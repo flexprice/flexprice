@@ -9,6 +9,44 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.3.0] - 2026-08-12
+
+### Added
+- **e2eprobe as chart templates** (`templates/probe/deployment.yaml`,
+  `templates/probe/service.yaml`), gated on `e2eprobe.enabled` (default
+  `false`). Ports the synthetic end-to-end probe previously deployed as
+  hand-written manifests into the chart.
+  - `replicaCount: 1` with `strategy.rollingUpdate.maxSurge: 0` is a
+    correctness constraint, not a tunable default: the probe's checks
+    mutate shared seeded fixtures under one tenant, and a second replica
+    races the first into false failures.
+  - The webhook Service (`e2eprobe.service.port`, default `8765`) is
+    ClusterIP only and is never wired into ingress — its endpoint accepts
+    unauthenticated POSTs.
+  - Consumes a pre-created Secret via `e2eprobe.existingSecret` (same
+    convention as `secrets.existingSecret` for the main app) — the chart
+    renders no ExternalSecret for it, matching the rest of the chart.
+  - Image defaults to the separate `ghcr.io/flexprice/e2eprobe` artifact
+    (not the main app image).
+- **GCE managed-ingress support** via `ingress.provider` (`nginx` default,
+  `gce` opt-in). When `ingress.provider: gce` and `ingress.enabled: true`:
+  - New templates under `templates/ingress-gcp/`: `managedcertificate.yaml`
+    (`networking.gke.io/v1` ManagedCertificate), `backendconfig.yaml`
+    (`cloud.google.com/v1` BackendConfig — health check path `/health`,
+    timeouts, optional Cloud Armor via
+    `ingress.gce.backendConfig.cloudArmor.securityPolicyName`), and
+    `frontendconfig.yaml` (`networking.gke.io/v1beta1` FrontendConfig —
+    HTTP→HTTPS redirect).
+  - The api Service (`templates/app/service.yaml`) gains
+    `cloud.google.com/neg` and `beta.cloud.google.com/backend-config`
+    annotations, needed so GCE's native load balancer routes directly to
+    pod IPs via NEG instead of through kube-proxy.
+  - `templates/app/ingress.yaml` needed no changes — it was already
+    class-agnostic (driven by `ingress.className`, no nginx-specific
+    annotations).
+  - Rendering with `ingress.provider: nginx` (the default) is
+    byte-identical to 1.2.0.
+
 ## [1.2.0] - 2026-08-05
 
 ### Added

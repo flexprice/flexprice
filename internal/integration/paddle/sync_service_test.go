@@ -926,11 +926,23 @@ func (m *mockSubscriptionService) CalculateResumeImpact(ctx context.Context, sub
 func (m *mockSubscriptionService) ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, sub *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*apidto.PriceResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) PreviewPlanChange(ctx context.Context, subscriptionID string, req apidto.SubscriptionChangeV2Request) (*apidto.SubscriptionChangeV2Response, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ExecutePlanChange(ctx context.Context, subscriptionID string, req apidto.SubscriptionChangeV2Request) (*apidto.SubscriptionChangeV2Response, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, req *apidto.AddAddonRequest) (*apidto.AddAddonToSubscriptionResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *apidto.RemoveAddonRequest) error {
 	return nil
+}
+func (m *mockSubscriptionService) AttachAddon(ctx context.Context, sub *subscription.Subscription, req *apidto.AddAddonToSubscriptionRequest, checkout *apidto.CheckoutParams) (*apidto.AddonChangeResult, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) DetachAddon(ctx context.Context, req *apidto.RemoveAddonRequest, subscriptionID string) (*apidto.AddonChangeResult, error) {
+	return nil, nil
 }
 func (m *mockSubscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req apidto.CreateSubscriptionLineItemRequest) (*apidto.SubscriptionLineItemResponse, error) {
 	return nil, nil

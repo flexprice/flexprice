@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
+	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -25,7 +26,9 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	// First check in config
 	tenantID, userID, valid = auth.ValidateAPIKey(cfg, apiKey)
 	if valid {
-		return tenantID, userID, "", "", []string{}, true // Empty roles = full access for config keys
+		// Config keys are operator-provisioned and carry no database record to
+		// hold roles, so they are granted full access explicitly.
+		return tenantID, userID, "", "", []string{types.RoleSuperAdmin.String()}, true
 	}
 
 	// If not found in config, check in database
@@ -228,7 +231,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 // AuthenticateMiddleware is a middleware that authenticates requests based on either:
 // 1. JWT token in the Authorization header as a Bearer token
 // 2. API key in the x-api-key header (or configured header name)
-func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, logger *logger.Logger) gin.HandlerFunc {
+func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, userRepo domainUser.Repository, logger *logger.Logger) gin.HandlerFunc {
 	authProvider := auth.NewProvider(cfg)
 
 	return func(c *gin.Context) {
@@ -274,8 +277,43 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 			return
 		}
 
-		// JWT users have empty roles = full access
-		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{}); err != nil {
+		// A JWT carries no roles claim, so the user record is the only source
+		// of the session's permissions. The lookup is scoped to the tenant the
+		// token names, since the repository takes it from the context.
+		tenantCtx := types.SetTenantID(c.Request.Context(), claims.TenantID)
+		user, err := userRepo.GetByID(tenantCtx, claims.UserID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				logger.Info(c.Request.Context(), "rejecting token for a user that no longer exists",
+					"user_id", claims.UserID,
+					"tenant_id", claims.TenantID,
+				)
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+				c.Abort()
+				return
+			}
+			logger.Error(c.Request.Context(), "failed to load user roles", "error", err, "user_id", claims.UserID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			c.Abort()
+			return
+		}
+
+		// A token outlives the account it was issued for, so an archived user
+		// must be refused here rather than on the strength of the token alone.
+		// The response does not distinguish this from a missing user: telling an
+		// unauthenticated caller which accounts exist is an enumeration oracle.
+		if user.Status != types.StatusPublished {
+			logger.Info(c.Request.Context(), "rejecting token for an inactive user",
+				"user_id", claims.UserID,
+				"tenant_id", claims.TenantID,
+				"status", user.Status,
+			)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+
+		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", user.Roles); err != nil {
 			abortEnvironmentResolution(c, logger, err, claims.TenantID, claims.UserID)
 			return
 		}

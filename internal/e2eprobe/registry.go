@@ -30,6 +30,17 @@ type Seeds struct {
 	// PreFundedCustomerIDs so wallet_debit_verification / wallet_balance_probe
 	// don't top it up or read it. Consumed only by LowBalanceAlertProbe.
 	AlertCanaryExternalCustomerID string
+
+	// New coverage additions (2026-08-12 plan)
+	SharedCouponID     string            // "" if seed hasn't run yet
+	SharedCouponCode   string            // canonical code used for attaching to subs
+	SharedTaxRateID    string
+	SharedTaxRateCode  string            // canonical code used for tax associations
+	BucketedFeatureIDs map[string]string // lookup_key -> feature id
+	PlanEntitlementIDs []string          // entitlement IDs seeded on the plan
+
+	// Entitlement-grants coverage (2026-08-13 plan)
+	GrantEntitlementIDs map[string]string // feature-lookup-key → entitlement id
 }
 
 type EphemeralEntity struct {
@@ -68,6 +79,13 @@ func (r *registry) LoadSeeds(s Seeds) {
 		FeatureIDs:                    append([]string(nil), s.FeatureIDs...),
 		MeterIDs:                      copyStringMap(s.MeterIDs),
 		AlertCanaryExternalCustomerID: s.AlertCanaryExternalCustomerID,
+		SharedCouponID:                s.SharedCouponID,
+		SharedCouponCode:              s.SharedCouponCode,
+		SharedTaxRateID:               s.SharedTaxRateID,
+		SharedTaxRateCode:             s.SharedTaxRateCode,
+		BucketedFeatureIDs:            copyStringMap(s.BucketedFeatureIDs),
+		PlanEntitlementIDs:            append([]string(nil), s.PlanEntitlementIDs...),
+		GrantEntitlementIDs:           copyStringMap(s.GrantEntitlementIDs),
 	}
 }
 
@@ -83,6 +101,13 @@ func (r *registry) Seeds() Seeds {
 		FeatureIDs:                    append([]string(nil), r.seeds.FeatureIDs...),
 		MeterIDs:                      copyStringMap(r.seeds.MeterIDs),
 		AlertCanaryExternalCustomerID: r.seeds.AlertCanaryExternalCustomerID,
+		SharedCouponID:                r.seeds.SharedCouponID,
+		SharedCouponCode:              r.seeds.SharedCouponCode,
+		SharedTaxRateID:               r.seeds.SharedTaxRateID,
+		SharedTaxRateCode:             r.seeds.SharedTaxRateCode,
+		BucketedFeatureIDs:            copyStringMap(r.seeds.BucketedFeatureIDs),
+		PlanEntitlementIDs:            append([]string(nil), r.seeds.PlanEntitlementIDs...),
+		GrantEntitlementIDs:           copyStringMap(r.seeds.GrantEntitlementIDs),
 	}
 }
 

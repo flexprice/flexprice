@@ -313,10 +313,10 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestRemoveFromGroupedInvoicing_R
 }
 
 // -----------------------------------------------------------------------
-// getGroupedInvoicingSubscriptions
+// groupedInvoicingChildren
 // -----------------------------------------------------------------------
 
-func (s *SubscriptionGroupedInvoicingTestSuite) TestGetGroupedInvoicingSubscriptions_ReturnsCorrectChildren() {
+func (s *SubscriptionGroupedInvoicingTestSuite) TestGroupedInvoicingChildren_ReturnsCorrectChildren() {
 	ctx := s.GetContext()
 	cust := s.createTestCustomer()
 
@@ -342,7 +342,7 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestGetGroupedInvoicingSubscript
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 	})
 
-	subs, err := s.subscriptionService.getGroupedInvoicingSubscriptions(ctx, parent.ID)
+	subs, err := getGroupedInvoicingChildren(ctx, s.subscriptionService.ServiceParams, parent, false)
 	require.NoError(s.T(), err)
 	require.Len(s.T(), subs, 2)
 
@@ -352,6 +352,17 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestGetGroupedInvoicingSubscript
 	}
 	require.True(s.T(), ids[child1.ID])
 	require.True(s.T(), ids[child2.ID])
+
+	// An active parent must not pull in draft children — that widening applies only to a draft
+	// (checkout) parent, and period processing only ever sees active parents.
+	_ = s.makeChildSub(cust.ID, baseAnchor, baseAnchor, func(sub *subscription.Subscription) {
+		sub.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+		sub.ParentSubscriptionID = &parent.ID
+		sub.SubscriptionStatus = types.SubscriptionStatusDraft
+	})
+	subs, err = getGroupedInvoicingChildren(ctx, s.subscriptionService.ServiceParams, parent, false)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), subs, 2, "draft child must be excluded under an active parent")
 }
 
 // -----------------------------------------------------------------------

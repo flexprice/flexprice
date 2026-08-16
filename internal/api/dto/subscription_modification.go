@@ -36,6 +36,7 @@ type SubModifyInheritanceRequest struct {
 // checkoutAllowedModifyTypes is the allowlist of modification types that accept checkout.
 var checkoutAllowedModifyTypes = []SubscriptionModifyType{
 	SubscriptionModifyTypeQuantityChange,
+	SubscriptionModifyTypeAddon,
 }
 
 func (r *SubModifyInheritanceRequest) Validate() error {
@@ -144,6 +145,14 @@ const (
 	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
 	SubscriptionModifyTypeCoupon           SubscriptionModifyType = "coupon"
 	SubscriptionModifyTypeTax              SubscriptionModifyType = "tax"
+	SubscriptionModifyTypeAddon            SubscriptionModifyType = "addon"
+)
+
+type SubscriptionModificationAction string
+
+const (
+	SubscriptionModificationActionAdd    SubscriptionModificationAction = "add"
+	SubscriptionModificationActionRemove SubscriptionModificationAction = "remove"
 )
 
 // SubModifyCouponAction is the action to perform on a coupon association.
@@ -280,6 +289,37 @@ func (r *SubModifyTaxParams) Validate() error {
 	return nil
 }
 
+type SubModifyAddonParams struct {
+	Action SubscriptionModificationAction `json:"action" binding:"required"`
+	Add    *AddAddonToSubscriptionRequest `json:"add,omitempty"`
+	Remove *RemoveAddonRequest            `json:"remove,omitempty"`
+}
+
+func (r *SubModifyAddonParams) Validate() error {
+	switch r.Action {
+	case SubscriptionModificationActionAdd:
+		if r.Add == nil {
+			return ierr.NewError("add is required for addon action 'add'").
+				WithHint("Provide the addon to attach under addon_params.add").
+				Mark(ierr.ErrValidation)
+		}
+		return r.Add.Validate()
+
+	case SubscriptionModificationActionRemove:
+		if r.Remove == nil {
+			return ierr.NewError("remove is required for addon action 'remove'").
+				WithHint("Provide the addon association to end under addon_params.remove").
+				Mark(ierr.ErrValidation)
+		}
+		return r.Remove.Validate()
+
+	default:
+		return ierr.NewError("unknown addon action: " + string(r.Action)).
+			WithHint("Valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+}
+
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of the *Params fields must be set, matching the type.
@@ -292,6 +332,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
+	AddonParams            *SubModifyAddonParams            `json:"addon_params,omitempty"`
 	Checkout               *CheckoutParams                  `json:"checkout,omitempty"`
 }
 
@@ -334,9 +375,16 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		err = r.TaxParams.Validate()
+	case SubscriptionModifyTypeAddon:
+		if r.AddonParams == nil {
+			return ierr.NewError("addon_params is required for type 'addon'").
+				WithHint("Provide addon_params with an action of add or remove").
+				Mark(ierr.ErrValidation)
+		}
+		err = r.AddonParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, addon").
 			Mark(ierr.ErrValidation)
 	}
 	if err != nil {
@@ -351,13 +399,20 @@ func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
 	}
 	if !lo.Contains(checkoutAllowedModifyTypes, r.Type) {
 		return ierr.NewError("checkout is not supported for this modification type").
-			WithHint("checkout is only allowed for quantity_change").
+			WithHintf("checkout is only allowed for %v", checkoutAllowedModifyTypes).
 			WithReportableDetails(map[string]any{
 				"type":          r.Type,
 				"allowed_types": checkoutAllowedModifyTypes,
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	if r.Type == SubscriptionModifyTypeAddon && r.AddonParams.Action == SubscriptionModificationActionRemove {
+		return ierr.NewError("checkout is not supported when removing an addon").
+			WithHint("Removing an addon issues a credit, so there is no payment to collect").
+			Mark(ierr.ErrValidation)
+	}
+
 	return r.Checkout.Validate()
 }
 

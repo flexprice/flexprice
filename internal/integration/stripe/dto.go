@@ -93,6 +93,8 @@ type CardDetails struct {
 type StripeInvoiceSyncRequest struct {
 	InvoiceID        string `json:"invoice_id" validate:"required"`
 	CollectionMethod string `json:"collection_method" validate:"required,oneof=charge_automatically send_invoice"`
+	// LinkStripeProduct links invoice items to a synced Stripe Product instead of a bare amount.
+	LinkStripeProduct bool `json:"link_stripe_product,omitempty"`
 }
 
 // StripeInvoiceSyncResponse represents the response from syncing an invoice to Stripe

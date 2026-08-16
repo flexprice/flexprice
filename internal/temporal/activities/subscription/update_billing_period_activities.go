@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
@@ -121,6 +122,17 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 	for _, period := range input.Periods {
 		draft, err := subscriptionService.CreateDraftInvoiceForSubscription(ctx, input.SubscriptionID, period)
 		if err != nil {
+			// Idempotent no-op: a finalized/paid invoice already exists for this period.
+			// The workflow's intent — "make sure invoices exist for these periods" — is
+			// satisfied. Skip and continue; if we propagated this Temporal would retry
+			// the activity forever since the state can never revert.
+			if ierr.IsAlreadyExists(err) {
+				s.logger.Info(ctx, "invoice already exists for period, skipping",
+					"subscription_id", input.SubscriptionID,
+					"period_start", period.Start,
+					"period_end", period.End)
+				continue
+			}
 			return nil, err
 		}
 		if draft == nil {

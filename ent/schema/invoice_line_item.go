@@ -199,6 +199,15 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Entitlement-covered units deducted from raw usage. Nil when no entitlement applied"),
+
+		field.String("parent_line_item_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable().
+			Comment("ID of the line item this one replaced, if it was created by editing an existing line item"),
 	}
 }
 

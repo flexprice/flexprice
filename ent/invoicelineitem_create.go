@@ -438,6 +438,20 @@ func (ilic *InvoiceLineItemCreate) SetNillableAdjustedEntitlementQuantity(d *dec
 	return ilic
 }
 
+// SetParentLineItemID sets the "parent_line_item_id" field.
+func (ilic *InvoiceLineItemCreate) SetParentLineItemID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetParentLineItemID(s)
+	return ilic
+}
+
+// SetNillableParentLineItemID sets the "parent_line_item_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableParentLineItemID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetParentLineItemID(*s)
+	}
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -756,6 +770,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 		_node.AdjustedEntitlementQuantity = &value
+	}
+	if value, ok := ilic.mutation.ParentLineItemID(); ok {
+		_spec.SetField(invoicelineitem.FieldParentLineItemID, field.TypeString, value)
+		_node.ParentLineItemID = &value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

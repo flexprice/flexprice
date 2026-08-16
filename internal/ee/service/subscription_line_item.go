@@ -166,7 +166,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				},
 			},
 		}
-		if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
+		if _, applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
 			s.Logger.Info(ctx, "proration apply failed for line item add",
 				"line_item_id", lineItem.ID, "error", applyErr)
 		}
@@ -421,7 +421,7 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 							},
 						},
 					}
-					if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
+					if _, applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
 						s.Logger.Info(ctx, "proration apply failed for line item delete",
 							"line_item_id", lineItemID, "error", applyErr)
 					}

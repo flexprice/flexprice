@@ -177,7 +177,27 @@ spec:
 
     profiles:
       readonly/readonly: "1"
-      default/data_type_default_nullable: 1
+      {{- /*
+        Nullable-by-default. MUST be 0 for a ClickHouse server that the
+        migrations will build tables on: with 1, a column declared without an
+        explicit NOT NULL becomes Nullable(...), and ReplacingMergeTree rejects
+        a Nullable version column outright:
+
+          Code: 169. DB::Exception: The column version cannot be used as a
+          version column for storage ReplacingMergeTree because it is of type
+          Nullable(UInt64) (must be of an integer type or of type
+          Date/DateTime/DateTime64). (BAD_TYPE_OF_FIELD)
+
+        Defaults to 1 to preserve existing regions byte-for-byte; their tables
+        were created before this setting was parameterized, and changing it does
+        not alter an existing table, only what future CREATE TABLE statements
+        infer. Any region building a ClickHouse schema from scratch must set 0.
+
+        Tested with `hasKey` rather than `default`, because Helm's `default`
+        treats 0 as empty — `| default 1` would silently rewrite an explicit 0
+        back to 1 and reintroduce the crash.
+      */}}
+      default/data_type_default_nullable: {{ if hasKey .Values.clickhouse.altinity "dataTypeDefaultNullable" }}{{ .Values.clickhouse.altinity.dataTypeDefaultNullable }}{{ else }}1{{ end }}
       default/insert_distributed_sync: 1
       {{- if .Values.clickhouse.altinity.asyncInsert.enabled }}
       default/async_insert: 1

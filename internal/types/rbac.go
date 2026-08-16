@@ -1,5 +1,41 @@
 package types
 
+type Role string
+
+func (r Role) String() string { return string(r) }
+
+const (
+	RoleSuperAdmin    Role = "super_admin"
+	RoleAllReader     Role = "all_reader"
+	RoleAllWriter     Role = "all_writer"
+	RoleEventIngestor Role = "event_ingestor"
+	RoleEventReader   Role = "event_reader"
+)
+
+// AllowedRoles returns the roles assignable to this user type. People hold a
+// broad access level over the whole tenant, while service accounts hold either
+// full access or a single narrow machine scope, so the two sets are disjoint
+// apart from super_admin.
+func (ut UserType) AllowedRoles() []Role {
+	switch ut {
+	case UserTypeUser:
+		return []Role{RoleSuperAdmin, RoleAllReader, RoleAllWriter}
+	case UserTypeServiceAccount:
+		return []Role{RoleSuperAdmin, RoleEventIngestor, RoleEventReader}
+	default:
+		return nil
+	}
+}
+
+// RoleFilter filters the roles returned by GET /rbac/roles. Bound via
+// ShouldBindQuery, following the same *QueryFilter-style convention as the
+// other GET list endpoints (e.g. ConnectionFilter, MeterFilter) — no
+// pagination/time-range fields are needed here since role listing isn't
+// paginated.
+type RoleFilter struct {
+	UserType *UserType `json:"user_type,omitempty" form:"user_type"`
+}
+
 type Action string
 
 func (a Action) String() string { return string(a) }

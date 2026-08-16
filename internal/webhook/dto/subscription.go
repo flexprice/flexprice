@@ -40,6 +40,7 @@ type Subscription struct {
 	SubscriptionType     types.SubscriptionType   `json:"subscription_type"`
 	ParentSubscriptionID *string                  `json:"parent_subscription_id,omitempty"`
 	Metadata             types.Metadata           `json:"metadata,omitempty"`
+	Customer             *Customer                `json:"customer,omitempty"`
 }
 
 func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
@@ -69,6 +70,7 @@ func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 		SubscriptionType:     resp.SubscriptionType,
 		ParentSubscriptionID: resp.ParentSubscriptionID,
 		Metadata:             resp.Metadata,
+		Customer:             NewCustomer(resp.Customer),
 	}
 }
 
@@ -99,6 +101,7 @@ func NewSubscriptionFromV2(resp *dto.SubscriptionResponseV2) *Subscription {
 		SubscriptionType:     resp.SubscriptionType,
 		ParentSubscriptionID: resp.ParentSubscriptionID,
 		Metadata:             resp.Metadata,
+		Customer:             NewCustomer(resp.Customer),
 	}
 }
 

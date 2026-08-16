@@ -143,18 +143,114 @@ func IsPublicIP(ip net.IP) bool {
 		return false
 	}
 
-	// Carrier-grade NAT (100.64.0.0/10). Not covered by IsPrivate, but routable
-	// inside cloud networks and used by some metadata proxies.
+	// The RFC 8215 local-use translation range carries an IPv4 destination that
+	// cannot be recovered without knowing the operator's prefix length, so it is
+	// refused rather than decoded. See isNAT64LocalUsePrefix.
+	if ip16 := ip.To16(); ip16 != nil && ip.To4() == nil && isNAT64LocalUsePrefix(ip16) {
+		return false
+	}
+
+	// An IPv6 address can carry an IPv4 destination inside it. To4 only unwraps
+	// the IPv4-mapped and IPv4-compatible forms, so NAT64 and 6to4 addresses
+	// reach the IPv6 path with their real target hidden: 64:ff9b::a00:5 routes to
+	// 10.0.0.5 and 2002:a9fe:a9fe:: routes to the 169.254.169.254 metadata
+	// address. Judge those by the address they actually reach.
+	if embedded := embeddedIPv4(ip); embedded != nil {
+		return IsPublicIP(embedded)
+	}
+
 	if ip4 := ip.To4(); ip4 != nil {
-		if ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
-			return false
-		}
-		// 192.0.0.0/24 holds IETF protocol assignments, including the
-		// 192.0.0.192 metadata address used by some providers.
-		if ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0 {
-			return false
-		}
+		return isPublicIPv4(ip4)
 	}
 
 	return true
+}
+
+// isPublicIPv4 rejects the IPv4 ranges that are not publicly routable but are
+// not covered by the net.IP classification helpers.
+func isPublicIPv4(ip4 net.IP) bool {
+	switch {
+	// Carrier-grade NAT (100.64.0.0/10). Routable inside cloud networks and used
+	// by some metadata proxies.
+	case ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127:
+		return false
+	// 192.0.0.0/24 holds IETF protocol assignments, including the 192.0.0.192
+	// metadata address used by some providers.
+	case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0:
+		return false
+	// 192.0.2.0/24 (TEST-NET-1), 198.51.100.0/24 (TEST-NET-2) and
+	// 203.0.113.0/24 (TEST-NET-3) are documentation ranges, never a real
+	// destination.
+	case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 2,
+		ip4[0] == 198 && ip4[1] == 51 && ip4[2] == 100,
+		ip4[0] == 203 && ip4[1] == 0 && ip4[2] == 113:
+		return false
+	// 198.18.0.0/15 is reserved for inter-network benchmarking.
+	case ip4[0] == 198 && (ip4[1] == 18 || ip4[1] == 19):
+		return false
+	// 240.0.0.0/4 is reserved for future use, and includes the
+	// 255.255.255.255 broadcast address.
+	case ip4[0] >= 240:
+		return false
+	}
+
+	return true
+}
+
+// embeddedIPv4 returns the IPv4 address carried inside an IPv6 address for the
+// translation schemes that To4 does not unwrap, or nil when there is none.
+func embeddedIPv4(ip net.IP) net.IP {
+	ip16 := ip.To16()
+	if ip16 == nil || ip.To4() != nil {
+		return nil
+	}
+
+	// NAT64 well-known prefix 64:ff9b::/96 carries the IPv4 address in the last
+	// four bytes. Bytes 4-11 must be zero for the prefix to be the /96 one:
+	// matching on the first four bytes alone would also catch 64:ff9b:1::/48,
+	// whose embedded address RFC 6052 splits around the u-octet rather than
+	// leaving in the final four bytes. Reading those bytes for a /48 address
+	// yields the wrong IPv4, so 64:ff9b:1::/48 is rejected outright below rather
+	// than decoded here.
+	if isNAT64WellKnownPrefix(ip16) {
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15])
+	}
+
+	// 6to4 (2002::/16) encodes the IPv4 address in bytes 2-5.
+	if ip16[0] == 0x20 && ip16[1] == 0x02 {
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5])
+	}
+
+	return nil
+}
+
+// isNAT64WellKnownPrefix reports whether the address uses the 64:ff9b::/96
+// well-known prefix, which is the only NAT64 prefix whose embedded IPv4 address
+// sits in the final four bytes.
+func isNAT64WellKnownPrefix(ip16 net.IP) bool {
+	if ip16[0] != 0x00 || ip16[1] != 0x64 || ip16[2] != 0xff || ip16[3] != 0x9b {
+		return false
+	}
+	for _, b := range ip16[4:12] {
+		if b != 0x00 {
+			return false
+		}
+	}
+	return true
+}
+
+// isNAT64LocalUsePrefix reports whether the address falls in 64:ff9b:1::/48,
+// the RFC 8215 local-use translation range.
+//
+// RFC 6052 encodes the embedded IPv4 address differently for each prefix length
+// and splits it around the reserved u-octet for prefixes shorter than /96, so
+// the destination cannot be recovered without knowing which length the operator
+// configured. RFC 8215 says applications must not assume the embedded-address
+// syntax here. Since the real target is unknowable, the whole range is refused
+// rather than decoded: 64:ff9b:1:a00:0:5:808:808 translates to 10.0.0.5 while
+// its final four bytes read as 8.8.8.8.
+func isNAT64LocalUsePrefix(ip16 net.IP) bool {
+	return ip16[0] == 0x00 && ip16[1] == 0x64 &&
+		ip16[2] == 0xff && ip16[3] == 0x9b &&
+		ip16[4] == 0x00 && ip16[5] == 0x01
 }

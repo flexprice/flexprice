@@ -100,6 +100,21 @@ func (s *couponApplicationService) GetCouponApplication(ctx context.Context, id 
 	}, nil
 }
 
+func resolveInvoiceLineItemToBeDiscounted(
+	lineItemCoupon dto.InvoiceLineItemCoupon,
+	subsLineItemIdMap map[string]*invoice.InvoiceLineItem,
+	priceIdMap map[string]*invoice.InvoiceLineItem,
+) (*invoice.InvoiceLineItem, bool) {
+	if sliID := lo.FromPtr(lineItemCoupon.SubscriptionLineItemID); sliID != "" {
+		if target, ok := subsLineItemIdMap[sliID]; ok {
+			return target, ok
+		}
+	}
+
+	target, ok := priceIdMap[lineItemCoupon.LineItemID]
+	return target, ok
+}
+
 // ApplyCouponsToInvoice applies both invoice-level and line item-level coupons to an invoice.
 // This is the unified method that handles all coupon application logic.
 // CouponService.ApplyDiscount() handles all validation and calculation.
@@ -171,21 +186,24 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 	lineItemCouponApplications := make([]*coupon_application.CouponApplication, 0)
 	invoiceLevelCouponApplications := make([]*coupon_application.CouponApplication, 0)
 
-	// Build a map of line items by PriceID for O(1) lookup
-	lineItemsByPriceID := make(map[string]*invoice.InvoiceLineItem)
-	for _, lineItem := range inv.LineItems {
-		if lineItem.PriceID != nil {
-			lineItemsByPriceID[lo.FromPtr(lineItem.PriceID)] = lineItem
+	subsLineItemIdMap := make(map[string]*invoice.InvoiceLineItem)
+	priceIdMap := make(map[string]*invoice.InvoiceLineItem)
+	for _, li := range inv.LineItems {
+		if li.SubscriptionLineItemID != nil {
+			subsLineItemIdMap[lo.FromPtr(li.SubscriptionLineItemID)] = li
+		}
+		if li.PriceID != nil {
+			priceIdMap[lo.FromPtr(li.PriceID)] = li
 		}
 	}
 
 	// Process line item coupons (mutate line items directly since we'll persist them in DB)
 	for _, lineItemCoupon := range lineItemCoupons {
-		// Find the line item this coupon applies to by matching price_id
-		targetLineItem, exists := lineItemsByPriceID[lineItemCoupon.LineItemID]
+		targetLineItem, exists := resolveInvoiceLineItemToBeDiscounted(lineItemCoupon, subsLineItemIdMap, priceIdMap)
 		if !exists {
 			s.Logger.Info(ctx, "line item not found for coupon, skipping",
-				"price_id_used_as_line_item_id", lineItemCoupon.LineItemID,
+				"subscription_line_item_id", lo.FromPtr(lineItemCoupon.SubscriptionLineItemID),
+				"price_id", lineItemCoupon.LineItemID,
 				"coupon_id", lineItemCoupon.CouponID)
 			continue
 		}
@@ -221,7 +239,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			CouponAssociationID: couponAssociationID,
 			InvoiceID:           inv.ID,
 			InvoiceLineItemID:   &targetLineItem.ID,
-			SubscriptionID:      inv.SubscriptionID,
+			SubscriptionID:      lo.CoalesceOrEmpty(targetLineItem.SubscriptionID, inv.SubscriptionID),
 			AppliedAt:           time.Now(),
 			OriginalPrice:       targetLineItem.Amount,
 			FinalPrice:          discountResult.FinalPrice,

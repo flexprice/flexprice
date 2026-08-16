@@ -71,6 +71,38 @@ func TestPublicAddressIsNotBlocked(t *testing.T) {
 	}
 }
 
+// A proxy would defeat the guard entirely: the dial goes to the proxy address,
+// which is what gets classified, and the proxy then reaches the real destination
+// unchecked. http.DefaultTransport carries ProxyFromEnvironment, so the clone
+// must drop it rather than inherit it.
+func TestGuardedTransportIgnoresProxyEnvironment(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://10.0.0.5:3128")
+	t.Setenv("HTTPS_PROXY", "http://10.0.0.5:3128")
+	t.Setenv("ALL_PROXY", "http://10.0.0.5:3128")
+
+	transport := newGuardedTransport()
+	if transport.Proxy != nil {
+		t.Fatal("the guarded transport must not use a proxy")
+	}
+
+	// With the proxy honoured this request would dial 10.0.0.5 and be reported
+	// against that address; the guard must reject the loopback target itself.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := &http.Client{Transport: transport}
+	resp, err := client.Get(srv.URL)
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("expected the guarded transport to refuse a loopback server")
+	}
+	if !errors.Is(err, ErrBlockedAddress) {
+		t.Fatalf("expected ErrBlockedAddress, got: %v", err)
+	}
+}
+
 func TestSplitHostPortErrorSurfaces(t *testing.T) {
 	if _, err := publicOnlyDialContext(context.Background(), "tcp", "no-port-here"); err == nil {
 		t.Fatal("expected an error for a malformed address")

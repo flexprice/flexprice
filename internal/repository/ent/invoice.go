@@ -309,8 +309,15 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 	r.logger.Debug(ctx, "adding line items", "invoice_id", invoiceID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
-		// Verify invoice exists
-		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		// Verify invoice exists within the caller's tenant + environment. Without
+		// this predicate the existence gate would accept a foreign-tenant invoice
+		// ID, allowing a cross-tenant line-item write (SHN-9b / A01 invariant).
+		exists, err := r.client.Writer(ctx).Invoice.Query().
+			Where(
+				invoice.ID(invoiceID),
+				invoice.TenantID(types.GetTenantID(ctx)),
+				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -377,8 +384,15 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 	r.logger.Debug(ctx, "removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
-		// Verify invoice exists
-		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		// Verify invoice exists within the caller's tenant + environment. Without
+		// this predicate the existence gate would accept a foreign-tenant invoice
+		// ID, allowing a cross-tenant line-item write (SHN-9b / A01 invariant).
+		exists, err := r.client.Writer(ctx).Invoice.Query().
+			Where(
+				invoice.ID(invoiceID),
+				invoice.TenantID(types.GetTenantID(ctx)),
+				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -389,6 +403,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 		_, err = r.client.Writer(ctx).InvoiceLineItem.Update().
 			Where(
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 				invoicelineitem.InvoiceID(invoiceID),
 				invoicelineitem.IDIn(itemIDs...),
 			).
@@ -565,6 +580,12 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetTotalDiscount(inv.TotalDiscount).
 		AddVersion(1) // Increment version atomically
 
+	// Monotonic: only ever set the lock, never clear it here - a caller
+	// passing the Go zero-value false must not silently unlock the invoice.
+	if inv.IsManuallyEdited {
+		query.SetIsManuallyEdited(true)
+	}
+
 	// Execute update
 	n, err := query.Save(ctx)
 	if err != nil {
@@ -612,6 +633,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			Where(
 				invoicelineitem.InvoiceID(id),
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).

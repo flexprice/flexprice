@@ -27,6 +27,7 @@ type InvoiceLineItem struct {
 type Invoice struct {
 	ID              string              `json:"id"`
 	CustomerID      string              `json:"customer_id"`
+	EnvironmentID   string              `json:"environment_id"`
 	SubscriptionID  *string             `json:"subscription_id,omitempty"`
 	InvoiceType     types.InvoiceType   `json:"invoice_type"`
 	InvoiceStatus   types.InvoiceStatus `json:"invoice_status"`
@@ -91,6 +92,7 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 	return &Invoice{
 		ID:              resp.ID,
 		CustomerID:      resp.CustomerID,
+		EnvironmentID:   resp.EnvironmentID,
 		SubscriptionID:  resp.SubscriptionID,
 		InvoiceType:     resp.InvoiceType,
 		InvoiceStatus:   resp.InvoiceStatus,

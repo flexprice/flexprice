@@ -143,6 +143,9 @@ func (f *fakeInvoiceOps) Get(_ context.Context, _ string) (*dtos.GetInvoiceRespo
 	atomic.AddInt32(&f.queryCalled, 1)
 	return &dtos.GetInvoiceResponse{}, nil
 }
+func (f *fakeInvoiceOps) GetPreview(_ context.Context, _ types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error) {
+	return &dtos.GetInvoicePreviewResponse{}, nil
+}
 
 type fakePriceOps struct{ createCalled int32 }
 
@@ -167,43 +170,124 @@ func (f *fakeAsyncOps) EnqueueWithOptions(_ flexprice.EventOptions) error {
 func (f *fakeAsyncOps) Flush() error  { return nil }
 func (f *fakeAsyncOps) Close() error  { return nil }
 
+type fakeEntitlementOps struct{}
+
+func (f *fakeEntitlementOps) Create(_ context.Context, _ types.CreateEntitlementRequest) (*dtos.CreateEntitlementResponse, error) {
+	return &dtos.CreateEntitlementResponse{}, nil
+}
+func (f *fakeEntitlementOps) Query(_ context.Context, _ types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error) {
+	return &dtos.QueryEntitlementResponse{}, nil
+}
+func (f *fakeEntitlementOps) Delete(_ context.Context, _ string) (*dtos.DeleteEntitlementResponse, error) {
+	return &dtos.DeleteEntitlementResponse{}, nil
+}
+func (f *fakeEntitlementOps) CreateWithGrant(_ context.Context, _ GrantEntitlementInput) (string, error) {
+	return "grant_test", nil
+}
+func (f *fakeEntitlementOps) GetRaw(_ context.Context, _ string) (*GrantEntitlementResponse, error) {
+	return &GrantEntitlementResponse{}, nil
+}
+
+type fakeCouponOps struct{}
+
+func (f *fakeCouponOps) Create(_ context.Context, _ types.CreateCouponRequest) (*dtos.CreateCouponResponse, error) {
+	return &dtos.CreateCouponResponse{}, nil
+}
+func (f *fakeCouponOps) Query(_ context.Context, _ types.CouponFilter) (*dtos.QueryCouponResponse, error) {
+	return &dtos.QueryCouponResponse{}, nil
+}
+func (f *fakeCouponOps) GetByCode(_ context.Context, _ string) (*dtos.GetCouponByCodeResponse, error) {
+	return &dtos.GetCouponByCodeResponse{}, nil
+}
+func (f *fakeCouponOps) Delete(_ context.Context, _ string) (*dtos.DeleteCouponResponse, error) {
+	return &dtos.DeleteCouponResponse{}, nil
+}
+
+type fakeCouponAssociationOps struct{}
+
+func (f *fakeCouponAssociationOps) List(_ context.Context, _ dtos.ListCouponAssociationsRequest) (*dtos.ListCouponAssociationsResponse, error) {
+	return &dtos.ListCouponAssociationsResponse{}, nil
+}
+
+type fakeTaxRateOps struct{}
+
+func (f *fakeTaxRateOps) Create(_ context.Context, _ types.CreateTaxRateRequest) (*dtos.CreateTaxRateResponse, error) {
+	return &dtos.CreateTaxRateResponse{}, nil
+}
+func (f *fakeTaxRateOps) Get(_ context.Context, _ string) (*dtos.GetTaxRateResponse, error) {
+	return &dtos.GetTaxRateResponse{}, nil
+}
+func (f *fakeTaxRateOps) List(_ context.Context, _ dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
+	return &dtos.GetTaxRatesResponse{}, nil
+}
+func (f *fakeTaxRateOps) Delete(_ context.Context, _ string) (*dtos.DeleteTaxRateResponse, error) {
+	return &dtos.DeleteTaxRateResponse{}, nil
+}
+
+type fakeTaxAssociationOps struct{}
+
+func (f *fakeTaxAssociationOps) Create(_ context.Context, _ types.CreateTaxAssociationRequest) (*dtos.CreateTaxAssociationResponse, error) {
+	return &dtos.CreateTaxAssociationResponse{}, nil
+}
+func (f *fakeTaxAssociationOps) List(_ context.Context, _, _, _, _ *string) (*dtos.ListTaxAssociationsResponse, error) {
+	return &dtos.ListTaxAssociationsResponse{}, nil
+}
+func (f *fakeTaxAssociationOps) Delete(_ context.Context, _ string) (*dtos.DeleteTaxAssociationResponse, error) {
+	return &dtos.DeleteTaxAssociationResponse{}, nil
+}
+
 // ── fake Client assembling the ops above ─────────────────────────────
 
 type fakeInnerClient struct {
-	customers *fakeCustomerOps
-	plans     *fakePlanOps
-	prices    *fakePriceOps
-	features  *fakeFeatureOps
-	subs      *fakeSubOps
-	wallets   *fakeWalletOps
-	events    *fakeEventOps
-	invoices  *fakeInvoiceOps
-	async     *fakeAsyncOps
+	customers          *fakeCustomerOps
+	plans              *fakePlanOps
+	prices             *fakePriceOps
+	features           *fakeFeatureOps
+	subs               *fakeSubOps
+	wallets            *fakeWalletOps
+	events             *fakeEventOps
+	invoices           *fakeInvoiceOps
+	entitlements       *fakeEntitlementOps
+	coupons            *fakeCouponOps
+	couponAssociations *fakeCouponAssociationOps
+	taxRates           *fakeTaxRateOps
+	taxAssociations    *fakeTaxAssociationOps
+	async              *fakeAsyncOps
 }
 
 func newFakeInnerClient() *fakeInnerClient {
 	return &fakeInnerClient{
-		customers: &fakeCustomerOps{},
-		plans:     &fakePlanOps{},
-		prices:    &fakePriceOps{},
-		features:  &fakeFeatureOps{},
-		subs:      &fakeSubOps{},
-		wallets:   &fakeWalletOps{},
-		events:    &fakeEventOps{},
-		invoices:  &fakeInvoiceOps{},
-		async:     &fakeAsyncOps{},
+		customers:          &fakeCustomerOps{},
+		plans:              &fakePlanOps{},
+		prices:             &fakePriceOps{},
+		features:           &fakeFeatureOps{},
+		subs:               &fakeSubOps{},
+		wallets:            &fakeWalletOps{},
+		events:             &fakeEventOps{},
+		invoices:           &fakeInvoiceOps{},
+		entitlements:       &fakeEntitlementOps{},
+		coupons:            &fakeCouponOps{},
+		couponAssociations: &fakeCouponAssociationOps{},
+		taxRates:           &fakeTaxRateOps{},
+		taxAssociations:    &fakeTaxAssociationOps{},
+		async:              &fakeAsyncOps{},
 	}
 }
 
-func (c *fakeInnerClient) Customers() CustomerOps         { return c.customers }
-func (c *fakeInnerClient) Plans() PlanOps                 { return c.plans }
-func (c *fakeInnerClient) Prices() PriceOps               { return c.prices }
-func (c *fakeInnerClient) Features() FeatureOps           { return c.features }
-func (c *fakeInnerClient) Subscriptions() SubscriptionOps { return c.subs }
-func (c *fakeInnerClient) Wallets() WalletOps             { return c.wallets }
-func (c *fakeInnerClient) Events() EventOps               { return c.events }
-func (c *fakeInnerClient) Invoices() InvoiceOps           { return c.invoices }
-func (c *fakeInnerClient) NewAsyncEventClient() AsyncEventClient { return c.async }
+func (c *fakeInnerClient) Customers() CustomerOps                     { return c.customers }
+func (c *fakeInnerClient) Plans() PlanOps                             { return c.plans }
+func (c *fakeInnerClient) Prices() PriceOps                           { return c.prices }
+func (c *fakeInnerClient) Features() FeatureOps                       { return c.features }
+func (c *fakeInnerClient) Subscriptions() SubscriptionOps             { return c.subs }
+func (c *fakeInnerClient) Wallets() WalletOps                         { return c.wallets }
+func (c *fakeInnerClient) Events() EventOps                           { return c.events }
+func (c *fakeInnerClient) Invoices() InvoiceOps                       { return c.invoices }
+func (c *fakeInnerClient) Entitlements() EntitlementOps               { return c.entitlements }
+func (c *fakeInnerClient) Coupons() CouponOps                         { return c.coupons }
+func (c *fakeInnerClient) CouponAssociations() CouponAssociationOps   { return c.couponAssociations }
+func (c *fakeInnerClient) TaxRates() TaxRateOps                       { return c.taxRates }
+func (c *fakeInnerClient) TaxAssociations() TaxAssociationOps         { return c.taxAssociations }
+func (c *fakeInnerClient) NewAsyncEventClient() AsyncEventClient       { return c.async }
 
 // ── Tests ─────────────────────────────────────────────────────────────
 

@@ -1,15 +1,31 @@
 {
   "super_admin": {
     "name": "Super Admin",
-    "description": "Full access to all resources.",
+    "description": "Provides unrestricted access to all resources, operations, and administrative settings.",
     "permissions": {
       "*": ["*"]
     }
   },
-  
+
+  "all_reader": {
+    "name": "All Reader",
+    "description": "Provides read-only access to all resources and operations.",
+    "permissions": {
+      "*": ["read"]
+    }
+  },
+
+  "all_writer": {
+    "name": "All Writer",
+    "description": "Provides read and write access to all resources and operations, excluding user, role, and administrative management.",
+    "permissions": {
+      "*": ["read", "write"]
+    }
+  },
+
   "event_ingestor": {
     "name": "Event Ingestor",
-    "description": "Limited to ingesting events and batch events. Use for services that only send events.",
+    "description": "Provides write-only access to event ingestion. Intended for services that only submit events.",
     "permissions": {
       "event": ["write"]
     }
@@ -17,10 +33,9 @@
 
   "event_reader": {
     "name": "Event Reader",
-    "description": "Limited to reading events. Use for services that only read events.",
+    "description": "Provides read-only access to events. Intended for services that only consume or inspect events.",
     "permissions": {
       "event": ["read"]
     }
   }
 }
-

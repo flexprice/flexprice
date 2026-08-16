@@ -340,7 +340,7 @@ func (s *InMemoryMeterUsageStore) GetEarliestUsageTimestamp(_ context.Context, p
 			continue
 		}
 		if earliest == nil || r.Timestamp.Before(*earliest) {
-			ts := r.Timestamp
+			ts := r.Timestamp.UTC()
 			earliest = &ts
 		}
 	}

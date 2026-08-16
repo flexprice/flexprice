@@ -103,6 +103,7 @@ const (
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
+	PrefixPublishedConnections   = "published_connections:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

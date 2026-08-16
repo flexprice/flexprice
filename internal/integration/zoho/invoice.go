@@ -15,6 +15,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const zohoDiscountTypeItemLevel = "item_level"
+
 type ZohoInvoiceService interface {
 	SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceSyncRequest) (*ZohoInvoiceSyncResponse, error)
 	// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
@@ -86,6 +88,11 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 				"invoice_id", req.InvoiceID,
 				"zoho_invoice_id", zohoID)
 		}
+
+		if err := s.markPaidIfFlexpricePaid(ctx, req.InvoiceID); err != nil {
+			return nil, err
+		}
+
 		return &ZohoInvoiceSyncResponse{
 			ZohoInvoiceID: zohoID,
 			Status:        status,
@@ -116,6 +123,12 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		LineItems:  lineItems,
 		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
 	}
+
+	if s.totalLineItemDiscount(lineItems).IsPositive() {
+		reqPayload.DiscountType = zohoDiscountTypeItemLevel
+		reqPayload.IsDiscountBeforeTax = true
+	}
+
 	if flexInvoice.FinalizedAt != nil {
 		reqPayload.Date = flexInvoice.FinalizedAt.Format("2006-01-02")
 	} else {
@@ -126,6 +139,11 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	if err != nil {
 		return nil, err
 	}
+	s.logger.Info(ctx, "resolved Zoho invoice currency for sync",
+		"invoice_id", req.InvoiceID,
+		"flexprice_currency", flexInvoice.Currency,
+		"zoho_currency_code", curCode,
+		"zoho_exchange_rate", exchRate)
 	reqPayload.CurrencyCode = curCode
 	reqPayload.ExchangeRate = exchRate
 
@@ -161,12 +179,36 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 			"zoho_invoice_id", zohoInv.InvoiceID)
 	}
 
+	if err := s.markPaidIfFlexpricePaid(ctx, req.InvoiceID); err != nil {
+		return nil, err
+	}
+
 	return &ZohoInvoiceSyncResponse{
 		ZohoInvoiceID: zohoInv.InvoiceID,
 		Status:        zohoInv.Status,
 		Total:         zohoInv.Total,
 		Currency:      flexInvoice.Currency,
 	}, nil
+}
+
+// markPaidIfFlexpricePaid re-reads the FlexPrice invoice and records a Zoho customer
+// payment when it is already succeeded or overpaid. Re-fetch is required because
+// checkout can mark the invoice paid while CreateInvoice is still in flight.
+func (s *InvoiceService) markPaidIfFlexpricePaid(ctx context.Context, flexpriceInvoiceID string) error {
+	flex, err := s.invoiceRepo.Get(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+	if flex == nil {
+		return nil
+	}
+	
+	switch flex.PaymentStatus {
+	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
+		return s.MarkInvoicePaidInZoho(ctx, flex.ID)
+	default:
+		return nil
+	}
 }
 
 // MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
@@ -280,6 +322,11 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to resolve tax for invoice").Mark(ierr.ErrInternal)
 	}
+	s.logger.Info(ctx, "resolved Zoho tax for invoice sync",
+		"invoice_id", flexInvoice.ID,
+		"is_taxable", taxRes.IsTaxable,
+		"tax_id", taxRes.TaxID,
+		"tax_exemption_id", taxRes.TaxExemptionID)
 
 	priceToItemID := map[string]string{}
 	if len(inputs) > 0 {
@@ -306,17 +353,33 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		childName := childCustomerIDToName[lineItemIDToChildCustomer[li.ID]]
-		out = append(out, InvoiceLineItem{
+		lineItem := InvoiceLineItem{
 			Name:        name,
 			Description: formatPeriodDescription(childName, li.PeriodStart, li.PeriodEnd),
 			Quantity:    qty,
 			Rate:        rate,
+			Discount:    li.LineItemDiscount.Add(li.InvoiceLevelDiscount),
 			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
-			//TaxID:          taxRes.TaxID,
-			//TaxExemptionID: taxRes.TaxExemptionID,
-		})
+		}
+		if taxRes != nil {
+			if taxRes.IsTaxable {
+				lineItem.TaxID = taxRes.TaxID
+			} else {
+				lineItem.TaxExemptionID = taxRes.TaxExemptionID
+			}
+		}
+		out = append(out, lineItem)
 	}
 	return out, nil
+}
+
+func (s *InvoiceService) totalLineItemDiscount(lineItems []InvoiceLineItem) decimal.Decimal {
+	total := decimal.Zero
+	for _, li := range lineItems {
+		total = total.Add(li.Discount)
+	}
+
+	return total
 }
 
 func (s *InvoiceService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {

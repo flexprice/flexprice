@@ -579,6 +579,60 @@ func (s *PaymentServiceSuite) TestUpdatePaymentAppliesWhenStatusUnchanged() {
 	s.Equal(types.PaymentStatusSucceeded, stored.PaymentStatus)
 }
 
+func (s *PaymentServiceSuite) TestUpdatePaymentCorrectsAmount() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_amount_correction",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	correctedAmount := decimal.NewFromFloat(80)
+	_, err := s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+		Amount: &correctedAmount,
+	})
+	s.NoError(err)
+
+	stored, getErr := repo.Get(ctx, p.ID)
+	s.NoError(getErr)
+	s.True(correctedAmount.Equal(stored.Amount))
+}
+
+func (s *PaymentServiceSuite) TestUpdatePaymentRejectsAmountCorrectionOnSettledPayment() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_amount_correction_settled",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusSucceeded,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	correctedAmount := decimal.NewFromFloat(80)
+	_, err := s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+		Amount: &correctedAmount,
+	})
+	s.Error(err)
+
+	stored, getErr := repo.Get(ctx, p.ID)
+	s.NoError(getErr)
+	s.True(p.Amount.Equal(stored.Amount), "amount must be unchanged once the payment has settled")
+}
+
 // The repository reports a conflict rather than silently writing nothing.
 func (s *PaymentServiceSuite) TestUpdateWithExpectedStatusReportsConflict() {
 	ctx := s.GetContext()

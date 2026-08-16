@@ -50,6 +50,21 @@ func (c *dryRunClient) Invoices() InvoiceOps { return c.inner.Invoices() }
 func (c *dryRunClient) NewAsyncEventClient() AsyncEventClient {
 	return &dryRunAsync{inner: c.inner.NewAsyncEventClient(), lg: c.lg}
 }
+func (c *dryRunClient) Entitlements() EntitlementOps {
+	return &dryRunEntitlements{inner: c.inner.Entitlements(), lg: c.lg}
+}
+func (c *dryRunClient) Coupons() CouponOps {
+	return &dryRunCoupons{inner: c.inner.Coupons(), lg: c.lg}
+}
+
+// CouponAssociations are read-only — delegate directly.
+func (c *dryRunClient) CouponAssociations() CouponAssociationOps { return c.inner.CouponAssociations() }
+func (c *dryRunClient) TaxRates() TaxRateOps {
+	return &dryRunTaxRates{inner: c.inner.TaxRates(), lg: c.lg}
+}
+func (c *dryRunClient) TaxAssociations() TaxAssociationOps {
+	return &dryRunTaxAssociations{inner: c.inner.TaxAssociations(), lg: c.lg}
+}
 
 // dryLog logs a skipped mutation at Info level.
 func dryLog(ctx context.Context, lg *logger.Logger, op string, kv ...any) {
@@ -278,4 +293,98 @@ func (d *dryRunAsync) Flush() error {
 func (d *dryRunAsync) Close() error {
 	dryLog(context.Background(), d.lg, "AsyncEventClient.Close")
 	return nil
+}
+
+// ── Entitlements ──────────────────────────────────────────────────────
+
+type dryRunEntitlements struct {
+	inner EntitlementOps
+	lg    *logger.Logger
+}
+
+func (d *dryRunEntitlements) Create(ctx context.Context, req types.CreateEntitlementRequest) (*dtos.CreateEntitlementResponse, error) {
+	dryLog(ctx, d.lg, "Entitlements.Create")
+	return &dtos.CreateEntitlementResponse{}, nil
+}
+func (d *dryRunEntitlements) Query(ctx context.Context, req types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error) {
+	return d.inner.Query(ctx, req)
+}
+func (d *dryRunEntitlements) Delete(ctx context.Context, id string) (*dtos.DeleteEntitlementResponse, error) {
+	dryLog(ctx, d.lg, "Entitlements.Delete", "id", id)
+	return &dtos.DeleteEntitlementResponse{}, nil
+}
+func (d *dryRunEntitlements) CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (string, error) {
+	dryLog(ctx, d.lg, "Entitlements.CreateWithGrant",
+		"feature_id", req.FeatureID,
+		"grant_measure", req.GrantMeasure,
+		"grant_quota", req.GrantQuota,
+		"aggregation_mode", req.AggregationMode,
+	)
+	return "grant_dryrun", nil
+}
+func (d *dryRunEntitlements) GetRaw(ctx context.Context, id string) (*GrantEntitlementResponse, error) {
+	return d.inner.GetRaw(ctx, id)
+}
+
+// ── Coupons ───────────────────────────────────────────────────────────
+
+type dryRunCoupons struct {
+	inner CouponOps
+	lg    *logger.Logger
+}
+
+func (d *dryRunCoupons) Create(ctx context.Context, req types.CreateCouponRequest) (*dtos.CreateCouponResponse, error) {
+	dryLog(ctx, d.lg, "Coupons.Create", "name", req.Name)
+	return &dtos.CreateCouponResponse{}, nil
+}
+func (d *dryRunCoupons) Query(ctx context.Context, req types.CouponFilter) (*dtos.QueryCouponResponse, error) {
+	return d.inner.Query(ctx, req)
+}
+func (d *dryRunCoupons) GetByCode(ctx context.Context, code string) (*dtos.GetCouponByCodeResponse, error) {
+	return d.inner.GetByCode(ctx, code)
+}
+func (d *dryRunCoupons) Delete(ctx context.Context, id string) (*dtos.DeleteCouponResponse, error) {
+	dryLog(ctx, d.lg, "Coupons.Delete", "id", id)
+	return &dtos.DeleteCouponResponse{}, nil
+}
+
+// ── TaxRates ──────────────────────────────────────────────────────────
+
+type dryRunTaxRates struct {
+	inner TaxRateOps
+	lg    *logger.Logger
+}
+
+func (d *dryRunTaxRates) Create(ctx context.Context, req types.CreateTaxRateRequest) (*dtos.CreateTaxRateResponse, error) {
+	dryLog(ctx, d.lg, "TaxRates.Create", "name", req.Name)
+	return &dtos.CreateTaxRateResponse{}, nil
+}
+func (d *dryRunTaxRates) Get(ctx context.Context, id string) (*dtos.GetTaxRateResponse, error) {
+	return d.inner.Get(ctx, id)
+}
+func (d *dryRunTaxRates) List(ctx context.Context, req dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
+	return d.inner.List(ctx, req)
+}
+func (d *dryRunTaxRates) Delete(ctx context.Context, id string) (*dtos.DeleteTaxRateResponse, error) {
+	dryLog(ctx, d.lg, "TaxRates.Delete", "id", id)
+	return &dtos.DeleteTaxRateResponse{}, nil
+}
+
+// ── TaxAssociations ───────────────────────────────────────────────────
+
+type dryRunTaxAssociations struct {
+	inner TaxAssociationOps
+	lg    *logger.Logger
+}
+
+func (d *dryRunTaxAssociations) Create(ctx context.Context, req types.CreateTaxAssociationRequest) (*dtos.CreateTaxAssociationResponse, error) {
+	dryLog(ctx, d.lg, "TaxAssociations.Create")
+	return &dtos.CreateTaxAssociationResponse{}, nil
+}
+func (d *dryRunTaxAssociations) List(ctx context.Context, entityType, entityID, externalCustomerID, taxRateID *string) (*dtos.ListTaxAssociationsResponse, error) {
+	return d.inner.List(ctx, entityType, entityID, externalCustomerID, taxRateID)
+}
+func (d *dryRunTaxAssociations) Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error) {
+	dryLog(ctx, d.lg, "TaxAssociations.Delete", "id", id)
+	return &dtos.DeleteTaxAssociationResponse{}, nil
 }

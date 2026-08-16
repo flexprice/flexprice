@@ -53,6 +53,10 @@ type InvoiceLineItem struct {
 	// sub_line_item_id links this invoice line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// parent_line_item_id links this line item to the line item it replaced, if it was created by editing
+	// an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
+	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
+
 	types.BaseModel
 }
 
@@ -91,6 +95,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		InvoiceLevelDiscount:        lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
 		SubscriptionLineItemID:      e.SubscriptionLineItemID,
+		ParentLineItemID:            e.ParentLineItemID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

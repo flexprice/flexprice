@@ -23,6 +23,9 @@ import (
 
 type PaymentProcessorService interface {
 	ProcessPayment(ctx context.Context, id string) (*payment.Payment, error)
+	// DispatchMarkPaid notifies the provider integrations holding a copy of the invoice
+	// (Zoho Books, Whop) that it has been paid in FlexPrice.
+	DispatchMarkPaid(ctx context.Context, invoiceID string)
 }
 
 type paymentProcessor struct {
@@ -302,8 +305,8 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			}
 			return false
 		}(),
-		Metadata:  linkMetadata,
-		PaymentID: paymentObj.ID,
+		Metadata:               linkMetadata,
+		PaymentID:              paymentObj.ID,
 		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
 	}
 
@@ -738,10 +741,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			"error", err)
 	}
 
-	// Invoice is fully paid — dispatch Whop and Zoho mark-paid directly if a mapping exists.
+	// Invoice is fully paid — dispatch mark-paid to whichever providers are connected.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		p.dispatchWhopMarkPaid(ctx, invoice.ID)
-		p.dispatchZohoMarkPaid(ctx, invoice.ID)
+		p.DispatchMarkPaid(ctx, invoice.ID)
 	}
 
 	return nil
@@ -803,6 +805,34 @@ func (p *paymentProcessor) dispatchZohoMarkPaid(ctx context.Context, invoiceID s
 	input := temporalmodels.NewZohoBooksInvoiceMarkPaidWorkflowInput(invoiceID, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 	if _, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalZohoBooksInvoiceMarkPaidWorkflow, input); err != nil {
 		p.Logger.Error(ctx, "failed to start Zoho mark-paid workflow", "error", err, "invoice_id", invoiceID)
+	}
+}
+
+// DispatchMarkPaid lists the tenant's published connections once and only dispatches to providers
+// that are actually connected, instead of starting a workflow per provider blind and letting it
+// fail downstream with "connection not configured" for the ones that aren't.
+func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID string) {
+	if p.ConnectionRepo == nil {
+		return
+	}
+
+	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to list published connections, skipping mark-paid dispatch",
+			"error", err, "invoice_id", invoiceID)
+		return
+	}
+
+	connected := make(map[types.SecretProvider]bool, len(connections))
+	for _, c := range connections {
+		connected[c.ProviderType] = true
+	}
+
+	if connected[types.SecretProviderZohoBooks] {
+		p.dispatchZohoMarkPaid(ctx, invoiceID)
+	}
+	if connected[types.SecretProviderWhop] {
+		p.dispatchWhopMarkPaid(ctx, invoiceID)
 	}
 }
 

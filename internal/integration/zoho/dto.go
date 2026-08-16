@@ -97,21 +97,24 @@ type InvoiceLineItem struct {
 	Description    string          `json:"description,omitempty"`
 	Rate           decimal.Decimal `json:"rate"`
 	Quantity       decimal.Decimal `json:"quantity"`
+	Discount       decimal.Decimal `json:"discount,omitzero"`
 	TaxID          string          `json:"tax_id,omitempty"`
 	TaxExemptionID string          `json:"tax_exemption_id,omitempty"`
 }
 
 type InvoiceCreateRequest struct {
-	CustomerID      string            `json:"customer_id"`
-	CurrencyCode    string            `json:"currency_code,omitempty"`
-	ExchangeRate    float64           `json:"exchange_rate,omitempty"`
-	Date            string            `json:"date,omitempty"`
-	DueDate         string            `json:"due_date,omitempty"`
-	ReferenceNumber string            `json:"reference_number,omitempty"`
-	Notes           string            `json:"notes,omitempty"`
-	Terms           string            `json:"terms,omitempty"`
-	LineItems       []InvoiceLineItem `json:"line_items"`
-	Adjustment      decimal.Decimal   `json:"adjustment,omitzero"`
+	CustomerID          string            `json:"customer_id"`
+	CurrencyCode        string            `json:"currency_code,omitempty"`
+	ExchangeRate        float64           `json:"exchange_rate,omitempty"`
+	Date                string            `json:"date,omitempty"`
+	DueDate             string            `json:"due_date,omitempty"`
+	ReferenceNumber     string            `json:"reference_number,omitempty"`
+	Notes               string            `json:"notes,omitempty"`
+	Terms               string            `json:"terms,omitempty"`
+	LineItems           []InvoiceLineItem `json:"line_items"`
+	Adjustment          decimal.Decimal   `json:"adjustment,omitzero"`
+	DiscountType        string            `json:"discount_type,omitempty"`
+	IsDiscountBeforeTax bool              `json:"is_discount_before_tax,omitempty"`
 }
 
 type InvoiceResponse struct {

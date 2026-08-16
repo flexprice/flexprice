@@ -32647,6 +32647,7 @@ type InvoiceMutation struct {
 	total_prepaid_credits_applied *decimal.Decimal
 	idempotency_key               *string
 	recalculated_invoice_id       *string
+	is_manually_edited            *bool
 	clearedFields                 map[string]struct{}
 	line_items                    map[string]struct{}
 	removedline_items             map[string]struct{}
@@ -34693,6 +34694,42 @@ func (m *InvoiceMutation) ResetRecalculatedInvoiceID() {
 	delete(m.clearedFields, invoice.FieldRecalculatedInvoiceID)
 }
 
+// SetIsManuallyEdited sets the "is_manually_edited" field.
+func (m *InvoiceMutation) SetIsManuallyEdited(b bool) {
+	m.is_manually_edited = &b
+}
+
+// IsManuallyEdited returns the value of the "is_manually_edited" field in the mutation.
+func (m *InvoiceMutation) IsManuallyEdited() (r bool, exists bool) {
+	v := m.is_manually_edited
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsManuallyEdited returns the old "is_manually_edited" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldIsManuallyEdited(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsManuallyEdited is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsManuallyEdited requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsManuallyEdited: %w", err)
+	}
+	return oldValue.IsManuallyEdited, nil
+}
+
+// ResetIsManuallyEdited resets all changes to the "is_manually_edited" field.
+func (m *InvoiceMutation) ResetIsManuallyEdited() {
+	m.is_manually_edited = nil
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by ids.
 func (m *InvoiceMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -34835,7 +34872,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 42)
+	fields := make([]string, 0, 43)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -34962,6 +34999,9 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.recalculated_invoice_id != nil {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
+	if m.is_manually_edited != nil {
+		fields = append(fields, invoice.FieldIsManuallyEdited)
+	}
 	return fields
 }
 
@@ -35054,6 +35094,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.IdempotencyKey()
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.RecalculatedInvoiceID()
+	case invoice.FieldIsManuallyEdited:
+		return m.IsManuallyEdited()
 	}
 	return nil, false
 }
@@ -35147,6 +35189,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIdempotencyKey(ctx)
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.OldRecalculatedInvoiceID(ctx)
+	case invoice.FieldIsManuallyEdited:
+		return m.OldIsManuallyEdited(ctx)
 	}
 	return nil, fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -35449,6 +35493,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRecalculatedInvoiceID(v)
+		return nil
+	case invoice.FieldIsManuallyEdited:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsManuallyEdited(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
@@ -35829,6 +35880,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ResetRecalculatedInvoiceID()
 		return nil
+	case invoice.FieldIsManuallyEdited:
+		m.ResetIsManuallyEdited()
+		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -35981,6 +36035,7 @@ type InvoiceLineItemMutation struct {
 	invoice_level_discount        *decimal.Decimal
 	subscription_line_item_id     *string
 	adjusted_entitlement_quantity *decimal.Decimal
+	parent_line_item_id           *string
 	clearedFields                 map[string]struct{}
 	invoice                       *string
 	clearedinvoice                bool
@@ -37596,6 +37651,55 @@ func (m *InvoiceLineItemMutation) ResetAdjustedEntitlementQuantity() {
 	delete(m.clearedFields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 }
 
+// SetParentLineItemID sets the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) SetParentLineItemID(s string) {
+	m.parent_line_item_id = &s
+}
+
+// ParentLineItemID returns the value of the "parent_line_item_id" field in the mutation.
+func (m *InvoiceLineItemMutation) ParentLineItemID() (r string, exists bool) {
+	v := m.parent_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentLineItemID returns the old "parent_line_item_id" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldParentLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentLineItemID: %w", err)
+	}
+	return oldValue.ParentLineItemID, nil
+}
+
+// ClearParentLineItemID clears the value of the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) ClearParentLineItemID() {
+	m.parent_line_item_id = nil
+	m.clearedFields[invoicelineitem.FieldParentLineItemID] = struct{}{}
+}
+
+// ParentLineItemIDCleared returns if the "parent_line_item_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) ParentLineItemIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldParentLineItemID]
+	return ok
+}
+
+// ResetParentLineItemID resets all changes to the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) ResetParentLineItemID() {
+	m.parent_line_item_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldParentLineItemID)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -37711,7 +37815,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 33)
+	fields := make([]string, 0, 34)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -37811,6 +37915,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.adjusted_entitlement_quantity != nil {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
+	if m.parent_line_item_id != nil {
+		fields = append(fields, invoicelineitem.FieldParentLineItemID)
+	}
 	return fields
 }
 
@@ -37885,6 +37992,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionLineItemID()
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.AdjustedEntitlementQuantity()
+	case invoicelineitem.FieldParentLineItemID:
+		return m.ParentLineItemID()
 	}
 	return nil, false
 }
@@ -37960,6 +38069,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSubscriptionLineItemID(ctx)
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.OldAdjustedEntitlementQuantity(ctx)
+	case invoicelineitem.FieldParentLineItemID:
+		return m.OldParentLineItemID(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -38200,6 +38311,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAdjustedEntitlementQuantity(v)
 		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentLineItemID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -38302,6 +38420,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldAdjustedEntitlementQuantity) {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
+	if m.FieldCleared(invoicelineitem.FieldParentLineItemID) {
+		fields = append(fields, invoicelineitem.FieldParentLineItemID)
+	}
 	return fields
 }
 
@@ -38387,6 +38508,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ClearAdjustedEntitlementQuantity()
+		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		m.ClearParentLineItemID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -38494,6 +38618,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ResetAdjustedEntitlementQuantity()
+		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		m.ResetParentLineItemID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)

@@ -22,6 +22,7 @@ type InvoiceSyncService struct {
 	customerSvc                  *CustomerService
 	invoiceRepo                  invoice.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	priceSyncSvc                 *stripePriceSyncService
 	logger                       *logger.Logger
 }
 
@@ -31,6 +32,7 @@ func NewInvoiceSyncService(
 	customerSvc *CustomerService,
 	invoiceRepo invoice.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
+	priceSyncSvc *stripePriceSyncService,
 	logger *logger.Logger,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
@@ -38,6 +40,7 @@ func NewInvoiceSyncService(
 		customerSvc:                  customerSvc,
 		invoiceRepo:                  invoiceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		priceSyncSvc:                 priceSyncSvc,
 		logger:                       logger,
 	}
 }
@@ -89,7 +92,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	}
 
 	// Step 6: Sync line items to Stripe
-	if err := s.syncLineItemsToStripe(ctx, flexInvoice, stripeInvoiceID, customerService); err != nil {
+	if err := s.syncLineItemsToStripe(ctx, flexInvoice, stripeInvoiceID, customerService, req.LinkStripeProduct); err != nil {
 		return nil, err
 	}
 
@@ -205,7 +208,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 }
 
 // syncLineItemsToStripe adds all line items to the Stripe invoice
-func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvoice *invoice.Invoice, stripeInvoiceID string, customerService interfaces.CustomerService) error {
+func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvoice *invoice.Invoice, stripeInvoiceID string, customerService interfaces.CustomerService, linkStripeProduct bool) error {
 	if len(flexInvoice.LineItems) == 0 {
 		s.logger.Info(ctx, "no line items to sync", "invoice_id", flexInvoice.ID)
 		return nil
@@ -216,14 +219,30 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		return err
 	}
 
+	var productIDByPriceID map[string]string
+	if linkStripeProduct {
+		priced := lo.UniqBy(lo.Filter(flexInvoice.LineItems, func(li *invoice.InvoiceLineItem, _ int) bool {
+			return li.PriceID != nil && *li.PriceID != ""
+		}), func(li *invoice.InvoiceLineItem) string { return *li.PriceID })
+
+		if len(priced) > 0 {
+			items := lo.Map(priced, func(li *invoice.InvoiceLineItem, _ int) priceSyncItem {
+				return priceSyncItem{PriceID: *li.PriceID, DisplayName: lo.FromPtr(li.DisplayName)}
+			})
+			productIDByPriceID, err = s.priceSyncSvc.EnsureBulkProductsSynced(ctx, items)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	s.logger.Info(ctx, "syncing line items to Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoiceID,
 		"line_items_count", len(flexInvoice.LineItems))
 
-	// Add each line item to Stripe invoice
 	for _, lineItem := range flexInvoice.LineItems {
-		if err := s.addLineItemToStripeInvoice(ctx, stripeClient, stripeInvoiceID, lineItem, flexInvoice, customerService); err != nil {
+		if err := s.addLineItemToStripeInvoice(ctx, stripeClient, stripeInvoiceID, lineItem, flexInvoice, customerService, productIDByPriceID); err != nil {
 			return err
 		}
 	}
@@ -235,32 +254,20 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 	return nil
 }
 
-// addLineItemToStripeInvoice adds a single line item to Stripe invoice
-func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, lineItem *invoice.InvoiceLineItem, flexInvoice *invoice.Invoice, customerService interfaces.CustomerService) error {
-	// Convert amount to cents (Stripe uses cents)
+// buildInvoiceItemParams is pure (no Stripe calls), so it's unit-testable directly.
+// Quantity must stay unset — UnitAmount already holds the computed total, so setting it would double the charge.
+func buildInvoiceItemParams(
+	lineItem *invoice.InvoiceLineItem,
+	customerID string,
+	stripeInvoiceID string,
+	productIDByPriceID map[string]string,
+) *stripe.InvoiceItemCreateParams {
 	amountCents := lineItem.Amount.Mul(decimal.NewFromInt(100)).IntPart()
-
-	// Get customer ID from the invoice
-	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get Stripe customer ID",
-			"error", err,
-			"customer_id", flexInvoice.CustomerID,
-			"line_item_id", lineItem.ID)
-		return ierr.NewError("failed to get Stripe customer ID").
-			WithHint("Unable to find Stripe customer mapping").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id":  flexInvoice.CustomerID,
-				"line_item_id": lineItem.ID,
-				"error":        err.Error(),
-			}).
-			Mark(ierr.ErrSystem)
-	}
+	currency := strings.ToLower(lineItem.Currency)
 
 	params := &stripe.InvoiceItemCreateParams{
 		Customer:    stripe.String(customerID),
 		Invoice:     stripe.String(stripeInvoiceID),
-		Currency:    stripe.String(strings.ToLower(lineItem.Currency)),
 		Description: stripe.String(lineItem.GetDescription()),
 		Metadata: map[string]string{
 			"flexprice_line_item_id": lineItem.ID,
@@ -269,31 +276,46 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 		},
 	}
 
-	// Stripe only allows either Amount OR Quantity, not both
-	// For now, we'll always use Amount since it's simpler and works for all cases
-	params.Amount = stripe.Int64(amountCents)
+	if lineItem.PriceID != nil {
+		if productID, ok := productIDByPriceID[*lineItem.PriceID]; ok {
+			params.PriceData = &stripe.InvoiceItemCreatePriceDataParams{
+				Product:    stripe.String(productID),
+				Currency:   stripe.String(currency),
+				UnitAmount: stripe.Int64(amountCents),
+			}
+			params.Metadata["flexprice_stripe_product_id"] = productID
+			return params
+		}
+	}
 
-	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
+	params.Currency = stripe.String(currency)
+	params.Amount = stripe.Int64(amountCents)
+	return params
+}
+
+// addLineItemToStripeInvoice adds a single line item to Stripe invoice
+func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, lineItem *invoice.InvoiceLineItem, flexInvoice *invoice.Invoice, customerService interfaces.CustomerService, productIDByPriceID map[string]string) error {
+	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
 	if err != nil {
-		s.logger.Error(ctx, "failed to add line item to Stripe invoice",
-			"error", err,
-			"line_item_id", lineItem.ID,
-			"stripe_invoice_id", stripeInvoiceID)
-		return ierr.NewError("failed to add line item to Stripe").
-			WithHint("Unable to add line item to Stripe invoice").
-			WithReportableDetails(map[string]interface{}{
-				"line_item_id":      lineItem.ID,
-				"stripe_invoice_id": stripeInvoiceID,
-				"error":             err.Error(),
-			}).
+		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "line_item_id", lineItem.ID)
+		return ierr.NewError("failed to get Stripe customer ID").
+			WithHint("Unable to find Stripe customer mapping").
+			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "line_item_id": lineItem.ID, "error": err.Error()}).
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Debug(ctx, "added line item to Stripe invoice",
-		"line_item_id", lineItem.ID,
-		"stripe_invoice_id", stripeInvoiceID,
-		"stripe_item_id", invoiceItem.ID)
+	params := buildInvoiceItemParams(lineItem, customerID, stripeInvoiceID, productIDByPriceID)
 
+	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
+	if err != nil {
+		s.logger.Error(ctx, "failed to add line item to Stripe invoice", "error", err, "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID)
+		return ierr.NewError("failed to add line item to Stripe").
+			WithHint("Unable to add line item to Stripe invoice").
+			WithReportableDetails(map[string]interface{}{"line_item_id": lineItem.ID, "stripe_invoice_id": stripeInvoiceID, "error": err.Error()}).
+			Mark(ierr.ErrSystem)
+	}
+
+	s.logger.Debug(ctx, "added line item to Stripe invoice", "line_item_id", lineItem.ID, "stripe_invoice_id", stripeInvoiceID, "stripe_item_id", invoiceItem.ID)
 	return nil
 }
 

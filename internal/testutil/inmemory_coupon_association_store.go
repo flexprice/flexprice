@@ -13,13 +13,35 @@ import (
 // InMemoryCouponAssociationStore implements coupon_association.Repository
 type InMemoryCouponAssociationStore struct {
 	*InMemoryStore[*coupon_association.CouponAssociation]
+
+	// coupons mirrors the Ent repository's WithCoupon() eager load. Readers such as
+	// splitAndOrderAssociations drop any association whose Coupon is nil, so a store that only
+	// echoed back what the writer happened to set would silently disable coupon selection in
+	// tests — and the service layer does not set it when creating associations.
+	coupons *InMemoryCouponStore
 }
 
-// NewInMemoryCouponAssociationStore creates a new in-memory coupon association store
-func NewInMemoryCouponAssociationStore() *InMemoryCouponAssociationStore {
+// NewInMemoryCouponAssociationStore creates a new in-memory coupon association store. Pass the
+// coupon store so reads can hydrate the Coupon edge the way the real repository does.
+func NewInMemoryCouponAssociationStore(coupons *InMemoryCouponStore) *InMemoryCouponAssociationStore {
 	return &InMemoryCouponAssociationStore{
 		InMemoryStore: NewInMemoryStore[*coupon_association.CouponAssociation](),
+		coupons:       coupons,
 	}
+}
+
+// hydrateCoupon fills the Coupon edge from the coupon store when the stored association lacks it.
+func (s *InMemoryCouponAssociationStore) hydrateCoupon(
+	ctx context.Context,
+	ca *coupon_association.CouponAssociation,
+) *coupon_association.CouponAssociation {
+	if ca == nil || ca.Coupon != nil || s.coupons == nil {
+		return ca
+	}
+	if c, err := s.coupons.Get(ctx, ca.CouponID); err == nil {
+		ca.Coupon = c
+	}
+	return ca
 }
 
 // Helper to copy coupon association
@@ -90,7 +112,7 @@ func (s *InMemoryCouponAssociationStore) Get(ctx context.Context, id string) (*c
 			}).
 			Mark(ierr.ErrNotFound)
 	}
-	return copyCouponAssociation(ca), nil
+	return s.hydrateCoupon(ctx, copyCouponAssociation(ca)), nil
 }
 
 func (s *InMemoryCouponAssociationStore) Update(ctx context.Context, ca *coupon_association.CouponAssociation) error {
@@ -118,7 +140,7 @@ func (s *InMemoryCouponAssociationStore) List(ctx context.Context, filter *types
 	}
 
 	return lo.Map(items, func(ca *coupon_association.CouponAssociation, _ int) *coupon_association.CouponAssociation {
-		return copyCouponAssociation(ca)
+		return s.hydrateCoupon(ctx, copyCouponAssociation(ca))
 	}), nil
 }
 

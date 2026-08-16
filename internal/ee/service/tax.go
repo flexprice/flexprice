@@ -43,6 +43,7 @@ type TaxService interface {
 	// Invoice tax operations
 	PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error)
 	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) (*TaxCalculationResult, error)
+	CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) *TaxCalculationResult
 }
 
 type taxService struct {
@@ -1005,6 +1006,51 @@ type TaxCalculationResult struct {
 	TaxRates          []*dto.TaxRateResponse
 }
 
+// taxLineAmount is one rate and what it charges on a given taxable amount.
+type taxLineAmount struct {
+	rate   *dto.TaxRateResponse
+	amount decimal.Decimal
+}
+
+func taxableAmount(inv *invoice.Invoice) decimal.Decimal {
+	amount := inv.Subtotal.Sub(inv.TotalDiscount)
+	if amount.IsNegative() {
+		return decimal.Zero
+	}
+
+	return amount
+}
+
+func (s *taxService) calculateTaxLines(inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) ([]taxLineAmount, decimal.Decimal) {
+	base := taxableAmount(inv)
+	lines := make([]taxLineAmount, 0, len(taxRates))
+	total := decimal.Zero
+
+	for _, taxRate := range taxRates {
+		amount := s.calculateTaxAmount(taxRate, base)
+		if amount == nil {
+			continue
+		}
+
+		rounded := types.RoundToCurrencyPrecision(lo.FromPtr(amount), inv.Currency)
+		lines = append(lines, taxLineAmount{rate: taxRate, amount: rounded})
+		total = total.Add(rounded)
+	}
+
+	return lines, total
+}
+
+// CalculateTaxesOnInvoice returns what taxes would be charged and writes nothing.
+func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) *TaxCalculationResult {
+	_, totalTaxAmount := s.calculateTaxLines(inv, taxRates)
+
+	return &TaxCalculationResult{
+		TotalTaxAmount:    totalTaxAmount,
+		TaxAppliedRecords: []*dto.TaxAppliedResponse{},
+		TaxRates:          taxRates,
+	}
+}
+
 // ApplyTaxesOnInvoice applies taxes to an invoice and creates/updates tax applied records
 // This method handles idempotency by checking for existing tax applied records
 // Returns calculated tax data instead of directly updating the invoice
@@ -1022,26 +1068,12 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		"invoice_id", inv.ID,
 		"tax_rates_count", len(taxRates))
 
-	// Discount-first policy: taxable amount is subtotal minus total discount (clamped at zero)
-	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount)
-	if taxableAmount.IsNegative() {
-		taxableAmount = decimal.Zero
-	}
-	totalTaxAmount := decimal.Zero
-	taxAppliedRecords := make([]*dto.TaxAppliedResponse, 0, len(taxRates))
+	base := taxableAmount(inv)
+	lines, totalTaxAmount := s.calculateTaxLines(inv, taxRates)
+	taxAppliedRecords := make([]*dto.TaxAppliedResponse, 0, len(lines))
 
-	// Process each tax rate
-	for _, taxRate := range taxRates {
-		taxAmount := s.calculateTaxAmount(taxRate, taxableAmount)
-		if taxAmount == nil {
-			continue // Skip invalid tax rate types
-		}
-
-		// Round each tax amount immediately at source to ensure currency precision
-		roundedTaxAmount := types.RoundToCurrencyPrecision(lo.FromPtr(taxAmount), inv.Currency)
-		totalTaxAmount = totalTaxAmount.Add(roundedTaxAmount)
-
-		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, taxRate, taxableAmount, roundedTaxAmount)
+	for _, line := range lines {
+		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, line.rate, base, line.amount)
 		if err != nil {
 			return nil, err
 		}

@@ -47,8 +47,7 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
-			Immutable(),
+			NotEmpty(),
 		field.String("subscription_status").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

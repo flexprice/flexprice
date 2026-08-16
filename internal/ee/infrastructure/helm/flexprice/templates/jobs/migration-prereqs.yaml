@@ -10,10 +10,14 @@
   Rather than convert the PRIMARY ServiceAccount into a hook (which would orphan it
   on `helm uninstall` and delete it on a failed upgrade — see CodeRabbit review on
   PR #2321), render a dedicated `-migration` ServiceAccount here at weight -10
-  (ahead of the Job). hook-delete-policy before-hook-creation,hook-succeeded cleans
-  it up after the Job completes so it never lingers. It carries the same
-  Workload-Identity / IRSA annotations as the app SA so the migration can reach
-  cloud dependencies (e.g. GMK via OAUTHBEARER).
+  (ahead of the Job). It carries the same Workload-Identity / IRSA annotations as
+  the app SA so the migration can reach cloud dependencies (e.g. GMK via
+  OAUTHBEARER).
+
+  This SA deliberately has NO hook-delete-policy at all — see the note on the
+  annotations below. It therefore persists between releases rather than being
+  cleaned up after the Job, which is harmless: it holds no credentials of its
+  own and re-applying it is an in-place update.
 */}}
 apiVersion: v1
 kind: ServiceAccount
@@ -30,4 +34,32 @@ metadata:
     {{- end }}
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-10"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- /*
+      NO hook-delete-policy on purpose. This is what makes the migration run
+      under ArgoCD at all.
+
+      ArgoCD executes PreSync hooks in weight order and waits for each one to
+      reach a TERMINAL state before starting the next. A ServiceAccount has no
+      status and no completion condition, so with a delete policy attached
+      ArgoCD parks it at hookPhase: Running forever and never applies the
+      weight -5 migration Job. The controller log shows the symptom exactly:
+
+        PreSync/-10 hook /ServiceAccount:flexprice/flexprice-migration obj->obj
+        PreSync/-5  hook batch/Job:flexprice/.../flexprice-migration-<sum> nil->obj
+        Applying resource ServiceAccount/flexprice-migration ...
+        <no "Applying resource Job/..." line, ever>
+
+      The overall sync still reports Succeeded and the app Deployments roll out,
+      so the failure is silent: pods come up Running against an unmigrated
+      database. This cost the northamerica-northeast2 bring-up several hours.
+
+      Without a delete policy ArgoCD treats the object as applied-and-done and
+      moves on to the Job. Helm keeps working as before — it only waits on hook
+      resources that have a completion concept (Jobs, Pods), never on a
+      ServiceAccount.
+
+      The trade-off is that this ServiceAccount now persists between releases
+      instead of being cleaned up after the Job. That is harmless: it holds no
+      credentials of its own, only Workload-Identity / IRSA annotations
+      mirroring the app SA, and re-applying it is an ordinary in-place update.
+    */}}

@@ -75,6 +75,15 @@ func (r *InMemoryAuthRepository) DeleteAuth(ctx context.Context, userID string) 
 	return nil
 }
 
+// Count returns how many auth records the store holds, letting tests assert
+// that a failed flow left no auth material behind.
+func (r *InMemoryAuthRepository) Count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return len(r.auths)
+}
+
 // Clear clears all auth records from the in-memory store
 func (r *InMemoryAuthRepository) Clear() {
 	r.mu.Lock()

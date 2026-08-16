@@ -90,6 +90,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 
 	SetSpanSuccess(span)
 	*c = *domainConnection.FromEnt(connection)
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
@@ -213,6 +214,29 @@ func (r *connectionRepository) ListPublishedByProvider(ctx context.Context, prov
 		result = append(result, domainConnection.FromEnt(c))
 	}
 	return result, nil
+}
+
+// ListAllPublished returns every published connection for the tenant/environment in ctx, across
+// all providers. Read-through/write-through cached as a single list entry, since callers use this
+// to check "is provider X connected" before dispatching work rather than to read one connection.
+func (r *connectionRepository) ListAllPublished(ctx context.Context) ([]*domainConnection.Connection, error) {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "list_all_published", nil)
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
+	if value, found := r.redisCache.Get(ctx, cacheKey); found {
+		if connections, ok := cache.UnmarshalCacheValue[[]*domainConnection.Connection](value); ok {
+			return *connections, nil
+		}
+	}
+
+	connections, err := r.List(ctx, types.NewNoLimitConnectionFilter())
+	if err != nil {
+		return nil, err
+	}
+
+	r.redisCache.Set(ctx, cacheKey, connections, cache.ExpiryDefaultRedis)
+	return connections, nil
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
@@ -550,6 +574,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	r.DeleteCache(ctx, c)
 	// Update cache with new data
 	r.SetCache(ctx, c)
+	r.deleteAllPublishedCache(ctx)
 
 	return nil
 }
@@ -597,6 +622,7 @@ func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.C
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, c)
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
@@ -740,5 +766,13 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixConnection, connection.ID)
+	r.redisCache.Delete(ctx, cacheKey)
+}
+
+// deleteAllPublishedCache invalidates the cached ListAllPublished result for the tenant/environment
+// in ctx. Called on any create/update/delete so a newly connected, updated, or disconnected
+// integration is reflected immediately instead of waiting out the cache TTL.
+func (r *connectionRepository) deleteAllPublishedCache(ctx context.Context) {
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
 	r.redisCache.Delete(ctx, cacheKey)
 }

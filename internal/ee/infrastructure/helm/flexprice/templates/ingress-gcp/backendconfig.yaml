@@ -1,0 +1,33 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.provider "gce") }}
+# BackendConfig for the api Service behind the GCE ingress.
+#
+# GCE's load balancer health-checks the backend directly rather than relying on
+# the pod readiness probe, so the health check path is declared here. Without
+# this the LB defaults to "/" and marks healthy pods UNHEALTHY, producing a
+# 502 at the ingress with all pods Running.
+#
+# Referenced by the api Service via the beta.cloud.google.com/backend-config
+# annotation (see templates/app/service.yaml).
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api-backend
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  {{- with .Values.ingress.gce.backendConfig.healthCheck }}
+  healthCheck:
+    type: HTTP
+    requestPath: {{ .path | quote }}
+    port: {{ .port }}
+    checkIntervalSec: {{ .checkIntervalSec }}
+    timeoutSec: {{ .timeoutSec }}
+    healthyThreshold: {{ .healthyThreshold }}
+    unhealthyThreshold: {{ .unhealthyThreshold }}
+  {{- end }}
+  timeoutSec: {{ .Values.ingress.gce.backendConfig.timeoutSec }}
+  {{- with .Values.ingress.gce.backendConfig.cloudArmor.securityPolicyName }}
+  securityPolicy:
+    name: {{ . | quote }}
+  {{- end }}
+{{- end }}

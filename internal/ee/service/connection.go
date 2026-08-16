@@ -718,6 +718,22 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
+	// Whop: require the webhook signing secret at creation time. The Whop webhook
+	// route is unauthenticated and takes tenant and environment from the URL, so a
+	// connection without a secret leaves no way to tell a real delivery from a
+	// forged one — and those deliveries mark invoices paid. Legacy connections
+	// predating this check can add the secret via UpdateConnection.
+	if conn.ProviderType == types.SecretProviderWhop {
+		if conn.EncryptedSecretData.Whop == nil {
+			return nil, ierr.NewError("whop connection requires api_key, company_id and webhook_secret").
+				WithHint("encrypted_secret_data.whop with api_key, company_id and webhook_secret is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.Whop.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	// Zoho Books: validate the metadata on direct creation too. The OAuth flow
 	// gates accounts_server and api_domain behind a CSRF state token, but those
 	// same fields can be supplied straight to this endpoint, and they become the

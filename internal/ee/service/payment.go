@@ -425,6 +425,20 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	if req.PaymentMethodID != nil {
 		p.PaymentMethodID = *req.PaymentMethodID
 	}
+	if req.Amount != nil {
+		// Once settled, an amount correction must go through a refund/credit note, not this.
+		if observedStatus != types.PaymentStatusInitiated && observedStatus != types.PaymentStatusPending &&
+			observedStatus != types.PaymentStatusProcessing {
+			return nil, ierr.NewError("cannot correct amount on a payment that has already settled").
+				WithHint("Amount corrections are only allowed while a payment is initiated, pending, or processing").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":     id,
+					"current_status": observedStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		p.Amount = *req.Amount
+	}
 	if req.SucceededAt != nil {
 		p.SucceededAt = req.SucceededAt
 	}

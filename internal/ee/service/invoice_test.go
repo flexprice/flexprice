@@ -1749,6 +1749,36 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 			expectedErrorMessage: "invoice must be finalized",
 		},
 		{
+			// Regression (AUTHZ-VULN-05): a DRAFT *subscription* invoice must also be
+			// rejected. The subscription payment path does not re-check finalization,
+			// so before the guard in AttemptPayment this returned success and charged
+			// pre-finalization, bypassing credit/tax/discount application.
+			name: "Subscription invoice not in finalized state",
+			setupInvoice: func() *invoice.Invoice {
+				inv := &invoice.Invoice{
+					ID:              "inv_test_sub_not_finalized",
+					CustomerID:      s.testData.customer.ID,
+					SubscriptionID:  &s.testData.subscription.ID,
+					InvoiceType:     types.InvoiceTypeSubscription,
+					InvoiceStatus:   types.InvoiceStatusDraft, // Not finalized
+					PaymentStatus:   types.PaymentStatusPending,
+					Currency:        "usd",
+					AmountDue:       decimal.NewFromInt(100),
+					AmountPaid:      decimal.Zero,
+					AmountRemaining: decimal.NewFromInt(100),
+					Description:     "Test Subscription Invoice - Not Finalized",
+					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+				}
+				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
+				return inv
+			},
+			setupWallets: func() {
+				s.setupWallets()
+			},
+			expectedError:        true,
+			expectedErrorMessage: "invoice must be finalized",
+		},
+		{
 			name: "Invoice already paid",
 			setupInvoice: func() *invoice.Invoice {
 				inv := &invoice.Invoice{

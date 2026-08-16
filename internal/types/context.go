@@ -70,12 +70,14 @@ func GetEnvironmentID(ctx context.Context) string {
 	return ""
 }
 
-// GetRoles returns the RBAC roles array from the context
+// GetRoles returns the RBAC roles array from the context. A caller with no
+// roles holds no grant and is refused every permission check, so an absent or
+// unexpected value fails closed rather than widening access.
 func GetRoles(ctx context.Context) []string {
 	if roles, ok := ctx.Value(CtxRoles).([]string); ok {
 		return roles
 	}
-	return []string{} // Empty roles = full access
+	return []string{}
 }
 
 // GetCustomerID returns the customer ID from the context
@@ -120,7 +122,8 @@ func SetCustomerID(ctx context.Context, customerID string) context.Context {
 }
 
 // IsServiceAccount reports whether the request was made by a service account API key.
-// Returns false for JWT users and config API keys, which bypass RBAC enforcement.
+// Returns false for JWT users and config API keys. RBAC applies to every caller
+// type regardless, so this reports the caller's kind and never grants a bypass.
 func IsServiceAccount(ctx context.Context) bool {
 	t, _ := ctx.Value(CtxUserType).(string)
 	return t == string(UserTypeServiceAccount)

@@ -225,10 +225,27 @@ Backwards-compatible with the old hardcoded refs when the values block is unset.
 
 {{/*
 Resolve the PostgreSQL host.
-Uses the bitnami/postgresql subchart service name when internal, or the user-supplied host when external.
+Uses the bitnami/postgresql subchart service name when internal, or the
+user-supplied host when external.
+
+Under the config-autobind shape (.Values.env set), the address is declared as
+env.FLEXPRICE_POSTGRES_HOST and that is what the application reads. Templates
+that cannot go through the env block — the migration Job's init containers and
+the legacy ConfigMap — resolve the address through this helper instead, so
+prefer the autobind value when it is present and fall back to postgres.host.
+
+Without this, the address has to be declared TWICE in every values file and the
+two copies silently disagree the moment one is updated: the app connects fine
+while the migration Job loops "[n/60] Not ready yet..." against a dead IP. Every
+region currently mirrors the value by hand; asia-south1 even carries a comment
+telling the next person to keep them in sync. This makes the mirror unnecessary
+— a values file may still set postgres.host, and it is used only when the
+autobind key is absent, so existing regions render unchanged.
 */}}
 {{- define "flexprice.postgresHost" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_HOST") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_HOST" -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.host }}
 {{- else -}}
 {{- printf "%s-postgresql" .Release.Name }}
@@ -236,10 +253,12 @@ Uses the bitnami/postgresql subchart service name when internal, or the user-sup
 {{- end }}
 
 {{/*
-Resolve the PostgreSQL port.
+Resolve the PostgreSQL port. Same autobind precedence as the host above.
 */}}
 {{- define "flexprice.postgresPort" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_PORT") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_PORT" | toString -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.port | toString }}
 {{- else -}}
 5432
@@ -291,7 +310,18 @@ Resolve the ClickHouse address (host:port) based on clickhouse.mode.
 {{- if eq .Values.clickhouse.mode "external" -}}
 {{- .Values.clickhouse.address }}
 {{- else if eq .Values.clickhouse.mode "altinity" -}}
-{{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
+{{- /* Namespace-qualified when clickhouse.namespace is set, matching what the
+       standalone branch below already does via flexprice.clickhouseServiceHost.
+       The operator's Service lives in the ClickHouse namespace, so the bare
+       name only resolves for consumers in that same namespace — the migration
+       Job runs in the release namespace and failed with
+       "nc: bad address 'chi-flexprice-flexprice-0-0'". */ -}}
+{{- $chSvc := printf "chi-%s-flexprice-0-0" (include "flexprice.fullname" .) -}}
+{{- if .Values.clickhouse.namespace -}}
+{{- printf "%s.%s.svc.cluster.local:9000" $chSvc .Values.clickhouse.namespace }}
+{{- else -}}
+{{- printf "%s:9000" $chSvc }}
+{{- end -}}
 {{- else -}}
 {{- printf "%s:9000" (include "flexprice.clickhouseServiceHost" .) }}
 {{- end -}}
@@ -749,5 +779,56 @@ All service addresses are resolved via named templates above so this block stays
 {{- /* ---- Extra env vars (passthrough; applies in both legacy and migrated modes) ---- */}}
 {{- with .Values.extraEnv }}
 {{ toYaml . | trim }}
+{{- end }}
+{{- end }}
+
+{{/*
+Topology spread constraints for a component, with a defaulted labelSelector.
+Usage: include "flexprice.topologySpreadConstraints" (dict "ctx" . "component" "api")
+
+Resolves `.Values.<component>.topologySpreadConstraints` first, falling back to
+the global `.Values.topologySpreadConstraints`.
+
+Any constraint that carries NO labelSelector of its own gets one injected:
+the chart's selector labels (which honour nameOverride/fullnameOverride) plus
+the component key, so each workload spreads against its own replicas rather
+than against every pod in the release.
+
+This defaulting exists because the previous values.yaml hardcoded
+`app.kubernetes.io/name: flexprice`. That matched zero pods the moment an
+operator set nameOverride, and since the default whenUnsatisfiable is
+ScheduleAnyway the scheduler silently ignored the constraint — all replicas
+could land in one AZ with nothing in the manifest to show for it.
+
+A constraint that DOES define labelSelector is passed through untouched, so an
+operator can still spread against an arbitrary set of pods.
+
+Presence is tested with `hasKey`, not truthiness: an explicit `labelSelector: {}`
+is a VALID selector meaning "match every pod in the namespace", but it is falsey
+in Go templates. Testing truthiness would take the injection branch and emit
+`labelSelector` twice in the same constraint — YAML resolves the duplicate to the
+last occurrence, so the operator's explicit selector would be silently discarded
+rather than rejected.
+*/}}
+{{- define "flexprice.topologySpreadConstraints" -}}
+{{- $ctx := .ctx -}}
+{{- $component := .component -}}
+{{- $cfg := index $ctx.Values $component | default dict -}}
+{{- $tsc := default $ctx.Values.topologySpreadConstraints (get $cfg "topologySpreadConstraints") -}}
+{{- /* `--set topologySpreadConstraints=[]` yields the STRING "[]", not an empty
+       list, and `range` over a string is a render error. Anything that is not a
+       real list is treated as "no constraints" so the caller's `with` emits
+       nothing, matching `topologySpreadConstraints: []` set via a values file. */ -}}
+{{- if not (kindIs "slice" $tsc) }}{{- $tsc = list }}{{- end -}}
+{{- range $tsc }}
+{{- if hasKey . "labelSelector" }}
+- {{ toYaml . | nindent 2 | trim }}
+{{- else }}
+- {{ toYaml . | nindent 2 | trim }}
+  labelSelector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" $ctx | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+{{- end }}
 {{- end }}
 {{- end }}

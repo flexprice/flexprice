@@ -41,7 +41,6 @@ func getDisplayMessage(err error) string {
 			}
 		}
 	}
-
 	// fallback to the error message
 	return "An unexpected error occurred"
 }

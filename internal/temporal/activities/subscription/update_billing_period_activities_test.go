@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -242,4 +243,75 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_TerminatesResourc
 	for _, li := range lineItems {
 		s.False(li.EndDate.IsZero(), "line item %s must be terminated when CheckCancellationActivity fires the cancellation", li.ID)
 	}
+}
+
+// TestCreateDraftInvoicesActivity_SkipsPeriodWithFinalizedInvoice guards the retry-storm
+// root cause: when a period already has a finalized (non-draft) invoice, the underlying
+// service returns ErrAlreadyExists. The activity must treat that as an idempotent no-op
+// and continue with the remaining periods, otherwise Temporal retries the activity forever
+// because the state can never become "no invoice for this period" again.
+func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_SkipsPeriodWithFinalizedInvoice() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_create_draft_invoices_skip")
+
+	// Minute-aligned so the service's Truncate(time.Minute) doesn't cause a mismatch
+	// when it later calls InvoiceRepo.GetForPeriod.
+	p1Start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	p1End := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	p2Start := p1End
+	p2End := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_create_draft_invoices_skip",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          p1Start,
+		CurrentPeriodStart: p2Start,
+		CurrentPeriodEnd:   p2End,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	// Pre-existing finalized invoice for P1 — this is the state that causes
+	// CreateDraftInvoiceForSubscription to return ErrAlreadyExists.
+	existing := &invoice.Invoice{
+		ID:              "inv_finalized_p1",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusSucceeded,
+		Currency:        "usd",
+		AmountDue:       decimal.Zero,
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.Zero,
+		Subtotal:        decimal.Zero,
+		Total:           decimal.Zero,
+		PeriodStart:     &p1Start,
+		PeriodEnd:       &p1End,
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, existing))
+
+	input := subscriptionModels.CreateInvoicesActivityInput{
+		SubscriptionID: sub.ID,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		UserID:         types.GetUserID(ctx),
+		Periods: []dto.Period{
+			{Start: p1Start, End: p1End},
+			{Start: p2Start, End: p2End},
+		},
+	}
+
+	output, err := s.activities.CreateDraftInvoicesActivity(ctx, input)
+	s.NoError(err, "activity must not fail when a period is already invoiced — Temporal would retry the permanent failure forever")
+	s.Require().NotNil(output)
+	s.Len(output.InvoiceIDs, 1, "P1 must be skipped (already invoiced), only P2 gets a new draft")
+	s.NotContains(output.InvoiceIDs, existing.ID, "output must contain newly-created draft IDs, not the pre-existing finalized invoice")
 }

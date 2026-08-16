@@ -259,7 +259,16 @@ jobs:
   deploy-preprod:
     name: Deploy Preprod (${{ strategy.job-index }})
     needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' && needs.resolve-config.outputs.preprod_targets != '[]' }}
+    # `always()` is required so a skipped approval-gate does not block staging, but it
+    # also cancels the implicit "skip on failed needs" rule — so every dependency this
+    # job actually relies on must be asserted explicitly. `needs.build.result` is the
+    # one that matters: without it a failed image build still reaches the deploy step,
+    # which registers a task definition referencing an image that was never pushed.
+    if: >-
+      ${{ always() &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.preprod_targets != '[]' }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -379,6 +388,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
@@ -415,6 +425,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
@@ -451,6 +462,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||

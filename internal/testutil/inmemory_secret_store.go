@@ -120,12 +120,21 @@ func (s *InMemorySecretStore) Count(ctx context.Context, filter *types.SecretFil
 }
 
 func (s *InMemorySecretStore) ListAll(ctx context.Context, filter *types.SecretFilter) ([]*secret.Secret, error) {
-	// Create an unlimited filter
+	// Drop pagination but keep every predicate. Copying only a subset here would
+	// silently widen the result set for callers that filter by owner, status or
+	// expiry (ensureNoActiveAPIKeys does all three), making tests pass against
+	// data the real repository would never have returned.
 	unlimitedFilter := &types.SecretFilter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 		TimeRangeFilter: filter.TimeRangeFilter,
 		Type:            filter.Type,
 		Provider:        filter.Provider,
+		Prefix:          filter.Prefix,
+		UserID:          filter.UserID,
+		NotExpiredAt:    filter.NotExpiredAt,
+	}
+	if filter.QueryFilter != nil {
+		unlimitedFilter.QueryFilter.Status = filter.QueryFilter.Status
 	}
 
 	return s.List(ctx, unlimitedFilter)

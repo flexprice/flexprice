@@ -182,6 +182,42 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Update user roles
+// @ID updateUserRoles
+// @Description Update the roles of a user account (not service accounts — their roles are fixed at creation). Restricted to super_admin; a caller cannot update their own roles. Blocked with a 400 if the user has any active (published, unexpired) API key in any environment, since a key's permissions are snapshotted at creation time and would otherwise silently keep running on the old roles; the error lists the active keys grouped by environment ID so the caller can prompt to expire them first, then retry.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "User ID"
+// @Param request body dto.UpdateUserRolesRequest true "Update user roles request"
+// @Success 200 {object} dto.UpdateUserRolesResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request, or user has active API keys that must be expired first"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/{id}/roles [put]
+func (h *UserHandler) UpdateUserRoles(c *gin.Context) {
+	id := c.Param("id")
+	var req dto.UpdateUserRolesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.userService.UpdateUserRoles(c.Request.Context(), id, &req)
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "failed to update user roles", "error", err, "user_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Delete service account
 // @ID deleteServiceAccount
 // @Description Soft-delete (archive) a service account by ID.

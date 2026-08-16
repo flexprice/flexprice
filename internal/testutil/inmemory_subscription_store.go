@@ -195,6 +195,11 @@ func (s *InMemorySubscriptionStore) Get(ctx context.Context, id string) (*subscr
 	return sub, nil
 }
 
+// GetForUpdate matches Get; in-memory store has no row locks.
+func (s *InMemorySubscriptionStore) GetForUpdate(ctx context.Context, id string) (*subscription.Subscription, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
 	subs, err := s.InMemoryStore.List(ctx, filter, subscriptionFilterFn, subscriptionSortFn)
 	if err != nil {
@@ -273,7 +278,15 @@ func (s *InMemorySubscriptionStore) Update(ctx context.Context, sub *subscriptio
 			WithHint("Subscription data is required").
 			Mark(ierr.ErrValidation)
 	}
-	err := s.InMemoryStore.Update(ctx, sub.ID, sub)
+
+	// The ent repository does not write plan_id here (see UpdatePlan); a double
+	// that did would hide a caller writing a stale plan back.
+	stored := *sub
+	if existing, getErr := s.InMemoryStore.Get(ctx, sub.ID); getErr == nil && existing != nil {
+		stored.PlanID = existing.PlanID
+	}
+
+	err := s.InMemoryStore.Update(ctx, sub.ID, &stored)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			return ierr.WithError(err).
@@ -291,6 +304,23 @@ func (s *InMemorySubscriptionStore) Update(ctx context.Context, sub *subscriptio
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
+}
+
+func (s *InMemorySubscriptionStore) UpdatePlan(ctx context.Context, id string, planID string) error {
+	if planID == "" {
+		return ierr.NewError("plan_id is required").
+			WithHint("A subscription cannot be moved to an empty plan").
+			Mark(ierr.ErrValidation)
+	}
+
+	sub, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	updated := *sub
+	updated.PlanID = planID
+	return s.InMemoryStore.Update(ctx, id, &updated)
 }
 
 // Delete archives the subscription, matching the ent repository, which flips status to archived and
