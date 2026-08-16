@@ -1,12 +1,52 @@
 package e2eprobe
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
+
+// GrantEntitlementInput mirrors internal/api/dto/entitlement.go:CreateEntitlementRequest
+// for the grant subset that SDK v2.0.24 doesn't cover. When the SDK is
+// regenerated with grant fields on CreateEntitlementRequest, delete this
+// and use the SDK's typed Create.
+type GrantEntitlementInput struct {
+	FeatureID          string
+	FeatureType        string // "metered"
+	PlanID             string
+	EntityType         string // "plan"
+	EntityID           string // same value as PlanID for plan-level
+	IsEnabled          bool
+	GrantMeasure       string // "quantity" | "amount"
+	GrantQuota         string // decimal string
+	GrantDurationValue int
+	GrantDurationUnit  string // "hour" | "day" | "week"
+	AggregationMode    string // "additive" | "parallel"
+}
+
+// GrantEntitlementResponse is the minimal decode of GET /entitlements/{id}
+// carrying only the fields the seed's config-echo assertion needs. The
+// server's full EntitlementResponse has many more fields; we ignore them.
+type GrantEntitlementResponse struct {
+	ID                 string `json:"id"`
+	FeatureID          string `json:"feature_id"`
+	PlanID             string `json:"plan_id"`
+	GrantMeasure       string `json:"grant_measure"`
+	GrantQuota         string `json:"grant_quota"`
+	GrantDurationValue *int   `json:"grant_duration_value"`
+	GrantDurationUnit  string `json:"grant_duration_unit"`
+	AggregationMode    string `json:"aggregation_mode"`
+	IsEnabled          bool   `json:"is_enabled"`
+}
 
 type Client interface {
 	Customers() CustomerOps
@@ -18,6 +58,11 @@ type Client interface {
 	Events() EventOps
 	Invoices() InvoiceOps
 	NewAsyncEventClient() AsyncEventClient
+	Entitlements() EntitlementOps
+	Coupons() CouponOps
+	CouponAssociations() CouponAssociationOps
+	TaxRates() TaxRateOps
+	TaxAssociations() TaxAssociationOps
 }
 
 type CustomerOps interface {
@@ -80,6 +125,46 @@ type EventOps interface {
 type InvoiceOps interface {
 	Query(ctx context.Context, filter types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error)
 	Get(ctx context.Context, id string) (*dtos.GetInvoiceResponse, error)
+	GetPreview(ctx context.Context, req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error)
+}
+
+type EntitlementOps interface {
+	Create(ctx context.Context, req types.CreateEntitlementRequest) (*dtos.CreateEntitlementResponse, error)
+	Query(ctx context.Context, req types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error)
+	Delete(ctx context.Context, id string) (*dtos.DeleteEntitlementResponse, error)
+
+	// CreateWithGrant sends a grant-config-enabled entitlement create via
+	// raw HTTP. SDK v2.0.24's CreateEntitlementRequest doesn't expose grant
+	// fields; when the SDK regenerates, delete this and use Create.
+	CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (id string, err error)
+
+	// GetRaw fetches an entitlement by ID via raw HTTP so callers can
+	// inspect grant fields the SDK's typed EntitlementResponse drops.
+	GetRaw(ctx context.Context, id string) (*GrantEntitlementResponse, error)
+}
+
+type CouponOps interface {
+	Create(ctx context.Context, req types.CreateCouponRequest) (*dtos.CreateCouponResponse, error)
+	Query(ctx context.Context, req types.CouponFilter) (*dtos.QueryCouponResponse, error)
+	GetByCode(ctx context.Context, code string) (*dtos.GetCouponByCodeResponse, error)
+	Delete(ctx context.Context, id string) (*dtos.DeleteCouponResponse, error)
+}
+
+type CouponAssociationOps interface {
+	List(ctx context.Context, req dtos.ListCouponAssociationsRequest) (*dtos.ListCouponAssociationsResponse, error)
+}
+
+type TaxRateOps interface {
+	Create(ctx context.Context, req types.CreateTaxRateRequest) (*dtos.CreateTaxRateResponse, error)
+	Get(ctx context.Context, id string) (*dtos.GetTaxRateResponse, error)
+	List(ctx context.Context, req dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error)
+	Delete(ctx context.Context, id string) (*dtos.DeleteTaxRateResponse, error)
+}
+
+type TaxAssociationOps interface {
+	Create(ctx context.Context, req types.CreateTaxAssociationRequest) (*dtos.CreateTaxAssociationResponse, error)
+	List(ctx context.Context, entityType, entityID, externalCustomerID, taxRateID *string) (*dtos.ListTaxAssociationsResponse, error)
+	Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error)
 }
 
 type AsyncEventClient interface {
@@ -94,11 +179,19 @@ func NewSDKClient(apiHost, apiKey string) Client {
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
 	)
-	return &sdkClient{sdk: sdk}
+	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
 }
 
 type sdkClient struct {
 	sdk *flexprice.Flexprice
+	// apiHost + apiKey are captured here so raw-HTTP methods
+	// (EntitlementOps.CreateWithGrant + GetRaw) can bypass the SDK's
+	// generated typed request/response for endpoints where the SDK
+	// doesn't cover fields the server accepts. When SDK v2.0.24 is
+	// regenerated with those fields, delete the raw-HTTP methods and
+	// remove these captures.
+	apiHost string
+	apiKey  string
 }
 
 func (c *sdkClient) Customers() CustomerOps         { return customerOps{c.sdk.Customers} }
@@ -112,6 +205,13 @@ func (c *sdkClient) Invoices() InvoiceOps           { return invoiceOps{c.sdk.In
 func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
 	return c.sdk.NewAsyncClient()
 }
+func (c *sdkClient) Entitlements() EntitlementOps {
+	return entitlementOps{s: c.sdk.Entitlements, parent: c}
+}
+func (c *sdkClient) Coupons() CouponOps                       { return couponOps{c.sdk.Coupons} }
+func (c *sdkClient) CouponAssociations() CouponAssociationOps { return couponAssociationOps{c.sdk.CouponAssociations} }
+func (c *sdkClient) TaxRates() TaxRateOps                     { return taxRateOps{c.sdk.TaxRates} }
+func (c *sdkClient) TaxAssociations() TaxAssociationOps       { return taxAssociationOps{c.sdk.TaxAssociations} }
 
 // --- adapters ---
 
@@ -243,4 +343,158 @@ func (o invoiceOps) Query(ctx context.Context, f types.InvoiceFilter) (*dtos.Que
 // Get passes nil for optional expandBySource and groupBy parameters (not exposed in the interface).
 func (o invoiceOps) Get(ctx context.Context, id string) (*dtos.GetInvoiceResponse, error) {
 	return o.s.GetInvoice(ctx, id, nil, nil)
+}
+func (o invoiceOps) GetPreview(ctx context.Context, req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error) {
+	return o.s.GetInvoicePreview(ctx, req)
+}
+
+type entitlementOps struct {
+	s      *flexprice.Entitlements
+	parent *sdkClient // read-only reference — holds apiHost + apiKey for raw HTTP
+}
+
+func (o entitlementOps) Create(ctx context.Context, req types.CreateEntitlementRequest) (*dtos.CreateEntitlementResponse, error) {
+	return o.s.CreateEntitlement(ctx, req)
+}
+func (o entitlementOps) Query(ctx context.Context, f types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error) {
+	return o.s.QueryEntitlement(ctx, f)
+}
+func (o entitlementOps) Delete(ctx context.Context, id string) (*dtos.DeleteEntitlementResponse, error) {
+	return o.s.DeleteEntitlement(ctx, id)
+}
+
+// CreateWithGrant POSTs a hand-rolled JSON body to /entitlements matching
+// the server's dto.CreateEntitlementRequest schema, including grant fields
+// that SDK v2.0.24's CreateEntitlementRequest doesn't expose.
+func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (string, error) {
+	body := map[string]any{
+		"feature_id":           req.FeatureID,
+		"feature_type":         req.FeatureType,
+		"plan_id":              req.PlanID,
+		"entity_type":          req.EntityType,
+		"entity_id":            req.EntityID,
+		"is_enabled":           req.IsEnabled,
+		"grant_measure":        req.GrantMeasure,
+		"grant_quota":          req.GrantQuota,
+		"grant_duration_value": req.GrantDurationValue,
+		"grant_duration_unit":  req.GrantDurationUnit,
+		"aggregation_mode":     req.AggregationMode,
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal grant entitlement input: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		strings.TrimRight(o.parent.apiHost, "/")+"/entitlements",
+		bytes.NewReader(raw))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("x-api-key", o.parent.apiKey)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var out GrantEntitlementResponse
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return "", fmt.Errorf("decode response: %w", err)
+		}
+		return out.ID, nil
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+}
+
+// GetRaw fetches an entitlement's full JSON body and decodes into
+// GrantEntitlementResponse — includes grant_* fields the SDK's typed
+// EntitlementResponse silently drops.
+func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlementResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET",
+		strings.TrimRight(o.parent.apiHost, "/")+"/entitlements/"+id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("x-api-key", o.parent.apiKey)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var out GrantEntitlementResponse
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return nil, fmt.Errorf("decode response: %w", err)
+		}
+		return &out, nil
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	return nil, errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+}
+
+// errorFromRawHTTPResponse converts a non-2xx HTTP response into an SDK-shaped
+// error so callers can reuse isNotFound / isAlreadyExists helpers unchanged.
+func errorFromRawHTTPResponse(status int, body []byte) error {
+	var er sdkerrors.ErrorResponse
+	if err := json.Unmarshal(body, &er); err == nil && er.HTTPStatusCode != nil {
+		return &er
+	}
+	return sdkerrors.NewAPIError("raw HTTP error", status, string(body), nil)
+}
+
+type couponOps struct{ s *flexprice.Coupons }
+
+func (o couponOps) Create(ctx context.Context, req types.CreateCouponRequest) (*dtos.CreateCouponResponse, error) {
+	return o.s.CreateCoupon(ctx, req)
+}
+func (o couponOps) Query(ctx context.Context, f types.CouponFilter) (*dtos.QueryCouponResponse, error) {
+	return o.s.QueryCoupon(ctx, f)
+}
+func (o couponOps) GetByCode(ctx context.Context, code string) (*dtos.GetCouponByCodeResponse, error) {
+	return o.s.GetCouponByCode(ctx, code)
+}
+func (o couponOps) Delete(ctx context.Context, id string) (*dtos.DeleteCouponResponse, error) {
+	return o.s.DeleteCoupon(ctx, id)
+}
+
+type couponAssociationOps struct{ s *flexprice.CouponAssociations }
+
+func (o couponAssociationOps) List(ctx context.Context, req dtos.ListCouponAssociationsRequest) (*dtos.ListCouponAssociationsResponse, error) {
+	return o.s.ListCouponAssociations(ctx, req)
+}
+
+type taxRateOps struct{ s *flexprice.TaxRates }
+
+func (o taxRateOps) Create(ctx context.Context, req types.CreateTaxRateRequest) (*dtos.CreateTaxRateResponse, error) {
+	return o.s.CreateTaxRate(ctx, req)
+}
+func (o taxRateOps) Get(ctx context.Context, id string) (*dtos.GetTaxRateResponse, error) {
+	return o.s.GetTaxRate(ctx, id)
+}
+func (o taxRateOps) List(ctx context.Context, req dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
+	return o.s.GetTaxRates(ctx, req)
+}
+func (o taxRateOps) Delete(ctx context.Context, id string) (*dtos.DeleteTaxRateResponse, error) {
+	return o.s.DeleteTaxRate(ctx, id)
+}
+
+type taxAssociationOps struct{ s *flexprice.TaxAssociations }
+
+func (o taxAssociationOps) Create(ctx context.Context, req types.CreateTaxAssociationRequest) (*dtos.CreateTaxAssociationResponse, error) {
+	return o.s.CreateTaxAssociation(ctx, req)
+}
+func (o taxAssociationOps) List(ctx context.Context, entityType, entityID, externalCustomerID, taxRateID *string) (*dtos.ListTaxAssociationsResponse, error) {
+	return o.s.ListTaxAssociations(ctx, entityType, entityID, externalCustomerID, taxRateID)
+}
+func (o taxAssociationOps) Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error) {
+	return o.s.DeleteTaxAssociation(ctx, id)
 }

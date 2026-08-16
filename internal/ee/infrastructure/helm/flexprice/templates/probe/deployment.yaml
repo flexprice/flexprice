@@ -1,0 +1,126 @@
+{{- if .Values.e2eprobe.enabled }}
+# e2eprobe — synthetic end-to-end probe.
+#
+# Single replica by design: the checks mutate shared seeded fixtures under one
+# tenant, and a second replica would race against the first into false
+# failures. `strategy.rollingUpdate.maxSurge: 0` preserves that invariant
+# across deploys — never bump replicaCount or maxSurge above 0 for this
+# component without first reworking the probe's fixture isolation.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+spec:
+  # Hardcoded, NOT configurable. The checks mutate shared seeded fixtures under
+  # a single tenant, so a second replica races the first into false failures.
+  # This is a correctness constraint, so the chart does not expose it as a knob.
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: e2eprobe
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "e2eprobe") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- /*
+        Dedicated ServiceAccount with NO API token.
+
+        Without this the pod runs as the namespace `default` ServiceAccount and
+        Kubernetes mounts its token, so a compromised probe image could reach
+        the Kubernetes API with whatever the default SA is granted — on top of
+        the probe's own API key and Slack webhook, which are mounted as env.
+
+        The probe talks only to the flexprice API over HTTPS. It needs no
+        cluster access at all, so the token is switched off on both the
+        ServiceAccount and the pod.
+      */}}
+      serviceAccountName: {{ include "flexprice.fullname" . }}-e2eprobe
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: e2eprobe
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- /*
+            Tag falls back to the chart's appVersion rather than a mutable
+            floating tag, and pullPolicy defaults to IfNotPresent. A default of
+            `develop` + `Always` means every enabling operator continuously
+            re-pulls a mutable reference into production, so a compromised push
+            to that tag reaches the cluster with access to the mounted probe
+            secrets and the pod's ServiceAccount token. Pin a tag or digest per
+            region instead.
+          */}}
+          image: "{{ .Values.e2eprobe.image.repository }}:{{ .Values.e2eprobe.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.e2eprobe.image.pullPolicy | default "IfNotPresent" }}
+          workingDir: /app
+          ports:
+            - name: webhook
+              containerPort: {{ .Values.e2eprobe.service.port }}
+              protocol: TCP
+          env:
+            {{- /*
+              Custom env is rendered FIRST so the reserved names below always
+              win. Kubernetes resolves a duplicated env name to the LAST
+              occurrence, so rendering .Values.e2eprobe.env after these would
+              let a values entry named E2EPROBE_API_KEY silently replace the
+              secret-backed credential with a plaintext literal — the probe
+              would keep running, authenticating with the wrong key.
+              Reserved: E2EPROBE_API_KEY, E2EPROBE_SLACK_WEBHOOK_URL,
+              E2EPROBE_LISTENER_PORT, TMPDIR.
+            */}}
+            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" }}
+            {{- range $k, $v := .Values.e2eprobe.env }}
+            {{- if has $k $reserved }}
+            {{- fail (printf "e2eprobe.env may not set %s — it is managed by the chart (reserved: %s)" $k (join ", " $reserved)) }}
+            {{- end }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: E2EPROBE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.existingSecret }}
+                  key: {{ .Values.e2eprobe.secretKeys.apiKey }}
+            - name: E2EPROBE_SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.existingSecret }}
+                  key: {{ .Values.e2eprobe.secretKeys.slackWebhookUrl }}
+            - name: E2EPROBE_LISTENER_PORT
+              value: {{ .Values.e2eprobe.service.port | quote }}
+            - name: TMPDIR
+              value: "/tmp"
+          # No HTTP liveness/readiness probe: the probe serves only /webhook, and
+          # only when the listener checks are enabled. Same posture as the
+          # chart's worker Deployment (templates/app/deployment-worker.yaml).
+          resources:
+            {{- toYaml .Values.e2eprobe.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with (default .Values.nodeSelector .Values.e2eprobe.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.tolerations .Values.e2eprobe.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

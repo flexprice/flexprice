@@ -22,13 +22,18 @@ type Router struct {
 	tracing      *tracing.Service
 	config       *config.Webhook
 	dlqPublisher message.Publisher
+	debugLogs    bool
 }
 
 // NewRouter creates a new message router
 func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*Router, error) {
+	// enableDebugLogs allows watermill DEBUG messages in debug mode.
+	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
+	enableDebugLogs := cfg.Logging.Level == types.LogLevelDebug
+
 	router, err := message.NewRouter(
 		message.RouterConfig{},
-		watermill.NewStdLogger(true, false),
+		watermill.NewStdLogger(enableDebugLogs, false),
 	)
 	if err != nil {
 		return nil, err
@@ -59,6 +64,7 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 		tracing:      tracingSvc,
 		config:       &cfg.Webhook,
 		dlqPublisher: dlqPublisher,
+		debugLogs:    enableDebugLogs,
 	}, nil
 }
 
@@ -195,7 +201,7 @@ func (r *Router) AddNoPublishHandler(
 		Multiplier:          2.0,
 		MaxElapsedTime:      2 * time.Minute,
 		RandomizationFactor: 0.5,
-		Logger:              watermill.NewStdLogger(true, false),
+		Logger:              watermill.NewStdLogger(r.debugLogs, false),
 		OnRetryHook: func(retryNum int, delay time.Duration) {
 			r.logger.Info(context.Background(), "retrying message",
 				"handler", handlerName,

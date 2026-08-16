@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	"github.com/flexprice/flexprice/internal/logger"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -32,6 +34,27 @@ const (
 func strPtr(s string) *string { return &s }
 func int64Ptr(i int64) *int64 { return &i }
 func boolPtr(b bool) *bool    { return &b }
+
+const (
+	SharedCouponCode = "E2EPROBE_COUPON_10PCT"
+	SharedCouponName = "E2EProbe 10% Coupon"
+
+	SharedTaxRateCode = "E2EPROBE_TAX_10PCT"
+	SharedTaxRateName = "E2EProbe 10% Tax"
+)
+
+// Grant coverage constants (2026-08-13 spec). See
+// docs/superpowers/specs/2026-08-13-e2eprobe-entitlement-grants-design.md
+// for rationale. The DB constraint "one non-parallel entitlement per
+// (entity, feature)" means the additive-grant feature MUST NOT also get
+// the legacy soft-limit entitlement — ensurePlanEntitlements skips it via
+// the grantOnlyFeatures set defined below.
+const (
+	AdditiveGrantFeatureLookupKey = "e2eprobe_sum_multiplier_feature"
+	AdditiveGrantQuota            = "1000"
+	AdditiveGrantDurationValue    = 1
+	AdditiveGrantDurationUnit     = "hour"
+)
 
 // lowBalanceAlertSettings returns the alert thresholds seed wallets are
 // created with: info at 25, warning at 10, critical at 0 (all "below").
@@ -74,6 +97,12 @@ func (s *SeedEnsure) Run(ctx context.Context) error {
 	if err := s.ensureFeatures(ctx, &seeds); err != nil {
 		return err
 	}
+	if err := s.ensureCoupons(ctx, &seeds); err != nil {
+		return err
+	}
+	if err := s.ensureTaxRates(ctx, &seeds); err != nil {
+		return err
+	}
 	if err := s.ensureCustomers(ctx, &seeds); err != nil {
 		return err
 	}
@@ -83,7 +112,33 @@ func (s *SeedEnsure) Run(ctx context.Context) error {
 	if err := s.ensurePrices(ctx, &seeds); err != nil {
 		return err
 	}
+	if err := s.ensurePlanEntitlements(ctx, &seeds); err != nil {
+		return err
+	}
+	// ensureEntitlementGrants is intentionally NON-FATAL. It provisions
+	// additive-grant coverage on ONE reserved feature (2026-08-13 plan).
+	// If the server rejects the raw-HTTP grant config, an SDK/server
+	// version drift misses a field, or config-echo drifts, we log and
+	// continue — every downstream step (subscriptions, wallets, tax
+	// association) and every existing probe (new-customer-lifecycle,
+	// commitment, tax, coupon, etc.) must keep working. Otherwise a
+	// grant-side failure poisons LoadSeeds → all ephemeral-creating
+	// probes soft-skip on empty PlanIDs → no customers appear in the
+	// tenant. See the "no ephemeral customers on staging" report.
+	if err := s.ensureEntitlementGrants(ctx, &seeds); err != nil {
+		if s.logger != nil {
+			s.logger.Info(ctx, "seed-ensure: grant provisioning failed; continuing without grant coverage",
+				"error", err.Error(),
+			)
+		}
+		// Intentional: clear GrantEntitlementIDs so the grant probe
+		// soft-skips instead of hitting the half-populated map.
+		seeds.GrantEntitlementIDs = nil
+	}
 	if err := s.ensureSubscriptions(ctx, &seeds); err != nil {
+		return err
+	}
+	if err := s.ensurePersistentTaxAssociation(ctx, &seeds); err != nil {
 		return err
 	}
 	if err := s.ensureWallets(ctx, &seeds); err != nil {
@@ -157,10 +212,25 @@ var seedFeatureSpecs = func() []featureSpec {
 			},
 			aggLabel: "sum_filtered",
 		},
+		{
+			lookupKey: "e2eprobe_max_15min_feature", eventName: "e2eprobe_max_15min",
+			displayName: "E2EProbe Max 15min", aggType: types.AggregationTypeMax,
+			field: strPtr("amount"), bucketSize: bucketSizePtr(types.WindowSizeFifteenMin), aggLabel: "max_15min",
+		},
+		{
+			lookupKey: "e2eprobe_sum_hour_feature", eventName: "e2eprobe_sum_hour",
+			displayName: "E2EProbe Sum Hour", aggType: types.AggregationTypeSum,
+			field: strPtr("amount"), bucketSize: bucketSizePtr(types.WindowSizeHour), aggLabel: "sum_hour",
+		},
+		{
+			lookupKey: "e2eprobe_max_day_feature", eventName: "e2eprobe_max_day",
+			displayName: "E2EProbe Max Day", aggType: types.AggregationTypeMax,
+			field: strPtr("amount"), bucketSize: bucketSizePtr(types.WindowSizeDay), aggLabel: "max_day",
+		},
 	}
 }()
 
-// ensureFeatures creates 8 features with embedded meters idempotently.
+// ensureFeatures creates 11 features with embedded meters idempotently.
 // MeterIDs and FeatureIDs are populated into out.
 func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) error {
 	// Build lookup-key index of existing features.
@@ -188,6 +258,12 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 			// Already exists — record IDs.
 			if existing.ID != nil {
 				out.FeatureIDs = append(out.FeatureIDs, *existing.ID)
+				if spec.bucketSize != nil {
+					if out.BucketedFeatureIDs == nil {
+						out.BucketedFeatureIDs = map[string]string{}
+					}
+					out.BucketedFeatureIDs[spec.lookupKey] = *existing.ID
+				}
 			}
 			if existing.MeterID != nil {
 				out.MeterIDs[spec.eventName] = *existing.MeterID
@@ -237,9 +313,259 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		feat := resp.FeatureResponse
 		if feat.ID != nil {
 			out.FeatureIDs = append(out.FeatureIDs, *feat.ID)
+			if spec.bucketSize != nil {
+				if out.BucketedFeatureIDs == nil {
+					out.BucketedFeatureIDs = map[string]string{}
+				}
+				out.BucketedFeatureIDs[spec.lookupKey] = *feat.ID
+			}
 		}
 		if feat.MeterID != nil {
 			out.MeterIDs[spec.eventName] = *feat.MeterID
+		}
+	}
+	return nil
+}
+
+// ensureCoupons idempotently provisions the shared E2EPROBE_COUPON_10PCT
+// coupon reused by coupon-application-probe and by seed's attachment on
+// persistent cust #1.
+//
+// Idempotency uses GetCouponByCode (GET /coupons/code/{code}) rather than
+// the search endpoint. The repo lowercases coupon_code on INSERT and the
+// GetByCode path normalizes the query and filters to StatusPublished
+// (see internal/repository/ent/coupon.go:159) — the search endpoint's
+// CouponCodes filter is case-sensitive and was silently missing the
+// stored lowercase row on staging, causing the create below to 409 on
+// every run.
+func (s *SeedEnsure) ensureCoupons(ctx context.Context, out *e2eprobe.Seeds) error {
+	existResp, err := s.client.Coupons().GetByCode(ctx, SharedCouponCode)
+	if err == nil && existResp != nil && existResp.CouponResponse != nil && existResp.CouponResponse.ID != nil {
+		out.SharedCouponID = *existResp.CouponResponse.ID
+		out.SharedCouponCode = SharedCouponCode
+		return nil
+	}
+	if err != nil && !isNotFound(err) {
+		return e2eprobe.Errorf(map[string]string{"step": "get_coupon_by_code", "coupon_code": SharedCouponCode}, "lookup coupon by code: %w", err)
+	}
+
+	code := SharedCouponCode
+	percentage := "10"
+	createResp, err := s.client.Coupons().Create(ctx, types.CreateCouponRequest{
+		Name:          SharedCouponName,
+		Type:          types.CouponTypePercentage,
+		Cadence:       types.CouponCadenceOnce,
+		CouponCode:    &code,
+		PercentageOff: &percentage,
+		Metadata: map[string]string{
+			"e2eprobe":      "true",
+			"e2eprobe_role": "seed",
+		},
+	})
+	if err != nil {
+		// A concurrent seed run (or a manual create) can win the race between
+		// the lookup above and this create; re-fetch by code so the caller
+		// still has SharedCouponID populated.
+		if isAlreadyExists(err) {
+			retryResp, retryErr := s.client.Coupons().GetByCode(ctx, SharedCouponCode)
+			if retryErr == nil && retryResp != nil && retryResp.CouponResponse != nil && retryResp.CouponResponse.ID != nil {
+				out.SharedCouponID = *retryResp.CouponResponse.ID
+				out.SharedCouponCode = SharedCouponCode
+				return nil
+			}
+		}
+		return e2eprobe.Errorf(map[string]string{"coupon_code": SharedCouponCode}, "create coupon: %w", err)
+	}
+	if createResp.CouponResponse != nil && createResp.CouponResponse.ID != nil {
+		out.SharedCouponID = *createResp.CouponResponse.ID
+	}
+	out.SharedCouponCode = SharedCouponCode
+	return nil
+}
+
+// ensureTaxRates idempotently provisions the shared E2EPROBE_TAX_10PCT tax
+// rate (10% percentage, EXTERNAL scope) reused by tax-application-probe and
+// by the persistent tax association on customer #0.
+//
+// SDK v2.0.24's TaxRates.List (GET /taxes/rates) is broken: the server
+// returns {items, pagination} but the SDK expects a bare array (schema-
+// annotation mismatch in the server's Swagger doc). Rather than call the
+// broken List method, this step attempts Create and treats an already-
+// exists response (HTTP 409 or Code=="already_exists") as success. On a
+// duplicate we cannot recover the existing ID (there is no exposed
+// GET-by-code endpoint), so out.SharedTaxRateID stays empty on that path
+// and downstream callers must tolerate that.
+func (s *SeedEnsure) ensureTaxRates(ctx context.Context, out *e2eprobe.Seeds) error {
+	// Populate the code first so downstream soft-skips (that only need code)
+	// still get it even if Create returns an unexpected error below.
+	out.SharedTaxRateCode = SharedTaxRateCode
+
+	percentage := "10"
+	scope := types.TaxRateScopeExternal
+	trType := types.TaxRateTypePercentage
+	createResp, err := s.client.TaxRates().Create(ctx, types.CreateTaxRateRequest{
+		Code:            SharedTaxRateCode,
+		Name:            SharedTaxRateName,
+		PercentageValue: &percentage,
+		Scope:           &scope,
+		TaxRateType:     &trType,
+		Metadata: map[string]string{
+			"e2eprobe":      "true",
+			"e2eprobe_role": "seed",
+		},
+	})
+	if err == nil {
+		if createResp.TaxRateResponse != nil && createResp.TaxRateResponse.ID != nil {
+			out.SharedTaxRateID = *createResp.TaxRateResponse.ID
+		}
+		return nil
+	}
+	if isAlreadyExists(err) {
+		if s.logger != nil {
+			s.logger.Info(ctx, "ensureTaxRates: tax rate already exists (no ID lookup available in SDK v2.0.24, downstream will fall back to code match)",
+				"tax_rate_code", SharedTaxRateCode,
+			)
+		}
+		return nil
+	}
+	return e2eprobe.Errorf(map[string]string{"tax_rate_code": SharedTaxRateCode}, "create tax rate: %w", err)
+}
+
+// isAlreadyExists returns true when the given SDK error represents a
+// "resource already exists" (HTTP 409, or an ErrorResponse with Code
+// "already_exists"). Used by seed steps for create-then-swallow-duplicate
+// idempotency where a list-then-create round-trip is unavailable.
+func isAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	var errResp *sdkerrors.ErrorResponse
+	if errors.As(err, &errResp) {
+		if errResp.HTTPStatusCode != nil && *errResp.HTTPStatusCode == http.StatusConflict {
+			return true
+		}
+		if errResp.Code != nil && *errResp.Code == types.ErrorCodeAlreadyExists {
+			return true
+		}
+	}
+	var apiErr *sdkerrors.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode == http.StatusConflict {
+			return true
+		}
+		// The generic 4xx SDK path returns *APIError with the raw JSON body;
+		// fall back to substring match on the error code within the body.
+		if strings.Contains(apiErr.Body, `"code":"already_exists"`) {
+			return true
+		}
+	}
+	return false
+}
+
+// bucketedFeatureLookupKeys is the set of lookup keys whose features are
+// bucketed meters — plan-level entitlements are NOT provisioned for these
+// because the server rejects entitlements on bucketed max meters
+// ("Bucketed max meters process each bucket independently and cannot
+// have entitlements"). Derived from seedFeatureSpecs (bucketSize != nil)
+// so a new bucketed spec is auto-skipped without touching this file.
+var bucketedFeatureLookupKeys = func() map[string]bool {
+	m := map[string]bool{}
+	for _, spec := range seedFeatureSpecs {
+		if spec.bucketSize != nil {
+			m[spec.lookupKey] = true
+		}
+	}
+	return m
+}()
+
+// grantOnlyFeatures is the set of feature lookup keys reserved for
+// grant entitlements. ensurePlanEntitlements skips these; the grant
+// entitlement is created by ensureEntitlementGrants instead. The DB
+// enforces at most one non-parallel entitlement per (entity, feature),
+// so trying to add both a soft-limit AND an additive grant here would
+// conflict at INSERT time.
+var grantOnlyFeatures = map[string]bool{
+	AdditiveGrantFeatureLookupKey: true,
+}
+
+// ensurePlanEntitlements idempotently provisions one plan-level soft-limit
+// entitlement per non-bucketed metered feature (limit=100, reset MONTHLY).
+// Soft-limit is deliberate: hard-limit would reject the ingest driver's
+// traffic and pollute every other probe.
+func (s *SeedEnsure) ensurePlanEntitlements(ctx context.Context, out *e2eprobe.Seeds) error {
+	if len(out.PlanIDs) == 0 {
+		return nil
+	}
+	planID := out.PlanIDs[0]
+
+	existResp, err := s.client.Entitlements().Query(ctx, types.EntitlementFilter{
+		PlanIds: []string{planID},
+	})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query plan entitlements: %w", err)
+	}
+	existByFeature := map[string]string{}
+	if existResp.ListEntitlementsResponse != nil {
+		for _, e := range existResp.ListEntitlementsResponse.Items {
+			if e.FeatureID != nil && e.ID != nil {
+				existByFeature[*e.FeatureID] = *e.ID
+			}
+		}
+	}
+
+	// Resolve non-bucketed feature IDs by lookup key. Also skip the
+	// grant-only feature — ensureEntitlementGrants owns its (plan, feature)
+	// slot, and adding a soft-limit here would DB-conflict.
+	lookupKeys := make([]string, 0, len(seedFeatureSpecs))
+	for _, spec := range seedFeatureSpecs {
+		if bucketedFeatureLookupKeys[spec.lookupKey] {
+			continue
+		}
+		if grantOnlyFeatures[spec.lookupKey] {
+			continue
+		}
+		lookupKeys = append(lookupKeys, spec.lookupKey)
+	}
+	featResp, err := s.client.Features().Query(ctx, types.FeatureFilter{LookupKeys: lookupKeys})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query features for entitlements: %w", err)
+	}
+	if featResp.ListFeaturesResponse == nil {
+		return nil
+	}
+
+	limit := int64(100)
+	resetPeriod := types.EntitlementUsageResetPeriodMonthly
+	softLimit := true
+	enabled := true
+	planIDCopy := planID
+	entityType := types.EntitlementEntityTypePlan
+
+	for _, feat := range featResp.ListFeaturesResponse.Items {
+		if feat.ID == nil {
+			continue
+		}
+		featID := *feat.ID
+		if existID, ok := existByFeature[featID]; ok {
+			out.PlanEntitlementIDs = append(out.PlanEntitlementIDs, existID)
+			continue
+		}
+		createResp, err := s.client.Entitlements().Create(ctx, types.CreateEntitlementRequest{
+			FeatureID:        featID,
+			FeatureType:      types.FeatureTypeMetered,
+			EntityID:         &planIDCopy,
+			EntityType:       &entityType,
+			PlanID:           &planIDCopy,
+			UsageLimit:       &limit,
+			UsageResetPeriod: &resetPeriod,
+			IsSoftLimit:      &softLimit,
+			IsEnabled:        &enabled,
+		})
+		if err != nil {
+			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "feature_id": featID}, "create entitlement for feature %s: %w", featID, err)
+		}
+		if createResp.EntitlementResponse != nil && createResp.EntitlementResponse.ID != nil {
+			out.PlanEntitlementIDs = append(out.PlanEntitlementIDs, *createResp.EntitlementResponse.ID)
 		}
 	}
 	return nil
@@ -449,6 +775,188 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 	return nil
 }
 
+// ensureEntitlementGrants idempotently provisions one plan-level additive
+// grant entitlement on AdditiveGrantFeatureLookupKey. Reconciliation cases:
+//   - grant entitlement already present on (plan, feature): skip; capture id.
+//   - legacy soft-limit entitlement present on (plan, feature): delete it
+//     (frees the (entity, feature) slot the additive grant needs), then
+//     create the grant.
+//   - nothing present: create the grant.
+//
+// After Create, an immediate GetRaw round-trip verifies the server stored
+// the grant config as sent — catches silent field drops or mistranslation.
+func (s *SeedEnsure) ensureEntitlementGrants(ctx context.Context, out *e2eprobe.Seeds) error {
+	if len(out.PlanIDs) == 0 {
+		return nil
+	}
+	planID := out.PlanIDs[0]
+
+	// Resolve the target feature.
+	featResp, err := s.client.Features().Query(ctx, types.FeatureFilter{
+		LookupKeys: []string{AdditiveGrantFeatureLookupKey},
+	})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"step": "query_feature", "feature_lookup_key": AdditiveGrantFeatureLookupKey}, "query grant feature: %w", err)
+	}
+	if featResp.ListFeaturesResponse == nil || len(featResp.ListFeaturesResponse.Items) == 0 {
+		return nil // grant feature not seeded yet — soft skip
+	}
+	if featResp.ListFeaturesResponse.Items[0].ID == nil {
+		return nil
+	}
+	featID := *featResp.ListFeaturesResponse.Items[0].ID
+
+	// Query existing entitlements on this (plan, feature).
+	existResp, err := s.client.Entitlements().Query(ctx, types.EntitlementFilter{
+		PlanIds:    []string{planID},
+		FeatureIds: []string{featID},
+	})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"step": "query_existing_entitlements", "plan_id": planID, "feature_id": featID}, "query existing entitlements: %w", err)
+	}
+
+	var existingGrantID string
+	var legacySoftLimitID string
+	if existResp.ListEntitlementsResponse != nil {
+		for _, e := range existResp.ListEntitlementsResponse.Items {
+			if e.ID == nil {
+				continue
+			}
+			// The SDK's EntitlementResponse doesn't expose grant fields, so
+			// we use GetRaw to inspect grant_measure — its presence signals a
+			// grant entitlement, its absence a legacy soft-limit one.
+			raw, rawErr := s.client.Entitlements().GetRaw(ctx, *e.ID)
+			if rawErr != nil {
+				// Never classify on a failed read: a transient 5xx / timeout
+				// would otherwise mark a healthy grant entitlement as legacy
+				// and delete it below. Bubble the error up — the caller
+				// (ensureEntitlementGrants) is non-fatal, so on-call gets one
+				// log line and the next tick retries without destroying state.
+				return e2eprobe.Errorf(map[string]string{
+					"step":           "classify_existing_entitlement",
+					"plan_id":        planID,
+					"feature_id":     featID,
+					"entitlement_id": *e.ID,
+				}, "read existing entitlement for classification: %w", rawErr)
+			}
+			if raw.GrantMeasure != "" {
+				existingGrantID = *e.ID
+				break
+			}
+			legacySoftLimitID = *e.ID
+		}
+	}
+
+	if existingGrantID != "" {
+		// Idempotent-run case.
+		if out.GrantEntitlementIDs == nil {
+			out.GrantEntitlementIDs = map[string]string{}
+		}
+		out.GrantEntitlementIDs[AdditiveGrantFeatureLookupKey] = existingGrantID
+		return s.assertGrantConfigEcho(ctx, existingGrantID, featID, planID)
+	}
+
+	if legacySoftLimitID != "" {
+		// Legacy soft-limit entitlement from a pre-migration seed run.
+		// Delete it to free the (plan, feature) slot for the grant.
+		if _, err := s.client.Entitlements().Delete(ctx, legacySoftLimitID); err != nil && !isNotFound(err) {
+			return e2eprobe.Errorf(map[string]string{"step": "delete_legacy_entitlement", "plan_id": planID, "feature_id": featID, "entitlement_id": legacySoftLimitID}, "delete legacy soft-limit entitlement: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info(ctx, "ensureEntitlementGrants: deleted legacy soft-limit entitlement to make room for grant",
+				"plan_id", planID,
+				"feature_id", featID,
+				"entitlement_id", legacySoftLimitID,
+			)
+		}
+	}
+
+	// Create the additive grant entitlement.
+	createReq := e2eprobe.GrantEntitlementInput{
+		FeatureID:          featID,
+		FeatureType:        "metered",
+		PlanID:             planID,
+		EntityType:         "plan",
+		EntityID:           planID,
+		IsEnabled:          true,
+		GrantMeasure:       "quantity",
+		GrantQuota:         AdditiveGrantQuota,
+		GrantDurationValue: AdditiveGrantDurationValue,
+		GrantDurationUnit:  AdditiveGrantDurationUnit,
+		AggregationMode:    "additive",
+	}
+	id, err := s.client.Entitlements().CreateWithGrant(ctx, createReq)
+	if err != nil {
+		if isAlreadyExists(err) {
+			if s.logger != nil {
+				s.logger.Info(ctx, "ensureEntitlementGrants: grant entitlement already exists (concurrent create)",
+					"plan_id", planID,
+					"feature_id", featID,
+				)
+			}
+			return nil
+		}
+		return e2eprobe.Errorf(map[string]string{"step": "create_grant_entitlement", "plan_id": planID, "feature_id": featID}, "create grant entitlement: %w", err)
+	}
+
+	if out.GrantEntitlementIDs == nil {
+		out.GrantEntitlementIDs = map[string]string{}
+	}
+	out.GrantEntitlementIDs[AdditiveGrantFeatureLookupKey] = id
+
+	return s.assertGrantConfigEcho(ctx, id, featID, planID)
+}
+
+// assertGrantConfigEcho fetches the entitlement via raw HTTP and asserts
+// the grant fields we sent came back unchanged. Catches silent server-side
+// field drops that would otherwise leave the probe running against a
+// ghost entitlement.
+func (s *SeedEnsure) assertGrantConfigEcho(ctx context.Context, entitlementID, featID, planID string) error {
+	raw, err := s.client.Entitlements().GetRaw(ctx, entitlementID)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"step": "get_grant_entitlement", "entitlement_id": entitlementID, "plan_id": planID, "feature_id": featID}, "get grant entitlement for echo verification: %w", err)
+	}
+	if raw.GrantMeasure != "quantity" {
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "grant_measure", "want": "quantity", "got": raw.GrantMeasure}, "grant_measure did not round-trip: want %q, got %q", "quantity", raw.GrantMeasure)
+	}
+	if !decimalEquals(raw.GrantQuota, AdditiveGrantQuota) {
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "grant_quota", "want": AdditiveGrantQuota, "got": raw.GrantQuota}, "grant_quota did not round-trip: want %q, got %q", AdditiveGrantQuota, raw.GrantQuota)
+	}
+	if raw.GrantDurationValue == nil || *raw.GrantDurationValue != AdditiveGrantDurationValue {
+		gotStr := "<nil>"
+		if raw.GrantDurationValue != nil {
+			gotStr = fmt.Sprintf("%d", *raw.GrantDurationValue)
+		}
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "grant_duration_value", "want": fmt.Sprintf("%d", AdditiveGrantDurationValue), "got": gotStr}, "grant_duration_value did not round-trip")
+	}
+	if raw.GrantDurationUnit != AdditiveGrantDurationUnit {
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "grant_duration_unit", "want": AdditiveGrantDurationUnit, "got": raw.GrantDurationUnit}, "grant_duration_unit did not round-trip: want %q, got %q", AdditiveGrantDurationUnit, raw.GrantDurationUnit)
+	}
+	if raw.AggregationMode != "additive" {
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "aggregation_mode", "want": "additive", "got": raw.AggregationMode}, "aggregation_mode did not round-trip: want %q, got %q", "additive", raw.AggregationMode)
+	}
+	if !raw.IsEnabled {
+		return e2eprobe.Errorf(map[string]string{"step": "assert_grant_echo", "entitlement_id": entitlementID, "field": "is_enabled", "want": "true", "got": "false"}, "is_enabled did not round-trip: server returned disabled")
+	}
+	return nil
+}
+
+// decimalEquals compares two decimal-string values with tolerance for
+// server-side normalisation of trailing zeros (e.g. "1000" vs "1000.0"
+// vs "1000.00"). Both empty strings compare unequal; empty vs non-empty
+// compares unequal.
+func decimalEquals(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	da, errA := decimal.NewFromString(a)
+	db, errB := decimal.NewFromString(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return da.Equal(db)
+}
+
 // ensureSubscriptions creates subscriptions for all persistent customers on the e2eprobe plan.
 func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Seeds) error {
 	if len(seeds.PlanIDs) == 0 || len(seeds.PersistentCustomerIDs) == 0 {
@@ -476,6 +984,9 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 
 		billingCycle := types.BillingCycleAnniversary
 		now := time.Now().UTC()
+		commitAmount := "5.00"
+		commitDuration := types.BillingPeriodMonthly
+		overageFactor := "1.5"
 		req := types.CreateSubscriptionRequest{
 			ExternalCustomerID: &extID,
 			PlanID:             planID,
@@ -484,11 +995,24 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 			BillingPeriodCount: int64Ptr(1),
 			BillingCycle:       &billingCycle,
 			StartDate:          &now,
+			// Commitment applies to every newly-created persistent sub.
+			// Existing subs are not migrated (would break cycle-invoice-probe baseline).
+			CommitmentAmount:   &commitAmount,
+			CommitmentDuration: &commitDuration,
+			OverageFactor:      &overageFactor,
 			Metadata: map[string]string{
 				"e2eprobe":        "true",
 				"e2eprobe_role":   "seed",
 				"e2eprobe_cohort": "persistent",
 			},
+		}
+		// Attach shared coupon to persistent cust #1 at sub-create time (the
+		// only hook the SDK exposes for coupon attachment). Same "new subs
+		// only" caveat as commitment.
+		if extID == persistentExternalCustomerID(1) && seeds.SharedCouponCode != "" {
+			req.SubscriptionCoupons = []types.SubscriptionCouponInput{
+				{CouponCode: seeds.SharedCouponCode},
+			}
 		}
 		createResp, err := s.client.Subscriptions().Create(ctx, req)
 		if err != nil {
@@ -518,6 +1042,93 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 				)
 			}
 		}
+	}
+	return nil
+}
+
+// ensurePersistentTaxAssociation attaches the shared E2EPROBE_TAX_10PCT
+// tax rate to persistent cust #0's subscription. Idempotency lists all
+// tax associations for the subscription (filtered by entity_type + entity_id
+// only — NOT by tax_rate_id, since SharedTaxRateID may be empty when the
+// tax rate pre-existed) and treats "any association present" as done. Safe
+// because the seed only ever attaches one tax rate to this sub.
+//
+// Unlike coupons (attached at sub-create via SubscriptionCoupons), tax
+// associations are a separate API call, so this covers both freshly-
+// created and pre-existing seed subs.
+func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2eprobe.Seeds) error {
+	if out.SharedTaxRateCode == "" {
+		return nil // tax rate seed didn't run — soft skip
+	}
+	if len(out.PersistentCustomerIDs) == 0 || len(out.PersistentSubIDs) == 0 {
+		return nil
+	}
+	// PersistentSubIDs[0] corresponds to PersistentCustomerIDs[0] because
+	// ensureSubscriptions iterates PersistentCustomerIDs in order. Defensive
+	// alignment check keeps this safe if that invariant ever changes.
+	if out.PersistentCustomerIDs[0] != persistentExternalCustomerID(0) {
+		return nil
+	}
+	subID := out.PersistentSubIDs[0]
+
+	// Server enum is lowercase ("subscription"); passing uppercase fails
+	// validation with "Invalid tax rate entity type" (see
+	// internal/types/taxrate.go:72). Use the SDK constant to avoid drift.
+	entityType := string(types.TaxRateEntityTypeSubscription)
+	listResp, err := s.client.TaxAssociations().List(ctx, &entityType, &subID, nil, nil)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"subscription_id": subID, "tax_rate_code": out.SharedTaxRateCode}, "list tax associations: %w", err)
+	}
+	// The seed only ever attaches ONE tax rate to persistent cust #0's sub,
+	// so any existing association is by definition OUR association. On the
+	// happy path we match by SharedTaxRateID; when the ID is unknown (SDK
+	// v2.0.24 TaxRates.List is broken and CreateTaxRate returned
+	// "already exists"), we opportunistically backfill SharedTaxRateID from
+	// the existing association's TaxRateID so downstream janitor / probe
+	// assertions can use the strong ID match.
+	if listResp.ListTaxAssociationsResponse != nil {
+		for _, ta := range listResp.ListTaxAssociationsResponse.Items {
+			if out.SharedTaxRateID != "" && ta.TaxRateID != nil && *ta.TaxRateID == out.SharedTaxRateID {
+				return nil
+			}
+			if ta.TaxRate != nil && ta.TaxRate.Code != nil && *ta.TaxRate.Code == out.SharedTaxRateCode {
+				if out.SharedTaxRateID == "" && ta.TaxRateID != nil {
+					out.SharedTaxRateID = *ta.TaxRateID
+				}
+				return nil
+			}
+			// Unknown-code, unknown-ID fallback: seed invariant guarantees only
+			// our shared rate is ever attached to cust #0's sub, so any
+			// association wins. Backfill the ID from it.
+			if out.SharedTaxRateID == "" && ta.TaxRateID != nil {
+				out.SharedTaxRateID = *ta.TaxRateID
+				return nil
+			}
+		}
+	}
+
+	autoApply := true
+	tType := types.TaxRateEntityTypeSubscription
+	createResp, err := s.client.TaxAssociations().Create(ctx, types.CreateTaxAssociationRequest{
+		TaxRateCode: out.SharedTaxRateCode,
+		EntityID:    &subID,
+		EntityType:  &tType,
+		AutoApply:   &autoApply,
+		Metadata: map[string]string{
+			"e2eprobe":      "true",
+			"e2eprobe_role": "seed",
+		},
+	})
+	if err != nil {
+		if isAlreadyExists(err) {
+			return nil // benign — a prior seed already attached it
+		}
+		return e2eprobe.Errorf(map[string]string{"subscription_id": subID, "tax_rate_code": out.SharedTaxRateCode}, "create tax association: %w", err)
+	}
+	// Opportunistically backfill SharedTaxRateID from the association response
+	// so downstream janitor / probe assertions can use the stronger ID match.
+	if out.SharedTaxRateID == "" && createResp.TaxAssociationResponse != nil && createResp.TaxAssociationResponse.TaxRateID != nil {
+		out.SharedTaxRateID = *createResp.TaxAssociationResponse.TaxRateID
 	}
 	return nil
 }
@@ -638,3 +1249,5 @@ func (s *SeedEnsure) ensureAlertCanaryWallet(ctx context.Context, extCustID stri
 	}
 	return nil
 }
+
+func bucketSizePtr(w types.WindowSize) *types.WindowSize { return &w }

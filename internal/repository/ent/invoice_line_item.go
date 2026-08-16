@@ -79,6 +79,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
+		SetNillableParentLineItemID(item.ParentLineItemID).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -165,6 +166,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetCommitmentInfo(item.CommitmentInfo).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
+				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -542,6 +544,98 @@ func (r *invoiceLineItemRepository) List(ctx context.Context, filter *types.Invo
 	}
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+func (r *invoiceLineItemRepository) GetBilledAmountsBySubscriptionLineItem(
+	ctx context.Context,
+	subscriptionLineItemIDs []string,
+	asOf time.Time,
+) (map[string]*domaininvoice.BilledAmounts, error) {
+	if len(subscriptionLineItemIDs) == 0 {
+		return map[string]*domaininvoice.BilledAmounts{}, nil
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "get_billed_amounts_by_subscription_line_item", map[string]interface{}{
+		"tenant_id":       tenantID,
+		"environment_id":  envID,
+		"as_of":           asOf,
+		"line_item_count": len(subscriptionLineItemIDs),
+	})
+	defer FinishSpan(span)
+
+	args := []interface{}{tenantID, envID, asOf}
+	placeholders := make([]string, len(subscriptionLineItemIDs))
+	for i, id := range subscriptionLineItemIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+4)
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			ili.subscription_line_item_id,
+			COALESCE(SUM(ili.amount) FILTER (WHERE ili.amount > 0), 0)::text  AS charged,
+			COALESCE(SUM(-ili.amount) FILTER (WHERE ili.amount < 0), 0)::text AS credited
+		FROM invoice_line_items ili
+		INNER JOIN invoices inv
+			ON inv.id = ili.invoice_id
+			AND inv.invoice_status IN ('DRAFT', 'FINALIZED')
+			AND inv.status = 'published'
+		WHERE ili.tenant_id = $1
+			AND ili.environment_id = $2
+			AND ili.status = 'published'
+			AND ili.period_start <= $3
+			AND ili.period_end > $3
+			AND ili.subscription_line_item_id IN (%s)
+		GROUP BY ili.subscription_line_item_id
+	`, strings.Join(placeholders, ", "))
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to get billed amounts by subscription line item").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	results := make(map[string]*domaininvoice.BilledAmounts, len(subscriptionLineItemIDs))
+	for rows.Next() {
+		var lineItemID, chargedStr, creditedStr string
+		if err := rows.Scan(&lineItemID, &chargedStr, &creditedStr); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to scan billed amounts row").
+				Mark(ierr.ErrDatabase)
+		}
+		charged, err := decimal.NewFromString(chargedStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse billed charge amount").
+				Mark(ierr.ErrDatabase)
+		}
+		credited, err := decimal.NewFromString(creditedStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse billed credit amount").
+				Mark(ierr.ErrDatabase)
+		}
+		results[lineItemID] = domaininvoice.NewBilledAmounts(charged, credited)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to iterate billed amounts rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
 }
 
 // GetRevenueByCustomer aggregates invoice line item amounts grouped by customer_id

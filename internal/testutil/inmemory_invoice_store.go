@@ -82,6 +82,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
+			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
 		})
@@ -114,6 +115,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		PaidAt:                     inv.PaidAt,
 		VoidedAt:                   inv.VoidedAt,
 		FinalizedAt:                inv.FinalizedAt,
+		IssueDate:                  inv.IssueDate,
 		BillingPeriod:              inv.BillingPeriod,
 		PeriodStart:                inv.PeriodStart,
 		PeriodEnd:                  inv.PeriodEnd,
@@ -125,6 +127,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		LastComputedAt:             inv.LastComputedAt,
+		IsManuallyEdited:           inv.IsManuallyEdited,
 		BaseModel:                  inv.BaseModel,
 	}
 }
@@ -216,6 +219,9 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 // it cannot provide real mutual exclusion (that is SELECT ... FOR UPDATE in
 // Postgres). It records the access so tests can assert that a code path takes
 // the lock *before* it reads mutable invoice state.
+//
+// Mirrors the real ent repository's GetForUpdate, which fetches published line
+// items via ListByInvoiceID and populates the result's LineItems field.
 func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
 	if hook := s.BeforeGetForUpdate; hook != nil {
 		hook(id)
@@ -225,7 +231,15 @@ func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*in
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("invoice get failed").Mark(ierr.ErrDatabase)
 	}
-	return copyInvoice(inv), nil
+	result := copyInvoice(inv)
+	if s.lineItemStore != nil {
+		lineItems, err := s.lineItemStore.ListByInvoiceID(ctx, id)
+		if err != nil {
+			return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
+		}
+		result.LineItems = lineItems
+	}
+	return result, nil
 }
 
 func (s *InMemoryInvoiceStore) recordAccess(id, kind string) {

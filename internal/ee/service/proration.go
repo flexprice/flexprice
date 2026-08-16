@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -433,34 +434,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 			Mark(ierr.ErrValidation)
 	}
 
-	// TODO: Implement credit capping to prevent over-crediting customers
-	// This is critical for financial integrity - ensures customers never receive
-	// more credits than they originally paid for the current billing period
-
-	// TODO: Get original amount paid for this line item in current period
-	// originalAmountPaid, err := s.getOriginalAmountPaidForLineItem(ctx, subscription.ID, item.ID, periodStart)
-	// if err != nil {
-	//     logger.Info(context.Background(), "failed to get original amount paid, using calculated amount",
-	//         "error", err,
-	//         "line_item_id", item.ID)
-	//     // Fallback to calculated amount based on current price and quantity
-	//     originalAmountPaid = price.Amount.Mul(item.Quantity)
-	// }
-
-	// For now, use calculated amount as fallback
-	originalAmountPaid := price.Amount.Mul(item.Quantity)
-
-	// TODO: Get any previous credits issued for this line item in current period
-	// previousCredits, err := s.getPreviousCreditsForLineItem(ctx, subscription.ID, item.ID, periodStart, effectiveDate)
-	// if err != nil {
-	//     logger.Info(context.Background(), "failed to get previous credits, assuming zero",
-	//         "error", err,
-	//         "line_item_id", item.ID)
-	//     previousCredits = decimal.Zero
-	// }
-
-	// For now, assume no previous credits
-	previousCredits := decimal.Zero
+	originalAmountPaid, previousCredits := s.creditBasisForLineItem(ctx, item, price, effectiveDate)
 
 	// Determine if customer is eligible for refund/credit
 	refundEligible := s.isRefundEligible(subscription, item, price, cancellationType, effectiveDate)
@@ -489,7 +463,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 
 		ProrationDate:     effectiveDate,
 		ProrationBehavior: behavior,
-		Timezone:  subscription.Timezone,
+		Timezone:          subscription.Timezone,
 		ProrationStrategy: types.StrategySecondBased,
 		Currency:          price.Currency,
 		PlanDisplayName:   item.PlanDisplayName,
@@ -562,13 +536,58 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 		NewPricePerUnit:       price.Amount,
 		ProrationDate:         item.GetPeriodStart(periodStart),
 		ProrationBehavior:     behavior,
-		Timezone:      subscription.Timezone,
+		Timezone:              subscription.Timezone,
 		OriginalAmountPaid:    decimal.Zero,
 		PreviousCreditsIssued: decimal.Zero,
 		ProrationStrategy:     types.StrategySecondBased,
 		Currency:              price.Currency,
 		PlanDisplayName:       item.PlanDisplayName,
 	}, nil
+}
+
+func creditBasis(
+	item *subscription.SubscriptionLineItem,
+	p *price.Price,
+	billed map[string]*invoice.BilledAmounts,
+) (originalAmountPaid, previousCredits decimal.Decimal) {
+	if item == nil {
+		return decimal.Zero, decimal.Zero
+	}
+
+	if amounts := billed[item.ID]; amounts != nil {
+		return amounts.Charged(), amounts.Credited()
+	}
+
+	return listPriceTotal(item, p), decimal.Zero
+}
+
+func listPriceTotal(item *subscription.SubscriptionLineItem, p *price.Price) decimal.Decimal {
+	if item == nil || p == nil {
+		return decimal.Zero
+	}
+
+	return p.Amount.Mul(item.Quantity)
+}
+
+func (s *prorationService) creditBasisForLineItem(
+	ctx context.Context,
+	item *subscription.SubscriptionLineItem,
+	price *price.Price,
+	asOf time.Time,
+) (originalAmountPaid, previousCredits decimal.Decimal) {
+	billed, err := s.serviceParams.InvoiceLineItemRepo.GetBilledAmountsBySubscriptionLineItem(
+		ctx, []string{item.ID}, asOf,
+	)
+
+	if err != nil {
+		s.serviceParams.Logger.Info(ctx, "failed to read billed amounts for credit basis, falling back to list price",
+			"error", err,
+			"line_item_id", item.ID,
+			"subscription_id", item.SubscriptionID)
+		return creditBasis(item, price, nil)
+	}
+
+	return creditBasis(item, price, billed)
 }
 
 // isRefundEligible determines if a customer is eligible for refund/credit based on cancellation scenario
@@ -665,7 +684,7 @@ func (s *prorationService) CalculateEntitlementProration(
 		PeriodStart:        periodStart,
 		PeriodEnd:          periodEnd,
 		ProrationDate:      prorationDate,
-		Timezone:   customerTimezone,
+		Timezone:           customerTimezone,
 		BillingCycle:       billingCycle,
 		BillingAnchor:      billingAnchor,
 		BillingPeriod:      billingPeriod,

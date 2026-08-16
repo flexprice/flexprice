@@ -337,11 +337,51 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
+  # provider selects the ingress controller flavor. "nginx" (default) changes
+  # nothing from prior chart versions. "gce" additionally renders the
+  # templates/ingress-gcp/* CRDs (ManagedCertificate, BackendConfig,
+  # FrontendConfig — GKE's Ingress-for-Anthos / GCE-native ingress objects)
+  # and adds NEG + BackendConfig annotations to the api Service. Only takes
+  # effect when ingress.enabled is also true.
+  provider: nginx   # nginx | gce
+  gce:
+    managedCertificate:
+      # Domains covered by the GCP-managed TLS certificate. Defaults to the
+      # hosts already listed under ingress.hosts above; override only if the
+      # certificate needs to cover additional domains.
+      domains: []
+    backendConfig:
+      healthCheck:
+        path: /health
+        port: 8080
+        checkIntervalSec: 15
+        timeoutSec: 5
+        healthyThreshold: 2
+        unhealthyThreshold: 3
+      timeoutSec: 30
+      # Optional Cloud Armor security policy. Leave securityPolicyName empty
+      # to omit the securityPolicy block entirely.
+      cloudArmor:
+        securityPolicyName: ""
+    frontendConfig:
+      # Redirect HTTP -> HTTPS at the GCE load balancer.
+      redirectToHttps:
+        enabled: true
+        responseCodeName: MOVED_PERMANENTLY_DEFAULT
 
 
 # Frontend deployment configuration
 frontend:
   enabled: false
+  # How the UI is served.
+  #   image    — a self-contained frontend image listening on service.port.
+  #              Default; existing regions render exactly as before.
+  #   gcsproxy — static SPA assets published to a GCS bucket and served by a
+  #              gcsproxy sidecar behind nginx. This is what the GCP production
+  #              regions actually run (previously as raw manifests in each
+  #              region's ui/ directory). Requires frontend.gcs.bucket and a
+  #              ServiceAccount bound to a GSA with objectViewer on it.
+  mode: image
   replicaCount: 1
   # Extra labels for this component's Kubernetes objects (Deployment, Service,
   # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
@@ -354,6 +394,34 @@ frontend:
     repository: flexprice-frontend
     tag: "local"
     pullPolicy: IfNotPresent
+  # ── mode: gcsproxy ───────────────────────────────────────────────────────────
+  # Only read when mode is "gcsproxy".
+  gcs:
+    # GCS bucket holding the built SPA. Required in this mode.
+    bucket: ""
+    # Object served for / and for SPA deep links.
+    indexObject: index.html
+    # Public upstream image, pinned by digest. Deliberately not mirrored into
+    # Artifact Registry: it is tiny, pulled once per pod start, and a per-region
+    # AR copy would need cross-region reader grants on the node SA.
+    image: ghcr.io/daichirata/gcsproxy@sha256:462591f5990b0c1578a848095fc0fd40e01a0ec08321e00f5b85bd4a9492cf5c
+    # Loopback port the sidecar listens on; nginx proxies to it. Never exposed.
+    port: 8080
+    resources:
+      requests: {cpu: "50m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+  # nginx sidecar that fronts gcsproxy and terminates the Service port.
+  nginx:
+    image: nginx:1.27-alpine
+    resources:
+      requests: {cpu: "50m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+  # ServiceAccount for the UI pod. In gcsproxy mode this must be annotated for
+  # Workload Identity so gcsproxy can read the bucket.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
   env:
     apiUrl: "http://api.flexprice.example.com/v1"
     environment: "self-hosted"
@@ -379,6 +447,36 @@ frontend:
     maxUnavailable: ""
   # Inherits global topologySpreadConstraints unless overridden here.
   topologySpreadConstraints: []
+
+# e2eprobe — synthetic end-to-end probe that runs continuously against a
+# live environment, driving real billing flows under a dedicated probe
+# tenant and alerting to Slack on assertion failure. Off by default so
+# existing regions are unaffected; opt in per-region.
+e2eprobe:
+  enabled: false          # opt-in; existing regions unaffected
+  # SEPARATE GHCR repo from the app image — the probe ships its own artifact.
+  image:
+    repository: ghcr.io/flexprice/e2eprobe
+    # Pin an explicit tag or digest per region. Left empty on purpose: the
+    # template falls back to the chart appVersion rather than a mutable
+    # floating tag, so enabling the probe cannot silently pull whatever was
+    # last pushed to `develop` into a production cluster.
+    tag: ""
+    pullPolicy: IfNotPresent
+  # NOTE: replica count is NOT configurable. The Deployment hardcodes 1 because
+  # concurrent probes race on shared seeded fixtures and produce false
+  # failures. See templates/probe/deployment.yaml.
+  existingSecret: e2eprobe-secrets
+  secretKeys:
+    apiKey: api-key
+    slackWebhookUrl: slack-webhook-url
+  env: {}                 # E2EPROBE_* non-secret vars, set per region
+  service: {port: 8765}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  nodeSelector: {}
+  tolerations: []
 
 # Frontend ingress — serves the UI at its own hostname
 frontendIngress:
@@ -1160,13 +1258,19 @@ affinity: {}
 # HA on real EKS/GKE/AKS deployments. Override per-component via
 # `<component>.topologySpreadConstraints`. Use `whenUnsatisfiable: DoNotSchedule`
 # for strict HA where you'd rather pods stay Pending than land in one AZ.
+#
+# labelSelector is left EMPTY on purpose: the deployment templates inject
+# `app.kubernetes.io/name` (honouring nameOverride) plus the per-component key
+# when a constraint carries no selector of its own. Hardcoding
+# `app.kubernetes.io/name: flexprice` here matched nothing as soon as an
+# operator set nameOverride, and because whenUnsatisfiable is ScheduleAnyway
+# that failed SILENTLY — every replica could land in one AZ with no signal.
+# Set labelSelector explicitly only if you want to spread against a different
+# set of pods than the component being rendered.
 topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: flexprice
 
 # Liveness probe
 livenessProbe:

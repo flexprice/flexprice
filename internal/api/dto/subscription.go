@@ -622,6 +622,10 @@ type RemoveAddonRequest struct {
 	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	// EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+
+	// PreviewOnly quotes the removal without writing anything. Server-set: callers reach it
+	// through the preview endpoint, never by sending it.
+	PreviewOnly bool `json:"-"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
@@ -857,9 +861,13 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 		return nil
 	}
 
-	if r.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
-		return nil
-	}
+	// A grouped_invoicing child is built by createGroupedInvoicingChildren, which
+	// sets parent_subscription_id and passes the parent's checkout down. That
+	// combination is rejected by checkoutUnsupportedFields below, so the
+	// inheritance check alone is skipped for this type. The status and phase
+	// checks still apply: the generated child sets neither, and a request that
+	// does set them is as unsupported here as anywhere else.
+	isGroupedInvoicingChild := r.SubscriptionType == types.SubscriptionTypeGroupedInvoicing
 
 	if r.SubscriptionStatus != "" {
 		return ierr.NewError("subscription_status is not supported with checkout").
@@ -874,7 +882,7 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.Inheritance.checkoutUnsupportedFields() {
+	if !isGroupedInvoicingChild && r.Inheritance.checkoutUnsupportedFields() {
 		return ierr.NewError("inheritance field is not supported with checkout").
 			WithHint("Only grouped_invoicing_children_to_create is supported with checkout; remove the other inheritance fields, or remove checkout").
 			Mark(ierr.ErrValidation)

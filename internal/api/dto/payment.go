@@ -74,16 +74,17 @@ func (o *StripePaymentGatewayOptions) Validate(paymentMethodType types.PaymentMe
 
 // UpdatePaymentRequest represents a request to update a payment
 type UpdatePaymentRequest struct {
-	PaymentStatus    *string         `json:"payment_status,omitempty"`
-	PaymentGateway   *string         `json:"payment_gateway,omitempty"`
-	GatewayPaymentID *string         `json:"gateway_payment_id,omitempty"`
-	PaymentMethodID  *string         `json:"payment_method_id,omitempty"`
-	Metadata         *types.Metadata `json:"metadata,omitempty"`
-	SucceededAt      *time.Time      `json:"succeeded_at,omitempty"`
-	FailedAt         *time.Time      `json:"failed_at,omitempty"`
-	VoidedAt         *time.Time      `json:"voided_at,omitempty"`
-	RefundedAt       *time.Time      `json:"refunded_at,omitempty"`
-	ErrorMessage     *string         `json:"error_message,omitempty"`
+	PaymentStatus    *string          `json:"payment_status,omitempty"`
+	PaymentGateway   *string          `json:"payment_gateway,omitempty"`
+	GatewayPaymentID *string          `json:"gateway_payment_id,omitempty"`
+	PaymentMethodID  *string          `json:"payment_method_id,omitempty"`
+	Amount           *decimal.Decimal `json:"-"`
+	Metadata         *types.Metadata  `json:"metadata,omitempty"`
+	SucceededAt      *time.Time       `json:"succeeded_at,omitempty"`
+	FailedAt         *time.Time       `json:"failed_at,omitempty"`
+	VoidedAt         *time.Time       `json:"voided_at,omitempty"`
+	RefundedAt       *time.Time       `json:"refunded_at,omitempty"`
+	ErrorMessage     *string          `json:"error_message,omitempty"`
 }
 
 // PaymentResponse represents a payment response

@@ -276,6 +276,11 @@ func RecalculatedInvoiceID(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldRecalculatedInvoiceID, v))
 }
 
+// IsManuallyEdited applies equality check predicate on the "is_manually_edited" field. It's identical to IsManuallyEditedEQ.
+func IsManuallyEdited(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIsManuallyEdited, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTenantID, v))
@@ -2755,6 +2760,16 @@ func RecalculatedInvoiceIDEqualFold(v string) predicate.Invoice {
 // RecalculatedInvoiceIDContainsFold applies the ContainsFold predicate on the "recalculated_invoice_id" field.
 func RecalculatedInvoiceIDContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldRecalculatedInvoiceID, v))
+}
+
+// IsManuallyEditedEQ applies the EQ predicate on the "is_manually_edited" field.
+func IsManuallyEditedEQ(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIsManuallyEdited, v))
+}
+
+// IsManuallyEditedNEQ applies the NEQ predicate on the "is_manually_edited" field.
+func IsManuallyEditedNEQ(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldIsManuallyEdited, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

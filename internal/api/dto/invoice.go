@@ -21,12 +21,12 @@ type InvoiceCoupon struct {
 }
 
 // InvoiceLineItemCoupon represents a coupon applied to a specific invoice line item.
-// LineItemID is the price_id used to match the coupon to the correct line item.
 // Only coupon ID is needed - the service will fetch and validate the coupon.
 type InvoiceLineItemCoupon struct {
-	LineItemID          string  `json:"line_item_id" validate:"required"` // price_id used to match the line item
-	CouponID            string  `json:"coupon_id" validate:"required"`
-	CouponAssociationID *string `json:"coupon_association_id,omitempty"`
+	LineItemID             string  `json:"line_item_id" validate:"required"` // price_id used to match the line item
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
+	CouponID               string  `json:"coupon_id" validate:"required"`
+	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
 // CreateInvoiceRequest represents the request payload for creating a new invoice
@@ -971,6 +971,150 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	return nil
 }
 
+type AddLineItemRequest struct {
+	DisplayName string          `json:"display_name" validate:"required"`
+	Amount      decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
+	Quantity    decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
+}
+
+func (r *AddLineItemRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// AddBulkLineItemRequest adds one or more line items to a draft invoice in a single call.
+type AddBulkLineItemRequest struct {
+	Items []AddLineItemRequest `json:"items" validate:"required,min=1,max=100"`
+
+	// MarkManuallyEdited stamps invoice.IsManuallyEdited = true when set.
+	MarkManuallyEdited bool `json:"mark_manually_edited,omitempty"`
+}
+
+func (r *AddBulkLineItemRequest) Validate() error {
+	if len(r.Items) == 0 {
+		return ierr.NewError("at least one line item is required").
+			WithHint("please provide at least one line item to add").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.Items) > 100 {
+		return ierr.NewError("too many line items in bulk request").
+			WithHint("maximum 100 line items allowed per request").
+			Mark(ierr.ErrValidation)
+	}
+
+	for i, item := range r.Items {
+		if err := item.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHintf("line item at index %d is invalid", i).
+				WithReportableDetails(map[string]any{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+type UpdateLineItemRequest struct {
+	DisplayName *string          `json:"display_name,omitempty"`
+	Amount      *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	// MarkManuallyEdited stamps invoice.IsManuallyEdited = true when set.
+	MarkManuallyEdited bool `json:"mark_manually_edited,omitempty"`
+}
+
+func (r *UpdateLineItemRequest) Validate() error {
+	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil {
+		return ierr.NewError("at least one field must be provided").
+			WithHint("at least one of display_name, amount, or quantity must be provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Amount != nil && r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity != nil && r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// RemoveBulkLineItemRequest removes one or more line items from a draft invoice in a single call.
+type RemoveBulkLineItemRequest struct {
+	LineItemIDs []string `json:"line_item_ids" validate:"required,min=1,max=100"`
+	// MarkManuallyEdited stamps invoice.IsManuallyEdited = true when set.
+	MarkManuallyEdited bool `json:"mark_manually_edited,omitempty"`
+}
+
+func (r *RemoveBulkLineItemRequest) Validate() error {
+	if len(r.LineItemIDs) == 0 {
+		return ierr.NewError("at least one line item id is required").
+			WithHint("please provide at least one line item id to remove").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.LineItemIDs) > 100 {
+		return ierr.NewError("too many line item ids in bulk request").
+			WithHint("maximum 100 line item ids allowed per request").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+type ApplyCouponRequest struct {
+	CouponID   string  `json:"coupon_id" validate:"required"`
+	LineItemID *string `json:"line_item_id,omitempty"`
+}
+
+func (r *ApplyCouponRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// ApplyTaxRequest represents the request payload for applying a tax rate to a draft invoice
+type ApplyTaxRequest struct {
+	TaxRateID string `json:"tax_rate_id" validate:"required"`
+}
+
+func (r *ApplyTaxRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	invoice.Invoice
@@ -1414,4 +1558,17 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 
 	// total paid invoice amount
 	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
+}
+
+type ApplyExternalInvoiceDiscountRequest struct {
+	DiscountAmount decimal.Decimal `json:"discount_amount"`
+	MetadataKey    string          `json:"metadata_key,omitempty"`
+	MetadataJSON   string          `json:"metadata_json,omitempty"`
+}
+
+func (r *ApplyExternalInvoiceDiscountRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
 }

@@ -153,6 +153,64 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub
 	return subData, nil
 }
 
+// GetForUpdate row-locks the subscription and bypasses cache (cache can't hold a lock).
+func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*domainSub.Subscription, error) {
+	span := StartRepositorySpan(ctx, "subscription", "get_for_update", map[string]interface{}{
+		"subscription_id": id,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	lockQuery := `SELECT id FROM subscriptions WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 AND status = $4 FOR UPDATE`
+	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID, string(types.StatusPublished))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("subscription lock failed").Mark(ierr.ErrDatabase)
+	}
+	// Check and close before running another query on the same connection.
+	hasRow := rows.Next()
+	rowErr := rows.Err()
+	rows.Close()
+	if rowErr != nil {
+		SetSpanError(span, rowErr)
+		return nil, ierr.WithError(rowErr).WithHint("subscription lock failed").Mark(ierr.ErrDatabase)
+	}
+	if !hasRow {
+		return nil, ierr.NewError("subscription not found").
+			WithHint("Subscription not found").
+			WithReportableDetails(map[string]any{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Read on the same connection, so this sees the locked row.
+	sub, err := client.Subscription.Query().
+		Where(
+			subscription.ID(id),
+			subscription.TenantID(tenantID),
+			subscription.Status(string(types.StatusPublished)),
+			subscription.EnvironmentID(environmentID),
+		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.NewError("subscription not found").
+				WithHint("Subscription not found").
+				WithReportableDetails(map[string]any{"id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainSub.GetSubscriptionFromEnt(sub), nil
+}
+
 func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subscription) error {
 	client := r.client.Writer(ctx)
 	now := time.Now().UTC()
@@ -164,7 +222,6 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	})
 	defer FinishSpan(span)
 
-	// Use predicate-based update for optimistic locking
 	query := client.Subscription.Update().
 		Where(
 			subscription.ID(sub.ID),
@@ -173,7 +230,6 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		)
 
-	// Set all fields
 	query.
 		SetLookupKey(sub.LookupKey).
 		SetStartDate(sub.StartDate).
@@ -242,6 +298,52 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, sub.ID)
+	return nil
+}
+
+// UpdatePlan writes plan_id and nothing else, so a plan move can never ride along
+// with an unrelated update carrying a stale (possibly cached) subscription.
+func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, planID string) error {
+	span := StartRepositorySpan(ctx, "subscription", "update_plan", map[string]interface{}{
+		"subscription_id": id,
+		"plan_id":         planID,
+	})
+	defer FinishSpan(span)
+
+	if planID == "" {
+		return ierr.NewError("plan_id is required").
+			WithHint("A subscription cannot be moved to an empty plan").
+			WithReportableDetails(map[string]any{"subscription_id": id}).
+			Mark(ierr.ErrValidation)
+	}
+
+	affected, err := r.client.Writer(ctx).Subscription.Update().
+		Where(
+			subscription.ID(id),
+			subscription.TenantID(types.GetTenantID(ctx)),
+			subscription.Status(string(types.StatusPublished)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetPlanID(planID).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		r.logger.Error(ctx, "failed to update subscription plan", "error", err, "subscription_id", id, "plan_id", planID)
+		return ierr.WithError(err).
+			WithHint("Failed to change the subscription's plan").
+			Mark(ierr.ErrDatabase)
+	}
+	if affected == 0 {
+		return ierr.NewError("subscription not found").
+			WithHint("Subscription not found").
+			WithReportableDetails(map[string]any{"subscription_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 

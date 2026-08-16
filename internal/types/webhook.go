@@ -101,6 +101,9 @@ const (
 	WebhookEventSubscriptionPaused       WebhookEventName = "subscription.paused"
 	WebhookEventSubscriptionCancelled    WebhookEventName = "subscription.cancelled"
 	WebhookEventSubscriptionResumed      WebhookEventName = "subscription.resumed"
+
+	// Plan change in place — never emit cancelled+created for this; the subscription row survives.
+	WebhookEventSubscriptionPlanChanged WebhookEventName = "subscription.plan_changed"
 )
 
 // subscription phase event names

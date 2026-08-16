@@ -322,9 +322,15 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 
 // Helper method to convert domain models to DTOs
 func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_association.CouponAssociation) *dto.CouponAssociationResponse {
-	return &dto.CouponAssociationResponse{
+	resp := &dto.CouponAssociationResponse{
 		CouponAssociation: ca,
 	}
+
+	if ca != nil && ca.Coupon != nil {
+		resp.Coupon = dto.NewCouponResponse(ca.Coupon)
+	}
+
+	return resp
 }
 
 // computeCouponEndDate advances startDate through n billing periods using the

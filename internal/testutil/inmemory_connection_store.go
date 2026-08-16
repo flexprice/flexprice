@@ -88,6 +88,10 @@ func (s *InMemoryConnectionStore) ListPublishedByProvider(ctx context.Context, p
 	}), nil
 }
 
+func (s *InMemoryConnectionStore) ListAllPublished(ctx context.Context) ([]*connection.Connection, error) {
+	return s.List(ctx, types.NewNoLimitConnectionFilter())
+}
+
 func (s *InMemoryConnectionStore) List(ctx context.Context, filter *types.ConnectionFilter) ([]*connection.Connection, error) {
 	items, err := s.store.List(ctx, filter, connectionFilterFn, connectionSortFn)
 	if err != nil {

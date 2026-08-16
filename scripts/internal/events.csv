@@ -1,0 +1,2 @@
+"id","tenant_id","external_customer_id","environment_id","event_name","customer_id","source",timestamp,ingested_at,"properties"
+"123","00000000-0000-0000-0000-000000000000","cust-test","test-env-id","api_call","","",2026-08-06 06:53:31.000,2026-08-06 06:53:31.000,"{""app_id"":""testing"",""tokens"":""4407"",""run_id"":""123""}"

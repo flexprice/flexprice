@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -273,6 +275,44 @@ func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 	}
 	SetSpanSuccess(span)
 	return int(n), nil
+}
+
+// ReanchorSubSyncedSequence sets synced_price_sequence in either direction
+// (StampSubsAsSynced is forward-only and cannot express a lower target sequence).
+func (r *planPriceSyncRepository) ReanchorSubSyncedSequence(
+	ctx context.Context,
+	subscriptionID string,
+	seq int64,
+) error {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
+
+	span := StartRepositorySpan(ctx, "plan_price_sync_v2", "reanchor_sub_sequence", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"seq":             seq,
+	})
+	defer FinishSpan(span)
+
+	if _, err := r.client.Writer(ctx).Subscription.Update().
+		Where(
+			subscription.ID(subscriptionID),
+			subscription.TenantID(tenantID),
+			subscription.EnvironmentID(environmentID),
+		).
+		SetSyncedPriceSequence(seq).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(userID).
+		Save(ctx); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to re-anchor subscription price sequence").
+			WithReportableDetails(map[string]any{"subscription_id": subscriptionID, "seq": seq}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
 }
 
 // StampSubsAsSynced sets synced_price_sequence on the given subs. Forward-only

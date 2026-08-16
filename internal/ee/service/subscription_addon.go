@@ -2,135 +2,194 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// addonAttachParams is a fully-resolved addon attach that has not been written yet, so it can be
-// priced before anyone decides whether to persist it. planAddonAttach builds it,
-// calculateAddonProration prices it, persistAddonAttach writes it.
-type addonAttachParams struct {
-	subscription   *subscription.Subscription
-	request        *dto.AddAddonToSubscriptionRequest
-	association    *addonassociation.AddonAssociation
-	lineItems      []*subscription.SubscriptionLineItem
-	bucketCfgs     map[string]*dto.LineItemCommitmentConfig
-	priceMap       map[string]*dto.PriceResponse
-	requestedStart time.Time
-	effectiveDate  time.Time
+// AttachAddon attaches an addon and settles the proration it raises.
+func (s *subscriptionService) AttachAddon(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req *dto.AddAddonToSubscriptionRequest,
+	checkout *dto.CheckoutParams,
+) (*dto.AddonChangeResult, error) {
+	if req.PreviewOnly {
+		return s.previewAttachAddon(ctx, sub, req)
+	}
 
-	// isReplay marks a plan whose association is an existing pending row being activated
-	// rather than a new one being created.
-	isReplay bool
+	if checkout != nil {
+		if err := checkout.Validate(); err != nil {
+			return nil, err
+		}
+
+		if len(req.OverrideLineItems) > 0 || len(req.LineItemCommitments) > 0 {
+			return nil, ierr.NewError("override_line_items and line_item_commitments are not supported with checkout").
+				WithHint("Attach without checkout to use price overrides or line item commitments").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": sub.ID,
+					"addon_id":        req.AddonID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, ierr.NewError("subscription status does not allow a payment-gated addon attach").
+				WithHint("Checkout is only supported for active subscriptions").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id":     sub.ID,
+					"subscription_status": sub.SubscriptionStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	params, err := s.createAddonAttachParams(ctx, sub, req, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if checkout != nil {
+		summary, err := s.calculateAddonProration(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		if summary.TotalChargeAmount.GreaterThan(decimal.Zero) {
+			resp, err := s.settleAddAddonPayFirst(ctx, params, summary, checkout)
+			if err != nil {
+				return nil, err
+			}
+
+			return &dto.AddonChangeResult{
+				Association:     resp.AddonAssociation,
+				CheckoutSession: resp.CheckoutSession,
+				Invoice:         resp.Invoice,
+			}, nil
+		}
+		// Zero or negative net → nothing to collect, so fall through and attach immediately.
+	}
+
+	if err := s.persistAddonAttach(ctx, params); err != nil {
+		return nil, err
+	}
+
+	return &dto.AddonChangeResult{
+		Association:      params.getAssociation(),
+		CreatedLineItems: params.getLineItems(),
+		ChangedInvoices:  s.settleAddonAttach(ctx, params),
+		EffectiveDate:    params.getEffectiveDate(),
+	}, nil
 }
 
-func (p *addonAttachParams) getSubscription() *subscription.Subscription {
-	if p == nil {
-		return nil
+// previewAttachAddon quotes an attach without writing anything.
+func (s *subscriptionService) previewAttachAddon(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req *dto.AddAddonToSubscriptionRequest,
+) (*dto.AddonChangeResult, error) {
+	params, err := s.createAddonAttachParams(ctx, sub, req, nil)
+	if err != nil {
+		return nil, err
 	}
-	return p.subscription
+
+	summary, err := s.calculateAddonProration(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	changedInvoices, err := s.previewAddonSettlement(ctx, sub, summary, params.getEffectiveDate())
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AddonChangeResult{
+		Association:      params.getAssociation(),
+		CreatedLineItems: params.getLineItems(),
+		ChangedInvoices:  changedInvoices,
+		EffectiveDate:    params.getEffectiveDate(),
+	}, nil
 }
 
-func (p *addonAttachParams) getRequest() *dto.AddAddonToSubscriptionRequest {
-	if p == nil {
-		return nil
+// addonAttachProrationRequest builds the attach's proration request, or nil when there is
+// nothing to prorate, so neither preview nor settlement has to repeat the condition.
+func (s *subscriptionService) addonAttachProrationRequest(
+	ctx context.Context,
+	params *addonAttachParams,
+) (*LineItemProrationRequest, error) {
+	behavior := params.getRequest().ProrationBehavior
+	if behavior != types.ProrationBehaviorCreateProrations {
+		return nil, nil
 	}
-	return p.request
-}
 
-func (p *addonAttachParams) getAssociation() *addonassociation.AddonAssociation {
-	if p == nil {
-		return nil
+	entries, err := s.buildAddonProrationEntries(ctx, params.getLineItems(), types.ProrationActionAddItem)
+	if err != nil {
+		return nil, err
 	}
-	return p.association
-}
 
-func (p *addonAttachParams) getLineItems() []*subscription.SubscriptionLineItem {
-	if p == nil {
-		return nil
-	}
-	return p.lineItems
-}
-
-func (p *addonAttachParams) getRequestedStart() time.Time {
-	if p == nil {
-		return time.Time{}
-	}
-	return p.requestedStart
-}
-
-func (p *addonAttachParams) getEffectiveDate() time.Time {
-	if p == nil {
-		return time.Time{}
-	}
-	return p.effectiveDate
-}
-
-// getBucketCfgs is keyed by LINE ITEM ID, matching applyLineItemCommitmentFromMap's contract.
-func (p *addonAttachParams) getBucketCfgs() map[string]*dto.LineItemCommitmentConfig {
-	if p == nil {
-		return nil
-	}
-	return p.bucketCfgs
-}
-
-func (p *addonAttachParams) getPriceMap() map[string]*dto.PriceResponse {
-	if p == nil {
-		return nil
-	}
-	return p.priceMap
-}
-
-func (p *addonAttachParams) isReplayAttach() bool {
-	if p == nil {
-		return false
-	}
-	return p.isReplay
-}
-
-func (p *addonAttachParams) prorationIdempotencyKey() string {
-	association := p.getAssociation()
-	if association == nil {
-		return ""
-	}
-	return fmt.Sprintf("addon_add_%s_%d", association.ID, p.getEffectiveDate().Unix())
+	return &LineItemProrationRequest{
+		Subscription:   params.getSubscription(),
+		Entries:        entries,
+		EffectiveDate:  params.getEffectiveDate(),
+		Behavior:       behavior,
+		IdempotencyKey: params.prorationIdempotencyKey(),
+	}, nil
 }
 
 func (s *subscriptionService) calculateAddonProration(
 	ctx context.Context,
 	params *addonAttachParams,
 ) (*LineItemProrationSummary, error) {
-	sub := params.getSubscription()
-	req := params.getRequest()
-
-	if req.ProrationBehavior != types.ProrationBehaviorCreateProrations {
-		return &LineItemProrationSummary{
-			Currency:          sub.Currency,
-			TotalChargeAmount: decimal.Zero,
-			TotalCreditAmount: decimal.Zero,
-		}, nil
-	}
-
-	entries, err := s.buildAddonProrationEntries(ctx, params.getLineItems())
+	req, err := s.addonAttachProrationRequest(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+	if req == nil {
+		return emptyProrationSummary(params.getSubscription()), nil
+	}
 
-	return NewLineItemProrationService(s.ServiceParams).Compute(ctx, LineItemProrationRequest{
-		Subscription:  sub,
-		Entries:       entries,
-		EffectiveDate: params.getEffectiveDate(),
-		Behavior:      req.ProrationBehavior,
-	})
+	return NewLineItemProrationService(s.ServiceParams).Compute(ctx, *req)
+}
+
+func (s *subscriptionService) settleAddonAttach(
+	ctx context.Context,
+	params *addonAttachParams,
+) []dto.ChangedInvoice {
+	logFailure := func(cause error) {
+		s.Logger.Error(ctx, "failed to create proration invoice for addon add; addon was persisted and is UNBILLED for this period",
+			"error", cause,
+			"association_id", params.getAssociation().ID,
+			"addon_id", params.getRequest().AddonID,
+			"subscription_id", params.getSubscription().ID,
+			"effective_date", params.getEffectiveDate(),
+			"idempotency_key", params.prorationIdempotencyKey(),
+		)
+	}
+
+	prorationReq, err := s.addonAttachProrationRequest(ctx, params)
+	if err != nil {
+		logFailure(err)
+		return nil
+	}
+	if prorationReq == nil {
+		return nil
+	}
+
+	settled, err := NewLineItemProrationService(s.ServiceParams).Apply(ctx, *prorationReq)
+	if err != nil {
+		logFailure(err)
+		return nil
+	}
+
+	return settled
 }
 
 func (s *subscriptionService) settleAddAddonPayFirst(
@@ -363,4 +422,318 @@ func (s *subscriptionService) applyAddAddonRef(
 	}
 
 	return s.persistAddonAttach(ctx, params)
+}
+
+// DetachAddon removes an addon and credits back the unused prepaid time it paid for.
+func (s *subscriptionService) DetachAddon(
+	ctx context.Context,
+	req *dto.RemoveAddonRequest,
+	subscriptionId string,
+) (*dto.AddonChangeResult, error) {
+	params, err := s.createAddonDetachParams(ctx, req, subscriptionId)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.PreviewOnly {
+		summary, err := s.calculateAddonDetachProration(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		changedInvoices, err := s.previewAddonSettlement(
+			ctx, params.getSubscription(), summary, params.getEffectiveDate(),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// The cancelled association persistAddonDetach would write, built but not saved.
+		cancelled := addonassociation.NewAddonAssociationBuilder(params.getAssociation()).
+			WithCancellation(params.getEffectiveDate(), params.getReason()).
+			Build()
+
+		return &dto.AddonChangeResult{
+			Association:     cancelled,
+			EndedLineItems:  params.getLineItems(),
+			ChangedInvoices: changedInvoices,
+			EffectiveDate:   params.getEffectiveDate(),
+		}, nil
+	}
+
+	if err := s.persistAddonDetach(ctx, params); err != nil {
+		return nil, err
+	}
+
+	return &dto.AddonChangeResult{
+		Association:     params.getAssociation(),
+		EndedLineItems:  params.getLineItems(),
+		ChangedInvoices: s.settleAddonDetach(ctx, params),
+		EffectiveDate:   params.getEffectiveDate(),
+	}, nil
+}
+
+// previewAddonSettlement quotes what Apply would raise, through the same invoice request builder
+// and the same two independent branches, so preview and execute cannot drift.
+func (s *subscriptionService) previewAddonSettlement(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	summary *LineItemProrationSummary,
+	effectiveDate time.Time,
+) ([]dto.ChangedInvoice, error) {
+	quoted := make([]dto.ChangedInvoice, 0, 2)
+
+	if summary.TotalChargeAmount.GreaterThan(decimal.Zero) && len(summary.ChargeLineItems) > 0 {
+		inv, err := NewInvoiceService(s.ServiceParams).CreatePreviewInvoice(
+			ctx, buildLineItemProrationChargeInvoiceRequest(sub, summary, effectiveDate, ""),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		quoted = append(quoted, dto.ChangedInvoice{
+			Action:  dto.ChangedInvoiceActionCreated,
+			Status:  dto.ChangedInvoiceStatusPreview,
+			Invoice: inv,
+		})
+	}
+
+	if summary.TotalCreditAmount.GreaterThan(decimal.Zero) {
+		quoted = append(quoted, walletCreditChangedInvoice(&dto.WalletTransactionResponse{
+			Transaction: &wallet.Transaction{
+				CustomerID:        sub.GetInvoicingCustomerID(),
+				Amount:            summary.TotalCreditAmount,
+				Currency:          sub.Currency,
+				TransactionReason: types.TransactionReasonSubscriptionCredit,
+			},
+		}, dto.ChangedInvoiceStatusPreview))
+	}
+
+	return quoted, nil
+}
+
+// createAddonDetachParams resolves everything a removal needs — validations, the association,
+// the line items still to close and the effective date — and writes NOTHING.
+func (s *subscriptionService) createAddonDetachParams(
+	ctx context.Context,
+	req *dto.RemoveAddonRequest,
+	subscriptionId string,
+) (*addonDetachParams, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	association, err := s.AddonAssociationRepo.GetByID(ctx, req.AddonAssociationID)
+	if err != nil {
+		return nil, err
+	}
+
+	if subscriptionId != "" && association.EntityID != subscriptionId {
+		return nil, ierr.NewError("addon association does not belong to this subscription").
+			WithHint("The addon association belongs to a different subscription").
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": association.ID,
+				"subscription_id":      subscriptionId,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if association.AddonStatus == types.AddonStatusPending {
+		return nil, ierr.NewError("addon attach is pending payment").
+			WithHint("Complete or cancel the pending checkout for this addon first").
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": association.ID,
+				"addon_id":             association.AddonID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if association.EndDate != nil {
+		return nil, ierr.NewError("addon is already scheduled to be removed").
+			WithHint("This addon is already marked for removal").
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": association.ID,
+				"end_date":             association.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	lineItemFilter := types.NewSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = []string{association.EntityID}
+	lineItemFilter.EntityIDs = []string{association.AddonID}
+	lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	lineItemFilter.AddonAssociationIDs = []string{association.ID}
+
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Onetime addons have EndDate set on ALL their line items — they are already scheduled to end.
+	// We check ALL items: if any item has no EndDate (recurring), the addon is cancellable.
+	// This handles the case where a previous association was cancelled at period-end (EndDate set)
+	// while a new recurring association was added on top (EndDate zero).
+	var onetimeEndDate time.Time
+	allOnetime := len(lineItems) > 0
+	for _, li := range lineItems {
+		if li.EndDate.IsZero() {
+			allOnetime = false
+			break
+		}
+		onetimeEndDate = li.EndDate
+	}
+	if allOnetime {
+		return nil, ierr.NewError("addon is already scheduled to end").
+			WithHintf("This addon is already scheduled to end at %s", onetimeEndDate.Format("2 Jan 2006")).
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": association.ID,
+				"expires_at":           onetimeEndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Keep only line items that are NOT already scheduled to end.
+	// Line items from a previous association cancelled at period-end have EndDate set
+	// and must be excluded — they are already handled and must not be re-processed.
+	var activeLineItems []*subscription.SubscriptionLineItem
+	for _, li := range lineItems {
+		if li.EndDate.IsZero() {
+			activeLineItems = append(activeLineItems, li)
+		}
+	}
+
+	sub, err := s.SubRepo.Get(ctx, association.EntityID)
+	if err != nil {
+		return nil, err
+	}
+
+	effectiveEndDate := sub.CurrentPeriodEnd
+	if req.EffectiveDate != nil {
+		effectiveEndDate = *req.EffectiveDate
+		if effectiveEndDate.Before(sub.CurrentPeriodStart) || effectiveEndDate.After(sub.CurrentPeriodEnd) {
+			return nil, ierr.NewError("effective_date is outside the current billing period").
+				WithHint("effective_date must be between the subscription's current period start and end").
+				WithReportableDetails(map[string]any{
+					"effective_date":       effectiveEndDate,
+					"current_period_start": sub.CurrentPeriodStart,
+					"current_period_end":   sub.CurrentPeriodEnd,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return &addonDetachParams{
+		subscription:  sub,
+		association:   association,
+		lineItems:     activeLineItems,
+		effectiveDate: effectiveEndDate,
+		behavior:      req.ProrationBehavior,
+		reason:        req.Reason,
+	}, nil
+}
+
+func (s *subscriptionService) addonDetachProrationRequest(
+	ctx context.Context,
+	params *addonDetachParams,
+) (*LineItemProrationRequest, error) {
+	if params.getBehavior() != types.ProrationBehaviorCreateProrations {
+		return nil, nil
+	}
+
+	entries, err := s.buildAddonProrationEntries(ctx, params.getLineItems(), types.ProrationActionRemoveItem)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LineItemProrationRequest{
+		Subscription:   params.getSubscription(),
+		Entries:        entries,
+		EffectiveDate:  params.getEffectiveDate(),
+		Behavior:       params.getBehavior(),
+		Reason:         params.getReason(),
+		IdempotencyKey: params.prorationIdempotencyKey(),
+	}, nil
+}
+
+func (s *subscriptionService) calculateAddonDetachProration(
+	ctx context.Context,
+	params *addonDetachParams,
+) (*LineItemProrationSummary, error) {
+	req, err := s.addonDetachProrationRequest(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return emptyProrationSummary(params.getSubscription()), nil
+	}
+
+	return NewLineItemProrationService(s.ServiceParams).Compute(ctx, *req)
+}
+
+// persistAddonDetach cancels the association, ends its line items and stops future credit grants
+// in one transaction. It raises no credit — that is settleAddonDetach's job.
+func (s *subscriptionService) persistAddonDetach(ctx context.Context, params *addonDetachParams) error {
+	association := addonassociation.NewAddonAssociationBuilder(params.getAssociation()).
+		WithCancellation(params.getEffectiveDate(), params.getReason()).
+		Build()
+
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.AddonAssociationRepo.Update(ctx, association); err != nil {
+			return err
+		}
+
+		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: lo.ToPtr(params.getEffectiveDate())}
+		for _, lineItem := range params.getLineItems() {
+			if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+				return err
+			}
+		}
+
+		// Cancel future applications of credit grants materialized from THIS addon only
+		// (scoped by addon_id provenance). Already-granted credits are not clawed back;
+		// plan-sourced and other-addon grants are left untouched.
+		creditGrantService := NewCreditGrantService(s.ServiceParams)
+		return creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
+			SubscriptionID: association.EntityID,
+			AddonID:        lo.ToPtr(association.AddonID),
+			EffectiveDate:  lo.ToPtr(params.getEffectiveDate()),
+		})
+	}); err != nil {
+		return err
+	}
+
+	params.association = association
+	return nil
+}
+
+func (s *subscriptionService) settleAddonDetach(
+	ctx context.Context,
+	params *addonDetachParams,
+) []dto.ChangedInvoice {
+	logFailure := func(cause error) {
+		association := params.getAssociation()
+		s.Logger.Error(ctx, "failed to issue proration credit for addon remove; removal was persisted and the credit is UNISSUED",
+			"error", cause,
+			"association_id", association.ID,
+			"addon_id", association.AddonID,
+			"subscription_id", association.EntityID,
+		)
+	}
+
+	prorationReq, err := s.addonDetachProrationRequest(ctx, params)
+	if err != nil {
+		logFailure(err)
+		return nil
+	}
+	if prorationReq == nil {
+		return nil
+	}
+
+	settled, err := NewLineItemProrationService(s.ServiceParams).Apply(ctx, *prorationReq)
+	if err != nil {
+		logFailure(err)
+		return nil
+	}
+
+	return settled
 }

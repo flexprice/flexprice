@@ -127,6 +127,31 @@ func (r *InMemoryPlanPriceSyncStore) CurrentPlanSequence(
 	return maxSeq, nil
 }
 
+func (r *InMemoryPlanPriceSyncStore) ReanchorSubSyncedSequence(
+	ctx context.Context,
+	subscriptionID string,
+	seq int64,
+) error {
+	if r.subStore == nil {
+		return nil
+	}
+
+	r.subStore.mu.Lock()
+	defer r.subStore.mu.Unlock()
+
+	sub, ok := r.subStore.items[subscriptionID]
+	if !ok || sub == nil || !scopedByCtx(ctx, sub.TenantID, sub.EnvironmentID) {
+		return nil
+	}
+
+	sub.SyncedPriceSequence = seq
+	sub.UpdatedAt = time.Now().UTC()
+	if uid := types.GetUserID(ctx); uid != "" {
+		sub.UpdatedBy = uid
+	}
+	return nil
+}
+
 // StampSubsAsSynced sets synced_price_sequence on the given subs.
 // Forward-only: never lowers an existing higher value.
 func (r *InMemoryPlanPriceSyncStore) StampSubsAsSynced(

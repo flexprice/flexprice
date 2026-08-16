@@ -55,6 +55,13 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 		return false
 	}
 
+	// Without this the store returns every line on the subscription when a caller
+	// asks for one attachment's lines, so plan lines get swept into addon work.
+	if len(f.AddonAssociationIDs) > 0 &&
+		(item.AddonAssociationID == nil || !lo.Contains(f.AddonAssociationIDs, *item.AddonAssociationID)) {
+		return false
+	}
+
 	// Filter by entity type (when set)
 	if f.EntityType != nil && item.EntityType != *f.EntityType {
 		return false

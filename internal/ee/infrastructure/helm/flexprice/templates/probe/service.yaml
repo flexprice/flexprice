@@ -1,0 +1,38 @@
+{{- if .Values.e2eprobe.enabled }}
+# Dedicated ServiceAccount for the probe, with no API token.
+#
+# The probe reaches only the flexprice API over HTTPS; it never calls the
+# Kubernetes API. Running it under the namespace `default` ServiceAccount would
+# mount a token it does not need, handing a compromised image whatever the
+# default SA is granted — alongside the probe's own credentials, which are
+# mounted as env from e2eprobe-secrets.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+automountServiceAccountToken: false
+---
+# ClusterIP for the probe's webhook listener.
+#
+# Cluster-internal only — the endpoint accepts unauthenticated JSON POSTs and
+# must NEVER be exposed through ingress. Do not add this Service to
+# templates/app/ingress.yaml or any other ingress-gcp template.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: e2eprobe
+  ports:
+    - name: webhook
+      port: {{ .Values.e2eprobe.service.port }}
+      targetPort: webhook
+      protocol: TCP
+{{- end }}

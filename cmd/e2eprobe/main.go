@@ -5,15 +5,68 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	checks_pkg "github.com/flexprice/flexprice/internal/e2eprobe/checks"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// buildLoggingConfig assembles the LoggingConfig used by logger.NewLogger.
+// It wires OTLP log export from the standard OTEL env vars so that
+// e2eprobe's structured logs land in the same SigNoz/Grafana pipeline as
+// the app's — auth via OTEL_EXPORTER_OTLP_HEADERS (single "name=value" pair).
+//
+// Traces already flow through internal/e2eprobe/otel.go, which uses the
+// SDK's implicit env var handling for endpoint/headers. This function
+// only wires LOGS, which take an explicit config path.
+func buildLoggingConfig(cfg *e2eprobe.Config) config.LoggingConfig {
+	lc := config.LoggingConfig{
+		Level: types.LogLevel(cfg.LogLevel),
+	}
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if !cfg.OTEL.Enabled || endpoint == "" {
+		return lc
+	}
+	lc.OtelEnabled = true
+	lc.OtelEndpoint = endpoint
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	if protocol == "" {
+		protocol = "grpc"
+	}
+	lc.OtelProtocol = protocol
+	if hdr, val, ok := parseFirstOTLPHeader(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")); ok {
+		lc.OtelAuthHeader = hdr
+		lc.OtelAuthValue = val
+	}
+	return lc
+}
+
+// parseFirstOTLPHeader extracts the first "name=value" pair from the
+// standard OTLP headers env var (which allows comma-separated pairs).
+// The logger's LoggingConfig only supports a single auth header, which is
+// enough for common SigNoz / Grafana Cloud / Datadog access-token setups.
+func parseFirstOTLPHeader(raw string) (string, string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", false
+	}
+	first, _, _ := strings.Cut(raw, ",")
+	name, value, ok := strings.Cut(first, "=")
+	if !ok {
+		return "", "", false
+	}
+	name = strings.TrimSpace(name)
+	value = strings.TrimSpace(value)
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
+}
 
 func main() {
 	cfg, err := e2eprobe.LoadConfig()
@@ -26,7 +79,7 @@ func main() {
 		return
 	}
 
-	lg, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevel(cfg.LogLevel)}})
+	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
@@ -143,6 +196,41 @@ func main() {
 	if cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Enabled {
 		smf := checks_pkg.NewSubscriptionModificationFlow(client, reg, runID)
 		runner.Add(smf, e2eprobe.NewTickerScheduler(smf, cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Interval))
+	}
+
+	if cfg.Checks["BUCKETED_METER_PROBE"].Enabled {
+		bmp := checks_pkg.NewBucketedMeterProbe(client, reg, runID, lg)
+		runner.Add(bmp, e2eprobe.NewTickerScheduler(bmp, cfg.Checks["BUCKETED_METER_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Enabled {
+		ctup := checks_pkg.NewCommitmentTrueUpProbe(client, reg, runID, lg)
+		runner.Add(ctup, e2eprobe.NewTickerScheduler(ctup, cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Enabled {
+		eep := checks_pkg.NewEntitlementEnforcementProbe(client, reg, runID, lg)
+		runner.Add(eep, e2eprobe.NewTickerScheduler(eep, cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Interval))
+	}
+
+	if cfg.Checks["TAX_APPLICATION_PROBE"].Enabled {
+		tap := checks_pkg.NewTaxApplicationProbe(client, reg, runID, lg)
+		runner.Add(tap, e2eprobe.NewTickerScheduler(tap, cfg.Checks["TAX_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COUPON_APPLICATION_PROBE"].Enabled {
+		cap_ := checks_pkg.NewCouponApplicationProbe(client, reg, runID, lg)
+		runner.Add(cap_, e2eprobe.NewTickerScheduler(cap_, cfg.Checks["COUPON_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Enabled {
+		pbip := checks_pkg.NewPersistentBillingInvariantsProbe(client, reg, runID, lg)
+		runner.Add(pbip, e2eprobe.NewTickerScheduler(pbip, cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Enabled {
+		egap := checks_pkg.NewEntitlementGrantAdditiveProbe(client, reg, runID, lg)
+		runner.Add(egap, e2eprobe.NewTickerScheduler(egap, cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Interval))
 	}
 
 	// The listener is created regardless of the LOW_WALLET_ALERT_LISTENER flag

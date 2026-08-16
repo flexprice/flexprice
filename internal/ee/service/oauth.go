@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 const (
@@ -592,12 +593,26 @@ func (s *oauthService) BuildOAuthURL(provider types.OAuthProvider, clientID, red
 				"ZohoBooks.invoices.READ",
 				"ZohoBooks.invoices.CREATE",
 				"ZohoBooks.invoices.UPDATE",
+				"ZohoBooks.customerpayments.READ",
+				"ZohoBooks.customerpayments.CREATE",
+				"ZohoBooks.customerpayments.UPDATE",
 			}, ",")
 		}
 		params.Set("scope", scopes)
 		accountsServer := metadata[types.OAuthMetadataAccountsServer]
 		if accountsServer == "" {
 			accountsServer = "https://accounts.zoho.com"
+		}
+		// Restrict the client-supplied accounts_server to a Zoho domain before
+		// building a URL the user's browser is redirected to, so it cannot be
+		// turned into an open-redirect or internal-endpoint target.
+		if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+			return "", err
+		}
+		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
+			return "", ierr.WithError(err).
+				WithHint("Invalid accounts_server: must be a public https endpoint").
+				Mark(ierr.ErrValidation)
 		}
 		return fmt.Sprintf("%s/oauth/v2/auth?%s", strings.TrimRight(accountsServer, "/"), params.Encode()), nil
 
@@ -808,6 +823,21 @@ func (s *oauthService) ExchangeCodeForConnection(
 			accountsServer = "https://accounts.zoho.com"
 		}
 
+		// accounts_server is client-supplied (via POST /v1/oauth/complete) and is
+		// used verbatim to build the outbound token-exchange URL below, which
+		// carries client_id/client_secret. Restrict it to a Zoho domain so those
+		// credentials cannot be exfiltrated to an attacker-chosen host, and also
+		// run the outbound-URL guard for defense-in-depth against DNS/private-IP
+		// tricks (metadata 169.254.169.254, localhost, internal ranges).
+		if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+			return "", err
+		}
+		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
+			return "", ierr.WithError(err).
+				WithHint("Invalid accounts_server: must be a public https endpoint").
+				Mark(ierr.ErrValidation)
+		}
+
 		form := url.Values{}
 		form.Set("code", code)
 		form.Set("client_id", clientID)
@@ -830,9 +860,14 @@ func (s *oauthService) ExchangeCodeForConnection(
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// Do not reflect the raw response body to the caller: the outbound host
+			// is client-influenced, so echoing the body back would leak the content
+			// of whatever endpoint was reached. Log it server-side instead.
+			s.logger.Error(ctx, "Zoho token exchange failed",
+				"error", "non_2xx_from_token_endpoint",
+				"status_code", resp.StatusCode)
 			return "", ierr.NewError("Zoho token exchange failed").
 				WithHintf("Zoho token endpoint returned status %d", resp.StatusCode).
-				WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 				Mark(ierr.ErrHTTPClient)
 		}
 

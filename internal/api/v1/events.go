@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -53,7 +54,11 @@ func NewEventsHandler(eventService service.EventService, rawEventsReprocessingSe
 func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.IngestEventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := middleware.BindJSONWithLimit(c, &req); err != nil {
+		if isRequestBodyTooLarge(err) {
+			c.Error(errRequestBodyTooLarge())
+			return
+		}
 		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.NewError("invalid request payload").
 			WithHint("Invalid request payload").
@@ -91,7 +96,11 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.BulkIngestEventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := middleware.BindJSONWithLimit(c, &req); err != nil {
+		if isRequestBodyTooLarge(err) {
+			c.Error(errRequestBodyTooLarge())
+			return
+		}
 		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request payload").
@@ -114,13 +123,33 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"message": "Events accepted for processing"})
 }
 
+// isRequestBodyTooLarge reports whether a bind error was caused by the ingestion
+// body cap (middleware.MaxEventIngestionBodyBytes) rather than malformed JSON.
+// MaxBytesReader truncates the stream, so the decoder surfaces this wrapped
+// behind an unmarshal error — without the check an oversized batch would be
+// reported to the caller as invalid JSON.
+func isRequestBodyTooLarge(err error) bool {
+	var maxErr *http.MaxBytesError
+	return errors.As(err, &maxErr)
+}
+
+func errRequestBodyTooLarge() error {
+	return ierr.NewError("request body too large").
+		WithHint("Request body exceeds the maximum size; split the batch into smaller requests").
+		Mark(ierr.ErrValidation)
+}
+
 // BulkIngestRawEvent publishes a batch of raw Bento-format event payloads directly to the
 // raw_events Kafka topic (POST /v1/events/raw/bulk). Intentionally excluded from Swagger/SDK
 // — this is an internal endpoint for testing and backfills, not part of the public API.
 func (h *EventsHandler) BulkIngestRawEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.BulkIngestRawEventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := middleware.BindJSONWithLimit(c, &req); err != nil {
+		if isRequestBodyTooLarge(err) {
+			c.Error(errRequestBodyTooLarge())
+			return
+		}
 		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request payload").

@@ -53,6 +53,17 @@ func (j *Janitor) Run(ctx context.Context) error {
 	if err := j.sweepOrphans(ctx, cutoff); err != nil {
 		return err
 	}
+	// Phase 3: best-effort delete tax associations pointing at a subscription
+	// that no longer exists. Runs independently of Phase 2 because subs can
+	// vanish faster than customers (cancel-customer-flow deletes the sub, then
+	// the customer separately) and we don't want to gate this on the customer
+	// sweep having found anything. Failure here does NOT surface as a check
+	// failure — it's logged and retried next tick.
+	if err := j.sweepOrphanTaxAssociations(ctx); err != nil {
+		slog.InfoContext(ctx, "janitor sweepOrphanTaxAssociations deferred (will retry)",
+			"upstream_error", err.Error(),
+		)
+	}
 	return nil
 }
 
@@ -64,7 +75,22 @@ func isNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	// Real SDK errors surface as *sdkerrors.APIError with StatusCode 404.
+	// Endpoints with an explicit 404 branch (e.g., GetCustomerByExternalID,
+	// GetSubscription, DeleteCustomer) surface the response as
+	// *sdkerrors.ErrorResponse with HTTPStatusCode=404. Endpoints that fall
+	// through to the generic 4xx handler surface it as *sdkerrors.APIError.
+	// Both must be treated as "not found" or the janitor spuriously fails
+	// whenever another flow (e.g., cancel-customer-flow) archives an
+	// ephemeral customer concurrently with the janitor's own sweep.
+	var errResp *sdkerrors.ErrorResponse
+	if errors.As(err, &errResp) {
+		if errResp.HTTPStatusCode != nil && *errResp.HTTPStatusCode == http.StatusNotFound {
+			return true
+		}
+		if errResp.Code != nil && *errResp.Code == types.ErrorCodeNotFound {
+			return true
+		}
+	}
 	var apiErr *sdkerrors.APIError
 	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
 		return true
@@ -199,6 +225,56 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 
 	if deleted > 0 {
 		slog.InfoContext(ctx, "janitor swept orphan ephemeral customers", "count", deleted)
+	}
+	return nil
+}
+
+// sweepOrphanTaxAssociations lists all associations for the shared e2eprobe
+// tax rate and deletes any whose EntityID (subscription) 404s on lookup.
+// The seed tax association on persistent cust #0 is preserved because its
+// subscription is persistent and never 404s.
+//
+// Soft-skips when SharedTaxRateID is empty. That can happen when the seed's
+// CreateTaxRate call returned "already exists" AND no CreateTaxAssociation
+// has yet backfilled the ID (see ensureTaxRates + ensurePersistentTaxAssociation
+// in seed_ensure.go, added as workarounds for the SDK v2.0.24 GetTaxRates
+// schema mismatch). Missing a cleanup cycle in that edge state is acceptable
+// — orphan accumulation is slow and a fresh probe iteration typically
+// backfills the ID within one cycle.
+func (j *Janitor) sweepOrphanTaxAssociations(ctx context.Context) error {
+	taxRateID := j.reg.Seeds().SharedTaxRateID
+	if taxRateID == "" {
+		return nil // seed hasn't run yet, or ID wasn't recoverable — nothing to sweep
+	}
+	resp, err := j.client.TaxAssociations().List(ctx, nil, nil, nil, &taxRateID)
+	if err != nil {
+		return err
+	}
+	if resp.ListTaxAssociationsResponse == nil {
+		return nil
+	}
+	orphansDeleted := 0
+	for _, ta := range resp.ListTaxAssociationsResponse.Items {
+		if ta.ID == nil || ta.EntityID == nil {
+			continue
+		}
+		if _, err := j.client.Subscriptions().Get(ctx, *ta.EntityID); err == nil {
+			continue // sub exists — keep the association
+		} else if !isNotFound(err) {
+			continue // transient error — skip, retry next tick
+		}
+		if _, delErr := j.client.TaxAssociations().Delete(ctx, *ta.ID); delErr != nil && !isNotFound(delErr) {
+			slog.InfoContext(ctx, "janitor sweepOrphanTaxAssociations: delete deferred",
+				"tax_association_id", *ta.ID,
+				"subscription_id", *ta.EntityID,
+				"upstream_error", delErr.Error(),
+			)
+			continue
+		}
+		orphansDeleted++
+	}
+	if orphansDeleted > 0 {
+		slog.InfoContext(ctx, "janitor swept orphan tax associations", "count", orphansDeleted)
 	}
 	return nil
 }

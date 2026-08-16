@@ -104,6 +104,8 @@ type Invoice struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// ID of the replacement invoice created when this invoice was recalculated after voiding
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+	// True once a user has manually added, edited, or removed a line item on this draft invoice
+	IsManuallyEdited bool `json:"is_manually_edited,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceQuery when eager-loading is set.
 	Edges        InvoiceEdges `json:"edges"`
@@ -150,6 +152,8 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
+		case invoice.FieldIsManuallyEdited:
+			values[i] = new(sql.NullBool)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
 		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
@@ -450,6 +454,12 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.RecalculatedInvoiceID = new(string)
 				*i.RecalculatedInvoiceID = value.String
 			}
+		case invoice.FieldIsManuallyEdited:
+			if value, ok := values[j].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_manually_edited", values[j])
+			} else if value.Valid {
+				i.IsManuallyEdited = value.Bool
+			}
 		default:
 			i.selectValues.Set(columns[j], values[j])
 		}
@@ -659,6 +669,9 @@ func (i *Invoice) String() string {
 		builder.WriteString("recalculated_invoice_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("is_manually_edited=")
+	builder.WriteString(fmt.Sprintf("%v", i.IsManuallyEdited))
 	builder.WriteByte(')')
 	return builder.String()
 }

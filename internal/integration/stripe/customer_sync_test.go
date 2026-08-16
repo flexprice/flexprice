@@ -56,10 +56,14 @@ type syncTestMappingRepo struct {
 	entityintegrationmapping.Repository
 	mappings  []*entityintegrationmapping.EntityIntegrationMapping
 	listCalls int
+	listErr   error
 }
 
 func (r *syncTestMappingRepo) List(_ context.Context, _ *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	r.listCalls++
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
 	return r.mappings, nil
 }
 

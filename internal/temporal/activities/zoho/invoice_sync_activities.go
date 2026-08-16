@@ -39,6 +39,13 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 	_, err = zohoIntegration.InvoiceSvc.SyncInvoiceToZoho(ctx, zoho.ZohoInvoiceSyncRequest{
 		InvoiceID: input.InvoiceID,
 	})
+	if err != nil {
+		a.logger.Error(ctx, "Zoho Books invoice sync activity failed",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID)
+	}
 	return err
 }
 

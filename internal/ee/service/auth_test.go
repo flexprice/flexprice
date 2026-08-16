@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -140,6 +141,14 @@ func (s *AuthServiceSuite) TestSignUp() {
 				s.NotNil(resp)
 				// We used a real provider, so check that token exists (not necessarily 'auth-token' as before)
 				s.NotEmpty(resp.Token)
+
+				// The user who creates a tenant owns it, so onboarding must grant
+				// super_admin outright — no roles would leave them unable to
+				// administer the tenant they just signed up for.
+				owner, err := s.userRepo.GetByEmail(s.GetContext(), tc.req.Email)
+				s.NoError(err)
+				s.Equal([]string{types.RoleSuperAdmin.String()}, owner.Roles)
+				s.Equal(types.UserTypeUser, owner.Type)
 
 				if tc.req.Metadata != nil {
 					createdUser, err := s.userRepo.GetByEmail(s.GetContext(), tc.req.Email)

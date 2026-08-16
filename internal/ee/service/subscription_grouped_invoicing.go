@@ -244,19 +244,34 @@ func (s *subscriptionService) validateRemoveFromGroupedInvoicingDryRun(
 	return nil
 }
 
-// getGroupedInvoicingSubscriptions returns all active/trialing child subscriptions
-// of type grouped_invoicing that belong to the given parent subscription.
-func (s *subscriptionService) getGroupedInvoicingSubscriptions(
+// getGroupedInvoicingChildren returns the children whose charges belong on this parent's invoice.
+// Empty for any subscription that is not a parent.
+func getGroupedInvoicingChildren(
 	ctx context.Context,
-	parentSubID string,
+	sp ServiceParams,
+	parent *subscription.Subscription,
+	withLineItems bool,
 ) ([]*subscription.Subscription, error) {
+	if parent.SubscriptionType != types.SubscriptionTypeParent {
+		return nil, nil
+	}
+
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	filter.ParentSubscriptionIDs = []string{parentSubID}
+	filter.ParentSubscriptionIDs = []string{parent.ID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 	}
-	return s.SubRepo.List(ctx, filter)
+
+	// A draft parent is only ever invoiced by the checkout pricing pass, and its inline children
+	// are draft too, so they belong on the amount the customer is asked to pay.
+	if parent.SubscriptionStatus == types.SubscriptionStatusDraft {
+		filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusDraft)
+	}
+
+	filter.WithLineItems = withLineItems
+
+	return sp.SubRepo.List(ctx, filter)
 }

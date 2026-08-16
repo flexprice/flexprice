@@ -836,7 +836,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	}
 
 	// Call HandleFlexPriceCheckoutPayment with optional payment intent
-	err = h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService)
+	err = h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, &checkoutSession, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService)
 	if err != nil {
 		h.logger.Error(ctx, "failed to handle FlexPrice checkout payment, skipping event",
 			"error", err,

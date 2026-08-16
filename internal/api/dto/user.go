@@ -116,5 +116,52 @@ type UpdateServiceAccountResponse struct {
 	*UserResponse
 }
 
+// UpdateUserRolesRequest is the request body for PUT /users/:id/roles.
+// Only supported for type=user accounts; service account roles are fixed at creation.
+type UpdateUserRolesRequest struct {
+	Roles []string `json:"roles" validate:"omitempty"`
+}
+
+func (r *UpdateUserRolesRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if len(r.Roles) == 0 {
+		return ierr.NewError("roles is required").
+			WithHint("Provide at least one role").
+			Mark(ierr.ErrValidation)
+	}
+	for _, role := range r.Roles {
+		if role == "" {
+			return ierr.NewError("roles cannot contain empty values").
+				WithHint("Remove empty entries from roles").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// UpdateUserRolesResponse is the response for PUT /users/:id/roles.
+type UpdateUserRolesResponse struct {
+	*UserResponse
+}
+
+// ActiveAPIKey identifies a single active API key in the active-keys error
+// payload returned when a role update is blocked.
+type ActiveAPIKey struct {
+	ID      string `json:"id"`
+	KeyName string `json:"key_name"`
+}
+
+// ActiveEnvironmentAPIKeys groups a user's active API keys by the environment
+// they belong to — keyed by environment ID in the parent map (stable and
+// unique, unlike environment name), with the name carried here for display.
+type ActiveEnvironmentAPIKeys struct {
+	EnvName string         `json:"env_name"`
+	APIKeys []ActiveAPIKey `json:"api_keys"`
+}
+
 // ListUsersResponse is the response type for listing users with pagination
 type ListUsersResponse = types.ListResponse[*UserResponse] // @name ListUsersResponse

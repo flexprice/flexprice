@@ -83,7 +83,7 @@ func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.TaxRateFilter true "Filter"
-// @Success 200 {object} []dto.TaxRateResponse
+// @Success 200 {object} dto.ListTaxRatesResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates [get]

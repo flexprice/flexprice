@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
@@ -16,15 +17,20 @@ import (
 
 
 type fakeClient struct {
-	customers fakeCustomers
-	plans     fakePlans
-	prices    fakePrices
-	features  fakeFeatures
-	subs      fakeSubscriptions
-	wallets   fakeWallets
-	events    fakeEvents
-	invoices  fakeInvoices
-	async     *fakeAsyncEvents
+	customers          fakeCustomers
+	plans              fakePlans
+	prices             fakePrices
+	features           fakeFeatures
+	subs               fakeSubscriptions
+	wallets            fakeWallets
+	events             fakeEvents
+	invoices           fakeInvoices
+	entitlements       fakeEntitlements
+	coupons            fakeCoupons
+	couponAssociations fakeCouponAssociations
+	taxRates           fakeTaxRates
+	taxAssociations    fakeTaxAssociations
+	async              *fakeAsyncEvents
 }
 
 func newFakeClient() *fakeClient {
@@ -45,16 +51,22 @@ func (c *fakeClient) Invoices() e2eprobe.InvoiceOps           { return &c.invoic
 func (c *fakeClient) NewAsyncEventClient() e2eprobe.AsyncEventClient {
 	return c.async
 }
+func (c *fakeClient) Entitlements() e2eprobe.EntitlementOps             { return &c.entitlements }
+func (c *fakeClient) Coupons() e2eprobe.CouponOps                       { return &c.coupons }
+func (c *fakeClient) CouponAssociations() e2eprobe.CouponAssociationOps { return &c.couponAssociations }
+func (c *fakeClient) TaxRates() e2eprobe.TaxRateOps                     { return &c.taxRates }
+func (c *fakeClient) TaxAssociations() e2eprobe.TaxAssociationOps       { return &c.taxAssociations }
 
 // --- Customers ---
 
 type fakeCustomers struct {
-	mu          sync.Mutex
-	created     []types.CreateCustomerRequest
-	byExt       map[string]string
-	getErr      error
-	deleted     []string // internal customer IDs passed to Delete
-	queryResult []types.CustomerResponse
+	mu           sync.Mutex
+	created      []types.CreateCustomerRequest
+	byExt        map[string]string
+	getErr       error
+	deleted      []string // internal customer IDs passed to Delete
+	queryResult  []types.CustomerResponse
+	usageSummary *dtos.GetCustomerUsageSummaryResponse
 }
 
 func (f *fakeCustomers) Create(_ context.Context, req types.CreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
@@ -93,6 +105,11 @@ func (f *fakeCustomers) GetEntitlements(_ context.Context, _ string) (*dtos.GetC
 	return &dtos.GetCustomerEntitlementsResponse{}, nil
 }
 func (f *fakeCustomers) GetUsageSummary(_ context.Context, _ dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.usageSummary != nil {
+		return f.usageSummary, nil
+	}
 	return &dtos.GetCustomerUsageSummaryResponse{}, nil
 }
 func (f *fakeCustomers) Update(_ context.Context, _ types.UpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
@@ -220,14 +237,16 @@ func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dt
 // --- Subscriptions ---
 
 type fakeSubscriptions struct {
-	mu        sync.Mutex
-	created   []types.CreateSubscriptionRequest
-	cancelled []string
-	gets      int
-	nextID    int
-	subs      map[string]types.SubscriptionResponse
-	subErr    error
-	cancelErr error
+	mu                  sync.Mutex
+	created             []types.CreateSubscriptionRequest
+	cancelled           []string
+	gets                int
+	nextID              int
+	subs                map[string]types.SubscriptionResponse
+	subErr              error
+	cancelErr           error
+	getEntitlementsResp *dtos.GetSubscriptionEntitlementsResponse
+	getEntitlementsErr  error
 }
 
 func (f *fakeSubscriptions) Create(_ context.Context, req types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
@@ -295,10 +314,23 @@ func (f *fakeSubscriptions) ActivateSubscription(_ context.Context, _ string, _ 
 	return &dtos.ActivateSubscriptionResponse{}, nil
 }
 func (f *fakeSubscriptions) GetEntitlements(_ context.Context, _ string, _ []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.getEntitlementsErr != nil {
+		return nil, f.getEntitlementsErr
+	}
+	if f.getEntitlementsResp != nil {
+		return f.getEntitlementsResp, nil
+	}
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
 }
 func (f *fakeSubscriptions) GetUsage(_ context.Context, _ types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return &dtos.GetSubscriptionUsageResponse{}, nil
+	// Return a large enough Amount that probe usage-threshold gates always
+	// pass in unit tests — the polling loop is exercised in staging.
+	amt := 1e12
+	return &dtos.GetSubscriptionUsageResponse{
+		GetUsageBySubscriptionResponse: &types.GetUsageBySubscriptionResponse{Amount: &amt},
+	}, nil
 }
 func (f *fakeSubscriptions) CreateLineItem(_ context.Context, _ string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil
@@ -485,6 +517,11 @@ type fakeInvoices struct {
 	queryErr   error
 	invoices   []types.InvoiceResponse
 	lastFilter types.InvoiceFilter
+	// Preview support
+	previewResp    *dtos.GetInvoicePreviewResponse               // default response
+	previewErr     error
+	previewForSub  map[string]*dtos.GetInvoicePreviewResponse    // per-sub override, keyed by SubscriptionID
+	previewCalls   []types.GetPreviewInvoiceRequest
 }
 
 func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error) {
@@ -504,6 +541,21 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 }
 func (f *fakeInvoices) Get(_ context.Context, _ string) (*dtos.GetInvoiceResponse, error) {
 	return &dtos.GetInvoiceResponse{}, nil
+}
+func (f *fakeInvoices) GetPreview(_ context.Context, req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.previewCalls = append(f.previewCalls, req)
+	if f.previewErr != nil {
+		return nil, f.previewErr
+	}
+	if resp, ok := f.previewForSub[req.SubscriptionID]; ok {
+		return resp, nil
+	}
+	if f.previewResp != nil {
+		return f.previewResp, nil
+	}
+	return &dtos.GetInvoicePreviewResponse{}, nil
 }
 
 // --- Async events ---
@@ -538,6 +590,275 @@ func (f *fakeAsyncEvents) Close() error {
 	defer f.mu.Unlock()
 	f.closed = true
 	return nil
+}
+
+// --- Entitlements ---
+
+type fakeEntitlements struct {
+	mu        sync.Mutex
+	created   []types.CreateEntitlementRequest
+	createErr error
+	queryResp *dtos.QueryEntitlementResponse
+	queryErr  error
+	deleted   []string
+
+	// Grant-related fields (Task 3 of entitlement-grants plan)
+	createdWithGrant   []e2eprobe.GrantEntitlementInput
+	createWithGrantErr error
+	createWithGrantID  string // returned by CreateWithGrant when non-empty; else auto-generated
+	getRawResp         *e2eprobe.GrantEntitlementResponse
+	getRawRespByID     map[string]*e2eprobe.GrantEntitlementResponse // per-id lookup takes priority over getRawResp
+	getRawErr          error
+	getRawCalls        []string
+}
+
+func (f *fakeEntitlements) Create(_ context.Context, req types.CreateEntitlementRequest) (*dtos.CreateEntitlementResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	f.created = append(f.created, req)
+	id := fmt.Sprintf("ent_%d", len(f.created))
+	return &dtos.CreateEntitlementResponse{
+		EntitlementResponse: &types.EntitlementResponse{ID: &id, FeatureID: &req.FeatureID},
+	}, nil
+}
+func (f *fakeEntitlements) Query(_ context.Context, _ types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.queryErr != nil {
+		return nil, f.queryErr
+	}
+	if f.queryResp != nil {
+		return f.queryResp, nil
+	}
+	return &dtos.QueryEntitlementResponse{}, nil
+}
+func (f *fakeEntitlements) Delete(_ context.Context, id string) (*dtos.DeleteEntitlementResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleted = append(f.deleted, id)
+	return &dtos.DeleteEntitlementResponse{}, nil
+}
+
+func (f *fakeEntitlements) CreateWithGrant(_ context.Context, req e2eprobe.GrantEntitlementInput) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.createWithGrantErr != nil {
+		return "", f.createWithGrantErr
+	}
+	f.createdWithGrant = append(f.createdWithGrant, req)
+	if f.createWithGrantID != "" {
+		return f.createWithGrantID, nil
+	}
+	return fmt.Sprintf("ent_grant_%d", len(f.createdWithGrant)), nil
+}
+
+func (f *fakeEntitlements) GetRaw(_ context.Context, id string) (*e2eprobe.GrantEntitlementResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getRawCalls = append(f.getRawCalls, id)
+	if f.getRawErr != nil {
+		return nil, f.getRawErr
+	}
+	if resp, ok := f.getRawRespByID[id]; ok {
+		return resp, nil
+	}
+	if f.getRawResp != nil {
+		return f.getRawResp, nil
+	}
+	// Default: well-formed response matching the seed's config-echo assertion,
+	// so happy-path tests don't need to inject.
+	dv := 1
+	return &e2eprobe.GrantEntitlementResponse{
+		ID:                 id,
+		GrantMeasure:       "quantity",
+		GrantQuota:         "1000",
+		GrantDurationValue: &dv,
+		GrantDurationUnit:  "hour",
+		AggregationMode:    "additive",
+		IsEnabled:          true,
+	}, nil
+}
+
+// --- Coupons ---
+
+type fakeCoupons struct {
+	mu        sync.Mutex
+	created   []types.CreateCouponRequest
+	createErr error
+	byCode    map[string]string // code -> id
+}
+
+// normalizeCouponCode mirrors internal/repository/ent/coupon.go: the real
+// repo lowercases/trims coupon codes on INSERT and stores the normalized
+// form, so the fake must do the same for the CouponCodes filter to hit.
+func normalizeCouponCode(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+func (f *fakeCoupons) Create(_ context.Context, req types.CreateCouponRequest) (*dtos.CreateCouponResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	f.created = append(f.created, req)
+	id := fmt.Sprintf("coupon_%d", len(f.created))
+	if req.CouponCode != nil {
+		if f.byCode == nil {
+			f.byCode = map[string]string{}
+		}
+		f.byCode[normalizeCouponCode(*req.CouponCode)] = id
+	}
+	return &dtos.CreateCouponResponse{
+		CouponResponse: &types.CouponResponse{ID: &id, CouponCode: req.CouponCode, Name: &req.Name},
+	}, nil
+}
+func (f *fakeCoupons) Query(_ context.Context, filter types.CouponFilter) (*dtos.QueryCouponResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var items []types.CouponResponse
+	for _, code := range filter.CouponCodes {
+		norm := normalizeCouponCode(code)
+		if id, ok := f.byCode[norm]; ok {
+			c := norm
+			i := id
+			items = append(items, types.CouponResponse{ID: &i, CouponCode: &c})
+		}
+	}
+	if len(items) == 0 {
+		return &dtos.QueryCouponResponse{}, nil
+	}
+	return &dtos.QueryCouponResponse{
+		ListCouponsResponse: &types.ListCouponsResponse{Items: items},
+	}, nil
+}
+func (f *fakeCoupons) GetByCode(_ context.Context, code string) (*dtos.GetCouponByCodeResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	norm := normalizeCouponCode(code)
+	id, ok := f.byCode[norm]
+	if !ok {
+		return nil, &sdkerrors.ErrorResponse{
+			HTTPStatusCode: int64Ptr(http.StatusNotFound),
+		}
+	}
+	c := norm
+	return &dtos.GetCouponByCodeResponse{
+		CouponResponse: &types.CouponResponse{ID: &id, CouponCode: &c},
+	}, nil
+}
+func (f *fakeCoupons) Delete(_ context.Context, _ string) (*dtos.DeleteCouponResponse, error) {
+	return &dtos.DeleteCouponResponse{}, nil
+}
+
+// --- Coupon associations ---
+
+type fakeCouponAssociations struct {
+	mu   sync.Mutex
+	resp *dtos.ListCouponAssociationsResponse
+}
+
+func (f *fakeCouponAssociations) List(_ context.Context, _ dtos.ListCouponAssociationsRequest) (*dtos.ListCouponAssociationsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.resp != nil {
+		return f.resp, nil
+	}
+	return &dtos.ListCouponAssociationsResponse{}, nil
+}
+
+// --- Tax rates ---
+
+type fakeTaxRates struct {
+	mu        sync.Mutex
+	created   []types.CreateTaxRateRequest
+	createErr error
+	byCode    map[string]string // code -> id
+	listResp  *dtos.GetTaxRatesResponse
+	listErr   error
+}
+
+func (f *fakeTaxRates) Create(_ context.Context, req types.CreateTaxRateRequest) (*dtos.CreateTaxRateResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	f.created = append(f.created, req)
+	id := fmt.Sprintf("taxrate_%d", len(f.created))
+	if f.byCode == nil {
+		f.byCode = map[string]string{}
+	}
+	f.byCode[req.Code] = id
+	c := req.Code
+	return &dtos.CreateTaxRateResponse{
+		TaxRateResponse: &types.TaxRateResponse{ID: &id, Code: &c},
+	}, nil
+}
+func (f *fakeTaxRates) Get(_ context.Context, id string) (*dtos.GetTaxRateResponse, error) {
+	return &dtos.GetTaxRateResponse{
+		TaxRateResponse: &types.TaxRateResponse{ID: &id},
+	}, nil
+}
+func (f *fakeTaxRates) List(_ context.Context, _ dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listResp != nil {
+		return f.listResp, nil
+	}
+	return &dtos.GetTaxRatesResponse{}, nil
+}
+func (f *fakeTaxRates) Delete(_ context.Context, _ string) (*dtos.DeleteTaxRateResponse, error) {
+	return &dtos.DeleteTaxRateResponse{}, nil
+}
+
+// --- Tax associations ---
+
+type fakeTaxAssociations struct {
+	mu        sync.Mutex
+	created   []types.CreateTaxAssociationRequest
+	createErr error
+	listResp  *dtos.ListTaxAssociationsResponse
+	listErr   error
+	deleted   []string
+	deleteErr error
+}
+
+func (f *fakeTaxAssociations) Create(_ context.Context, req types.CreateTaxAssociationRequest) (*dtos.CreateTaxAssociationResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	f.created = append(f.created, req)
+	id := fmt.Sprintf("taxassoc_%d", len(f.created))
+	return &dtos.CreateTaxAssociationResponse{
+		TaxAssociationResponse: &types.TaxAssociationResponse{ID: &id},
+	}, nil
+}
+func (f *fakeTaxAssociations) List(_ context.Context, _, _, _, _ *string) (*dtos.ListTaxAssociationsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listResp != nil {
+		return f.listResp, nil
+	}
+	return &dtos.ListTaxAssociationsResponse{}, nil
+}
+func (f *fakeTaxAssociations) Delete(_ context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
+	}
+	f.deleted = append(f.deleted, id)
+	return &dtos.DeleteTaxAssociationResponse{}, nil
 }
 
 // --- helpers (strPtr is defined in seed_ensure.go) ---

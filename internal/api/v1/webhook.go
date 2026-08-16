@@ -1251,9 +1251,14 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	}
 }
 func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
-	// Always return 200 OK to Whop to prevent retries
-	// We log errors internally but don't expose them to Whop
+	// Return 200 OK to Whop to prevent retries once the request is accepted.
+	// We log errors internally but don't expose them to Whop. If the handler
+	// aborted (e.g. rejected an unauthenticated request with 401), skip this
+	// write so the rejection is not overwritten by a success body.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -1303,18 +1308,25 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		timestamp := c.GetHeader("webhook-timestamp")
 		signature := c.GetHeader("webhook-signature")
 		if webhookID == "" || timestamp == "" || signature == "" {
-			h.logger.Info(ctx, "Whop webhook secret configured but signature headers missing - rejecting request",
+			h.logger.Error(ctx, "Whop webhook rejected: signature headers missing",
+				"error", "signature_headers_missing",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Webhook signature headers are missing",
+			})
 			return
 		}
 
 		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, webhookID, timestamp, signature); err != nil {
-			h.logger.Info(ctx, "Whop webhook signature verification failed - rejecting request",
+			h.logger.Error(ctx, "Whop webhook rejected: signature verification failed",
 				"error", err,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
 				"note", "signature does not match configured webhook_secret")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Webhook signature verification failed",
+			})
 			return
 		}
 
@@ -1322,10 +1334,24 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	} else {
-		// No webhook secret configured - allow with warning
-		h.logger.Info(ctx, "Whop webhook received without secret verification",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		//
+		// AbortWithStatusJSON rather than a bare return: the deferred success
+		// body at the top of this handler would otherwise answer 200 to a
+		// request that was refused. Aborting marks the context so the deferred
+		// write is skipped.
+		h.logger.Error(ctx, "Whop webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
 			"tenant_id", tenantID,
-			"environment_id", environmentID)
+			"environment_id", environmentID,
+			"note", "Configure webhook_secret in the Whop connection settings")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
+		return
 	}
 
 	var event whopwebhook.WhopWebhookEvent

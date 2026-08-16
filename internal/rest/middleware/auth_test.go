@@ -7,9 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
@@ -109,6 +112,38 @@ func newTestEnvironmentRepo() *fakeEnvironmentRepo {
 	}
 }
 
+// newTestUserRepo seeds the active "usr_dev" user that makeJWT mints tokens for,
+// in each tenant these tests issue tokens for, so the middleware's role lookup
+// resolves and the request reaches the behaviour under test. Tests concerned
+// with the lookup itself seed their own store instead.
+func newTestUserRepo() *testutil.InMemoryUserStore {
+	devUser := func(tenantID, email string) *user.User {
+		return &user.User{
+			ID:    "usr_dev",
+			Email: email,
+			Type:  types.UserTypeUser,
+			Roles: []string{types.RoleSuperAdmin.String()},
+			BaseModel: types.BaseModel{
+				TenantID: tenantID,
+				Status:   types.StatusPublished,
+			},
+		}
+	}
+	return newUserRepoWith(
+		devUser("t_tenant1", "usr_dev@example.com"),
+		devUser("t_tenant_without_envs", "usr_dev+no_envs@example.com"),
+	)
+}
+
+func newUserRepoWith(users ...*user.User) *testutil.InMemoryUserStore {
+	store := testutil.NewInMemoryUserStore()
+	for _, u := range users {
+		ctx := context.WithValue(context.Background(), types.CtxTenantID, u.TenantID)
+		_ = store.Create(ctx, u)
+	}
+	return store
+}
+
 func makeJWT(t *testing.T, tenantID, userID, environmentID string, expiryHours int) string {
 	t.Helper()
 	claims := jwt.MapClaims{
@@ -140,7 +175,7 @@ func newAuthTestRouter(t *testing.T) *gin.Engine {
 	log := newTestLogger(t)
 
 	r := gin.New()
-	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), log))
+	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), log))
 	r.GET("/test", func(c *gin.Context) {
 		ctx := c.Request.Context()
 		c.JSON(http.StatusOK, gin.H{
@@ -258,7 +293,7 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 				Secret:   testSecret,
 				APIKey:   config.APIKeyConfig{Header: "x-api-key"},
 			},
-		}, nil, newTestEnvironmentRepo(), newTestLogger(t)))
+		}, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
 		r.GET("/capture", func(c *gin.Context) {
 			capturedCtx = c.Request.Context()
 			c.Status(http.StatusOK)
@@ -405,7 +440,7 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 
 	newRouter := func() *gin.Engine {
 		r := gin.New()
-		r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestLogger(t)))
+		r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
 		handler := func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"environment_id": types.GetEnvironmentID(c.Request.Context()),
@@ -493,7 +528,7 @@ func TestAuthenticateMiddleware_EnvironmentLookupFailureIsNotForbidden(t *testin
 	r := gin.New()
 	r.Use(AuthenticateMiddleware(cfg, nil, &fakeEnvironmentRepo{
 		getErr: ierr.NewError("connection refused").Mark(ierr.ErrDatabase),
-	}, newTestLogger(t)))
+	}, newTestUserRepo(), newTestLogger(t)))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	w := httptest.NewRecorder()
@@ -503,4 +538,150 @@ func TestAuthenticateMiddleware_EnvironmentLookupFailureIsNotForbidden(t *testin
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// A JWT carries no roles claim, so the user record is the only thing that can
+// establish what a dashboard session may do — and the only thing that can
+// withdraw it, since a token stays valid after the account behind it is closed.
+func TestAuthenticateMiddleware_JWTRolesComeFromUserRecord(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Configuration{
+		Auth: config.AuthConfig{
+			Provider: types.AuthProviderFlexprice,
+			Secret:   testSecret,
+			APIKey:   config.APIKeyConfig{Header: "x-api-key"},
+		},
+	}
+
+	activeUser := func(roles []string) *user.User {
+		return &user.User{
+			ID:    "usr_dev",
+			Email: "usr_dev@example.com",
+			Type:  types.UserTypeUser,
+			Roles: roles,
+			BaseModel: types.BaseModel{
+				TenantID: "t_tenant1",
+				Status:   types.StatusPublished,
+			},
+		}
+	}
+
+	withStatus := func(status types.Status) *user.User {
+		u := activeUser([]string{types.RoleSuperAdmin.String()})
+		u.Status = status
+		return u
+	}
+
+	testCases := []struct {
+		name      string
+		userRepo  *testutil.InMemoryUserStore
+		wantCode  int
+		wantRoles []string
+	}{
+		{
+			name:      "roles on the record are placed in the request context",
+			userRepo:  newUserRepoWith(activeUser([]string{types.RoleAllReader.String()})),
+			wantCode:  http.StatusOK,
+			wantRoles: []string{types.RoleAllReader.String()},
+		},
+		{
+			name:      "multiple roles are carried through intact",
+			userRepo:  newUserRepoWith(activeUser([]string{types.RoleAllReader.String(), types.RoleAllWriter.String()})),
+			wantCode:  http.StatusOK,
+			wantRoles: []string{types.RoleAllReader.String(), types.RoleAllWriter.String()},
+		},
+		// An empty role set is no longer read as full access, so it must reach
+		// RequirePermission as-is rather than being substituted for anything.
+		{
+			name:      "an empty role set is carried through, not widened",
+			userRepo:  newUserRepoWith(activeUser([]string{})),
+			wantCode:  http.StatusOK,
+			wantRoles: []string{},
+		},
+		{
+			name:     "a valid token for a user that no longer exists is refused",
+			userRepo: testutil.NewInMemoryUserStore(),
+			wantCode: http.StatusUnauthorized,
+		},
+		{
+			name:     "an archived user is refused",
+			userRepo: newUserRepoWith(withStatus(types.StatusArchived)),
+			wantCode: http.StatusUnauthorized,
+		},
+		{
+			name:     "a deleted user is refused",
+			userRepo: newUserRepoWith(withStatus(types.StatusDeleted)),
+			wantCode: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedRoles []string
+
+			r := gin.New()
+			r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), tc.userRepo, newTestLogger(t)))
+			r.GET("/test", func(c *gin.Context) {
+				capturedRoles = types.GetRoles(c.Request.Context())
+				c.Status(http.StatusOK)
+			})
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("Authorization", "Bearer "+makeJWT(t, "t_tenant1", "usr_dev", "env_dev", 1))
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, tc.wantCode, w.Code)
+			if tc.wantCode == http.StatusOK {
+				assert.Equal(t, tc.wantRoles, capturedRoles)
+			} else {
+				// The refusal must not disclose whether the account exists.
+				assert.JSONEq(t, `{"error":"Unauthorized"}`, w.Body.String())
+			}
+		})
+	}
+}
+
+// Config-map API keys have no database record to carry roles, so the middleware
+// grants them super_admin explicitly. Without it they would hold no roles at
+// all and be refused every check.
+func TestAuthenticateMiddleware_ConfigAPIKeyIsSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	const apiKey = "test-config-key"
+	cfg := &config.Configuration{
+		Auth: config.AuthConfig{
+			Provider: types.AuthProviderFlexprice,
+			Secret:   testSecret,
+			APIKey: config.APIKeyConfig{
+				Header: "x-api-key",
+				Keys: map[string]config.APIKeyDetails{
+					auth.HashAPIKey(apiKey): {
+						TenantID: "t_tenant1",
+						UserID:   "usr_dev",
+						Name:     "config key",
+						IsActive: true,
+					},
+				},
+			},
+		},
+	}
+
+	var capturedRoles []string
+	r := gin.New()
+	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
+	r.GET("/test", func(c *gin.Context) {
+		capturedRoles = types.GetRoles(c.Request.Context())
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set(types.HeaderEnvironment, "env_dev")
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, []string{types.RoleSuperAdmin.String()}, capturedRoles)
 }

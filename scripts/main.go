@@ -129,6 +129,11 @@ var commands = []Command{
 		Description: "Create CUSTOMER_COUNT demo customers (default 1), each with subscription, $100 wallet top-up, and 500 meter events (Postgres + Kafka)",
 		Run:         internal.SetupDummyBillingCustomer,
 	},
+	{
+		Name:        "replay-events-csv",
+		Description: "Replay events from a CSV via POST /v1/events (preserves event_id, timestamp, event_name, source, properties)",
+		Run:         internal.ReplayEventsFromCSV,
+	},
 }
 
 func main() {

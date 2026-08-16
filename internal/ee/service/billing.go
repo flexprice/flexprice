@@ -1223,7 +1223,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	referencePoint := params.ReferencePoint
 	excludeInvoiceID := params.ExcludeInvoiceID
 	// Validate that the billing period respects subscription end date
-	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart, periodEnd); err != nil {
+	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart); err != nil {
 		return nil, err
 	}
 
@@ -1548,24 +1548,11 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// For parent subscriptions, merge line items from all grouped_invoicing children.
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		filter := types.NewNoLimitSubscriptionFilter()
-		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-		filter.ParentSubscriptionIDs = []string{sub.ID}
-		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
-		filter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-		}
-
-		// A draft parent is only ever invoiced by the checkout pricing pass, and its inline
-		// children are draft too, so they belong on the amount the customer is asked to pay.
-		if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
-			filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusDraft)
-		}
-		children, err := s.SubRepo.List(ctx, filter)
+		children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
 		if err != nil {
 			return nil, err
 		}
+
 		for _, child := range children {
 			// NOTE: ExcludeInvoiceID and OpeningInvoiceAdjustmentAmount from the parent params
 			// are intentionally not forwarded here.
@@ -1592,6 +1579,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 				}
 			}
 			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
+			invReq.LineItemCoupons = append(invReq.LineItemCoupons, childReq.LineItemCoupons...)
 		}
 		// Recalculate totals from merged line items
 		if len(children) > 0 {
@@ -1611,8 +1599,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 // validatePeriodAgainstSubscriptionEndDate ensures billing periods don't exceed subscription end date
 func (s *billingService) validatePeriodAgainstSubscriptionEndDate(
 	sub *subscription.Subscription,
-	periodStart,
-	periodEnd time.Time,
+	periodStart time.Time,
 ) error {
 	// If no end date, no validation needed
 	if sub.EndDate == nil {
@@ -2036,9 +2023,10 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		}
 		for _, assoc := range assocs {
 			validLineItemCoupons = append(validLineItemCoupons, dto.InvoiceLineItemCoupon{
-				LineItemID:          priceID,
-				CouponID:            assoc.CouponID,
-				CouponAssociationID: &assoc.ID,
+				LineItemID:             priceID,
+				SubscriptionLineItemID: lo.ToPtr(sliID),
+				CouponID:               assoc.CouponID,
+				CouponAssociationID:    &assoc.ID,
 			})
 		}
 	}

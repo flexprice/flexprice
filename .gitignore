@@ -136,3 +136,6 @@ graphify-out/server
 # Security assessment working directory. This repository is public; scan
 # configuration and findings must not be published here.
 shannon-setup/
+
+# Local git worktrees for isolated feature work (superpowers:using-git-worktrees)
+.worktrees/

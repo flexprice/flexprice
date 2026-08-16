@@ -33,9 +33,23 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "flexprice.fullname" $ }}-api
+                {{- /*
+                  Backend defaults to the api Service, so every existing values
+                  file renders unchanged. Set `service` and `port` on a path to
+                  route it elsewhere — needed to serve the UI and the API from a
+                  SINGLE Ingress.
+
+                  That is not a stylistic choice: two Ingress objects cannot
+                  share one static IP. Each provisions its own load balancer and
+                  forwarding rule, and the second fails with
+                    Invalid value for field 'resource.IPAddress': Specified IP
+                    address is in-use and would result in a conflict
+                  One Ingress with per-host rules is the only way to put both
+                  hostnames on one address.
+                */}}
+                name: {{ .service | default (printf "%s-api" (include "flexprice.fullname" $)) }}
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: {{ .port | default $.Values.service.port }}
           {{- end }}
     {{- end }}
 {{- end }}

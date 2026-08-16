@@ -121,6 +121,17 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error) {
 	user, err := s.UserRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
+		// Only normalize the not-found case: an unknown email must return the
+		// same "invalid credentials" response as a valid email with a wrong
+		// password (both ErrPermissionDenied / 401), otherwise the distinct
+		// not-found status enables account enumeration on this unauthenticated,
+		// unthrottled endpoint. Other errors (e.g. a database failure) must
+		// propagate as-is so they surface as server errors, not bad credentials.
+		if ierr.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Invalid email or password").
+				Mark(ierr.ErrPermissionDenied)
+		}
 		return nil, err
 	}
 
@@ -140,17 +151,16 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	}, auth)
 
 	if err != nil {
+		// Same generic response as the unknown-email and identity-mismatch cases
+		// so none of the three is distinguishable to an enumerating caller.
 		return nil, ierr.WithError(err).
-			WithHint("Failed to authenticate").
+			WithHint("Invalid email or password").
 			Mark(ierr.ErrPermissionDenied)
 	}
 
 	if authResponse.ID != user.ID {
-		return nil, ierr.NewError("user not found").
-			WithHint("User not found").
-			WithReportableDetails(map[string]interface{}{
-				"user_id": user.ID,
-			}).
+		return nil, ierr.NewError("invalid credentials").
+			WithHint("Invalid email or password").
 			Mark(ierr.ErrPermissionDenied)
 	}
 

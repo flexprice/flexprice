@@ -114,11 +114,26 @@ func (s *invoiceService) resolveCurrentInvoiceCoupons(ctx context.Context, inv *
 		return nil, nil, err
 	}
 
-	couponValidationService := NewCouponValidationService(s.ServiceParams)
-	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
-		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
+	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, true)
+	if err != nil {
+		return nil, nil, err
 	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, *inv.PeriodStart, *inv.PeriodEnd, filter)
+
+	subs := append([]*subscription.Subscription{sub}, children...)
+	subByID := lo.SliceToMap(subs, func(x *subscription.Subscription) (string, *subscription.Subscription) {
+		return x.ID, x
+	})
+
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	filter := func(c *coupon.Coupon, a *coupon_association.CouponAssociation) bool {
+		owner, ok := subByID[a.SubscriptionID]
+		if !ok {
+			return false
+		}
+		return couponValidationService.ValidateCoupon(ctx, *c, owner) == nil
+	}
+
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, subs, *inv.PeriodStart, *inv.PeriodEnd, filter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,10 +143,9 @@ func (s *invoiceService) resolveCurrentInvoiceCoupons(ctx context.Context, inv *
 		func(li *invoice.InvoiceLineItem) (string, bool) { return *li.PriceID, true },
 	)
 
-	invoiceCoupons := lo.FlatMap(lo.Values(sel.SubLevel), func(assocs []*coupon_association.CouponAssociation, _ int) []dto.InvoiceCoupon {
-		return lo.Map(assocs, func(a *coupon_association.CouponAssociation, _ int) dto.InvoiceCoupon {
-			return dto.InvoiceCoupon{CouponID: a.CouponID, CouponAssociationID: &a.ID}
-		})
+	// Only the parent's subscription-level coupons.
+	invoiceCoupons := lo.Map(sel.SubLevel[sub.ID], func(a *coupon_association.CouponAssociation, _ int) dto.InvoiceCoupon {
+		return dto.InvoiceCoupon{CouponID: a.CouponID, CouponAssociationID: &a.ID}
 	})
 
 	lineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
@@ -141,7 +155,12 @@ func (s *invoiceService) resolveCurrentInvoiceCoupons(ctx context.Context, inv *
 			continue
 		}
 		lineItemCoupons = append(lineItemCoupons, lo.Map(assocs, func(a *coupon_association.CouponAssociation, _ int) dto.InvoiceLineItemCoupon {
-			return dto.InvoiceLineItemCoupon{LineItemID: priceID, CouponID: a.CouponID, CouponAssociationID: &a.ID}
+			return dto.InvoiceLineItemCoupon{
+				LineItemID:             priceID,
+				SubscriptionLineItemID: lo.ToPtr(sliID),
+				CouponID:               a.CouponID,
+				CouponAssociationID:    &a.ID,
+			}
 		})...)
 	}
 

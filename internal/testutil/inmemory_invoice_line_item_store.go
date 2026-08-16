@@ -133,6 +133,63 @@ func (s *InMemoryInvoiceLineItemStore) List(ctx context.Context, filter *types.I
 	return result, nil
 }
 
+// Mirrors the SQL predicate except for the invoice join: the SQL counts a line
+// only when its invoice is published and DRAFT or FINALIZED, and this store holds
+// no invoices. Tenant/environment scoping is enforced, so a test that leaks a
+// line item across scopes fails here the way it would in production.
+func (s *InMemoryInvoiceLineItemStore) GetBilledAmountsBySubscriptionLineItem(
+	ctx context.Context,
+	subscriptionLineItemIDs []string,
+	asOf time.Time,
+) (map[string]*invoice.BilledAmounts, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	wanted := make(map[string]bool, len(subscriptionLineItemIDs))
+	for _, id := range subscriptionLineItemIDs {
+		wanted[id] = true
+	}
+
+	charged := make(map[string]decimal.Decimal)
+	credited := make(map[string]decimal.Decimal)
+	for _, item := range s.data {
+		if item.Status != types.StatusPublished || item.SubscriptionLineItemID == nil {
+			continue
+		}
+		if item.TenantID != tenantID || item.EnvironmentID != environmentID {
+			continue
+		}
+		id := *item.SubscriptionLineItemID
+		if !wanted[id] {
+			continue
+		}
+		// Service period must contain asOf: period_start <= asOf < period_end.
+		if item.PeriodStart == nil || item.PeriodEnd == nil ||
+			item.PeriodStart.After(asOf) || !item.PeriodEnd.After(asOf) {
+			continue
+		}
+		if item.Amount.IsPositive() {
+			charged[id] = charged[id].Add(item.Amount)
+		} else if item.Amount.IsNegative() {
+			credited[id] = credited[id].Add(item.Amount.Neg())
+		}
+	}
+
+	results := make(map[string]*invoice.BilledAmounts, len(charged)+len(credited))
+	for id := range charged {
+		results[id] = invoice.NewBilledAmounts(charged[id], credited[id])
+	}
+	for id := range credited {
+		if _, ok := results[id]; !ok {
+			results[id] = invoice.NewBilledAmounts(charged[id], credited[id])
+		}
+	}
+	return results, nil
+}
+
 func (s *InMemoryInvoiceLineItemStore) GetRevenueByCustomer(
 	_ context.Context,
 	periodStart, periodEnd time.Time,
