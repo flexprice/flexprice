@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
@@ -127,4 +128,39 @@ func (s *EnvironmentServiceSuite) TestUpdateEnvironment() {
 		Type: string(types.EnvironmentProduction),
 	})
 	s.Error(err)
+}
+
+// Regression: the update must be authorised against the environment named in
+// the path. The caller's selected environment is not the target and is absent
+// entirely when the request carries no X-Environment-ID, so a check tied to it
+// let a user mutate an environment it had no access to.
+func (s *EnvironmentServiceSuite) TestUpdateEnvironmentDeniesUnauthorisedTarget() {
+	cfg := &config.Configuration{
+		EnvAccess: config.EnvAccessConfig{
+			UserEnvMapping: map[string]map[string][]string{
+				"t_tenant1": {"usr_dev": {"env_dev"}},
+			},
+		},
+	}
+	s.environmentService.envAccessService = NewEnvAccessService(cfg)
+
+	ctx := context.WithValue(context.Background(), types.CtxTenantID, "t_tenant1")
+	ctx = context.WithValue(ctx, types.CtxUserID, "usr_dev")
+
+	_ = s.environmentRepo.Create(ctx, &environment.Environment{ID: "env_dev", Name: "Development", Type: types.EnvironmentDevelopment})
+	_ = s.environmentRepo.Create(ctx, &environment.Environment{ID: "env_prod", Name: "Production", Type: types.EnvironmentProduction})
+
+	// The environment the user may reach is still writable.
+	resp, err := s.environmentService.UpdateEnvironment(ctx, "env_dev", dto.UpdateEnvironmentRequest{Name: "Renamed Dev"})
+	s.NoError(err)
+	s.Equal("Renamed Dev", resp.Name)
+
+	// The one it may not reach is refused, and the record is left untouched.
+	_, err = s.environmentService.UpdateEnvironment(ctx, "env_prod", dto.UpdateEnvironmentRequest{Name: "cross-env-write"})
+	s.Error(err)
+	s.True(ierr.IsPermissionDenied(err))
+
+	unchanged, err := s.environmentRepo.Get(ctx, "env_prod")
+	s.NoError(err)
+	s.Equal("Production", unchanged.Name)
 }
