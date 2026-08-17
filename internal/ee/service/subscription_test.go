@@ -2764,6 +2764,82 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems() {
 	}
 }
 
+// TestCreateSubscriptionWithLineItems_PublishesLineItemCreatedEvent guards against regressing
+// coverage of req.LineItems-created items in CreateSubscription's post-commit publishLineItemEvents
+// call. addSubscriptionLineItem no longer triggers HubSpot sync inline, so these extra items must be
+// fed into sub.LineItems for the subscription.line_item.created event to fire at all.
+//
+// Uses send_invoice collection method so subscription activation goes through
+// handleSendInvoiceMethod, which updates the subscription status in place instead of
+// re-fetching it via a plain SubRepo.Get. That re-fetch is what the in-memory test double's
+// stale per-subscription line-item cache would otherwise clobber sub.LineItems with (it has
+// no bearing on the real Ent-backed repository, which never populates LineItems on a plain
+// Get), which would make this assertion flaky for reasons unrelated to the production code
+// under test.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_PublishesLineItemCreatedEvent() {
+	ctx := s.GetContext()
+	start := s.testData.now
+	end := s.testData.now.Add(90 * 24 * time.Hour)
+
+	inlineAmount := decimal.NewFromInt(5)
+	inlinePriceReq := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             &inlineAmount,
+		LookupKey:          "inline_fixed_publish_test",
+	}
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &start,
+		EndDate:            &end,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			LineItems: []dto.CreateSubscriptionLineItemRequest{
+				{Price: inlinePriceReq},
+			},
+		},
+	}
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus)
+
+	got, err := s.service.GetSubscription(ctx, resp.ID)
+	s.Require().NoError(err)
+
+	var inlineLineItemID string
+	for _, li := range got.Subscription.LineItems {
+		if li.EntityType == types.SubscriptionLineItemEntityTypeSubscription {
+			inlineLineItemID = li.ID
+		}
+	}
+	s.Require().NotEmpty(inlineLineItemID, "expected the inline req.LineItems entry to create a subscription-scoped line item")
+
+	var foundEvent bool
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemCreated && evt.EntityID == inlineLineItemID {
+			foundEvent = true
+			break
+		}
+	}
+	s.True(foundEvent, "expected a subscription.line_item.created event for the req.LineItems entry")
+}
+
 // TestCreateSubscriptionWithLineItems_ValidationErrors asserts that CreateSubscription fails when LineItems
 // have invalid or out-of-bound values (e.g. start_date before subscription start, end_date after subscription end).
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_ValidationErrors() {
@@ -5346,18 +5422,20 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 
 	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
 
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 	// Calling it again with the same effectiveDate must not error, even though every
 	// resource is already terminated (repo-level guards make this a no-op the second time).
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}
@@ -5381,6 +5459,95 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 	s.NoError(err)
 	s.Require().NotNil(gotGrant.EndDate)
 	s.True(gotGrant.EndDate.Equal(effectiveDate), "credit grant EndDate must equal the exact effective date, not just be non-nil")
+}
+
+// TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce guards against a regression where an
+// addon's FIXED-price line item, terminated by cancelAddonsForSubscription, was ALSO picked up by
+// cancelAllLineItemsForSubscription's own (separate) activeLineItems query moments later in the same
+// transaction — because that query built its filter with ActiveFilter=true but no CurrentPeriodStart,
+// which both the Ent repo and the in-memory test double treat as "skip the active filter entirely".
+// That made cancelAllLineItemsForSubscription publish a second subscription.line_item.deleted event for
+// the same already-terminated addon line item, on top of the one published post-commit via
+// TerminateSubscriptionResources's returned terminated line items.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_addon_dedup_test",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	addonID := "addon_dedup_test"
+	priceID := "price_addon_dedup_test"
+	a := &addon.Addon{ID: addonID, LookupKey: addonID, Name: "Addon", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	// FIXED price type so publishLineItemEvents (which filters to PRICE_TYPE_FIXED only) actually fires.
+	amount := decimal.NewFromInt(10)
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             amount,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &addAddonNow,
+		},
+	})
+	s.NoError(err)
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	liFilter.EntityIDs = []string{addonID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	addonLineItemsBefore, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	s.Require().Len(addonLineItemsBefore, 1, "expected exactly one addon line item")
+	addonLineItemID := addonLineItemsBefore[0].ID
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_addon_dedup",
+	})
+	s.NoError(err)
+
+	deletedEventsForAddonLineItem := 0
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemDeleted && evt.EntityID == addonLineItemID {
+			deletedEventsForAddonLineItem++
+		}
+	}
+	s.Equal(1, deletedEventsForAddonLineItem,
+		"expected exactly one subscription.line_item.deleted event for the terminated addon line item, got %d", deletedEventsForAddonLineItem)
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
@@ -10473,4 +10640,25 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	_, err = s.service.CreateSubscription(ctx, req)
 	s.Error(err, "expected duplicate price_id in a child's override_line_items to be rejected")
 	s.Contains(err.Error(), "duplicate price_id in override line items")
+}
+
+func (s *SubscriptionServiceSuite) TestPublishLineItemEvents_FiltersToFixedPriceType() {
+	svc, ok := s.service.(*subscriptionService)
+	s.Require().True(ok, "expected concrete *subscriptionService")
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	lineItems := []*subscription.SubscriptionLineItem{
+		{ID: "li_fixed", CustomerID: "cus_1", PriceType: types.PRICE_TYPE_FIXED},
+		{ID: "li_usage", CustomerID: "cus_1", PriceType: types.PRICE_TYPE_USAGE},
+	}
+
+	svc.publishLineItemEvents(s.GetContext(), "sub_1", lineItems, types.WebhookEventSubscriptionLineItemCreated)
+
+	events := publisher.Events()
+	s.Len(events, 1, "expected exactly 1 published event (FIXED only)")
+	s.Equal(types.WebhookEventSubscriptionLineItemCreated, events[0].EventName)
+	s.Equal("li_fixed", events[0].EntityID, "surviving event must be for the FIXED line item, not the USAGE one")
 }

@@ -349,8 +349,15 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	for i := range req.LineItems {
 		itemReq := req.LineItems[i]
 		itemReq.SkipEntitlementCheck = true
-		if _, err = s.addSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
-			return nil, err
+		extraLineItem, addErr := s.addSubscriptionLineItem(ctx, sub.ID, itemReq)
+		if addErr != nil {
+			return nil, addErr
+		}
+		// Feed into sub.LineItems so CreateSubscription's post-commit publishLineItemEvents
+		// call covers these too, instead of losing the event entirely now that
+		// addSubscriptionLineItem no longer triggers it inline.
+		if extraLineItem != nil && extraLineItem.SubscriptionLineItem != nil {
+			sub.LineItems = append(sub.LineItems, extraLineItem.SubscriptionLineItem)
 		}
 	}
 	if len(req.OverrideEntitlements) > 0 {
@@ -426,6 +433,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			if extraErr != nil {
 				return nil, extraErr
 			}
+			sub.LineItems = append(sub.LineItems, extraItems...)
 			// Apply phase 0 coupons to the extra line items created above.
 			// handleSubCoupons runs before this block and only covers req.Coupons /
 			// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
@@ -608,7 +616,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.triggerHubSpotQuoteSyncWorkflow(ctx, result.Sub.ID, result.Customer.ID)
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
 	} else {
-		s.triggerHubSpotDealSyncWorkflow(ctx, result.Sub.ID, result.Customer.ID)
+		s.publishLineItemEvents(ctx, result.Sub.ID, result.Sub.LineItems, types.WebhookEventSubscriptionLineItemCreated)
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
 	}
 	return response, nil
@@ -818,109 +826,6 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
 
 	return response, nil
-}
-
-// triggerHubSpotDealSyncWorkflow triggers the Temporal workflow to sync subscription to HubSpot deal
-func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context, subscriptionID, customerID string) {
-	// Copy necessary context values
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-
-	s.Logger.Info(ctx, "triggering HubSpot deal sync workflow",
-		"subscription_id", subscriptionID,
-		"customer_id", customerID,
-		"tenant_id", tenantID,
-		"environment_id", envID)
-
-	// Check if HubSpot connection exists and deal outbound sync is enabled
-	if s.ConnectionRepo == nil {
-		s.Logger.Debug(ctx, "ConnectionRepo not available, skipping HubSpot deal sync",
-			"subscription_id", subscriptionID,
-			"customer_id", customerID)
-		return
-	}
-
-	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
-	if err != nil || conn == nil {
-		s.Logger.Debug(ctx, "HubSpot connection not found, skipping deal sync",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"customer_id", customerID)
-		return
-	}
-
-	if !conn.IsDealOutboundEnabled() {
-		s.Logger.Debug(ctx, "HubSpot deal outbound sync disabled, skipping deal sync",
-			"subscription_id", subscriptionID,
-			"customer_id", customerID,
-			"connection_id", conn.ID)
-		return
-	}
-
-	// Fetch customer to check for HubSpot deal ID
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to fetch customer for HubSpot deal sync",
-			"error", err,
-			"customer_id", customerID,
-			"subscription_id", subscriptionID)
-		return
-	}
-
-	// Check if customer has HubSpot deal ID in metadata
-	dealID, ok := cust.Metadata["hubspot_deal_id"]
-	if !ok || dealID == "" {
-		s.Logger.Debug(ctx, "customer does not have HubSpot deal ID, skipping sync",
-			"customer_id", customerID,
-			"subscription_id", subscriptionID)
-		return // Not an error - customer might not be from HubSpot
-	}
-
-	// Prepare workflow input with all necessary IDs
-	input := &models.HubSpotDealSyncWorkflowInput{
-		SubscriptionID: subscriptionID,
-		CustomerID:     customerID,
-		DealID:         dealID,
-		TenantID:       tenantID,
-		EnvironmentID:  envID,
-	}
-
-	// Validate input
-	if err := input.Validate(); err != nil {
-		s.Logger.Error(ctx, "invalid workflow input for HubSpot deal sync",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"customer_id", customerID,
-			"deal_id", dealID)
-		return
-	}
-
-	// Get global temporal service
-	temporalSvc := temporalservice.GetGlobalTemporalService()
-	if temporalSvc == nil {
-		s.Logger.Info(ctx, "temporal service not available for HubSpot deal sync",
-			"subscription_id", subscriptionID)
-		return
-	}
-
-	// Start workflow - Temporal handles async execution, no need for goroutines
-	workflowRun, err := temporalSvc.ExecuteWorkflow(
-		ctx,
-		types.TemporalHubSpotDealSyncWorkflow,
-		input,
-	)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to start HubSpot deal sync workflow",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"customer_id", customerID,
-			"deal_id", dealID)
-		return
-	}
-
-	s.Logger.Info(ctx, "HubSpot deal sync workflow started successfully",
-		"subscription_id", subscriptionID,
-		"workflow_id", workflowRun.GetID())
 }
 
 // triggerHubSpotQuoteSyncWorkflow triggers the Temporal workflow to sync subscription to HubSpot quote
@@ -2077,6 +1982,10 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
+	// Declared here, before Step 2 shadows the "subscription" package name with a
+	// same-named local variable, so the package-qualified type can still be referenced.
+	var terminatedLineItemsForHubSpot []*subscription.SubscriptionLineItem
+
 	// Step 2: Get subscription with line items
 	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
@@ -2240,13 +2149,15 @@ func (s *subscriptionService) CancelSubscription(
 		// period-rollover loop) so that reverting a pending schedule never leaves these resources
 		// terminated while the subscription itself is active again.
 		if req.CancellationType == types.CancellationTypeImmediate {
-			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+			terminated, err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 				SubscriptionID:     subscription.ID,
 				EffectiveDate:      effectiveDate,
 				CancellationReason: req.Reason,
-			}); err != nil {
+			})
+			if err != nil {
 				return err
 			}
+			terminatedLineItemsForHubSpot = terminated
 		}
 
 		// Step 7c: Handle scheduling for future cancellations (end_of_period and scheduled_date)
@@ -2285,7 +2196,7 @@ func (s *subscriptionService) CancelSubscription(
 
 	if !req.SuppressWebhook {
 		// Step 10: Publish events
-		s.publishCancellationEvents(ctx, subscription, req.CancellationType)
+		s.publishCancellationEvents(ctx, subscription, req.CancellationType, terminatedLineItemsForHubSpot)
 	}
 
 	// Gate on the resulting status, not the request's cancellation type: only an immediate
@@ -3525,6 +3436,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	isSubscriptionCancelled := false
+	var terminatedLineItemsForHubSpot []*subscription.SubscriptionLineItem
 	// Use db's WithTx for atomic operations
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process all periods except the last one (which becomes the new current period)
@@ -3632,13 +3544,15 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// deferred in the first place and must be left alone.
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
 			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+			terminated, err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 				SubscriptionID:     sub.ID,
 				EffectiveDate:      *sub.CancelAt,
 				CancellationReason: sub.Metadata["cancellation_reason"],
-			}); err != nil {
+			})
+			if err != nil {
 				return err
 			}
+			terminatedLineItemsForHubSpot = terminated
 		}
 
 		// Update the subscription
@@ -3695,7 +3609,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	if isSubscriptionCancelled {
-		s.PublishCancellationEvents(ctx, sub)
+		s.PublishCancellationEvents(ctx, sub, terminatedLineItemsForHubSpot)
 	}
 
 	return nil
@@ -4696,7 +4610,56 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 }
 
-func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+// publishLineItemEvents publishes a subscription.line_item.created/deleted webhook event for
+// each FIXED-price line item in lineItems; non-FIXED line items are skipped since only fixed
+// charges are synced to HubSpot deal line items.
+func (s *subscriptionService) publishLineItemEvents(
+	ctx context.Context,
+	subscriptionID string,
+	lineItems []*subscription.SubscriptionLineItem,
+	eventName types.WebhookEventName,
+) {
+	for _, li := range lineItems {
+		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		payload := webhookDto.InternalSubscriptionLineItemEvent{
+			SubscriptionID: subscriptionID,
+			LineItemID:     li.ID,
+			CustomerID:     li.CustomerID,
+			PriceType:      li.PriceType,
+			TenantID:       types.GetTenantID(ctx),
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+		}
+
+		webhookPayload, err := json.Marshal(payload)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to marshal line item event payload",
+				"error", err, "subscription_id", subscriptionID, "line_item_id", li.ID)
+			continue
+		}
+
+		webhookEvent := &types.WebhookEvent{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+			EventName:     eventName,
+			TenantID:      types.GetTenantID(ctx),
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			UserID:        types.GetUserID(ctx),
+			Timestamp:     time.Now().UTC(),
+			Payload:       json.RawMessage(webhookPayload),
+			EntityType:    types.SystemEntityTypeSubscriptionLineItem,
+			EntityID:      li.ID,
+		}
+		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+			s.Logger.Error(ctx, "failed to publish line item event",
+				"event_name", eventName, "subscription_id", subscriptionID, "line_item_id", li.ID, "error", err)
+		}
+	}
+}
+
+func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription, terminatedLineItems []*subscription.SubscriptionLineItem) {
+	s.publishLineItemEvents(ctx, sub.ID, terminatedLineItems, types.WebhookEventSubscriptionLineItemDeleted)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 }
@@ -5116,8 +5079,13 @@ func (s *subscriptionService) persistAddonAttach(ctx context.Context, params *ad
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	s.publishLineItemEvents(ctx, sub.ID, lineItems, types.WebhookEventSubscriptionLineItemCreated)
+
+	return nil
 }
 
 // materializeAddonCreditGrants clones the addon's ADDON-scoped credit grant templates
@@ -5282,17 +5250,18 @@ func (s *subscriptionService) pendingAddonFeatureResetPeriods(
 func (s *subscriptionService) TerminateSubscriptionResources(
 	ctx context.Context,
 	req dto.TerminateSubscriptionResourcesRequest,
-) error {
+) ([]*subscription.SubscriptionLineItem, error) {
 	if err := req.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := s.cancelAddonsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate, req.CancellationReason); err != nil {
-		return err
+	terminatedLineItems, err := s.cancelAddonsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate, req.CancellationReason)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.cancelAllLineItemsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
-		return err
+		return nil, err
 	}
 
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
@@ -5300,10 +5269,10 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		SubscriptionID: req.SubscriptionID,
 		EffectiveDate:  &req.EffectiveDate,
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return terminatedLineItems, nil
 }
 
 // listPendingAddonAssociations returns the subscription's addon associations that are still
@@ -5322,7 +5291,7 @@ func (s *subscriptionService) listPendingAddonAssociations(
 
 // Called during subscription cancellation (immediate or end_of_period) with the effective cancellation date.
 // Uses the same GetActiveAddonAssociation path as the API so we reliably find all active addons on the subscription.
-func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error {
+func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) ([]*subscription.SubscriptionLineItem, error) {
 	logger := s.Logger.With(
 		"subscription_id", subscriptionID,
 		"effective_date", effectiveDate,
@@ -5334,7 +5303,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		EntityType: types.AddonAssociationEntityTypeSubscription,
 	})
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to get active addon associations for subscription").
 			Mark(ierr.ErrDatabase)
 	}
@@ -5343,7 +5312,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 	// active read above, but they must be cancelled here too or they outlive the subscription.
 	pendingAddons, err := s.listPendingAddonAssociations(ctx, subscriptionID)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to get pending addon associations for subscription").
 			Mark(ierr.ErrDatabase)
 	}
@@ -5361,7 +5330,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 
 	if len(associations) == 0 {
 		logger.Debug(ctx, "no addon associations to cancel")
-		return nil
+		return nil, nil
 	}
 
 	logger.Info(ctx, "cancelling addon associations for subscription",
@@ -5400,7 +5369,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 			logger.Error(ctx, "failed to update addon association",
 				"addon_association_id", association.ID,
 				"error", err)
-			return ierr.WithError(err).
+			return nil, ierr.WithError(err).
 				WithHintf("Failed to cancel addon association %s", association.ID).
 				Mark(ierr.ErrDatabase)
 		}
@@ -5411,7 +5380,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 	}
 
 	if len(addonIDsToCancel) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	addonIDList := lo.Keys(addonIDsToCancel)
@@ -5425,7 +5394,7 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		logger.Error(ctx, "failed to list subscription line items for addon termination",
 			"subscription_id", subscriptionID,
 			"error", err)
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscription line items for addon termination").
 			Mark(ierr.ErrDatabase)
 	}
@@ -5436,30 +5405,33 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		"line_items_found", len(allLineItems))
 
 	deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: &effectiveDate}
-	terminated := 0
+	terminatedLineItems := make([]*subscription.SubscriptionLineItem, 0, len(allLineItems))
 	for _, lineItem := range allLineItems {
 		if !lineItem.EndDate.IsZero() {
 			continue
 		}
 
-		if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+		resp, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq)
+		if err != nil {
 			logger.Error(ctx, "failed to terminate addon line item",
 				"line_item_id", lineItem.ID,
 				"entity_id", lineItem.EntityID,
 				"error", err)
-			return ierr.WithError(err).
+			return nil, ierr.WithError(err).
 				WithHintf("Failed to terminate line item %s (entity_type=addon, entity_id=%s)", lineItem.ID, lineItem.EntityID).
 				Mark(ierr.ErrDatabase)
 		}
-		terminated++
+		if resp != nil && resp.SubscriptionLineItem != nil {
+			terminatedLineItems = append(terminatedLineItems, resp.SubscriptionLineItem)
+		}
 	}
 
 	logger.Info(ctx, "terminated addon line items for subscription",
 		"subscription_id", subscriptionID,
 		"addon_ids_count", len(addonIDsToCancel),
-		"line_items_terminated", terminated)
+		"line_items_terminated", len(terminatedLineItems))
 
-	return nil
+	return terminatedLineItems, nil
 }
 
 // RemoveAddonFromSubscription removes an addon from a subscription by addon association ID
@@ -6263,7 +6235,10 @@ func (s *subscriptionService) publishCancellationEvents(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	cancellationType types.CancellationType,
+	terminatedLineItems []*subscription.SubscriptionLineItem,
 ) {
+	s.publishLineItemEvents(ctx, sub.ID, terminatedLineItems, types.WebhookEventSubscriptionLineItemDeleted)
+
 	// Publish standard subscription events
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 	if cancellationType == types.CancellationTypeImmediate {
@@ -7519,6 +7494,35 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 		"effective_date", effectiveDate,
 	)
 
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.ActiveFilter = true
+	// Without CurrentPeriodStart, both the Ent repo and the in-memory test double treat
+	// ActiveFilter as a no-op (see applyActiveLineItemFilter), so this would otherwise return
+	// every line item ever created for the subscription — including ones terminated long ago.
+	filter.CurrentPeriodStart = &effectiveDate
+	activeLineItems, err := s.SubscriptionLineItemRepo.List(ctx, filter)
+	if err != nil {
+		logger.Error(ctx, "failed to list active line items before cancellation", "error", err)
+		return ierr.WithError(err).
+			WithHint("Failed to list active line items before cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// This function only owns plan/subscription-scoped line items (see doc comment above);
+	// addon-scoped ones are cancelled and published separately by cancelAddonsForSubscription,
+	// which runs immediately before this in the same transaction. An addon's line item is
+	// end-dated to this same effectiveDate there, so the active-as-of-effectiveDate filter above
+	// (EndDate >= effectiveDate OR EndDate IS NULL) still matches it; excluding it explicitly here
+	// prevents publishing a second subscription.line_item.deleted event for it.
+	planAndSubscriptionLineItems := make([]*subscription.SubscriptionLineItem, 0, len(activeLineItems))
+	for _, li := range activeLineItems {
+		if li != nil && li.EntityType == types.SubscriptionLineItemEntityTypeAddon {
+			continue
+		}
+		planAndSubscriptionLineItems = append(planAndSubscriptionLineItems, li)
+	}
+
 	terminated, err := s.SubscriptionLineItemRepo.BulkTerminate(ctx, subscriptionID, effectiveDate)
 	if err != nil {
 		logger.Error(ctx, "failed to terminate line items for subscription", "error", err)
@@ -7528,6 +7532,8 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 	}
 
 	logger.Info(ctx, "terminated line items for subscription", "line_items_terminated", terminated)
+
+	s.publishLineItemEvents(ctx, subscriptionID, planAndSubscriptionLineItems, types.WebhookEventSubscriptionLineItemDeleted)
 	return nil
 }
 

@@ -1110,6 +1110,66 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Version
 	s.True(newQty.Equal(newLI.Quantity), "new line item should have updated quantity")
 }
 
+// TestExecuteQuantityChange_PublishesLineItemEvents guards against regressing HubSpot-sync
+// coverage for quantity changes: applying a quantity change must publish exactly one
+// subscription.line_item.deleted event (for the ended line item) and one
+// subscription.line_item.created event (for the replacement), referencing the same IDs
+// returned in ChangedResources.LineItems.
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PublishesLineItemEvents() {
+	ctx := s.GetContext()
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	cust := s.createCustomer("ext-qty-events-001")
+	sub := s.createActiveSub(cust.ID)
+	oldQty := decimal.NewFromInt(5)
+	li := s.createFixedLineItem(sub.ID, cust.ID, oldQty, types.InvoiceCadenceArrear)
+
+	newQty := decimal.NewFromInt(10)
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: newQty},
+			},
+		},
+	}
+
+	resp, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Len(resp.ChangedResources.LineItems, 2)
+
+	var endedID, createdID string
+	for _, cli := range resp.ChangedResources.LineItems {
+		switch cli.ChangeAction {
+		case dto.ChangedLineItemActionEnded:
+			endedID = cli.ID
+		case dto.ChangedLineItemActionCreated:
+			createdID = cli.ID
+		}
+	}
+	s.Require().NotEmpty(endedID)
+	s.Require().NotEmpty(createdID)
+
+	var deletedEvents, createdEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		switch evt.EventName {
+		case types.WebhookEventSubscriptionLineItemDeleted:
+			deletedEvents = append(deletedEvents, evt)
+		case types.WebhookEventSubscriptionLineItemCreated:
+			createdEvents = append(createdEvents, evt)
+		}
+	}
+
+	s.Require().Len(deletedEvents, 1, "expected exactly 1 subscription.line_item.deleted event")
+	s.Equal(endedID, deletedEvents[0].EntityID, "deleted event should reference the ended line item")
+
+	s.Require().Len(createdEvents, 1, "expected exactly 1 subscription.line_item.created event")
+	s.Equal(createdID, createdEvents[0].EntityID, "created event should reference the replacement line item")
+}
+
 // TestExecuteQuantityChange_PreservesFiniteEndDate verifies that a replacement line item
 // keeps the source item's finite EndDate (not cleared to open-ended).
 func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PreservesFiniteEndDate() {
@@ -2407,7 +2467,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	// Re-apply the same request — must not create another open LI.
 	rebuilt, err := modSvc.requestFromModifySubscriptionParams(ctx, request.toModifySubscriptionParams())
 	s.Require().NoError(err)
-	_, err = modSvc.applyQuantityChange(ctx, rebuilt)
+	_, _, err = modSvc.applyQuantityChange(ctx, rebuilt)
 	s.Require().NoError(err)
 
 	_, afterSecond, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)

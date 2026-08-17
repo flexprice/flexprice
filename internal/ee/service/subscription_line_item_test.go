@@ -606,6 +606,45 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Effect
 	s.Equal(oldEndDate.Truncate(time.Second).Unix(), resp.SubscriptionLineItem.EndDate.Truncate(time.Second).Unix())
 }
 
+// TestUpdateSubscriptionLineItem_PublishesDeleteAndCreateLineItemEvents guards against
+// regressing the fix where the replace path's webhook publishes (delete of the old line
+// item, create of the new one) moved to strictly after the transaction commits. A price
+// override (setting Amount) triggers ShouldCreateNewLineItem(), which terminates the
+// existing line item and creates a replacement inside a single DB transaction; both
+// events must fire exactly once each, and only for the two line items involved.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_PublishesDeleteAndCreateLineItemEvents() {
+	ctx := s.GetContext()
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	newAmount := decimal.NewFromInt(200)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		Amount: &newAmount,
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotEqual(s.testData.lineItem.ID, resp.SubscriptionLineItem.ID, "replace path should create a new line item")
+
+	var deletedEvents, createdEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		switch evt.EventName {
+		case types.WebhookEventSubscriptionLineItemDeleted:
+			deletedEvents = append(deletedEvents, evt)
+		case types.WebhookEventSubscriptionLineItemCreated:
+			createdEvents = append(createdEvents, evt)
+		}
+	}
+
+	s.Require().Len(deletedEvents, 1, "expected exactly 1 subscription.line_item.deleted event")
+	s.Equal(s.testData.lineItem.ID, deletedEvents[0].EntityID, "deleted event should reference the old line item")
+
+	s.Require().Len(createdEvents, 1, "expected exactly 1 subscription.line_item.created event")
+	s.Equal(resp.SubscriptionLineItem.ID, createdEvents[0].EntityID, "created event should reference the new line item")
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromWithoutCriticalField() {
 	ctx := s.GetContext()
 	effectiveFrom := time.Now().UTC().Add(24 * time.Hour)
@@ -653,6 +692,50 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 
 	_, err = s.GetStores().SubscriptionLineItemRepo.Get(ctx, resp.SubscriptionLineItem.ID)
 	s.NoError(err)
+}
+
+// TestAddSubscriptionLineItem_PublishesLineItemCreatedEvent guards against regressing the
+// subscription.line_item.created webhook that AddSubscriptionLineItem now publishes directly,
+// now that the underlying addSubscriptionLineItem helper no longer triggers HubSpot sync inline.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_PublishesLineItemCreatedEvent() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(2),
+		SkipEntitlementCheck: true,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var lineItemCreatedEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			lineItemCreatedEvents = append(lineItemCreatedEvents, evt)
+		}
+	}
+	s.Require().Len(lineItemCreatedEvents, 1, "expected exactly 1 subscription.line_item.created event")
+	s.Equal(resp.SubscriptionLineItem.ID, lineItemCreatedEvents[0].EntityID)
 }
 
 // TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity verifies that when an
@@ -2051,6 +2134,29 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Publis
 	s.Equal(1, s.countSubscriptionUpdated())
 }
 
+// TestDeleteSubscriptionLineItem_PublishesLineItemDeletedEvent guards against regressing the
+// subscription.line_item.deleted webhook that DeleteSubscriptionLineItem now publishes directly,
+// now that the underlying deleteSubscriptionLineItem helper no longer triggers HubSpot sync inline.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_PublishesLineItemDeletedEvent() {
+	ctx := s.GetContext()
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	resp, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var lineItemDeletedEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			lineItemDeletedEvents = append(lineItemDeletedEvents, evt)
+		}
+	}
+	s.Require().Len(lineItemDeletedEvents, 1, "expected exactly 1 subscription.line_item.deleted event")
+	s.Equal(resp.SubscriptionLineItem.ID, lineItemDeletedEvents[0].EntityID)
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_DoesNotPublish() {
 	ctx := s.GetContext()
 	price2 := &price.Price{
@@ -2075,6 +2181,15 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_D
 		Quantity:             decimal.NewFromInt(1),
 		SkipEntitlementCheck: true,
 	})
+	s.Require().NoError(err)
+	s.Equal(0, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItemInternal_DoesNotPublish() {
+	ctx := s.GetContext()
+	svc := s.service.(*subscriptionService)
+	s.resetWebhooks()
+	_, err := svc.deleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
 	s.Require().NoError(err)
 	s.Equal(0, s.countSubscriptionUpdated())
 }

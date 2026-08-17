@@ -17,7 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-const (
+var (
 	HubSpotAPIBaseURL = "https://api.hubapi.com"
 )
 
