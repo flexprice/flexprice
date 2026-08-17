@@ -307,6 +307,12 @@ func main() {
 			startServer,
 		),
 	)
+	// Enterprise features, if this binary was built with `-tags ee`. Empty in a
+	// community build. Appended after the core options so EE fx.Invoke calls run
+	// before startServer, and so importing the ee package triggers the init()
+	// functions that populate the extension registries.
+	opts = append(opts, eeOptions()...)
+
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -438,6 +444,7 @@ func provideRouter(
 	webhookRequestRepo incomingwebhookevent.Repository,
 	environmentRepo environment.Repository,
 	userRepo user.Repository,
+	serviceParams service.ServiceParams,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -450,6 +457,7 @@ func provideRouter(
 		webhookRequestRepo,
 		environmentRepo,
 		userRepo,
+		serviceParams,
 	)
 }
 

@@ -20,3 +20,8 @@ dist
 .DS_Store
 Dockerfile*
 .dockerignore
+
+# Enterprise submodule. The community image must not carry EE source, even in
+# an intermediate layer — COPY . . would otherwise pick it up whenever a
+# developer builds with the submodule checked out. Dockerfile.ee un-ignores it.
+ee/

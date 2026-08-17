@@ -34,9 +34,13 @@ const (
 	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 )
 
-func (s *SettingKey) Validate() error {
+// isCoreSettingKey reports whether the key is one the community build ships.
+func isCoreSettingKey(key SettingKey) bool {
+	return lo.Contains(coreSettingKeys(), key)
+}
 
-	allowedKeys := []SettingKey{
+func coreSettingKeys() []SettingKey {
+	return []SettingKey{
 		SettingKeyInvoiceConfig,
 		SettingKeySubscriptionConfig,
 		SettingKeyInvoicePDFConfig,
@@ -50,6 +54,16 @@ func (s *SettingKey) Validate() error {
 		SettingKeyBonusCreditsTopupConfig,
 		SettingKeyPaymentMandateLimits,
 		SettingKeyDraftInvoiceRecomputeConfig,
+	}
+}
+
+func (s *SettingKey) Validate() error {
+	allowedKeys := coreSettingKeys()
+
+	// Keys contributed by the ee/ submodule. Empty in a community build, so an
+	// unknown key is rejected exactly as before.
+	if _, ok := LookupEESetting(*s); ok {
+		return nil
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -691,7 +705,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
-	return map[SettingKey]DefaultSettingValue{
+	defaults := map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
 			DefaultValue: invoiceConfigMap,
@@ -759,7 +773,31 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
 			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
 		},
-	}, nil
+	}
+
+	// Defaults contributed by the ee/ submodule. No-op in a community build.
+	for key, def := range eeSettingDefaults() {
+		defaults[key] = def
+	}
+
+	return defaults, nil
+}
+
+// eeSettingDefaults exposes enterprise-registered keys in the same shape as the
+// built-in defaults, so GetSetting resolves them without a special case.
+func eeSettingDefaults() map[SettingKey]DefaultSettingValue {
+	eeSettingsMu.RLock()
+	defer eeSettingsMu.RUnlock()
+
+	out := make(map[SettingKey]DefaultSettingValue, len(eeSettingDefs))
+	for key, def := range eeSettingDefs {
+		out[key] = DefaultSettingValue{
+			Key:          key,
+			DefaultValue: def.DefaultValue,
+			Description:  def.Description,
+		}
+	}
+	return out
 }
 
 // IsValidSettingKey checks if a setting key is valid
@@ -887,6 +925,14 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	default:
+		// Enterprise keys carry their own validator, since the community build
+		// has no type to decode them into.
+		if def, ok := LookupEESetting(key); ok {
+			if def.Validate == nil {
+				return nil
+			}
+			return def.Validate(value)
+		}
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)

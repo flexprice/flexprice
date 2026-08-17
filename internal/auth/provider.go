@@ -74,6 +74,14 @@ type Provider interface {
 }
 
 func NewProvider(cfg *config.Configuration) Provider {
+	// Enterprise contributions are consulted first so a build can supply a
+	// variation of a built-in provider under the same auth.provider value.
+	// The registry is empty in a community build, so this is a no-op there and
+	// the switch below is reached unchanged.
+	if provider, ok := lookupEEProvider(cfg.Auth.Provider, cfg); ok {
+		return provider
+	}
+
 	switch cfg.Auth.Provider {
 	case types.AuthProviderSupabase:
 		return NewSupabaseAuth(cfg)

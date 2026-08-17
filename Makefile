@@ -194,8 +194,61 @@ define run-go-test
 endef
 
 # Run all tests
+# cmd/server is included for the ee wiring guards, which assert that a community
+# build registers no enterprise code.
 test: install-typst
-	$(call run-go-test,-v -race ./internal/...)
+	$(call run-go-test,-v -race ./internal/... ./cmd/server/...)
+
+# Build the enterprise image.
+#
+# .dockerignore excludes ee/ so a community build can never pick up enterprise
+# source. buildx honours <dockerfile>.dockerignore in preference to
+# .dockerignore, so a sibling file without the ee/ entry scopes the exception to
+# this build alone rather than mutating .dockerignore.
+docker-build-ee: verify-ee-pin
+	@test ! -e Dockerfile.dockerignore || \
+		(echo "Dockerfile.dockerignore already exists — a previous build left it behind."; \
+		 echo "Remove it before continuing; while present, every docker build includes ee/."; exit 1)
+	@trap 'rm -f Dockerfile.dockerignore' EXIT INT TERM HUP; \
+	grep -v '^ee/$$' .dockerignore > Dockerfile.dockerignore; \
+	docker build --build-arg BUILD_TAGS=ee -t $${IMAGE:-flexprice-ee} .
+
+# Verify the ee/ submodule is at the reviewed commit.
+#
+# ee/ executes inside the server process in an enterprise build: its init()
+# functions register auth providers, routes, and workflows. A submodule pointer
+# moved to an unreviewed commit is therefore arbitrary code execution with the
+# server's privileges. .gitmodules tracks no branch, so builds follow the
+# gitlink in the commit tree, and ee.expected_commit records the SHA that was
+# reviewed. Changing ee/ requires updating that file in the same PR.
+verify-ee-pin:
+	@if [ ! -f ee.expected_commit ]; then echo "ee.expected_commit missing"; exit 1; fi
+	@if [ ! -e ee/.git ]; then \
+		echo "ee/ is not checked out — run 'git submodule update --init' (needs access to flexprice/ee)"; \
+		exit 1; \
+	fi
+	@expected=$$(cat ee.expected_commit | tr -d '[:space:]'); \
+	actual=$$(git -C ee rev-parse HEAD 2>/dev/null); \
+	if [ -z "$$actual" ]; then \
+		echo "ee/ not checked out — run 'git submodule update --init'"; exit 1; \
+	elif [ "$$expected" != "$$actual" ]; then \
+		echo "ee/ is at $$actual but ee.expected_commit pins $$expected."; \
+		echo "If this update is intended, review the ee diff and update ee.expected_commit."; \
+		exit 1; \
+	else \
+		echo "ee/ verified at $$expected"; \
+	fi
+
+# Run the enterprise build's tests. Requires the ee/ submodule:
+#   git submodule update --init
+# Skips with a notice rather than failing when ee/ is empty, so a community
+# clone can still run `make test-ee` without an error it cannot act on.
+test-ee:
+	@if [ -z "$$(ls -A ee 2>/dev/null | grep -v '^\.git$$')" ]; then \
+		echo "ee/ is empty — run 'git submodule update --init' (needs access to flexprice/ee). Skipping."; \
+	else \
+		$(MAKE) verify-ee-pin && go test -tags ee ./ee/... ./cmd/server/... ./internal/...; \
+	fi
 
 # Run tests with verbose output
 test-verbose:

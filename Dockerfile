@@ -18,13 +18,31 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
+# Enterprise build. Empty by default, which produces the community image:
+#
+#   docker build -t flexprice .                            community
+#   make docker-build-ee                                   enterprise
+#
+# ee/ is listed in .dockerignore, so `COPY . .` above never carries enterprise
+# source into a community image, not even in an intermediate layer. The
+# enterprise target swaps in an ignore file without that entry for the duration
+# of the build, so ee/ is present only when it is deliberately requested.
+ARG BUILD_TAGS=""
+
+# Fail loudly rather than silently producing a community binary from an
+# enterprise build request. ee/ reaches the context only when .dockerignore
+# does not exclude it, which `make docker-build-ee` arranges.
+RUN if [ "$BUILD_TAGS" = "ee" ] && [ ! -f ee/module.go ]; then \
+        echo "BUILD_TAGS=ee but ee/ is not in the build context - use: make docker-build-ee"; exit 1; \
+    fi
+
 # TARGETARCH is provided automatically by buildx (e.g. amd64, arm64)
 ARG TARGETARCH
 ENV CGO_ENABLED=0 \
     GOOS=linux
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
+    GOARCH=$TARGETARCH go build -tags "$BUILD_TAGS" -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate
 
 # Typst stage
