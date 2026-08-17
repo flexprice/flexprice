@@ -225,18 +225,24 @@ func (qb *QueryBuilder) Build() (string, map[string]interface{}) {
 	return query, qb.args
 }
 
+// parseTimeConditions builds timestamp WHERE fragments with an explicit `'UTC'` third
+// arg to toDateTime64. Without it, ClickHouse parses the literal in the server's local
+// timezone, so a formatted UTC clock time (e.g. "2026-08-14 15:05:55") gets reinterpreted
+// as Europe/Rome and stored as 13:05:55 UTC internally — silently shifting the window by
+// the server's tz offset. This builder interpolates strings directly (no `?` binding),
+// so the safe form is the explicit-timezone literal rather than driver-bound time.Time.
 func parseTimeConditions(params *events.UsageParams) []string {
 	var conditions []string
 
 	if !params.StartTime.IsZero() {
 		conditions = append(conditions,
-			fmt.Sprintf("timestamp >= toDateTime64('%s', 3)",
+			fmt.Sprintf("timestamp >= toDateTime64('%s', 3, 'UTC')",
 				formatClickHouseDateTime(params.StartTime)))
 	}
 
 	if !params.EndTime.IsZero() {
 		conditions = append(conditions,
-			fmt.Sprintf("timestamp < toDateTime64('%s', 3)",
+			fmt.Sprintf("timestamp < toDateTime64('%s', 3, 'UTC')",
 				formatClickHouseDateTime(params.EndTime)))
 	}
 
@@ -259,8 +265,8 @@ WITH base_events AS (
     FROM events
     WHERE event_name = 'images_processed'
       AND tenant_id = '00000000-0000-0000-0000-000000000000'
-      AND timestamp >= toDateTime64('2024-12-01 08:03:02.000', 3)
-      AND timestamp < toDateTime64('2025-01-01 08:03:02.000', 3)
+      AND timestamp >= toDateTime64('2024-12-01 08:03:02.000', 3, 'UTC')
+      AND timestamp < toDateTime64('2025-01-01 08:03:02.000', 3, 'UTC')
       AND external_customer_id = 'cus_loadtest_1'
       AND JSONExtractString(properties, 'image_size') IN ('512x512','768x768','1024x1024')
 ),

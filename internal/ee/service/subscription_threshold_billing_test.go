@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -63,6 +64,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupService() {
 		PriceRepo:                  s.GetStores().PriceRepo,
 		PriceUnitRepo:              s.GetStores().PriceUnitRepo,
 		EventRepo:                  s.GetStores().EventRepo,
+		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
@@ -207,19 +209,34 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, s.testData.subB, []*subscription.SubscriptionLineItem{}))
 }
 
-// insertEvents inserts n COUNT events for subA's customer, all at the given timestamp.
+// insertEvents inserts n COUNT events for subA's customer, all at the given timestamp,
+// and mirrors each into meter_usage — the source ProcessAutoInvoiceThresholdBilling and
+// the invoice-creation path both read from. In prod this mirroring is done by the
+// meter-usage tracking Kafka consumer; the test path bypasses that consumer.
 func (s *SubscriptionThresholdBillingTestSuite) insertEvents(n int, ts time.Time) {
 	ctx := s.GetContext()
+	meterUsageRecords := make([]*events.MeterUsage, 0, n)
 	for i := 0; i < n; i++ {
-		s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, &events.Event{
-			ID:                 s.GetUUID(),
+		id := s.GetUUID()
+		evt := &events.Event{
+			ID:                 id,
 			TenantID:           s.testData.subA.TenantID,
+			EnvironmentID:      s.testData.subA.EnvironmentID,
 			EventName:          s.testData.meter.EventName,
 			ExternalCustomerID: s.testData.customer.ExternalID,
 			Timestamp:          ts,
+			IngestedAt:         ts,
 			Properties:         map[string]interface{}{},
-		}))
+		}
+		s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, evt))
+		meterUsageRecords = append(meterUsageRecords, &events.MeterUsage{
+			Event:      *evt,
+			MeterID:    s.testData.meter.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: fmt.Sprintf("%s:%s", s.testData.meter.EventName, id),
+		})
 	}
+	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, meterUsageRecords))
 }
 
 // TestThresholdBilling_InvoiceCreatedWhenThresholdExceeded verifies that when
