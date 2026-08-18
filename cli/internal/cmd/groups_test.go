@@ -108,9 +108,8 @@ func TestEveryResourceHasADescription(t *testing.T) {
 	}
 }
 
-// The fallback stays for resources the API adds later, but anything we ship
-// reaching it is a wiring bug — raw get/post/delete once did, with every other
-// test in this file still passing.
+// The fallback stays for resources added later, but anything we ship reaching
+// it is a wiring bug — raw get/post/delete once did.
 func TestRootHelp_NothingFallsIntoAdditionalCommands(t *testing.T) {
 	root := NewRootCommand("test")
 	var buf bytes.Buffer

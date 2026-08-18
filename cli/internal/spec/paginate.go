@@ -19,19 +19,14 @@ type Page struct {
 	Limit  int
 }
 
-// Ignores the response's echoed offset: the API was observed returning
-// offset == limit for a request that sent no offset, so the caller tracks how
-// many it has actually seen and passes that in.
+// Ignores the echoed offset: the API returns offset == limit even when no
+// offset was sent, so the caller tracks how many it has actually seen.
 func (p Page) HasMore(seen int) bool {
 	return p.Total > 0 && seen < p.Total
 }
 
-// Two envelope shapes exist: pagination nested under "pagination", or total/
-// limit/offset at the top level beside a named array.
-//
 // A bare top-level "total" is not evidence on its own — InvoiceResponse's is a
-// string dollar amount. Detection needs a "pagination" sub-object, an "items"
-// array, or numeric total/limit/offset plus a top-level array of objects.
+// string amount — so detection needs a numeric total plus a real array.
 func PageInfo(raw []byte) (Page, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -86,9 +81,7 @@ func PageInfo(raw []byte) (Page, error) {
 	}, nil
 }
 
-// arrayCount finds the item count for an envelope already confirmed to be
-// paginated. It prefers a literal "items" key and only falls back to
-// scanning for an array field when that key is absent.
+// Prefers a literal "items" key, falling back to scanning only when absent.
 func arrayCount(doc map[string]any) int {
 	if items, ok := doc["items"].([]any); ok {
 		return len(items)
@@ -99,9 +92,8 @@ func arrayCount(doc map[string]any) int {
 	return 0
 }
 
-// findObjectArrayKey returns the top-level key holding an array of objects,
-// choosing deterministically (alphabetically) when more than one exists
-// rather than relying on Go's randomized map iteration order.
+// Chooses alphabetically when more than one array exists, rather than relying
+// on Go's randomized map order.
 func findObjectArrayKey(doc map[string]any) (string, bool) {
 	keys := make([]string, 0, len(doc))
 	for k := range doc {
@@ -141,9 +133,8 @@ func intOf(v any) int {
 	}
 }
 
-// ApplyPaging sets limit and offset where the operation accepts them: the query
-// string for GET, the request body for the POST search operations that back list.
-// Values the caller already supplied are never overwritten.
+// Sets limit/offset in the query for GET or the body for POST search
+// operations, never overwriting values the caller already supplied.
 func ApplyPaging(req *Request, cmd Command, p Paging) {
 	if p.Limit <= 0 {
 		return

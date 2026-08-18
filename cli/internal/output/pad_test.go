@@ -7,9 +7,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// text/tabwriter counts escape bytes as visible width; this is the regression
-// that misaligned every column once styling was on, and the reason env list
-// could not simply be given colour while it still used tabwriter.
+// text/tabwriter counts escape bytes as visible width, which is what
+// misaligned every column once styling was on.
 func TestPadGrid_MeasuresVisibleWidthNotBytes(t *testing.T) {
 	style.EnableForTests()
 
@@ -45,9 +44,8 @@ func TestPadGrid_NoTrailingWhitespace(t *testing.T) {
 	}
 }
 
-// Wide runes occupy two cells. Measuring them as one character misaligns
-// everything after them, which matters because the API returns non-ASCII
-// values (environment names, customer names).
+// Wide runes occupy two cells; measuring them as one misaligns everything
+// after them.
 func TestPadGrid_HandlesWideRunes(t *testing.T) {
 	lines := PadGrid([][]string{
 		{"名前", "a"},

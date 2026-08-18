@@ -12,10 +12,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// The atomic auth unit: a key is scoped to one environment, so region, base URL
-// and key move together. Deliberately carries no environment name or live flag —
-// no endpoint reveals which environment a key belongs to, so either would be a
-// guess, and users label profiles themselves (ADR 0003).
+// A key is scoped to one environment, so region, base URL and key move
+// together. No environment name or live flag: no endpoint reveals which
+// environment a key belongs to, so users label profiles themselves.
 type Profile struct {
 	Region  string `toml:"region"`
 	BaseURL string `toml:"base_url"`
@@ -56,18 +55,14 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Save writes cfg to path atomically: it encodes to a temp file in the same
-// directory and renames it into place, so a crash or interrupt mid-write
-// cannot leave a truncated config on disk.
+// Atomic: encodes to a temp file and renames into place, so a crash mid-write
+// cannot leave a truncated config.
 func Save(path string, cfg *Config) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	// Belt-and-suspenders: MkdirAll already requests 0700 and umask can only
-	// clear bits, never add them, so this is a no-op under any umask that
-	// (like every umask in practice) leaves the owner bits alone. It only
-	// matters if MkdirAll's mode is ever loosened later.
+	// Belt-and-suspenders in case MkdirAll's mode is ever loosened later.
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return fmt.Errorf("secure config directory: %w", err)
 	}
@@ -115,9 +110,8 @@ func (c *Config) Resolve(name string) (string, Profile, error) {
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
-// Slugifies a user-supplied label. Input with no ASCII alphanumeric character
-// at all (punctuation-only, or pure unicode like "üöä") collapses to "", which
-// falls back to "default" rather than an unusable TOML key.
+// Punctuation-only or non-ASCII input collapses to "", which falls back to
+// "default" rather than an unusable TOML key.
 func ProfileName(label string) string {
 	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(label), "-"), "-")
 	if slug == "" {

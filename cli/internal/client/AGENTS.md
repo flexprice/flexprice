@@ -6,11 +6,8 @@ owns:
 
 # Client Layer
 
-> The only package that makes a network call. Every request — hand-written
-> commands, spec-dispatched resource commands, and any future fixture
-> engine — goes through here.
-> Why → ../../decisions/0001-no-sdk-single-http-path.md,
-> ../../decisions/0002-retry-only-idempotent-methods.md.
+> The only package that makes a network call. Every request goes through
+> here, hand-written or spec-dispatched.
 
 ## Purpose
 
@@ -65,10 +62,8 @@ Do(ctx, method, path, query, body)
   a body-level `idempotency_key` exists elsewhere, the server generates one
   containing a timestamp if the caller omits it, so it differs per attempt
   even though the retried body is byte-identical — server-side dedup does not
-  save you. Fixed in the commit that added `retryPolicy`; full reasoning in
-  [ADR 0002](../../decisions/0002-retry-only-idempotent-methods.md). If you
-  are ever tempted to add POST to the retried methods, you are re-opening
-  this bug.
+  save you. Fixed by `retryPolicy`; adding POST back to the retried methods
+  re-opens this bug.
 - **A malformed `--base-url` used to fail deep in the HTTP stack** with a
   confusing `unsupported protocol scheme ""` rather than naming the actual
   cause. `New` now validates `Scheme`/`Host` are present and surfaces a clear

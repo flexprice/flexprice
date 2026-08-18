@@ -17,10 +17,8 @@ import (
 	"github.com/flexprice/cli/internal/ui"
 )
 
-// Globals holds the values bound to the root command's persistent flags.
-// Created per root and threaded into subcommands explicitly: pflag writes each
-// flag's default into the bound pointer at registration time, so a shared
-// instance is clobbered the moment a second root is constructed.
+// Created per root: pflag writes flag defaults into the bound pointer at
+// registration, so a shared instance is clobbered by a second root.
 type Globals struct {
 	Profile string
 	Output  string
@@ -112,9 +110,8 @@ func NewRootCommand(version string) *cobra.Command {
 	}
 	addRawCommands(root, g, version)
 
-	// LAST, after every AddCommand: doing it earlier silently misses anything
-	// added later, which is how raw get/post/delete once landed under
-	// "Additional Commands" with every test still passing.
+	// LAST, after every AddCommand — earlier silently misses anything added
+	// later, which is how raw get/post/delete once fell out of the taxonomy.
 	for _, c := range root.Commands() {
 		if id, ok := builtinGroups[c.Name()]; ok {
 			c.GroupID = id
@@ -145,9 +142,8 @@ func globalsFor(root *cobra.Command) *Globals {
 	return rootGlobals[root]
 }
 
-// The context footer under table output. Softens the gap in ADR 0003: the CLI
-// cannot tell which environment a key belongs to, but it can always show which
-// profile served the request.
+// The context footer under table output: which profile served the request,
+// since the CLI cannot tell which environment a key belongs to.
 func statusLine(rc config.RuntimeContext, version string) string {
 	parts := []string{"profile: " + rc.ProfileName}
 	if rc.Profile.Region != "" {

@@ -8,7 +8,6 @@ owns:
 
 > Profiles and credential precedence. Holds no secrets — API keys live in
 > `internal/keyring` and are referenced by `KeyRef`.
-> Why → ../../decisions/0003-environment-scoped-profiles-no-live-flag.md.
 
 ## Purpose
 
@@ -34,9 +33,8 @@ ResolveContext(cfg, store, overrides)
 ## Patterns to follow
 
 - `Profile` has no environment name and no live/test flag — this is
-  deliberate, not an oversight. See
-  [ADR 0003](../../decisions/0003-environment-scoped-profiles-no-live-flag.md)
-  before you consider adding one back.
+  deliberate, not an oversight: no endpoint reveals which environment a key
+  belongs to, so either would be a guess. Don't add one back.
 - Every error path in `resolve.go` must be checked for API-key leakage
   before merging a change — no `fmt.Errorf` may interpolate the key value.
 

@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// The status footer is human commentary and must never reach stdout. It moved
-// to internal/ui in the DX polish round; this test pins that it did not come
-// back, and that nothing else human leaks into the machine-readable stream.
+// The status footer moved to internal/ui; this pins that it never leaks back
+// into the machine-readable stream.
 func TestRenderTable_WritesNothingHumanToStdout(t *testing.T) {
 	input, err := os.ReadFile(filepath.Join("testdata", "customers_list.json"))
 	if err != nil {
@@ -27,13 +26,8 @@ func TestRenderTable_WritesNothingHumanToStdout(t *testing.T) {
 	}
 }
 
-// Options must not regrow a Status field. The renderer has no business knowing
-// about stderr commentary at all — that is what let the footer be gated on
-// stdout's TTY-ness while being written to stderr.
+// The renderer has no business knowing about stderr commentary at all.
 func TestOptions_HasNoStatusField(t *testing.T) {
-	// A compile-time check expressed as a test: if Status comes back, this
-	// composite literal stops compiling only if the field is removed, so
-	// instead assert on the zero value round-tripping through Render.
 	var out, errOut bytes.Buffer
 	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
 	if err := w.Render([]byte(`{"items":[{"id":"a"}],"pagination":{"total":1}}`), Options{

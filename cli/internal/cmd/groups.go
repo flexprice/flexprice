@@ -27,9 +27,7 @@ var commandGroups = []*cobra.Group{
 	{ID: groupAdvanced, Title: "Advanced"},
 }
 
-// Descriptions are hand-written: the spec's summaries describe individual
-// operations ("Get customer by external ID"), not the resource, so deriving a
-// parent from them is misleading.
+// Hand-written: the spec's summaries describe operations, not resources.
 type resourceEntry struct {
 	GroupID string
 	Short   string

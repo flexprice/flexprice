@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// go test never has a terminal attached, so the profile must be forced or every
-// ANSI assertion passes or fails on where it runs. Individual tests still use
-// Enable()/Disable(), which is orthogonal to the profile.
+// go test has no terminal attached, so the profile must be forced or every
+// ANSI assertion depends on where it runs.
 func TestMain(m *testing.M) {
 	EnableForTests()
 	os.Exit(m.Run())

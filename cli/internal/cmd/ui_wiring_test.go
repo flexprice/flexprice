@@ -38,9 +38,8 @@ func TestGlobals_UIReflectsParsedFlags(t *testing.T) {
 	}
 }
 
-// Deliberately does NOT assert g.UI.NoInput(): a non-TTY stdin already implies
-// --no-input, and stdin is never a TTY under `go test`, so that would hold even
-// unwired. TestGatingMatrix in internal/ui covers the UI half.
+// Not asserting g.UI.NoInput(): stdin is never a TTY under go test, so that
+// would hold even unwired. TestGatingMatrix in internal/ui covers it.
 func TestGlobals_NoInputReachesGlobals(t *testing.T) {
 	root := NewRootCommand("test")
 	var out bytes.Buffer

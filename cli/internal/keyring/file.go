@@ -12,11 +12,9 @@ import (
 	"path/filepath"
 )
 
-// FileStore is the fallback when no OS keychain exists. The key material is
-// encrypted with a host-derived key, which stops casual disclosure (backups,
-// shoulder-surfing, accidental `cat`). It is not protection against an attacker
-// who already has read access as this user — file mode 0600 is the real control,
-// and the warning from Open() tells the user which backend is in play.
+// The fallback when no OS keychain exists. Encrypted with a host-derived key to
+// stop casual disclosure; file mode 0600 is the real control against an
+// attacker with read access as this user.
 type FileStore struct {
 	Dir string
 }
@@ -27,11 +25,8 @@ func (f *FileStore) path(profile string) string {
 	return filepath.Join(f.Dir, profile+".key")
 }
 
-// derive builds the AES key from stable host and user identifiers. It is
-// intentionally sensitive to the hostname: a rename, DHCP-driven change, or a
-// container restart with a fresh hostname makes previously stored keys
-// undecryptable. Get() below turns that into an actionable message rather than
-// a bare crypto error.
+// Sensitive to the hostname on purpose: a rename makes stored keys
+// undecryptable, which Get() below turns into an actionable message.
 func (f *FileStore) derive() []byte {
 	host, _ := os.Hostname()
 	sum := sha256.Sum256([]byte("flexprice-cli|" + host + "|" + f.Dir))

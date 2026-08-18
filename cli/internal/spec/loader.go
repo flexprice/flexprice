@@ -13,10 +13,8 @@ import (
 	specdata "github.com/flexprice/cli/spec"
 )
 
-// WebhookEventsTag marks 56 documentation stubs that describe webhook payload
-// schemas. They have no operationId, their paths are synthetic, and calling them
-// 404s — so they are excluded from commands but kept as the authoritative list of
-// event types. Design doc §5.
+// Marks 56 documentation stubs with no operationId, synthetic paths, and a
+// 404 on call — excluded from commands but kept as the event-type list.
 const WebhookEventsTag = "Webhook Events"
 
 // Memoizes Load: parsing the ~880KB spec costs tens of milliseconds and a
@@ -47,8 +45,7 @@ type Region struct {
 	Description string
 }
 
-// Regions derives the region list from servers[], so adding a region to the spec
-// makes the next build offer it with no code change. Design doc §6.
+// Derived from servers[], so adding a region to the spec needs no code change.
 func Regions(doc *openapi3.T) []Region {
 	var out []Region
 	for _, s := range doc.Servers {
@@ -61,9 +58,7 @@ func Regions(doc *openapi3.T) []Region {
 	return out
 }
 
-// regionKey produces a short flag-friendly key: "US Region" -> us, "India Region" -> in.
-// Falls back to a slug derived from the URL host when the description is missing or
-// blank, since strings.Fields on an empty description would otherwise panic on index 0.
+// "US Region" -> us. Falls back to a URL-host slug when description is blank.
 func regionKey(url, description string) string {
 	fields := strings.Fields(description)
 	if len(fields) == 0 {

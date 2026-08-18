@@ -119,9 +119,8 @@ func TestBodyFields_ListsSchemaProperties(t *testing.T) {
 	}
 }
 
-// The --all loop rebuilds the request per page from the same Input, so
-// `payments list --status succeeded --all` would silently drop the filter after
-// page one if consumed flags were deleted from the caller's map.
+// The --all loop reuses the same Input per page; a mutated caller map would
+// silently drop a filter after page one.
 func TestBuildRequest_DoesNotMutateCallerFlags(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, ok := reg.Lookup("payments", "list")

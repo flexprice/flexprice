@@ -80,16 +80,14 @@ parsed document against `commands.yaml` at startup, not by reading generated
 source.
 
 The corresponding cost is that command names cannot be derived automatically
-from the spec — see [ADR 0004](decisions/0004-curated-commands-yaml-over-mechanical-derivation.md)
-for why, and why that cost is worth paying by hand rather than working around.
+from the spec, so `commands.yaml` is curated by hand rather than generated.
 
 ## Auth and profiles
 
 A Flexprice API key is scoped to exactly one environment. The CLI's entire auth
-model follows from that one fact — see
-[ADR 0003](decisions/0003-environment-scoped-profiles-no-live-flag.md) for the
-full reasoning, including why there is no `--environment` flag and no
-automatic production/development detection.
+model follows from that one fact: there is no `--environment` flag and no
+automatic production/development detection, since no endpoint reveals which
+environment a key belongs to.
 
 ## Error and exit-code contract
 

@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// The renderer no longer invents an empty-state message: it reports that the
-// result set was empty and lets the caller, which knows the resource name, say
-// something useful.
+// The renderer reports emptiness rather than inventing a message; the caller
+// knows the resource name.
 func TestRenderResult_ReportsEmptyWithoutPrinting(t *testing.T) {
 	var out, errOut bytes.Buffer
 	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
@@ -43,9 +42,8 @@ func TestRenderResult_NotEmptyWhenRowsExist(t *testing.T) {
 	}
 }
 
-// json and yaml are machine formats: an empty list is valid output and must be
-// emitted verbatim, never replaced with prose. Reporting Empty for them would
-// make the caller print "No customers yet." over the top of valid JSON.
+// json/yaml are machine formats: an empty list is valid output and must be
+// emitted verbatim, not replaced with prose.
 func TestRenderResult_MachineFormatsNeverReportEmpty(t *testing.T) {
 	for _, format := range []Format{FormatJSON, FormatYAML} {
 		var out, errOut bytes.Buffer

@@ -88,9 +88,8 @@ func TestRawCommands_AreRegistered(t *testing.T) {
 	}
 }
 
-// resolveEditor must never spawn a process to decide whether an editor is
-// available: exec.LookPath only inspects PATH, so a missing editor is a clean,
-// immediate error rather than a hang waiting on a program that doesn't exist.
+// exec.LookPath only inspects PATH, so a missing editor is a clean, immediate
+// error rather than a hang.
 func TestResolveEditor_ReturnsCleanErrorWhenNoEditorIsAvailable(t *testing.T) {
 	t.Setenv("EDITOR", "")
 	t.Setenv("VISUAL", "")
@@ -102,9 +101,8 @@ func TestResolveEditor_ReturnsCleanErrorWhenNoEditorIsAvailable(t *testing.T) {
 	}
 }
 
-// EDITOR/VISUAL commonly carries flags — EDITOR="code --wait" (VS Code),
-// EDITOR="subl -w" (Sublime Text) — and exec.Command needs the binary and its
-// arguments split apart, not one argv[0] containing a space.
+// EDITOR commonly carries flags (EDITOR="code --wait"), and exec.Command
+// needs the binary and arguments split apart.
 func TestSplitEditorCommand_SplitsCommandAndArgs(t *testing.T) {
 	tests := []struct {
 		raw      string
@@ -217,9 +215,8 @@ func setArgs(t *testing.T, args ...string) (restore func()) {
 	return func() { os.Args = orig }
 }
 
-// finalizeInvoice is tagged x-scope: delete in the real spec (openapi.json) —
-// the backend's own classification of it as irreversible — so it must require
-// confirmation like delete/void/terminate/cancel/archive.
+// finalizeInvoice is tagged x-scope: delete in the real spec, so it must
+// require confirmation like delete/void/terminate.
 func TestDestructiveActions_IncludeFinalize(t *testing.T) {
 	if !destructive["finalize"] {
 		t.Error(`destructive["finalize"] = false, want true`)

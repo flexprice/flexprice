@@ -19,9 +19,8 @@ var logoCompact = []string{
 	`└  ┴─┘└─┘┴ └─┴  ┴└─┴└─┘└─┘`,
 }
 
-// logoWideMinWidth is the terminal width below which the wide wordmark wraps.
-// It carries a small margin over the art's own 67 columns so the logo never
-// sits flush against the right edge.
+// A small margin over the art's own 67 columns, so it never sits flush
+// against the right edge.
 const logoWideMinWidth = 72
 
 // Width 0 means the terminal size is unknown (piped output) and falls back to

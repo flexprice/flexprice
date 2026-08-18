@@ -18,8 +18,7 @@ func ConfirmTitle(action, subject string) string {
 }
 
 // Refuses rather than prompting when input is unavailable, so scripts fail
-// loudly instead of hanging — or, as the old raw y/N prompt did, proceeding to
-// destroy something because nobody could be asked.
+// loudly instead of hanging or proceeding blind.
 func (u *UI) Confirm(action, subject string) error {
 	if u.noInput {
 		return fmt.Errorf(

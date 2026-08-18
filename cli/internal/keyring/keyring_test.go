@@ -8,13 +8,8 @@ import (
 	"time"
 )
 
-// Guards the bug where OSKeyring's real Set/Get/Delete were unwrapped calls
-// with no timeout, so an expiring session could hang the CLI forever.
-//
-// Each test fakes the backend and shrinks keychainOpTimeout; the real keychain
-// is never touched. The `started` channel keeps the deferred restore from
-// racing the abandoned goroutine's read of the package var.
-
+// Guards against unwrapped Set/Get/Delete calls, where an expiring session
+// could hang the CLI forever. Fakes the backend; the real keychain is untouched.
 func TestOSKeyring_Set_TimesOutWhenKeychainNeverResponds(t *testing.T) {
 	restoreSet, restoreTimeout := keychainSet, keychainOpTimeout
 	defer func() { keychainSet, keychainOpTimeout = restoreSet, restoreTimeout }()
@@ -127,9 +122,8 @@ func TestOSKeyring_Delete_TimesOutWhenKeychainNeverResponds(t *testing.T) {
 	}
 }
 
-// TestOSKeyring_Set_SucceedsWithoutWaitingForTimeout confirms the timeout
-// wrapping doesn't penalize the normal case: a fast-returning backend should
-// resolve immediately, not wait out keychainOpTimeout.
+// A fast-returning backend should resolve immediately, not wait out
+// keychainOpTimeout.
 func TestOSKeyring_Set_SucceedsWithoutWaitingForTimeout(t *testing.T) {
 	restoreSet, restoreTimeout := keychainSet, keychainOpTimeout
 	defer func() { keychainSet, keychainOpTimeout = restoreSet, restoreTimeout }()

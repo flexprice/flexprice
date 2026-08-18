@@ -36,10 +36,8 @@ type Field struct {
 func BuildRequest(cmd Command, in Input) (Request, error) {
 	req := Request{Method: cmd.Operation.Method, Path: cmd.Operation.Path, Query: url.Values{}}
 
-	// Flags is a map, so passing Input by value does not stop this function's
-	// deletes below from mutating the caller's original map. Callers such as the
-	// --all pagination loop call BuildRequest more than once against the same
-	// Input, so those deletes must apply to a private copy, never the caller's.
+	// Flags is a map, so deletes below would mutate the caller's map by
+	// reference; the --all loop reuses the same Input across pages.
 	flags := make(map[string]string, len(in.Flags))
 	for k, v := range in.Flags {
 		flags[k] = v
@@ -184,9 +182,8 @@ func schemaType(s *openapi3.Schema) string {
 	}
 }
 
-// Rejected client-side rather than sent as a string: the server's decoder would
-// reject a type-mismatched body with a generic "Invalid request format" and no
-// field name.
+// Rejected client-side: the server's decoder gives a generic "Invalid request
+// format" with no field name on a type mismatch.
 func coerce(raw, kind string) (any, error) {
 	switch kind {
 	case "integer":

@@ -24,9 +24,8 @@ func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, ve
 		entry, known := resourceGroups[resource]
 		short := entry.Short
 		if !known {
-			// Unmapped resources still appear under cobra's "Additional
-			// Commands". GroupID stays empty: an unregistered ID panics at
-			// Execute().
+			// Unmapped: falls into "Additional Commands"; GroupID stays empty
+			// since an unregistered ID panics at Execute().
 			short = fmt.Sprintf("Operations on %s", resource)
 		}
 		parent := &cobra.Command{
@@ -67,14 +66,12 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 		Short: operationSummary(cmd),
 		Long:  operationHelp(cmd, fields),
 		Args:  cobra.MaximumNArgs(1),
-		// Body fields are not typed flags: 198 operations, and
-		// CreateSubscriptionRequest alone has 37 top-level properties. Unknown
-		// flags are collected and validated against the spec instead.
+		// Not typed flags: 198 operations is too many. Unknown flags are
+		// collected and validated against the spec instead.
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		RunE: func(cc *cobra.Command, args []string) error {
-			// Validated before anything else: a bad --output is a usage error,
-			// and discovering it only after a network round-trip wastes the
-			// request and reports the wrong exit code.
+			// Validated first: after the request wastes a round-trip and
+			// reports the wrong exit code.
 			format, err := output.ParseFormat(g.Output)
 			if err != nil {
 				return exitcode.Wrap(exitcode.Usage, err)
@@ -195,9 +192,8 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 	return c
 }
 
-// Actions that cannot be undone. Confirmed regardless of environment: the CLI
-// has no signal for which one it is pointed at (ADR 0003). Hand-maintained —
-// deriving it from the spec's x-scope: delete would need registry changes.
+// Confirmed regardless of environment: the CLI has no signal for which one
+// it is pointed at. Hand-maintained rather than derived from the spec.
 var destructive = map[string]bool{
 	"delete": true, "void": true, "terminate": true, "cancel": true, "archive": true,
 	"finalize": true,
@@ -214,9 +210,8 @@ func confirm(g *Globals, cmd spec.Command, target string, force bool) error {
 	return confirmAction(g, cmd.Action, subject, force)
 }
 
-// Shared by the spec-driven commands and the raw escape hatch, neither of which
-// always has a spec.Command to hand. ui.Confirm refuses rather than proceeding
-// when nobody can be asked.
+// Shared by spec-driven commands and the raw escape hatch. Refuses rather
+// than proceeding when nobody can be asked.
 func confirmAction(g *Globals, action, subject string, force bool) error {
 	if force {
 		return nil

@@ -84,9 +84,8 @@ func TestProfileName_SlugifiesUserInput(t *testing.T) {
 	}
 }
 
-// TestProfileName_EdgeCases covers inputs called out by the design as risky for a
-// naive slugifier: punctuation-only input, leading/trailing separators, and
-// unicode. The result must always be non-empty and usable as a bare TOML key.
+// Punctuation-only, separator-heavy, and unicode input must always slugify to
+// something non-empty and usable as a bare TOML key.
 func TestProfileName_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -113,9 +112,8 @@ func TestProfileName_EdgeCases(t *testing.T) {
 			if got == "" {
 				t.Errorf("ProfileName(%q) returned empty string", tt.label)
 			}
-			// A bare TOML key permits only [A-Za-z0-9_-]; the slugifier's
-			// output alphabet ([a-z0-9-]) is a subset, so it must round-trip
-			// as a map key without needing quoting.
+			// A bare TOML key permits [A-Za-z0-9_-]; the slugifier's alphabet
+			// is a subset, so it must round-trip without quoting.
 			cfg := &Config{Profiles: map[string]Profile{got: {Label: tt.label}}}
 			var buf strings.Builder
 			if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {

@@ -1,6 +1,5 @@
 // Command bootstrap-commands prints a starting commands.yaml derived from the
-// embedded spec. Run it once, then hand-correct the output — the derived names
-// are a starting point, not the final vocabulary.
+// spec, to be hand-corrected rather than used as-is.
 package main
 
 import (

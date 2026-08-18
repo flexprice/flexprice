@@ -7,9 +7,7 @@ import (
 	"github.com/flexprice/cli/internal/spec"
 )
 
-// Replaces TestRender_StatusFooterNotShownForJSON, which lived in
-// internal/output until the footer moved to internal/ui. Someone piping json
-// or yaml is scripting, not reading a status line.
+// Someone piping json or yaml is scripting, not reading a status line.
 func TestShouldShowFooter(t *testing.T) {
 	cases := []struct {
 		format output.Format
@@ -29,8 +27,7 @@ func TestShouldShowFooter(t *testing.T) {
 	}
 }
 
-// Every mutating action needs a verb that is not the vague fallback, or the
-// spinner says "Working on customers…" during a create.
+// A mutating action must not fall back to "Working on customers…".
 func TestSpinnerVerb(t *testing.T) {
 	cases := map[string]string{
 		"list":      "Fetching",
@@ -51,8 +48,7 @@ func TestSpinnerVerb(t *testing.T) {
 	}
 }
 
-// The destructive actions are the ones a user most needs accurate feedback on,
-// so none of them may fall through to the vague default.
+// Destructive actions are what a user most needs accurate feedback on.
 func TestSpinnerVerb_DestructiveActionsAreNamed(t *testing.T) {
 	for action := range destructive {
 		if got := spinnerVerb(spec.Command{Action: action}); got == "Working on" {

@@ -113,9 +113,8 @@ func TestResolveContext_DefaultPrecedence_UsesProfileAndKeyring(t *testing.T) {
 	}
 }
 
-// The profile resolves fine but nothing was ever stored for it in the
-// keyring (e.g. login was interrupted, or the entry was deleted out of
-// band). The error must name the specific profile and the fix.
+// The profile resolves but nothing was ever stored for it in the keyring;
+// the error must name the profile and the fix.
 func TestResolveContext_ProfileExistsButKeyringEmpty(t *testing.T) {
 	store := &stubStore{keys: map[string]string{}}
 	_, err := ResolveContext(baseConfig(), store, Overrides{})
@@ -144,10 +143,8 @@ func TestResolveContext_NoProfileNoFlagNoEnv_ErrorNamesInit(t *testing.T) {
 	}
 }
 
-// The env var supplies a key but the profile lookup fails (no config file
-// yet) and no --region/--base-url was given either: the key alone still
-// can't identify a region, so this must fail the same way a bare --api-key
-// does, not silently guess.
+// A key with no profile and no --region/--base-url must fail the same way a
+// bare --api-key does, not silently guess a region.
 func TestResolveContext_EnvKeySetButNoProfileOrRegion_ErrorNamesRegion(t *testing.T) {
 	store := &stubStore{keys: map[string]string{}}
 	empty := &Config{Profiles: map[string]Profile{}}

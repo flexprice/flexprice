@@ -16,10 +16,8 @@ import (
 
 const redacted = "[redacted]"
 
-// The only response fields printed in full under --debug. Allowlist-based so
-// unanticipated fields fail closed, and limited to structurally constrained
-// values: free-text like "message" or "name" is where servers interpolate
-// dynamic content, so allowlisting it by key would leak that content.
+// Fields safe to print under --debug. Free-text fields are excluded: servers
+// interpolate dynamic content into them, which could leak.
 var safeKeys = map[string]bool{
 	"id": true, "object": true, "status": true, "type": true,
 	"created_at": true, "updated_at": true, "currency": true, "amount": true,
@@ -37,11 +35,8 @@ var idempotentMethods = map[string]bool{
 	"GET": true, "HEAD": true, "PUT": true, "DELETE": true, "OPTIONS": true,
 }
 
-// Refuses to retry non-idempotent requests: retryablehttp's default policy
-// inspects only the status code, never the method, and this API has no working
-// idempotency key, so retrying a POST can double-create billing objects. 429 is
-// retried for every method — the server is stating it did not process the
-// request. Full reasoning in decisions/0002-retry-only-idempotent-methods.md.
+// retryablehttp retries by status alone; this refuses non-idempotent methods
+// since a retried POST can double-create billing objects.
 func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true, nil
@@ -57,9 +52,7 @@ type Options struct {
 	APIKey  string
 	Version string
 	Debug   bool
-	// Timeout bounds a whole request including retries. Zero means DefaultTimeout;
-	// cleanhttp sets only a Transport, so without this the client can hang forever
-	// on a connection that stalls after headers arrive.
+	// Zero means DefaultTimeout. Without it a stalled connection can hang forever.
 	Timeout time.Duration
 	// DebugOut receives --debug dumps. Never stdout: data goes to stdout so that
 	// `--output json > file` stays clean.
@@ -76,10 +69,7 @@ type Client struct {
 	debug   bool
 	debugW  io.Writer
 	http    *retryablehttp.Client
-	// baseErr defers a malformed BaseURL to the first Do call. New has no error
-	// return so that call sites stay a single expression; reporting it here still
-	// names the real cause rather than surfacing "unsupported protocol scheme"
-	// from deep in the HTTP stack.
+	// Defers a malformed BaseURL to the first Do call, since New has no error return.
 	baseErr error
 }
 
@@ -120,11 +110,8 @@ func New(o Options) *Client {
 	return c
 }
 
-// Returns the raw body alongside any *APIError, so a caller rendering JSON can
-// still emit the error envelope; check the error before using the body.
-//
-// Pass a literal nil for body when there is none: a typed nil pointer is a
-// non-nil interface and would encode as the JSON literal null.
+// Returns the raw body alongside any *APIError so JSON callers can still emit
+// the error envelope. Pass a literal nil for body, not a typed nil pointer.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body any) ([]byte, error) {
 	if c.baseErr != nil {
 		return nil, c.baseErr

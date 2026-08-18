@@ -228,7 +228,7 @@ func TestClient_JoinsPathAgainstBaseURLWithPath(t *testing.T) {
 }
 
 // The server may have committed before failing, so a retried POST can duplicate
-// a subscription, invoice or payment (ADR 0002).
+// a subscription, invoice or payment.
 func TestClient_DoesNotRetryPOSTOnServerError(t *testing.T) {
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

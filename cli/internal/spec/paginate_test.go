@@ -57,9 +57,8 @@ func TestPageInfo_InvoiceLikeResponseIsNotMisreadAsPaginated(t *testing.T) {
 	}
 }
 
-// Count is derived by scanning top-level array fields; when more than one
-// exists, the selection must be deterministic rather than depending on Go's
-// randomized map iteration order.
+// Selection among multiple array fields must be deterministic, not dependent
+// on Go's randomized map order.
 func TestPageInfo_CountIsDeterministicAcrossMultipleArrayFields(t *testing.T) {
 	raw := []byte(`{"total":5,"limit":10,"offset":0,"alpha_items":[{"id":"a"}],"beta_items":[{"id":"b"},{"id":"c"}]}`)
 

@@ -87,9 +87,8 @@ func ResolveContext(cfg *Config, store Store, o Overrides) (RuntimeContext, erro
 	return rc, nil
 }
 
-// availableRegions renders the known region keys for an error message, or a
-// placeholder when the caller passed no region map at all (e.g. a spec that
-// failed to load) so the message never degrades to an empty list.
+// Falls back to a placeholder when regions is empty, so the message never
+// degrades to an empty list.
 func availableRegions(regions map[string]string) string {
 	if len(regions) == 0 {
 		return "none configured"

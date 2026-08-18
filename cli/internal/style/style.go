@@ -21,9 +21,8 @@ const (
 	colorDim     = lipgloss.Color("#6b7280")
 )
 
-// enabled gates the package-level functions, which write STDOUT content only.
-// Anything written to stderr must build its own Palette from that stream's
-// TTY-ness — see internal/ui. Icons (✓/✗/⚠) are never gated.
+// Gates STDOUT content only; stderr builds its own Palette (see internal/ui).
+// Icons (✓/✗/⚠) are never gated.
 var enabled = os.Getenv("NO_COLOR") == "" &&
 	os.Getenv("TERM") != "dumb" &&
 	term.IsTerminal(int(os.Stdout.Fd()))
@@ -31,10 +30,8 @@ var enabled = os.Getenv("NO_COLOR") == "" &&
 func Disable() { enabled = false }
 func Enable()  { enabled = true }
 
-// EnableForTests forces a real color profile so other packages' tests can
-// assert on colored output. go test never has a terminal attached, so without
-// this both this package and lipgloss suppress color and such assertions pass
-// or fail on where they run. Not for production code.
+// Forces a real color profile so tests can assert on colored output, since
+// go test has no terminal attached. Not for production code.
 func EnableForTests() {
 	enabled = true
 	renderer.SetColorProfile(termenv.TrueColor)
@@ -94,9 +91,8 @@ var (
 	}
 )
 
-// StatusColor leaves an unrecognised status completely unstyled rather than
-// guessing: the wrong color is worse than none. Matching is exact-word, so
-// "proactive" cannot trigger on "active".
+// Leaves an unrecognised status unstyled rather than guessing. Exact-word
+// match, so "proactive" cannot trigger on "active".
 func (p Palette) StatusColor(value string) string {
 	lower := strings.ToLower(value)
 	switch {

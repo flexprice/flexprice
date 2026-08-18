@@ -30,7 +30,7 @@ type environmentsResponse struct {
 }
 
 // Returns no identity deliberately: nothing reachable by an environment-scoped
-// key reveals which environment it belongs to (ADR 0003).
+// key reveals which environment it belongs to.
 func VerifyKey(ctx context.Context, baseURL, apiKey, version string, debug bool, debugOut io.Writer) error {
 	c := client.New(client.Options{
 		BaseURL: baseURL, APIKey: apiKey, Version: version,
@@ -40,9 +40,8 @@ func VerifyKey(ctx context.Context, baseURL, apiKey, version string, debug bool,
 	if _, err := c.Do(ctx, http.MethodGet, "/environments", nil, nil); err != nil {
 		var apiErr *client.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized {
-			// A wrong-region key and an invalid key both return an identical
-			// 401, so the message has to name the possibility. %w keeps
-			// errors.As in main.go finding the *client.APIError.
+			// Identical 401 for wrong-region and invalid keys, so the message
+			// names the possibility. %w keeps errors.As finding the APIError.
 			return fmt.Errorf(
 				"this key was rejected by %s.\n"+
 					"  Keys are region-specific. If your account is in another region, re-run with --region\n"+

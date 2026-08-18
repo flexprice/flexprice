@@ -15,10 +15,8 @@ const (
 	Interrupted = 130
 )
 
-// Error carries an explicit exit code out of a package that cannot depend on
-// internal/client. Without it, errors raised before any HTTP call — a missing
-// profile, an unparseable --output — all exited 1, so a script could not tell
-// "needs login" from any other failure.
+// Carries an exit code out of packages that cannot depend on internal/client,
+// so errors raised before any HTTP call don't all collapse to exit 1.
 type Error struct {
 	Code int
 	Err  error

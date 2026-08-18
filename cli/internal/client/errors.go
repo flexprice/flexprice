@@ -10,14 +10,9 @@ import (
 	"github.com/flexprice/cli/internal/exitcode"
 )
 
-// Three error shapes exist in practice, verified against the live API:
-//
-//	{"code":"not_found","message":"...","http_status_code":404,"details":{...}}
-//	{"error":"Unauthorized"}   // auth middleware, a bare string
-//	<non-JSON>                 // gateways and proxies
-//
-// details is json.RawMessage rather than a typed map so a bad shape there
-// cannot take code and message down with it; it is decoded separately.
+// Three shapes exist in practice: {code,message,details}, a bare string error
+// (auth middleware), and non-JSON (gateways). Details is decoded separately
+// so a bad shape there cannot take code/message down with it.
 type envelope struct {
 	Code           string          `json:"code"`
 	Message        string          `json:"message"`

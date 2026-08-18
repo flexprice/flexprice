@@ -13,16 +13,8 @@ import (
 // cap of 12 was measured to truncate real nodes.
 const maxSkeletonDepth = 16
 
-// Skeleton renders an editable JSON document for an operation's request body.
-//
-// Only required fields are emitted as live JSON; optional ones are commented
-// out for the user to uncomment. Not stylistic: an untouched optional numeric
-// field sent as "" fails the server's request binding with no details. The
-// commented block carries most of the value here — every nested structure
-// --edit exists for is optional in the spec.
-//
-// Termination is guaranteed by the depth cap; the cycle guard bounds breadth
-// (without it the SubscriptionResponse walk grows from 1,693 to 17,789 nodes).
+// Only required fields are emitted live; optional ones are commented out, since
+// an untouched optional numeric field sent as "" fails request binding.
 func Skeleton(cmd Command) (string, error) {
 	op := cmd.Operation.Op
 	if op.RequestBody == nil || op.RequestBody.Value == nil {

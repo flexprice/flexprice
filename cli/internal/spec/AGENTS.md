@@ -9,8 +9,6 @@ owns:
 > Turns the embedded OpenAPI document into a resolvable command tree and
 > turns one resolved command plus user input into an HTTP request. Never
 > touches the network.
-> Why → ../../decisions/0004-curated-commands-yaml-over-mechanical-derivation.md,
-> ../../decisions/0005-region-discovery-from-openapi-servers.md.
 
 ## Purpose
 
@@ -63,9 +61,8 @@ Load()                         parse the embedded OpenAPI document
   the server's request binding outright with no field-level detail — proven
   by a live round-trip against the real API during the implementation spike.
 - `commands.yaml` validation is default-allow (`registry.go`): an unmapped
-  operation gets a derived name and a warning, never a hard failure. Do not
-  make this stricter — see [ADR 0004](../../decisions/0004-curated-commands-yaml-over-mechanical-derivation.md)
-  for why.
+  operation gets a derived name and a warning, never a hard failure. Don't
+  make this stricter — derived names have caused real collisions before.
 - `Load()` memoizes the parsed document via a package-level `sync.Once` — the
   first call pays the real ~48-73ms parse cost, every call after is
   effectively free. Call it as often as convenient; do not thread a

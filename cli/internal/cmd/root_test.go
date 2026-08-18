@@ -30,17 +30,15 @@ func TestRootCommand_HelpShowsDescriptionAndFlags(t *testing.T) {
 	if !strings.Contains(out, "Flexprice API") {
 		t.Errorf("help output missing the product description:\n%s", out)
 	}
-	// Guards the Run stub: cobra omits the Flags section for a root command that
-	// is neither Runnable nor has subcommands, so removing the stub prematurely
-	// would silently stop help from listing any flags.
+	// Guards the Run stub: cobra omits Flags for a root with no Runnable and
+	// no subcommands, so removing it stops help from listing flags.
 	if !strings.Contains(out, "--profile") {
 		t.Errorf("help output missing the Flags section:\n%s", out)
 	}
 }
 
-// Two roots in one process must not share flag state. pflag writes defaults into
-// the bound pointer at registration time, so a package-level Globals would have
-// the second construction clobber the first's parsed values.
+// pflag writes defaults into the bound pointer at registration, so a
+// package-level Globals would let a second construction clobber the first.
 func TestNewRootCommand_InstancesDoNotShareState(t *testing.T) {
 	rootA := NewRootCommand("a")
 	rootA.SetOut(&bytes.Buffer{})
@@ -68,9 +66,8 @@ func TestNewRootCommand_InstancesDoNotShareState(t *testing.T) {
 	}
 }
 
-// --no-color must disable style output for the whole process, wired through
-// PersistentPreRunE since flags are not populated until Execute() parses them
-// — NewRootCommand itself runs before that.
+// Wired through PersistentPreRunE since flags are not populated until
+// Execute() parses them — NewRootCommand runs before that.
 func TestNoColorFlag_DisablesStyling(t *testing.T) {
 	style.EnableForTests()
 	defer style.EnableForTests()

@@ -1,9 +1,6 @@
 // Command gendocs writes the CLI command reference as Markdown.
 //
-// TODO: not currently wired into cli-release.yml — it only runs when invoked
-// by hand via `make cli-docs`. Check with the team before adding an automated
-// call on release; revisit this deliberately rather than assuming it should
-// just be hooked in.
+// TODO: not wired into cli-release.yml; runs only via `make cli-docs`.
 package main
 
 import (

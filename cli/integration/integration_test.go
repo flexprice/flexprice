@@ -1,8 +1,6 @@
 // Package integration exercises the CLI against a running Flexprice server.
-//
-// It starts nothing. Bring a server up yourself (make run-local) and export
-// FLEXPRICE_TEST_BASE_URL and FLEXPRICE_TEST_API_KEY. Without those the whole
-// package skips, so `go test ./...` stays green on a machine with no server.
+// It starts nothing — export FLEXPRICE_TEST_BASE_URL/API_KEY, or the whole
+// package skips.
 package integration
 
 import (

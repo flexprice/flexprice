@@ -7,9 +7,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// The full block logo is 67 columns wide. Anything narrower than that plus a
-// small margin has to fall back, or the logo wraps and renders as unreadable
-// garbage — worse than no logo at all.
+// Anything narrower than 67 columns plus a margin must fall back, or the
+// logo wraps into unreadable garbage.
 func TestLogo_WideTerminalUsesFullBlock(t *testing.T) {
 	got := Logo(100)
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
@@ -26,9 +25,7 @@ func TestLogo_NarrowTerminalFallsBackToCompact(t *testing.T) {
 	}
 }
 
-// A width of 0 means "couldn't determine terminal size" (e.g. output is piped).
-// That must not be treated as an extremely narrow terminal in a way that
-// crashes, and must not optimistically render the wide form into a pipe.
+// Width 0 means "unknown" (piped output); must not crash or render wide.
 func TestLogo_UnknownWidthFallsBackToCompact(t *testing.T) {
 	got := Logo(0)
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")

@@ -156,9 +156,8 @@ func (r *Registry) Warnings() []string               { return r.warnings }
 
 var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
-// DeriveName is a pure function of tag and operationId. operationId stability is
-// already a contract held for the SDKs, so derived command names are as stable as
-// the SDK method names. Design doc §5.
+// Pure function of tag and operationId, whose stability is already an SDK
+// contract, so derived names are just as stable.
 func DeriveName(tag, operationID string) (resource, action string) {
 	resource = kebab(tag)
 	action = kebab(operationID)

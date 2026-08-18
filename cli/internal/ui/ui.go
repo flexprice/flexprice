@@ -1,7 +1,5 @@
-// Package ui owns every human-facing write. style decides what colour
-// something is; ui decides what gets said, to which stream, and whether anyone
-// is there to read it — so --quiet, TERM=dumb, CI detection and --no-input are
-// each implemented once rather than at every call site.
+// Package ui owns every human-facing write: what gets said, to which stream,
+// and whether anyone is there to read it.
 package ui
 
 import (

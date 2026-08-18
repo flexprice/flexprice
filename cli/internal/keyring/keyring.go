@@ -13,16 +13,12 @@ import (
 
 const service = "flexprice"
 
-// probeTimeout bounds how long Open() waits on the OS keychain probe. Some
-// backends (a partially configured Linux secret service with D-Bus reachable
-// but no prompt agent to answer an unlock request) block indefinitely instead
-// of failing fast, which would otherwise freeze the CLI at startup.
+// Some backends (a Linux secret service with no prompt agent) block
+// indefinitely instead of failing fast, which would freeze the CLI at startup.
 const probeTimeout = 2 * time.Second
 
-// Bounds a real Set/Get/Delete against the OS keychain. Longer than
-// probeTimeout on purpose: a real operation can involve the user answering an
-// OS unlock prompt, which a 2s bound would false-timeout on. A var so tests
-// can shrink it; production never reassigns it.
+// Longer than probeTimeout: a real operation can involve the user answering an
+// OS unlock prompt, which 2s would false-timeout on.
 var keychainOpTimeout = 8 * time.Second
 
 // Store is the credential backend. Name() is surfaced by whoami so the user can
@@ -34,9 +30,7 @@ type Store interface {
 	Name() string
 }
 
-// keychainSet, keychainGet, and keychainDelete are indirections over the
-// zalando/go-keyring functions so tests can substitute a fake, deterministic
-// backend (e.g. one that blocks past a timeout) without ever touching the
+// Indirections so tests can substitute a fake backend without touching the
 // real OS keychain.
 var (
 	keychainSet    = oskeyring.Set
@@ -95,9 +89,8 @@ func Open() (store Store, warn string, err error) {
 		nil
 }
 
-// The only reliable availability check: on Linux the keychain fails at call
-// time when libsecret or D-Bus is absent. Calls the raw functions rather than
-// OSKeyring's methods so probeTimeout applies instead of keychainOpTimeout.
+// Calls the raw functions rather than OSKeyring's methods so probeTimeout
+// applies instead of keychainOpTimeout.
 func probeKeychain() error {
 	_, err := withTimeout(probeTimeout, "probe", func() (struct{}, error) {
 		if err := keychainSet(service, service+".probe", "probe"); err != nil {

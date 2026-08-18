@@ -14,16 +14,9 @@ import (
 // InvoiceResponse's top-level "total" is a string amount ("150.00"), not a count.
 var numericListMarkers = []string{"total", "limit", "offset"}
 
-// rowsFrom finds the list of rows in a response. Two envelope shapes exist:
-//
-//	{"items":[...], "pagination":{...}}                        // types.ListResponse[T]
-//	{"environments":[...], "total":.., "offset":.., "limit":..} // older shape
-//
 // Outside "items", a key is only the row list if the envelope also carries a
 // pagination marker — that is what separates a real list from a single object
-// with an array field (a customer's tax_rates, an invoice's line_items).
-// Among candidates the first non-empty array-of-objects wins, since an empty
-// array is never the intended source when a populated one exists alongside it.
+// with an array field. Among candidates the first non-empty array wins.
 func rowsFrom(raw []byte) ([]map[string]any, error) {
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {

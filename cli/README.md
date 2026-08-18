@@ -196,8 +196,7 @@ means switching profiles:
 
 `flexprice env list` shows every environment in your tenant, but the CLI
 cannot tell you which one your active key belongs to — the API itself does not
-expose that. See [ADR 0003](decisions/0003-environment-scoped-profiles-no-live-flag.md)
-if you're curious why.
+expose that.
 
 ## Output & scripting
 
@@ -257,11 +256,9 @@ published at https://docs.flexprice.io/cli.
 
 This CLI dispatches commands at runtime from an embedded OpenAPI spec rather
 than generating Go source per command — [ARCHITECTURE.md](ARCHITECTURE.md)
-walks through the request lifecycle end to end. The five decisions with real
-trade-offs behind them are recorded as short ADRs in
-[decisions/](decisions/); the two most common maintenance tasks — adding a
-generated command and adding a hand-written one — are walked through in
-[guides/](guides/).
+walks through the request lifecycle end to end. The two most common
+maintenance tasks — adding a generated command and adding a hand-written
+one — are walked through in [guides/](guides/).
 
 Build and test locally with the standard Go toolchain from inside `cli/`:
 

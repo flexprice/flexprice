@@ -40,10 +40,8 @@ func newEnvCommand(g *Globals, version string) *cobra.Command {
 				return fmt.Errorf("parse environments: %w", err)
 			}
 
-			// A plain listing: the API does not report which environment the
-			// active key belongs to, so profiles cannot be correlated.
-			// PadGrid rather than text/tabwriter, which counts the styled
-			// header's escape bytes as visible width and misaligns everything.
+			// A plain listing: the API cannot correlate profiles to environments.
+			// PadGrid, not text/tabwriter, which miscounts the styled header.
 			grid := [][]string{{
 				style.Header("ENVIRONMENT"),
 				style.Header("TYPE"),

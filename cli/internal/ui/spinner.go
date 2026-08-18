@@ -74,9 +74,8 @@ func (s *Spinner) Update(msg string) {
 	s.mu.Unlock()
 }
 
-// Stop erases the line and restores the cursor. Safe to call more than once:
-// both the normal return path and the signal handler reach it. Failing to
-// restore leaves the user's shell with an invisible cursor after we exit.
+// Safe to call more than once. Failing to restore the cursor leaves the
+// user's shell with an invisible one after we exit.
 func (s *Spinner) Stop() {
 	if !s.live {
 		return

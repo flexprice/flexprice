@@ -8,9 +8,7 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// --quiet suppresses the whole banner. This checks printInitBanner directly
-// rather than running the whole init command, which would require a real
-// terminal or --api-key; the full login flow is covered by auth_test.go.
+// Checks printInitBanner directly; the full login flow is in auth_test.go.
 func TestInitCommand_QuietSuppressesBanner(t *testing.T) {
 	var out bytes.Buffer
 	printInitBanner(&out, &Globals{Quiet: true})
@@ -35,9 +33,7 @@ func TestInitCommand_BannerShowsWithoutQuiet(t *testing.T) {
 	}
 }
 
-// The banner must stay readable with color disabled — the wordmark's own
-// characters carry it, color is decoration on top. This is the NO_COLOR /
-// --no-color / piped-output case.
+// The wordmark's own characters carry it; color is decoration on top.
 func TestInitBanner_ReadableWithColorDisabled(t *testing.T) {
 	style.Disable()
 	defer style.EnableForTests()

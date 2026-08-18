@@ -55,9 +55,8 @@ func TestVerifyKey_RejectionMentionsRegion(t *testing.T) {
 	}
 }
 
-// main.go dispatches exit codes via errors.As(err, &apiErr); a rejection must
-// stay a *client.APIError under wrapping so a bad key exits with exitcode.Auth
-// (3), not the generic fallback (1).
+// A rejection must stay a *client.APIError under wrapping so main.go's
+// errors.As exits with exitcode.Auth, not the generic fallback.
 func TestVerifyKey_RejectionPreservesAPIErrorType(t *testing.T) {
 	srv := envServer(t, "production")
 	defer srv.Close()
@@ -75,9 +74,8 @@ func TestVerifyKey_RejectionPreservesAPIErrorType(t *testing.T) {
 	}
 }
 
-// VerifyKey's own client.New call must thread through debug settings like every
-// other call site in this package, or `flexprice login --debug` silently
-// produces no output for the verification request.
+// VerifyKey's own client.New must thread through debug settings, or
+// `flexprice login --debug` silently produces no output.
 func TestVerifyKey_DebugWritesRequestOutput(t *testing.T) {
 	srv := envServer(t, "development")
 	defer srv.Close()
@@ -109,9 +107,8 @@ func TestMaskKey_ShowsOnlyAPrefix(t *testing.T) {
 	}
 }
 
-// TestMaskKey_ShortKeyDoesNotPanic guards the login command's rotation display,
-// which calls MaskKey on whatever was previously stored — including a key
-// shorter than the 8-byte prefix MaskKey normally takes.
+// Guards the rotation display, which calls MaskKey on a key possibly shorter
+// than its 8-byte prefix.
 func TestMaskKey_ShortKeyDoesNotPanic(t *testing.T) {
 	for _, key := range []string{"", "a", "1234567", "12345678"} {
 		got := MaskKey(key)
@@ -128,9 +125,7 @@ func TestPromptRegion_NoTTYFallsBackToExactPriorBehavior(t *testing.T) {
 		{Key: "us", BaseURL: "https://us.api.flexprice.io/v1"},
 		{Key: "in", BaseURL: "https://api.cloud.flexprice.io/v1"},
 	}
-	// The TTY state is now injected rather than probed, so this no longer
-	// depends on go test's stdin happening not to be a terminal — it asserts
-	// the behaviour directly.
+	// TTY state is injected rather than probed, asserting the behaviour directly.
 	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
 	_, err := promptRegion(g, regions)
 	if err == nil {

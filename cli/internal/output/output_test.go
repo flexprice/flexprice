@@ -18,16 +18,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// olderListShape mirrors GET /environments: the array key isn't "items" but
-// the envelope still carries pagination markers (total/offset/limit) at the
-// top level, which is what tells rowsFrom this is a list and not one object.
+// Mirrors GET /environments: array key isn't "items", but top-level
+// pagination markers still tell rowsFrom this is a list.
 func olderListShape() []byte {
 	return []byte(`{"environments":[{"id":"env_1","name":"Prod"}],"total":1,"offset":0,"limit":50}`)
 }
 
-// singleObjectWithArrayField mirrors GET /customers/{id}: a bare object whose
-// own field happens to be an array. There is no pagination marker here, so it
-// must never be mistaken for a list of tax rates.
+// A bare object with an array field but no pagination marker; must never be
+// mistaken for a list of tax rates.
 func singleObjectWithArrayField() []byte {
 	return []byte(`{"id":"c1","metadata":{},"tax_rates":["us-ca","us-ny"]}`)
 }
@@ -220,9 +218,7 @@ func TestHasListMarker_StringTotalDoesNotCount(t *testing.T) {
 	}
 }
 
-// TestRender_TableIsDeterministicAcrossRuns guards against Go's randomized
-// map iteration leaking into rendered column order, both when columns are
-// explicitly requested and when defaultColumns must pick them from the map.
+// Guards against Go's randomized map iteration leaking into column order.
 func TestRender_TableIsDeterministicAcrossRuns(t *testing.T) {
 	render := func(o Options) string {
 		var out, errOut bytes.Buffer
@@ -248,12 +244,9 @@ func TestRender_TableIsDeterministicAcrossRuns(t *testing.T) {
 	}
 }
 
-// TestFormat_TruncatesOnRuneBoundary ensures a nested JSON value with
-// multi-byte UTF-8 characters (e.g. Arabic environment names returned by the
-// live API) is never cut mid-character, which would emit invalid UTF-8.
+// Ensures a value with multi-byte UTF-8 characters is never cut mid-character.
 func TestFormat_TruncatesOnRuneBoundary(t *testing.T) {
-	// Force well over the 40-char budget with a value that is pure multi-byte
-	// characters, so any byte-index slice lands inside a character.
+	// Well over the 40-char budget, so a byte-index slice would land mid-char.
 	name := strings.Repeat("بيئة تجريبية ", 5)
 	v := map[string]any{"name": name}
 
@@ -280,8 +273,7 @@ func TestRenderTable_HeaderIsStyled(t *testing.T) {
 	}
 }
 
-// The status VALUE, not just the header, gets colored when the column name
-// contains "status" and the value matches a known word.
+// The status VALUE, not just the header, is colored for a known word.
 func TestRenderTable_KnownStatusValueIsColored(t *testing.T) {
 	var out, errOut bytes.Buffer
 	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
@@ -290,9 +282,7 @@ func TestRenderTable_KnownStatusValueIsColored(t *testing.T) {
 	if err := w.Render(input, Options{Columns: []string{"id", "status"}}); err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	// The raw word is still present as a substring — color wraps it, does not
-	// replace it — so this also proves existing "strings.Contains(out, value)"
-	// style assertions elsewhere in this file remain valid unchanged.
+	// Color wraps the word rather than replacing it.
 	if !strings.Contains(out.String(), "archived") {
 		t.Errorf("table output missing the status value itself: %q", out.String())
 	}
