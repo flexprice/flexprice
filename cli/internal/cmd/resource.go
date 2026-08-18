@@ -163,13 +163,18 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				return err
 			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
-			if err := w.Render(merged, output.Options{
+			res, err := w.RenderResult(merged, output.Options{
 				Columns: pickColumns(reg, g, cmd.Resource),
 				Quiet:   g.Quiet,
 				Shown:   shown,
 				Total:   page.Total,
-			}); err != nil {
+			})
+			if err != nil {
 				return err
+			}
+			if res.Empty {
+				g.UI.EmptyState(cmd.Resource)
+				return nil
 			}
 			if shouldShowFooter(format) {
 				g.UI.StatusLine(statusLine(rc, version))

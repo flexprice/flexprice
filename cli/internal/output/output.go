@@ -47,6 +47,36 @@ type Writer struct {
 	Format Format
 }
 
+// Result reports what Render did, so a caller that knows the resource name can
+// say something useful about an empty list. The renderer deliberately does not
+// invent that message itself: it has no idea what "customers" are.
+type Result struct {
+	Empty bool
+}
+
+// RenderResult renders and reports. Render is kept as a thin wrapper so
+// existing callers and tests are unaffected.
+//
+// Empty is only ever reported for table output. json and yaml are machine
+// formats where an empty list is valid output that must be emitted verbatim —
+// reporting Empty there would have the caller print prose over the top of
+// valid JSON.
+func (w Writer) RenderResult(raw []byte, o Options) (Result, error) {
+	if w.Format != FormatTable {
+		return Result{}, w.Render(raw, o)
+	}
+	rows, err := rowsFrom(raw)
+	if err != nil {
+		// Unparseable as a table — fall back to JSON so the user still sees
+		// the data, and do not claim the result was empty.
+		return Result{}, Writer{Out: w.Out, Err: w.Err, Format: FormatJSON}.Render(raw, o)
+	}
+	if len(rows) == 0 {
+		return Result{Empty: true}, nil
+	}
+	return Result{}, w.renderTable(raw, o)
+}
+
 func (w Writer) Render(raw []byte, o Options) error {
 	switch w.Format {
 	case FormatJSON:

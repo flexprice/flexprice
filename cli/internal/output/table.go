@@ -151,7 +151,10 @@ func (w Writer) renderTable(raw []byte, o Options) error {
 		return Writer{Out: w.Out, Err: w.Err, Format: FormatJSON}.Render(raw, o)
 	}
 	if len(rows) == 0 {
-		w.Warn(o, "No results.")
+		// Emptiness is reported through RenderResult so the caller, which knows
+		// the resource name, can name a next step. Reaching here directly via
+		// the legacy Render path prints nothing rather than a bare
+		// "No results." that suggests nothing.
 		return nil
 	}
 
