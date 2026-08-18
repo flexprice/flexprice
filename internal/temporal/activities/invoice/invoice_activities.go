@@ -11,6 +11,7 @@ import (
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 )
 
 // InvoiceActivities contains all invoice-related activities
@@ -146,6 +147,17 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 	}
 
 	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
+		// Business-condition failures (insufficient balance, invoice not in draft) are
+		// marked ErrInvalidOperation and won't clear by the time Temporal's activity
+		// RetryPolicy expires (currently 3 attempts, up to 5-min backoff). Wrap as
+		// NonRetryable so Temporal fails fast — the workflow still surfaces the error
+		// to its caller (cron / API). Log at Info: not a system fault.
+		if ierr.IsInvalidOperation(err) {
+			s.logger.Info(ctx, "invoice finalize rejected (invalid state — non-retryable)",
+				"invoice_id", input.InvoiceID,
+				"error", err.Error())
+			return nil, temporal.NewNonRetryableApplicationError(err.Error(), "InvoiceFinalizeInvalidState", err)
+		}
 		s.logger.Error(ctx, "failed to finalize invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)

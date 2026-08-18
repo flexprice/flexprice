@@ -77,6 +77,12 @@ func (r *SystemEventRepository) OnConsumed(ctx context.Context, event *types.Web
 		return err
 	}
 
+	// entity_id is varchar(50); customer-supplied IDs (e.g. IngestEventRequest.EventID
+	// propagated to event.rejected webhooks) can exceed this and would fail the insert,
+	// cascading into "system_event not found" on webhook delivery lookup. Truncate
+	// silently — the full ID is preserved in payload for debugging.
+	entityID := truncateForColumn(event.EntityID, 50)
+
 	client := r.client.Writer(ctx)
 	now := time.Now().UTC()
 
@@ -86,7 +92,7 @@ func (r *SystemEventRepository) OnConsumed(ctx context.Context, event *types.Web
 		SetEnvironmentID(event.EnvironmentID).
 		SetEventName(string(event.EventName)).
 		SetEntityType(string(event.EntityType)).
-		SetEntityID(event.EntityID).
+		SetEntityID(entityID).
 		SetPayload(payloadMap).
 		SetCreatedAt(now).
 		SetUpdatedAt(now).
@@ -109,13 +115,20 @@ func (r *SystemEventRepository) OnConsumed(ctx context.Context, event *types.Web
 	if event.EntityType != "" {
 		updateQ = updateQ.SetEntityType(string(event.EntityType))
 	}
-	if event.EntityID != "" {
-		updateQ = updateQ.SetEntityID(event.EntityID)
+	if entityID != "" {
+		updateQ = updateQ.SetEntityID(entityID)
 	}
 	if payloadMap != nil {
 		updateQ = updateQ.SetPayload(payloadMap)
 	}
 	return updateQ.Exec(ctx)
+}
+
+func truncateForColumn(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
 }
 
 // OnDelivered stamps webhook_message_id and published_at once the webhook has been sent.
