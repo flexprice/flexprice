@@ -174,6 +174,9 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 			if shouldShowFooter(format) {
 				g.UI.StatusLine(statusLine(rc, version))
 			}
+			if verb, ok := receiptVerbs[cmd.Action]; ok {
+				g.UI.Receipt(verb, singular(cmd.Resource), responseID(merged))
+			}
 			return nil
 		},
 	}
@@ -225,6 +228,43 @@ func confirmAction(g *Globals, action, subject string, force bool) error {
 		return nil
 	}
 	return g.UI.Confirm(action, subject)
+}
+
+// receiptVerbs maps mutating actions to the past-tense verb shown in a
+// receipt. Read actions are absent deliberately: "Retrieved customer X" tells
+// the user nothing they cannot see in the output directly above it.
+var receiptVerbs = map[string]string{
+	"create":    "Created",
+	"update":    "Updated",
+	"delete":    "Deleted",
+	"void":      "Voided",
+	"cancel":    "Cancelled",
+	"terminate": "Terminated",
+	"archive":   "Archived",
+	"finalize":  "Finalized",
+}
+
+// responseID pulls the top-level "id" out of a response, or returns "" when
+// there is not one. Returning "" makes Receipt silent, which is the intended
+// behaviour when we cannot say precisely what happened.
+func responseID(raw []byte) string {
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return ""
+	}
+	id, _ := doc["id"].(string)
+	return id
+}
+
+// singular trims a trailing "s" for the receipt line, so the resource reads as
+// one object. Resources whose plural is irregular are left alone: this is
+// cosmetic, and a wrong singular is more jarring than an unchanged plural.
+func singular(resource string) string {
+	if len(resource) > 1 && strings.HasSuffix(resource, "s") &&
+		!strings.HasSuffix(resource, "ss") {
+		return strings.TrimSuffix(resource, "s")
+	}
+	return resource
 }
 
 // shouldShowFooter reports whether the status footer belongs under this
