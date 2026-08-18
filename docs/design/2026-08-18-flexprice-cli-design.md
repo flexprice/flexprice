@@ -112,10 +112,10 @@ request. The binary never fetches a spec at runtime.
 ## 5. Command mapping
 
 The spec has 255 operations across 34 tags. **56 of those, all under the `Webhook Events` tag, are
-documentation stubs** — no `operationId`, synthetic paths such as `POST /webhook-events/invoice.created`
+documentation stubs** — no `operationId`, synthetic paths such as `POST /webhook-events/invoice.update.finalized`
 — that exist to document webhook payload schemas. They 404 if called. The resolver excludes that tag
 from command generation but keeps it as the authoritative list of event types for `trigger` and
-`listen --events`. Real surface: **199 operations across 33 tags.**
+`listen --events`. Real surface: **198 operations across 33 tags** (255 total, less 56 webhook stubs, less `POST /marketplace/agreements` which also carries no `operationId`).
 
 Mechanical derivation from paths and verbs produces a bad CLI. Observed in the spec:
 
@@ -337,7 +337,7 @@ A scenario is an ordered list of steps; each step is an operationId plus paramet
 `${step.field}` interpolation:
 
 ```yaml
-name: invoice.finalized
+name: invoice.update.finalized
 steps:
   - { id: cust, op: createCustomer,     params: { external_id: "cli-demo-${random}" } }
   - { id: plan, op: createPlan,         params: { name: "CLI Demo" } }

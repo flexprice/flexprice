@@ -1941,12 +1941,12 @@ func TestEventTypes_ComeFromWebhookEventStubs(t *testing.T) {
 	}
 	found := false
 	for _, e := range types {
-		if e == "invoice.created" {
+		if e == "customer.created" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("invoice.created missing from event types: %v", types)
+		t.Errorf("customer.created missing from event types: %v", types)
 	}
 }
 ```
@@ -4445,7 +4445,7 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 		Short: operationSummary(cmd),
 		Long:  operationHelp(cmd, fields),
 		Args:  cobra.MaximumNArgs(1),
-		// Body fields are not declared as typed flags: the spec has 199 operations
+		// Body fields are not declared as typed flags: the spec has 198 operations
 		// and CreateSubscriptionRequest alone has 37 top-level properties. Unknown
 		// flags are collected and validated against the spec instead. Design doc §7.
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
