@@ -64,13 +64,23 @@ Render(raw, options)
   here — fixing it properly needs a `Content-Type`-aware signature change to
   `Client.Do`, which is out of this package's scope. If you touch a
   binary-returning operation, do not assume this is handled.
-- **The array-detection heuristic used to pick the wrong field.** An
-  earlier version picked the alphabetically-first array-valued key, which
-  worked for `{"items":..., "pagination":...}` but would have rendered a
-  single customer's `tax_rates` array as the row list instead of the
-  customer itself. Fixed by requiring either the literal key `items`, or a
-  pagination marker alongside the array. Do not revert to a bare
-  "first array found" rule.
+- **`hasListMarker` used to check key presence, not key type — a real,
+  shipped bug, not just a hypothetical.** It treated any top-level field
+  literally named `total`/`limit`/`offset` as proof of a paginated list,
+  with no check on the field's JSON type. `InvoiceResponse` has a top-level
+  field literally named `total` that is a **string** (the invoice's dollar
+  amount), so `flexprice invoices retrieve <id> --output table` was
+  misclassifying every single-invoice response as a list — and because
+  `isObjectArray` returned true (vacuously) for an *empty* array, with the
+  alphabetically-first matching key winning, an empty `coupon_applications`
+  routinely beat a real, non-empty `line_items`, printing "No results." for
+  invoices that plainly exist. `numericListMarkers` (`table.go`) now only
+  counts `total`/`limit`/`offset` as pagination evidence when the decoded
+  JSON value is a `float64` — a bare string never counts. `rowsFrom` also
+  now prefers the first **non-empty** array-of-objects over
+  alphabetical-first, since an empty array can never be the intended row
+  source when a populated one exists alongside it. If you ever see a
+  key-presence-only check reappear here, you are reintroducing this bug.
 
 ## Related layers
 
