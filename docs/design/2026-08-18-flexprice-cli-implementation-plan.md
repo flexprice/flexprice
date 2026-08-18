@@ -470,11 +470,13 @@ import (
 )
 
 func TestAPIError_RendersWhatWhyNext(t *testing.T) {
-	body := []byte(`{"error":{"message":"customer not found","hint":"Check the customer ID"}}`)
+	// Shape verified against the live API.
+	body := []byte(`{"code":"not_found","message":"Customer with ID cust_missing was not found",` +
+		`"http_status_code":404,"details":{"customer_id":"cust_missing"}}`)
 	err := NewAPIError(http.StatusNotFound, body, "GET", "/v1/customers/cust_missing")
 
 	got := err.Error()
-	for _, want := range []string{"customer not found", "Check the customer ID"} {
+	for _, want := range []string{"was not found", "customer_id", "cust_missing"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Error() = %q, missing %q", got, want)
 		}
@@ -498,6 +500,17 @@ func TestAPIError_ExitCodeByStatus(t *testing.T) {
 		if got := err.ExitCode(); got != want {
 			t.Errorf("status %d: ExitCode() = %d, want %d", status, got, want)
 		}
+	}
+}
+
+// The auth middleware returns a bare string under "error", unlike every other path.
+func TestAPIError_HandlesBareErrorString(t *testing.T) {
+	err := NewAPIError(http.StatusUnauthorized, []byte(`{"error":"Unauthorized"}`), "GET", "/v1/customers")
+	if !strings.Contains(err.Error(), "Unauthorized") {
+		t.Errorf("Error() = %q, want it to surface the bare error string", err.Error())
+	}
+	if err.ExitCode() != exitcode.Auth {
+		t.Errorf("ExitCode() = %d, want %d", err.ExitCode(), exitcode.Auth)
 	}
 }
 
@@ -545,20 +558,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/flexprice/cli/internal/exitcode"
 )
 
-// envelope matches the API's error response shape. Fields are optional because
-// not every failure path produces all of them.
+// envelope matches the API's error responses. Three shapes exist in practice,
+// verified against the live API:
+//
+//	{"code":"not_found","message":"...","http_status_code":404,"details":{"customer_id":"..."}}
+//	{"error":"Unauthorized"}                      // auth middleware, a bare string
+//	<non-JSON>                                    // gateways and proxies
+//
+// details is field-keyed and is the most actionable part of a validation
+// failure, so it is rendered rather than discarded.
 type envelope struct {
-	Error struct {
-		Message string `json:"message"`
-		Hint    string `json:"hint"`
-		Code    string `json:"code"`
-	} `json:"error"`
-	Message string `json:"message"` // some endpoints return a bare message
+	Code           string            `json:"code"`
+	Message        string            `json:"message"`
+	HTTPStatusCode int               `json:"http_status_code"`
+	Details        map[string]string `json:"details"`
+	Error          json.RawMessage   `json:"error"`
 }
 
 // APIError renders as what failed, why, and what to do next.
@@ -567,8 +587,8 @@ type APIError struct {
 	Method  string
 	Path    string
 	Message string
-	Hint    string
 	Code    string
+	Details map[string]string
 	Raw     []byte
 }
 
@@ -577,11 +597,17 @@ func NewAPIError(status int, body []byte, method, path string) *APIError {
 
 	var env envelope
 	if err := json.Unmarshal(body, &env); err == nil {
-		e.Message = env.Error.Message
-		e.Hint = env.Error.Hint
-		e.Code = env.Error.Code
-		if e.Message == "" {
-			e.Message = env.Message
+		e.Message = env.Message
+		e.Code = env.Code
+		e.Details = env.Details
+
+		// The auth middleware returns {"error":"Unauthorized"} — a string, not an
+		// object — so it is decoded separately rather than into the main shape.
+		if e.Message == "" && len(env.Error) > 0 {
+			var bare string
+			if json.Unmarshal(env.Error, &bare) == nil {
+				e.Message = bare
+			}
 		}
 	}
 	if e.Message == "" {
@@ -596,8 +622,17 @@ func NewAPIError(status int, body []byte, method, path string) *APIError {
 func (e *APIError) Error() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s failed (HTTP %d)\n  %s", e.Method, e.Path, e.Status, e.Message)
-	if e.Hint != "" {
-		fmt.Fprintf(&b, "\n  %s", e.Hint)
+
+	// details names the offending fields; sorted so the output is deterministic.
+	if len(e.Details) > 0 {
+		keys := make([]string, 0, len(e.Details))
+		for k := range e.Details {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "\n    %s: %s", k, e.Details[k])
+		}
 	}
 	if next := e.nextStep(); next != "" {
 		fmt.Fprintf(&b, "\n\n  %s", next)
@@ -978,14 +1013,13 @@ func TestSaveLoad_RoundTrips(t *testing.T) {
 	path := filepath.Join(dir, "config.toml")
 
 	in := &Config{
-		DefaultProfile: "acme-production",
+		DefaultProfile: "sandbox",
 		Profiles: map[string]Profile{
-			"acme-production": {
-				Region:      "us",
-				BaseURL:     "https://us.api.flexprice.io/v1",
-				Environment: "production",
-				Live:        true,
-				KeyRef:      "keychain:flexprice/acme-production",
+			"sandbox": {
+				Region:  "in",
+				BaseURL: "https://api.cloud.flexprice.io/v1",
+				Label:   "Sandbox",
+				KeyRef:  "keychain:flexprice/sandbox",
 			},
 		},
 	}
@@ -997,12 +1031,12 @@ func TestSaveLoad_RoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	got, ok := out.Profiles["acme-production"]
+	got, ok := out.Profiles["sandbox"]
 	if !ok {
 		t.Fatal("profile missing after round trip")
 	}
-	if got.Environment != "production" || !got.Live || got.Region != "us" {
-		t.Errorf("profile = %+v, want production/live/us", got)
+	if got.Region != "in" || got.Label != "Sandbox" {
+		t.Errorf("profile = %+v, want region in and label Sandbox", got)
 	}
 }
 
@@ -1040,9 +1074,12 @@ func TestLoad_MissingFileReturnsEmptyConfig(t *testing.T) {
 	}
 }
 
-func TestProfileName_SlugifiesTheEnvironment(t *testing.T) {
-	if got := ProfileName("Production EU"); got != "production-eu" {
-		t.Errorf("ProfileName = %q, want %q", got, "production-eu")
+func TestProfileName_SlugifiesUserInput(t *testing.T) {
+	if got := ProfileName("My Sandbox"); got != "my-sandbox" {
+		t.Errorf("ProfileName = %q, want %q", got, "my-sandbox")
+	}
+	if got := ProfileName(""); got != "default" {
+		t.Errorf("ProfileName(\"\") = %q, want %q", got, "default")
 	}
 }
 ```
@@ -1075,16 +1112,20 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile is the atomic auth unit. An API key is scoped to exactly one
-// environment, so region, tenant, environment and key move together or not at
-// all. Design doc §6.
+// Profile is the atomic auth unit: an API key is scoped to exactly one
+// environment, so region, base URL and key move together or not at all.
+//
+// There is deliberately no environment name and no live flag. No endpoint
+// reachable by an environment-scoped key reveals which environment that key
+// belongs to — GET /environments returns every environment in the tenant,
+// GET /environments/{id} succeeds for all of them, and /secrets/api/keys omits
+// environment_id. Deriving either value would mean guessing, and a wrong live
+// flag is worse than no live flag. Users label profiles themselves. Design doc §6.
 type Profile struct {
-	Region      string `toml:"region"`
-	BaseURL     string `toml:"base_url"`
-	Tenant      string `toml:"tenant"`
-	Environment string `toml:"environment"`
-	Live        bool   `toml:"live"`
-	KeyRef      string `toml:"key_ref"`
+	Region  string `toml:"region"`
+	BaseURL string `toml:"base_url"`
+	Label   string `toml:"label"` // free text, set by the user; purely informational
+	KeyRef  string `toml:"key_ref"`
 }
 
 type Config struct {
@@ -1158,13 +1199,15 @@ func (c *Config) Resolve(name string) (string, Profile, error) {
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
-// ProfileName builds a self-describing profile name from the environment, so
-// that whoami and every production confirmation name the environment rather
-// than an opaque "default". The tenant is not available from any endpoint an
-// environment-scoped key can reach; users with several tenants pass
-// --profile-name explicitly.
-func ProfileName(environment string) string {
-	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(environment), "-"), "-")
+// ProfileName slugifies a user-supplied label, falling back to "default".
+// Nothing about the key identifies its environment, so the name is whatever the
+// user chooses.
+func ProfileName(label string) string {
+	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(label), "-"), "-")
+	if slug == "" {
+		return "default"
+	}
+	return slug
 }
 ```
 
@@ -1505,8 +1548,8 @@ func baseConfig() *Config {
 	return &Config{
 		DefaultProfile: "acme-production",
 		Profiles: map[string]Profile{
-			"acme-production": {Region: "us", BaseURL: "https://us.example/v1", Environment: "production", Live: true},
-			"acme-dev":        {Region: "us", BaseURL: "https://us.example/v1", Environment: "development"},
+			"acme-production": {Region: "us", BaseURL: "https://us.example/v1", Label: "prod"},
+			"acme-dev":        {Region: "us", BaseURL: "https://us.example/v1", Label: "dev"},
 		},
 	}
 }
@@ -1534,14 +1577,14 @@ func TestResolveContext_EnvBeatsKeyring(t *testing.T) {
 	}
 }
 
-func TestResolveContext_ProfileOverrideSelectsEnvironment(t *testing.T) {
+func TestResolveContext_ProfileOverrideSelectsThatProfile(t *testing.T) {
 	store := &stubStore{keys: map[string]string{"acme-dev": "sk_dev"}}
 	rc, err := ResolveContext(baseConfig(), store, Overrides{Profile: "acme-dev"})
 	if err != nil {
 		t.Fatalf("ResolveContext: %v", err)
 	}
-	if rc.Profile.Environment != "development" || rc.Profile.Live {
-		t.Errorf("profile = %+v, want development and not live", rc.Profile)
+	if rc.ProfileName != "acme-dev" || rc.Profile.Label != "dev" {
+		t.Errorf("profile = %q %+v, want acme-dev", rc.ProfileName, rc.Profile)
 	}
 }
 
@@ -2959,11 +3002,29 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-const maxSkeletonDepth = 8
+// maxSkeletonDepth is 16: the deepest natural nesting in this spec is 14, and a
+// cap of 12 was measured to truncate real nodes.
+const maxSkeletonDepth = 16
 
-// Skeleton renders an editable JSON document for an operation's request body:
-// required fields populated by type, a comment header listing the optional ones.
-// Cycles are broken by tracking schemas already on the current path.
+// Skeleton renders an editable JSON document for an operation's request body.
+//
+// Fill policy, derived from measurements against the live API:
+//
+//   - Only REQUIRED fields are emitted as live JSON. Optional fields are listed
+//     as commented-out lines the user uncomments. This is not a stylistic
+//     choice: sending an untouched optional numeric field as "" fails the
+//     server's request binding outright, producing "Invalid request format"
+//     with no details — a dead end for the user. String-typed optionals bind
+//     fine, but the rule is applied uniformly so the skeleton is never a trap.
+//   - A required-only skeleton for CreateSubscriptionRequest is just three
+//     fields, because every nested structure --edit exists for (phases,
+//     line_items, credit_grants) is optional in the spec. The commented block
+//     is therefore what carries the feature's value, and it must list nested
+//     fields with their types rather than omitting them.
+//
+// Cycles are broken by tracking schemas already on the current path. Note that
+// termination is guaranteed by the depth cap; the cycle guard bounds breadth
+// (removing it grows the SubscriptionResponse walk from 1,693 to 17,789 nodes).
 func Skeleton(cmd Command) (string, error) {
 	op := cmd.Operation.Op
 	if op.RequestBody == nil || op.RequestBody.Value == nil {
@@ -3471,32 +3532,12 @@ func envServer(t *testing.T, envType string) *httptest.Server {
 	}))
 }
 
-func TestVerifyKey_DerivesLiveFromEnvironmentType(t *testing.T) {
-	srv := envServer(t, "production")
-	defer srv.Close()
-
-	id, err := VerifyKey(t.Context(), srv.URL, "sk_good", "test")
-	if err != nil {
-		t.Fatalf("VerifyKey: %v", err)
-	}
-	if !id.Live {
-		t.Error("Live = false for a production environment")
-	}
-	if id.Environment != "Production" {
-		t.Errorf("Environment = %q", id.Environment)
-	}
-}
-
-func TestVerifyKey_DevelopmentIsNotLive(t *testing.T) {
+func TestVerifyKey_AcceptsAWorkingKey(t *testing.T) {
 	srv := envServer(t, "development")
 	defer srv.Close()
 
-	id, err := VerifyKey(t.Context(), srv.URL, "sk_good", "test")
-	if err != nil {
+	if err := VerifyKey(t.Context(), srv.URL, "sk_good", "test"); err != nil {
 		t.Fatalf("VerifyKey: %v", err)
-	}
-	if id.Live {
-		t.Error("Live = true for a development environment")
 	}
 }
 
@@ -3506,7 +3547,7 @@ func TestVerifyKey_RejectionMentionsRegion(t *testing.T) {
 	srv := envServer(t, "production")
 	defer srv.Close()
 
-	_, err := VerifyKey(t.Context(), srv.URL, "sk_wrong", "test")
+	err := VerifyKey(t.Context(), srv.URL, "sk_wrong", "test")
 	if err == nil {
 		t.Fatal("want an error for a rejected key")
 	}
@@ -3560,16 +3601,9 @@ import (
 	"github.com/flexprice/cli/internal/spec"
 )
 
-// Identity is what a key resolves to once verified.
-//
-// There is deliberately no Tenant field: dto.EnvironmentResponse carries no
-// tenant, and the only tenant lookup (GET /tenants/{id}) needs an id an
-// environment-scoped key cannot supply. Profiles are therefore named after the
-// environment alone.
-type Identity struct {
-	Environment string
-	Live        bool
-}
+// VerifyKey confirms a key works against a region. It deliberately returns no
+// identity: nothing reachable by an environment-scoped key reveals which
+// environment it belongs to, so there is nothing trustworthy to report.
 
 // environmentsResponse matches dto.ListEnvironmentsResponse.
 //
@@ -3585,36 +3619,22 @@ type environmentsResponse struct {
 	} `json:"environments"`
 }
 
-// VerifyKey confirms a key works and resolves what it is scoped to. Live is
-// derived from EnvironmentType (development | production), never asked.
-func VerifyKey(ctx context.Context, baseURL, apiKey, version string) (Identity, error) {
+func VerifyKey(ctx context.Context, baseURL, apiKey, version string) error {
 	c := client.New(client.Options{BaseURL: baseURL, APIKey: apiKey, Version: version})
 
-	raw, err := c.Do(ctx, http.MethodGet, "/environments", nil, nil)
-	if err != nil {
+	if _, err := c.Do(ctx, http.MethodGet, "/environments", nil, nil); err != nil {
 		var apiErr *client.APIError
 		if ok := asAPIError(err, &apiErr); ok && apiErr.Status == http.StatusUnauthorized {
-			return Identity{}, fmt.Errorf(
+			// A wrong-region key and an invalid key both return 401 with an
+			// identical body, so the message has to name the possibility.
+			return fmt.Errorf(
 				"this key was rejected by %s.\n"+
 					"  Keys are region-specific. If your account is in another region, re-run with --region\n"+
 					"  (for example: flexprice login --region in)", baseURL)
 		}
-		return Identity{}, err
+		return err
 	}
-
-	var envs environmentsResponse
-	if err := json.Unmarshal(raw, &envs); err != nil {
-		return Identity{}, fmt.Errorf("parse environments response: %w", err)
-	}
-	if len(envs.Environments) == 0 {
-		return Identity{}, fmt.Errorf("the key is valid but no environments were returned")
-	}
-
-	env := envs.Environments[0]
-	return Identity{
-		Environment: env.Name,
-		Live:        strings.EqualFold(env.Type, "production"),
-	}, nil
+	return nil
 }
 
 func asAPIError(err error, target **client.APIError) bool {
@@ -3649,7 +3669,7 @@ func readSecret(prompt string) (string, error) {
 }
 
 func newLoginCommand(version string) *cobra.Command {
-	var profileName string
+	var profileName, label string
 
 	cmd := &cobra.Command{
 		Use:   "login",
@@ -3696,14 +3716,11 @@ func newLoginCommand(version string) *cobra.Command {
 				return fmt.Errorf("no API key provided")
 			}
 
-			id, err := VerifyKey(ctx, baseURL, apiKey, version)
-			if err != nil {
+			if err := VerifyKey(ctx, baseURL, apiKey, version); err != nil {
 				return err
 			}
 
-			if profileName == "" {
-				profileName = config.ProfileName(id.Environment)
-			}
+			profileName = config.ProfileName(profileName)
 
 			store, warn, err := keyring.Open()
 			if err != nil {
@@ -3735,11 +3752,10 @@ func newLoginCommand(version string) *cobra.Command {
 			}
 
 			cfg.Profiles[profileName] = config.Profile{
-				Region:      globals.Region,
-				BaseURL:     baseURL,
-				Environment: id.Environment,
-				Live:        id.Live,
-				KeyRef:      "keyring:" + profileName,
+				Region:  globals.Region,
+				BaseURL: baseURL,
+				Label:   label,
+				KeyRef:  "keyring:" + profileName,
 			}
 			if cfg.DefaultProfile == "" {
 				cfg.DefaultProfile = profileName
@@ -3748,17 +3764,16 @@ func newLoginCommand(version string) *cobra.Command {
 				return err
 			}
 
-			mode := "test"
-			if id.Live {
-				mode = "live"
-			}
-			fmt.Fprintf(os.Stderr, "Verified — environment %s (%s), stored as profile %q in %s\n",
-				id.Environment, mode, profileName, store.Name())
+			fmt.Fprintf(os.Stderr, "Verified — stored as profile %q in %s\n", profileName, store.Name())
+			fmt.Fprintln(os.Stderr,
+				"Note: the API does not report which environment a key belongs to, so label your\n"+
+					"profiles yourself (--profile-name, --label) and check with: flexprice whoami")
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&profileName, "profile-name", "", "name for the stored profile (default: <tenant>-<environment>)")
+	cmd.Flags().StringVar(&profileName, "profile-name", "", "name for the stored profile (default: \"default\")")
+	cmd.Flags().StringVar(&label, "label", "", "free-text note shown by whoami, e.g. \"sandbox\"")
 	return cmd
 }
 ```
@@ -3854,12 +3869,8 @@ func newWhoamiCommand() *cobra.Command {
 			}
 			key, keyErr := store.Get(name)
 
-			mode := "test"
-			if profile.Live {
-				mode = "live"
-			}
 			fmt.Fprintf(os.Stdout, "Profile:      %s\n", name)
-					fmt.Fprintf(os.Stdout, "Environment:  %s (%s)\n", profile.Environment, mode)
+			fmt.Fprintf(os.Stdout, "Label:        %s\n", profile.Label)
 			fmt.Fprintf(os.Stdout, "Region:       %s\n", profile.Region)
 			fmt.Fprintf(os.Stdout, "Base URL:     %s\n", profile.BaseURL)
 			fmt.Fprintf(os.Stdout, "Key backend:  %s\n", store.Name())
@@ -3922,22 +3933,20 @@ func newEnvCommand(version string) *cobra.Command {
 				return fmt.Errorf("parse environments: %w", err)
 			}
 
-			byEnv := map[string]string{}
-			for name, p := range cfg.Profiles {
-				byEnv[p.Environment] = name
-			}
-
+			// Profiles cannot be correlated to environments: the API does not
+			// report which environment the active key belongs to, so this is a
+			// plain listing of what exists in the tenant.
 			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "ENVIRONMENT\tTYPE\tPROFILE")
+			fmt.Fprintln(tw, "ENVIRONMENT\tTYPE\tID")
 			for _, e := range envs.Environments {
-				profile, ok := byEnv[e.Name]
-				if !ok {
-					profile = fmt.Sprintf("—  run: flexprice login --profile-name %s",
-						config.ProfileName(e.Name))
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", e.Name, e.Type, profile)
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", e.Name, e.Type, e.ID)
 			}
-			return tw.Flush()
+			if err := tw.Flush(); err != nil {
+				return err
+			}
+			fmt.Fprintln(os.Stderr,
+				"\nYour key is scoped to one of these, but the API does not say which.")
+			return nil
 		},
 	})
 
@@ -3981,17 +3990,13 @@ func newConfigCommand() *cobra.Command {
 			}
 
 			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "PROFILE\tENVIRONMENT\tMODE\tREGION\tDEFAULT")
+			fmt.Fprintln(tw, "PROFILE\tLABEL\tREGION\tDEFAULT")
 			for name, p := range cfg.Profiles {
-				mode := "test"
-				if p.Live {
-					mode = "live"
-				}
 				marker := ""
 				if name == cfg.DefaultProfile {
 					marker = "*"
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", name, p.Environment, mode, p.Region, marker)
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", name, p.Label, p.Region, marker)
 			}
 			return tw.Flush()
 		},
@@ -4270,6 +4275,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/flexprice/cli/internal/client"
 	"github.com/flexprice/cli/internal/output"
@@ -4307,6 +4313,7 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *
 	var (
 		dataArg string
 		edit    bool
+		force   bool
 	)
 
 	fields := spec.BodyFields(cmd)
@@ -4343,6 +4350,10 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *
 				in.Data = doc
 			}
 
+			if err := confirm(cmd, in.PositionalID, force); err != nil {
+				return err
+			}
+
 			req, err := spec.BuildRequest(cmd, in)
 			if err != nil {
 				return err
@@ -4376,7 +4387,40 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *
 
 	c.Flags().StringVar(&dataArg, "data", "", "request body: @file.json, - for stdin, or a JSON literal")
 	c.Flags().BoolVar(&edit, "edit", false, "open $EDITOR with a pre-filled request body")
+	c.Flags().BoolVar(&force, "force", false, "skip the confirmation prompt on destructive actions")
 	return c
+}
+
+// destructive lists the actions that cannot be undone. Because the CLI cannot
+// tell a production environment from a development one, every destructive action
+// is confirmed regardless of where it is pointed — there is no environment signal
+// to be selective with.
+var destructive = map[string]bool{
+	"delete": true, "void": true, "terminate": true, "cancel": true, "archive": true,
+}
+
+// confirm prompts before a destructive action. It returns nil when stdin is not a
+// terminal, so scripts and CI are never blocked; --force skips it entirely.
+func confirm(cmd spec.Command, target string, force bool) error {
+	if force || !destructive[cmd.Action] {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return nil
+	}
+
+	subject := target
+	if subject == "" {
+		subject = cmd.Resource
+	}
+	fmt.Fprintf(os.Stderr, "This will %s %s and cannot be undone.\nContinue? [y/N]: ", cmd.Action, subject)
+
+	var answer string
+	_, _ = fmt.Fscanln(os.Stdin, &answer)
+	if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+		return fmt.Errorf("cancelled")
+	}
+	return nil
 }
 
 func pickColumns(reg *spec.Registry, resource string) []string {
@@ -5154,8 +5198,13 @@ type Page struct {
 }
 
 // HasMore reports whether another page exists.
-func (p Page) HasMore() bool {
-	return p.Total > 0 && p.Offset+p.Count < p.Total
+//
+// It deliberately ignores the response's echoed offset: the API was observed
+// returning offset == limit for a request that sent no offset at all, so the
+// echo cannot be treated as "records already consumed". The caller tracks how
+// many it has actually seen and passes that in as seen.
+func (p Page) HasMore(seen int) bool {
+	return p.Total > 0 && seen < p.Total
 }
 
 // PageInfo reads the pagination envelope. Two shapes exist: types.ListResponse
@@ -5276,7 +5325,7 @@ In `cli/internal/cmd/resource.go`, replace the single `cl.Do(...)` call and the 
 				shown += page.Count
 				merged = raw
 
-				if !globals.All || !page.HasMore() || page.Count == 0 {
+				if !globals.All || !page.HasMore(shown) || page.Count == 0 {
 					break
 				}
 				offset += page.Count

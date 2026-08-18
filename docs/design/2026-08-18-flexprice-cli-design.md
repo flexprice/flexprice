@@ -172,23 +172,35 @@ Credential precedence: `--api-key` flag → `FLEXPRICE_API_KEY` → OS keychain 
 `~/.flexprice/config.toml` (mode 0600, directory 0700) holds no secrets:
 
 ```toml
-default_profile = "production"
+default_profile = "sandbox"
 
-[profiles.production]
-  region      = "us"
-  base_url    = "https://us.api.flexprice.io/v1"
-  environment = "production"
-  live        = true
-  key_ref     = "keychain:flexprice/production"
+[profiles.sandbox]
+  region   = "in"
+  base_url = "https://api.cloud.flexprice.io/v1"
+  label    = "Sandbox"                       # free text, set by the user
+  key_ref  = "keychain:flexprice/sandbox"
 ```
 
-Profiles are auto-named after the environment at login and are confirmable, so `whoami` and every
-production confirmation name the environment rather than an opaque `default`.
+**Profiles are named by the user** (`--profile-name`, `--label`, defaulting to `default`), and carry
+no environment name and no live/test flag.
 
-The tenant is deliberately absent. `dto.EnvironmentResponse` carries no tenant field, and the only
-tenant lookup (`GET /tenants/{id}`) needs an id an environment-scoped key cannot supply — so a
-`<tenant>-<environment>` name is underivable. Users working across several tenants pass
-`--profile-name` explicitly.
+This is forced by the API, and was verified against it rather than assumed. **Nothing reachable by an
+environment-scoped key reveals which environment that key belongs to:**
+
+| Probe | Result |
+|---|---|
+| `GET /environments` | returns **every** environment in the tenant (~50), not the key's |
+| `GET /environments/{id}` | **200 for all of them** — no discrimination |
+| `GET /secrets/api/keys` | *is* environment-scoped (returns only the active key) but omits `environment_id` |
+| Response headers | carry no environment or tenant identifier |
+
+An earlier draft derived the profile name and a `live` flag from `EnvironmentType` by reading the
+first entry of `GET /environments`. That entry is arbitrary. A silently wrong `live` flag is worse
+than no flag at all — it would make the production guard confidently incorrect — so both the
+derivation and the guard are removed. §10 uses a plain confirmation prompt instead.
+
+Exposing `environment_id` on `/secrets/api/keys`, or adding a `/v1/me`, would make all of this
+derivable; recorded in §20.
 
 ### Regions
 
@@ -338,9 +350,10 @@ The engine uses the same resolver and `internal/client` as every other command, 
 a typed command are one code path and cannot drift. `trigger` runs embedded built-ins (`go:embed`);
 `fixtures run` runs user files. `events simulate` is a thin wrapper generating a one-step scenario.
 
-`trigger` and `fixtures run` refuse a profile marked `live` without `--i-know-this-is-production`.
-Destructive operations (`delete`, `void`, `terminate`) prompt on live profiles unless `--force` or
-non-TTY. Created IDs print on completion; automatic teardown is deliberately excluded — a CLI that
+Destructive operations (`delete`, `void`, `terminate`, `cancel`, `archive`) prompt for confirmation
+**regardless of environment**, unless `--force` or a non-TTY stdin. There is no environment-selective
+guard, because §6 establishes there is no environment signal to be selective with. `trigger` and
+`fixtures run` carry the same prompt. Created IDs print on completion; automatic teardown is deliberately excluded — a CLI that
 deletes by inference eventually deletes the wrong thing.
 
 ## 11. `listen` (v1.1)
@@ -384,6 +397,17 @@ before v1.1.
 | 5 | Rate limited |
 
 Every error renders **what failed, why, and what to do next**, mapped from the API error envelope.
+Three envelope shapes exist, all verified against the live API, and the parser handles each:
+
+```
+{"code":"not_found","message":"Customer with ID x was not found",
+ "http_status_code":404,"details":{"customer_id":"x"}}   # the standard shape
+{"error":"Unauthorized"}                                  # auth middleware: a bare string
+<non-JSON>                                                # gateways and proxies
+```
+
+`details` is field-keyed and is the most actionable part of a validation failure, so it is rendered
+rather than discarded.
 A 404 on a *mapped* operation renders as a version-skew hint naming the embedded spec build and
 suggesting an upgrade, not a bare 404.
 
@@ -503,6 +527,9 @@ presets · MCP changes · fixture auto-teardown · JWT/Bearer authentication.
 - **Keychain library** — `zalando/go-keyring` versus `99designs/keyring`, decided at spike time.
 - **Annotate `GET /v1/environments`** with swaggo so it enters the spec (§6). Small backend change,
   not a v1.0 blocker.
+- **Expose the active key's environment** — `environment_id` on `/secrets/api/keys`, or a `/v1/me`
+  endpoint. Until this exists the CLI cannot label profiles by environment or offer a
+  production-aware guard (§6, §10). This is the single highest-value backend change for CLI UX.
 - **`flexprice/cli` is private and unlicensed** — make it public and set `cli/LICENSE` before release.
 - Courtesy note to the author of the Rust `flexprice-cli` on the direction change, and archive that
   repository. Lower stakes than superseding it in place, but worth doing before `flexprice/cli` ships.
