@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 
 	"github.com/flexprice/cli/internal/config"
 	"github.com/flexprice/cli/internal/keyring"
@@ -120,6 +121,16 @@ func statusLine(rc config.RuntimeContext, version string) string {
 		parts = append(parts, rc.Profile.Label)
 	}
 	return strings.Join(parts, " · ") + " · v" + version
+}
+
+// RestoreTerminal re-enables the cursor. main calls it on every exit path
+// because a spinner may have hidden it, and an invisible cursor outlives the
+// process — the user is left fixing it by restarting their terminal. Writing
+// the sequence when no spinner ran is harmless.
+func RestoreTerminal() {
+	if term.IsTerminal(int(os.Stderr.Fd())) {
+		fmt.Fprint(os.Stderr, "\x1b[?25h")
+	}
 }
 
 // hasExistingConfig reports whether a config file already exists, without

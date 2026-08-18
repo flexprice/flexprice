@@ -9,4 +9,8 @@ const (
 	Auth        = 3
 	NotFound    = 4
 	RateLimited = 5
+
+	// Interrupted follows the shell convention of 128 + SIGINT(2). It is
+	// additive: no existing value changes.
+	Interrupted = 130
 )
