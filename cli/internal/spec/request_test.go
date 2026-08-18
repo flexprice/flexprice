@@ -120,3 +120,33 @@ func TestBodyFields_ListsSchemaProperties(t *testing.T) {
 		t.Errorf("external_id missing from %d body fields", len(fields))
 	}
 }
+
+// BuildRequest must not mutate the caller's Input.Flags: the --all pagination
+// loop calls it more than once against the same Input to rebuild the request
+// per page, and a GET-based list with query filters (e.g. payments list
+// --status succeeded) would silently lose the filter after the first page if
+// the consumed flag were deleted from the caller's map instead of a copy.
+func TestBuildRequest_DoesNotMutateCallerFlags(t *testing.T) {
+	reg := testRegistry(t)
+	cmd, ok := reg.Lookup("payments", "list")
+	if !ok {
+		t.Skip("payments list not registered")
+	}
+
+	in := Input{Flags: map[string]string{"status": "succeeded"}}
+
+	if _, err := BuildRequest(cmd, in); err != nil {
+		t.Fatalf("first BuildRequest: %v", err)
+	}
+	if _, ok := in.Flags["status"]; !ok {
+		t.Fatal("caller's Flags map lost \"status\" after the first BuildRequest call")
+	}
+
+	req2, err := BuildRequest(cmd, in)
+	if err != nil {
+		t.Fatalf("second BuildRequest: %v", err)
+	}
+	if got := req2.Query.Get("status"); got != "succeeded" {
+		t.Errorf("second BuildRequest's query status = %q, want \"succeeded\" — the filter was lost on rebuild", got)
+	}
+}

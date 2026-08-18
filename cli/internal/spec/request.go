@@ -36,6 +36,16 @@ type Field struct {
 func BuildRequest(cmd Command, in Input) (Request, error) {
 	req := Request{Method: cmd.Operation.Method, Path: cmd.Operation.Path, Query: url.Values{}}
 
+	// Flags is a map, so passing Input by value does not stop this function's
+	// deletes below from mutating the caller's original map. Callers such as the
+	// --all pagination loop call BuildRequest more than once against the same
+	// Input, so those deletes must apply to a private copy, never the caller's.
+	flags := make(map[string]string, len(in.Flags))
+	for k, v := range in.Flags {
+		flags[k] = v
+	}
+	in.Flags = flags
+
 	pathParams, queryParams := splitParameters(cmd.Operation.Op)
 
 	// Path parameters. A single path parameter is filled from the positional ID so

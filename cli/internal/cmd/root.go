@@ -127,5 +127,5 @@ func bindGlobals(f *pflag.FlagSet, g *Globals) {
 	f.BoolVar(&g.NoColor, "no-color", false, "disable coloured output")
 	f.StringSliceVar(&g.Columns, "columns", nil, "columns to show in table output")
 	f.IntVar(&g.Limit, "limit", 20, "maximum records to return")
-	f.BoolVar(&g.All, "all", false, "fetch every page")
+	f.BoolVar(&g.All, "all", false, "page through every record (prints the last page; use --output json with --limit for bulk export)")
 }
