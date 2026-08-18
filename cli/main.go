@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/flexprice/cli/internal/client"
 	"github.com/flexprice/cli/internal/cmd"
 	"github.com/flexprice/cli/internal/exitcode"
 	"github.com/flexprice/cli/internal/ui"
@@ -43,9 +42,11 @@ func main() {
 
 	out.Failure(err)
 
-	var apiErr *client.APIError
-	if errors.As(err, &apiErr) {
-		os.Exit(apiErr.ExitCode())
+	// Any error carrying an exit code decides its own: *client.APIError for
+	// HTTP failures, *exitcode.Error for anything raised before a request.
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		os.Exit(coded.ExitCode())
 	}
 	os.Exit(exitcode.Generic)
 }

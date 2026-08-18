@@ -14,3 +14,18 @@ const (
 	// additive: no existing value changes.
 	Interrupted = 130
 )
+
+// Error carries an explicit exit code out of a package that cannot depend on
+// internal/client. Without it, errors raised before any HTTP call — a missing
+// profile, an unparseable --output — all exited 1, so a script could not tell
+// "needs login" from any other failure.
+type Error struct {
+	Code int
+	Err  error
+}
+
+func (e *Error) Error() string { return e.Err.Error() }
+func (e *Error) Unwrap() error { return e.Err }
+func (e *Error) ExitCode() int { return e.Code }
+
+func Wrap(code int, err error) *Error { return &Error{Code: code, Err: err} }

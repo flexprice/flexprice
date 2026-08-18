@@ -774,3 +774,25 @@ sync-cli-spec:
 .PHONY: cli-docs
 cli-docs:
 	cd cli && go run ./tools/gendocs
+
+# Smoke suite: the CLI's own contract (streams, exit codes, help, safety).
+# Needs no server, so it is safe to run anywhere and in CI.
+#   make cli-smoke
+#   FLEXPRICE_API_KEY=sk_... make cli-smoke        # also exercises live reads
+.PHONY: cli-smoke
+cli-smoke:
+	@cli/scripts/smoke.sh
+
+# End-to-end lifecycle against the INDIA region: builds feature → plan → price
+# → entitlement → coupon → customer → subscription → wallet → events →
+# invoice, verifies each, then tears it all down.
+#   make cli-e2e                       # prompts for the API key
+#   FLEXPRICE_API_KEY=sk_... make cli-e2e
+#   make cli-e2e-dry                   # print every command, call nothing
+.PHONY: cli-e2e
+cli-e2e:
+	@cli/scripts/e2e.sh
+
+.PHONY: cli-e2e-dry
+cli-e2e-dry:
+	@cli/scripts/e2e.sh --dry-run

@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flexprice/cli/internal/client"
+	"github.com/flexprice/cli/internal/exitcode"
 	"github.com/flexprice/cli/internal/output"
 	"github.com/flexprice/cli/internal/spec"
 )
@@ -71,6 +72,14 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 		// flags are collected and validated against the spec instead.
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		RunE: func(cc *cobra.Command, args []string) error {
+			// Validated before anything else: a bad --output is a usage error,
+			// and discovering it only after a network round-trip wastes the
+			// request and reports the wrong exit code.
+			format, err := output.ParseFormat(g.Output)
+			if err != nil {
+				return exitcode.Wrap(exitcode.Usage, err)
+			}
+
 			in := spec.Input{Flags: map[string]string{}}
 			if len(args) == 1 {
 				in.PositionalID = args[0]
@@ -156,10 +165,6 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 			}
 			sp.Stop()
 
-			format, err := output.ParseFormat(g.Output)
-			if err != nil {
-				return err
-			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
 			res, err := w.RenderResult(merged, output.Options{
 				Columns: pickColumns(reg, g, cmd.Resource),

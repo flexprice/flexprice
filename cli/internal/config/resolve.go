@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/flexprice/cli/internal/exitcode"
 )
 
 var errNotFound = errors.New("credential not found")
@@ -68,18 +70,19 @@ func ResolveContext(cfg *Config, store Store, o Overrides) (RuntimeContext, erro
 	case rc.ProfileName != "":
 		key, err := store.Get(rc.ProfileName)
 		if err != nil {
-			return rc, fmt.Errorf("no stored key for profile %q — run: flexprice login --profile %s", rc.ProfileName, rc.ProfileName)
+			return rc, exitcode.Wrap(exitcode.Auth,
+				fmt.Errorf("no stored key for profile %q — run: flexprice login --profile %s", rc.ProfileName, rc.ProfileName))
 		}
 		rc.APIKey = key
 	}
 
 	if rc.APIKey == "" {
-		return rc, fmt.Errorf("not authenticated — run: flexprice init")
+		return rc, exitcode.Wrap(exitcode.Auth, fmt.Errorf("not authenticated — run: flexprice init"))
 	}
 	if rc.BaseURL == "" {
-		return rc, fmt.Errorf(
-			"a key alone does not identify a region — pass --region (us, in) or --base-url,\n" +
-				"or run `flexprice login` to store a profile")
+		return rc, exitcode.Wrap(exitcode.Usage, fmt.Errorf(
+			"a key alone does not identify a region — pass --region (us, in) or --base-url,\n"+
+				"or run `flexprice login` to store a profile"))
 	}
 	return rc, nil
 }
