@@ -36,7 +36,7 @@ Every box in that diagram is one package with one job:
   tree, and turns one resolved command plus user input into an HTTP request.
   Nothing in this package makes a network call.
 - **`internal/client`** (`client.go`, `errors.go`) is the only package that
-  makes a network call. See [ADR 0001](decisions/0001-no-sdk-single-http-path.md).
+  makes a network call.
 - **`internal/output`** (`output.go`, `table.go`, `pad.go`) turns a raw JSON
   response into what the terminal or a script sees. It renders **response data
   only**: it knows nothing about progress, prompts or commentary, which is what
@@ -47,7 +47,6 @@ Every box in that diagram is one package with one job:
   prompts, confirmations, empty states and the status footer, all on stderr. It
   decides **once** whether a human is watching — `--quiet`, stderr TTY,
   `TERM=dumb`, `--no-input` — so no call site has to.
-  See [ADR 0006](decisions/0006-ui-owns-human-facing-output.md).
 - **`internal/style`** decides only what colour something is. It exposes a
   `Palette` value so each caller can gate colour on **its own stream**: table
   content on stdout, everything from `internal/ui` on stderr. Gating stderr on
@@ -55,7 +54,7 @@ Every box in that diagram is one package with one job:
   footer still going to a live terminal.
 - **`internal/config`** and **`internal/keyring`** resolve *who* is making the
   request — profile, region, API key — before `internal/client` is ever
-  called. See [ADR 0003](decisions/0003-environment-scoped-profiles-no-live-flag.md).
+  called.
 - **`internal/cmd`** is the only package that imports `cobra`. It wires the
   above together into the command tree cobra dispatches.
 
