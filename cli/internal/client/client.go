@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,6 +39,9 @@ var idempotentMethods = map[string]bool{
 // retryablehttp retries by status alone; this refuses non-idempotent methods
 // since a retried POST can double-create billing objects.
 func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	if errors.Is(err, errCrossOriginRedirect) {
+		return false, err // deterministic refusal; retrying can't change it
+	}
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true, nil
 	}
@@ -45,6 +49,25 @@ func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, err
 		return false, err
 	}
 	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+}
+
+// errCrossOriginRedirect lets retryPolicy detect the refusal below without
+// string-matching retryablehttp's private "too many redirects" regex.
+var errCrossOriginRedirect = errors.New("refused cross-origin redirect")
+
+// Go strips Authorization/Cookie on a cross-host redirect but forwards custom
+// headers (x-api-key) unconditionally, so a compromised origin could 302 the
+// key to any host. Only same scheme+host redirects are followed.
+func sameOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	orig := via[0].URL
+	if req.URL.Scheme != orig.Scheme || req.URL.Host != orig.Host {
+		return fmt.Errorf("%w: %s -> %s would leak the API key",
+			errCrossOriginRedirect, orig.Host, req.URL.Host)
+	}
+	return nil
 }
 
 type Options struct {
@@ -105,6 +128,7 @@ func New(o Options) *Client {
 	rc.Logger = nil // retryablehttp logs to stderr by default; the CLI owns its output
 	rc.CheckRetry = retryPolicy
 	rc.HTTPClient.Timeout = timeout
+	rc.HTTPClient.CheckRedirect = sameOriginRedirect
 	c.http = rc
 
 	return c

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestClient_SendsAPIKeyHeader(t *testing.T) {
@@ -274,6 +275,87 @@ func TestNew_MalformedBaseURLFailsWithAClearMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "base URL") {
 		t.Errorf("err = %q, want it to name the base URL as the cause", err)
+	}
+}
+
+// A compromised or misconfigured origin could 302 to an attacker host and
+// walk off with the API key, since Go forwards custom headers on redirect.
+func TestClient_RefusesCrossOriginRedirect(t *testing.T) {
+	var evilGotKey string
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		evilGotKey = r.Header.Get("x-api-key")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer evil.Close()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, evil.URL+"/steal", http.StatusFound)
+	}))
+	defer origin.Close()
+
+	c := New(Options{BaseURL: origin.URL, APIKey: "sk_live_secret"})
+	_, err := c.Do(context.Background(), http.MethodGet, "/customers", nil, nil)
+	if err == nil {
+		t.Fatal("Do: want an error refusing the cross-origin redirect, got nil")
+	}
+	if evilGotKey != "" {
+		t.Errorf("cross-origin server received x-api-key = %q, want the key never sent", evilGotKey)
+	}
+}
+
+// The refusal is deterministic, so retrying it 3x with backoff is pure delay.
+func TestClient_DoesNotRetryCrossOriginRedirectRefusal(t *testing.T) {
+	var hits int32
+	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer evil.Close()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		http.Redirect(w, r, evil.URL+"/steal", http.StatusFound)
+	}))
+	defer origin.Close()
+
+	c := New(Options{BaseURL: origin.URL, APIKey: "sk_live_secret"})
+	start := time.Now()
+	_, err := c.Do(context.Background(), http.MethodGet, "/customers", nil, nil)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Do: want an error, got nil")
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Errorf("origin hit %d times, want exactly 1 (no retry of a deterministic refusal)", got)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Do took %s; retries appear to have run despite the deterministic refusal", elapsed)
+	}
+}
+
+// A same-origin redirect (e.g. trailing-slash normalization) is not a leak
+// and must still be followed.
+func TestClient_FollowsSameOriginRedirect(t *testing.T) {
+	var finalGotKey string
+	var mux http.ServeMux
+	srv := httptest.NewServer(&mux)
+	defer srv.Close()
+
+	mux.HandleFunc("/v1/customers", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, srv.URL+"/v1/customers/", http.StatusFound)
+	})
+	mux.HandleFunc("/v1/customers/", func(w http.ResponseWriter, r *http.Request) {
+		finalGotKey = r.Header.Get("x-api-key")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+
+	c := New(Options{BaseURL: srv.URL + "/v1", APIKey: "sk_live_secret"})
+	if _, err := c.Do(context.Background(), http.MethodGet, "/customers", nil, nil); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if finalGotKey != "sk_live_secret" {
+		t.Errorf("x-api-key after same-origin redirect = %q, want %q", finalGotKey, "sk_live_secret")
 	}
 }
 

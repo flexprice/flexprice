@@ -18,7 +18,7 @@ outside this package touches `net/http` for talking to Flexprice.
 ## Key files
 | File | Role |
 |---|---|
-| `client.go` | `Client`, `New`, `Do`, `retryPolicy`, `--debug` redaction |
+| `client.go` | `Client`, `New`, `Do`, `retryPolicy`, `sameOriginRedirect`, `--debug` redaction |
 | `errors.go` | `APIError`, `NewAPIError` — normalizes three response envelope shapes |
 
 ## Request path
@@ -52,6 +52,9 @@ Do(ctx, method, path, query, body)
 - `New`'s `BaseURL` handling returns an error via `c.baseErr` rather than
   panicking or silently defaulting — checked lazily on the first `Do` call so
   `New` itself has no error return.
+- `sameOriginRedirect` refuses any redirect that changes scheme or host.
+  Never relax this to "follow redirects" without re-checking that custom
+  headers (`x-api-key`) can't be forwarded to a third party.
 
 ## Common pitfalls
 
@@ -80,6 +83,13 @@ Do(ctx, method, path, query, body)
   longer take sibling fields down with it. If you add a new field to
   `envelope`, decode it the same way rather than adding it to the struct
   that gates the whole parse.
+
+- **A redirect could send the API key to any host, silently.** Go's
+  `net/http` strips `Authorization`/`Cookie` on a cross-host redirect but
+  forwards custom headers unconditionally, so a compromised or misconfigured
+  origin returning a bare 302 walked off with `x-api-key`. Fixed by
+  `sameOriginRedirect` as `CheckRedirect`. Its refusal is also excluded from
+  `retryPolicy` — it's deterministic, so retrying only adds delay.
 
 ## Related layers
 
