@@ -231,7 +231,6 @@ resources:
     cancel: cancelSubscriptionSchedule
 
   tasks:
-    create: createTask
     list: listTasks
     retrieve: getTask
     update-status: updateTaskStatus
