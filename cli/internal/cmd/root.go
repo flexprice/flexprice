@@ -101,6 +101,14 @@ func NewRootCommand(version string) *cobra.Command {
 		newVersionCommand(g, version),
 	)
 
+	// AddGroup must run before any command carrying a GroupID reaches
+	// Execute: cobra panics on an ID it does not know.
+	root.AddGroup(commandGroups...)
+	// help and completion are created during Execute, not here, and land in
+	// "Additional Commands" unless placed explicitly.
+	root.SetHelpCommandGroupID(groupAdvanced)
+	root.SetCompletionCommandGroupID(groupAdvanced)
+
 	if doc, err := spec.Load(); err == nil {
 		if reg, err := spec.NewRegistry(doc); err == nil {
 			addResourceCommands(root, reg, g, version)
@@ -114,6 +122,16 @@ func NewRootCommand(version string) *cobra.Command {
 		}
 	}
 	addRawCommands(root, g, version)
+
+	// Assign built-in groups LAST, after every AddCommand call. Doing it
+	// earlier silently misses anything added later — the raw get/post/delete
+	// commands landed under "Additional Commands" that way, and every test
+	// still passed; it was only visible by reading the rendered help.
+	for _, c := range root.Commands() {
+		if id, ok := builtinGroups[c.Name()]; ok {
+			c.GroupID = id
+		}
+	}
 
 	registerGlobals(root, g)
 	return root

@@ -22,9 +22,18 @@ import (
 // There is no generated code: the tree is derived from the embedded spec.
 func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, version string) {
 	for _, resource := range reg.Resources() {
+		entry, known := resourceGroups[resource]
+		short := entry.Short
+		if !known {
+			// Unmapped resources still appear, under cobra's built-in
+			// "Additional Commands" heading. GroupID stays empty deliberately:
+			// an unregistered ID would panic at Execute().
+			short = fmt.Sprintf("Operations on %s", resource)
+		}
 		parent := &cobra.Command{
-			Use:   resource,
-			Short: fmt.Sprintf("Operations on %s", resource),
+			Use:     resource,
+			Short:   short,
+			GroupID: entry.GroupID,
 		}
 		for _, action := range reg.Actions(resource) {
 			cmd, _ := reg.Lookup(resource, action)
@@ -34,8 +43,9 @@ func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, ve
 	}
 
 	root.AddCommand(&cobra.Command{
-		Use:   "resources",
-		Short: "List every resource this CLI can act on",
+		Use:     "resources",
+		Short:   "List every resource this CLI can act on",
+		GroupID: groupAdvanced,
 		RunE: func(c *cobra.Command, _ []string) error {
 			for _, r := range reg.Resources() {
 				fmt.Fprintf(os.Stdout, "%-28s %s\n", r, strings.Join(reg.Actions(r), ", "))
