@@ -714,6 +714,21 @@ kafkaConfig:
 # Set enabled=true to run database migrations as a Kubernetes Job
 migration:
   enabled: true  # Set to true to enable migration job
+
+  # Install the migration Job as a Helm pre-install/pre-upgrade HOOK (default),
+  # or as an ordinary chart resource.
+  #
+  # true  — ArgoCD and plain `helm install`. The Job runs before the app rolls
+  #         out and Helm owns its lifecycle.
+  #
+  # false — for delivery models where the Job is applied by something else, as
+  #         its own terraform unit ordered before the release. The hook's
+  #         delete-policy (hook-succeeded,hook-failed) removes the Job and its
+  #         logs the moment it fails, which is correct when a controller can
+  #         retry immediately and wrong when a human needs to read why it broke.
+  #         Set false ONLY when something else applies the Job; leaving both this
+  #         false and no external applier means migrations never run.
+  asHook: true
   timeout: 300  # Timeout in seconds for migration
   backoffLimit: 3  # Number of retries before marking job as failed
   activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)

@@ -1,3 +1,4 @@
+{{- if .Values.migration.enabled }}
 {{- /*
   Dedicated pre-install/pre-upgrade ServiceAccount for the migration Job.
 
@@ -32,8 +33,10 @@ metadata:
     {{- with .Values.serviceAccount.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+    {{- if .Values.migration.asHook }}
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-10"
+    {{- end }}
     {{- /*
       NO hook-delete-policy on purpose. This is what makes the migration run
       under ArgoCD at all.
@@ -63,3 +66,4 @@ metadata:
       credentials of its own, only Workload-Identity / IRSA annotations
       mirroring the app SA, and re-applying it is an ordinary in-place update.
     */}}
+{{- end }}

@@ -43,6 +43,7 @@ metadata:
   annotations:
     checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
     checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
+    {{- if .Values.migration.asHook }}
     "helm.sh/hook": pre-upgrade,pre-install
     "helm.sh/hook-weight": "-5"
     {{- /*
@@ -79,6 +80,7 @@ metadata:
       look while it is still running.
     */}}
     "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+    {{- end }}
 spec:
   backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
   {{- if .Values.migration.activeDeadlineSeconds }}
