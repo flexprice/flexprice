@@ -765,5 +765,6 @@ cli-vet:
 
 .PHONY: sync-cli-spec
 sync-cli-spec:
+	mkdir -p cli/spec
 	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
 	@echo "Synced OpenAPI spec into cli/spec/openapi.json"

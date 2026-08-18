@@ -313,7 +313,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Globals are bound on the root command and read by every subcommand.
+// Globals holds the values bound to the root command's persistent flags.
+//
+// An instance is created per root command and threaded into subcommands as a
+// parameter rather than kept in a package variable: pflag writes each flag's
+// default into the bound pointer at registration time, so a shared instance is
+// clobbered the moment a second root is constructed. Verified by
+// TestNewRootCommand_InstancesDoNotShareState.
 type Globals struct {
 	Profile  string
 	Output   string
@@ -328,9 +334,9 @@ type Globals struct {
 	Columns  []string
 }
 
-var globals Globals
-
 func NewRootCommand(version string) *cobra.Command {
+	g := &Globals{}
+
 	root := &cobra.Command{
 		Use:     "flexprice",
 		Short:   "Flexprice CLI — usage-based billing from your terminal",
@@ -341,15 +347,7 @@ func NewRootCommand(version string) *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	f := root.PersistentFlags()
-	f.StringVarP(&globals.Profile, "profile", "p", "", "profile to use for this command")
-	f.StringVar(&globals.Output, "output", "table", "output format: table, json, yaml")
-	f.StringVar(&globals.APIKey, "api-key", "", "API key (CI use; prefer flexprice login)")
-	f.StringVar(&globals.BaseURL, "base-url", "", "override the API base URL")
-	f.StringVar(&globals.Region, "region", "", "region key, e.g. us or in")
-	f.BoolVar(&globals.Quiet, "quiet", false, "suppress progress output")
-	f.BoolVar(&globals.Debug, "debug", false, "dump requests and responses, secrets redacted")
-	f.BoolVar(&globals.NoColor, "no-color", false, "disable coloured output")
+	bindGlobals(root.PersistentFlags(), g)
 
 	return root
 }
@@ -428,6 +426,7 @@ cli-vet:
 
 .PHONY: sync-cli-spec
 sync-cli-spec:
+	mkdir -p cli/spec
 	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
 	@echo "Synced OpenAPI spec into cli/spec/openapi.json"
 ```
@@ -701,6 +700,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -750,18 +750,51 @@ func TestClient_SendsIdentifiableUserAgent(t *testing.T) {
 func TestClient_ErrorStatusReturnsAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"error":{"message":"nope"}}`))
+		// The real envelope shape, verified against the live API.
+		_, _ = w.Write([]byte(`{"code":"not_found","message":"Customer with ID c was not found",` +
+			`"http_status_code":404,"details":{"customer_id":"c"}}`))
 	}))
 	defer srv.Close()
 
 	c := New(Options{BaseURL: srv.URL, APIKey: "k", Version: "t"})
 	_, err := c.Do(context.Background(), http.MethodGet, "/missing", nil, nil)
-	apiErr, ok := err.(*APIError)
-	if !ok {
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("err = %T, want *APIError", err)
 	}
 	if apiErr.Status != http.StatusNotFound {
 		t.Errorf("Status = %d, want 404", apiErr.Status)
+	}
+	if !strings.Contains(apiErr.Error(), "was not found") {
+		t.Errorf("Error() = %q, want the API message surfaced", apiErr.Error())
+	}
+}
+
+// A 5xx is retried; a 4xx is not, because retrying a client error just wastes time.
+func TestClient_RetriesServerErrorsNotClientErrors(t *testing.T) {
+	var serverHits, clientHits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/boom" {
+			serverHits++
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		clientHits++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":"validation_error","message":"bad"}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, APIKey: "k", Version: "t"})
+	_, _ = c.Do(context.Background(), http.MethodGet, "/boom", nil, nil)
+	_, _ = c.Do(context.Background(), http.MethodGet, "/bad", nil, nil)
+
+	if serverHits < 2 {
+		t.Errorf("server error hit %d times, want retries", serverHits)
+	}
+	if clientHits != 1 {
+		t.Errorf("client error hit %d times, want exactly 1 (no retry)", clientHits)
 	}
 }
 
@@ -3668,7 +3701,7 @@ func readSecret(prompt string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-func newLoginCommand(version string) *cobra.Command {
+func newLoginCommand(g *Globals, version string) *cobra.Command {
 	var profileName, label string
 
 	cmd := &cobra.Command{
@@ -3686,9 +3719,9 @@ func newLoginCommand(version string) *cobra.Command {
 			}
 			regions := spec.Regions(doc)
 
-			baseURL := globals.BaseURL
+			baseURL := g.BaseURL
 			if baseURL == "" {
-				region := globals.Region
+				region := g.Region
 				if region == "" {
 					region, err = promptRegion(regions)
 					if err != nil {
@@ -3705,7 +3738,7 @@ func newLoginCommand(version string) *cobra.Command {
 				}
 			}
 
-			apiKey := globals.APIKey
+			apiKey := g.APIKey
 			if apiKey == "" {
 				apiKey, err = readSecret("API key: ")
 				if err != nil {
@@ -3752,7 +3785,7 @@ func newLoginCommand(version string) *cobra.Command {
 			}
 
 			cfg.Profiles[profileName] = config.Profile{
-				Region:  globals.Region,
+				Region:  g.Region,
 				BaseURL: baseURL,
 				Label:   label,
 				KeyRef:  "keyring:" + profileName,
@@ -3802,7 +3835,7 @@ func promptRegion(regions []spec.Region) (string, error) {
 	return regions[idx-1].Key, nil
 }
 
-func newLogoutCommand() *cobra.Command {
+func newLogoutCommand(g *Globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove a stored profile and its key",
@@ -3815,7 +3848,7 @@ func newLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, _, err := cfg.Resolve(globals.Profile)
+			name, _, err := cfg.Resolve(g.Profile)
 			if err != nil {
 				return err
 			}
@@ -3845,7 +3878,7 @@ func newLogoutCommand() *cobra.Command {
 	}
 }
 
-func newWhoamiCommand() *cobra.Command {
+func newWhoamiCommand(g *Globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
 		Short: "Show the active profile, environment and key backend",
@@ -3858,7 +3891,7 @@ func newWhoamiCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, profile, err := cfg.Resolve(globals.Profile)
+			name, profile, err := cfg.Resolve(g.Profile)
 			if err != nil {
 				return err
 			}
@@ -3908,20 +3941,20 @@ import (
 // newEnvCommand lists the tenant's environments and which have a local profile.
 // Because keys are environment-scoped, switching environments means logging in
 // again — so the command prints the exact next step. Design doc §6.
-func newEnvCommand(version string) *cobra.Command {
+func newEnvCommand(g *Globals, version string) *cobra.Command {
 	env := &cobra.Command{Use: "env", Short: "Inspect environments"}
 
 	env.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List environments and which have a local profile",
 		RunE: func(c *cobra.Command, _ []string) error {
-			rc, cfg, err := runtimeContext()
+			rc, cfg, err := runtimeContext(g)
 			if err != nil {
 				return err
 			}
 			cl := client.New(client.Options{
 				BaseURL: rc.BaseURL, APIKey: rc.APIKey, Version: version,
-				Debug: globals.Debug, DebugOut: os.Stderr,
+				Debug: g.Debug, DebugOut: os.Stderr,
 			})
 			raw, err := cl.Do(c.Context(), http.MethodGet, "/environments", nil, nil)
 			if err != nil {
@@ -3969,7 +4002,7 @@ import (
 	"github.com/flexprice/cli/internal/config"
 )
 
-func newConfigCommand() *cobra.Command {
+func newConfigCommand(g *Globals) *cobra.Command {
 	cfgCmd := &cobra.Command{Use: "config", Short: "Manage profiles"}
 
 	cfgCmd.AddCommand(&cobra.Command{
@@ -4044,7 +4077,7 @@ import (
 )
 
 // newInitCommand is the guided first run: login, then tell the user what to do next.
-func newInitCommand(version string) *cobra.Command {
+func newInitCommand(g *Globals, version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Set up the CLI (guided)",
@@ -4053,7 +4086,7 @@ func newInitCommand(version string) *cobra.Command {
 			fmt.Fprintln(os.Stderr, "Your API key is scoped to one environment — you can add more later with `flexprice login`.")
 			fmt.Fprintln(os.Stderr)
 
-			login := newLoginCommand(version)
+			login := newLoginCommand(g, version)
 			login.SetContext(c.Context())
 			if err := login.RunE(login, nil); err != nil {
 				return err
@@ -4077,7 +4110,7 @@ Add to `cli/internal/cmd/root.go`:
 ```go
 // runtimeContext resolves credentials for the current invocation. Every command
 // that talks to the API starts here, so precedence is applied in exactly one place.
-func runtimeContext() (config.RuntimeContext, *config.Config, error) {
+func runtimeContext(g *Globals) (config.RuntimeContext, *config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return config.RuntimeContext{}, nil, err
@@ -4091,7 +4124,7 @@ func runtimeContext() (config.RuntimeContext, *config.Config, error) {
 	if err != nil {
 		return config.RuntimeContext{}, nil, err
 	}
-	if warn != "" && !globals.Quiet {
+	if warn != "" && !g.Quiet {
 		fmt.Fprintln(os.Stderr, warn)
 	}
 
@@ -4105,10 +4138,10 @@ func runtimeContext() (config.RuntimeContext, *config.Config, error) {
 	}
 
 	rc, err := config.ResolveContext(cfg, store, config.Overrides{
-		Profile: globals.Profile,
-		APIKey:  globals.APIKey,
-		BaseURL: globals.BaseURL,
-		Region:  globals.Region,
+		Profile: g.Profile,
+		APIKey:  g.APIKey,
+		BaseURL: g.BaseURL,
+		Region:  g.Region,
 		Regions: regions,
 	})
 	return rc, cfg, err
@@ -4124,12 +4157,12 @@ And register everything in `NewRootCommand`, before the `return root`:
 	root.Run = nil
 
 	root.AddCommand(
-		newInitCommand(version),
-		newLoginCommand(version),
-		newLogoutCommand(),
-		newWhoamiCommand(),
-		newEnvCommand(version),
-		newConfigCommand(),
+		newInitCommand(g, version),
+		newLoginCommand(g, version),
+		newLogoutCommand(g),
+		newWhoamiCommand(g),
+		newEnvCommand(g, version),
+		newConfigCommand(g),
 	)
 ```
 
@@ -4289,7 +4322,7 @@ import (
 
 // addResourceCommands builds the command tree from the registry at startup.
 // There is no generated code: the tree is derived from the embedded spec.
-func addResourceCommands(root *cobra.Command, reg *spec.Registry, version string) {
+func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, version string) {
 	for _, resource := range reg.Resources() {
 		parent := &cobra.Command{
 			Use:   resource,
@@ -4297,7 +4330,7 @@ func addResourceCommands(root *cobra.Command, reg *spec.Registry, version string
 		}
 		for _, action := range reg.Actions(resource) {
 			cmd, _ := reg.Lookup(resource, action)
-			parent.AddCommand(newOperationCommand(cmd, reg, version))
+			parent.AddCommand(newOperationCommand(cmd, reg, g, version))
 		}
 		root.AddCommand(parent)
 	}
@@ -4314,7 +4347,7 @@ func addResourceCommands(root *cobra.Command, reg *spec.Registry, version string
 	})
 }
 
-func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *cobra.Command {
+func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, version string) *cobra.Command {
 	var (
 		dataArg string
 		edit    bool
@@ -4364,13 +4397,13 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *
 				return err
 			}
 
-			rc, _, err := runtimeContext()
+			rc, _, err := runtimeContext(g)
 			if err != nil {
 				return err
 			}
 			cl := client.New(client.Options{
 				BaseURL: rc.BaseURL, APIKey: rc.APIKey, Version: version,
-				Debug: globals.Debug, DebugOut: os.Stderr,
+				Debug: g.Debug, DebugOut: os.Stderr,
 			})
 
 			raw, err := cl.Do(cc.Context(), req.Method, req.Path, req.Query, req.Body)
@@ -4378,14 +4411,14 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, version string) *
 				return err
 			}
 
-			format, err := output.ParseFormat(globals.Output)
+			format, err := output.ParseFormat(g.Output)
 			if err != nil {
 				return err
 			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
 			return w.Render(raw, output.Options{
-				Columns: pickColumns(reg, cmd.Resource),
-				Quiet:   globals.Quiet,
+				Columns: pickColumns(reg, g, cmd.Resource),
+				Quiet:   g.Quiet,
 			})
 		},
 	}
@@ -4428,9 +4461,9 @@ func confirm(cmd spec.Command, target string, force bool) error {
 	return nil
 }
 
-func pickColumns(reg *spec.Registry, resource string) []string {
-	if len(globals.Columns) > 0 {
-		return globals.Columns
+func pickColumns(reg *spec.Registry, g *Globals, resource string) []string {
+	if len(g.Columns) > 0 {
+		return g.Columns
 	}
 	return reg.Columns(resource)
 }
@@ -4619,7 +4652,7 @@ import (
 
 // addRawCommands registers get/post/delete — the escape hatch for anything the
 // resource tree does not cover, mirroring `stripe get /v1/...`.
-func addRawCommands(root *cobra.Command, version string) {
+func addRawCommands(root *cobra.Command, g *Globals, version string) {
 	for _, m := range []struct {
 		name, method, short string
 		takesBody           bool
@@ -4645,13 +4678,13 @@ func addRawCommands(root *cobra.Command, version string) {
 					body = doc
 				}
 
-				rc, _, err := runtimeContext()
+				rc, _, err := runtimeContext(g)
 				if err != nil {
 					return err
 				}
 				cl := client.New(client.Options{
 					BaseURL: rc.BaseURL, APIKey: rc.APIKey, Version: version,
-					Debug: globals.Debug, DebugOut: os.Stderr,
+					Debug: g.Debug, DebugOut: os.Stderr,
 				})
 
 				raw, err := cl.Do(cc.Context(), method, args[0], nil, body)
@@ -4659,12 +4692,12 @@ func addRawCommands(root *cobra.Command, version string) {
 					return err
 				}
 
-				format, err := output.ParseFormat(globals.Output)
+				format, err := output.ParseFormat(g.Output)
 				if err != nil {
 					return err
 				}
 				w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
-				return w.Render(raw, output.Options{Quiet: globals.Quiet})
+				return w.Render(raw, output.Options{Quiet: g.Quiet})
 			},
 		}
 		if takesBody {
@@ -4682,25 +4715,25 @@ In `NewRootCommand`, after the auth commands are added:
 ```go
 	if doc, err := spec.Load(); err == nil {
 		if reg, err := spec.NewRegistry(doc); err == nil {
-			addResourceCommands(root, reg, version)
+			addResourceCommands(root, reg, g, version)
 			// Derived-name warnings are diagnostics, not errors: an unmapped
 			// operation still works, it just has a machine-chosen name.
-			if globals.Debug {
+			if g.Debug {
 				for _, warning := range reg.Warnings() {
 					fmt.Fprintln(os.Stderr, "warning:", warning)
 				}
 			}
 		}
 	}
-	addRawCommands(root, version)
+	addRawCommands(root, g, version)
 ```
 
 Also register the `--columns`, `--limit` and `--all` persistent flags in `NewRootCommand`:
 
 ```go
-	f.StringSliceVar(&globals.Columns, "columns", nil, "columns to show in table output")
-	f.IntVar(&globals.Limit, "limit", 20, "maximum records to return")
-	f.BoolVar(&globals.All, "all", false, "fetch every page")
+	f.StringSliceVar(&g.Columns, "columns", nil, "columns to show in table output")
+	f.IntVar(&g.Limit, "limit", 20, "maximum records to return")
+	f.BoolVar(&g.All, "all", false, "fetch every page")
 ```
 
 - [ ] **Step 6: Run the tests and try it end to end**
@@ -4757,7 +4790,7 @@ import (
 	specdata "github.com/flexprice/cli/spec"
 )
 
-func newOpenCommand(version string) *cobra.Command {
+func newOpenCommand(g *Globals, version string) *cobra.Command {
 	open := &cobra.Command{Use: "open", Short: "Open Flexprice in your browser"}
 
 	open.AddCommand(&cobra.Command{
@@ -4772,13 +4805,13 @@ func newOpenCommand(version string) *cobra.Command {
 		Use:   "webhooks",
 		Short: "Open the webhook portal for this environment",
 		RunE: func(c *cobra.Command, _ []string) error {
-			rc, _, err := runtimeContext()
+			rc, _, err := runtimeContext(g)
 			if err != nil {
 				return err
 			}
 			cl := client.New(client.Options{
 				BaseURL: rc.BaseURL, APIKey: rc.APIKey, Version: version,
-				Debug: globals.Debug, DebugOut: os.Stderr,
+				Debug: g.Debug, DebugOut: os.Stderr,
 			})
 			raw, err := cl.Do(c.Context(), http.MethodGet, "/webhooks/dashboard", nil, nil)
 			if err != nil {
@@ -4821,7 +4854,7 @@ func openURL(url string) error {
 
 // newVersionCommand reports the binary version and the spec build it embeds, so
 // a 404 on a known command can be diagnosed as version skew. Design doc §12.
-func newVersionCommand(version string) *cobra.Command {
+func newVersionCommand(g *Globals, version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the CLI version and embedded spec build",
@@ -4836,7 +4869,7 @@ func newVersionCommand(version string) *cobra.Command {
 Register both in `NewRootCommand`:
 
 ```go
-	root.AddCommand(newOpenCommand(version), newVersionCommand(version))
+	root.AddCommand(newOpenCommand(g, version), newVersionCommand(g, version))
 ```
 
 Cobra provides `completion` automatically, so no code is needed for it.
@@ -5307,7 +5340,7 @@ func ApplyPaging(req *Request, cmd Command, p Paging) {
 In `cli/internal/cmd/resource.go`, replace the single `cl.Do(...)` call and the render block in `newOperationCommand`'s `RunE` with:
 
 ```go
-			pageSize := globals.Limit
+			pageSize := g.Limit
 			if pageSize <= 0 {
 				pageSize = 20
 			}
@@ -5330,7 +5363,7 @@ In `cli/internal/cmd/resource.go`, replace the single `cl.Do(...)` call and the 
 				shown += page.Count
 				merged = raw
 
-				if !globals.All || !page.HasMore(shown) || page.Count == 0 {
+				if !g.All || !page.HasMore(shown) || page.Count == 0 {
 					break
 				}
 				offset += page.Count
@@ -5340,22 +5373,22 @@ In `cli/internal/cmd/resource.go`, replace the single `cl.Do(...)` call and the 
 				if err != nil {
 					return err
 				}
-				if !globals.Quiet {
+				if !g.Quiet {
 					fmt.Fprintf(os.Stderr, "\rfetched %d of %d…", shown, page.Total)
 				}
 			}
-			if globals.All && !globals.Quiet && shown > 0 {
+			if g.All && !g.Quiet && shown > 0 {
 				fmt.Fprintln(os.Stderr)
 			}
 
-			format, err := output.ParseFormat(globals.Output)
+			format, err := output.ParseFormat(g.Output)
 			if err != nil {
 				return err
 			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
 			return w.Render(merged, output.Options{
-				Columns: pickColumns(reg, cmd.Resource),
-				Quiet:   globals.Quiet,
+				Columns: pickColumns(reg, g, cmd.Resource),
+				Quiet:   g.Quiet,
 				Shown:   shown,
 				Total:   page.Total,
 			})
@@ -5364,7 +5397,7 @@ In `cli/internal/cmd/resource.go`, replace the single `cl.Do(...)` call and the 
 `--all` prints only the final page's body. That is a deliberate v1.0 limitation: merging pages across two different response envelopes is fiddly, and the progress counter plus footer make the behaviour visible. Note it in `--all`'s help text:
 
 ```go
-	f.BoolVar(&globals.All, "all", false, "page through every record (prints the last page; use --output json with --limit for bulk export)")
+	f.BoolVar(&g.All, "all", false, "page through every record (prints the last page; use --output json with --limit for bulk export)")
 ```
 
 - [ ] **Step 5: Run the tests**

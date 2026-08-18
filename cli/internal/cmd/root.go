@@ -2,9 +2,17 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
-// Globals are bound on the root command and read by every subcommand.
+// Globals holds the values bound to the root command's persistent flags.
+//
+// Fields are exported because pflag binds to their addresses directly; a getter
+// cannot serve as a flag target. An instance is created per root command and
+// threaded into subcommands explicitly rather than kept in a package variable:
+// pflag writes each flag's default into the bound pointer at registration time,
+// so a shared instance is clobbered the moment a second root is constructed,
+// which would break table-driven and parallel subcommand tests.
 type Globals struct {
 	Profile string
 	Output  string
@@ -19,9 +27,9 @@ type Globals struct {
 	Columns []string
 }
 
-var globals Globals
-
 func NewRootCommand(version string) *cobra.Command {
+	g := &Globals{}
+
 	root := &cobra.Command{
 		Use:     "flexprice",
 		Short:   "Flexprice CLI — usage-based billing from your terminal",
@@ -34,20 +42,27 @@ func NewRootCommand(version string) *cobra.Command {
 
 	// Without a Run func, cobra's default help template skips the Usage/Flags
 	// section entirely (it only renders when the command is Runnable or has
-	// subcommands), so a bare invocation prints help explicitly.
+	// subcommands), so a bare invocation prints help explicitly. Later tasks set
+	// root.Run = nil once real subcommands make this redundant.
 	root.Run = func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
 	}
 
-	f := root.PersistentFlags()
-	f.StringVarP(&globals.Profile, "profile", "p", "", "profile to use for this command")
-	f.StringVar(&globals.Output, "output", "table", "output format: table, json, yaml")
-	f.StringVar(&globals.APIKey, "api-key", "", "API key (CI use; prefer flexprice login)")
-	f.StringVar(&globals.BaseURL, "base-url", "", "override the API base URL")
-	f.StringVar(&globals.Region, "region", "", "region key, e.g. us or in")
-	f.BoolVar(&globals.Quiet, "quiet", false, "suppress progress output")
-	f.BoolVar(&globals.Debug, "debug", false, "dump requests and responses, secrets redacted")
-	f.BoolVar(&globals.NoColor, "no-color", false, "disable coloured output")
+	bindGlobals(root.PersistentFlags(), g)
+
+	// Later tasks add subcommands here, each taking g as a parameter:
+	//   root.AddCommand(newLoginCommand(g, version), ...)
 
 	return root
+}
+
+func bindGlobals(f *pflag.FlagSet, g *Globals) {
+	f.StringVarP(&g.Profile, "profile", "p", "", "profile to use for this command")
+	f.StringVar(&g.Output, "output", "table", "output format: table, json, yaml")
+	f.StringVar(&g.APIKey, "api-key", "", "API key (CI use; prefer flexprice login)")
+	f.StringVar(&g.BaseURL, "base-url", "", "override the API base URL")
+	f.StringVar(&g.Region, "region", "", "region key, e.g. us or in")
+	f.BoolVar(&g.Quiet, "quiet", false, "suppress progress output")
+	f.BoolVar(&g.Debug, "debug", false, "dump requests and responses, secrets redacted")
+	f.BoolVar(&g.NoColor, "no-color", false, "disable coloured output")
 }
