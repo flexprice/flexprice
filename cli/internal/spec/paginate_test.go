@@ -43,6 +43,56 @@ func TestPageInfo_NonListResponseIsNotAnError(t *testing.T) {
 	}
 }
 
+// InvoiceResponse has a top-level "total" field that is a string dollar
+// amount (e.g. "150"), not a pagination count. When that amount happens to
+// be a whole number, strconv.Atoi on it succeeds, and a naive reader mistakes
+// the invoice for a 150-record paginated list. Real envelopes carry total as
+// a JSON number alongside a "pagination" object or an "items" array.
+func TestPageInfo_InvoiceLikeResponseIsNotMisreadAsPaginated(t *testing.T) {
+	raw := []byte(`{"id":"inv_1","total":"150","currency":"usd","line_items":[{"id":"li_1"},{"id":"li_2"}]}`)
+
+	info, err := PageInfo(raw)
+	if err != nil {
+		t.Fatalf("PageInfo: %v", err)
+	}
+	if info != (Page{}) {
+		t.Errorf("info = %+v, want zero value (not treated as a paginated envelope)", info)
+	}
+}
+
+// Count is derived by scanning top-level array fields; when more than one
+// exists, the selection must be deterministic rather than depending on Go's
+// randomized map iteration order.
+func TestPageInfo_CountIsDeterministicAcrossMultipleArrayFields(t *testing.T) {
+	raw := []byte(`{"total":5,"limit":10,"offset":0,"alpha_items":[{"id":"a"}],"beta_items":[{"id":"b"},{"id":"c"}]}`)
+
+	var first int
+	for i := 0; i < 20; i++ {
+		info, err := PageInfo(raw)
+		if err != nil {
+			t.Fatalf("PageInfo: %v", err)
+		}
+		if i == 0 {
+			first = info.Count
+			continue
+		}
+		if info.Count != first {
+			t.Fatalf("Count is nondeterministic: iteration %d got %d, want %d", i, info.Count, first)
+		}
+	}
+}
+
+// A response cut short mid-stream (e.g. a network blip during an --all loop)
+// is genuinely malformed JSON, not merely "not an object" — it must surface
+// as an error so the caller can distinguish a failed page from a completed
+// pagination run.
+func TestPageInfo_MalformedJSONIsAnError(t *testing.T) {
+	_, err := PageInfo([]byte(`{"total":1,"items":[{"id":"a"}`))
+	if err == nil {
+		t.Fatal("PageInfo on truncated JSON: want error, got nil")
+	}
+}
+
 func TestApplyPaging_SetsQueryForGET(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, ok := reg.Lookup("customers", "retrieve")

@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 )
 
@@ -29,35 +30,109 @@ func (p Page) HasMore(seen int) bool {
 }
 
 // PageInfo reads the pagination envelope. Two shapes exist: types.ListResponse
-// nests pagination under "pagination", while older endpoints put total, limit and
-// offset at the top level next to a named array.
+// nests pagination under "pagination", while older endpoints put total, limit
+// and offset at the top level next to a named array (or an "items" array).
+//
+// A bare top-level "total"/"limit"/"offset" is not, by itself, evidence of a
+// paginated envelope: InvoiceResponse has a top-level "total" field that is a
+// string dollar amount (e.g. "150"), not a pagination count, and would
+// otherwise be misread as one. Detection requires one of: a "pagination"
+// sub-object, an unambiguous "items" array, or (for the legacy shape) total/
+// limit/offset genuinely typed as JSON numbers plus a top-level array of
+// objects backing them up.
 func PageInfo(raw []byte) (Page, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
-		return Page{}, nil // not an object: nothing to page
+		if json.Valid(raw) {
+			return Page{}, nil // valid JSON, just not an object: nothing to page
+		}
+		return Page{}, err // malformed/truncated body: caller must not treat this as "done"
 	}
 
-	var page Page
 	if nested, ok := doc["pagination"].(map[string]any); ok {
-		page.Total = intOf(nested["total"])
-		page.Limit = intOf(nested["limit"])
-		page.Offset = intOf(nested["offset"])
-	} else {
-		page.Total = intOf(doc["total"])
-		page.Limit = intOf(doc["limit"])
-		page.Offset = intOf(doc["offset"])
+		return Page{
+			Total:  intOf(nested["total"]),
+			Limit:  intOf(nested["limit"]),
+			Offset: intOf(nested["offset"]),
+			Count:  arrayCount(doc),
+		}, nil
 	}
 
-	for key, value := range doc {
-		if key == "pagination" {
+	if items, ok := doc["items"].([]any); ok {
+		return Page{
+			Total:  intOf(doc["total"]),
+			Limit:  intOf(doc["limit"]),
+			Offset: intOf(doc["offset"]),
+			Count:  len(items),
+		}, nil
+	}
+
+	total, ok := doc["total"].(float64)
+	if !ok {
+		return Page{}, nil
+	}
+	if v, present := doc["limit"]; present {
+		if _, isNum := v.(float64); !isNum {
+			return Page{}, nil
+		}
+	}
+	if v, present := doc["offset"]; present {
+		if _, isNum := v.(float64); !isNum {
+			return Page{}, nil
+		}
+	}
+
+	key, ok := findObjectArrayKey(doc)
+	if !ok {
+		return Page{}, nil
+	}
+	return Page{
+		Total:  int(total),
+		Limit:  intOf(doc["limit"]),
+		Offset: intOf(doc["offset"]),
+		Count:  len(doc[key].([]any)),
+	}, nil
+}
+
+// arrayCount finds the item count for an envelope already confirmed to be
+// paginated. It prefers a literal "items" key and only falls back to
+// scanning for an array field when that key is absent.
+func arrayCount(doc map[string]any) int {
+	if items, ok := doc["items"].([]any); ok {
+		return len(items)
+	}
+	if key, ok := findObjectArrayKey(doc); ok {
+		return len(doc[key].([]any))
+	}
+	return 0
+}
+
+// findObjectArrayKey returns the top-level key holding an array of objects,
+// choosing deterministically (alphabetically) when more than one exists
+// rather than relying on Go's randomized map iteration order.
+func findObjectArrayKey(doc map[string]any) (string, bool) {
+	keys := make([]string, 0, len(doc))
+	for k := range doc {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		if k == "pagination" || k == "total" || k == "limit" || k == "offset" {
 			continue
 		}
-		if arr, ok := value.([]any); ok {
-			page.Count = len(arr)
-			break
+		arr, ok := doc[k].([]any)
+		if !ok {
+			continue
 		}
+		if len(arr) > 0 {
+			if _, isObj := arr[0].(map[string]any); !isObj {
+				continue
+			}
+		}
+		return k, true
 	}
-	return page, nil
+	return "", false
 }
 
 func intOf(v any) int {
