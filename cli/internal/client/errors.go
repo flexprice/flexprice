@@ -18,14 +18,17 @@ import (
 //	<non-JSON>                                    // gateways and proxies
 //
 // details is field-keyed and is the most actionable part of a validation
-// failure, so it is rendered rather than discarded. Its values are typed as any
-// rather than string: a single non-string value would otherwise fail the whole
-// envelope decode and silently take message and code down with it.
+// failure, so it is rendered rather than discarded. It is decoded as
+// json.RawMessage rather than a typed map: encoding/json partially populates a
+// struct even when a field-level type mismatch makes the overall Unmarshal call
+// return an error, so a bad details shape (e.g. an array where an object is
+// expected) must not be able to take code and message down with it. The raw
+// bytes are unmarshaled into the target type separately, best-effort.
 type envelope struct {
 	Code           string          `json:"code"`
 	Message        string          `json:"message"`
 	HTTPStatusCode int             `json:"http_status_code"`
-	Details        map[string]any  `json:"details"`
+	Details        json.RawMessage `json:"details"`
 	Error          json.RawMessage `json:"error"`
 }
 
@@ -46,19 +49,27 @@ var _ error = (*APIError)(nil)
 func NewAPIError(status int, body []byte, method, path string) *APIError {
 	e := &APIError{Status: status, Method: method, Path: path, Raw: body}
 
+	// Unmarshal errors from one field's type mismatch (e.g. details as an array
+	// instead of an object) do not stop the decoder from populating sibling
+	// fields it already matched successfully, so the fields below are copied
+	// regardless of the returned error rather than only when err == nil.
 	var env envelope
-	if err := json.Unmarshal(body, &env); err == nil {
-		e.Message = env.Message
-		e.Code = env.Code
-		e.Details = env.Details
+	_ = json.Unmarshal(body, &env)
+	e.Message = env.Message
+	e.Code = env.Code
+	if len(env.Details) > 0 {
+		var details map[string]any
+		if json.Unmarshal(env.Details, &details) == nil {
+			e.Details = details
+		}
+	}
 
-		// The auth middleware returns {"error":"Unauthorized"} — a string, not an
-		// object — so it is decoded separately rather than into the main shape.
-		if e.Message == "" && len(env.Error) > 0 {
-			var bare string
-			if json.Unmarshal(env.Error, &bare) == nil {
-				e.Message = bare
-			}
+	// The auth middleware returns {"error":"Unauthorized"} — a string, not an
+	// object — so it is decoded separately rather than into the main shape.
+	if e.Message == "" && len(env.Error) > 0 {
+		var bare string
+		if json.Unmarshal(env.Error, &bare) == nil {
+			e.Message = bare
 		}
 	}
 	if e.Message == "" {

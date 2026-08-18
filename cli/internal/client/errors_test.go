@@ -79,3 +79,17 @@ func TestAPIError_NonStringDetailValuePreservesMessage(t *testing.T) {
 		}
 	}
 }
+
+// A type mismatch on details (array instead of object) must not discard code and
+// message that decoded successfully before the decoder reached the bad field.
+func TestAPIError_DetailsTypeMismatchPreservesCodeAndMessage(t *testing.T) {
+	body := []byte(`{"code":"validation_error","message":"plan_id is required","details":[]}`)
+	err := NewAPIError(http.StatusBadRequest, body, "POST", "/v1/plans")
+
+	if err.Code != "validation_error" {
+		t.Errorf("Code = %q, want validation_error", err.Code)
+	}
+	if err.Message != "plan_id is required" {
+		t.Errorf("Message = %q, want %q", err.Message, "plan_id is required")
+	}
+}
