@@ -1,0 +1,3 @@
+# The CLI's curated command vocabulary. Changes here rename user-facing commands.
+/cli/spec/commands.yaml   @flexprice/cli-maintainers
+/cli/                     @flexprice/cli-maintainers
