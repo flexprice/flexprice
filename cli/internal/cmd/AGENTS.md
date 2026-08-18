@@ -46,6 +46,10 @@ NewRootCommand(version)
 - Every command that talks to the API calls `runtimeContext(g)` first and
   exactly once to resolve credentials — do not duplicate that resolution
   logic in a new command.
+- Destructive actions (raw or spec-driven) confirm via `confirmAction`
+  (`resource.go`), not a bespoke prompt — see Pitfalls below for why a
+  second, disconnected confirmation path is exactly how this CLI shipped a
+  real gap.
 - Adding a new hand-written command: see
   [../../guides/adding-a-hand-written-command.md](../../guides/adding-a-hand-written-command.md).
 - Adding or renaming a spec-driven command: see
@@ -80,6 +84,32 @@ NewRootCommand(version)
   was left as documented behavior rather than fixed — do not "fix" it
   without checking whether the fix could instead break the common
   `--key=value` case.
+- **The raw `get`/`post`/`delete` escape hatch used to bypass the
+  destructive-action confirmation entirely — a real, shipped gap.**
+  `raw.go`'s `delete` never called `confirm()`, had no `--force` flag, and
+  never checked `term.IsTerminal`, so `flexprice delete <path>` fired
+  immediately while `flexprice customers delete <id>` prompted for the same
+  kind of action. Fixed by extracting `confirmAction`/`promptConfirm` out of
+  `resource.go` so both files share one confirmation path. If you add a new
+  raw or hand-written command that can delete/void/finalize/etc., route it
+  through `confirmAction`, not a bespoke prompt.
+- **`"finalize"` was missing from the `destructive` map — a real, shipped
+  gap, not a hypothetical.** `finalizeInvoice` is tagged `x-scope: delete` by
+  the backend's own spec, but the CLI never reads `x-scope` anywhere, so
+  `flexprice invoices finalize <id>` executed with zero confirmation. Added
+  to `destructive`. The `destructive` map is still hand-maintained and
+  disconnected from the spec's own `x-scope` classification — if a future
+  action verb (e.g. `remove`, `revoke`) is genuinely destructive, it will
+  have the identical silent gap unless someone remembers to add it here.
+  Driving this from `x-scope` directly would close that permanently but was
+  judged out of scope for this fix.
+- **`editSkeleton` used to break `--edit` for any editor configured with
+  arguments — a real, shipped bug.** `EDITOR="code --wait"` (VS Code) or
+  `EDITOR="subl -w"` (Sublime), both common, made `exec.Command` look for a
+  single binary literally named with a space in it. `splitEditorCommand`
+  now splits on whitespace via `strings.Fields` before exec — it does not
+  handle quoted arguments (e.g. a path containing a space); that's a known,
+  accepted limitation, not an oversight.
 
 ## Related layers
 
