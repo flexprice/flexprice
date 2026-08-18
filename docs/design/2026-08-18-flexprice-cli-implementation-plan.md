@@ -3062,10 +3062,29 @@ func TestSkeleton_IncludesRequiredFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Skeleton: %v", err)
 	}
-	for _, want := range []string{"customer_id", "plan_id"} {
+	// CreateSubscriptionRequest's actual required list, verified against
+	// docs/swagger/swagger-3-0.json: billing_period, currency, plan_id.
+	for _, want := range []string{"billing_period", "currency", "plan_id"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("skeleton missing required field %q", want)
 		}
+	}
+}
+
+// customer_id is not in CreateSubscriptionRequest's required list, but a
+// subscription is meaningless without one. The optional-fields comment block
+// is where a field like this must surface, or a user filling in the skeleton
+// has no signal it exists at all.
+func TestSkeleton_ListsFunctionallyNecessaryOptionalFields(t *testing.T) {
+	reg := testRegistry(t)
+	cmd, _ := reg.Lookup("subscriptions", "create")
+
+	out, err := Skeleton(cmd)
+	if err != nil {
+		t.Fatalf("Skeleton: %v", err)
+	}
+	if !strings.Contains(out, "customer_id") {
+		t.Error("skeleton does not mention customer_id anywhere, required or optional")
 	}
 }
 
