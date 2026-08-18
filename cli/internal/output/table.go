@@ -209,6 +209,9 @@ func (w Writer) renderTable(raw []byte, o Options) error {
 	if o.Total > o.Shown && o.Shown > 0 {
 		w.Warn(o, "\nshowing %d of %d — use --all to fetch every page", o.Shown, o.Total)
 	}
+	if o.Status != "" {
+		w.Warn(o, "%s", style.Dim(o.Status))
+	}
 	return nil
 }
 

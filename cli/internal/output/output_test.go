@@ -370,3 +370,65 @@ func TestRender_YAMLOutputNeverContainsANSICodes(t *testing.T) {
 		t.Errorf("--output yaml contains ANSI escape codes: %q", out.String())
 	}
 }
+
+// The status footer goes to stderr, never stdout — stdout carries data, and
+// `--output json > file.json` must stay clean. Design doc §6/U4.
+func TestRenderTable_StatusFooterGoesToStderr(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	input := []byte(`{"items":[{"id":"cust_1"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Columns: []string{"id"}, Status: "profile: sandbox · region: in"}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out.String(), "profile: sandbox") {
+		t.Errorf("status footer leaked into stdout: %q", out.String())
+	}
+	if !strings.Contains(errOut.String(), "profile: sandbox") {
+		t.Errorf("status footer missing from stderr: %q", errOut.String())
+	}
+}
+
+// Scripting formats never get the footer at all — someone piping JSON is not
+// reading a status line, and stderr is commonly captured alongside stdout in
+// CI, so emitting it there would still be noise.
+func TestRender_StatusFooterNotShownForJSON(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatJSON}
+
+	input := []byte(`{"items":[{"id":"cust_1"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Status: "profile: sandbox · region: in"}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out.String()+errOut.String(), "profile: sandbox") {
+		t.Errorf("status footer shown for --output json: stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+}
+
+func TestRenderTable_StatusFooterSuppressedByQuiet(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	input := []byte(`{"items":[{"id":"cust_1"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{
+		Columns: []string{"id"}, Status: "profile: sandbox", Quiet: true,
+	}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(errOut.String(), "profile: sandbox") {
+		t.Errorf("status footer shown despite --quiet: %q", errOut.String())
+	}
+}
+
+func TestRenderTable_NoStatusFooterWhenEmpty(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	input := []byte(`{"items":[{"id":"cust_1"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Columns: []string{"id"}}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.TrimSpace(errOut.String()) != "" {
+		t.Errorf("stderr not empty when no status was set: %q", errOut.String())
+	}
+}

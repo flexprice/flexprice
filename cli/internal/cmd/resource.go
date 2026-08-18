@@ -155,6 +155,7 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				Quiet:   g.Quiet,
 				Shown:   shown,
 				Total:   page.Total,
+				Status:  statusLine(rc, version),
 			})
 		},
 	}

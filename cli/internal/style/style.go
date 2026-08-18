@@ -20,6 +20,7 @@ const (
 	colorGreen   = lipgloss.Color("#4ade80")
 	colorRed     = lipgloss.Color("#f87171")
 	colorYellow  = lipgloss.Color("#facc15")
+	colorDim     = lipgloss.Color("#6b7280")
 )
 
 // enabled gates every ANSI color code this package emits. It does not gate
@@ -79,6 +80,10 @@ func styled(s string, c lipgloss.Color, bold bool) string {
 	}
 	return st.Render(s)
 }
+
+// Dim renders secondary context — the status footer, mostly — so it reads as
+// background rather than competing with the data above it.
+func Dim(s string) string { return styled(s, colorDim, false) }
 
 func Success(s string) string { return "✓ " + styled(s, colorGreen, false) }
 func Error(s string) string   { return "✗ " + styled(s, colorRed, false) }

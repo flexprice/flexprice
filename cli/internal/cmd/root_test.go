@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/flexprice/cli/internal/config"
 	"github.com/flexprice/cli/internal/style"
 )
 
@@ -133,5 +134,42 @@ func TestBareInvocation_WithConfigShowsPlainHelp(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Usage:") {
 		t.Errorf("bare invocation with an existing config did not show normal help: %q", out.String())
+	}
+}
+
+func TestStatusLine_IncludesProfileRegionAndVersion(t *testing.T) {
+	got := statusLine(config.RuntimeContext{
+		ProfileName: "sandbox",
+		Profile:     config.Profile{Region: "in"},
+	}, "1.2.3")
+
+	for _, want := range []string{"profile: sandbox", "region: in", "v1.2.3"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("statusLine = %q, missing %q", got, want)
+		}
+	}
+}
+
+// Region and label are optional on a profile (a --base-url login sets neither),
+// so the line must not render a dangling separator or an empty field.
+func TestStatusLine_OmitsEmptyFields(t *testing.T) {
+	got := statusLine(config.RuntimeContext{ProfileName: "default"}, "1.0.0")
+
+	if strings.Contains(got, "region:") {
+		t.Errorf("statusLine = %q, should omit region when unset", got)
+	}
+	if strings.Contains(got, "·  ·") || strings.HasSuffix(got, "·") {
+		t.Errorf("statusLine = %q, has a dangling separator", got)
+	}
+}
+
+func TestStatusLine_IncludesLabelWhenSet(t *testing.T) {
+	got := statusLine(config.RuntimeContext{
+		ProfileName: "sandbox",
+		Profile:     config.Profile{Region: "in", Label: "my sandbox"},
+	}, "1.0.0")
+
+	if !strings.Contains(got, "my sandbox") {
+		t.Errorf("statusLine = %q, want it to include the profile label", got)
 	}
 }

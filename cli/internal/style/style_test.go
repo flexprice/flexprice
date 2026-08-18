@@ -118,3 +118,25 @@ func TestStatusColor_CaseInsensitive(t *testing.T) {
 		t.Errorf("StatusColor(ACTIVE) = %q, want the match to be case-insensitive", got)
 	}
 }
+
+func TestDim_WrapsTextWithoutLosingIt(t *testing.T) {
+	Enable()
+	defer Disable()
+
+	got := Dim("profile: sandbox")
+	if !strings.Contains(got, "profile: sandbox") {
+		t.Errorf("Dim = %q, want it to contain the original text", got)
+	}
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("Dim = %q, want ANSI codes when color is enabled", got)
+	}
+}
+
+func TestDim_PlainWhenDisabled(t *testing.T) {
+	Disable()
+	defer EnableForTests()
+
+	if got := Dim("profile: sandbox"); got != "profile: sandbox" {
+		t.Errorf("Dim with color disabled = %q, want the text unchanged", got)
+	}
+}

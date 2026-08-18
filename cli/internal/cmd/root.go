@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -101,6 +102,24 @@ func NewRootCommand(version string) *cobra.Command {
 	addRawCommands(root, g, version)
 
 	return root
+}
+
+// statusLine formats the context footer shown under table output: which
+// profile and region a command actually ran against.
+//
+// This exists partly to soften the gap recorded in ADR 0003 — the CLI cannot
+// tell which environment a key belongs to, since no endpoint reports it, but
+// it can always show which profile was used, which is the next best signal for
+// "am I pointed where I think I am".
+func statusLine(rc config.RuntimeContext, version string) string {
+	parts := []string{"profile: " + rc.ProfileName}
+	if rc.Profile.Region != "" {
+		parts = append(parts, "region: "+rc.Profile.Region)
+	}
+	if rc.Profile.Label != "" {
+		parts = append(parts, rc.Profile.Label)
+	}
+	return strings.Join(parts, " · ") + " · v" + version
 }
 
 // hasExistingConfig reports whether a config file already exists, without
