@@ -1,8 +1,15 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/flexprice/cli/internal/config"
+	"github.com/flexprice/cli/internal/keyring"
+	"github.com/flexprice/cli/internal/spec"
 )
 
 // Globals holds the values bound to the root command's persistent flags.
@@ -40,20 +47,59 @@ func NewRootCommand(version string) *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	// Without a Run func, cobra's default help template skips the Usage/Flags
-	// section entirely (it only renders when the command is Runnable or has
-	// subcommands), so a bare invocation prints help explicitly. Later tasks set
-	// root.Run = nil once real subcommands make this redundant.
-	root.Run = func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
-	}
-
 	bindGlobals(root.PersistentFlags(), g)
 
-	// Later tasks add subcommands here, each taking g as a parameter:
-	//   root.AddCommand(newLoginCommand(g, version), ...)
+	root.AddCommand(
+		newInitCommand(g, version),
+		newLoginCommand(g, version),
+		newLogoutCommand(g),
+		newWhoamiCommand(g),
+		newEnvCommand(g, version),
+		newConfigCommand(g),
+		newOpenCommand(g, version),
+		newVersionCommand(g, version),
+	)
 
 	return root
+}
+
+// runtimeContext resolves credentials for the current invocation. Every command
+// that talks to the API starts here, so precedence is applied in exactly one place.
+func runtimeContext(g *Globals) (config.RuntimeContext, *config.Config, error) {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return config.RuntimeContext{}, nil, err
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return config.RuntimeContext{}, nil, err
+	}
+
+	store, warn, err := keyring.Open()
+	if err != nil {
+		return config.RuntimeContext{}, nil, err
+	}
+	if warn != "" && !g.Quiet {
+		fmt.Fprintln(os.Stderr, warn)
+	}
+
+	doc, err := spec.Load()
+	if err != nil {
+		return config.RuntimeContext{}, nil, err
+	}
+	regions := map[string]string{}
+	for _, r := range spec.Regions(doc) {
+		regions[r.Key] = r.BaseURL
+	}
+
+	rc, err := config.ResolveContext(cfg, store, config.Overrides{
+		Profile: g.Profile,
+		APIKey:  g.APIKey,
+		BaseURL: g.BaseURL,
+		Region:  g.Region,
+		Regions: regions,
+	})
+	return rc, cfg, err
 }
 
 func bindGlobals(f *pflag.FlagSet, g *Globals) {

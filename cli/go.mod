@@ -13,6 +13,12 @@ require (
 )
 
 require (
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+)
+
+require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
@@ -24,5 +30,6 @@ require (
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	golang.org/x/sys v0.27.0 // indirect
+	golang.org/x/term v0.26.0
 	golang.org/x/text v0.14.0 // indirect
 )
