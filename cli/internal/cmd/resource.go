@@ -169,28 +169,53 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 // tell a production environment from a development one, every destructive action
 // is confirmed regardless of where it is pointed — there is no environment signal
 // to be selective with.
+//
+// This is hand-maintained. Ideally it would be derived from the spec's
+// x-scope: delete extension instead — finalizeInvoice, for example, is a POST
+// tagged x-scope: delete in openapi.json because it is irreversible — but
+// wiring that through the registry is a larger refactor than this fix.
 var destructive = map[string]bool{
 	"delete": true, "void": true, "terminate": true, "cancel": true, "archive": true,
+	"finalize": true,
 }
 
-// confirm prompts before a destructive action. It returns nil when stdin is not a
-// terminal, so scripts and CI are never blocked; --force skips it entirely.
+// confirm prompts before a destructive spec-driven action. It returns nil when
+// stdin is not a terminal, so scripts and CI are never blocked; --force skips
+// it entirely.
 func confirm(cmd spec.Command, target string, force bool) error {
-	if force || !destructive[cmd.Action] {
+	if !destructive[cmd.Action] {
+		return nil
+	}
+	subject := target
+	if subject == "" {
+		subject = cmd.Resource
+	}
+	return confirmAction(cmd.Action, subject, force)
+}
+
+// confirmAction prompts before a destructive action described by action and
+// subject (e.g. "delete", "/v1/customers/cust_123") — shared by the
+// spec-driven commands and the raw get/post/delete escape hatch, neither of
+// which always has a spec.Command to hand. It returns nil when stdin is not a
+// terminal, so scripts and CI are never blocked; force skips it entirely.
+func confirmAction(action, subject string, force bool) error {
+	if force {
 		return nil
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return nil
 	}
+	return promptConfirm(os.Stdin, os.Stderr, action, subject)
+}
 
-	subject := target
-	if subject == "" {
-		subject = cmd.Resource
-	}
-	fmt.Fprintf(os.Stderr, "This will %s %s and cannot be undone.\nContinue? [y/N]: ", cmd.Action, subject)
+// promptConfirm writes the confirmation prompt and blocks for a y/N answer.
+// Split out from confirmAction so tests can supply an in-memory reader/writer
+// instead of a real terminal.
+func promptConfirm(in io.Reader, out io.Writer, action, subject string) error {
+	fmt.Fprintf(out, "This will %s %s and cannot be undone.\nContinue? [y/N]: ", action, subject)
 
 	var answer string
-	_, _ = fmt.Fscanln(os.Stdin, &answer)
+	_, _ = fmt.Fscanln(in, &answer)
 	if strings.ToLower(strings.TrimSpace(answer)) != "y" {
 		return fmt.Errorf("cancelled")
 	}
@@ -323,7 +348,12 @@ func editSkeleton(cmd spec.Command) (map[string]any, error) {
 		return nil, err
 	}
 
-	ed := exec.Command(editor, path)
+	editorCmd, editorArgs := splitEditorCommand(editor)
+	if editorCmd == "" {
+		return nil, fmt.Errorf("no editor found — set $EDITOR, or pass the body with --data @file.json")
+	}
+
+	ed := exec.Command(editorCmd, append(editorArgs, path)...)
 	ed.Stdin, ed.Stdout, ed.Stderr = os.Stdin, os.Stderr, os.Stderr
 	if err := ed.Run(); err != nil {
 		return nil, fmt.Errorf("editor %s exited with an error: %w", editor, err)
@@ -339,6 +369,19 @@ func editSkeleton(cmd spec.Command) (map[string]any, error) {
 		return nil, fmt.Errorf("the edited body is not valid JSON: %w", err)
 	}
 	return doc, nil
+}
+
+// splitEditorCommand splits an $EDITOR/$VISUAL value into a command and its
+// arguments on whitespace, so editors configured with flags (EDITOR="code
+// --wait", EDITOR="subl -w") resolve to a real binary instead of one invalid
+// argv[0] containing a space. This is plain whitespace splitting, not shell
+// parsing — a quoted argument (e.g. a path containing spaces) is not supported.
+func splitEditorCommand(raw string) (cmd string, args []string) {
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return "", nil
+	}
+	return fields[0], fields[1:]
 }
 
 func resolveEditor() (string, error) {

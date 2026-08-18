@@ -101,6 +101,47 @@ func TestResolveEditor_ReturnsCleanErrorWhenNoEditorIsAvailable(t *testing.T) {
 	}
 }
 
+// EDITOR/VISUAL commonly carries flags — EDITOR="code --wait" (VS Code),
+// EDITOR="subl -w" (Sublime Text) — and exec.Command needs the binary and its
+// arguments split apart, not one argv[0] containing a space.
+func TestSplitEditorCommand_SplitsCommandAndArgs(t *testing.T) {
+	tests := []struct {
+		raw      string
+		wantCmd  string
+		wantArgs []string
+	}{
+		{"code --wait", "code", []string{"--wait"}},
+		{"subl -w", "subl", []string{"-w"}},
+		{"vim -u NONE", "vim", []string{"-u", "NONE"}},
+		{"vi", "vi", nil},
+		{"", "", nil},
+	}
+	for _, tt := range tests {
+		gotCmd, gotArgs := splitEditorCommand(tt.raw)
+		if gotCmd != tt.wantCmd {
+			t.Errorf("splitEditorCommand(%q) cmd = %q, want %q", tt.raw, gotCmd, tt.wantCmd)
+		}
+		if !reflect.DeepEqual(gotArgs, tt.wantArgs) && !(len(gotArgs) == 0 && len(tt.wantArgs) == 0) {
+			t.Errorf("splitEditorCommand(%q) args = %v, want %v", tt.raw, gotArgs, tt.wantArgs)
+		}
+	}
+}
+
+func TestResolveEditor_ThenSplit_HandlesEditorConfiguredWithArgs(t *testing.T) {
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "code --wait")
+
+	editor, err := resolveEditor()
+	if err != nil {
+		t.Fatalf("resolveEditor: %v", err)
+	}
+
+	cmd, args := splitEditorCommand(editor)
+	if cmd != "code" || !reflect.DeepEqual(args, []string{"--wait"}) {
+		t.Errorf("cmd=%q args=%v, want cmd=%q args=[--wait]", cmd, args, "code")
+	}
+}
+
 func TestResolveEditor_PrefersVISUALOverEDITOR(t *testing.T) {
 	t.Setenv("VISUAL", "my-visual-editor")
 	t.Setenv("EDITOR", "my-editor")
@@ -177,6 +218,64 @@ func setArgs(t *testing.T, args ...string) (restore func()) {
 	orig := os.Args
 	os.Args = args
 	return func() { os.Args = orig }
+}
+
+// finalizeInvoice is tagged x-scope: delete in the real spec (openapi.json) —
+// the backend's own classification of it as irreversible — so it must require
+// confirmation like delete/void/terminate/cancel/archive.
+func TestDestructiveActions_IncludeFinalize(t *testing.T) {
+	if !destructive["finalize"] {
+		t.Error(`destructive["finalize"] = false, want true`)
+	}
+}
+
+func TestPromptConfirm_ConfirmsOnLowercaseY(t *testing.T) {
+	in := strings.NewReader("y\n")
+	var out strings.Builder
+
+	if err := promptConfirm(in, &out, "delete", "/v1/customers/cust_123"); err != nil {
+		t.Fatalf("promptConfirm: %v", err)
+	}
+	if !strings.Contains(out.String(), "This will delete /v1/customers/cust_123 and cannot be undone.") {
+		t.Errorf("prompt = %q, missing expected message", out.String())
+	}
+}
+
+func TestPromptConfirm_ConfirmsOnUppercaseY(t *testing.T) {
+	in := strings.NewReader("Y\n")
+	var out strings.Builder
+
+	if err := promptConfirm(in, &out, "finalize", "inv_123"); err != nil {
+		t.Fatalf("promptConfirm: %v", err)
+	}
+}
+
+func TestPromptConfirm_CancelsOnAnythingElse(t *testing.T) {
+	for _, answer := range []string{"n\n", "no\n", "\n"} {
+		var out strings.Builder
+		err := promptConfirm(strings.NewReader(answer), &out, "delete", "cust_123")
+		if err == nil {
+			t.Errorf("answer %q: want an error, got nil", answer)
+		}
+	}
+}
+
+func TestConfirmAction_SkipsPromptWhenForced(t *testing.T) {
+	// force=true must return immediately without reading stdin at all — pass a
+	// reader that panics if touched would be ideal, but confirmAction talks to
+	// os.Stdin directly; force short-circuits before that read, which this
+	// completing without blocking demonstrates.
+	if err := confirmAction("delete", "cust_123", true); err != nil {
+		t.Errorf("confirmAction with force=true: %v", err)
+	}
+}
+
+func TestConfirmAction_SkipsPromptWhenStdinIsNotATerminal(t *testing.T) {
+	// go test's stdin is never a terminal, so this exercises the same
+	// non-interactive bypass that protects scripts and CI.
+	if err := confirmAction("delete", "cust_123", false); err != nil {
+		t.Errorf("confirmAction on non-terminal stdin: %v", err)
+	}
 }
 
 // pickColumns must read live from commands.yaml's columns: entries, not a

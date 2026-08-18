@@ -10,6 +10,13 @@ import (
 	"github.com/flexprice/cli/internal/output"
 )
 
+// rawDeleteConfirm gates a raw DELETE behind the same confirmation prompt the
+// spec-driven destructive commands use. There is no spec.Command / resource
+// name available on the raw path, so the request path itself is the subject.
+func rawDeleteConfirm(path string, force bool) error {
+	return confirmAction("delete", path, force)
+}
+
 // addRawCommands registers get/post/delete — the escape hatch for anything the
 // resource tree does not cover, mirroring `stripe get /v1/...`.
 func addRawCommands(root *cobra.Command, g *Globals, version string) {
@@ -21,8 +28,9 @@ func addRawCommands(root *cobra.Command, g *Globals, version string) {
 		{"post", http.MethodPost, "Issue a raw POST against the API", true},
 		{"delete", http.MethodDelete, "Issue a raw DELETE against the API", false},
 	} {
-		method, takesBody := m.method, m.takesBody
+		name, method, takesBody := m.name, m.method, m.takesBody
 		var dataArg string
+		var force bool
 
 		c := &cobra.Command{
 			Use:   m.name + " <path>",
@@ -36,6 +44,12 @@ func addRawCommands(root *cobra.Command, g *Globals, version string) {
 						return err
 					}
 					body = doc
+				}
+
+				if name == "delete" {
+					if err := rawDeleteConfirm(args[0], force); err != nil {
+						return err
+					}
 				}
 
 				rc, _, err := runtimeContext(g)
@@ -62,6 +76,9 @@ func addRawCommands(root *cobra.Command, g *Globals, version string) {
 		}
 		if takesBody {
 			c.Flags().StringVar(&dataArg, "data", "", "request body: @file.json, - for stdin, or a JSON literal")
+		}
+		if name == "delete" {
+			c.Flags().BoolVar(&force, "force", false, "skip the confirmation prompt")
 		}
 		root.AddCommand(c)
 	}
