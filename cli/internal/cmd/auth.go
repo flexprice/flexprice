@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -191,25 +192,35 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 	return cmd
 }
 
+// promptRegion asks which data region the key belongs to, using an arrow-key
+// menu when a real terminal is attached.
+//
+// The TTY guard is load-bearing and must stay: huh drives a full-screen
+// terminal session, so it can only run for a human at a keyboard. Without this
+// check every scripted and CI invocation would break. huh itself also fails
+// fast rather than hanging when no terminal exists (it opens /dev/tty directly
+// and errors immediately) — verified in the implementation spike — so the two
+// form independent, agreeing safety nets, but this check is the primary one.
 func promptRegion(regions []spec.Region) (string, error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", fmt.Errorf("no terminal available — pass --region (for example --region us)")
 	}
-	fmt.Fprintln(os.Stderr, "Data region:")
+
+	options := make([]huh.Option[string], len(regions))
 	for i, r := range regions {
-		fmt.Fprintf(os.Stderr, "  %d) %-6s %s\n", i+1, r.Key, r.BaseURL)
+		options[i] = huh.NewOption(fmt.Sprintf("%-6s  %s", r.Key, r.BaseURL), r.Key)
 	}
-	fmt.Fprint(os.Stderr, "Choose [1]: ")
 
 	var choice string
-	if _, err := fmt.Fscanln(os.Stdin, &choice); err != nil && choice == "" {
-		choice = "1"
+	sel := huh.NewSelect[string]().
+		Title("Data region").
+		Options(options...).
+		Value(&choice)
+
+	if err := sel.Run(); err != nil {
+		return "", fmt.Errorf("region selection cancelled: %w", err)
 	}
-	idx := 1
-	if _, err := fmt.Sscanf(choice, "%d", &idx); err != nil || idx < 1 || idx > len(regions) {
-		idx = 1
-	}
-	return regions[idx-1].Key, nil
+	return choice, nil
 }
 
 func newLogoutCommand(g *Globals) *cobra.Command {

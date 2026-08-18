@@ -11,6 +11,7 @@ import (
 
 	"github.com/flexprice/cli/internal/client"
 	"github.com/flexprice/cli/internal/exitcode"
+	"github.com/flexprice/cli/internal/spec"
 )
 
 func envServer(t *testing.T, envType string) *httptest.Server {
@@ -116,5 +117,25 @@ func TestMaskKey_ShortKeyDoesNotPanic(t *testing.T) {
 		if got == "" {
 			t.Errorf("MaskKey(%q) = %q, want a non-empty placeholder", key, got)
 		}
+	}
+}
+
+// promptRegion's non-TTY fallback must be preserved exactly: huh.Select must
+// never be invoked when stdin is not a real terminal, or every existing test
+// and CI/script invocation of this CLI breaks. This is the single most
+// important test in the interactive-UI work.
+func TestPromptRegion_NoTTYFallsBackToExactPriorBehavior(t *testing.T) {
+	regions := []spec.Region{
+		{Key: "us", BaseURL: "https://us.api.flexprice.io/v1"},
+		{Key: "in", BaseURL: "https://api.cloud.flexprice.io/v1"},
+	}
+	// os.Stdin in `go test` is not a TTY, so this exercises the real
+	// non-interactive path without needing to fake terminal state.
+	_, err := promptRegion(regions)
+	if err == nil {
+		t.Fatal("want an error when stdin is not a terminal")
+	}
+	if !strings.Contains(err.Error(), "--region") {
+		t.Errorf("error = %q, want it to name --region as the alternative", err.Error())
 	}
 }
