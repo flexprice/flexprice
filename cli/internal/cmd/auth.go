@@ -267,8 +267,7 @@ func newWhoamiCommand(g *Globals) *cobra.Command {
 			key, keyErr := store.Get(name)
 
 			// Stays on stdout via ui.Data: whoami's output is a result people
-			// parse, not commentary. Styling changes how it looks, never which
-			// stream it uses.
+			// parse, not commentary.
 			g.UI.Data("Profile:      %s", name)
 			g.UI.Data("Label:        %s", profile.Label)
 			g.UI.Data("Region:       %s", profile.Region)

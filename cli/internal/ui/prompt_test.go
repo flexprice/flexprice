@@ -5,9 +5,7 @@ import (
 	"testing"
 )
 
-// Replaces the three TestPromptConfirm_* cases that lived in internal/cmd
-// against the old fmt.Fscanln reader. huh now owns reading the answer; the
-// wording is still ours, and it is the part that can silently regress.
+// huh owns reading the answer; the wording is ours and can silently regress.
 func TestConfirmTitle_NamesTheActionAndSubject(t *testing.T) {
 	got := ConfirmTitle("delete", "/v1/customers/cust_123")
 	for _, want := range []string{"delete", "/v1/customers/cust_123", "cannot be undone"} {
@@ -38,9 +36,8 @@ func TestConfirm_RefusesWhenStdinIsNotATerminal(t *testing.T) {
 	}
 }
 
-// The refusal must name what would have been destroyed. "refusing to proceed"
-// with no subject leaves the operator guessing which command in their script
-// stopped.
+// "refusing to proceed" with no subject leaves the operator guessing which
+// command stopped.
 func TestConfirm_RefusalNamesTheSubject(t *testing.T) {
 	u, _, _ := newTestUI(Options{StderrTTY: true, StdinTTY: false, Term: "xterm-256color"})
 

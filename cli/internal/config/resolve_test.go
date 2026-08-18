@@ -176,9 +176,8 @@ func TestResolveContext_UnknownRegion_ListsAvailableRegions(t *testing.T) {
 	}
 }
 
-// --region is passed but the caller supplied a nil/empty Regions map (e.g.
-// spec discovery failed): the message must say so plainly instead of
-// printing an empty list.
+// A nil Regions map (e.g. spec discovery failed) must say so plainly, not
+// print an empty list.
 func TestResolveContext_RegionGivenButRegionsMapNil(t *testing.T) {
 	store := &stubStore{keys: map[string]string{}}
 	empty := &Config{Profiles: map[string]Profile{}}

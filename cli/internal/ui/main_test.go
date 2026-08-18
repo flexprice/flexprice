@@ -7,10 +7,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// Forces a true-colour profile so this package's gating is the only thing that
-// can suppress colour. Without it lipgloss suppresses colour on its own under
-// `go test`, which makes every "no escape codes" assertion vacuous — verified
-// by deleting the gates and watching the tests still pass.
+// Forces true-colour so this package's gating is the only thing that can
+// suppress colour; otherwise lipgloss suppresses it under go test regardless.
 func TestMain(m *testing.M) {
 	style.EnableForTests()
 	os.Exit(m.Run())

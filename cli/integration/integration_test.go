@@ -1,6 +1,5 @@
-// Package integration exercises the CLI against a running Flexprice server.
-// It starts nothing — export FLEXPRICE_TEST_BASE_URL/API_KEY, or the whole
-// package skips.
+// Package integration exercises the CLI against a running server. It starts
+// nothing — export FLEXPRICE_TEST_BASE_URL/API_KEY, or the package skips.
 package integration
 
 import (

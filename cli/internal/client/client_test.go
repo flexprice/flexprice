@@ -199,9 +199,8 @@ func TestClient_RetriedPUTResendsSameBody(t *testing.T) {
 	}
 }
 
-// Evidence for point 4 (URL joining): an httptest server's URL has an empty
-// path, so the existing tests structurally cannot catch a join bug against a
-// real base URL that itself carries a path, like https://us.api.flexprice.io/v1.
+// httptest's URL has an empty path, so other tests can't catch a join bug
+// against a base URL that itself carries one.
 func TestClient_JoinsPathAgainstBaseURLWithPath(t *testing.T) {
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

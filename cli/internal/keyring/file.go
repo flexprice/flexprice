@@ -12,9 +12,8 @@ import (
 	"path/filepath"
 )
 
-// The fallback when no OS keychain exists. Encrypted with a host-derived key to
-// stop casual disclosure; file mode 0600 is the real control against an
-// attacker with read access as this user.
+// The fallback when no OS keychain exists. Encrypted to stop casual
+// disclosure; file mode 0600 is the real control.
 type FileStore struct {
 	Dir string
 }
@@ -63,9 +62,8 @@ func (f *FileStore) Set(profile, key string) error {
 	return f.writeAtomic(f.path(profile), enc)
 }
 
-// Temp file plus rename, which is atomic on the same filesystem. Two processes
-// opening the destination with O_TRUNC directly could leave a short write with
-// a leftover tail from the longer one.
+// Temp file plus rename, atomic on the same filesystem. O_TRUNC directly
+// could leave a leftover tail from a longer prior write.
 func (f *FileStore) writeAtomic(dest string, data []byte) error {
 	tmp, err := os.CreateTemp(f.Dir, filepath.Base(dest)+".tmp-*")
 	if err != nil {

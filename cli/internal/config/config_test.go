@@ -130,9 +130,8 @@ func TestProfileName_EdgeCases(t *testing.T) {
 	}
 }
 
-// BurntSushi/toml merges into a non-empty map rather than replacing it. Load is
-// safe today because it always starts from a fresh map, but reusing a *Config
-// would silently resurrect stale profiles.
+// BurntSushi/toml merges into a non-empty map rather than replacing it; reusing
+// a *Config would silently resurrect stale profiles.
 func TestUnmarshal_MergesIntoExistingMap(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"stale":   {Region: "stale-region"},

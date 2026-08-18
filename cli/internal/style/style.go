@@ -41,9 +41,8 @@ func EnableForTests() {
 // a profile deterministically.
 var renderer = lipgloss.NewRenderer(os.Stdout)
 
-// Palette renders at a fixed color setting, so callers writing to different
-// streams can each gate on their own: piping stdout to a file must not strip
-// color from a stderr message the user is still watching.
+// Renders at a fixed setting, so callers on different streams gate on their
+// own — piping stdout must not strip color from a live stderr message.
 type Palette struct{ enabled bool }
 
 func NewPalette(enabled bool) Palette { return Palette{enabled: enabled} }

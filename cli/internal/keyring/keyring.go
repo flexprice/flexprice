@@ -62,9 +62,8 @@ func (OSKeyring) Delete(profile string) error {
 	return err
 }
 
-// Open returns the OS keychain when it works, otherwise the file fallback.
-// warn is non-empty when the fallback was selected and the caller has not opted
-// in via FLEXPRICE_KEY_BACKEND=file; callers print it once.
+// Returns the OS keychain when it works, otherwise the file fallback. warn is
+// non-empty when the fallback was selected without opting in.
 func Open() (store Store, warn string, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

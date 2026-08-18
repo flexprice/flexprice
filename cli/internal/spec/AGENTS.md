@@ -6,9 +6,8 @@ owns:
 
 # Spec Layer
 
-> Turns the embedded OpenAPI document into a resolvable command tree and
-> turns one resolved command plus user input into an HTTP request. Never
-> touches the network.
+> Turns the embedded OpenAPI document into a resolvable command tree, and
+> one resolved command plus user input into an HTTP request. Never network.
 
 ## Purpose
 

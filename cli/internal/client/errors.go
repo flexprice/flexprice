@@ -10,9 +10,8 @@ import (
 	"github.com/flexprice/cli/internal/exitcode"
 )
 
-// Three shapes exist in practice: {code,message,details}, a bare string error
-// (auth middleware), and non-JSON (gateways). Details is decoded separately
-// so a bad shape there cannot take code/message down with it.
+// Three shapes exist: {code,message,details}, a bare string (auth
+// middleware), and non-JSON (gateways). Details decodes separately.
 type envelope struct {
 	Code           string          `json:"code"`
 	Message        string          `json:"message"`

@@ -73,9 +73,8 @@ func TestGatingMatrix(t *testing.T) {
 	}
 }
 
-// Color is deliberately TRUE in most cases below: with Color:false the palette
-// is disabled twice over and this passes even with the stream gates deleted —
-// verified by deleting them.
+// Color is TRUE in most cases below: with Color:false this passes even with
+// the stream gates deleted, which was verified directly.
 func TestNonTTY_WritesZeroEscapeBytes(t *testing.T) {
 	cases := []struct {
 		name string

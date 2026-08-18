@@ -185,9 +185,8 @@ func TestCollectUnknownFlags_BothKeyValueAndSpaceSeparatedFormsWork(t *testing.T
 	}
 }
 
-// Documents a boundary rather than a desirable behaviour: in `--key value` form
-// a value starting with "--" is dropped, since it is indistinguishable from the
-// next flag. --key=value has no such limit.
+// In `--key value` form a value starting with "--" is dropped, being
+// indistinguishable from the next flag. --key=value has no such limit.
 func TestCollectUnknownFlags_SpaceSeparatedValueLookingLikeAFlagIsDropped(t *testing.T) {
 	c := newFakeOperationCommand()
 

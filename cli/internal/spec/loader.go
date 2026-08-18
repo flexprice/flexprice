@@ -17,9 +17,8 @@ import (
 // 404 on call — excluded from commands but kept as the event-type list.
 const WebhookEventsTag = "Webhook Events"
 
-// Memoizes Load: parsing the ~880KB spec costs tens of milliseconds and a
-// single invocation calls it 2-3 times. The returned *openapi3.T is shared, so
-// callers must treat it as read-only.
+// Memoizes Load: a single invocation parses the ~880KB spec 2-3 times
+// otherwise. The returned *openapi3.T is shared and must be read-only.
 var (
 	loadOnce sync.Once
 	loadDoc  *openapi3.T

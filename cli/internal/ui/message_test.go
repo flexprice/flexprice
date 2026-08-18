@@ -80,9 +80,7 @@ func TestEmptyState_NamesANextStep(t *testing.T) {
 	}
 }
 
-// Replaces TestRenderTable_StatusFooterGoesToStderr, which lived in
-// internal/output until the footer moved here. stdout carries data, and
-// `--output json > file.json` must stay clean.
+// stdout carries data; `--output json > file.json` must stay clean.
 func TestStatusLine_GoesToStderrOnly(t *testing.T) {
 	u, out, errBuf := newTestUI(Options{StderrTTY: true, StdinTTY: true, Term: "xterm-256color"})
 

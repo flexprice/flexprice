@@ -13,8 +13,7 @@ import (
 )
 
 // A key is scoped to one environment, so region, base URL and key move
-// together. No environment name or live flag: no endpoint reveals which
-// environment a key belongs to, so users label profiles themselves.
+// together. No environment name or live flag, since no endpoint reveals it.
 type Profile struct {
 	Region  string `toml:"region"`
 	BaseURL string `toml:"base_url"`

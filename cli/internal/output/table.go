@@ -15,8 +15,7 @@ import (
 var numericListMarkers = []string{"total", "limit", "offset"}
 
 // Outside "items", a key is only the row list if the envelope also carries a
-// pagination marker — that is what separates a real list from a single object
-// with an array field. Among candidates the first non-empty array wins.
+// pagination marker; among candidates the first non-empty array wins.
 func rowsFrom(raw []byte) ([]map[string]any, error) {
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {

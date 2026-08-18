@@ -128,9 +128,8 @@ func TestRowsFrom_SingleObjectWithArrayFieldIsNotFlattened(t *testing.T) {
 	}
 }
 
-// Mirrors GET /invoices/{id}: a string "total", an empty
-// "coupon_applications" and a populated "line_items". The empty array sorts
-// first alphabetically, which is what breaks a naive heuristic.
+// Mirrors GET /invoices/{id}: a string "total" and an empty
+// "coupon_applications" that sorts before the populated "line_items".
 func invoiceResponseShape() []byte {
 	return []byte(`{
 		"id": "inv_1",
@@ -145,8 +144,7 @@ func invoiceResponseShape() []byte {
 }
 
 // Reproduces `invoices retrieve --output table` printing "No results.": a
-// string "total" was read as a pagination marker, then the empty
-// "coupon_applications" beat "line_items" alphabetically. Both must be fixed.
+// string "total" was read as a pagination marker.
 func TestRowsFrom_InvoiceResponseUsesLineItemsNotStringTotal(t *testing.T) {
 	rows, err := rowsFrom(invoiceResponseShape())
 	if err != nil {
@@ -157,9 +155,8 @@ func TestRowsFrom_InvoiceResponseUsesLineItemsNotStringTotal(t *testing.T) {
 	}
 }
 
-// End-to-end regression for the "No results." bug below. Columns are requested
-// explicitly because "id" alone satisfies defaultColumns, which would hide the
-// line_items column and make the assertion moot.
+// Columns are explicit: "id" alone satisfies defaultColumns and would hide
+// line_items, making the assertion moot.
 func TestRender_InvoiceResponseTableShowsLineItems(t *testing.T) {
 	var out, errOut bytes.Buffer
 	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
