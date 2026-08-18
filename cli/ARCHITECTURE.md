@@ -37,19 +37,36 @@ Every box in that diagram is one package with one job:
   Nothing in this package makes a network call.
 - **`internal/client`** (`client.go`, `errors.go`) is the only package that
   makes a network call. See [ADR 0001](decisions/0001-no-sdk-single-http-path.md).
-- **`internal/output`** (`output.go`, `table.go`) turns a raw JSON response
-  into what the terminal or a script sees, and is the only package that
-  renders response data — no other package writes to `os.Stdout`.
+- **`internal/output`** (`output.go`, `table.go`, `pad.go`) turns a raw JSON
+  response into what the terminal or a script sees. It renders **response data
+  only**: it knows nothing about progress, prompts or commentary, which is what
+  keeps stdout clean for piping. `pad.go` holds the ANSI-aware column padding,
+  shared with `env list` so `text/tabwriter` — which counts escape bytes as
+  visible width — cannot creep back in.
+- **`internal/ui`** owns every human-facing write: progress spinners, receipts,
+  prompts, confirmations, empty states and the status footer, all on stderr. It
+  decides **once** whether a human is watching — `--quiet`, stderr TTY,
+  `TERM=dumb`, `--no-input` — so no call site has to.
+  See [ADR 0006](decisions/0006-ui-owns-human-facing-output.md).
+- **`internal/style`** decides only what colour something is. It exposes a
+  `Palette` value so each caller can gate colour on **its own stream**: table
+  content on stdout, everything from `internal/ui` on stderr. Gating stderr on
+  stdout's TTY-ness was a real bug — redirecting stdout stripped colour from a
+  footer still going to a live terminal.
 - **`internal/config`** and **`internal/keyring`** resolve *who* is making the
   request — profile, region, API key — before `internal/client` is ever
   called. See [ADR 0003](decisions/0003-environment-scoped-profiles-no-live-flag.md).
 - **`internal/cmd`** is the only package that imports `cobra`. It wires the
   above together into the command tree cobra dispatches.
 
-A sixth package, **`internal/exitcode`**, does not sit in the request path
-above; it defines the stable exit codes that `internal/client`'s errors carry
-out of the process (see [Error and exit-code contract](#error-and-exit-code-contract)
-below).
+**`internal/exitcode`** does not sit in the request path above; it defines the
+stable exit codes that `internal/client`'s errors carry out of the process (see
+[Error and exit-code contract](#error-and-exit-code-contract) below).
+
+The split between `internal/output` and `internal/ui` is the one worth
+remembering: **stdout is a machine contract, stderr is a conversation.** If a
+change would put a word on stdout that a script does not want to parse, it
+belongs in `ui` instead.
 
 ## Why runtime dispatch, not code generation
 

@@ -91,10 +91,20 @@ inspecting it.
   it fails fast rather than hanging — but no one has pressed ↑/↓ and Enter. Verify with:
   `HOME=$(mktemp -d) FLEXPRICE_KEY_BACKEND=file ./bin/flexprice init`
 
-**Stale documentation (introduced by the final UI work):**
-- `docs/design/2026-08-18-flexprice-cli-interactive-ui-implementation-plan.md` still describes
-  the bordered welcome box that the block wordmark replaced.
-- `cli/README.md` documents neither the wordmark nor the status footer.
+**Stale documentation (introduced by the final UI work):** — **both resolved in the
+DX polish round, 2026-08-18.**
+- ~~`docs/design/2026-08-18-flexprice-cli-interactive-ui-implementation-plan.md` still
+  describes the bordered welcome box that the block wordmark replaced.~~ Task 5 in that
+  document now carries a "Superseded — do not implement as written" note explaining why.
+- ~~`cli/README.md` documents neither the wordmark nor the status footer.~~ Quickstart now
+  shows the real wordmark and region picker; "What you can do" shows the status footer,
+  mutation receipts and empty states.
+
+**Superseded by the DX polish round** (see
+`2026-08-18-flexprice-cli-dx-polish-design.md` and its implementation plan): the CLI now
+has an `internal/ui` package owning all human-facing output, grouped root help, spinners,
+`--no-input`, `TERM=dumb` handling and SIGINT teardown. Two items in §5 below changed as a
+result and are annotated there.
 
 **Before the CLI can be installed by anyone:**
 - `flexprice/cli` is **private and unlicensed**. Homebrew, `install.sh` and `go install` all
@@ -135,6 +145,11 @@ inspecting it.
 - **`internal/style` auto-detects color** and `go test` never has a terminal attached. Any test
   asserting ANSI codes are present must call `style.EnableForTests()` (usually via `TestMain`),
   or it will fail based on where it runs rather than on correctness.
+  **The inverse is the sharper trap, found in the DX polish round:** a test asserting ANSI
+  codes are *absent* passes for free under `go test`, because lipgloss suppresses colour on
+  its own when no terminal is attached. Such a test can pass with the code under test deleted
+  outright. `internal/ui` has a `TestMain` forcing a true-colour profile for exactly this
+  reason. When writing an absence assertion, verify it by removing the mechanism it guards.
 - **This branch has been worked on by more than one session.** Several commits in the log —
   the `AGENTS.md` series, six `fix(cli)` commits, `d4bca9f2d`, and the maintainer-docs
   design/plan — were made outside the conversation that produced this handoff and have **not**

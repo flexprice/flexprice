@@ -738,6 +738,15 @@ git commit -m "feat(cli): arrow-key region picker via huh.Select"
 
 ### Task 5: `init`'s welcome banner
 
+> **Superseded — do not implement as written.** The bordered welcome box described
+> below was replaced by the block-letter wordmark in `cli/internal/style/logo.go`
+> before this plan was finished: the box rendered visibly crooked (a hardcoded
+> 30-char border around a 24-char content row) and the wordmark carries the
+> message without needing to be sized. The steps here are kept as a record of
+> what was tried. The banner as shipped is `printInitBanner` in
+> `cli/internal/cmd/init.go`, and the current onboarding output is documented in
+> `cli/README.md` under Quickstart.
+
 **Files:**
 - Modify: `cli/internal/cmd/init.go`
 - Create: `cli/internal/cmd/init_test.go`

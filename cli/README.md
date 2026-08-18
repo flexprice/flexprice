@@ -34,18 +34,37 @@ key, verifies it against the API, and stores it in your OS keychain (or an
 encrypted file when no keychain is available, e.g. in a container or CI).
 
     $ flexprice init
-    Setting up the Flexprice CLI.
+    ███████╗██╗     ███████╗██╗  ██╗██████╗ ██████╗ ██╗ ██████╗███████╗
+    ██╔════╝██║     ██╔════╝╚██╗██╔╝██╔══██╗██╔══██╗██║██╔════╝██╔════╝
+    █████╗  ██║     █████╗   ╚███╔╝ ██████╔╝██████╔╝██║██║     █████╗
+    ██╔══╝  ██║     ██╔══╝   ██╔██╗ ██╔═══╝ ██╔══██╗██║██║     ██╔══╝
+    ██║     ███████╗███████╗██╔╝ ██╗██║     ██║  ██║██║╚██████╗███████╗
+    ╚═╝     ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝ ╚═════╝╚══════╝
+    Usage-based billing from your terminal
+
+    Welcome to Flexprice — let's get you set up.
     Your API key is scoped to one environment — you can add more later with `flexprice login`.
 
-    Verified — stored as profile "default" in encrypted file (~/.flexprice/keys)
+    ? Data region
+      > us      https://us.api.flexprice.io/v1
+        in      https://api.cloud.flexprice.io/v1
+
+    API key: ••••••••••••••••••••
+    ⠹ Verifying your key…
+    ✓ Verified — stored as profile "default" in encrypted file (~/.flexprice/keys)
     Note: the API does not report which environment a key belongs to, so label your
     profiles yourself (--profile-name, --label) and check with: flexprice whoami
 
-    Next steps:
+    Here's what to try first:
       flexprice whoami            confirm what you are pointed at
       flexprice resources         see everything you can act on
       flexprice customers list    try a read
       flexprice env list          see your other environments
+
+The region menu is arrow-key driven. The wordmark drops to a compact form on
+narrow terminals, and everything above is written to stderr, so it never
+pollutes piped output. Pass `--region` and `--api-key` to skip both prompts
+entirely in CI.
 
 Confirm what you're pointed at:
 
@@ -128,8 +147,35 @@ which cannot:
 
     Use --edit to fill in a pre-built request body, or --data @file.json.
 
-Destructive actions (`delete`, `void`, `cancel`, `terminate`, `archive`) ask
-for confirmation on a terminal; `--force` skips the prompt for scripts.
+Destructive actions (`delete`, `void`, `cancel`, `terminate`, `archive`,
+`finalize`) ask for confirmation with an arrow-key prompt; `--force` skips it.
+Off a terminal the command **refuses** rather than proceeding — see
+[Running non-interactively](#running-non-interactively).
+
+Reads show a spinner while the request is in flight, and table output carries a
+footer naming which profile and region actually served it — the fastest way to
+catch "am I pointed where I think I am":
+
+    $ flexprice customers list
+    ID                NAME          STATUS    CREATED_AT
+    cust_01J8XABCDEF  Ada Lovelace  active    2026-01-02
+    cust_02           Grace Hopper  archived  2026-03-14
+
+    profile: default · region: us · sandbox · v1.0.0
+
+A write confirms what it did, so you never have to infer success from a table:
+
+    $ flexprice customers create --external_id=acme --email=billing@acme.com
+    ✓ Created customer cust_01J8XGHIJKL
+
+An empty list points at the next step rather than saying nothing useful:
+
+    $ flexprice customers list
+    No customers yet.
+      Create one with: flexprice customers create
+
+The footer, receipt and empty-state lines all go to stderr, so none of them
+appear in piped or redirected output.
 
 Anything not covered by a named command is reachable through the raw escape
 hatch:
@@ -169,6 +215,29 @@ safe to script against:
 | 3 | Authentication failure |
 | 4 | Not found |
 | 5 | Rate limited |
+| 130 | Interrupted (Ctrl-C) |
+
+### Running non-interactively
+
+The CLI adapts to whether a human is watching. Progress animation is suppressed
+automatically when stderr is not a terminal, when `TERM=dumb`, and under
+`--quiet`, so CI logs stay clean without any flag. Colour additionally respects
+`NO_COLOR` and `--no-color`.
+
+| Flag | Effect |
+|---|---|
+| `--quiet` | Suppress progress and commentary. Results and errors still print. |
+| `--no-color` | Disable colour. Status icons (`✓ ✗ ⚠`) remain. |
+| `--no-input` | Never prompt. Fail with a message naming the flag to pass instead. |
+| `--force` | Skip the confirmation on destructive commands. |
+
+Destructive commands (`delete`, `void`, `cancel`, `terminate`, `archive`,
+`finalize`) confirm before acting. In a script, pass `--force` to proceed:
+
+    flexprice customers delete cust_123 --force
+
+Without it, a non-interactive run **fails rather than proceeding** — the CLI will
+not destroy something because nobody could be asked.
 
 ## Configuration
 
