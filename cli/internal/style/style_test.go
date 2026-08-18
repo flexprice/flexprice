@@ -4,20 +4,17 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/muesli/termenv"
 )
 
-// TestMain forces the package's renderer to a real color profile for the
-// whole test binary. go test never runs with a terminal attached, so without
-// this, lipgloss's own auto-detection would correctly see "no terminal" and
-// silently suppress color — which would make every test asserting on ANSI
-// codes fail based on execution environment, not code correctness. Production
-// code never calls SetColorProfile, so real auto-detection is unaffected;
-// this is test-only, matching the technique verified in the implementation
-// spike (docs/design/2026-08-18-cli-interactive-ui-spike-findings.md).
+// TestMain forces a real color profile for the whole test binary via
+// EnableForTests — go test never runs with a terminal attached, so without
+// this, this package's own auto-detection would correctly see "no terminal"
+// and silently suppress color, making every test asserting on ANSI codes fail
+// based on execution environment rather than code correctness. Individual
+// tests still call Enable()/Disable() to control whether styling is attempted
+// at all — that remains orthogonal to the profile forced here.
 func TestMain(m *testing.M) {
-	renderer.SetColorProfile(termenv.TrueColor)
+	EnableForTests()
 	os.Exit(m.Run())
 }
 

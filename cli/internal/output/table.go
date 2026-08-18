@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"unicode/utf8"
+
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/flexprice/cli/internal/style"
 )
 
 // numericListMarkers are top-level keys that indicate a paginated list
@@ -157,17 +160,50 @@ func (w Writer) renderTable(raw []byte, o Options) error {
 		columns = defaultColumns(rows[0])
 	}
 
-	tw := tabwriter.NewWriter(w.Out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, strings.ToUpper(strings.Join(columns, "\t")))
+	// Build the full grid first so column widths can be measured on VISIBLE
+	// width. text/tabwriter counts raw bytes, so ANSI escape sequences (~20
+	// invisible bytes per styled cell) inflate its width calculation and
+	// misalign every column once styling is on — verified directly: a styled
+	// header rendered ~20 columns narrower than its own data rows. lipgloss.Width
+	// is ANSI-aware and also handles wide/East-Asian runes correctly.
+	grid := make([][]string, 0, len(rows)+1)
+	header := make([]string, len(columns))
+	for i, c := range columns {
+		header[i] = style.Header(strings.ToUpper(c))
+	}
+	grid = append(grid, header)
 	for _, row := range rows {
 		cells := make([]string, len(columns))
 		for i, c := range columns {
-			cells[i] = format(row[c])
+			cells[i] = formatCell(c, row[c])
 		}
-		fmt.Fprintln(tw, strings.Join(cells, "\t"))
+		grid = append(grid, cells)
 	}
-	if err := tw.Flush(); err != nil {
-		return fmt.Errorf("write table: %w", err)
+
+	widths := make([]int, len(columns))
+	for _, cells := range grid {
+		for i, cell := range cells {
+			if n := lipgloss.Width(cell); n > widths[i] {
+				widths[i] = n
+			}
+		}
+	}
+
+	const gutter = 2
+	for _, cells := range grid {
+		var line strings.Builder
+		for i, cell := range cells {
+			line.WriteString(cell)
+			// No trailing whitespace on the final column — it would be
+			// invisible but would show up in golden-file comparisons and when
+			// piping output into other tools.
+			if i < len(cells)-1 {
+				line.WriteString(strings.Repeat(" ", widths[i]-lipgloss.Width(cell)+gutter))
+			}
+		}
+		if _, err := fmt.Fprintln(w.Out, line.String()); err != nil {
+			return fmt.Errorf("write table: %w", err)
+		}
 	}
 
 	if o.Total > o.Shown && o.Shown > 0 {
@@ -203,6 +239,19 @@ func defaultColumns(row map[string]any) []string {
 		keys = keys[:5]
 	}
 	return keys
+}
+
+// formatCell renders one cell, applying status coloring only when the column
+// name looks like a status column. Design doc §5.2: a column is "status-shaped"
+// when its name contains "status", case-insensitive — not tied to any specific
+// command, since 197 commands cannot each be hand-mapped without repeating the
+// same maintenance trap this project has avoided everywhere else.
+func formatCell(column string, value any) string {
+	text := format(value)
+	if strings.Contains(strings.ToLower(column), "status") {
+		return style.StatusColor(text)
+	}
+	return text
 }
 
 const maxCellRunes = 40

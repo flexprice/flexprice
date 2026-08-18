@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"golang.org/x/term"
 )
 
@@ -43,6 +44,19 @@ func Disable() { enabled = false }
 // restore state after calling Disable(), and for a future --color flag if one
 // is ever added to force color in a piped context.
 func Enable() { enabled = true }
+
+// EnableForTests turns styling on and forces a real color profile, for use
+// only from other packages' tests that need to assert on this package's
+// colored output (e.g. internal/output's table tests). go test never runs
+// with a terminal attached, so without forcing the profile, this package's
+// own auto-detection would correctly see no terminal and silently suppress
+// color — making a caller's ANSI-code assertions fail based on where the
+// tests run, not on whether their code calls this package correctly. Do not
+// call this from production code.
+func EnableForTests() {
+	enabled = true
+	renderer.SetColorProfile(termenv.TrueColor)
+}
 
 // renderer is package-level, rather than calling lipgloss.NewStyle() (the
 // package-level default) directly, so tests can force a specific color

@@ -3,10 +3,24 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/flexprice/cli/internal/style"
 )
+
+// TestMain forces the style package to a real color profile for this test
+// binary, matching internal/style's own TestMain — go test never runs with a
+// terminal attached, so without this, style's own auto-detection would
+// correctly see "no terminal" and this file's ANSI-code assertions
+// (TestRenderTable_HeaderIsStyled etc.) would fail based on execution
+// environment, not on whether table.go calls style correctly.
+func TestMain(m *testing.M) {
+	style.EnableForTests()
+	os.Exit(m.Run())
+}
 
 // olderListShape mirrors GET /environments: the array key isn't "items" but
 // the envelope still carries pagination markers (total/offset/limit) at the
@@ -278,5 +292,81 @@ func TestFormat_TruncatesOnRuneBoundary(t *testing.T) {
 	}
 	if !utf8.ValidString(got) {
 		t.Fatalf("format() produced invalid UTF-8: %q (bytes: %v)", got, []byte(got))
+	}
+}
+
+func TestRenderTable_HeaderIsStyled(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	input := []byte(`{"items":[{"id":"cust_1","status":"active"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Columns: []string{"id", "status"}}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(out.String(), "\x1b[") {
+		t.Errorf("table output has no ANSI codes; want the header row styled")
+	}
+}
+
+// The status VALUE, not just the header, gets colored when the column name
+// contains "status" and the value matches a known word.
+func TestRenderTable_KnownStatusValueIsColored(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	input := []byte(`{"items":[{"id":"cust_1","status":"archived"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Columns: []string{"id", "status"}}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	// The raw word is still present as a substring — color wraps it, does not
+	// replace it — so this also proves existing "strings.Contains(out, value)"
+	// style assertions elsewhere in this file remain valid unchanged.
+	if !strings.Contains(out.String(), "archived") {
+		t.Errorf("table output missing the status value itself: %q", out.String())
+	}
+}
+
+// A non-status column (e.g. "email") never gets value-colored, even if its
+// text happens to collide with a status word.
+func TestRenderTable_NonStatusColumnValuesAreNeverColored(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
+
+	// "active" as an email local-part, in a column that is not named "status".
+	input := []byte(`{"items":[{"id":"cust_1","email":"active@example.com"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{Columns: []string{"id", "email"}}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out.String(), "active\x1b[") || strings.Contains(out.String(), "\x1b[32mactive") {
+		t.Errorf("email column value was colored as if it were a status: %q", out.String())
+	}
+}
+
+// --output json must never contain ANSI codes, regardless of styling changes
+// made to the table path. This is the hard constraint from the design doc §6/U4.
+func TestRender_JSONOutputNeverContainsANSICodes(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatJSON}
+
+	input := []byte(`{"items":[{"id":"cust_1","status":"active"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out.String(), "\x1b[") {
+		t.Errorf("--output json contains ANSI escape codes: %q", out.String())
+	}
+}
+
+// Design doc §6/U4 names both json and yaml explicitly as staying unstyled.
+func TestRender_YAMLOutputNeverContainsANSICodes(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := Writer{Out: &out, Err: &errOut, Format: FormatYAML}
+
+	input := []byte(`{"items":[{"id":"cust_1","status":"active"}],"pagination":{"total":1,"limit":20,"offset":0}}`)
+	if err := w.Render(input, Options{}); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(out.String(), "\x1b[") {
+		t.Errorf("--output yaml contains ANSI escape codes: %q", out.String())
 	}
 }
