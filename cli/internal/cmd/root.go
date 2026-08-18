@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/cli/internal/keyring"
 	"github.com/flexprice/cli/internal/spec"
 	"github.com/flexprice/cli/internal/style"
+	"github.com/flexprice/cli/internal/ui"
 )
 
 // Globals holds the values bound to the root command's persistent flags.
@@ -32,13 +34,23 @@ type Globals struct {
 	Quiet   bool
 	Debug   bool
 	NoColor bool
+	NoInput bool
 	Limit   int
 	All     bool
 	Columns []string
+
+	// UI owns every human-facing write. It is replaced in PersistentPreRunE
+	// once flags are parsed; the value set at construction is a safe default
+	// so a directly-constructed command in a test never dereferences nil.
+	UI *ui.UI
 }
 
 func NewRootCommand(version string) *cobra.Command {
 	g := &Globals{}
+	// A usable default so tests that construct commands without running
+	// PersistentPreRunE do not dereference nil. Replaced below once flags
+	// exist.
+	g.UI = ui.FromEnv(false, false, true)
 
 	root := &cobra.Command{
 		Use:     "flexprice",
@@ -52,13 +64,14 @@ func NewRootCommand(version string) *cobra.Command {
 
 	bindGlobals(root.PersistentFlags(), g)
 
-	// Flags are not populated until Execute() parses them, so --no-color
-	// cannot be applied at construction time — this hook is the first point
-	// where g.NoColor is real.
+	// Flags are not populated until Execute() parses them, so neither the
+	// colour decision nor the UI can be made at construction time — this hook
+	// is the first point where g's fields are real.
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if g.NoColor {
 			style.Disable()
 		}
+		g.UI = ui.FromEnv(g.Quiet, g.NoInput, !g.NoColor)
 		return nil
 	}
 
@@ -102,7 +115,32 @@ func NewRootCommand(version string) *cobra.Command {
 	}
 	addRawCommands(root, g, version)
 
+	registerGlobals(root, g)
 	return root
+}
+
+// rootGlobals lets tests reach the Globals belonging to a specific root
+// command. Keyed by command pointer, and guarded by a mutex, so tests that
+// construct separate roots in parallel never observe each other's state — the
+// failure mode that made Globals a per-root value rather than a package
+// variable in the first place.
+var (
+	rootGlobalsMu sync.Mutex
+	rootGlobals   = map[*cobra.Command]*Globals{}
+)
+
+func registerGlobals(root *cobra.Command, g *Globals) {
+	rootGlobalsMu.Lock()
+	defer rootGlobalsMu.Unlock()
+	rootGlobals[root] = g
+}
+
+// globalsFor exposes a root command's Globals for tests. Production code
+// receives *Globals by parameter and must not reach for this.
+func globalsFor(root *cobra.Command) *Globals {
+	rootGlobalsMu.Lock()
+	defer rootGlobalsMu.Unlock()
+	return rootGlobals[root]
 }
 
 // statusLine formats the context footer shown under table output: which
@@ -195,6 +233,7 @@ func bindGlobals(f *pflag.FlagSet, g *Globals) {
 	f.BoolVar(&g.Quiet, "quiet", false, "suppress progress output")
 	f.BoolVar(&g.Debug, "debug", false, "dump requests and responses, secrets redacted")
 	f.BoolVar(&g.NoColor, "no-color", false, "disable coloured output")
+	f.BoolVar(&g.NoInput, "no-input", false, "never prompt; fail instead of asking")
 	f.StringSliceVar(&g.Columns, "columns", nil, "columns to show in table output")
 	f.IntVar(&g.Limit, "limit", 20, "maximum records to return")
 	f.BoolVar(&g.All, "all", false, "page through every record (prints the last page; use --output json with --limit for bulk export)")
