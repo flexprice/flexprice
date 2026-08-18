@@ -1,6 +1,50 @@
 package spec
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+// Load parses an ~880KB embedded document; a typical invocation calls it 2-3
+// times (NewRootCommand, runtimeContext, login's region prompt). Without
+// memoization each call re-parses from scratch. This asserts N calls cost close
+// to one parse, not N parses, by comparing N calls against a single call scaled
+// up — a generous multiplier keeps it robust to machine noise while still
+// failing hard if caching regresses (which would show ~N times the cost).
+func TestLoad_IsMemoizedAcrossCalls(t *testing.T) {
+	// Warm any one-time global costs (e.g. the loader's internal setup) so the
+	// timed portion isolates the cost of Load itself.
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	start := time.Now()
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	single := time.Since(start)
+
+	const n = 20
+	start = time.Now()
+	for i := 0; i < n; i++ {
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+	}
+	total := time.Since(start)
+
+	// Un-memoized, n calls would cost roughly n times a single call. Memoized,
+	// they should cost roughly the same as one call (cache-hit overhead only).
+	// A 5x-of-single budget comfortably separates "cached" from "re-parsed 20
+	// times" while tolerating scheduling noise.
+	budget := single * 5
+	if budget < time.Millisecond {
+		budget = time.Millisecond
+	}
+	if total > budget {
+		t.Errorf("%d calls to Load took %v (one call took %v); want caching to keep total near a single parse (budget %v)", n, total, single, budget)
+	}
+}
 
 func TestLoad_ParsesEmbeddedSpec(t *testing.T) {
 	doc, err := Load()

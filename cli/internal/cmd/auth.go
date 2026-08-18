@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -35,18 +36,23 @@ type environmentsResponse struct {
 	} `json:"environments"`
 }
 
-func VerifyKey(ctx context.Context, baseURL, apiKey, version string) error {
-	c := client.New(client.Options{BaseURL: baseURL, APIKey: apiKey, Version: version})
+func VerifyKey(ctx context.Context, baseURL, apiKey, version string, debug bool, debugOut io.Writer) error {
+	c := client.New(client.Options{
+		BaseURL: baseURL, APIKey: apiKey, Version: version,
+		Debug: debug, DebugOut: debugOut,
+	})
 
 	if _, err := c.Do(ctx, http.MethodGet, "/environments", nil, nil); err != nil {
 		var apiErr *client.APIError
 		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized {
 			// A wrong-region key and an invalid key both return 401 with an
-			// identical body, so the message has to name the possibility.
+			// identical body, so the message has to name the possibility. Wrapped
+			// with %w so errors.As in main.go still finds the *client.APIError and
+			// exits with exitcode.Auth instead of the generic fallback.
 			return fmt.Errorf(
 				"this key was rejected by %s.\n"+
 					"  Keys are region-specific. If your account is in another region, re-run with --region\n"+
-					"  (for example: flexprice login --region in)", baseURL)
+					"  (for example: flexprice login --region in): %w", baseURL, err)
 		}
 		return err
 	}
@@ -124,7 +130,7 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 				return fmt.Errorf("no API key provided")
 			}
 
-			if err := VerifyKey(ctx, baseURL, apiKey, version); err != nil {
+			if err := VerifyKey(ctx, baseURL, apiKey, version, g.Debug, os.Stderr); err != nil {
 				return err
 			}
 

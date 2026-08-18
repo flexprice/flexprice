@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/flexprice/cli/internal/client"
+	"github.com/flexprice/cli/internal/exitcode"
 )
 
 func envServer(t *testing.T, envType string) *httptest.Server {
@@ -28,7 +33,7 @@ func TestVerifyKey_AcceptsAWorkingKey(t *testing.T) {
 	srv := envServer(t, "development")
 	defer srv.Close()
 
-	if err := VerifyKey(t.Context(), srv.URL, "sk_good", "test"); err != nil {
+	if err := VerifyKey(t.Context(), srv.URL, "sk_good", "test", false, nil); err != nil {
 		t.Fatalf("VerifyKey: %v", err)
 	}
 }
@@ -39,12 +44,56 @@ func TestVerifyKey_RejectionMentionsRegion(t *testing.T) {
 	srv := envServer(t, "production")
 	defer srv.Close()
 
-	err := VerifyKey(t.Context(), srv.URL, "sk_wrong", "test")
+	err := VerifyKey(t.Context(), srv.URL, "sk_wrong", "test", false, nil)
 	if err == nil {
 		t.Fatal("want an error for a rejected key")
 	}
 	if got := err.Error(); !strings.Contains(got, "region") {
 		t.Errorf("error = %q, want it to mention region", got)
+	}
+}
+
+// main.go dispatches exit codes via errors.As(err, &apiErr); a rejection must
+// stay a *client.APIError under wrapping so a bad key exits with exitcode.Auth
+// (3), not the generic fallback (1).
+func TestVerifyKey_RejectionPreservesAPIErrorType(t *testing.T) {
+	srv := envServer(t, "production")
+	defer srv.Close()
+
+	err := VerifyKey(t.Context(), srv.URL, "sk_wrong", "test", false, nil)
+	if err == nil {
+		t.Fatal("want an error for a rejected key")
+	}
+	var apiErr *client.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("errors.As(err, &apiErr) = false, want the *client.APIError to survive wrapping; err = %v", err)
+	}
+	if got := apiErr.ExitCode(); got != exitcode.Auth {
+		t.Errorf("ExitCode() = %d, want exitcode.Auth (%d)", got, exitcode.Auth)
+	}
+}
+
+// VerifyKey's own client.New call must thread through debug settings like every
+// other call site in this package, or `flexprice login --debug` silently
+// produces no output for the verification request.
+func TestVerifyKey_DebugWritesRequestOutput(t *testing.T) {
+	srv := envServer(t, "development")
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	if err := VerifyKey(t.Context(), srv.URL, "sk_good", "test", true, &buf); err != nil {
+		t.Fatalf("VerifyKey: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Error("debug=true produced no debug output")
+	}
+
+	buf.Reset()
+	if err := VerifyKey(t.Context(), srv.URL, "sk_good", "test", false, &buf); err != nil {
+		t.Fatalf("VerifyKey: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("debug=false wrote %d bytes, want none", buf.Len())
 	}
 }
 

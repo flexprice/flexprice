@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -18,13 +19,29 @@ import (
 // event types. Design doc §5.
 const WebhookEventsTag = "Webhook Events"
 
+// loadOnce, loadDoc and loadErr memoize Load: the embedded spec bytes never
+// change within a process, and parsing an ~880KB document costs tens of
+// milliseconds, yet a single invocation calls Load 2-3 times (building the
+// command tree, resolving runtime credentials, prompting for a region). Every
+// call after the first returns the cached result immediately. Callers must
+// treat the returned *openapi3.T as read-only, since it is shared.
+var (
+	loadOnce sync.Once
+	loadDoc  *openapi3.T
+	loadErr  error
+)
+
 func Load() (*openapi3.T, error) {
-	loader := openapi3.NewLoader()
-	doc, err := loader.LoadFromData(specdata.OpenAPI)
-	if err != nil {
-		return nil, fmt.Errorf("parse embedded OpenAPI spec: %w", err)
-	}
-	return doc, nil
+	loadOnce.Do(func() {
+		loader := openapi3.NewLoader()
+		doc, err := loader.LoadFromData(specdata.OpenAPI)
+		if err != nil {
+			loadErr = fmt.Errorf("parse embedded OpenAPI spec: %w", err)
+			return
+		}
+		loadDoc = doc
+	})
+	return loadDoc, loadErr
 }
 
 type Region struct {
