@@ -1,5 +1,8 @@
 # Flexprice CLI
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/flexprice/cli)](https://github.com/flexprice/cli/releases)
+
 Usage-based billing from your terminal — send events, inspect how they metered,
 and drive the Flexprice API without leaving the command line.
 
@@ -19,6 +22,10 @@ and drive the Flexprice API without leaving the command line.
 **Go**
 
     go install github.com/flexprice/cli@latest
+
+**Upgrading:** `brew upgrade flexprice/tap/flexprice`, re-run the install
+script, or `go install github.com/flexprice/cli@latest` again — all three
+just replace the binary in place; your config and stored keys are untouched.
 
 ## Quickstart
 
@@ -65,6 +72,26 @@ See everything you can act on:
     customers                    by-external-id, create, delete, entitlements, entitlements-by-external-id, list, retrieve, subscriptions, upcoming-grants, update, usage
     ... and 24 more
 
+## Commands at a glance
+
+197 commands across 34 resources are resolved at startup from the embedded
+OpenAPI spec — nothing below is committed generated code (see
+[ARCHITECTURE.md](ARCHITECTURE.md)). A handful of commands don't map to a
+single API operation and are hand-written instead:
+
+| Command | What it does |
+|---|---|
+| `flexprice init` | Guided first-run setup |
+| `flexprice login` / `flexprice logout` | Add or remove a stored profile |
+| `flexprice whoami` | Show the active profile, region, and key backend |
+| `flexprice env list` | List environments in your tenant |
+| `flexprice config list` / `flexprice config use <profile>` | Manage stored profiles |
+| `flexprice resources` | List every resource and its actions |
+| `flexprice <resource> <action>` | The generated surface — `customers list`, `invoices finalize`, ... |
+| `flexprice get` / `post` / `delete <path>` | Raw HTTP escape hatch for anything not covered by a resource command |
+| `flexprice open dashboard` / `flexprice open webhooks` | Open the web dashboard or webhook portal |
+| `flexprice version` | Print the CLI version and embedded spec build |
+
 ## What you can do
 
 Every resource in the API is a top-level command, grouped by action:
@@ -101,6 +128,9 @@ which cannot:
 
     Use --edit to fill in a pre-built request body, or --data @file.json.
 
+Destructive actions (`delete`, `void`, `cancel`, `terminate`, `archive`) ask
+for confirmation on a terminal; `--force` skips the prompt for scripts.
+
 Anything not covered by a named command is reachable through the raw escape
 hatch:
 
@@ -116,6 +146,7 @@ means switching profiles:
     flexprice login --label "production"    # stores a second profile
     flexprice config list                    # see every stored profile
     flexprice -p production customers list   # use one for a single command
+    flexprice logout -p production           # remove a profile and its key
 
 `flexprice env list` shows every environment in your tenant, but the CLI
 cannot tell you which one your active key belongs to — the API itself does not
@@ -153,12 +184,26 @@ invocation or for CI.
 lists every action for a resource; a generated reference for every command is
 published at https://docs.flexprice.io/cli.
 
+## For maintainers
+
+This CLI dispatches commands at runtime from an embedded OpenAPI spec rather
+than generating Go source per command — [ARCHITECTURE.md](ARCHITECTURE.md)
+walks through the request lifecycle end to end. The five decisions with real
+trade-offs behind them are recorded as short ADRs in
+[decisions/](decisions/); the two most common maintenance tasks — adding a
+generated command and adding a hand-written one — are walked through in
+[guides/](guides/).
+
+Build and test locally with the standard Go toolchain from inside `cli/`:
+
+    go build ./...
+    go test -race ./...
+
 ## Contributing
 
 **Source of truth is `flexprice/flexprice` at `cli/`.** This repository is a
 release mirror — please open pull requests against the monorepo. Issues here
-are welcome. See [ARCHITECTURE.md](ARCHITECTURE.md) for how the code is put
-together.
+are welcome.
 
 ## License
 
