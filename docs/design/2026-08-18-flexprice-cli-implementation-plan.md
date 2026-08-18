@@ -4118,6 +4118,11 @@ func runtimeContext() (config.RuntimeContext, *config.Config, error) {
 And register everything in `NewRootCommand`, before the `return root`:
 
 ```go
+	// Remove the Run stub added in Task 2 now that subcommands exist: cobra renders
+	// the Usage/Flags help section when HasSubCommands() is true, so the stub that
+	// forced it for a bare root command is redundant from here on.
+	root.Run = nil
+
 	root.AddCommand(
 		newInitCommand(version),
 		newLoginCommand(version),

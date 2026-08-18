@@ -748,3 +748,22 @@ lint: build-loglint
 ## lint-ci: run loglint on internal/ (errors only — LL008 warnings ignored)
 lint-ci: build-loglint
 	@out=$$(go vet -vettool=./tools/bin/loglint ./internal/... 2>&1 | grep -v "^#" | grep -v "warning:"); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
+
+# ---- CLI (cli/ is a separate Go module: github.com/flexprice/cli) ----
+
+.PHONY: cli-build
+cli-build:
+	cd cli && go build -o bin/flexprice .
+
+.PHONY: cli-test
+cli-test:
+	cd cli && go test -race ./...
+
+.PHONY: cli-vet
+cli-vet:
+	cd cli && go vet ./...
+
+.PHONY: sync-cli-spec
+sync-cli-spec:
+	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
+	@echo "Synced OpenAPI spec into cli/spec/openapi.json"
