@@ -90,6 +90,8 @@ type InvoiceService interface {
 	AddBulkLineItem(ctx context.Context, invoiceID string, req dto.AddBulkLineItemRequest) (*dto.InvoiceResponse, error)
 
 	RemoveBulkLineItem(ctx context.Context, invoiceID string, req dto.RemoveBulkLineItemRequest) (*dto.InvoiceResponse, error)
+
+	ModifyInvoice(ctx context.Context, invoiceID string, req dto.ExecuteInvoiceModifyRequest) (*dto.InvoiceModifyResponse, error)
 }
 
 type invoiceService struct {
@@ -506,6 +508,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		inv, lockErr = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if lockErr != nil {
 			return lockErr
+		}
+
+		if inv.IsManuallyEdited {
+			return ierr.NewError("invoice has manual line-item edits").
+				WithHint("manual line-item edits are not supported for computed invoices").
+				Mark(ierr.ErrValidation)
 		}
 
 		// Re-check status under lock: allow SKIPPED invoices to be re-computed

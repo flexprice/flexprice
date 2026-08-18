@@ -202,7 +202,7 @@ func (s *InvoiceService) markPaidIfFlexpricePaid(ctx context.Context, flexpriceI
 	if flex == nil {
 		return nil
 	}
-	
+
 	switch flex.PaymentStatus {
 	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
 		return s.MarkInvoicePaidInZoho(ctx, flex.ID)
@@ -247,6 +247,15 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 			"zoho_invoice_id", zohoInvoiceID)
 		return nil
 	}
+
+	// Zoho's total is tax-inclusive while Flexprice's is tax-exclusive, so log both sides of the
+	// amount being settled to explain any mismatch between the two systems' figures.
+	s.logger.Info(ctx, "recording Zoho customer payment for synced invoice",
+		"invoice_id", flexpriceInvoiceID,
+		"zoho_invoice_id", zohoInvoiceID,
+		"zoho_customer_id", zohoInv.CustomerID,
+		"zoho_balance", zohoInv.Balance.String(),
+	)
 
 	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(
 		zohoInv.CustomerID,
@@ -353,22 +362,16 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		childName := childCustomerIDToName[lineItemIDToChildCustomer[li.ID]]
-		lineItem := InvoiceLineItem{
+		out = append(out, InvoiceLineItem{
 			Name:        name,
 			Description: formatPeriodDescription(childName, li.PeriodStart, li.PeriodEnd),
 			Quantity:    qty,
 			Rate:        rate,
 			Discount:    li.LineItemDiscount.Add(li.InvoiceLevelDiscount),
 			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
-		}
-		if taxRes != nil {
-			if taxRes.IsTaxable {
-				lineItem.TaxID = taxRes.TaxID
-			} else {
-				lineItem.TaxExemptionID = taxRes.TaxExemptionID
-			}
-		}
-		out = append(out, lineItem)
+			//TaxID:          taxRes.TaxID,
+			//TaxExemptionID: taxRes.TaxExemptionID,
+		})
 	}
 	return out, nil
 }

@@ -194,7 +194,6 @@ func (s *LineItemEditSuite) TestAddRecalculatesTotalsAndFlagsManuallyEdited() {
 				Quantity:    decimal.NewFromInt(2),
 			},
 		},
-		MarkManuallyEdited: true,
 	})
 	s.NoError(err)
 
@@ -202,48 +201,6 @@ func (s *LineItemEditSuite) TestAddRecalculatesTotalsAndFlagsManuallyEdited() {
 	s.True(resp.Total.Equal(decimal.NewFromInt(150)))
 	s.True(resp.AmountDue.Equal(decimal.NewFromInt(150)))
 	s.Require().Len(resp.LineItems, 2)
-
-	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
-	s.NoError(err)
-	s.True(updatedInv.IsManuallyEdited)
-}
-
-func (s *LineItemEditSuite) TestAddDoesNotMarkManuallyEditedByDefault() {
-	ctx := s.GetContext()
-	inv := s.createDraftInvoice(ctx, decimal.Zero)
-
-	_, err := s.service.AddBulkLineItem(ctx, inv.ID, dto.AddBulkLineItemRequest{
-		Items: []dto.AddLineItemRequest{
-			{
-				DisplayName: "New Item",
-				Amount:      decimal.NewFromInt(100),
-				Quantity:    decimal.NewFromInt(2),
-			},
-		},
-	})
-	s.NoError(err)
-
-	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
-	s.NoError(err)
-	s.False(updatedInv.IsManuallyEdited)
-}
-
-func (s *LineItemEditSuite) TestAddDoesNotResetManuallyEditedFlagWhenNotRequested() {
-	ctx := s.GetContext()
-	inv := s.createDraftInvoice(ctx, decimal.Zero)
-	inv.IsManuallyEdited = true
-	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
-
-	_, err := s.service.AddBulkLineItem(ctx, inv.ID, dto.AddBulkLineItemRequest{
-		Items: []dto.AddLineItemRequest{
-			{
-				DisplayName: "New Item",
-				Amount:      decimal.NewFromInt(100),
-				Quantity:    decimal.NewFromInt(2),
-			},
-		},
-	})
-	s.NoError(err)
 
 	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 	s.NoError(err)
@@ -374,8 +331,7 @@ func (s *LineItemEditSuite) TestUpdateArchivesOldCreatesNew() {
 
 	newName := "New Name"
 	resp, err := s.service.UpdateLineItem(ctx, inv.ID, li.ID, dto.UpdateLineItemRequest{
-		DisplayName:        &newName,
-		MarkManuallyEdited: true,
+		DisplayName: &newName,
 	})
 	s.NoError(err)
 	s.NotNil(resp)
@@ -404,21 +360,6 @@ func (s *LineItemEditSuite) TestUpdateArchivesOldCreatesNew() {
 	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 	s.NoError(err)
 	s.True(updatedInv.IsManuallyEdited)
-}
-
-func (s *LineItemEditSuite) TestUpdateDoesNotMarkManuallyEditedByDefault() {
-	ctx := s.GetContext()
-	inv, li := s.createDraftInvoiceWithLineItem(ctx, decimal.NewFromInt(100), decimal.NewFromInt(10))
-
-	newName := "New Name"
-	_, err := s.service.UpdateLineItem(ctx, inv.ID, li.ID, dto.UpdateLineItemRequest{
-		DisplayName: &newName,
-	})
-	s.NoError(err)
-
-	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
-	s.NoError(err)
-	s.False(updatedInv.IsManuallyEdited)
 }
 
 func (s *LineItemEditSuite) TestUpdateChainsLineageAcrossMultipleEdits() {
@@ -572,8 +513,7 @@ func (s *LineItemEditSuite) TestRemoveSoftDeletesLineItem() {
 	inv, li := s.createDraftInvoiceWithLineItem(ctx, decimal.NewFromInt(100), decimal.NewFromInt(10))
 
 	resp, err := s.service.RemoveBulkLineItem(ctx, inv.ID, dto.RemoveBulkLineItemRequest{
-		LineItemIDs:        []string{li.ID},
-		MarkManuallyEdited: true,
+		LineItemIDs: []string{li.ID},
 	})
 	s.NoError(err)
 	s.NotNil(resp)
@@ -591,20 +531,6 @@ func (s *LineItemEditSuite) TestRemoveSoftDeletesLineItem() {
 	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 	s.NoError(err)
 	s.True(updatedInv.IsManuallyEdited)
-}
-
-func (s *LineItemEditSuite) TestRemoveDoesNotMarkManuallyEditedByDefault() {
-	ctx := s.GetContext()
-	inv, li := s.createDraftInvoiceWithLineItem(ctx, decimal.NewFromInt(100), decimal.NewFromInt(10))
-
-	_, err := s.service.RemoveBulkLineItem(ctx, inv.ID, dto.RemoveBulkLineItemRequest{
-		LineItemIDs: []string{li.ID},
-	})
-	s.NoError(err)
-
-	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
-	s.NoError(err)
-	s.False(updatedInv.IsManuallyEdited)
 }
 
 func (s *LineItemEditSuite) TestRemoveRecalculatesTotalsExcludingRemovedItem() {
@@ -756,6 +682,182 @@ func (s *LineItemEditSuite) TestRemoveBulkLineItemRejectsOversizedBatch() {
 
 	_, err := s.service.RemoveBulkLineItem(ctx, inv.ID, dto.RemoveBulkLineItemRequest{
 		LineItemIDs: ids,
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+type InvoiceModificationServiceSuite struct {
+	testutil.BaseServiceTestSuite
+	service InvoiceService
+}
+
+func TestInvoiceModification(t *testing.T) {
+	suite.Run(t, new(InvoiceModificationServiceSuite))
+}
+
+func (s *InvoiceModificationServiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.service = NewInvoiceService(ServiceParams{
+		Logger:              s.GetLogger(),
+		Config:              s.GetConfig(),
+		DB:                  s.GetDB(),
+		InvoiceRepo:         s.GetStores().InvoiceRepo,
+		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
+	})
+}
+
+func (s *InvoiceModificationServiceSuite) createDraftInvoice() *invoice.Invoice {
+	ctx := s.GetContext()
+	inv := &invoice.Invoice{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:    "cust_test",
+		InvoiceType:   types.InvoiceTypeSubscription,
+		InvoiceStatus: types.InvoiceStatusDraft,
+		Currency:      "usd",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+	return inv
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteAddLineItem() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	resp, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action: dto.InvoiceModifyLineItemActionAdd,
+			Items: []dto.AddLineItemRequest{
+				{
+					DisplayName: "First Item",
+					Amount:      decimal.NewFromInt(100),
+					Quantity:    decimal.NewFromInt(1),
+				},
+				{
+					DisplayName: "Second Item",
+					Amount:      decimal.NewFromInt(50),
+					Quantity:    decimal.NewFromInt(2),
+				},
+			},
+		},
+	})
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotNil(resp.Invoice)
+	s.Require().Len(resp.Invoice.LineItems, 2)
+	s.True(resp.Invoice.Subtotal.Equal(decimal.NewFromInt(150)))
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteRemoveLineItem() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	li := &invoice.InvoiceLineItem{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:   inv.ID,
+		CustomerID:  inv.CustomerID,
+		DisplayName: lo.ToPtr("Item To Remove"),
+		Amount:      decimal.NewFromInt(100),
+		Quantity:    decimal.NewFromInt(1),
+		Currency:    "usd",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, li))
+
+	resp, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action:      dto.InvoiceModifyLineItemActionRemove,
+			LineItemIDs: []string{li.ID},
+		},
+	})
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotNil(resp.Invoice)
+	s.Len(resp.Invoice.LineItems, 0)
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteMarksInvoiceAsManuallyEdited() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action: dto.InvoiceModifyLineItemActionAdd,
+			Items: []dto.AddLineItemRequest{
+				{
+					DisplayName: "First Item",
+					Amount:      decimal.NewFromInt(100),
+					Quantity:    decimal.NewFromInt(1),
+				},
+			},
+		},
+	})
+	s.NoError(err)
+
+	updatedInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.NoError(err)
+	s.True(updatedInv.IsManuallyEdited)
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteRejectsUnknownType() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: "bogus",
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteRejectsUnknownAction() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action: "bogus",
+		},
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecuteRejectsMissingLineItemParams() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+func (s *InvoiceModificationServiceSuite) TestExecutePropagatesUnderlyingErrors() {
+	ctx := s.GetContext()
+	inv := s.createDraftInvoice()
+	inv.InvoiceStatus = types.InvoiceStatusFinalized
+	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action: dto.InvoiceModifyLineItemActionAdd,
+			Items: []dto.AddLineItemRequest{
+				{
+					DisplayName: "Should Not Be Added",
+					Amount:      decimal.NewFromInt(100),
+					Quantity:    decimal.NewFromInt(1),
+				},
+			},
+		},
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))

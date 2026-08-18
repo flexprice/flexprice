@@ -69,21 +69,22 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 				Mark(ierr.ErrValidation)
 		}
 
-		newItem := *existingItem
-		newItem.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
-		newItem.ParentLineItemID = &existingItem.ID
-		newItem.BaseModel = types.GetDefaultBaseModel(txCtx)
+		builder := invoice.NewInvoiceLineItemBuilder(existingItem).
+			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
+			WithParentLineItemID(lo.ToPtr(existingItem.ID)).
+			WithBaseModel(types.GetDefaultBaseModel(txCtx))
 
 		if req.DisplayName != nil {
-			newItem.DisplayName = req.DisplayName
+			builder = builder.WithDisplayName(req.DisplayName)
 		}
 		if req.Amount != nil {
-			newItem.Amount = *req.Amount
+			builder = builder.WithAmount(*req.Amount)
 		}
 		if req.Quantity != nil {
-			newItem.Quantity = *req.Quantity
+			builder = builder.WithQuantity(*req.Quantity)
 		}
 
+		newItem := builder.Build()
 		if err := newItem.Validate(); err != nil {
 			return err
 		}
@@ -93,7 +94,7 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 			return err
 		}
 
-		if err := s.InvoiceLineItemRepo.Create(txCtx, &newItem); err != nil {
+		if err := s.InvoiceLineItemRepo.Create(txCtx, newItem); err != nil {
 			return err
 		}
 
@@ -104,12 +105,10 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 			}
 			remaining = append(remaining, li)
 		}
-		publishedLineItems = append(remaining, &newItem)
+		publishedLineItems = append(remaining, newItem)
 
 		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
-		if req.MarkManuallyEdited {
-			lockedInv.IsManuallyEdited = true
-		}
+		lockedInv.IsManuallyEdited = true
 
 		return s.InvoiceRepo.Update(txCtx, lockedInv)
 	})
@@ -141,23 +140,23 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 		}
 		lockedInv = inv
 
-		newItems := make([]*invoice.InvoiceLineItem, len(req.Items))
-		for i, item := range req.Items {
-			newItem := &invoice.InvoiceLineItem{
-				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-				InvoiceID:     inv.ID,
-				CustomerID:    inv.CustomerID,
-				EnvironmentID: inv.EnvironmentID,
-				DisplayName:   lo.ToPtr(item.DisplayName),
-				Amount:        item.Amount,
-				Quantity:      item.Quantity,
-				Currency:      inv.Currency,
-				BaseModel:     types.GetDefaultBaseModel(txCtx),
-			}
+		newItems := lo.Map(req.Items, func(item dto.AddLineItemRequest, _ int) *invoice.InvoiceLineItem {
+			return invoice.NewInvoiceLineItemBuilder(nil).
+				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
+				WithInvoiceID(inv.ID).
+				WithCustomerID(inv.CustomerID).
+				WithEnvironmentID(inv.EnvironmentID).
+				WithDisplayName(lo.ToPtr(item.DisplayName)).
+				WithAmount(item.Amount).
+				WithQuantity(item.Quantity).
+				WithCurrency(inv.Currency).
+				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
+				Build()
+		})
+		for _, newItem := range newItems {
 			if err := newItem.Validate(); err != nil {
 				return err
 			}
-			newItems[i] = newItem
 		}
 
 		if err := s.InvoiceLineItemRepo.CreateBulk(txCtx, newItems); err != nil {
@@ -169,9 +168,7 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 		publishedLineItems = append(publishedLineItems, newItems...)
 
 		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
-		if req.MarkManuallyEdited {
-			lockedInv.IsManuallyEdited = true
-		}
+		lockedInv.IsManuallyEdited = true
 
 		return s.InvoiceRepo.Update(txCtx, lockedInv)
 	})
@@ -236,9 +233,7 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 		publishedLineItems = remaining
 
 		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
-		if req.MarkManuallyEdited {
-			lockedInv.IsManuallyEdited = true
-		}
+		lockedInv.IsManuallyEdited = true
 
 		return s.InvoiceRepo.Update(txCtx, lockedInv)
 	})
@@ -248,4 +243,46 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 
 	lockedInv.LineItems = publishedLineItems
 	return dto.NewInvoiceResponse(lockedInv), nil
+}
+
+func (s *invoiceService) ModifyInvoice(ctx context.Context, invoiceID string, req dto.ExecuteInvoiceModifyRequest) (*dto.InvoiceModifyResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	switch req.Type {
+	case dto.InvoiceModifyTypeLineItem:
+		return s.executeLineItemModification(ctx, invoiceID, req.LineItemParams)
+	default:
+		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
+			WithHint("valid values: line_item").
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (s *invoiceService) executeLineItemModification(ctx context.Context, invoiceID string, params *dto.InvoiceModifyLineItemParams) (*dto.InvoiceModifyResponse, error) {
+	var (
+		resp *dto.InvoiceResponse
+		err  error
+	)
+
+	switch params.Action {
+	case dto.InvoiceModifyLineItemActionAdd:
+		resp, err = s.AddBulkLineItem(ctx, invoiceID, dto.AddBulkLineItemRequest{
+			Items: params.Items,
+		})
+	case dto.InvoiceModifyLineItemActionRemove:
+		resp, err = s.RemoveBulkLineItem(ctx, invoiceID, dto.RemoveBulkLineItemRequest{
+			LineItemIDs: params.LineItemIDs,
+		})
+	default:
+		return nil, ierr.NewError("unknown line item action: " + string(params.Action)).
+			WithHint("valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.InvoiceModifyResponse{Invoice: resp}, nil
 }

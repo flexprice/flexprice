@@ -121,9 +121,9 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 
 type InvoiceWebhookPayload struct {
 	EventType types.WebhookEventName `json:"event_type"`
-	Invoice   *Invoice               `json:"invoice"`
+	Invoice   *dto.InvoiceResponse   `json:"invoice"`
 }
 
 func NewInvoiceWebhookPayload(invoice *dto.InvoiceResponse, eventType types.WebhookEventName) *InvoiceWebhookPayload {
-	return &InvoiceWebhookPayload{EventType: eventType, Invoice: NewInvoice(invoice, eventType)}
+	return &InvoiceWebhookPayload{EventType: eventType, Invoice: invoice}
 }
