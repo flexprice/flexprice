@@ -217,10 +217,30 @@ All 34 spec-derived resources are mapped (7 + 4 + 5 + 6 + 7 + 5 = 34).
 A hand-maintained taxonomy over a spec-derived command tree will drift the moment the API
 adds a resource. Both guards are required:
 
-1. **Runtime fallback.** An unmapped resource gets `GroupID: "additional"` and renders
-   under "Additional commands". It is never silently dropped from help.
+1. **Runtime fallback — native, no code required.** Verified by spike: cobra renders any
+   command whose `GroupID` is empty under a built-in `Additional Commands:` heading. So an
+   unmapped resource is never silently dropped from help, and the correct implementation is
+   to leave `GroupID` unset rather than to invent an `"additional"` group. Assigning a
+   literal `"additional"` ID would be strictly worse — see the hazard below.
 2. **`TestEveryResourceHasAGroup`.** Walks the registry and fails, naming any unmapped
    resource. Adding a resource then costs one line in `groups.go`, and CI says which.
+
+**Hazard, verified by spike:** cobra **panics** at `Execute()` when a command carries a
+`GroupID` that was never registered via `AddGroup`:
+
+```
+panic: group id 'does-not-exist' is not defined for subcommand 'flexprice bogus'
+```
+
+This is a runtime crash on *every* invocation, not a compile error, so a single typo in
+the group table bricks the whole CLI. The freshness test is therefore load-bearing rather
+than hygiene, and it must assert both directions: every resource has a group, **and**
+every assigned `GroupID` is registered. The cheapest way to cover the second is for the
+test to actually run `Execute()`, since that is the code path that panics.
+
+**Also verified by spike:** the auto-added `help` and `completion` commands fall into
+`Additional Commands:` unless explicitly placed with `SetHelpCommandGroupID` and
+`SetCompletionCommandGroupID`. Both calls are required to realise the §5 table.
 
 ### 5.2 Resource shorts
 
