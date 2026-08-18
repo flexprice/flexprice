@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/flexprice/cli/internal/client"
+	"github.com/flexprice/cli/internal/output"
+	"github.com/flexprice/cli/internal/style"
 )
 
 // newEnvCommand lists the tenant's environments and which have a local profile.
@@ -43,13 +44,22 @@ func newEnvCommand(g *Globals, version string) *cobra.Command {
 			// Profiles cannot be correlated to environments: the API does not
 			// report which environment the active key belongs to, so this is a
 			// plain listing of what exists in the tenant.
-			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "ENVIRONMENT\tTYPE\tID")
+			//
+			// output.PadGrid rather than text/tabwriter: tabwriter counts raw
+			// bytes, so the styled header below would have inflated its width
+			// calculation by ~20 invisible escape bytes per cell and misaligned
+			// every column — the same defect already fixed once in the table
+			// renderer.
+			grid := [][]string{{
+				style.Header("ENVIRONMENT"),
+				style.Header("TYPE"),
+				style.Header("ID"),
+			}}
 			for _, e := range envs.Environments {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", e.Name, e.Type, e.ID)
+				grid = append(grid, []string{e.Name, e.Type, e.ID})
 			}
-			if err := tw.Flush(); err != nil {
-				return err
+			for _, line := range output.PadGrid(grid) {
+				g.UI.Data("%s", line)
 			}
 			g.UI.Info("\nYour key is scoped to one of these, but the API does not say which.")
 			return nil

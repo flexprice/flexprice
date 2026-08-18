@@ -7,8 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/flexprice/cli/internal/style"
 )
 
@@ -183,28 +181,8 @@ func (w Writer) renderTable(raw []byte, o Options) error {
 		grid = append(grid, cells)
 	}
 
-	widths := make([]int, len(columns))
-	for _, cells := range grid {
-		for i, cell := range cells {
-			if n := lipgloss.Width(cell); n > widths[i] {
-				widths[i] = n
-			}
-		}
-	}
-
-	const gutter = 2
-	for _, cells := range grid {
-		var line strings.Builder
-		for i, cell := range cells {
-			line.WriteString(cell)
-			// No trailing whitespace on the final column — it would be
-			// invisible but would show up in golden-file comparisons and when
-			// piping output into other tools.
-			if i < len(cells)-1 {
-				line.WriteString(strings.Repeat(" ", widths[i]-lipgloss.Width(cell)+gutter))
-			}
-		}
-		if _, err := fmt.Fprintln(w.Out, line.String()); err != nil {
+	for _, line := range PadGrid(grid) {
+		if _, err := fmt.Fprintln(w.Out, line); err != nil {
 			return fmt.Errorf("write table: %w", err)
 		}
 	}
