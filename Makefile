@@ -768,3 +768,7 @@ sync-cli-spec:
 	mkdir -p cli/spec
 	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
 	@echo "Synced OpenAPI spec into cli/spec/openapi.json"
+
+.PHONY: cli-docs
+cli-docs:
+	cd cli && go run ./tools/gendocs

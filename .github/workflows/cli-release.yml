@@ -1,0 +1,65 @@
+name: CLI release
+
+on:
+  push:
+    # Prefixed tags keep CLI releases independent of backend releases.
+    tags: ['cli/v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+
+      - name: Verify the embedded spec is current
+        run: |
+          if ! diff -q docs/swagger/swagger-3-0.json cli/spec/openapi.json > /dev/null; then
+            echo "::error::cli/spec/openapi.json is stale. Run: make sync-cli-spec"
+            exit 1
+          fi
+
+      - name: Test
+        run: cd cli && go test -race ./...
+
+      # Publish the cli/ subtree to the flexprice/cli mirror, following the same
+      # pattern the SDK mirrors in generate-sdks.yml already use: clone the
+      # target repo, replace its tree, commit and push incrementally so the
+      # mirror keeps real git history across releases rather than having it
+      # discarded every time.
+      - name: Push source to flexprice/cli
+        env:
+          TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#cli/}"
+          git clone "https://x-access-token:${TOKEN}@github.com/flexprice/cli.git" /tmp/mirror
+          cd /tmp/mirror
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -R "$GITHUB_WORKSPACE/cli/." .
+          rm -rf bin
+          git config user.name  "flexprice-bot"
+          git config user.email "bot@flexprice.io"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "release ${VERSION}"
+          fi
+          if ! git rev-parse "${VERSION}" >/dev/null 2>&1; then
+            git tag "${VERSION}"
+          fi
+          git push origin main
+          git push origin "${VERSION}"
+
+      - name: Release binaries
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          workdir: cli
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+          SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
