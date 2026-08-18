@@ -769,6 +769,8 @@ sync-cli-spec:
 	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
 	@echo "Synced OpenAPI spec into cli/spec/openapi.json"
 
+# TODO: manual-only for now — not called from cli-release.yml. Check with the
+# team before wiring this into automated releases; see cli/tools/gendocs/main.go.
 .PHONY: cli-docs
 cli-docs:
 	cd cli && go run ./tools/gendocs
