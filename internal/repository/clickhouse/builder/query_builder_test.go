@@ -42,6 +42,21 @@ func TestQueryBuilder_WithBaseFilters(t *testing.T) {
 			},
 			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'api_calls' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3, 'UTC') AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3, 'UTC') ORDER BY tenant_id, environment_id, timestamp, id DESC))",
 		},
+		{
+			// Regression: non-UTC inputs must be converted to UTC clock time and the
+			// literal wrapped with an explicit `'UTC'` — without this, ClickHouse
+			// reinterprets the naive string in the server's local tz and silently
+			// shifts the window.
+			name: "non-UTC time inputs are converted to UTC in toDateTime64",
+			params: &events.UsageParams{
+				EventName: "api_calls",
+				// 10:00 in +02:00 == 08:00 UTC
+				StartTime: time.Date(2024, 1, 1, 10, 0, 0, 0, time.FixedZone("+02:00", 2*60*60)),
+				// 12:30 in -05:00 == 17:30 UTC
+				EndTime: time.Date(2024, 1, 2, 12, 30, 0, 0, time.FixedZone("-05:00", -5*60*60)),
+			},
+			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'api_calls' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 08:00:00.000', 3, 'UTC') AND timestamp < toDateTime64('2024-01-02 17:30:00.000', 3, 'UTC') ORDER BY tenant_id, environment_id, timestamp, id DESC))",
+		},
 	}
 
 	for _, tt := range tests {
