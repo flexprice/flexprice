@@ -50,7 +50,7 @@ START=$SECONDS
 # Entity ids, populated as the graph is built and consumed by teardown.
 FEATURE_ID=""; PLAN_ID=""; PRICE_FIXED_ID=""; PRICE_USAGE_ID=""
 ENTITLEMENT_ID=""; COUPON_ID=""; CUSTOMER_ID=""; SUBSCRIPTION_ID=""
-WALLET_ID=""; INVOICE_ID=""
+WALLET_ID=""; INVOICE_ID=""; METER_ID=""
 STAMP="$(date +%s)"
 SLUG="clie2e$STAMP"
 
@@ -84,15 +84,23 @@ skip() { STEP=$((STEP+1)); SKIPPED=$((SKIPPED+1))
 
 # ── CLI plumbing ────────────────────────────────────────────────────────
 
-# fp <args...> — every call is JSON so ids can be read back, and pinned to the
-# India region. --force because nothing here has a human to answer a prompt.
+# fp <resource> <action> [args...] — every call is JSON so ids can be read back,
+# and pinned to the India region.
+#
+# --force is placed AFTER resource and action, not with the global flags: it is
+# declared per operation command, not on the root. Passing it earlier makes
+# cobra consume the resource name as its value and report a nonsense error
+# ("unknown command \"list\"") about the action instead.
 fp() {
+    local resource="$1" action="$2"; shift 2
     if [ -n "$DRY_RUN" ]; then
-        printf '    $ flexprice --region %s --output json %s\n' "$REGION" "$*" >&2
+        printf '    $ flexprice --region %s --output json %s %s --force %s\n' \
+            "$REGION" "$resource" "$action" "$*" >&2
         echo '{"id":"dry_run_id","status":"published"}'
         return 0
     fi
-    "$BIN" --api-key "$API_KEY" --region "$REGION" --output json --force "$@"
+    "$BIN" --api-key "$API_KEY" --region "$REGION" --output json \
+        "$resource" "$action" --force "$@"
 }
 
 # jget <json> <key> — reads a top-level field, empty when absent.
@@ -216,9 +224,36 @@ fi
 
 phase "PHASE 1: PRODUCT CATALOG"
 
-create "create metered feature" FEATURE_ID \
-    features create --name="E2E Tokens $STAMP" --type=metered \
-                    --lookup_key="${SLUG}_tokens" --unit_singular=token --unit_plural=tokens
+# A metered feature carries a nested meter object, which flags cannot express —
+# this is exactly the case --data and --edit exist for.
+create "create metered feature" FEATURE_ID features create --data "{
+    \"name\": \"E2E Tokens $STAMP\",
+    \"type\": \"metered\",
+    \"lookup_key\": \"${SLUG}_tokens\",
+    \"unit_singular\": \"token\",
+    \"unit_plural\": \"tokens\",
+    \"meter\": {
+        \"name\": \"E2E token meter $STAMP\",
+        \"event_name\": \"${SLUG}_tokens\",
+        \"aggregation\": {\"type\": \"SUM\", \"field\": \"tokens\"},
+        \"reset_usage\": \"BILLING_PERIOD\"
+    }
+}"
+
+# The meter id the API generated for that feature — usage pricing needs it.
+if [ -n "$FEATURE_ID" ] && [ -z "$DRY_RUN" ]; then
+    run features list --limit 100
+    METER_ID=$(printf '%s' "$RUN_OUT" | python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    fid=sys.argv[1]
+    f=next((x for x in (d.get("items") or []) if x.get("id")==fid), {})
+    print((f.get("meter") or {}).get("id","") or f.get("meter_id","") or "")
+except Exception: print("")
+' "$FEATURE_ID" 2>/dev/null)
+    [ -n "$METER_ID" ] && pass "resolve feature meter" "$METER_ID" || skip "resolve feature meter" "no meter on feature"
+fi
 
 create "create plan" PLAN_ID \
     plans create --name="E2E Plan $STAMP" --lookup_key="${SLUG}_plan" \
@@ -233,13 +268,13 @@ if need "create recurring price" "$PLAN_ID"; then
                       --display_name="E2E monthly"
 fi
 
-if need "create usage price" "$PLAN_ID"; then
+if need "create usage price" "${PLAN_ID}${METER_ID:-}"; then
     create "create usage price" PRICE_USAGE_ID \
         prices create --amount=2 --currency=INR --type=USAGE \
                       --billing_model=FLAT_FEE --billing_period=MONTHLY \
                       --billing_period_count=1 --invoice_cadence=ARREAR \
                       --price_unit_type=FIAT --entity_type=PLAN --entity_id="$PLAN_ID" \
-                      --display_name="E2E per-token"
+                      --meter_id="${METER_ID:-}" --display_name="E2E per-token"
 fi
 
 need "retrieve plan"    "$PLAN_ID"    && verify "retrieve plan"    plans retrieve "$PLAN_ID"
@@ -252,10 +287,16 @@ verify "list features" features list --limit 5
 phase "PHASE 2: ENTITLEMENTS & DISCOUNTS"
 
 if need "create entitlement" "$FEATURE_ID$PLAN_ID"; then
-    create "create entitlement" ENTITLEMENT_ID \
-        entitlements create --feature_id="$FEATURE_ID" --feature_type=metered \
-                            --plan_id="$PLAN_ID" --entity_type=plan --entity_id="$PLAN_ID" \
-                            --is_enabled=true --grant_quota=100000
+    create "create entitlement" ENTITLEMENT_ID entitlements create --data "{
+        \"feature_id\": \"$FEATURE_ID\",
+        \"feature_type\": \"metered\",
+        \"entity_type\": \"PLAN\",
+        \"entity_id\": \"$PLAN_ID\",
+        \"plan_id\": \"$PLAN_ID\",
+        \"is_enabled\": true,
+        \"usage_limit\": 100000,
+        \"usage_reset_period\": \"MONTHLY\"
+    }"
 fi
 
 need "retrieve entitlement" "$ENTITLEMENT_ID" && \
@@ -279,8 +320,11 @@ need "retrieve customer" "$CUSTOMER_ID" && \
     verify "retrieve customer" customers retrieve "$CUSTOMER_ID"
 need "lookup by external id" "$CUSTOMER_ID" && \
     verify "lookup by external id" customers by-external-id "$SLUG"
+# PUT /customers has no path parameter: the id goes in the query string, so a
+# positional argument here would be silently dropped.
 need "update customer" "$CUSTOMER_ID" && \
-    verify "update customer" customers update "$CUSTOMER_ID" --name="E2E Customer $STAMP (updated)"
+    verify "update customer" customers update --id="$CUSTOMER_ID" \
+        --name="E2E Customer $STAMP (updated)"
 
 if need "create subscription" "$CUSTOMER_ID$PLAN_ID"; then
     create "create subscription" SUBSCRIPTION_ID \
@@ -303,12 +347,13 @@ phase "PHASE 4: WALLET"
 if need "create wallet" "$CUSTOMER_ID"; then
     create "create wallet" WALLET_ID \
         wallets create --customer_id="$CUSTOMER_ID" --currency=INR \
-                       --name="E2E wallet" --initial_credits_to_load=500
+                       --description="E2E wallet" --initial_credits_to_load=500
 fi
 
 need "retrieve wallet"  "$WALLET_ID" && verify "retrieve wallet"  wallets retrieve "$WALLET_ID"
 need "wallet balance"   "$WALLET_ID" && verify "wallet balance"   wallets balance "$WALLET_ID"
-need "top up wallet"    "$WALLET_ID" && verify "top up wallet"    wallets top-up "$WALLET_ID" --credits_to_add=250
+need "top up wallet"    "$WALLET_ID" && verify "top up wallet"    wallets top-up "$WALLET_ID" \
+    --credits_to_add=250 --transaction_reason=FREE_CREDIT_GRANT
 need "wallet transactions" "$WALLET_ID" && verify "wallet transactions" wallets transactions "$WALLET_ID"
 
 # ── PHASE 5 ─────────────────────────────────────────────────────────────
@@ -316,13 +361,16 @@ need "wallet transactions" "$WALLET_ID" && verify "wallet transactions" wallets 
 phase "PHASE 5: USAGE INGESTION"
 
 if need "ingest event" "$CUSTOMER_ID"; then
-    verify "ingest event" events ingest \
-        --event_name="${SLUG}_tokens" --external_customer_id="$SLUG" \
-        --properties='{"tokens":100}'
+    verify "ingest event" events ingest --data "{
+        \"event_name\": \"${SLUG}_tokens\",
+        \"external_customer_id\": \"$SLUG\",
+        \"properties\": {\"tokens\": 100}
+    }"
 fi
 
 need "list events" "$CUSTOMER_ID" && verify "list events" events list --limit 5
-need "customer usage" "$CUSTOMER_ID" && verify "customer usage" customers usage "$SLUG"
+need "customer usage" "$CUSTOMER_ID" && \
+    verify "customer usage" customers usage --customer_id="$CUSTOMER_ID"
 
 # ── PHASE 6 ─────────────────────────────────────────────────────────────
 
@@ -357,7 +405,8 @@ phase "PHASE 7: CLEANUP (non-fatal)"
 
 # Reverse creation order: dependents first, or the API rejects the parent.
 need "cancel subscription" "$SUBSCRIPTION_ID" && \
-    teardown "cancel subscription" subscriptions cancel "$SUBSCRIPTION_ID"
+    teardown "cancel subscription" subscriptions cancel "$SUBSCRIPTION_ID" \
+        --cancellation_type=immediate
 need "terminate wallet"    "$WALLET_ID"       && \
     teardown "terminate wallet"    wallets terminate "$WALLET_ID"
 need "delete customer"     "$CUSTOMER_ID"     && \
