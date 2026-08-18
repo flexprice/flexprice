@@ -73,6 +73,19 @@ Open()
   `Get`'s error message names the likely cause and the fix
   (`flexprice login` again) rather than surfacing a bare crypto error —
   keep that framing if you touch this path.
+- **The bounded probe used to protect only itself, not the real credential
+  operations — a real gap, not a hypothetical.** `Open()`'s 2-second
+  `probeTimeout` wrapped only the throwaway probe; once it returned
+  `OSKeyring`, the real `Set`/`Get`/`Delete` calls `login`/`logout`/`whoami`
+  actually make were direct, unwrapped calls into `zalando/go-keyring` — if
+  the keychain session expired or triggered a fresh unlock prompt between
+  the probe and the real call, the CLI could still hang indefinitely, which
+  is the exact incident the probe exists to prevent. `withTimeout` (a
+  generalized version of the probe's own goroutine+timeout pattern) now
+  wraps `Set`/`Get`/`Delete` too, at `keychainOpTimeout` (8s, longer than the
+  2s probe bound, since a real operation can legitimately involve the user
+  responding to an OS prompt). If you add a new method to `OSKeyring`, wrap
+  it with `withTimeout` too — an unwrapped call reopens this gap.
 
 ## Related layers
 
