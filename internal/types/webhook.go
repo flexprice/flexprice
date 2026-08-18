@@ -10,6 +10,23 @@ import (
 // @name WebhookEventName
 type WebhookEventName = string
 
+// IsInternalOnlyWebhookEvent reports whether this event is never meant to reach a
+// customer's webhook endpoint (no PayloadBuilder is registered for it) — used by
+// internal/webhook/handler to skip delivery attempts for these outright, rather
+// than letting them fail with "no builder registered" on every mutation.
+//
+// This is a free function rather than a method on WebhookEventName because
+// WebhookEventName is a type alias for string (`= string`, not `string`), and Go
+// does not allow defining methods on an alias for a builtin type.
+func IsInternalOnlyWebhookEvent(e WebhookEventName) bool {
+	switch e {
+	case WebhookEventSubscriptionLineItemCreated, WebhookEventSubscriptionLineItemDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
 // WebhookEvent represents a webhook event to be delivered
 type WebhookEvent struct {
 	ID            string           `json:"id"`
@@ -183,6 +200,13 @@ const (
 
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
+
+	// subscription line-item lifecycle events — internal only, never delivered to
+	// customer webhook endpoints (see IsInternalOnlyWebhookEvent below). Published
+	// whenever a FIXED-price subscription line item is created or ends; consumed by
+	// the HubSpot deal line-item sync dispatcher.
+	WebhookEventSubscriptionLineItemCreated WebhookEventName = "subscription.line_item.created"
+	WebhookEventSubscriptionLineItemDeleted WebhookEventName = "subscription.line_item.deleted"
 )
 
 // communication event names

@@ -2,15 +2,65 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+// publishLineItemEvents publishes a subscription.line_item.created/deleted webhook
+// event for each FIXED-price line item in lineItems; non-FIXED line items are
+// skipped since only fixed charges are synced to HubSpot deal line items.
+func (s *subscriptionService) publishLineItemEvents(
+	ctx context.Context,
+	subscriptionID string,
+	lineItems []*subscription.SubscriptionLineItem,
+	eventName types.WebhookEventName,
+) {
+	for _, li := range lineItems {
+		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		eventPayload := webhookDto.InternalSubscriptionLineItemEvent{
+			SubscriptionID: subscriptionID,
+			LineItemID:     li.ID,
+			CustomerID:     li.CustomerID,
+			PriceType:      li.PriceType,
+			TenantID:       types.GetTenantID(ctx),
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+		}
+
+		webhookPayload, err := json.Marshal(eventPayload)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to marshal line item webhook payload",
+				"error", err, "line_item_id", li.ID)
+			continue
+		}
+
+		webhookEvent := &types.WebhookEvent{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+			EventName:     eventName,
+			TenantID:      types.GetTenantID(ctx),
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			UserID:        types.GetUserID(ctx),
+			Timestamp:     time.Now().UTC(),
+			Payload:       json.RawMessage(webhookPayload),
+			EntityType:    types.SystemEntityTypeSubscription,
+			EntityID:      subscriptionID,
+		}
+		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+			s.Logger.Error(ctx, "failed to publish line item webhook event",
+				"error", err, "event_name", eventName, "line_item_id", li.ID)
+		}
+	}
+}
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
@@ -20,6 +70,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	s.publishLineItemEvents(ctx, subscriptionID,
+		[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem},
+		types.WebhookEventSubscriptionLineItemCreated)
 	return resp, nil
 }
 
@@ -319,6 +372,9 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		return nil, err
 	}
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
+	s.publishLineItemEvents(ctx, resp.SubscriptionID,
+		[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem},
+		types.WebhookEventSubscriptionLineItemDeleted)
 	return resp, nil
 }
 
@@ -524,6 +580,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
+		var terminatedLineItem *subscription.SubscriptionLineItem
 		err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Process the price override using existing method
 			lineItems := []*subscription.SubscriptionLineItem{existingLineItem}
@@ -539,10 +596,11 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
 				EffectiveFrom: &endDate,
 			}
-			_, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
+			deletedResp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 			if err != nil {
 				return err
 			}
+			terminatedLineItem = deletedResp.SubscriptionLineItem
 
 			// Create new line item using the DTO method
 			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
@@ -601,6 +659,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		)
 
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{terminatedLineItem},
+			types.WebhookEventSubscriptionLineItemDeleted)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{newLineItem},
+			types.WebhookEventSubscriptionLineItemCreated)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
 		// Update metadata and commitment fields if provided
