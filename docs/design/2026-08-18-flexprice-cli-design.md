@@ -172,19 +172,23 @@ Credential precedence: `--api-key` flag → `FLEXPRICE_API_KEY` → OS keychain 
 `~/.flexprice/config.toml` (mode 0600, directory 0700) holds no secrets:
 
 ```toml
-default_profile = "acme-production"
+default_profile = "production"
 
-[profiles.acme-production]
+[profiles.production]
   region      = "us"
   base_url    = "https://us.api.flexprice.io/v1"
-  tenant      = "Acme"
   environment = "production"
   live        = true
-  key_ref     = "keychain:flexprice/acme-production"
+  key_ref     = "keychain:flexprice/production"
 ```
 
-Profiles are auto-named `<tenant>-<environment>` at login and confirmable, so `whoami` and every
+Profiles are auto-named after the environment at login and are confirmable, so `whoami` and every
 production confirmation name the environment rather than an opaque `default`.
+
+The tenant is deliberately absent. `dto.EnvironmentResponse` carries no tenant field, and the only
+tenant lookup (`GET /tenants/{id}`) needs an id an environment-scoped key cannot supply — so a
+`<tenant>-<environment>` name is underivable. Users working across several tenants pass
+`--profile-name` explicitly.
 
 ### Regions
 
@@ -205,13 +209,21 @@ with `--region` or `--base-url`.
 ### Login flow
 
 Prompt region, then read the key from the terminal without echo (never argv). Verify with a real
-authenticated call, then `GET /v1/environments` to resolve tenant, environment and `EnvironmentType`.
+authenticated call, then `GET /v1/environments` to resolve the environment and its `EnvironmentType`.
 `EnvironmentType` is `development` or `production`; `production` marks the profile `live`. Live/test
 is derived, never asked and never guessed.
 
 `GET /v1/environments` is tenant-scoped (subject to the key's RBAC), so one key can enumerate the
 tenant's environments. `flexprice env list` shows which have a local profile and prints the exact
 command for those that do not — turning "why can't I switch?" into a next step.
+
+**That endpoint is not in the OpenAPI spec.** The route exists and is authenticated like any other,
+but `EnvironmentHandler.GetEnvironments` carries no swaggo annotations, so it is absent from
+`swagger-3-0.json` and cannot be resolved through the command registry. The CLI calls it by literal
+path. Annotating the handler upstream is recorded in §20; until then the endpoint is reachable by
+`flexprice get /v1/environments` but not as a registry command. Its response shape is
+`{"environments":[…],"total","offset","limit"}`, which predates the `types.ListResponse[T]`
+(`{"items":[…],"pagination":{…}}`) envelope most endpoints use — the CLI handles both.
 
 ### Key storage
 
@@ -258,7 +270,7 @@ did-you-mean suggestions on typos.
 flexprice init                       guided: region → key → verify → next steps
 flexprice login    [--region] [--api-key] [--profile]
 flexprice logout   [--profile]
-flexprice whoami                     tenant, environment, live/test, region, key prefix, key backend
+flexprice whoami                     environment, live/test, region, key prefix, key backend
 flexprice env list                   environments and which have local profiles
 flexprice config   list | use <p> | set <k> <v>
 
@@ -489,6 +501,8 @@ presets · MCP changes · fixture auto-teardown · JWT/Bearer authentication.
 
 - **Owner for `cli/spec/commands.yaml`** — needs a name in CODEOWNERS.
 - **Keychain library** — `zalando/go-keyring` versus `99designs/keyring`, decided at spike time.
+- **Annotate `GET /v1/environments`** with swaggo so it enters the spec (§6). Small backend change,
+  not a v1.0 blocker.
 - **`flexprice/cli` is private and unlicensed** — make it public and set `cli/LICENSE` before release.
 - Courtesy note to the author of the Rust `flexprice-cli` on the direction change, and archive that
   repository. Lower stakes than superseding it in place, but worth doing before `flexprice/cli` ships.
