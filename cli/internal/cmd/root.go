@@ -60,6 +60,20 @@ func NewRootCommand(version string) *cobra.Command {
 		newVersionCommand(g, version),
 	)
 
+	if doc, err := spec.Load(); err == nil {
+		if reg, err := spec.NewRegistry(doc); err == nil {
+			addResourceCommands(root, reg, g, version)
+			// Derived-name warnings are diagnostics, not errors: an unmapped
+			// operation still works, it just has a machine-chosen name.
+			if g.Debug {
+				for _, warning := range reg.Warnings() {
+					fmt.Fprintln(os.Stderr, "warning:", warning)
+				}
+			}
+		}
+	}
+	addRawCommands(root, g, version)
+
 	return root
 }
 
@@ -111,4 +125,7 @@ func bindGlobals(f *pflag.FlagSet, g *Globals) {
 	f.BoolVar(&g.Quiet, "quiet", false, "suppress progress output")
 	f.BoolVar(&g.Debug, "debug", false, "dump requests and responses, secrets redacted")
 	f.BoolVar(&g.NoColor, "no-color", false, "disable coloured output")
+	f.StringSliceVar(&g.Columns, "columns", nil, "columns to show in table output")
+	f.IntVar(&g.Limit, "limit", 20, "maximum records to return")
+	f.BoolVar(&g.All, "all", false, "fetch every page")
 }
