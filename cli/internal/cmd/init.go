@@ -4,40 +4,37 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/flexprice/cli/internal/style"
 )
 
-// printInitBanner writes the bordered welcome box. Split out from
+// printInitBanner writes the wordmark and tagline. Split out from
 // newInitCommand's RunE so it can be tested without exercising the full login
 // flow, which needs a real terminal or --api-key. Also reused by the root
 // command's bare invocation.
 //
-// The box drawing and wording carry the message on their own; color is
-// decoration layered on top, so this stays readable under --no-color, NO_COLOR
-// and piped output.
+// The wordmark is drawn with box/block characters, so it carries the message
+// on its own; color is decoration layered on top and this stays readable under
+// --no-color, NO_COLOR and piped output.
+// terminalWidth reports the width of the terminal attached to stdout, or 0
+// when there is none (output piped or redirected). style.Logo treats 0 as
+// "unknown" and picks its conservative form rather than guessing wide.
+func terminalWidth() int {
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		return 0
+	}
+	return w
+}
+
 func printInitBanner(w io.Writer, g *Globals) {
 	if g.Quiet {
 		return
 	}
-
-	// Size the border to the rendered content rather than hardcoding a width:
-	// a literal run of ─ drifts out of alignment the moment the wording
-	// changes, and lipgloss.Width measures visible width so the styling
-	// applied below does not inflate the count.
-	const pad = 2
-	title := style.Header("Welcome to") + " " + style.Accent("Flexprice")
-	inner := lipgloss.Width(title) + pad*2
-	bar := strings.Repeat("─", inner)
-	spaces := strings.Repeat(" ", pad)
-
-	fmt.Fprintln(w, style.Accent("┌"+bar+"┐"))
-	fmt.Fprintf(w, "%s%s%s%s%s\n", style.Accent("│"), spaces, title, spaces, style.Accent("│"))
-	fmt.Fprintln(w, style.Accent("└"+bar+"┘"))
+	fmt.Fprint(w, style.Logo(terminalWidth()))
 	fmt.Fprintln(w, "Usage-based billing from your terminal")
 	fmt.Fprintln(w)
 }

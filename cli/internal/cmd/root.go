@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/cli/internal/config"
 	"github.com/flexprice/cli/internal/keyring"
 	"github.com/flexprice/cli/internal/spec"
+	"github.com/flexprice/cli/internal/style"
 )
 
 // Globals holds the values bound to the root command's persistent flags.
@@ -49,6 +50,31 @@ func NewRootCommand(version string) *cobra.Command {
 
 	bindGlobals(root.PersistentFlags(), g)
 
+	// Flags are not populated until Execute() parses them, so --no-color
+	// cannot be applied at construction time — this hook is the first point
+	// where g.NoColor is real.
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if g.NoColor {
+			style.Disable()
+		}
+		return nil
+	}
+
+	// A fresh install gets the wordmark and a pointer at init rather than a
+	// wall of help for 40+ commands it cannot use yet. Once a config exists,
+	// this reverts to normal help — the banner is a first-run affordance, not
+	// something to sit through on every bare invocation.
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		if hasExistingConfig() {
+			return cmd.Help()
+		}
+		out := cmd.ErrOrStderr()
+		printInitBanner(out, g)
+		fmt.Fprintf(out, "  Get started   %s\n", style.Accent("flexprice init"))
+		fmt.Fprintf(out, "  Docs          %s\n", "https://docs.flexprice.io/cli")
+		return nil
+	}
+
 	root.AddCommand(
 		newInitCommand(g, version),
 		newLoginCommand(g, version),
@@ -75,6 +101,20 @@ func NewRootCommand(version string) *cobra.Command {
 	addRawCommands(root, g, version)
 
 	return root
+}
+
+// hasExistingConfig reports whether a config file already exists, without
+// resolving credentials — used only to decide whether bare `flexprice` shows
+// the welcome banner or normal help. A missing home directory or any other
+// lookup failure is treated the same as "no config": show the banner, rather
+// than erroring on a decision this lightweight.
+func hasExistingConfig() bool {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
 }
 
 // runtimeContext resolves credentials for the current invocation. Every command
