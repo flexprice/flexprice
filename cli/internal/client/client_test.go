@@ -172,7 +172,7 @@ func TestClient_DebugOutputNeverReachesStdout(t *testing.T) {
 // because retryablehttp.NewRequestWithContext receives a concrete *bytes.Reader,
 // which it snapshots and replays fresh on every attempt (see
 // getBodyReaderAndContentLength's *bytes.Reader case in go-retryablehttp).
-func TestClient_RetriedPOSTResendsSameBody(t *testing.T) {
+func TestClient_RetriedPUTResendsSameBody(t *testing.T) {
 	var attempt int32
 	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func TestClient_RetriedPOSTResendsSameBody(t *testing.T) {
 	defer srv.Close()
 
 	c := New(Options{BaseURL: srv.URL, APIKey: "k", Version: "t"})
-	_, err := c.Do(context.Background(), http.MethodPost, "/customers", nil, map[string]string{"name": "acme"})
+	_, err := c.Do(context.Background(), http.MethodPut, "/customers", nil, map[string]string{"name": "acme"})
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
@@ -229,5 +229,76 @@ func TestClient_JoinsPathAgainstBaseURLWithPath(t *testing.T) {
 	wantQuery := url.Values{"limit": []string{"10"}, "external_id": []string{"a b"}}.Encode()
 	if gotQuery != wantQuery {
 		t.Errorf("query = %q, want %q", gotQuery, wantQuery)
+	}
+}
+
+// A 5xx on POST must not be retried: on a billing API the server may have
+// committed before failing, so a retry can create a duplicate subscription,
+// invoice or payment. Verified against CreateSubscriptionRequest, which has no
+// idempotency field at all.
+func TestClient_DoesNotRetryPOSTOnServerError(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, APIKey: "k", Version: "t"})
+	_, _ = c.Do(context.Background(), http.MethodPost, "/subscriptions", nil, map[string]any{"plan_id": "p"})
+
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Errorf("POST hit the server %d times, want exactly 1 (no retry)", got)
+	}
+}
+
+// 429 is retried for any method: the server is explicitly saying it did not
+// process the request.
+func TestClient_RetriesPOSTOnRateLimit(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&hits, 1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New(Options{BaseURL: srv.URL, APIKey: "k", Version: "t"})
+	if _, err := c.Do(context.Background(), http.MethodPost, "/events", nil, map[string]any{"n": 1}); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got < 2 {
+		t.Errorf("POST hit the server %d times, want a retry after 429", got)
+	}
+}
+
+func TestNew_MalformedBaseURLFailsWithAClearMessage(t *testing.T) {
+	c := New(Options{BaseURL: "not-a-url", APIKey: "k", Version: "t"})
+	_, err := c.Do(context.Background(), http.MethodGet, "/x", nil, nil)
+	if err == nil {
+		t.Fatal("want an error for a malformed base URL")
+	}
+	if !strings.Contains(err.Error(), "base URL") {
+		t.Errorf("err = %q, want it to name the base URL as the cause", err)
+	}
+}
+
+// Free-text fields must not be allowlisted: a server interpolates customer data
+// into them.
+func TestRedact_DoesNotAllowlistFreeTextFields(t *testing.T) {
+	out := Redact(map[string]any{
+		"id":      "cust_1",
+		"message": "Customer ada@example.com owes 500 on card 4111111111111111",
+		"name":    "Ada Lovelace",
+	})
+	if out["id"] != "cust_1" {
+		t.Errorf("id was redacted, want preserved")
+	}
+	for _, k := range []string{"message", "name"} {
+		if out[k] != redacted {
+			t.Errorf("%s = %v, want redacted", k, out[k])
+		}
 	}
 }
