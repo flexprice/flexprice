@@ -39,7 +39,7 @@ func Logo(width int) string {
 
 	var b strings.Builder
 	for _, line := range art {
-		b.WriteString(styled(line, colorMagenta, false))
+		b.WriteString(Default().styled(line, colorMagenta, false))
 		b.WriteString("\n")
 	}
 	return b.String()
