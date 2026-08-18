@@ -64,6 +64,36 @@ ResolveContext(cfg, store, overrides)
   `Profiles` map, but if a future change reuses a non-empty `*Config` across
   calls, stale profiles would silently survive a `Load` that no longer
   mentions them.
+- **`ResolveContext` discards `cfg.Resolve`'s real error — a real, currently
+  unfixed gap.** `profileErr` (`resolve.go:45`) is checked only for `== nil`
+  to decide whether to populate `rc.Profile`; the error itself, which names
+  *why* resolution failed (e.g. `--profile staging` naming a profile that
+  does not exist), is thrown away. The caller falls through to whatever
+  generic error the missing `BaseURL`/`APIKey` produces later — a user who
+  mistyped `--profile` sees "not authenticated — run: flexprice init"
+  instead of "unknown profile \"staging\"", which sends them toward the
+  wrong fix. Not fixed as of this writing — if you touch this function,
+  surface `profileErr` directly when `o.Profile` was explicitly set (the
+  default-profile-missing case can stay silent, since falling through to no
+  credentials is already correct behavior there).
+- **`store.Get`'s real error is discarded in favor of a generic message —
+  also unfixed.** `resolve.go:69-71` replaces whatever `store.Get` actually
+  returned with a flat "no stored key for profile" message, so a genuine
+  keyring backend failure (e.g. the OS keychain timing out per
+  `internal/keyring`'s `keychainOpTimeout`) is indistinguishable from a
+  profile that legitimately never had a key stored. If you are debugging a
+  "no stored key" report that doesn't reproduce with a fresh login, suspect
+  this — the underlying error is not logged or wrapped anywhere.
+- **`Load`/`Save` have no file locking — two concurrent CLI invocations can
+  race.** Nothing in this package takes an OS-level lock on
+  `config.toml`; `Save`'s atomic temp-file-plus-rename (see Invariants)
+  protects against a *corrupt* file but not against one process's `login`
+  and another's `config use` racing to write the same path, where the
+  loser's changes are silently lost rather than merged or rejected. Not
+  fixed as of this writing — narrow in practice (the CLI is normally run
+  interactively, one invocation at a time), but real for scripted/parallel
+  usage. A fix would need an flock-style advisory lock around the
+  read-modify-write in both `Save` callers, not just atomic replacement.
 
 ## Related layers
 
