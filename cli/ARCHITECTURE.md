@@ -89,4 +89,6 @@ never changing meaning.
 
 - [`decisions/`](decisions/) — why, for the five decisions with real
   trade-offs behind them.
+- [`guides/`](guides/) — walkthroughs for the two most common maintenance
+  tasks.
 - [`README.md`](README.md) — how to install and use the CLI as a consumer.
