@@ -9,11 +9,12 @@ import (
 	"unicode/utf8"
 )
 
-// listMarkers are top-level keys that only appear on paginated list envelopes,
-// never on a single-object response. Their presence is what lets rowsFrom tell
-// "{"items":[...], "pagination":{...}}" (a list) apart from a bare object that
-// happens to contain an array field, e.g. a customer with "tax_rates":[...].
-var listMarkers = []string{"pagination", "total", "limit", "offset"}
+// numericListMarkers are top-level keys that indicate a paginated list
+// envelope only when their JSON value is a number — genuine pagination
+// envelopes always encode total/limit/offset as numbers. A same-named field
+// on a single-object response can hold any other type, e.g. InvoiceResponse's
+// top-level "total" is a string (the invoice amount, "150.00"), not a count.
+var numericListMarkers = []string{"total", "limit", "offset"}
 
 // rowsFrom finds the list of rows in a response.
 //
@@ -24,12 +25,20 @@ var listMarkers = []string{"pagination", "total", "limit", "offset"}
 //
 // "items" is checked first since it is the common-case key and unambiguous.
 // For any other shape, a key is only treated as the row list if the envelope
-// also carries a pagination marker (pagination/total/limit/offset) — that is
-// what separates a genuine list response from a single object that happens to
-// have an array-valued field (e.g. tax_rates on a customer). Without that
-// guard, an alphabetically-first-array heuristic picks the wrong field on
-// single-object responses; see output_test.go for the case this guards
-// against. A single object with no array field renders as one row.
+// also carries a pagination marker (pagination/total/limit/offset, with
+// total/limit/offset only counting when they are JSON numbers — see
+// hasListMarker) — that is what separates a genuine list response from a
+// single object that happens to have an array-valued field (e.g. tax_rates
+// on a customer, or InvoiceResponse's string "total" alongside its real
+// "line_items" array). Without that guard, an alphabetically-first-array
+// heuristic picks the wrong field on single-object responses; see
+// output_test.go for the cases this guards against. Among several
+// array-valued keys, the first non-empty array-of-objects wins (alphabetical
+// among ties) rather than strictly alphabetical-first, since an empty array
+// can never be the intended row source when a populated one exists alongside
+// it (e.g. InvoiceResponse's empty "coupon_applications" sorting before its
+// populated "line_items"). A single object with no array field renders as
+// one row.
 func rowsFrom(raw []byte) ([]map[string]any, error) {
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -53,12 +62,23 @@ func rowsFrom(raw []byte) ([]map[string]any, error) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+		var best []any
+		haveCandidate := false
 		for _, k := range keys {
 			arr, ok := v[k].([]any)
 			if !ok || !isObjectArray(arr) {
 				continue
 			}
-			return toRows(arr), nil
+			if !haveCandidate {
+				best, haveCandidate = arr, true
+				continue
+			}
+			if len(best) == 0 && len(arr) > 0 {
+				best = arr
+			}
+		}
+		if haveCandidate {
+			return toRows(best), nil
 		}
 		return []map[string]any{v}, nil
 	default:
@@ -66,10 +86,23 @@ func rowsFrom(raw []byte) ([]map[string]any, error) {
 	}
 }
 
+// hasListMarker reports whether v carries a genuine pagination envelope
+// marker. "pagination" is the primary, unambiguous signal (types.ListResponse
+// nests total/limit/offset under it, and no single-object response has ever
+// been observed to use that key name). A bare total/limit/offset at the top
+// level (the older envelope shape) only counts when its value is a JSON
+// number — json.Unmarshal decodes JSON numbers as float64, so a same-named
+// string field (e.g. InvoiceResponse's dollar-amount "total") is correctly
+// rejected.
 func hasListMarker(v map[string]any) bool {
-	for _, k := range listMarkers {
-		if _, ok := v[k]; ok {
-			return true
+	if _, ok := v["pagination"]; ok {
+		return true
+	}
+	for _, k := range numericListMarkers {
+		if n, ok := v[k]; ok {
+			if _, isNumber := n.(float64); isNumber {
+				return true
+			}
 		}
 	}
 	return false
@@ -77,7 +110,9 @@ func hasListMarker(v map[string]any) bool {
 
 // isObjectArray reports whether every element is a JSON object. An empty
 // array counts as an object array (vacuously true) since it carries no
-// evidence either way.
+// evidence either way — callers that must choose among several array-valued
+// keys should prefer a non-empty match over an empty one, since an empty
+// array can never be the intended row source when a populated one exists.
 func isObjectArray(arr []any) bool {
 	for _, it := range arr {
 		if _, ok := it.(map[string]any); !ok {
@@ -87,6 +122,15 @@ func isObjectArray(arr []any) bool {
 	return true
 }
 
+// toRows converts a JSON array into rows, silently dropping any element that
+// isn't a JSON object (e.g. a stray null in "items"). Only the fallback
+// key-scan path in rowsFrom vets its array with isObjectArray first; the
+// "items" and top-level-array paths call toRows directly, so a non-object
+// element there is dropped with no indication to the caller. Surfacing that
+// (e.g. a dropped-element count) would mean adding a return value here and
+// threading it back through rowsFrom's signature and all three call sites —
+// more restructuring than this fix warrants, so it is left as-is with this
+// note rather than done partially.
 func toRows(items []any) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, it := range items {
