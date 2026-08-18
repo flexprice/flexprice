@@ -66,6 +66,11 @@ Load()                         parse the embedded OpenAPI document
   operation gets a derived name and a warning, never a hard failure. Do not
   make this stricter — see [ADR 0004](../../decisions/0004-curated-commands-yaml-over-mechanical-derivation.md)
   for why.
+- `Load()` memoizes the parsed document via a package-level `sync.Once` — the
+  first call pays the real ~48-73ms parse cost, every call after is
+  effectively free. Call it as often as convenient; do not thread a
+  `*openapi3.T` through extra parameters just to avoid a second `Load()`
+  call, and do not add a second, uncached parse path.
 
 ## Common pitfalls
 
@@ -93,6 +98,38 @@ Load()                         parse the embedded OpenAPI document
   required, even though a subscription is meaningless without one. Do not
   assume "not in `required`" means "safe to omit" when writing anything that
   reasons about which fields matter.
+- **`PageInfo` had the identical key-presence-not-key-type bug as
+  `internal/output`'s `hasListMarker` — a real, shipped bug, not a
+  hypothetical.** `InvoiceResponse`'s string `total` field made `PageInfo`
+  believe a single invoice was a paginated list; for a whole-dollar invoice
+  (common — `shopspring/decimal` strips trailing zeros), `flexprice invoices
+  retrieve <id> --all` would re-issue the identical `GET` request until
+  `shown` reached the invoice's dollar amount. Fixed: envelope detection now
+  requires a `"pagination"` sub-object, an unambiguous `"items"` key, or (the
+  legacy shape) genuinely number-typed `total`/`limit`/`offset` alongside a
+  real array-of-objects field — never a bare same-named string. Array-key
+  selection (`findObjectArrayKey`) now prefers `items` and falls back to a
+  sorted scan instead of Go's randomized map iteration, so `Count` is
+  deterministic across runs. If you see a key-presence-only check here
+  again, you are reintroducing this bug — see the identical fix in
+  `internal/output/table.go`'s `hasListMarker`.
+- **`newRegistry`'s default-allow validation can still hard-fail the whole
+  CLI on a name collision — a real gap in the design, currently latent.**
+  The default-allow loop derives a name for every unmapped operation and
+  calls `add`, which returns a hard error on ANY resource+action collision —
+  including a collision between two derived names, or a derived name that
+  happens to match an already-curated `commands.yaml` entry. That error
+  propagates straight out of `NewRegistry`/`Load`, breaking every command at
+  startup — directly contradicting the "never a hard failure" invariant
+  above. Not currently exercised against the real spec (confirmed via
+  `TestRegistry_EveryOperationIsAccountedFor` passing), so this has not
+  broken anything yet, but it will the day two never-mapped operations under
+  the same tag happen to derive the same kebab-case action name. Not fixed
+  as of this writing — if you touch collision handling in `add`, make a
+  collision between two *derived* names degrade to a warning (picking one
+  deterministically, e.g. by operationId) rather than a hard error, matching
+  how a collision with a *curated* name should still fail loudly (that one
+  really is a human mistake worth blocking on).
 
 ## Related layers
 
