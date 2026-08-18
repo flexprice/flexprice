@@ -576,7 +576,7 @@ type envelope struct {
 	Code           string            `json:"code"`
 	Message        string            `json:"message"`
 	HTTPStatusCode int               `json:"http_status_code"`
-	Details        map[string]string `json:"details"`
+	Details        map[string]any    `json:"details"`
 	Error          json.RawMessage   `json:"error"`
 }
 
@@ -587,7 +587,7 @@ type APIError struct {
 	Path    string
 	Message string
 	Code    string
-	Details map[string]string
+	Details map[string]any
 	Raw     []byte
 }
 
@@ -630,7 +630,7 @@ func (e *APIError) Error() string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			fmt.Fprintf(&b, "\n    %s: %s", k, e.Details[k])
+			fmt.Fprintf(&b, "\n    %s: %v", k, e.Details[k])
 		}
 	}
 	if next := e.nextStep(); next != "" {
