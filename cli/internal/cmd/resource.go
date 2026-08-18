@@ -104,9 +104,45 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				Debug: g.Debug, DebugOut: os.Stderr,
 			})
 
-			raw, err := cl.Do(cc.Context(), req.Method, req.Path, req.Query, req.Body)
-			if err != nil {
-				return err
+			pageSize := g.Limit
+			if pageSize <= 0 {
+				pageSize = 20
+			}
+
+			var (
+				merged []byte
+				page   spec.Page
+				offset int
+				shown  int
+			)
+			for {
+				spec.ApplyPaging(&req, cmd, spec.Paging{Limit: pageSize, Offset: offset})
+
+				raw, err := cl.Do(cc.Context(), req.Method, req.Path, req.Query, req.Body)
+				if err != nil {
+					return err
+				}
+
+				page, _ = spec.PageInfo(raw)
+				shown += page.Count
+				merged = raw
+
+				if !g.All || !page.HasMore(shown) || page.Count == 0 {
+					break
+				}
+				offset += page.Count
+
+				// Rebuild so the next iteration starts from a clean query and body.
+				req, err = spec.BuildRequest(cmd, in)
+				if err != nil {
+					return err
+				}
+				if !g.Quiet {
+					fmt.Fprintf(os.Stderr, "\rfetched %d of %d\u2026", shown, page.Total)
+				}
+			}
+			if g.All && !g.Quiet && shown > 0 {
+				fmt.Fprintln(os.Stderr)
 			}
 
 			format, err := output.ParseFormat(g.Output)
@@ -114,9 +150,11 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				return err
 			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
-			return w.Render(raw, output.Options{
+			return w.Render(merged, output.Options{
 				Columns: pickColumns(reg, g, cmd.Resource),
 				Quiet:   g.Quiet,
+				Shown:   shown,
+				Total:   page.Total,
 			})
 		},
 	}
