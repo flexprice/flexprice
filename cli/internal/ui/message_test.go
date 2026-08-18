@@ -25,6 +25,33 @@ func TestStreamRouting(t *testing.T) {
 	}
 }
 
+// Replaces TestRenderTable_StatusFooterGoesToStderr, which lived in
+// internal/output until the footer moved here. stdout carries data, and
+// `--output json > file.json` must stay clean.
+func TestStatusLine_GoesToStderrOnly(t *testing.T) {
+	u, out, errBuf := newTestUI(Options{StderrTTY: true, StdinTTY: true, Term: "xterm-256color"})
+
+	u.StatusLine("profile: sandbox · region: in")
+
+	if strings.Contains(out.String(), "profile: sandbox") {
+		t.Errorf("status footer leaked into stdout: %q", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "profile: sandbox") {
+		t.Errorf("status footer missing from stderr: %q", errBuf.String())
+	}
+}
+
+// Replaces TestRenderTable_NoStatusFooterWhenEmpty.
+func TestStatusLine_SilentWhenEmpty(t *testing.T) {
+	u, _, errBuf := newTestUI(Options{StderrTTY: true, StdinTTY: true, Term: "xterm-256color"})
+
+	u.StatusLine("")
+
+	if errBuf.Len() != 0 {
+		t.Errorf("an empty status line should print nothing, got %q", errBuf.String())
+	}
+}
+
 // --quiet suppresses commentary but must never suppress the result or a failure.
 func TestQuiet_SuppressesCommentaryOnly(t *testing.T) {
 	u, out, errBuf := newTestUI(Options{StderrTTY: true, StdinTTY: true, Term: "xterm-256color", Quiet: true})

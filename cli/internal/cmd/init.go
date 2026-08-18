@@ -42,12 +42,18 @@ func printInitBanner(w io.Writer, g *Globals) {
 // newInitCommand is the guided first run: login, then tell the user what to do next.
 func newInitCommand(g *Globals, version string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "init",
-		Short: "Set up the CLI (guided)",
+		Use:     "init",
+		Short:   "Set up the CLI (guided)",
+		GroupID: groupSetup,
 		RunE: func(c *cobra.Command, args []string) error {
 			printInitBanner(os.Stderr, g)
-			fmt.Fprintln(os.Stderr, "Your API key is scoped to one environment — you can add more later with `flexprice login`.")
-			fmt.Fprintln(os.Stderr)
+			// Warmth is confined to init and login, where the user is a
+			// newcomer rather than an operator. Operational commands stay
+			// plain: whimsical wording beside irreversible billing actions
+			// costs trust.
+			g.UI.Info("Welcome to Flexprice — let's get you set up.")
+			g.UI.Info("Your API key is scoped to one environment — you can add more later with `flexprice login`.")
+			g.UI.Info("")
 
 			login := newLoginCommand(g, version)
 			login.SetContext(c.Context())
@@ -55,11 +61,11 @@ func newInitCommand(g *Globals, version string) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintln(os.Stderr, "\nNext steps:")
-			fmt.Fprintln(os.Stderr, "  flexprice whoami            confirm what you are pointed at")
-			fmt.Fprintln(os.Stderr, "  flexprice resources         see everything you can act on")
-			fmt.Fprintln(os.Stderr, "  flexprice customers list    try a read")
-			fmt.Fprintln(os.Stderr, "  flexprice env list          see your other environments")
+			g.UI.Info("\nHere's what to try first:")
+			g.UI.Info("  flexprice whoami            confirm what you are pointed at")
+			g.UI.Info("  flexprice resources         see everything you can act on")
+			g.UI.Info("  flexprice customers list    try a read")
+			g.UI.Info("  flexprice env list          see your other environments")
 			return nil
 		},
 	}

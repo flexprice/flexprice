@@ -39,13 +39,6 @@ type Options struct {
 	Shown int
 	Total int
 	Quiet bool
-	// Status is a pre-formatted context line (active profile, region, version)
-	// shown under table output. The caller formats it because this package has
-	// no access to config — passing the string keeps the renderer free of
-	// config types. Empty means no footer. Never shown for json/yaml: a caller
-	// piping those is scripting, not reading a status line, and CI commonly
-	// captures stderr alongside stdout where it would just be noise.
-	Status string
 }
 
 type Writer struct {

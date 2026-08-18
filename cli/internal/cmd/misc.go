@@ -53,8 +53,8 @@ func newOpenCommand(g *Globals, version string) *cobra.Command {
 			if resp.URL == "" {
 				return fmt.Errorf("no webhook portal URL was returned")
 			}
-			fmt.Fprintln(os.Stderr, "Add your tunnel URL as an endpoint here:")
-			fmt.Fprintln(os.Stdout, resp.URL)
+			g.UI.Info("Add your tunnel URL as an endpoint here:")
+			g.UI.Data("%s", resp.URL)
 			return openURL(resp.URL)
 		},
 	})
@@ -91,8 +91,8 @@ func newVersionCommand(g *Globals, version string) *cobra.Command {
 		Use:   "version",
 		Short: "Print the CLI version and embedded spec build",
 		Run: func(c *cobra.Command, _ []string) {
-			fmt.Fprintf(os.Stdout, "flexprice %s\n", version)
-			fmt.Fprintf(os.Stdout, "embedded OpenAPI spec: %d bytes\n", len(specdata.OpenAPI))
+			g.UI.Data("flexprice %s", version)
+			g.UI.Data("embedded OpenAPI spec: %d bytes", len(specdata.OpenAPI))
 		},
 	}
 }

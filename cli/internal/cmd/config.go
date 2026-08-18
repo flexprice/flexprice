@@ -26,7 +26,7 @@ func newConfigCommand(g *Globals) *cobra.Command {
 				return err
 			}
 			if len(cfg.Profiles) == 0 {
-				fmt.Fprintln(os.Stderr, "No profiles yet — run: flexprice init")
+				g.UI.Info("No profiles yet — run: flexprice init")
 				return nil
 			}
 
@@ -63,7 +63,7 @@ func newConfigCommand(g *Globals) *cobra.Command {
 			if err := config.Save(path, cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Default profile is now %q\n", args[0])
+			g.UI.Success("Default profile is now %q", args[0])
 			return nil
 		},
 	})

@@ -116,7 +116,7 @@ func NewRootCommand(version string) *cobra.Command {
 			// operation still works, it just has a machine-chosen name.
 			if g.Debug {
 				for _, warning := range reg.Warnings() {
-					fmt.Fprintln(os.Stderr, "warning:", warning)
+					g.UI.Info("warning: %s", warning)
 				}
 			}
 		}
@@ -219,8 +219,8 @@ func runtimeContext(g *Globals) (config.RuntimeContext, *config.Config, error) {
 	if err != nil {
 		return config.RuntimeContext{}, nil, err
 	}
-	if warn != "" && !g.Quiet {
-		fmt.Fprintln(os.Stderr, warn)
+	if warn != "" {
+		g.UI.Info("%s", warn)
 	}
 
 	doc, err := spec.Load()

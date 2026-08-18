@@ -131,8 +131,11 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 				return fmt.Errorf("no API key provided")
 			}
 
-			if err := VerifyKey(ctx, baseURL, apiKey, version, g.Debug, os.Stderr); err != nil {
-				return err
+			sp := g.UI.Spinner("Verifying your key…")
+			verifyErr := VerifyKey(ctx, baseURL, apiKey, version, g.Debug, os.Stderr)
+			sp.Stop()
+			if verifyErr != nil {
+				return verifyErr
 			}
 
 			profileName = config.ProfileName(profileName)
@@ -142,7 +145,7 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 				return err
 			}
 			if warn != "" {
-				fmt.Fprintln(os.Stderr, warn)
+				g.UI.Info("%s", warn)
 			}
 
 			path, err := config.DefaultPath()
@@ -157,7 +160,7 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 			// Rotation: show what is being replaced rather than silently overwriting.
 			if _, existed := cfg.Profiles[profileName]; existed {
 				if old, err := store.Get(profileName); err == nil {
-					fmt.Fprintf(os.Stderr, "Replacing key %s with %s for profile %q\n",
+					g.UI.Info("Replacing key %s with %s for profile %q",
 						MaskKey(old), MaskKey(apiKey), profileName)
 				}
 			}
@@ -179,10 +182,9 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Verified — stored as profile %q in %s\n", profileName, store.Name())
-			fmt.Fprintln(os.Stderr,
-				"Note: the API does not report which environment a key belongs to, so label your\n"+
-					"profiles yourself (--profile-name, --label) and check with: flexprice whoami")
+			g.UI.Success("Verified — stored as profile %q in %s", profileName, store.Name())
+			g.UI.Info("Note: the API does not report which environment a key belongs to, so label your\n" +
+				"profiles yourself (--profile-name, --label) and check with: flexprice whoami")
 			return nil
 		},
 	}
@@ -260,7 +262,7 @@ func newLogoutCommand(g *Globals) *cobra.Command {
 			if err := config.Save(path, cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Removed profile %q\n", name)
+			g.UI.Success("Removed profile %q", name)
 			return nil
 		},
 	}
@@ -290,15 +292,18 @@ func newWhoamiCommand(g *Globals) *cobra.Command {
 			}
 			key, keyErr := store.Get(name)
 
-			fmt.Fprintf(os.Stdout, "Profile:      %s\n", name)
-			fmt.Fprintf(os.Stdout, "Label:        %s\n", profile.Label)
-			fmt.Fprintf(os.Stdout, "Region:       %s\n", profile.Region)
-			fmt.Fprintf(os.Stdout, "Base URL:     %s\n", profile.BaseURL)
-			fmt.Fprintf(os.Stdout, "Key backend:  %s\n", store.Name())
+			// Stays on stdout via ui.Data: whoami's output is a result people
+			// parse, not commentary. Styling changes how it looks, never which
+			// stream it uses.
+			g.UI.Data("Profile:      %s", name)
+			g.UI.Data("Label:        %s", profile.Label)
+			g.UI.Data("Region:       %s", profile.Region)
+			g.UI.Data("Base URL:     %s", profile.BaseURL)
+			g.UI.Data("Key backend:  %s", store.Name())
 			if keyErr == nil {
-				fmt.Fprintf(os.Stdout, "Key:          %s\n", MaskKey(key))
+				g.UI.Data("Key:          %s", MaskKey(key))
 			} else {
-				fmt.Fprintf(os.Stdout, "Key:          (not stored — run flexprice login)\n")
+				g.UI.Data("Key:          (not stored — run flexprice login)")
 			}
 			return nil
 		},

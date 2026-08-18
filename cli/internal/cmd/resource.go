@@ -48,7 +48,7 @@ func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, ve
 		GroupID: groupAdvanced,
 		RunE: func(c *cobra.Command, _ []string) error {
 			for _, r := range reg.Resources() {
-				fmt.Fprintf(os.Stdout, "%-28s %s\n", r, strings.Join(reg.Actions(r), ", "))
+				g.UI.Data("%-28s %s", r, strings.Join(reg.Actions(r), ", "))
 			}
 			return nil
 		},
@@ -125,11 +125,15 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				offset int
 				shown  int
 			)
+			sp := g.UI.Spinner(spinnerVerb(cmd) + " " + cmd.Resource + "\u2026")
+			defer sp.Stop()
+
 			for {
 				spec.ApplyPaging(&req, cmd, spec.Paging{Limit: pageSize, Offset: offset})
 
 				raw, err := cl.Do(cc.Context(), req.Method, req.Path, req.Query, req.Body)
 				if err != nil {
+					sp.Stop()
 					return err
 				}
 
@@ -145,28 +149,33 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				// Rebuild so the next iteration starts from a clean query and body.
 				req, err = spec.BuildRequest(cmd, in)
 				if err != nil {
+					sp.Stop()
 					return err
 				}
-				if !g.Quiet {
-					fmt.Fprintf(os.Stderr, "\rfetched %d of %d\u2026", shown, page.Total)
-				}
+				// Tick on each COMPLETED page rather than on a timer, so a
+				// stalled page shows as a frozen count instead of an animation
+				// implying progress it is not making.
+				sp.Update(fmt.Sprintf("fetched %d of %d\u2026", shown, page.Total))
 			}
-			if g.All && !g.Quiet && shown > 0 {
-				fmt.Fprintln(os.Stderr)
-			}
+			sp.Stop()
 
 			format, err := output.ParseFormat(g.Output)
 			if err != nil {
 				return err
 			}
 			w := output.Writer{Out: os.Stdout, Err: os.Stderr, Format: format}
-			return w.Render(merged, output.Options{
+			if err := w.Render(merged, output.Options{
 				Columns: pickColumns(reg, g, cmd.Resource),
 				Quiet:   g.Quiet,
 				Shown:   shown,
 				Total:   page.Total,
-				Status:  statusLine(rc, version),
-			})
+			}); err != nil {
+				return err
+			}
+			if shouldShowFooter(format) {
+				g.UI.StatusLine(statusLine(rc, version))
+			}
+			return nil
 		},
 	}
 
@@ -231,6 +240,39 @@ func promptConfirm(in io.Reader, out io.Writer, action, subject string) error {
 		return fmt.Errorf("cancelled")
 	}
 	return nil
+}
+
+// shouldShowFooter reports whether the status footer belongs under this
+// output. Only table output gets one: someone piping json or yaml is
+// scripting, not reading a status line, and CI commonly captures stderr
+// alongside stdout where it would just be noise.
+//
+// Extracted rather than inlined so the rule stays under test after the footer
+// moved out of internal/output, where it had its own test.
+func shouldShowFooter(format output.Format) bool {
+	return format == output.FormatTable
+}
+
+// spinnerVerb turns an action into the present participle shown while a request
+// is in flight. Unknown actions fall back to "Working on", which is vague but
+// never wrong — a misleading verb is worse than a general one.
+func spinnerVerb(cmd spec.Command) string {
+	switch cmd.Action {
+	case "list", "retrieve", "get":
+		return "Fetching"
+	case "create":
+		return "Creating"
+	case "update":
+		return "Updating"
+	case "delete":
+		return "Deleting"
+	case "void", "cancel", "terminate", "archive":
+		return "Updating"
+	case "finalize":
+		return "Finalizing"
+	default:
+		return "Working on"
+	}
 }
 
 func pickColumns(reg *spec.Registry, g *Globals, resource string) []string {

@@ -51,8 +51,7 @@ func newEnvCommand(g *Globals, version string) *cobra.Command {
 			if err := tw.Flush(); err != nil {
 				return err
 			}
-			fmt.Fprintln(os.Stderr,
-				"\nYour key is scoped to one of these, but the API does not say which.")
+			g.UI.Info("\nYour key is scoped to one of these, but the API does not say which.")
 			return nil
 		},
 	})
