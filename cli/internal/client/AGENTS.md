@@ -73,6 +73,18 @@ Do(ctx, method, path, query, body)
   confusing `unsupported protocol scheme ""` rather than naming the actual
   cause. `New` now validates `Scheme`/`Host` are present and surfaces a clear
   error instead.
+- **`NewAPIError` used to let one malformed field discard an otherwise-valid
+  message — a real, shipped bug.** It gated copying `Code`/`Message` on the
+  *whole* `json.Unmarshal` call succeeding, but Go's decoder partially
+  populates a struct even when one field type-mismatches. A body like
+  `{"code":"validation_error","message":"plan_id is required","details":[]}`
+  (details as an array, not the expected object) had its correctly-decoded
+  `Code`/`Message` thrown away in favor of the generic `http.StatusText`
+  fallback, purely because `details` didn't match. `envelope.Details` is now
+  `json.RawMessage`, decoded lazily and best-effort — a mismatch there can no
+  longer take sibling fields down with it. If you add a new field to
+  `envelope`, decode it the same way rather than adding it to the struct
+  that gates the whole parse.
 
 ## Related layers
 
