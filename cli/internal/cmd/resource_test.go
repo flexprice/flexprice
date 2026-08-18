@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flexprice/cli/internal/spec"
+	"github.com/flexprice/cli/internal/ui"
 )
 
 type cobraCommand = cobra.Command
@@ -229,52 +230,50 @@ func TestDestructiveActions_IncludeFinalize(t *testing.T) {
 	}
 }
 
-func TestPromptConfirm_ConfirmsOnLowercaseY(t *testing.T) {
-	in := strings.NewReader("y\n")
-	var out strings.Builder
-
-	if err := promptConfirm(in, &out, "delete", "/v1/customers/cust_123"); err != nil {
-		t.Fatalf("promptConfirm: %v", err)
-	}
-	if !strings.Contains(out.String(), "This will delete /v1/customers/cust_123 and cannot be undone.") {
-		t.Errorf("prompt = %q, missing expected message", out.String())
-	}
-}
-
-func TestPromptConfirm_ConfirmsOnUppercaseY(t *testing.T) {
-	in := strings.NewReader("Y\n")
-	var out strings.Builder
-
-	if err := promptConfirm(in, &out, "finalize", "inv_123"); err != nil {
-		t.Fatalf("promptConfirm: %v", err)
-	}
-}
-
-func TestPromptConfirm_CancelsOnAnythingElse(t *testing.T) {
-	for _, answer := range []string{"n\n", "no\n", "\n"} {
-		var out strings.Builder
-		err := promptConfirm(strings.NewReader(answer), &out, "delete", "cust_123")
-		if err == nil {
-			t.Errorf("answer %q: want an error, got nil", answer)
-		}
-	}
-}
+// The three TestPromptConfirm_* cases that lived here tested the old
+// fmt.Fscanln y/N reader, which huh replaced. Their surviving concern — that
+// the prompt says what will be destroyed — is now
+// TestConfirmTitle_NamesTheActionAndSubject in internal/ui.
 
 func TestConfirmAction_SkipsPromptWhenForced(t *testing.T) {
-	// force=true must return immediately without reading stdin at all — pass a
-	// reader that panics if touched would be ideal, but confirmAction talks to
-	// os.Stdin directly; force short-circuits before that read, which this
-	// completing without blocking demonstrates.
-	if err := confirmAction("delete", "cust_123", true); err != nil {
+	// force=true must return immediately without prompting at all.
+	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+	if err := confirmAction(g, "delete", "cust_123", true); err != nil {
 		t.Errorf("confirmAction with force=true: %v", err)
 	}
 }
 
-func TestConfirmAction_SkipsPromptWhenStdinIsNotATerminal(t *testing.T) {
-	// go test's stdin is never a terminal, so this exercises the same
-	// non-interactive bypass that protects scripts and CI.
-	if err := confirmAction("delete", "cust_123", false); err != nil {
-		t.Errorf("confirmAction on non-terminal stdin: %v", err)
+// BEHAVIOUR CHANGE, deliberate. This previously asserted that a non-terminal
+// stdin bypassed confirmation and PROCEEDED, so a script piping into a
+// destructive command destroyed data with nothing asked. It now refuses and
+// names --force.
+func TestConfirmAction_RefusesWhenStdinIsNotATerminal(t *testing.T) {
+	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+	err := confirmAction(g, "delete", "cust_123", false)
+	if err == nil {
+		t.Fatal("confirmAction proceeded without confirmation on a non-terminal stdin")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("refusal must name --force, got %q", err)
+	}
+}
+
+// A non-destructive action must never prompt, regardless of stdin.
+func TestConfirm_NonDestructiveActionNeverPrompts(t *testing.T) {
+	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+	if err := confirm(g, spec.Command{Action: "list", Resource: "customers"}, "", false); err != nil {
+		t.Errorf("list should never require confirmation, got %v", err)
+	}
+}
+
+// Every destructive action must actually reach the confirmation path.
+func TestConfirm_EveryDestructiveActionPrompts(t *testing.T) {
+	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+	for action := range destructive {
+		err := confirm(g, spec.Command{Action: action, Resource: "invoices"}, "inv_1", false)
+		if err == nil {
+			t.Errorf("destructive action %q was not confirmed", action)
+		}
 	}
 }
 

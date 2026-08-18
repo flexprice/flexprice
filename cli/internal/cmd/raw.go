@@ -13,8 +13,8 @@ import (
 // rawDeleteConfirm gates a raw DELETE behind the same confirmation prompt the
 // spec-driven destructive commands use. There is no spec.Command / resource
 // name available on the raw path, so the request path itself is the subject.
-func rawDeleteConfirm(path string, force bool) error {
-	return confirmAction("delete", path, force)
+func rawDeleteConfirm(g *Globals, path string, force bool) error {
+	return confirmAction(g, "delete", path, force)
 }
 
 // addRawCommands registers get/post/delete — the escape hatch for anything the
@@ -47,7 +47,7 @@ func addRawCommands(root *cobra.Command, g *Globals, version string) {
 				}
 
 				if name == "delete" {
-					if err := rawDeleteConfirm(args[0], force); err != nil {
+					if err := rawDeleteConfirm(g, args[0], force); err != nil {
 						return err
 					}
 				}

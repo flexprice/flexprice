@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/flexprice/cli/internal/ui"
 )
 
 // Raw `delete` had zero confirmation: RunE went straight from argument
@@ -32,20 +35,38 @@ func TestRawGetAndPostCommands_HaveNoForceFlag(t *testing.T) {
 	}
 }
 
+// testGlobals builds a Globals whose UI cannot prompt, matching how the CLI
+// behaves in a script or CI.
+func testGlobals() *Globals {
+	return &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+}
+
 // force=true must bypass the prompt entirely — this proves the wiring calls
 // confirmAction with the raw path as the subject without ever touching stdin.
 func TestRawDeleteConfirm_SkipsPromptWhenForced(t *testing.T) {
-	if err := rawDeleteConfirm("/v1/customers/cust_123", true); err != nil {
+	if err := rawDeleteConfirm(testGlobals(), "/v1/customers/cust_123", true); err != nil {
 		t.Errorf("rawDeleteConfirm with force=true: %v", err)
 	}
 }
 
-// go test's stdin is never a terminal, so this exercises the same
-// non-interactive bypass that protects scripts and CI, now reused by the raw
-// delete path.
-func TestRawDeleteConfirm_SkipsPromptWhenStdinIsNotATerminal(t *testing.T) {
-	if err := rawDeleteConfirm("/v1/customers/cust_123", false); err != nil {
-		t.Errorf("rawDeleteConfirm on non-terminal stdin: %v", err)
+// BEHAVIOUR CHANGE, deliberate. This test previously asserted the opposite:
+// that a non-terminal stdin bypassed confirmation and proceeded. That meant a
+// script piping into `flexprice delete` destroyed data with nothing asked and
+// nothing logged.
+//
+// It now refuses and names --force. A script that relied on the old bypass
+// fails until --force is added, which is the point: deleting because nobody
+// could be asked is the worse default.
+func TestRawDeleteConfirm_RefusesWhenStdinIsNotATerminal(t *testing.T) {
+	err := rawDeleteConfirm(testGlobals(), "/v1/customers/cust_123", false)
+	if err == nil {
+		t.Fatal("raw delete proceeded without confirmation on a non-terminal stdin")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("refusal must name --force so a script can be fixed, got %q", err)
+	}
+	if !strings.Contains(err.Error(), "cust_123") {
+		t.Errorf("refusal must name the target, got %q", err)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/cli/internal/client"
 	"github.com/flexprice/cli/internal/exitcode"
 	"github.com/flexprice/cli/internal/spec"
+	"github.com/flexprice/cli/internal/ui"
 )
 
 func envServer(t *testing.T, envType string) *httptest.Server {
@@ -129,9 +130,11 @@ func TestPromptRegion_NoTTYFallsBackToExactPriorBehavior(t *testing.T) {
 		{Key: "us", BaseURL: "https://us.api.flexprice.io/v1"},
 		{Key: "in", BaseURL: "https://api.cloud.flexprice.io/v1"},
 	}
-	// os.Stdin in `go test` is not a TTY, so this exercises the real
-	// non-interactive path without needing to fake terminal state.
-	_, err := promptRegion(regions)
+	// The TTY state is now injected rather than probed, so this no longer
+	// depends on go test's stdin happening not to be a terminal — it asserts
+	// the behaviour directly.
+	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
+	_, err := promptRegion(g, regions)
 	if err == nil {
 		t.Fatal("want an error when stdin is not a terminal")
 	}

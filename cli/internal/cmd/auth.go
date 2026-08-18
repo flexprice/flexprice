@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/flexprice/cli/internal/config"
 	"github.com/flexprice/cli/internal/keyring"
 	"github.com/flexprice/cli/internal/spec"
+	"github.com/flexprice/cli/internal/ui"
 )
 
 // VerifyKey confirms a key works against a region. It deliberately returns no
@@ -105,7 +105,7 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 			if baseURL == "" {
 				region := g.Region
 				if region == "" {
-					region, err = promptRegion(regions)
+					region, err = promptRegion(g, regions)
 					if err != nil {
 						return err
 					}
@@ -197,32 +197,21 @@ func newLoginCommand(g *Globals, version string) *cobra.Command {
 // promptRegion asks which data region the key belongs to, using an arrow-key
 // menu when a real terminal is attached.
 //
-// The TTY guard is load-bearing and must stay: huh drives a full-screen
-// terminal session, so it can only run for a human at a keyboard. Without this
-// check every scripted and CI invocation would break. huh itself also fails
+// The TTY guard now lives in ui.SelectWithHint, which refuses with an
+// actionable message rather than hanging, so every scripted and CI caller gets
+// the same treatment as the raw and spec-driven paths. huh itself also fails
 // fast rather than hanging when no terminal exists (it opens /dev/tty directly
 // and errors immediately) — verified in the implementation spike — so the two
-// form independent, agreeing safety nets, but this check is the primary one.
-func promptRegion(regions []spec.Region) (string, error) {
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return "", fmt.Errorf("no terminal available — pass --region (for example --region us)")
-	}
-
-	options := make([]huh.Option[string], len(regions))
+// remain independent, agreeing safety nets.
+func promptRegion(g *Globals, regions []spec.Region) (string, error) {
+	opts := make([]ui.Option, len(regions))
 	for i, r := range regions {
-		options[i] = huh.NewOption(fmt.Sprintf("%-6s  %s", r.Key, r.BaseURL), r.Key)
+		opts[i] = ui.Option{
+			Label: fmt.Sprintf("%-6s  %s", r.Key, r.BaseURL),
+			Value: r.Key,
+		}
 	}
-
-	var choice string
-	sel := huh.NewSelect[string]().
-		Title("Data region").
-		Options(options...).
-		Value(&choice)
-
-	if err := sel.Run(); err != nil {
-		return "", fmt.Errorf("region selection cancelled: %w", err)
-	}
-	return choice, nil
+	return g.UI.SelectWithHint("Data region", "--region", opts)
 }
 
 func newLogoutCommand(g *Globals) *cobra.Command {

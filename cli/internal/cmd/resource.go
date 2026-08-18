@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/flexprice/cli/internal/client"
 	"github.com/flexprice/cli/internal/output"
@@ -96,7 +95,7 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 				in.Data = doc
 			}
 
-			if err := confirm(cmd, in.PositionalID, force); err != nil {
+			if err := confirm(g, cmd, in.PositionalID, force); err != nil {
 				return err
 			}
 
@@ -199,10 +198,8 @@ var destructive = map[string]bool{
 	"finalize": true,
 }
 
-// confirm prompts before a destructive spec-driven action. It returns nil when
-// stdin is not a terminal, so scripts and CI are never blocked; --force skips
-// it entirely.
-func confirm(cmd spec.Command, target string, force bool) error {
+// confirm prompts before a destructive spec-driven action. --force skips it.
+func confirm(g *Globals, cmd spec.Command, target string, force bool) error {
 	if !destructive[cmd.Action] {
 		return nil
 	}
@@ -210,36 +207,24 @@ func confirm(cmd spec.Command, target string, force bool) error {
 	if subject == "" {
 		subject = cmd.Resource
 	}
-	return confirmAction(cmd.Action, subject, force)
+	return confirmAction(g, cmd.Action, subject, force)
 }
 
 // confirmAction prompts before a destructive action described by action and
 // subject (e.g. "delete", "/v1/customers/cust_123") — shared by the
 // spec-driven commands and the raw get/post/delete escape hatch, neither of
-// which always has a spec.Command to hand. It returns nil when stdin is not a
-// terminal, so scripts and CI are never blocked; force skips it entirely.
-func confirmAction(action, subject string, force bool) error {
+// which always has a spec.Command to hand.
+//
+// The TTY check now lives in ui.Confirm, which REFUSES rather than proceeding
+// when nobody can be asked. That is a behaviour change: this function
+// previously returned nil on a non-terminal stdin, so a script piping into a
+// destructive command deleted without confirmation. Failing until --force is
+// supplied is the safer default.
+func confirmAction(g *Globals, action, subject string, force bool) error {
 	if force {
 		return nil
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return nil
-	}
-	return promptConfirm(os.Stdin, os.Stderr, action, subject)
-}
-
-// promptConfirm writes the confirmation prompt and blocks for a y/N answer.
-// Split out from confirmAction so tests can supply an in-memory reader/writer
-// instead of a real terminal.
-func promptConfirm(in io.Reader, out io.Writer, action, subject string) error {
-	fmt.Fprintf(out, "This will %s %s and cannot be undone.\nContinue? [y/N]: ", action, subject)
-
-	var answer string
-	_, _ = fmt.Fscanln(in, &answer)
-	if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-		return fmt.Errorf("cancelled")
-	}
-	return nil
+	return g.UI.Confirm(action, subject)
 }
 
 // shouldShowFooter reports whether the status footer belongs under this
