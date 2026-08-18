@@ -2,7 +2,7 @@
 
 Date: 2026-08-18
 Status: Approved design, ready for implementation planning
-Target repo: `github.com/flexprice/flexprice-cli` (Go rewrite; existing Rust preserved on `rust-legacy`)
+Source: `flexprice/flexprice` at `cli/` · Distribution: `github.com/flexprice/cli`
 
 ## 1. Purpose
 
@@ -50,8 +50,8 @@ nests. Their raw escape hatch (`stripe get /v1/...`) stays separate from resourc
 | D4 | Paste-key login now, browser pairing later | Zero backend dependency; pairing slots in without changing the command |
 | D5 | Region chosen at login, read from the spec's `servers[]` | Adding a region becomes a spec change, not a code change |
 | D6 | Profile is the atomic auth unit | API keys are environment-scoped; see §6 |
-| D7 | Supersede the Rust CLI in place, preserving it on `rust-legacy` | 4 commits, ~4 months cold, no external adoption; Rust blocks reuse and adds a second language |
-| D8 | Source in this monorepo at `cli/`, CI pushes to `flexprice/flexprice-cli` | Same pattern as `flexprice/go-sdk`; makes spec sync a local file copy |
+| D7 | Build fresh; leave the Rust `flexprice/flexprice-cli` untouched and archive it | 4 commits, ~4 months cold, no external adoption; Rust blocks spec reuse and adds a second language |
+| D8 | Source in this monorepo at `cli/`; release pushes to `flexprice/cli` | Spec drift is the CLI's primary failure mode, and both defences against it (§4.2, §5) only work in-repo |
 | D9 | `listen` deferred to v1.1 | It is the only capability requiring new backend endpoints |
 | D10 | Usage simulation included, as a fixture step type | The only capability no competitor has; marginal cost given the engine exists |
 
@@ -414,12 +414,41 @@ real API.
 
 ## 15. Distribution
 
-Source at `cli/` in this monorepo — the same repository as `docs/swagger`, making spec sync a local
-file copy. CI pushes to `flexprice/flexprice-cli` on merge, the pattern `flexprice/go-sdk` already
-uses. The existing Rust implementation moves to a `rust-legacy` branch tagged `v0.1.0-rust`.
+**Source lives in this monorepo at `cli/`, and releases push to `github.com/flexprice/cli`.**
 
-goreleaser builds darwin/linux/windows across amd64/arm64. Homebrew tap, `install.sh`,
-`go install github.com/flexprice/flexprice-cli@latest`, and an optional `@flexprice/cli` npm wrapper.
+The reason is the coupling in §4.2 and §5, not repo hygiene. The CLI's primary failure mode is spec
+drift, and both defences against it — `make sync-cli-spec` and the `commands.yaml` validator —
+produce their signal as a diff and a CI warning *in the pull request that changed the API*. Split
+across repositories, that signal fires elsewhere, days later, on a bot pull request nobody reads.
+Adding an endpoint, mapping it, and releasing the CLI stays one atomic change.
+
+The counter-argument is external contribution. The evidence says it is theoretical for now: the Rust
+CLI has 1 star, 0 forks, and no external pull requests in six months. Optimising layout for
+contributors who do not exist yet, at the cost of drift protection needed on day one, is the wrong
+trade. Revisit when the CLI has sustained external contributors or a dedicated owner — moving source
+out later is a few hours of git work, and the switching cost is low in both directions.
+
+`flexprice/cli` is therefore the **distribution and user-facing front door**:
+
+- Releases, binaries, install instructions, and discovery
+- **Issues enabled, pull requests disabled**, with a README line directing contributors to the
+  monorepo. Standard practice for mirrored repositories, and it gives users somewhere to report bugs
+  without implying the code is editable there
+- `go install github.com/flexprice/cli@latest` works against the mirror; it needs only a `go.mod` at
+  the repository root
+- Currently **private and unlicensed** (created 2026-08-17). Must be made public before any
+  distribution channel works
+
+**Release cadence is independent of the backend.** Tags are prefixed — `cli/v1.0.0` — and goreleaser
+fires only on that pattern, so a CLI patch never waits on a backend release despite sharing a
+repository.
+
+**Licensing:** the monorepo root is AGPL-3.0. The CLI is published permissively, which is legally
+straightforward since Flexprice holds the copyright, but it must be stated explicitly in `cli/LICENSE`
+rather than inherited by implication from the root.
+
+goreleaser builds darwin/linux/windows across amd64/arm64. Homebrew tap, `install.sh`, `go install`,
+and an optional `@flexprice/cli` npm wrapper.
 
 Docs: `cobra doc` generates the command reference into flexprice-docs, plus a hand-written quickstart.
 
@@ -460,4 +489,6 @@ presets · MCP changes · fixture auto-teardown · JWT/Bearer authentication.
 
 - **Owner for `cli/spec/commands.yaml`** — needs a name in CODEOWNERS.
 - **Keychain library** — `zalando/go-keyring` versus `99designs/keyring`, decided at spike time.
-- Coordination with the author of the existing Rust CLI on the `rust-legacy` transition.
+- **`flexprice/cli` is private and unlicensed** — make it public and set `cli/LICENSE` before release.
+- Courtesy note to the author of the Rust `flexprice-cli` on the direction change, and archive that
+  repository. Lower stakes than superseding it in place, but worth doing before `flexprice/cli` ships.
