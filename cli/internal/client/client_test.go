@@ -125,10 +125,8 @@ func TestRedact_IsAllowlistBased(t *testing.T) {
 	}
 }
 
-// Evidence for point 1 (stdout purity): dump/debugf must never reach stdout, even
-// with --debug on and a request/response body flowing through. Data goes to
-// stdout so `--output json > file.json` stays clean; diagnostics go to stderr
-// (or wherever DebugOut points).
+// Diagnostics must never reach stdout, even under --debug, so
+// `--output json > file.json` stays clean.
 func TestClient_DebugOutputNeverReachesStdout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -167,11 +165,8 @@ func TestClient_DebugOutputNeverReachesStdout(t *testing.T) {
 	}
 }
 
-// Evidence for point 3 (request body reuse across retries): a retried request
-// must re-send the same body, not an already-drained reader. This is only safe
-// because retryablehttp.NewRequestWithContext receives a concrete *bytes.Reader,
-// which it snapshots and replays fresh on every attempt (see
-// getBodyReaderAndContentLength's *bytes.Reader case in go-retryablehttp).
+// A retry must re-send the body, not an already-drained reader. Safe only
+// because retryablehttp snapshots the concrete *bytes.Reader it is given.
 func TestClient_RetriedPUTResendsSameBody(t *testing.T) {
 	var attempt int32
 	var bodies []string
@@ -232,10 +227,8 @@ func TestClient_JoinsPathAgainstBaseURLWithPath(t *testing.T) {
 	}
 }
 
-// A 5xx on POST must not be retried: on a billing API the server may have
-// committed before failing, so a retry can create a duplicate subscription,
-// invoice or payment. Verified against CreateSubscriptionRequest, which has no
-// idempotency field at all.
+// The server may have committed before failing, so a retried POST can duplicate
+// a subscription, invoice or payment (ADR 0002).
 func TestClient_DoesNotRetryPOSTOnServerError(t *testing.T) {
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

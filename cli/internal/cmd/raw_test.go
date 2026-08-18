@@ -9,11 +9,8 @@ import (
 	"github.com/flexprice/cli/internal/ui"
 )
 
-// Raw `delete` had zero confirmation: RunE went straight from argument
-// parsing to cl.Do with no prompt, no --force flag, and no terminal check.
-// These tests cover the fix — the --force flag exists on delete only, and
-// the confirmation wiring (rawDeleteConfirm) matches the spec-driven path's
-// confirmAction/promptConfirm behavior already covered in resource_test.go.
+// Raw `delete` originally had zero confirmation: RunE went straight to cl.Do
+// with no prompt, no --force flag and no terminal check.
 
 func TestRawDeleteCommand_HasForceFlag(t *testing.T) {
 	root := NewRootCommand("test")
@@ -49,14 +46,8 @@ func TestRawDeleteConfirm_SkipsPromptWhenForced(t *testing.T) {
 	}
 }
 
-// BEHAVIOUR CHANGE, deliberate. This test previously asserted the opposite:
-// that a non-terminal stdin bypassed confirmation and proceeded. That meant a
-// script piping into `flexprice delete` destroyed data with nothing asked and
-// nothing logged.
-//
-// It now refuses and names --force. A script that relied on the old bypass
-// fails until --force is added, which is the point: deleting because nobody
-// could be asked is the worse default.
+// BEHAVIOUR CHANGE: this previously asserted that a non-terminal stdin bypassed
+// confirmation and proceeded. It now refuses and names --force.
 func TestRawDeleteConfirm_RefusesWhenStdinIsNotATerminal(t *testing.T) {
 	err := rawDeleteConfirm(testGlobals(), "/v1/customers/cust_123", false)
 	if err == nil {

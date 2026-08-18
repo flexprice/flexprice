@@ -16,14 +16,10 @@ import (
 
 const redacted = "[redacted]"
 
-// safeKeys are the only response fields printed in full under --debug. Redaction
-// is allowlist-based so that fields nobody anticipated fail closed.
-//
-// Every key here is structurally constrained — an identifier, an enum, a number
-// or a timestamp. Free-text fields are deliberately excluded even when they look
-// harmless: "message", "name" and "hint" are exactly the fields a server
-// interpolates dynamic content into, so allowlisting them by key would leak
-// whatever happened to be interpolated.
+// The only response fields printed in full under --debug. Allowlist-based so
+// unanticipated fields fail closed, and limited to structurally constrained
+// values: free-text like "message" or "name" is where servers interpolate
+// dynamic content, so allowlisting it by key would leak that content.
 var safeKeys = map[string]bool{
 	"id": true, "object": true, "status": true, "type": true,
 	"created_at": true, "updated_at": true, "currency": true, "amount": true,
@@ -41,20 +37,11 @@ var idempotentMethods = map[string]bool{
 	"GET": true, "HEAD": true, "PUT": true, "DELETE": true, "OPTIONS": true,
 }
 
-// retryPolicy refuses to retry non-idempotent requests on 5xx or transport errors.
-//
-// retryablehttp's default policy inspects only the status code and never the
-// method, so it would retry POST identically to GET. On a billing API that is
-// unsafe: a 502 raised after the server has already committed is indistinguishable
-// from one raised before it, so retrying POST /subscriptions can create duplicate
-// subscriptions that bill real customers. The API offers no Idempotency-Key
-// header, CreateSubscriptionRequest has no idempotency field at all, and where a
-// body-level idempotency_key is omitted the server generates one containing a
-// timestamp — which differs on every attempt even though the body is byte
-// identical, so server-side dedup does not help either.
-//
-// 429 is retried for every method: the server is explicitly stating it did not
-// process the request.
+// Refuses to retry non-idempotent requests: retryablehttp's default policy
+// inspects only the status code, never the method, and this API has no working
+// idempotency key, so retrying a POST can double-create billing objects. 429 is
+// retried for every method — the server is stating it did not process the
+// request. Full reasoning in decisions/0002-retry-only-idempotent-methods.md.
 func retryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true, nil
@@ -133,14 +120,11 @@ func New(o Options) *Client {
 	return c
 }
 
-// Do issues a request against path (relative to BaseURL) and returns the raw body.
-//
-// A non-2xx status returns *APIError; the raw body is returned alongside it so a
-// caller rendering JSON can still emit the error envelope. Callers must check the
-// error before using the body. APIError.Raw carries the same bytes.
+// Returns the raw body alongside any *APIError, so a caller rendering JSON can
+// still emit the error envelope; check the error before using the body.
 //
 // Pass a literal nil for body when there is none: a typed nil pointer is a
-// non-nil interface and would be encoded as the JSON literal null.
+// non-nil interface and would encode as the JSON literal null.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body any) ([]byte, error) {
 	if c.baseErr != nil {
 		return nil, c.baseErr

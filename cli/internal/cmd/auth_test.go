@@ -121,10 +121,8 @@ func TestMaskKey_ShortKeyDoesNotPanic(t *testing.T) {
 	}
 }
 
-// promptRegion's non-TTY fallback must be preserved exactly: huh.Select must
-// never be invoked when stdin is not a real terminal, or every existing test
-// and CI/script invocation of this CLI breaks. This is the single most
-// important test in the interactive-UI work.
+// huh.Select must never run when stdin is not a real terminal, or every
+// scripted and CI invocation breaks.
 func TestPromptRegion_NoTTYFallsBackToExactPriorBehavior(t *testing.T) {
 	regions := []spec.Region{
 		{Key: "us", BaseURL: "https://us.api.flexprice.io/v1"},

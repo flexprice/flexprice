@@ -10,10 +10,8 @@ import (
 	"github.com/flexprice/cli/internal/spec"
 )
 
-// cobra panics at Execute() when a command carries a GroupID that was never
-// registered with AddGroup. That is a runtime crash on every invocation, so a
-// typo in the group table bricks the CLI. Running Execute here is the point:
-// it is the code path that panics.
+// cobra panics at Execute() on an unregistered GroupID — a crash on every
+// invocation. Running Execute is the point: it is the path that panics.
 func TestRootHelp_DoesNotPanicOnGroupIDs(t *testing.T) {
 	root := NewRootCommand("test")
 	var buf bytes.Buffer
@@ -110,14 +108,9 @@ func TestEveryResourceHasADescription(t *testing.T) {
 	}
 }
 
-// Nothing should reach cobra's built-in "Additional Commands" fallback: every
-// command the CLI ships is accounted for in groups.go.
-//
-// This exists because the raw get/post/delete commands originally landed there
-// — addRawCommands runs after the group-assignment loop, so they never received
-// a GroupID. Every other test in this file passed; the defect was only visible
-// by reading the rendered help. The fallback stays in place for resources the
-// API adds later, but anything we ship reaching it is a wiring bug.
+// The fallback stays for resources the API adds later, but anything we ship
+// reaching it is a wiring bug — raw get/post/delete once did, with every other
+// test in this file still passing.
 func TestRootHelp_NothingFallsIntoAdditionalCommands(t *testing.T) {
 	root := NewRootCommand("test")
 	var buf bytes.Buffer

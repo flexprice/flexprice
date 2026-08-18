@@ -6,13 +6,9 @@ import (
 	"testing"
 )
 
-// TestMain forces a real color profile for the whole test binary via
-// EnableForTests — go test never runs with a terminal attached, so without
-// this, this package's own auto-detection would correctly see "no terminal"
-// and silently suppress color, making every test asserting on ANSI codes fail
-// based on execution environment rather than code correctness. Individual
-// tests still call Enable()/Disable() to control whether styling is attempted
-// at all — that remains orthogonal to the profile forced here.
+// go test never has a terminal attached, so the profile must be forced or every
+// ANSI assertion passes or fails on where it runs. Individual tests still use
+// Enable()/Disable(), which is orthogonal to the profile.
 func TestMain(m *testing.M) {
 	EnableForTests()
 	os.Exit(m.Run())
@@ -63,11 +59,8 @@ func TestEnable_RestoresColorCodes(t *testing.T) {
 	}
 }
 
-// Tests asserting ANSI codes ARE present must force Enable() first: the
-// default `enabled` state auto-detects the real environment's TTY-ness, and
-// `go test` itself is never a TTY, so relying on the ambient default would
-// make these tests fail depending on where they're run rather than on
-// whether the code is correct.
+// Tests asserting ANSI codes are present must Enable() first: the ambient
+// default auto-detects TTY-ness, and `go test` is never a TTY.
 func TestStatusColor_KnownGoodValue(t *testing.T) {
 	Enable()
 	defer Disable()

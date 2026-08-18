@@ -18,13 +18,9 @@ import (
 )
 
 // Globals holds the values bound to the root command's persistent flags.
-//
-// Fields are exported because pflag binds to their addresses directly; a getter
-// cannot serve as a flag target. An instance is created per root command and
-// threaded into subcommands explicitly rather than kept in a package variable:
-// pflag writes each flag's default into the bound pointer at registration time,
-// so a shared instance is clobbered the moment a second root is constructed,
-// which would break table-driven and parallel subcommand tests.
+// Created per root and threaded into subcommands explicitly: pflag writes each
+// flag's default into the bound pointer at registration time, so a shared
+// instance is clobbered the moment a second root is constructed.
 type Globals struct {
 	Profile string
 	Output  string
@@ -39,17 +35,13 @@ type Globals struct {
 	All     bool
 	Columns []string
 
-	// UI owns every human-facing write. It is replaced in PersistentPreRunE
-	// once flags are parsed; the value set at construction is a safe default
-	// so a directly-constructed command in a test never dereferences nil.
+	// Replaced in PersistentPreRunE once flags are parsed; set at construction
+	// only so a directly-constructed command in a test never sees nil.
 	UI *ui.UI
 }
 
 func NewRootCommand(version string) *cobra.Command {
 	g := &Globals{}
-	// A usable default so tests that construct commands without running
-	// PersistentPreRunE do not dereference nil. Replaced below once flags
-	// exist.
 	g.UI = ui.FromEnv(false, false, true)
 
 	root := &cobra.Command{
@@ -64,9 +56,8 @@ func NewRootCommand(version string) *cobra.Command {
 
 	bindGlobals(root.PersistentFlags(), g)
 
-	// Flags are not populated until Execute() parses them, so neither the
-	// colour decision nor the UI can be made at construction time — this hook
-	// is the first point where g's fields are real.
+	// Flags are not populated until Execute() parses them, so this hook is the
+	// first point where g's fields are real.
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if g.NoColor {
 			style.Disable()
@@ -75,10 +66,8 @@ func NewRootCommand(version string) *cobra.Command {
 		return nil
 	}
 
-	// A fresh install gets the wordmark and a pointer at init rather than a
-	// wall of help for 40+ commands it cannot use yet. Once a config exists,
-	// this reverts to normal help — the banner is a first-run affordance, not
-	// something to sit through on every bare invocation.
+	// A fresh install gets the wordmark and a pointer at init rather than a wall
+	// of help for 40+ commands it cannot use yet.
 	root.RunE = func(cmd *cobra.Command, args []string) error {
 		if hasExistingConfig() {
 			return cmd.Help()
@@ -101,11 +90,11 @@ func NewRootCommand(version string) *cobra.Command {
 		newVersionCommand(g, version),
 	)
 
-	// AddGroup must run before any command carrying a GroupID reaches
-	// Execute: cobra panics on an ID it does not know.
+	// Must run before any command carrying a GroupID reaches Execute: cobra
+	// panics on an ID it does not know.
 	root.AddGroup(commandGroups...)
-	// help and completion are created during Execute, not here, and land in
-	// "Additional Commands" unless placed explicitly.
+	// help and completion are created during Execute, and land in "Additional
+	// Commands" unless placed explicitly.
 	root.SetHelpCommandGroupID(groupAdvanced)
 	root.SetCompletionCommandGroupID(groupAdvanced)
 
@@ -123,10 +112,9 @@ func NewRootCommand(version string) *cobra.Command {
 	}
 	addRawCommands(root, g, version)
 
-	// Assign built-in groups LAST, after every AddCommand call. Doing it
-	// earlier silently misses anything added later — the raw get/post/delete
-	// commands landed under "Additional Commands" that way, and every test
-	// still passed; it was only visible by reading the rendered help.
+	// LAST, after every AddCommand: doing it earlier silently misses anything
+	// added later, which is how raw get/post/delete once landed under
+	// "Additional Commands" with every test still passing.
 	for _, c := range root.Commands() {
 		if id, ok := builtinGroups[c.Name()]; ok {
 			c.GroupID = id
@@ -137,11 +125,8 @@ func NewRootCommand(version string) *cobra.Command {
 	return root
 }
 
-// rootGlobals lets tests reach the Globals belonging to a specific root
-// command. Keyed by command pointer, and guarded by a mutex, so tests that
-// construct separate roots in parallel never observe each other's state — the
-// failure mode that made Globals a per-root value rather than a package
-// variable in the first place.
+// Lets tests reach a specific root's Globals. Keyed by command pointer so
+// parallel tests constructing separate roots never observe each other's state.
 var (
 	rootGlobalsMu sync.Mutex
 	rootGlobals   = map[*cobra.Command]*Globals{}
@@ -153,21 +138,16 @@ func registerGlobals(root *cobra.Command, g *Globals) {
 	rootGlobals[root] = g
 }
 
-// globalsFor exposes a root command's Globals for tests. Production code
-// receives *Globals by parameter and must not reach for this.
+// For tests only; production code receives *Globals by parameter.
 func globalsFor(root *cobra.Command) *Globals {
 	rootGlobalsMu.Lock()
 	defer rootGlobalsMu.Unlock()
 	return rootGlobals[root]
 }
 
-// statusLine formats the context footer shown under table output: which
-// profile and region a command actually ran against.
-//
-// This exists partly to soften the gap recorded in ADR 0003 — the CLI cannot
-// tell which environment a key belongs to, since no endpoint reports it, but
-// it can always show which profile was used, which is the next best signal for
-// "am I pointed where I think I am".
+// The context footer under table output. Softens the gap in ADR 0003: the CLI
+// cannot tell which environment a key belongs to, but it can always show which
+// profile served the request.
 func statusLine(rc config.RuntimeContext, version string) string {
 	parts := []string{"profile: " + rc.ProfileName}
 	if rc.Profile.Region != "" {
@@ -179,21 +159,16 @@ func statusLine(rc config.RuntimeContext, version string) string {
 	return strings.Join(parts, " · ") + " · v" + version
 }
 
-// RestoreTerminal re-enables the cursor. main calls it on every exit path
-// because a spinner may have hidden it, and an invisible cursor outlives the
-// process — the user is left fixing it by restarting their terminal. Writing
-// the sequence when no spinner ran is harmless.
+// Called by main on every exit path: a spinner may have hidden the cursor, and
+// an invisible cursor outlives the process. Harmless when no spinner ran.
 func RestoreTerminal() {
 	if term.IsTerminal(int(os.Stderr.Fd())) {
 		fmt.Fprint(os.Stderr, "\x1b[?25h")
 	}
 }
 
-// hasExistingConfig reports whether a config file already exists, without
-// resolving credentials — used only to decide whether bare `flexprice` shows
-// the welcome banner or normal help. A missing home directory or any other
-// lookup failure is treated the same as "no config": show the banner, rather
-// than erroring on a decision this lightweight.
+// Decides only whether bare `flexprice` shows the banner or normal help, so
+// any lookup failure is treated as "no config" rather than erroring.
 func hasExistingConfig() bool {
 	path, err := config.DefaultPath()
 	if err != nil {
@@ -203,8 +178,8 @@ func hasExistingConfig() bool {
 	return err == nil
 }
 
-// runtimeContext resolves credentials for the current invocation. Every command
-// that talks to the API starts here, so precedence is applied in exactly one place.
+// Every command that talks to the API starts here, so credential precedence is
+// applied in exactly one place.
 func runtimeContext(g *Globals) (config.RuntimeContext, *config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {

@@ -15,23 +15,14 @@ const maxSkeletonDepth = 16
 
 // Skeleton renders an editable JSON document for an operation's request body.
 //
-// Fill policy, derived from measurements against the live API:
+// Only required fields are emitted as live JSON; optional ones are commented
+// out for the user to uncomment. Not stylistic: an untouched optional numeric
+// field sent as "" fails the server's request binding with no details. The
+// commented block carries most of the value here — every nested structure
+// --edit exists for is optional in the spec.
 //
-//   - Only REQUIRED fields are emitted as live JSON. Optional fields are listed
-//     as commented-out lines the user uncomments. This is not a stylistic
-//     choice: sending an untouched optional numeric field as "" fails the
-//     server's request binding outright, producing "Invalid request format"
-//     with no details — a dead end for the user. String-typed optionals bind
-//     fine, but the rule is applied uniformly so the skeleton is never a trap.
-//   - A required-only skeleton for CreateSubscriptionRequest is just three
-//     fields, because every nested structure --edit exists for (phases,
-//     line_items, credit_grants) is optional in the spec. The commented block
-//     is therefore what carries the feature's value, and it must list nested
-//     fields with their types rather than omitting them.
-//
-// Cycles are broken by tracking schemas already on the current path. Note that
-// termination is guaranteed by the depth cap; the cycle guard bounds breadth
-// (removing it grows the SubscriptionResponse walk from 1,693 to 17,789 nodes).
+// Termination is guaranteed by the depth cap; the cycle guard bounds breadth
+// (without it the SubscriptionResponse walk grows from 1,693 to 17,789 nodes).
 func Skeleton(cmd Command) (string, error) {
 	op := cmd.Operation.Op
 	if op.RequestBody == nil || op.RequestBody.Value == nil {

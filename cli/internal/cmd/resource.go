@@ -17,16 +17,15 @@ import (
 	"github.com/flexprice/cli/internal/spec"
 )
 
-// addResourceCommands builds the command tree from the registry at startup.
-// There is no generated code: the tree is derived from the embedded spec.
+// Builds the command tree from the embedded spec at startup; no generated code.
 func addResourceCommands(root *cobra.Command, reg *spec.Registry, g *Globals, version string) {
 	for _, resource := range reg.Resources() {
 		entry, known := resourceGroups[resource]
 		short := entry.Short
 		if !known {
-			// Unmapped resources still appear, under cobra's built-in
-			// "Additional Commands" heading. GroupID stays empty deliberately:
-			// an unregistered ID would panic at Execute().
+			// Unmapped resources still appear under cobra's "Additional
+			// Commands". GroupID stays empty: an unregistered ID panics at
+			// Execute().
 			short = fmt.Sprintf("Operations on %s", resource)
 		}
 		parent := &cobra.Command{
@@ -67,9 +66,9 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 		Short: operationSummary(cmd),
 		Long:  operationHelp(cmd, fields),
 		Args:  cobra.MaximumNArgs(1),
-		// Body fields are not declared as typed flags: the spec has 198 operations
-		// and CreateSubscriptionRequest alone has 37 top-level properties. Unknown
-		// flags are collected and validated against the spec instead. Design doc §7.
+		// Body fields are not typed flags: 198 operations, and
+		// CreateSubscriptionRequest alone has 37 top-level properties. Unknown
+		// flags are collected and validated against the spec instead.
 		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		RunE: func(cc *cobra.Command, args []string) error {
 			in := spec.Input{Flags: map[string]string{}}
@@ -151,9 +150,8 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 					sp.Stop()
 					return err
 				}
-				// Tick on each COMPLETED page rather than on a timer, so a
-				// stalled page shows as a frozen count instead of an animation
-				// implying progress it is not making.
+				// On each completed page, not on a timer, so a stall reads as
+				// a frozen count.
 				sp.Update(fmt.Sprintf("fetched %d of %d\u2026", shown, page.Total))
 			}
 			sp.Stop()
@@ -192,21 +190,14 @@ func newOperationCommand(cmd spec.Command, reg *spec.Registry, g *Globals, versi
 	return c
 }
 
-// destructive lists the actions that cannot be undone. Because the CLI cannot
-// tell a production environment from a development one, every destructive action
-// is confirmed regardless of where it is pointed — there is no environment signal
-// to be selective with.
-//
-// This is hand-maintained. Ideally it would be derived from the spec's
-// x-scope: delete extension instead — finalizeInvoice, for example, is a POST
-// tagged x-scope: delete in openapi.json because it is irreversible — but
-// wiring that through the registry is a larger refactor than this fix.
+// Actions that cannot be undone. Confirmed regardless of environment: the CLI
+// has no signal for which one it is pointed at (ADR 0003). Hand-maintained —
+// deriving it from the spec's x-scope: delete would need registry changes.
 var destructive = map[string]bool{
 	"delete": true, "void": true, "terminate": true, "cancel": true, "archive": true,
 	"finalize": true,
 }
 
-// confirm prompts before a destructive spec-driven action. --force skips it.
 func confirm(g *Globals, cmd spec.Command, target string, force bool) error {
 	if !destructive[cmd.Action] {
 		return nil
@@ -218,16 +209,9 @@ func confirm(g *Globals, cmd spec.Command, target string, force bool) error {
 	return confirmAction(g, cmd.Action, subject, force)
 }
 
-// confirmAction prompts before a destructive action described by action and
-// subject (e.g. "delete", "/v1/customers/cust_123") — shared by the
-// spec-driven commands and the raw get/post/delete escape hatch, neither of
-// which always has a spec.Command to hand.
-//
-// The TTY check now lives in ui.Confirm, which REFUSES rather than proceeding
-// when nobody can be asked. That is a behaviour change: this function
-// previously returned nil on a non-terminal stdin, so a script piping into a
-// destructive command deleted without confirmation. Failing until --force is
-// supplied is the safer default.
+// Shared by the spec-driven commands and the raw escape hatch, neither of which
+// always has a spec.Command to hand. ui.Confirm refuses rather than proceeding
+// when nobody can be asked.
 func confirmAction(g *Globals, action, subject string, force bool) error {
 	if force {
 		return nil
@@ -235,9 +219,8 @@ func confirmAction(g *Globals, action, subject string, force bool) error {
 	return g.UI.Confirm(action, subject)
 }
 
-// receiptVerbs maps mutating actions to the past-tense verb shown in a
-// receipt. Read actions are absent deliberately: "Retrieved customer X" tells
-// the user nothing they cannot see in the output directly above it.
+// Read actions are absent deliberately: "Retrieved customer X" adds nothing to
+// the output directly above it.
 var receiptVerbs = map[string]string{
 	"create":    "Created",
 	"update":    "Updated",
@@ -249,9 +232,7 @@ var receiptVerbs = map[string]string{
 	"finalize":  "Finalized",
 }
 
-// responseID pulls the top-level "id" out of a response, or returns "" when
-// there is not one. Returning "" makes Receipt silent, which is the intended
-// behaviour when we cannot say precisely what happened.
+// Returns "" when there is no top-level id, which makes Receipt stay silent.
 func responseID(raw []byte) string {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -261,9 +242,8 @@ func responseID(raw []byte) string {
 	return id
 }
 
-// singular trims a trailing "s" for the receipt line, so the resource reads as
-// one object. Resources whose plural is irregular are left alone: this is
-// cosmetic, and a wrong singular is more jarring than an unchanged plural.
+// Cosmetic, for the receipt line. Irregular plurals are left alone: a wrong
+// singular is more jarring than an unchanged plural.
 func singular(resource string) string {
 	if len(resource) > 1 && strings.HasSuffix(resource, "s") &&
 		!strings.HasSuffix(resource, "ss") {
@@ -272,20 +252,13 @@ func singular(resource string) string {
 	return resource
 }
 
-// shouldShowFooter reports whether the status footer belongs under this
-// output. Only table output gets one: someone piping json or yaml is
-// scripting, not reading a status line, and CI commonly captures stderr
-// alongside stdout where it would just be noise.
-//
-// Extracted rather than inlined so the rule stays under test after the footer
-// moved out of internal/output, where it had its own test.
+// Only table output gets a footer: someone piping json or yaml is scripting,
+// not reading a status line. Extracted so the rule stays under test.
 func shouldShowFooter(format output.Format) bool {
 	return format == output.FormatTable
 }
 
-// spinnerVerb turns an action into the present participle shown while a request
-// is in flight. Unknown actions fall back to "Working on", which is vague but
-// never wrong — a misleading verb is worse than a general one.
+// Unknown actions fall back to "Working on": vague but never wrong.
 func spinnerVerb(cmd spec.Command) string {
 	switch cmd.Action {
 	case "list", "retrieve", "get":
@@ -319,8 +292,7 @@ func operationSummary(cmd spec.Command) string {
 	return fmt.Sprintf("%s %s", cmd.Operation.Method, cmd.Operation.Path)
 }
 
-// operationHelp lists settable fields and states plainly when flags are not
-// enough for this operation's body.
+// Lists settable fields, and says plainly when flags cannot express the body.
 func operationHelp(cmd spec.Command, fields []spec.Field) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n%s %s\n", operationSummary(cmd), cmd.Operation.Method, cmd.Operation.Path)
@@ -356,7 +328,7 @@ func operationHelp(cmd spec.Command, fields []spec.Field) string {
 	return b.String()
 }
 
-// collectUnknownFlags gathers --key=value pairs cobra did not recognise.
+// Gathers --key=value pairs cobra did not recognise.
 func collectUnknownFlags(c *cobra.Command) map[string]string {
 	out := map[string]string{}
 	for i, raw := range os.Args {
@@ -380,7 +352,7 @@ func collectUnknownFlags(c *cobra.Command) map[string]string {
 	return out
 }
 
-// readDataArg accepts @file, - for stdin, or a JSON literal.
+// Accepts @file, - for stdin, or a JSON literal.
 func readDataArg(arg string) (map[string]any, error) {
 	var raw []byte
 	var err error
@@ -404,7 +376,6 @@ func readDataArg(arg string) (map[string]any, error) {
 	return doc, nil
 }
 
-// editSkeleton writes a skeleton to a temp file, opens $EDITOR, and parses the result.
 func editSkeleton(cmd spec.Command) (map[string]any, error) {
 	skeleton, err := spec.Skeleton(cmd)
 	if err != nil {
@@ -454,11 +425,8 @@ func editSkeleton(cmd spec.Command) (map[string]any, error) {
 	return doc, nil
 }
 
-// splitEditorCommand splits an $EDITOR/$VISUAL value into a command and its
-// arguments on whitespace, so editors configured with flags (EDITOR="code
-// --wait", EDITOR="subl -w") resolve to a real binary instead of one invalid
-// argv[0] containing a space. This is plain whitespace splitting, not shell
-// parsing — a quoted argument (e.g. a path containing spaces) is not supported.
+// Splits $EDITOR on whitespace so values with flags (EDITOR="code --wait")
+// resolve to a real binary. Not shell parsing: quoted arguments are unsupported.
 func splitEditorCommand(raw string) (cmd string, args []string) {
 	fields := strings.Fields(raw)
 	if len(fields) == 0 {
@@ -484,8 +452,8 @@ func resolveEditor() (string, error) {
 	return fallback, nil
 }
 
-// readAll drains stdin. os.ReadFile cannot be used here: stdin is a pipe, not a
-// path, and os.Stdin.Name() is not portably openable.
+// os.ReadFile cannot be used: stdin is a pipe, and os.Stdin.Name() is not
+// portably openable.
 func readAll(f *os.File) ([]byte, error) {
 	info, err := f.Stat()
 	if err == nil && info.Mode()&os.ModeCharDevice != 0 {

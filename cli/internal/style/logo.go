@@ -24,13 +24,8 @@ var logoCompact = []string{
 // sits flush against the right edge.
 const logoWideMinWidth = 72
 
-// Logo renders the Flexprice wordmark, sized to the given terminal width.
-//
-// A width of 0 means the terminal size could not be determined — typically
-// because output is piped rather than attached to a terminal — and falls back
-// to the compact form rather than optimistically emitting 67-column art into
-// something that may not be that wide. A wrapped logo reads as corruption, so
-// the fallback is deliberately conservative.
+// Width 0 means the terminal size is unknown (piped output) and falls back to
+// the compact form: a wrapped logo reads as corruption.
 func Logo(width int) string {
 	art := logoCompact
 	if width >= logoWideMinWidth {

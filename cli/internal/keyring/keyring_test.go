@@ -8,20 +8,12 @@ import (
 	"time"
 )
 
-// These tests guard against the bug where OSKeyring's real Set/Get/Delete
-// calls — as used by login/logout/whoami once Open has already picked
-// OSKeyring as the backend — were direct, unwrapped calls into the OS
-// keychain library with no bound at all. A keychain session expiring, or a
-// fresh unlock prompt appearing, between the startup probe and the real
-// operation could then hang the CLI forever.
+// Guards the bug where OSKeyring's real Set/Get/Delete were unwrapped calls
+// with no timeout, so an expiring session could hang the CLI forever.
 //
-// Each test substitutes a fake backend via the keychainSet/keychainGet/
-// keychainDelete indirections and shrinks keychainOpTimeout so the timeout
-// path is exercised in milliseconds rather than seconds; the real OS
-// keychain is never touched. The `started` channel synchronizes with the
-// fake actually being invoked before the deferred restore runs, so the
-// restore's write to the package var can't race with the abandoned
-// goroutine's read of it.
+// Each test fakes the backend and shrinks keychainOpTimeout; the real keychain
+// is never touched. The `started` channel keeps the deferred restore from
+// racing the abandoned goroutine's read of the package var.
 
 func TestOSKeyring_Set_TimesOutWhenKeychainNeverResponds(t *testing.T) {
 	restoreSet, restoreTimeout := keychainSet, keychainOpTimeout

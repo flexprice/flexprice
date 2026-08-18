@@ -9,12 +9,8 @@ import (
 	"testing"
 )
 
-// TestFileStore_ConcurrentSetDoesNotCorrupt guards against a real race in a
-// naive os.WriteFile-based implementation: two processes independently
-// truncating and writing the same destination can leave a leftover tail from
-// whichever write was longer, producing a file that is neither writer's
-// output and fails to decrypt. Set() must instead always leave the file as
-// exactly one writer's complete, decryptable result.
+// Two processes truncating the same destination can leave a leftover tail from
+// the longer write, producing a file that decrypts as neither writer's output.
 func TestFileStore_ConcurrentSetDoesNotCorrupt(t *testing.T) {
 	dir := t.TempDir()
 	s := &FileStore{Dir: dir}

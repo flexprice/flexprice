@@ -132,12 +132,9 @@ func TestProfileName_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestUnmarshal_MergesIntoExistingMap documents BurntSushi/toml's actual
-// behavior when Unmarshal targets a map that already has entries: it merges by
-// key rather than replacing the map wholesale, so keys absent from the TOML
-// source survive untouched. Load is safe today because it always starts from a
-// freshly-allocated empty map, but this would silently resurrect stale
-// profiles if Load were ever called on a reused, non-empty *Config.
+// BurntSushi/toml merges into a non-empty map rather than replacing it. Load is
+// safe today because it always starts from a fresh map, but reusing a *Config
+// would silently resurrect stale profiles.
 func TestUnmarshal_MergesIntoExistingMap(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{
 		"stale":   {Region: "stale-region"},
@@ -158,13 +155,8 @@ region = "in"
 	}
 }
 
-// TestSave_FailurePreservesExistingFile verifies the atomic-write guarantee:
-// if the final commit step fails, whatever was already at path is left
-// completely intact rather than truncated or partially overwritten. This is
-// forced by making path itself a directory, so the terminal os.Rename fails
-// with EEXIST/ENOTEMPTY after the temp file has already been fully written —
-// exercising exactly the "failure after the point of no return under the old
-// O_TRUNC approach" scenario that atomic rename is meant to guard against.
+// If the commit step fails, the existing file must be intact. Forced by making
+// path a directory so os.Rename fails after the temp file is fully written.
 func TestSave_FailurePreservesExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

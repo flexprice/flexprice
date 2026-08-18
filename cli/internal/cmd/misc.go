@@ -37,9 +37,8 @@ func newOpenCommand(g *Globals, version string) *cobra.Command {
 				BaseURL: rc.BaseURL, APIKey: rc.APIKey, Version: version,
 				Debug: g.Debug, DebugOut: os.Stderr,
 			})
-			// GET /webhooks/dashboard carries no OpenAPI annotations, so it is
-			// unreachable through the registry (see cli/spec/commands.yaml); it is
-			// called by literal path here, the same way /environments is.
+			// No OpenAPI annotations, so it is unreachable through the registry
+			// and called by literal path, the same way /environments is.
 			raw, err := cl.Do(c.Context(), http.MethodGet, "/webhooks/dashboard", nil, nil)
 			if err != nil {
 				return err
@@ -62,11 +61,8 @@ func newOpenCommand(g *Globals, version string) *cobra.Command {
 	return open
 }
 
-// openURL is only ever called with a URL the CLI printed itself: the fixed
-// dashboard URL above, or a "url" field parsed out of a JSON API response. It
-// is never called with user-supplied input. exec.Command passes url as a single
-// argv element to the OS opener binary rather than through a shell, so even a
-// malicious value could not inject additional shell commands.
+// Only ever called with a URL the CLI printed itself, never user input.
+// exec.Command passes url as a single argv element, not through a shell.
 func openURL(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -78,14 +74,14 @@ func openURL(url string) error {
 		cmd = exec.Command("xdg-open", url)
 	}
 	if err := cmd.Start(); err != nil {
-		// Not fatal: the URL was already printed to stdout.
+		// Not fatal: the URL was already printed.
 		fmt.Fprintf(os.Stderr, "Could not open a browser (%v). Open the URL above manually.\n", err)
 	}
 	return nil
 }
 
-// newVersionCommand reports the binary version and the spec build it embeds, so
-// a 404 on a known command can be diagnosed as version skew. Design doc §12.
+// Reports the embedded spec build too, so a 404 on a known command can be
+// diagnosed as version skew.
 func newVersionCommand(g *Globals, version string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",

@@ -6,31 +6,20 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-// Option is one choice in a Select.
 type Option struct {
 	Label string
 	Value string
 }
 
-// ConfirmTitle is the sentence shown above a destructive confirmation.
-//
-// Exported and separated from Confirm so it stays testable: huh drives a real
-// terminal session, so the interactive path cannot be exercised under `go
-// test`. The wording is the part that matters and the part that can regress —
-// a prompt that fails to say what will be destroyed is worse than no prompt,
-// because the user answers yes to a question they did not read properly.
+// Separated from Confirm so the wording stays testable: huh drives a real
+// terminal session, which `go test` cannot exercise.
 func ConfirmTitle(action, subject string) string {
 	return fmt.Sprintf("This will %s %s and cannot be undone.", action, subject)
 }
 
-// Confirm asks before a destructive action. It refuses rather than prompting
-// when input is unavailable, so scripts fail loudly with a message naming the
-// flag to pass instead of hanging on a prompt nobody can answer.
-//
-// This is a deliberate behaviour change from the previous raw y/N prompt, which
-// returned nil — i.e. proceeded — when stdin was not a terminal. Silently
-// destroying something because nobody could be asked is the worse default; a
-// script that relied on it now fails until --force is added.
+// Refuses rather than prompting when input is unavailable, so scripts fail
+// loudly instead of hanging — or, as the old raw y/N prompt did, proceeding to
+// destroy something because nobody could be asked.
 func (u *UI) Confirm(action, subject string) error {
 	if u.noInput {
 		return fmt.Errorf(
@@ -54,14 +43,14 @@ func (u *UI) Confirm(action, subject string) error {
 	return nil
 }
 
-// SelectWithHint presents an arrow-key menu. flagHint names the flag a scripted
-// caller should pass instead, so the refusal under --no-input is actionable.
+// flagHint names the flag a scripted caller should pass instead, so the
+// refusal under --no-input is actionable.
 func (u *UI) SelectWithHint(title, flagHint string, opts []Option) (string, error) {
 	if len(opts) == 0 {
 		return "", fmt.Errorf("no options available for %q", title)
 	}
-	// One option is not a question. Prompting here would make scripted use
-	// fail for no reason.
+	// One option is not a question; prompting would fail scripted use for
+	// no reason.
 	if len(opts) == 1 {
 		return opts[0].Value, nil
 	}
@@ -86,9 +75,7 @@ func (u *UI) SelectWithHint(title, flagHint string, opts []Option) (string, erro
 	return choice, nil
 }
 
-// Select is SelectWithHint for callers with no specific flag to point at. The
-// refusal message under --no-input is necessarily vaguer, so prefer
-// SelectWithHint wherever a flag exists.
+// Prefer SelectWithHint wherever a flag exists: this refusal message is vaguer.
 func (u *UI) Select(title string, opts []Option) (string, error) {
 	return u.SelectWithHint(title, "the corresponding flag", opts)
 }

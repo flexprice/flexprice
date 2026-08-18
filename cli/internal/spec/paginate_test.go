@@ -43,11 +43,8 @@ func TestPageInfo_NonListResponseIsNotAnError(t *testing.T) {
 	}
 }
 
-// InvoiceResponse has a top-level "total" field that is a string dollar
-// amount (e.g. "150"), not a pagination count. When that amount happens to
-// be a whole number, strconv.Atoi on it succeeds, and a naive reader mistakes
-// the invoice for a 150-record paginated list. Real envelopes carry total as
-// a JSON number alongside a "pagination" object or an "items" array.
+// An invoice's string "total" ("150") parses cleanly with Atoi, so a naive
+// reader mistakes one invoice for a 150-record list.
 func TestPageInfo_InvoiceLikeResponseIsNotMisreadAsPaginated(t *testing.T) {
 	raw := []byte(`{"id":"inv_1","total":"150","currency":"usd","line_items":[{"id":"li_1"},{"id":"li_2"}]}`)
 
@@ -82,10 +79,8 @@ func TestPageInfo_CountIsDeterministicAcrossMultipleArrayFields(t *testing.T) {
 	}
 }
 
-// A response cut short mid-stream (e.g. a network blip during an --all loop)
-// is genuinely malformed JSON, not merely "not an object" — it must surface
-// as an error so the caller can distinguish a failed page from a completed
-// pagination run.
+// A truncated response must surface as an error, so a failed page is
+// distinguishable from a completed pagination run.
 func TestPageInfo_MalformedJSONIsAnError(t *testing.T) {
 	_, err := PageInfo([]byte(`{"total":1,"items":[{"id":"a"}`))
 	if err == nil {

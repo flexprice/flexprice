@@ -5,12 +5,8 @@ import (
 	"time"
 )
 
-// Load parses an ~880KB embedded document; a typical invocation calls it 2-3
-// times (NewRootCommand, runtimeContext, login's region prompt). Without
-// memoization each call re-parses from scratch. This asserts N calls cost close
-// to one parse, not N parses, by comparing N calls against a single call scaled
-// up — a generous multiplier keeps it robust to machine noise while still
-// failing hard if caching regresses (which would show ~N times the cost).
+// Asserts N calls cost close to one parse rather than N. The multiplier is
+// generous enough for machine noise but still catches a caching regression.
 func TestLoad_IsMemoizedAcrossCalls(t *testing.T) {
 	// Warm any one-time global costs (e.g. the loader's internal setup) so the
 	// timed portion isolates the cost of Load itself.
@@ -33,9 +29,7 @@ func TestLoad_IsMemoizedAcrossCalls(t *testing.T) {
 	}
 	total := time.Since(start)
 
-	// Un-memoized, n calls would cost roughly n times a single call. Memoized,
-	// they should cost roughly the same as one call (cache-hit overhead only).
-	// A 5x-of-single budget comfortably separates "cached" from "re-parsed 20
+	// 5x of a single call comfortably separates "cached" from "re-parsed 20
 	// times" while tolerating scheduling noise.
 	budget := single * 5
 	if budget < time.Millisecond {
@@ -108,11 +102,8 @@ func TestEventTypes_ComeFromWebhookEventStubs(t *testing.T) {
 	if len(types) < 20 {
 		t.Fatalf("EventTypes returned %d, want the full stub list", len(types))
 	}
-	// The design doc's sample list included "invoice.created" as an example event
-	// name, but the embedded spec has no such event (verified: zero occurrences of
-	// "invoice.created" in spec/openapi.json). It has "invoice.create.drafted",
-	// "invoice.update.finalized", etc. instead. "customer.created" genuinely exists
-	// and exercises the same code path.
+	// Not "invoice.created" — no such event exists in the spec; the real names
+	// are "invoice.create.drafted", "invoice.update.finalized", etc.
 	found := false
 	for _, e := range types {
 		if e == "customer.created" {

@@ -46,10 +46,8 @@ func TestSkeleton_IncludesRequiredFields(t *testing.T) {
 	}
 }
 
-// customer_id is not in CreateSubscriptionRequest's required list, but a
-// subscription is meaningless without one. The optional-fields comment block
-// is where a field like this must surface, or a user filling in the skeleton
-// has no signal it exists at all.
+// customer_id is not required by the spec but a subscription is meaningless
+// without one, so the optional-fields block must surface it.
 func TestSkeleton_ListsFunctionallyNecessaryOptionalFields(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, _ := reg.Lookup("subscriptions", "create")
@@ -63,10 +61,8 @@ func TestSkeleton_ListsFunctionallyNecessaryOptionalFields(t *testing.T) {
 	}
 }
 
-// customer_id specifically must appear in the optional-fields comment block,
-// not as a live JSON field — it is not in CreateSubscriptionRequest's required
-// list, and the fill policy never emits optional fields as live JSON (see
-// TestSkeleton_OptionalFieldsAreNeverEmittedLive).
+// In the comment block, not as live JSON: the fill policy never emits optional
+// fields live.
 func TestSkeleton_CustomerIDAppearsInOptionalFieldsSection(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, _ := reg.Lookup("subscriptions", "create")
@@ -119,10 +115,8 @@ func TestSkeleton_TerminatesOnCyclicSchemas(t *testing.T) {
 	}
 }
 
-// Two runs on the same command must be byte-identical: Go's encoding/json sorts
-// map keys alphabetically in MarshalIndent, and the optional-fields comment
-// list is explicitly sorted too, so nothing here should depend on map
-// iteration order.
+// Byte-identical across runs: MarshalIndent sorts map keys and the
+// optional-fields list is sorted explicitly.
 func TestSkeleton_IsDeterministicAcrossRuns(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, _ := reg.Lookup("subscriptions", "create")
@@ -142,10 +136,8 @@ func TestSkeleton_IsDeterministicAcrossRuns(t *testing.T) {
 	}
 }
 
-// A body with only optional fields (no required fields at all) must still
-// produce a useful skeleton: valid JSON (even if "{}"), plus a populated
-// optional-fields comment block so the user has something to go on. Several
-// "update" operations have this shape because every field is optional-to-change.
+// Several "update" operations have no required fields at all; those must still
+// produce valid JSON plus a populated optional-fields block.
 func TestSkeleton_HandlesBodyWithNoRequiredFields(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, ok := findCommandWithNoRequiredBodyFields(t, reg)

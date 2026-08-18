@@ -19,19 +19,10 @@ const service = "flexprice"
 // of failing fast, which would otherwise freeze the CLI at startup.
 const probeTimeout = 2 * time.Second
 
-// keychainOpTimeout bounds a real Set/Get/Delete call against the OS
-// keychain, once Open has already picked OSKeyring as the backend. It is
-// longer than probeTimeout on purpose: the probe only needs to detect an
-// unusable backend fast at startup, but a real operation can legitimately
-// involve the user noticing and answering an OS unlock/consent prompt (a
-// macOS Keychain access dialog, a Linux polkit prompt) that a 2s bound would
-// false-timeout on. It still guarantees the CLI never hangs forever on a
-// truly stuck keychain (e.g. a Linux secret service with D-Bus reachable but
-// no prompt agent to answer it) — the same failure mode probeTimeout exists
-// to catch, just later in the call path.
-//
-// It is a var, not a const, so tests can shrink it to exercise the timeout
-// path without a multi-second sleep; production code never reassigns it.
+// Bounds a real Set/Get/Delete against the OS keychain. Longer than
+// probeTimeout on purpose: a real operation can involve the user answering an
+// OS unlock prompt, which a 2s bound would false-timeout on. A var so tests
+// can shrink it; production never reassigns it.
 var keychainOpTimeout = 8 * time.Second
 
 // Store is the credential backend. Name() is surfaced by whoami so the user can
@@ -104,12 +95,9 @@ func Open() (store Store, warn string, err error) {
 		nil
 }
 
-// probeKeychain is the only reliable availability check: on Linux the keychain
-// fails at call time when libsecret or D-Bus is absent. It calls the raw
-// keychain functions directly (not OSKeyring.Set/Delete) so its own
-// probeTimeout bound applies once, rather than nesting inside each method's
-// keychainOpTimeout bound and making the startup probe as slow as a real
-// operation.
+// The only reliable availability check: on Linux the keychain fails at call
+// time when libsecret or D-Bus is absent. Calls the raw functions rather than
+// OSKeyring's methods so probeTimeout applies instead of keychainOpTimeout.
 func probeKeychain() error {
 	_, err := withTimeout(probeTimeout, "probe", func() (struct{}, error) {
 		if err := keychainSet(service, service+".probe", "probe"); err != nil {
@@ -120,13 +108,8 @@ func probeKeychain() error {
 	return err
 }
 
-// withTimeout runs fn on its own goroutine and bounds it to timeout, the
-// pattern probeKeychain originally used inline. Both the probe and the real
-// OSKeyring operations need this: a hung OS keychain call must never block
-// the CLI forever, whether at startup (probe) or during login/logout/whoami
-// (Set/Get/Delete). If fn does not return in time, the goroutine is
-// abandoned (best-effort; it may complete later with nobody observing the
-// result) and a clear, actionable error is returned instead of hanging.
+// A hung OS keychain call must never block the CLI forever. On timeout the
+// goroutine is abandoned — best-effort, it may complete later unobserved.
 func withTimeout[T any](timeout time.Duration, op string, fn func() (T, error)) (T, error) {
 	type result struct {
 		val T

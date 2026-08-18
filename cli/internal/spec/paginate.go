@@ -19,27 +19,19 @@ type Page struct {
 	Limit  int
 }
 
-// HasMore reports whether another page exists.
-//
-// It deliberately ignores the response's echoed offset: the API was observed
-// returning offset == limit for a request that sent no offset at all, so the
-// echo cannot be treated as "records already consumed". The caller tracks how
-// many it has actually seen and passes that in as seen.
+// Ignores the response's echoed offset: the API was observed returning
+// offset == limit for a request that sent no offset, so the caller tracks how
+// many it has actually seen and passes that in.
 func (p Page) HasMore(seen int) bool {
 	return p.Total > 0 && seen < p.Total
 }
 
-// PageInfo reads the pagination envelope. Two shapes exist: types.ListResponse
-// nests pagination under "pagination", while older endpoints put total, limit
-// and offset at the top level next to a named array (or an "items" array).
+// Two envelope shapes exist: pagination nested under "pagination", or total/
+// limit/offset at the top level beside a named array.
 //
-// A bare top-level "total"/"limit"/"offset" is not, by itself, evidence of a
-// paginated envelope: InvoiceResponse has a top-level "total" field that is a
-// string dollar amount (e.g. "150"), not a pagination count, and would
-// otherwise be misread as one. Detection requires one of: a "pagination"
-// sub-object, an unambiguous "items" array, or (for the legacy shape) total/
-// limit/offset genuinely typed as JSON numbers plus a top-level array of
-// objects backing them up.
+// A bare top-level "total" is not evidence on its own — InvoiceResponse's is a
+// string dollar amount. Detection needs a "pagination" sub-object, an "items"
+// array, or numeric total/limit/offset plus a top-level array of objects.
 func PageInfo(raw []byte) (Page, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {

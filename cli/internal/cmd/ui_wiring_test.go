@@ -5,8 +5,7 @@ import (
 	"testing"
 )
 
-// The UI must never be nil, even for a command constructed directly in a test
-// that never runs PersistentPreRunE.
+// Must hold for commands constructed directly, without PersistentPreRunE.
 func TestGlobals_UIIsNeverNil(t *testing.T) {
 	root := NewRootCommand("test")
 	g := globalsFor(root)
@@ -18,9 +17,8 @@ func TestGlobals_UIIsNeverNil(t *testing.T) {
 	}
 }
 
-// Regression guard: pflag does not populate bound values until Execute parses
-// them, so a UI built at construction time would capture --quiet as false
-// regardless of what was passed.
+// pflag does not populate bound values until Execute parses them, so a UI built
+// at construction time would capture --quiet as false regardless.
 func TestGlobals_UIReflectsParsedFlags(t *testing.T) {
 	root := NewRootCommand("test")
 	var out bytes.Buffer
@@ -40,19 +38,9 @@ func TestGlobals_UIReflectsParsedFlags(t *testing.T) {
 	}
 }
 
-// --no-input must reach Globals, which is the only half of this that can be
-// asserted here.
-//
-// Deliberately NOT asserting g.UI.NoInput() is true: ui.New treats a non-TTY
-// stdin as implying --no-input, and stdin is never a TTY under `go test`, so
-// that assertion would hold even if the flag were never wired up at all —
-// confirmed by mutating PersistentPreRunE to skip rebuilding the UI, at which
-// point such an assertion still passed. The flag's effect on the UI is covered
-// by TestGatingMatrix in internal/ui, which can set StdinTTY independently.
-//
-// Asserting on colour here would be vacuous for the same reason: stderr is a
-// buffer under test, never a TTY. root_test.go covers --no-color against style
-// directly.
+// Deliberately does NOT assert g.UI.NoInput(): a non-TTY stdin already implies
+// --no-input, and stdin is never a TTY under `go test`, so that would hold even
+// unwired. TestGatingMatrix in internal/ui covers the UI half.
 func TestGlobals_NoInputReachesGlobals(t *testing.T) {
 	root := NewRootCommand("test")
 	var out bytes.Buffer
@@ -68,8 +56,7 @@ func TestGlobals_NoInputReachesGlobals(t *testing.T) {
 	}
 }
 
-// The flag must default to false, or every prompt would refuse. Cheap, but it
-// is the half of the default that a typo in bindGlobals would silently invert.
+// A typo in bindGlobals inverting this would make every prompt refuse.
 func TestGlobals_NoInputDefaultsFalse(t *testing.T) {
 	root := NewRootCommand("test")
 	var out bytes.Buffer
@@ -85,9 +72,8 @@ func TestGlobals_NoInputDefaultsFalse(t *testing.T) {
 	}
 }
 
-// Two roots must not share state. Globals was made per-root precisely because
-// pflag writes defaults into bound pointers at registration time, so a shared
-// instance is clobbered the moment a second root is constructed.
+// Globals is per-root because pflag writes defaults into bound pointers at
+// registration time, clobbering any shared instance.
 func TestGlobals_RootsAreIndependent(t *testing.T) {
 	a := NewRootCommand("test")
 	b := NewRootCommand("test")

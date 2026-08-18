@@ -17,20 +17,16 @@ import (
 var version = "dev"
 
 func main() {
-	// NotifyContext cancels ctx on Ctrl-C. The context reaches client.Do,
-	// which already accepts one, so an in-flight request is abandoned rather
-	// than waited out.
+	// Reaches client.Do, so an in-flight request is abandoned rather than
+	// waited out.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	root := cmd.NewRootCommand(version)
 	err := root.ExecuteContext(ctx)
 
-	// Restoring the cursor is the reason this handling exists at all: a
-	// spinner hides it, and a process that dies without restoring leaves the
-	// user's shell with no visible cursor. This runs on every exit path,
-	// including those where no spinner ever started, where it is a harmless
-	// no-op sequence.
+	// The reason this signal handling exists: a spinner hides the cursor, and
+	// dying without restoring it leaves the user's shell without one.
 	cmd.RestoreTerminal()
 
 	if err == nil {
@@ -39,8 +35,7 @@ func main() {
 
 	out := ui.FromEnv(false, false, true)
 
-	// A cancelled context means Ctrl-C, not a failure worth a stack of
-	// diagnostics. Report it plainly and use the conventional code.
+	// Ctrl-C, not a failure worth diagnostics.
 	if errors.Is(ctx.Err(), context.Canceled) {
 		out.Failure(errors.New("cancelled"))
 		os.Exit(exitcode.Interrupted)

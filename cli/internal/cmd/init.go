@@ -11,17 +11,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// printInitBanner writes the wordmark and tagline. Split out from
-// newInitCommand's RunE so it can be tested without exercising the full login
-// flow, which needs a real terminal or --api-key. Also reused by the root
-// command's bare invocation.
-//
-// The wordmark is drawn with box/block characters, so it carries the message
-// on its own; color is decoration layered on top and this stays readable under
-// --no-color, NO_COLOR and piped output.
-// terminalWidth reports the width of the terminal attached to stdout, or 0
-// when there is none (output piped or redirected). style.Logo treats 0 as
-// "unknown" and picks its conservative form rather than guessing wide.
+// Returns 0 when stdout is piped or redirected; style.Logo treats 0 as unknown
+// and picks its conservative form rather than guessing wide.
 func terminalWidth() int {
 	w, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
@@ -30,6 +21,8 @@ func terminalWidth() int {
 	return w
 }
 
+// Split out from newInitCommand so it can be tested without the login flow,
+// and reused by the root command's bare invocation.
 func printInitBanner(w io.Writer, g *Globals) {
 	if g.Quiet {
 		return
@@ -39,7 +32,6 @@ func printInitBanner(w io.Writer, g *Globals) {
 	fmt.Fprintln(w)
 }
 
-// newInitCommand is the guided first run: login, then tell the user what to do next.
 func newInitCommand(g *Globals, version string) *cobra.Command {
 	return &cobra.Command{
 		Use:     "init",
@@ -48,9 +40,7 @@ func newInitCommand(g *Globals, version string) *cobra.Command {
 		RunE: func(c *cobra.Command, args []string) error {
 			printInitBanner(os.Stderr, g)
 			// Warmth is confined to init and login, where the user is a
-			// newcomer rather than an operator. Operational commands stay
-			// plain: whimsical wording beside irreversible billing actions
-			// costs trust.
+			// newcomer rather than an operator.
 			g.UI.Info("Welcome to Flexprice — let's get you set up.")
 			g.UI.Info("Your API key is scoped to one environment — you can add more later with `flexprice login`.")
 			g.UI.Info("")

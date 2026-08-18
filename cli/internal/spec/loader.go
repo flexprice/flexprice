@@ -19,12 +19,9 @@ import (
 // event types. Design doc §5.
 const WebhookEventsTag = "Webhook Events"
 
-// loadOnce, loadDoc and loadErr memoize Load: the embedded spec bytes never
-// change within a process, and parsing an ~880KB document costs tens of
-// milliseconds, yet a single invocation calls Load 2-3 times (building the
-// command tree, resolving runtime credentials, prompting for a region). Every
-// call after the first returns the cached result immediately. Callers must
-// treat the returned *openapi3.T as read-only, since it is shared.
+// Memoizes Load: parsing the ~880KB spec costs tens of milliseconds and a
+// single invocation calls it 2-3 times. The returned *openapi3.T is shared, so
+// callers must treat it as read-only.
 var (
 	loadOnce sync.Once
 	loadDoc  *openapi3.T

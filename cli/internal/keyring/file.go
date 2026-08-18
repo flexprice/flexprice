@@ -68,14 +68,9 @@ func (f *FileStore) Set(profile, key string) error {
 	return f.writeAtomic(f.path(profile), enc)
 }
 
-// writeAtomic writes to a temporary file and renames it into place. Two
-// `flexprice` processes writing the same profile concurrently would otherwise
-// both open the destination with O_TRUNC and issue independent writes: if the
-// second writer's payload is shorter than the first's, the file is left with a
-// leftover tail from the first write instead of clean content from either
-// writer. Renaming a fully-written temp file over the destination is atomic on
-// the same filesystem, so a concurrent reader or writer only ever observes one
-// writer's complete result.
+// Temp file plus rename, which is atomic on the same filesystem. Two processes
+// opening the destination with O_TRUNC directly could leave a short write with
+// a leftover tail from the longer one.
 func (f *FileStore) writeAtomic(dest string, data []byte) error {
 	tmp, err := os.CreateTemp(f.Dir, filepath.Base(dest)+".tmp-*")
 	if err != nil {

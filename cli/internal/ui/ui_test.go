@@ -73,15 +73,9 @@ func TestGatingMatrix(t *testing.T) {
 	}
 }
 
-// The assertion that stops Christmas-tree CI logs. Asserting ABSENCE is the
-// point: the previous round shipped two real defects whose tests only checked
-// that output was produced.
-//
-// Color is deliberately TRUE in every case below. With Color:false the palette
-// is disabled twice over, and the test would pass even if the stream gates were
-// deleted outright — verified by mutating New to drop them, at which point this
-// test still passed. Colour must be requested so that the gate under test is
-// the only thing suppressing it.
+// Color is deliberately TRUE in most cases below: with Color:false the palette
+// is disabled twice over and this passes even with the stream gates deleted —
+// verified by deleting them.
 func TestNonTTY_WritesZeroEscapeBytes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -120,9 +114,8 @@ func TestNonTTY_WritesZeroEscapeBytes(t *testing.T) {
 	}
 }
 
-// The positive control for the test above: with colour requested on a real
-// terminal, escape codes MUST appear. Without this, every "no escapes" result
-// above could be produced by a UI that never colours anything at all.
+// Positive control: without it, every "no escapes" result above could come from
+// a UI that never colours anything.
 func TestTTY_DoesEmitColorWhenRequested(t *testing.T) {
 	style.EnableForTests()
 	u, _, errBuf := newTestUI(Options{Color: true, StderrTTY: true, StdinTTY: true, Term: "xterm-256color"})

@@ -1,6 +1,5 @@
-// Package output renders API responses. Data is written to Out and everything
-// human — footers, progress, warnings — to Err, so redirecting stdout yields
-// clean machine-readable output.
+// Package output renders API response data to Out. Human-facing commentary is
+// internal/ui's job, not this package's.
 package output
 
 import (
@@ -47,28 +46,21 @@ type Writer struct {
 	Format Format
 }
 
-// Result reports what Render did, so a caller that knows the resource name can
-// say something useful about an empty list. The renderer deliberately does not
-// invent that message itself: it has no idea what "customers" are.
+// Lets a caller that knows the resource name say something useful about an
+// empty list; the renderer has no idea what "customers" are.
 type Result struct {
 	Empty bool
 }
 
-// RenderResult renders and reports. Render is kept as a thin wrapper so
-// existing callers and tests are unaffected.
-//
-// Empty is only ever reported for table output. json and yaml are machine
-// formats where an empty list is valid output that must be emitted verbatim —
-// reporting Empty there would have the caller print prose over the top of
-// valid JSON.
+// Empty is only reported for table output: json and yaml are machine formats
+// where an empty list is valid output the caller must not print prose over.
 func (w Writer) RenderResult(raw []byte, o Options) (Result, error) {
 	if w.Format != FormatTable {
 		return Result{}, w.Render(raw, o)
 	}
 	rows, err := rowsFrom(raw)
 	if err != nil {
-		// Unparseable as a table — fall back to JSON so the user still sees
-		// the data, and do not claim the result was empty.
+		// Unparseable as a table: fall back to JSON rather than claiming empty.
 		return Result{}, Writer{Out: w.Out, Err: w.Err, Format: FormatJSON}.Render(raw, o)
 	}
 	if len(rows) == 0 {
@@ -108,7 +100,6 @@ func (w Writer) Render(raw []byte, o Options) error {
 	}
 }
 
-// Warn writes a human-facing message to stderr unless --quiet is set.
 func (w Writer) Warn(o Options, format string, args ...any) {
 	if o.Quiet || w.Err == nil {
 		return

@@ -11,12 +11,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// TestMain forces the style package to a real color profile for this test
-// binary, matching internal/style's own TestMain — go test never runs with a
-// terminal attached, so without this, style's own auto-detection would
-// correctly see "no terminal" and this file's ANSI-code assertions
-// (TestRenderTable_HeaderIsStyled etc.) would fail based on execution
-// environment, not on whether table.go calls style correctly.
+// go test never has a terminal attached, so without forcing a profile the
+// ANSI-code assertions below would pass or fail on where they run.
 func TestMain(m *testing.M) {
 	style.EnableForTests()
 	os.Exit(m.Run())
@@ -122,10 +118,8 @@ func TestRowsFrom_OlderListShape(t *testing.T) {
 	}
 }
 
-// TestRowsFrom_SingleObjectWithArrayFieldIsNotFlattened guards against a
-// bare alphabetical-first-array heuristic: a single customer object with a
-// "tax_rates" array must render as one row (the customer), not as one row
-// per tax rate string.
+// A single customer with a "tax_rates" array must render as one row, not one
+// row per tax rate.
 func TestRowsFrom_SingleObjectWithArrayFieldIsNotFlattened(t *testing.T) {
 	rows, err := rowsFrom(singleObjectWithArrayField())
 	if err != nil {
@@ -136,12 +130,9 @@ func TestRowsFrom_SingleObjectWithArrayFieldIsNotFlattened(t *testing.T) {
 	}
 }
 
-// invoiceResponseShape mirrors GET /invoices/{id}: a top-level "total" field
-// that is a string (the invoice's dollar amount, not a pagination count),
-// an empty "coupon_applications" array (no coupon applied — the common
-// case), and a populated "line_items" array. "coupon_applications" sorts
-// before "line_items" alphabetically, so a naive alphabetical-first-array
-// heuristic picks the empty array and reports no rows.
+// Mirrors GET /invoices/{id}: a string "total", an empty
+// "coupon_applications" and a populated "line_items". The empty array sorts
+// first alphabetically, which is what breaks a naive heuristic.
 func invoiceResponseShape() []byte {
 	return []byte(`{
 		"id": "inv_1",
@@ -155,14 +146,9 @@ func invoiceResponseShape() []byte {
 	}`)
 }
 
-// TestRowsFrom_InvoiceResponseUsesLineItemsNotStringTotal reproduces the bug
-// where `flexprice invoices retrieve <id> --output table` printed
-// "No results." A string "total" field was mistaken for a pagination marker,
-// and once treated as a list, the empty "coupon_applications" array (sorting
-// before "line_items") was picked over the real, populated "line_items"
-// array. Both must be fixed: a string "total" must not trigger list
-// detection at all, and even under list detection a non-empty array of
-// objects must win over an empty one.
+// Reproduces `invoices retrieve --output table` printing "No results.": a
+// string "total" was read as a pagination marker, then the empty
+// "coupon_applications" beat "line_items" alphabetically. Both must be fixed.
 func TestRowsFrom_InvoiceResponseUsesLineItemsNotStringTotal(t *testing.T) {
 	rows, err := rowsFrom(invoiceResponseShape())
 	if err != nil {
@@ -173,15 +159,9 @@ func TestRowsFrom_InvoiceResponseUsesLineItemsNotStringTotal(t *testing.T) {
 	}
 }
 
-// TestRender_InvoiceResponseTableShowsLineItems is the end-to-end
-// regression: rendering an InvoiceResponse-shaped payload as a table must
-// show the invoice's data — including its line items, when that column is
-// requested — instead of the "No results." warning that the compounded bug
-// (string "total" mistaken for a pagination marker, then the empty
-// "coupon_applications" array beating "line_items" alphabetically) produced.
-// Columns are requested explicitly here because "id" alone satisfies
-// defaultColumns's preferred-field list, which would otherwise hide the
-// line_items column and make this assertion moot.
+// End-to-end regression for the "No results." bug below. Columns are requested
+// explicitly because "id" alone satisfies defaultColumns, which would hide the
+// line_items column and make the assertion moot.
 func TestRender_InvoiceResponseTableShowsLineItems(t *testing.T) {
 	var out, errOut bytes.Buffer
 	w := Writer{Out: &out, Err: &errOut, Format: FormatTable}
@@ -204,11 +184,8 @@ func TestRender_InvoiceResponseTableShowsLineItems(t *testing.T) {
 	}
 }
 
-// genuineListWithEmptyFirstArray simulates a real pagination envelope (a
-// "pagination" marker, the primary and unambiguous signal) that happens to
-// carry two array-of-object fields, one empty and alphabetically first. This
-// isolates the second invariant: once an envelope is genuinely a list, the
-// row source must be chosen by non-empty-wins, not alphabetical-first.
+// A real pagination envelope carrying two array fields, one empty and
+// alphabetically first — isolates non-empty-wins from the "total" type check.
 func genuineListWithEmptyFirstArray() []byte {
 	return []byte(`{
 		"pagination": {"total": 2, "limit": 10, "offset": 0},
@@ -217,10 +194,8 @@ func genuineListWithEmptyFirstArray() []byte {
 	}`)
 }
 
-// TestRowsFrom_GenuineListPrefersNonEmptyArrayOverEmpty covers the second
-// invariant directly, independent of the "total" type-check: once
-// hasListMarker is genuinely true, an empty array-of-objects key that sorts
-// alphabetically first must not beat a populated one.
+// Once hasListMarker is true, an alphabetically-first empty array must not
+// beat a populated one.
 func TestRowsFrom_GenuineListPrefersNonEmptyArrayOverEmpty(t *testing.T) {
 	rows, err := rowsFrom(genuineListWithEmptyFirstArray())
 	if err != nil {
@@ -231,11 +206,8 @@ func TestRowsFrom_GenuineListPrefersNonEmptyArrayOverEmpty(t *testing.T) {
 	}
 }
 
-// TestHasListMarker_StringTotalDoesNotCount is a direct unit test of the
-// type-check invariant: a top-level "total" whose JSON value is a string
-// (InvoiceResponse's dollar amount) must not be mistaken for a pagination
-// count, while a numeric "total" (the older list envelope shape) still
-// counts.
+// A string "total" (an invoice's dollar amount) must not read as a pagination
+// count, while a numeric one still does.
 func TestHasListMarker_StringTotalDoesNotCount(t *testing.T) {
 	if hasListMarker(map[string]any{"total": "150.00"}) {
 		t.Error("hasListMarker({\"total\": \"150.00\"}) = true, want false for a string total")
@@ -371,7 +343,5 @@ func TestRender_YAMLOutputNeverContainsANSICodes(t *testing.T) {
 	}
 }
 
-// The status-footer tests that lived here moved to internal/ui when the footer
-// itself did: the renderer no longer knows about stderr commentary at all.
-// Equivalent coverage is TestStatusLine_GoesToStderrOnly in internal/ui and
-// TestShouldShowFooter in internal/cmd.
+// The status-footer tests moved with the footer: see
+// TestStatusLine_GoesToStderrOnly (internal/ui) and TestShouldShowFooter.

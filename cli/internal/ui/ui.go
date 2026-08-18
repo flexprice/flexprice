@@ -1,12 +1,7 @@
-// Package ui owns every human-facing write the CLI makes. It exists because
-// the same question — is a human watching this stream right now — was
-// previously answered independently at 34 call sites, and mostly not asked at
-// all. Centralising it means --quiet, TERM=dumb, CI detection and --no-input
-// are each implemented once.
-//
-// The split with internal/style: style decides what colour something is; ui
-// decides what gets said, to which stream, and whether anyone is there to read
-// it.
+// Package ui owns every human-facing write. style decides what colour
+// something is; ui decides what gets said, to which stream, and whether anyone
+// is there to read it — so --quiet, TERM=dumb, CI detection and --no-input are
+// each implemented once rather than at every call site.
 package ui
 
 import (
@@ -18,9 +13,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// Options carries the gating inputs explicitly rather than probing the process,
-// so tests can exercise every combination without a real terminal. Use FromEnv
-// in production.
+// Gating inputs are passed in rather than probed so tests can exercise every
+// combination without a real terminal. Production callers use FromEnv.
 type Options struct {
 	Out, Err  io.Writer
 	Quiet     bool
@@ -49,25 +43,18 @@ func New(o Options) *UI {
 	return &UI{
 		out: o.Out,
 		err: o.Err,
-		// Colour on stderr is gated on stderr, never on stdout: redirecting
-		// stdout is a common way to run this CLI and must not strip colour
-		// from a stream the user is still watching.
+		// Gated on stderr, never stdout: redirecting stdout must not strip
+		// colour from a stream the user is still watching.
 		palette: style.NewPalette(o.Color && o.StderrTTY && o.Term != "dumb"),
 		quiet:   o.Quiet,
-		// Not a terminal means nothing can be prompted for, so it implies
-		// --no-input rather than being a separate condition every prompt has
-		// to remember to check.
+		// No terminal means nothing can be prompted for, so it implies --no-input.
 		noInput: o.NoInput || !o.StdinTTY,
 		animate: o.StderrTTY && o.Term != "dumb" && !o.Quiet,
 	}
 }
 
-// FromEnv builds a UI against the real process streams.
-//
-// NO_COLOR is applied here rather than in New so that Options stays a pure
-// description of the desired state, testable without touching the environment.
-// internal/style honours NO_COLOR through its own gate; a ui that did not would
-// colour stderr for a user who had explicitly asked it not to.
+// NO_COLOR is applied here rather than in New so Options stays a pure
+// description of state, testable without touching the environment.
 func FromEnv(quiet, noInput, color bool) *UI {
 	return New(Options{
 		Out:       os.Stdout,
@@ -81,9 +68,5 @@ func FromEnv(quiet, noInput, color bool) *UI {
 	})
 }
 
-// NoInput reports whether prompting is forbidden, for callers that want to pick
-// a non-interactive path rather than surface the error from Confirm/Select.
 func (u *UI) NoInput() bool { return u.noInput }
-
-// Quiet reports whether commentary is suppressed.
-func (u *UI) Quiet() bool { return u.quiet }
+func (u *UI) Quiet() bool   { return u.quiet }

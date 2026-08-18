@@ -156,10 +156,8 @@ func TestResolveEditor_PrefersVISUALOverEDITOR(t *testing.T) {
 	}
 }
 
-// collectUnknownFlags parses os.Args by hand because cobra cannot natively
-// declare ~30 possible body-field flags per operation. --key=value must not
-// mistake "--" inside the value for a second flag: Cut only splits on the
-// first "=", so the entire remainder — including embedded "--" — becomes the value.
+// Cut splits on the first "=" only, so an embedded "--" stays part of the value
+// rather than being read as a second flag.
 func TestCollectUnknownFlags_KeyValueForm_PreservesEmbeddedDashDash(t *testing.T) {
 	c := newFakeOperationCommand()
 
@@ -189,11 +187,9 @@ func TestCollectUnknownFlags_BothKeyValueAndSpaceSeparatedFormsWork(t *testing.T
 	}
 }
 
-// A space-separated value that itself looks like a flag (starts with "--") is
-// silently dropped rather than captured, because the parser cannot tell a flag's
-// value apart from the next flag in that form. --key=value does not have this
-// limitation. This test documents the boundary rather than asserting it is
-// desirable.
+// Documents a boundary rather than a desirable behaviour: in `--key value` form
+// a value starting with "--" is dropped, since it is indistinguishable from the
+// next flag. --key=value has no such limit.
 func TestCollectUnknownFlags_SpaceSeparatedValueLookingLikeAFlagIsDropped(t *testing.T) {
 	c := newFakeOperationCommand()
 
@@ -230,10 +226,8 @@ func TestDestructiveActions_IncludeFinalize(t *testing.T) {
 	}
 }
 
-// The three TestPromptConfirm_* cases that lived here tested the old
-// fmt.Fscanln y/N reader, which huh replaced. Their surviving concern — that
-// the prompt says what will be destroyed — is now
-// TestConfirmTitle_NamesTheActionAndSubject in internal/ui.
+// The old TestPromptConfirm_* cases tested the fmt.Fscanln reader huh replaced;
+// their surviving concern is now TestConfirmTitle_NamesTheActionAndSubject.
 
 func TestConfirmAction_SkipsPromptWhenForced(t *testing.T) {
 	// force=true must return immediately without prompting at all.
@@ -243,10 +237,8 @@ func TestConfirmAction_SkipsPromptWhenForced(t *testing.T) {
 	}
 }
 
-// BEHAVIOUR CHANGE, deliberate. This previously asserted that a non-terminal
-// stdin bypassed confirmation and PROCEEDED, so a script piping into a
-// destructive command destroyed data with nothing asked. It now refuses and
-// names --force.
+// BEHAVIOUR CHANGE: this previously asserted a non-terminal stdin bypassed
+// confirmation and proceeded. It now refuses and names --force.
 func TestConfirmAction_RefusesWhenStdinIsNotATerminal(t *testing.T) {
 	g := &Globals{UI: ui.New(ui.Options{StderrTTY: true, StdinTTY: false, Term: "dumb"})}
 	err := confirmAction(g, "delete", "cust_123", false)

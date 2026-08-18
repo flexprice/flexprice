@@ -12,15 +12,10 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile is the atomic auth unit: an API key is scoped to exactly one
-// environment, so region, base URL and key move together or not at all.
-//
-// There is deliberately no environment name and no live flag. No endpoint
-// reachable by an environment-scoped key reveals which environment that key
-// belongs to — GET /environments returns every environment in the tenant,
-// GET /environments/{id} succeeds for all of them, and /secrets/api/keys omits
-// environment_id. Deriving either value would mean guessing, and a wrong live
-// flag is worse than no live flag. Users label profiles themselves. Design doc §6.
+// The atomic auth unit: a key is scoped to one environment, so region, base URL
+// and key move together. Deliberately carries no environment name or live flag —
+// no endpoint reveals which environment a key belongs to, so either would be a
+// guess, and users label profiles themselves (ADR 0003).
 type Profile struct {
 	Region  string `toml:"region"`
 	BaseURL string `toml:"base_url"`
@@ -120,13 +115,9 @@ func (c *Config) Resolve(name string) (string, Profile, error) {
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
-// ProfileName slugifies a user-supplied label, falling back to "default".
-// Nothing about the key identifies its environment, so the name is whatever the
-// user chooses. Non-ASCII-alphanumeric runs (spaces, punctuation, unicode
-// letters) collapse to a single "-"; leading/trailing "-" is trimmed. Input
-// with no ASCII alphanumeric character at all — empty, punctuation-only, or
-// pure unicode like "üöä" — collapses to "", which falls back to "default"
-// rather than producing an empty or unusable TOML key.
+// Slugifies a user-supplied label. Input with no ASCII alphanumeric character
+// at all (punctuation-only, or pure unicode like "üöä") collapses to "", which
+// falls back to "default" rather than an unusable TOML key.
 func ProfileName(label string) string {
 	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(label), "-"), "-")
 	if slug == "" {

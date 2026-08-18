@@ -13,9 +13,8 @@ import (
 	"github.com/flexprice/cli/internal/style"
 )
 
-// newEnvCommand lists the tenant's environments and which have a local profile.
-// Because keys are environment-scoped, switching environments means logging in
-// again — so the command prints the exact next step. Design doc §6.
+// Keys are environment-scoped, so switching environments means logging in
+// again; the command prints that next step.
 func newEnvCommand(g *Globals, version string) *cobra.Command {
 	env := &cobra.Command{Use: "env", Short: "Inspect environments"}
 
@@ -41,15 +40,10 @@ func newEnvCommand(g *Globals, version string) *cobra.Command {
 				return fmt.Errorf("parse environments: %w", err)
 			}
 
-			// Profiles cannot be correlated to environments: the API does not
-			// report which environment the active key belongs to, so this is a
-			// plain listing of what exists in the tenant.
-			//
-			// output.PadGrid rather than text/tabwriter: tabwriter counts raw
-			// bytes, so the styled header below would have inflated its width
-			// calculation by ~20 invisible escape bytes per cell and misaligned
-			// every column — the same defect already fixed once in the table
-			// renderer.
+			// A plain listing: the API does not report which environment the
+			// active key belongs to, so profiles cannot be correlated.
+			// PadGrid rather than text/tabwriter, which counts the styled
+			// header's escape bytes as visible width and misaligns everything.
 			grid := [][]string{{
 				style.Header("ENVIRONMENT"),
 				style.Header("TYPE"),

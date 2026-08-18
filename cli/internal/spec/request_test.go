@@ -81,10 +81,8 @@ func TestBuildRequest_UnknownFlagSuggestsTheNearestField(t *testing.T) {
 	}
 }
 
-// A flag value that cannot be parsed as its schema type is rejected here rather
-// than sent through as a raw string: the server's JSON decoder would reject a
-// type-mismatched body before its own field-level validation even runs, giving a
-// generic "Invalid request format" with no field name attached.
+// Rejected client-side: the server's decoder would reject a type-mismatched
+// body with a generic "Invalid request format" and no field name.
 func TestBuildRequest_UncoercibleFlagValueIsAnError(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, _ := reg.Lookup("customers", "create")
@@ -121,11 +119,9 @@ func TestBodyFields_ListsSchemaProperties(t *testing.T) {
 	}
 }
 
-// BuildRequest must not mutate the caller's Input.Flags: the --all pagination
-// loop calls it more than once against the same Input to rebuild the request
-// per page, and a GET-based list with query filters (e.g. payments list
-// --status succeeded) would silently lose the filter after the first page if
-// the consumed flag were deleted from the caller's map instead of a copy.
+// The --all loop rebuilds the request per page from the same Input, so
+// `payments list --status succeeded --all` would silently drop the filter after
+// page one if consumed flags were deleted from the caller's map.
 func TestBuildRequest_DoesNotMutateCallerFlags(t *testing.T) {
 	reg := testRegistry(t)
 	cmd, ok := reg.Lookup("payments", "list")

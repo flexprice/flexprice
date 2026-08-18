@@ -10,9 +10,8 @@ import (
 	"github.com/flexprice/cli/internal/output"
 )
 
-// rawDeleteConfirm gates a raw DELETE behind the same confirmation prompt the
-// spec-driven destructive commands use. There is no spec.Command / resource
-// name available on the raw path, so the request path itself is the subject.
+// No spec.Command is available on the raw path, so the request path itself is
+// the subject of the confirmation.
 func rawDeleteConfirm(g *Globals, path string, force bool) error {
 	return confirmAction(g, "delete", path, force)
 }

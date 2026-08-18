@@ -25,10 +25,8 @@ func TestInitCommand_BannerShowsWithoutQuiet(t *testing.T) {
 	printInitBanner(&out, &Globals{})
 
 	got := out.String()
-	// The wordmark is ASCII art, so assert on the tagline (real text) plus the
-	// presence of the art's block/box drawing characters, rather than on any
-	// particular row of the art itself — that would break every time the
-	// wordmark is retouched, without indicating a real defect.
+	// Assert on the tagline plus the presence of block/box characters, not on a
+	// particular row: that would break on every retouch of the art.
 	if !strings.Contains(got, "Usage-based billing from your terminal") {
 		t.Errorf("banner missing the tagline: %q", got)
 	}

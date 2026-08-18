@@ -2,10 +2,8 @@ package cmd
 
 import "github.com/spf13/cobra"
 
-// Group IDs. These strings are referenced by both commandGroups and
-// resourceGroups; cobra panics at Execute() if a command carries an ID that was
-// never registered, so the two must stay in step. TestEveryGroupIDIsRegistered
-// enforces that.
+// cobra panics at Execute() on an ID that was never registered, so these must
+// stay in step with commandGroups. TestEveryGroupIDIsRegistered enforces it.
 const (
 	groupSetup      = "setup"
 	groupCoreBill   = "core-billing"
@@ -17,8 +15,7 @@ const (
 	groupAdvanced   = "advanced"
 )
 
-// commandGroups is the render order of the root help. cobra prints groups in
-// the order they are added, so this slice is the layout.
+// cobra prints groups in the order added, so this slice is the help layout.
 var commandGroups = []*cobra.Group{
 	{ID: groupSetup, Title: "Setup"},
 	{ID: groupCoreBill, Title: "Core billing"},
@@ -30,21 +27,16 @@ var commandGroups = []*cobra.Group{
 	{ID: groupAdvanced, Title: "Advanced"},
 }
 
-// resourceEntry is a resource's placement and its one-line description.
-//
-// Descriptions are hand-written rather than derived from the OpenAPI spec: the
-// spec's summaries describe individual operations ("Get customer by external
-// ID"), not the resource, so every derivation rule produces a misleading
-// parent. They are one line each and change rarely.
+// Descriptions are hand-written: the spec's summaries describe individual
+// operations ("Get customer by external ID"), not the resource, so deriving a
+// parent from them is misleading.
 type resourceEntry struct {
 	GroupID string
 	Short   string
 }
 
-// resourceGroups covers every spec-derived resource. A resource missing from
-// this map still appears in help under cobra's built-in "Additional Commands"
-// heading — it is never silently dropped — but TestEveryResourceHasAGroup fails
-// so the omission is caught in CI rather than shipped.
+// A missing resource still appears under cobra's "Additional Commands" rather
+// than being dropped, and TestEveryResourceHasAGroup fails so CI catches it.
 var resourceGroups = map[string]resourceEntry{
 	// Core billing
 	"customers":               {groupCoreBill, "Manage the people and organisations you bill"},
@@ -93,9 +85,8 @@ var resourceGroups = map[string]resourceEntry{
 	"alert-settings":  {groupAutomation, "How and when alerts fire"},
 }
 
-// builtinGroups places the hand-written commands. Kept separate from
-// resourceGroups because these are not spec-derived and so are not covered by
-// TestEveryResourceHasAGroup.
+// Hand-written commands, kept separate because they are not spec-derived and
+// so are not covered by TestEveryResourceHasAGroup.
 var builtinGroups = map[string]string{
 	"init": groupSetup, "login": groupSetup, "logout": groupSetup,
 	"whoami": groupSetup, "env": groupSetup, "config": groupSetup,

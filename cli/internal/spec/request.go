@@ -184,11 +184,9 @@ func schemaType(s *openapi3.Schema) string {
 	}
 }
 
-// coerce converts a flag's raw string into the type its schema declares. A value
-// that does not parse is rejected here rather than sent through as a string: the
-// server's JSON decoder would reject a type-mismatched body before validation
-// even runs, producing a generic "Invalid request format" with no field name
-// attached — strictly worse than catching it client-side with the field named.
+// Rejected client-side rather than sent as a string: the server's decoder would
+// reject a type-mismatched body with a generic "Invalid request format" and no
+// field name.
 func coerce(raw, kind string) (any, error) {
 	switch kind {
 	case "integer":
