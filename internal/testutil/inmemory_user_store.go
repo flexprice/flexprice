@@ -131,6 +131,12 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 			continue
 		}
 
+		// Matches the ent repository, which unconditionally scopes ListByFilter
+		// to published users regardless of the filter's Status field.
+		if u.Status != types.StatusPublished {
+			continue
+		}
+
 		// Filter by type if specified
 		if filter.Type != nil && u.Type != *filter.Type {
 			continue

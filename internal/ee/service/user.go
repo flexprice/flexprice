@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/nedpals/supabase-go"
 	"github.com/samber/lo"
 )
 
@@ -28,6 +27,7 @@ type UserService interface {
 	UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error)
 	UpdateUserRoles(ctx context.Context, id string, req *dto.UpdateUserRolesRequest) (*dto.UpdateUserRolesResponse, error)
 	DeleteUser(ctx context.Context, id string) error
+	RemoveUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
@@ -40,7 +40,6 @@ type userService struct {
 	db              postgres.IClient
 	cfg             *config.Configuration
 	rbacService     *rbac.RBACService
-	supabaseAuth    *supabase.Client
 	settingsService SettingsService
 	logger          *logger.Logger
 }
@@ -54,7 +53,6 @@ func NewUserService(
 	db postgres.IClient,
 	cfg *config.Configuration,
 	rbacService *rbac.RBACService,
-	supabaseAuth *supabase.Client,
 	settingsService SettingsService,
 	logger *logger.Logger,
 ) UserService {
@@ -67,7 +65,6 @@ func NewUserService(
 		db:              db,
 		cfg:             cfg,
 		rbacService:     rbacService,
-		supabaseAuth:    supabaseAuth,
 		settingsService: settingsService,
 		logger:          logger,
 	}
@@ -616,4 +613,96 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 	}
 
 	return s.userRepo.Delete(ctx, id)
+}
+
+// RemoveUser removes a human user (type=user) from their tenant. Service accounts
+// are not supported here; use DeleteUser for those.
+func (s *userService) RemoveUser(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Defense-in-depth tenant scoping: userRepo.GetByID already filters by the caller's
+	// tenant for the production Ent-backed repository, but that's an implicit property of
+	// one implementation (the in-memory test store used elsewhere does not enforce it), and
+	// this method deletes the target's identity with a global Supabase service-role key —
+	// too security-sensitive to rely on an implicit contract across repository layers.
+	authTenantID := types.GetTenantID(ctx)
+	if authTenantID == "" {
+		return ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required in context").
+			Mark(ierr.ErrValidation)
+	}
+	if existingUser.TenantID != authTenantID {
+		return ierr.NewError("user not found").
+			WithHint("User does not belong to your tenant").
+			Mark(ierr.ErrNotFound)
+	}
+
+	if existingUser.Type != types.UserTypeUser {
+		return ierr.NewError("only human users can be removed").
+			WithHint("Use the service account delete API to remove a service account").
+			Mark(ierr.ErrValidation)
+	}
+
+	if s.cfg == nil {
+		return ierr.NewError("auth configuration missing").
+			WithHint("User removal requires auth provider configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := existingUser.TenantID
+	provider := authProvider.NewProvider(s.cfg)
+
+	// Serialize concurrent removals for this tenant: without a lock, two concurrent
+	// requests can both observe more than one human user, both pass the check below,
+	// and both archive a different user — leaving the tenant with none. The invariant
+	// check and the archive must be atomic together.
+	err = s.db.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire tenant lock for user removal").
+				Mark(ierr.ErrInternal)
+		}
+
+		_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			Type:        lo.ToPtr(types.UserTypeUser),
+		})
+		if err != nil {
+			return err
+		}
+		if totalHumanUsers <= 1 {
+			return ierr.NewError("cannot remove the last user in the tenant").
+				WithHint("At least one human user must remain in the tenant").
+				Mark(ierr.ErrValidation)
+		}
+
+		// The user is only considered removed once the auth provider identity is gone;
+		// the local record must not be touched if that fails.
+		if err := provider.RemoveUser(ctx, id); err != nil {
+			return err
+		}
+
+		return s.userRepo.Delete(ctx, id)
+	})
+	if err != nil {
+		return err
+	}
+
+	actorUserID := types.GetUserID(ctx)
+	s.logger.Info(ctx, "user removed from tenant",
+		"actor_user_id", actorUserID,
+		"target_user_id", id,
+		"tenant_id", tenantID,
+	)
+
+	return nil
 }

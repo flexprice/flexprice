@@ -47,7 +47,6 @@ func (s *UserServiceSuite) SetupTest() {
 		secretRepo:      s.secretRepo,
 		db:              testutil.NewMockPostgresClient(nil),
 		rbacService:     nil,
-		supabaseAuth:    nil,
 		settingsService: nil,
 	}
 
@@ -93,7 +92,6 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 				userRepo:     s.userRepo,
 				tenantRepo:   s.tenantRepo,
 				rbacService:  nil,
-				supabaseAuth: nil,
 			}
 
 			ctx := testutil.SetupContext()
@@ -144,7 +142,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -159,7 +156,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -174,7 +170,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -198,7 +193,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     rbacSvc,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -680,6 +674,147 @@ func (s *UserServiceSuite) TestDeleteUser() {
 		})
 		err := s.userService.DeleteUser(ctx, "sa-1")
 		s.NoError(err)
+	})
+}
+
+func (s *UserServiceSuite) TestRemoveUser() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+
+	seedStore := func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		s.secretRepo = testutil.NewInMemorySecretStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "actor-1",
+			Email:     "actor@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-1",
+			Email:     "u@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "sa-1",
+			Type:      types.UserTypeServiceAccount,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
+	}
+
+	s.Run("success_user_removed_api_key_retained", func() {
+		seedStore()
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:       "key-1",
+			UserID:   "user-1",
+			UserType: string(types.UserTypeUser),
+			BaseModel: types.BaseModel{
+				TenantID: types.DefaultTenantID,
+				Status:   types.StatusPublished,
+			},
+		})
+		err := s.userService.RemoveUser(ctx, "user-1")
+		s.NoError(err)
+
+		removedUser, err := s.userRepo.GetByID(ctx, "user-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, removedUser.Status)
+
+		key, err := s.secretRepo.Get(ctx, "key-1")
+		s.NoError(err, "the user's API key must remain active after removal")
+		s.Equal(types.StatusPublished, key.Status)
+	})
+
+	s.Run("empty_id_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "")
+		s.Error(err)
+		s.Contains(err.Error(), "user ID is required")
+	})
+
+	s.Run("unknown_id_returns_not_found", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "user-unknown")
+		s.Error(err)
+	})
+
+	s.Run("cross_tenant_target_returns_not_found", func() {
+		// InMemoryUserStore.GetByID (unlike the real Ent-backed repo) doesn't filter by
+		// tenant, so this only reaches the target user at all because of that; the explicit
+		// authTenantID check in RemoveUser is what has to reject it from there. Note this
+		// can't observe the deeper reason the check matters in production: without it, the
+		// auth-provider (Supabase) deletion would already have fired — using a global
+		// service-role key — before any tenant-scoped local repository call ever runs, since
+		// provider.RemoveUser is called ahead of the (also tenant-scoped) local Delete. This
+		// test can only confirm the local record is left untouched and the request rejected.
+		seedStore()
+		otherTenantModel := baseModel
+		otherTenantModel.TenantID = "other-tenant"
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "other-tenant-user",
+			Email:     "other@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: otherTenantModel,
+		})
+
+		err := s.userService.RemoveUser(ctx, "other-tenant-user")
+		s.Error(err)
+		s.Contains(err.Error(), "user not found")
+
+		// Must not have been touched: still published, identity untouched.
+		untouched, getErr := s.userRepo.GetByID(ctx, "other-tenant-user")
+		s.NoError(getErr)
+		s.Equal(types.StatusPublished, untouched.Status)
+	})
+
+	s.Run("service_account_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "sa-1")
+		s.Error(err)
+		s.Contains(err.Error(), "only human users can be removed")
+	})
+
+	s.Run("self_removal_is_allowed", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "actor-1")
+		s.NoError(err)
+
+		removedUser, err := s.userRepo.GetByID(ctx, "actor-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, removedUser.Status)
+	})
+
+	s.Run("last_human_user_returns_validation_error", func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		s.secretRepo = testutil.NewInMemorySecretStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "actor-1",
+			Email:     "actor@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
+
+		// Add a second user and remove it, leaving the actor as the sole
+		// remaining human user; removing them next must be blocked.
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-2",
+			Email:     "u2@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		err := s.userService.RemoveUser(ctx, "user-2")
+		s.NoError(err)
+
+		err = s.userService.RemoveUser(ctx, "actor-1")
+		s.Error(err)
+		s.Contains(err.Error(), "cannot remove the last user")
 	})
 }
 
