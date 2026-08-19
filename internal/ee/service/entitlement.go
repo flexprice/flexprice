@@ -150,6 +150,11 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		// Same rule, price-level source: a live bucketed price on this meter
+		// blocks the entitlement just as a bucketed meter would.
+		if err := validateEntitlementAgainstBucketedPrices(ctx, s.ServiceParams, m, req.ToEntitlement(ctx).HasGrantConfig()); err != nil {
+			return nil, err
+		}
 		meterForGrantCheck = m
 	}
 
@@ -335,6 +340,9 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 							"index":        i,
 						}).
 						Mark(ierr.ErrValidation)
+				}
+				if err := validateEntitlementAgainstBucketedPrices(txCtx, s.ServiceParams, m, entReq.ToEntitlement(txCtx).HasGrantConfig()); err != nil {
+					return err
 				}
 				meterForGrantCheck = m
 			}

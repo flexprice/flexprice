@@ -14,27 +14,30 @@ import (
 )
 
 type SubscriptionPriceCreateRequest struct {
-	Type               types.PriceType          `json:"type" validate:"required"`
-	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
-	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                      `json:"billing_period_count"`
-	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
-	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
-	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
-	MeterID            string                   `json:"meter_id,omitempty"`
-	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
-	LookupKey          string                   `json:"lookup_key,omitempty"`
-	TrialPeriodDays    int                      `json:"trial_period_days"`
-	Description        string                   `json:"description,omitempty"`
-	Metadata           map[string]string        `json:"metadata,omitempty"`
-	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
-	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
-	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
-	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
-	StartDate          *time.Time               `json:"start_date,omitempty"`
-	EndDate            *time.Time               `json:"end_date,omitempty"`
-	DisplayName        string                   `json:"display_name,omitempty"`
-	MinQuantity        *int64                   `json:"min_quantity,omitempty"`
+	Type               types.PriceType      `json:"type" validate:"required"`
+	PriceUnitType      types.PriceUnitType  `json:"price_unit_type" validate:"required"`
+	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                  `json:"billing_period_count"`
+	BillingModel       types.BillingModel   `json:"billing_model" validate:"required"`
+	InvoiceCadence     types.InvoiceCadence `json:"invoice_cadence" validate:"required"`
+	Amount             *decimal.Decimal     `json:"amount,omitempty" swaggertype:"string"`
+	MeterID            string               `json:"meter_id,omitempty"`
+	// BucketSize windows the meter's aggregation for this price. See
+	// CreatePriceRequest.BucketSize.
+	BucketSize        types.WindowSize         `json:"bucket_size,omitempty"`
+	FilterValues      map[string][]string      `json:"filter_values,omitempty"`
+	LookupKey         string                   `json:"lookup_key,omitempty"`
+	TrialPeriodDays   int                      `json:"trial_period_days"`
+	Description       string                   `json:"description,omitempty"`
+	Metadata          map[string]string        `json:"metadata,omitempty"`
+	TierMode          types.BillingTier        `json:"tier_mode,omitempty"`
+	Tiers             []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig   *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate         *time.Time               `json:"start_date,omitempty"`
+	EndDate           *time.Time               `json:"end_date,omitempty"`
+	DisplayName       string                   `json:"display_name,omitempty"`
+	MinQuantity       *int64                   `json:"min_quantity,omitempty"`
 }
 
 // ToCreatePriceRequest builds a CreatePriceRequest for subscription-scoped price creation.
@@ -54,6 +57,7 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 		InvoiceCadence:       p.InvoiceCadence,
 		Amount:               p.Amount,
 		MeterID:              p.MeterID,
+		BucketSize:           p.BucketSize,
 		FilterValues:         p.FilterValues,
 		LookupKey:            p.LookupKey,
 		TrialPeriodDays:      p.TrialPeriodDays,

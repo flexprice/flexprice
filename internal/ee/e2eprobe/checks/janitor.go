@@ -27,7 +27,7 @@ func NewJanitor(c e2eprobe.Client, r e2eprobe.Registry, maxAge time.Duration, ru
 	return &Janitor{client: c, reg: r, maxAge: maxAge, runID: runID}
 }
 
-func (j *Janitor) Name() string         { return "janitor" }
+func (j *Janitor) Name() string        { return "janitor" }
 func (j *Janitor) Kind() e2eprobe.Kind { return e2eprobe.KindMaintenance }
 
 func (j *Janitor) Run(ctx context.Context) error {

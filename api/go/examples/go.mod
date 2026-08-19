@@ -1,6 +1,6 @@
 module github.com/flexprice/go-sdk/v2/examples
 
-go 1.22
+go 1.25.10
 
 require (
 	github.com/flexprice/go-sdk/v2 v2.0.0

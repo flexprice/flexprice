@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -184,14 +185,13 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		getUsageRequest.Multiplier = m.Aggregation.Multiplier
 	}
 
-	// Pass the bucket_size from meter configuration if it's a MAX aggregation with bucket_size set
-	if m.IsBucketedMaxMeter() {
-		getUsageRequest.BucketSize = m.Aggregation.BucketSize
-	}
-
-	// Pass the bucket_size from meter configuration if it's a SUM aggregation with bucket_size set
-	if m.IsBucketedSumMeter() {
-		getUsageRequest.BucketSize = m.Aggregation.BucketSize
+	// Resolve the effective bucket size for this (price, meter) pair. req.Price is
+	// nil for price-less callers (the raw usage endpoint), which falls back to the
+	// meter's legacy value. The aggregators branch on BucketSize, not WindowSize,
+	// so it has to be set here or a bucketed price silently runs the
+	// non-windowed query.
+	if price.IsBucketedMax(req.Price, m) || price.IsBucketedSum(req.Price, m) {
+		getUsageRequest.BucketSize = price.ResolveBucketSize(req.Price, m)
 	}
 
 	// Pass meter-level GroupBy through as "properties.<X>" so the request

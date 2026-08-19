@@ -117,7 +117,6 @@ func (t *requestTracker) claim(ctx context.Context, tenantID, inResponseTo strin
 	return []string{inResponseTo}, true
 }
 
-
 // Handler serves the SAML browser-flow endpoints.
 type Handler struct {
 	cfg           *config.Configuration

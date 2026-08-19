@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/pubsub"
@@ -1128,7 +1129,9 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 	for _, f := range featureMap {
 		if f.MeterID != "" {
 			if m, exists := meterMap[f.MeterID]; exists {
-				if m.IsBucketedMaxMeter() {
+				// Feature-scoped: no price reachable here, so nil resolves to the
+				// meter's legacy bucket size.
+				if priceDomain.IsBucketedMax(nil, m) {
 					var featGroupBy []string
 					if m.Aggregation.GroupBy != "" {
 						featGroupBy = []string{"properties." + m.Aggregation.GroupBy}
@@ -1136,16 +1139,16 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 					maxBucketFeatures[f.ID] = &events.MaxBucketFeatureInfo{
 						FeatureID:    f.ID,
 						MeterID:      f.MeterID,
-						BucketSize:   types.WindowSize(m.Aggregation.BucketSize),
+						BucketSize:   priceDomain.ResolveBucketSize(nil, m),
 						EventName:    m.EventName,
 						PropertyName: m.Aggregation.Field,
 						GroupBy:      featGroupBy,
 					}
-				} else if m.IsBucketedSumMeter() {
+				} else if priceDomain.IsBucketedSum(nil, m) {
 					sumBucketFeatures[f.ID] = &events.SumBucketFeatureInfo{
 						FeatureID:    f.ID,
 						MeterID:      f.MeterID,
-						BucketSize:   types.WindowSize(m.Aggregation.BucketSize),
+						BucketSize:   priceDomain.ResolveBucketSize(nil, m),
 						EventName:    m.EventName,
 						PropertyName: m.Aggregation.Field,
 					}
@@ -1230,8 +1233,10 @@ func (s *costsheetUsageTrackingService) calculateCosts(ctx context.Context, cost
 			continue
 		}
 
-		// Calculate cost based on meter type
-		if meter.IsBucketedMaxMeter() || meter.IsBucketedSumMeter() {
+		// Calculate cost based on the effective bucketing for this (price, meter)
+		// pair. The costsheet price can carry its own bucket_size; resolving here
+		// means setting one takes effect instead of being silently ignored.
+		if priceDomain.IsBucketedMax(price, meter) || priceDomain.IsBucketedSum(price, meter) {
 			s.calculateBucketedCost(ctx, priceService, item, price)
 		} else {
 			s.calculateRegularCost(ctx, priceService, item, meter, price)
@@ -1567,7 +1572,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		// time-series points); standard meters use CalculateCost on the
 		// total usage.
 		var totalCost decimal.Decimal
-		if m != nil && (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) {
+		if m != nil && (priceDomain.IsBucketedMax(nil, m) || priceDomain.IsBucketedSum(nil, m)) {
 			if len(item.Points) > 0 {
 				bucketed := make([]decimal.Decimal, len(item.Points))
 				for i, pt := range item.Points {

@@ -215,10 +215,14 @@ func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
 func (c *sdkClient) Entitlements() EntitlementOps {
 	return entitlementOps{s: c.sdk.Entitlements, parent: c}
 }
-func (c *sdkClient) Coupons() CouponOps                       { return couponOps{c.sdk.Coupons} }
-func (c *sdkClient) CouponAssociations() CouponAssociationOps { return couponAssociationOps{c.sdk.CouponAssociations} }
-func (c *sdkClient) TaxRates() TaxRateOps                     { return taxRateOps{c.sdk.TaxRates} }
-func (c *sdkClient) TaxAssociations() TaxAssociationOps       { return taxAssociationOps{c.sdk.TaxAssociations} }
+func (c *sdkClient) Coupons() CouponOps { return couponOps{c.sdk.Coupons} }
+func (c *sdkClient) CouponAssociations() CouponAssociationOps {
+	return couponAssociationOps{c.sdk.CouponAssociations}
+}
+func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
+func (c *sdkClient) TaxAssociations() TaxAssociationOps {
+	return taxAssociationOps{c.sdk.TaxAssociations}
+}
 
 // --- adapters ---
 

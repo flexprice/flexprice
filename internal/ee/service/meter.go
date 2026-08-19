@@ -42,6 +42,18 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 			Mark(ierr.ErrValidation)
 	}
 
+	// Bucketing is configured on the price, not the meter. Existing meters keep
+	// their bucket_size and continue to resolve through it, but new ones must
+	// not add a second source of truth.
+	if req.Aggregation.BucketSize != "" {
+		return nil, ierr.NewError("bucket_size cannot be set on a meter").
+			WithHint("Bucketing is configured on the price. Create the meter without a bucket size, then set bucket_size on the plan charge.").
+			WithReportableDetails(map[string]interface{}{
+				"bucket_size": req.Aggregation.BucketSize,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	meter := req.ToMeter(types.GetTenantID(ctx), types.GetUserID(ctx))
 	meter.EnvironmentID = types.GetEnvironmentID(ctx)
 

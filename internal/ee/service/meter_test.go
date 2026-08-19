@@ -50,7 +50,10 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			expectedError: false,
 		},
 		{
-			name: "successful_max_meter_with_bucket",
+			// Bucketing moved to the price. Existing meters keep their bucket_size
+			// and still resolve through it, but new meters must not introduce a
+			// second source of truth.
+			name: "bucket_size_rejected_on_new_meter",
 			input: &dto.CreateMeterRequest{
 				Name:      "Peak Storage Usage",
 				EventName: "storage_usage",
@@ -62,7 +65,7 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 				Filters:    []meter.Filter{},
 				ResetUsage: types.ResetUsageBillingPeriod,
 			},
-			expectedError: false,
+			expectedError: true,
 		},
 		{
 			name:          "nil_meter",

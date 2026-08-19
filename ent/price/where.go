@@ -209,6 +209,12 @@ func TierMode(v types.BillingTier) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldTierMode, vc))
 }
 
+// BucketSize applies equality check predicate on the "bucket_size" field. It's identical to BucketSizeEQ.
+func BucketSize(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldEQ(FieldBucketSize, vc))
+}
+
 // LookupKey applies equality check predicate on the "lookup_key" field. It's identical to LookupKeyEQ.
 func LookupKey(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldLookupKey, v))
@@ -2091,6 +2097,100 @@ func TierModeEqualFold(v types.BillingTier) predicate.Price {
 func TierModeContainsFold(v types.BillingTier) predicate.Price {
 	vc := string(v)
 	return predicate.Price(sql.FieldContainsFold(FieldTierMode, vc))
+}
+
+// BucketSizeEQ applies the EQ predicate on the "bucket_size" field.
+func BucketSizeEQ(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldEQ(FieldBucketSize, vc))
+}
+
+// BucketSizeNEQ applies the NEQ predicate on the "bucket_size" field.
+func BucketSizeNEQ(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldNEQ(FieldBucketSize, vc))
+}
+
+// BucketSizeIn applies the In predicate on the "bucket_size" field.
+func BucketSizeIn(vs ...types.WindowSize) predicate.Price {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Price(sql.FieldIn(FieldBucketSize, v...))
+}
+
+// BucketSizeNotIn applies the NotIn predicate on the "bucket_size" field.
+func BucketSizeNotIn(vs ...types.WindowSize) predicate.Price {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Price(sql.FieldNotIn(FieldBucketSize, v...))
+}
+
+// BucketSizeGT applies the GT predicate on the "bucket_size" field.
+func BucketSizeGT(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldGT(FieldBucketSize, vc))
+}
+
+// BucketSizeGTE applies the GTE predicate on the "bucket_size" field.
+func BucketSizeGTE(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldGTE(FieldBucketSize, vc))
+}
+
+// BucketSizeLT applies the LT predicate on the "bucket_size" field.
+func BucketSizeLT(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldLT(FieldBucketSize, vc))
+}
+
+// BucketSizeLTE applies the LTE predicate on the "bucket_size" field.
+func BucketSizeLTE(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldLTE(FieldBucketSize, vc))
+}
+
+// BucketSizeContains applies the Contains predicate on the "bucket_size" field.
+func BucketSizeContains(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldContains(FieldBucketSize, vc))
+}
+
+// BucketSizeHasPrefix applies the HasPrefix predicate on the "bucket_size" field.
+func BucketSizeHasPrefix(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldHasPrefix(FieldBucketSize, vc))
+}
+
+// BucketSizeHasSuffix applies the HasSuffix predicate on the "bucket_size" field.
+func BucketSizeHasSuffix(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldHasSuffix(FieldBucketSize, vc))
+}
+
+// BucketSizeIsNil applies the IsNil predicate on the "bucket_size" field.
+func BucketSizeIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldBucketSize))
+}
+
+// BucketSizeNotNil applies the NotNil predicate on the "bucket_size" field.
+func BucketSizeNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldBucketSize))
+}
+
+// BucketSizeEqualFold applies the EqualFold predicate on the "bucket_size" field.
+func BucketSizeEqualFold(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldEqualFold(FieldBucketSize, vc))
+}
+
+// BucketSizeContainsFold applies the ContainsFold predicate on the "bucket_size" field.
+func BucketSizeContainsFold(v types.WindowSize) predicate.Price {
+	vc := string(v)
+	return predicate.Price(sql.FieldContainsFold(FieldBucketSize, vc))
 }
 
 // TiersIsNil applies the IsNil predicate on the "tiers" field.

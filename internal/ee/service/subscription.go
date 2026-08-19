@@ -1396,6 +1396,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			InvoiceCadence:       originalPrice.InvoiceCadence,
 			TrialPeriodDays:      originalPrice.TrialPeriodDays,
 			TierMode:             originalPrice.TierMode,
+			BucketSize:           lo.Ternary(override.BucketSize != "", override.BucketSize, originalPrice.BucketSize),
 			MeterID:              originalPrice.MeterID,
 			Description:          originalPrice.Description,
 			Metadata:             originalPrice.Metadata,
@@ -2912,6 +2913,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageRequest := &dto.GetUsageByMeterRequest{
 			MeterID:             meterID,
 			PriceID:             lineItem.PriceID,
+			Price:               priceMap[lineItem.PriceID],
 			Meter:               meter.ToMeter(),
 			ExternalCustomerIDs: externalCustomerIDs,
 			StartTime:           lineItem.GetPeriodStart(usageStartTime),
@@ -2986,7 +2988,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 		// Get meter info
 		meterInfo := meterMap[meterID]
-		if priceObj.MeterID != "" && meterInfo != nil && (meterInfo.ToMeter().IsBucketedMaxMeter() || meterInfo.ToMeter().IsBucketedSumMeter()) {
+		if priceObj.MeterID != "" && meterInfo != nil && (price.IsBucketedMax(priceObj, meterInfo.ToMeter()) || price.IsBucketedSum(priceObj, meterInfo.ToMeter())) {
 			// For bucketed max, use the array of values
 			bucketedValues := make([]decimal.Decimal, len(usage.Results))
 			for i, result := range usage.Results {

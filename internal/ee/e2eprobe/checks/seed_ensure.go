@@ -306,9 +306,12 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		if spec.field != nil {
 			meterReq.Aggregation.Field = spec.field
 		}
-		if spec.bucketSize != nil {
-			meterReq.Aggregation.BucketSize = spec.bucketSize
-		}
+		// bucketSize is no longer settable on a meter — bucketing moved to the
+		// price. The published go-sdk does not yet carry bucket_size on
+		// CreatePriceRequest, so these specs seed UNBUCKETED meters until the SDK
+		// is regenerated. spec.bucketSize is retained as a marker: it still drives
+		// BucketedFeatureIDs and the entitlement skip list below.
+		// TODO: set bucket_size on the usage price once the SDK exposes it.
 		if spec.multiplier != nil {
 			meterReq.Aggregation.Multiplier = spec.multiplier
 		}

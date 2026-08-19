@@ -87,6 +87,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
+	if err := s.validateBucketSizeAgainstMeter(ctx, &req); err != nil {
+		return nil, err
+	}
+
 	// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
 	p, err := s.preparePriceForCreation(ctx, &req)
 	if err != nil {
@@ -356,6 +360,12 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		prices := make([]*price.Price, 0, len(req.Items))
 
 		for _, priceReq := range req.Items {
+			// Same bucketing guards as the single-create path — otherwise bulk is a
+			// hole through which a second live bucket source can be introduced.
+			if err := s.validateBucketSizeAgainstMeter(txCtx, &priceReq); err != nil {
+				return err
+			}
+
 			// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
 			p, err := s.preparePriceForCreation(txCtx, &priceReq)
 			if err != nil {
@@ -1369,6 +1379,46 @@ func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price
 	// For now, we'll use the same calculation as CalculateCost
 	// In the future, we can add costsheet-specific pricing rules here
 	return s.CalculateCost(ctx, price, quantity)
+}
+
+// validateBucketSizeAgainstMeter enforces the two bucketing rules that need the
+// meter: the aggregation must be windowable, and the meter must not already
+// carry a bucket size. The second is what keeps precedence from becoming a
+// silent behaviour change — legacy meters are migrated by clearing the meter's
+// value, never by shadowing it from a price.
+func (s *priceService) validateBucketSizeAgainstMeter(ctx context.Context, req *dto.CreatePriceRequest) error {
+	if req.BucketSize == "" || req.MeterID == "" {
+		return nil
+	}
+
+	m, err := s.MeterRepo.GetMeter(ctx, req.MeterID)
+	if err != nil {
+		return err
+	}
+
+	if m.Aggregation.BucketSize != "" {
+		return ierr.NewError("meter already defines a bucket size").
+			WithHint("This meter is bucketed at the meter level. Clear the meter's bucket size before setting one on the price.").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":          m.ID,
+				"meter_bucket_size": m.Aggregation.BucketSize,
+				"price_bucket_size": req.BucketSize,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if m.Aggregation.Type != types.AggregationMax && m.Aggregation.Type != types.AggregationSum {
+		return ierr.NewError("bucket_size can only be used with MAX or SUM aggregation").
+			WithHint("Bucketing windows a meter's aggregation, which is only meaningful for MAX or SUM meters").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":         m.ID,
+				"aggregation_type": m.Aggregation.Type,
+				"bucket_size":      req.BucketSize,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return validateBucketedPriceAgainstEntitlements(ctx, s.ServiceParams, m, req.BucketSize, req.BillingModel)
 }
 
 // validateGroup validates that a group exists and is of type "price"

@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-
 type fakeClient struct {
 	customers          fakeCustomers
 	plans              fakePlans
@@ -98,6 +97,7 @@ func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.Ge
 
 // ensure errors import is exercised (used by seed_ensure_test).
 var _ = errors.New
+
 func (f *fakeCustomers) Get(_ context.Context, _ string) (*dtos.GetCustomerResponse, error) {
 	return &dtos.GetCustomerResponse{}, nil
 }
@@ -434,10 +434,10 @@ func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.TopUpWalletRe
 // --- Events ---
 
 type fakeEvents struct {
-	mu           sync.Mutex
-	ingested     []types.IngestEventRequest
-	analytics    int
-	anaErr       error
+	mu        sync.Mutex
+	ingested  []types.IngestEventRequest
+	analytics int
+	anaErr    error
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
 	analyticsItems []types.UsageAnalyticItem
 	// listRawItems, when set, is returned in ListRaw responses. Otherwise
@@ -530,10 +530,10 @@ type fakeInvoices struct {
 	invoices   []types.InvoiceResponse
 	lastFilter types.InvoiceFilter
 	// Preview support
-	previewResp    *dtos.GetInvoicePreviewResponse               // default response
-	previewErr     error
-	previewForSub  map[string]*dtos.GetInvoicePreviewResponse    // per-sub override, keyed by SubscriptionID
-	previewCalls   []types.GetPreviewInvoiceRequest
+	previewResp   *dtos.GetInvoicePreviewResponse // default response
+	previewErr    error
+	previewForSub map[string]*dtos.GetInvoicePreviewResponse // per-sub override, keyed by SubscriptionID
+	previewCalls  []types.GetPreviewInvoiceRequest
 }
 
 func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error) {

@@ -46081,6 +46081,7 @@ type PriceMutation struct {
 	meter_id                  *string
 	filter_values             *map[string][]string
 	tier_mode                 *types.BillingTier
+	bucket_size               *types.WindowSize
 	tiers                     *[]*types.PriceTier
 	appendtiers               []*types.PriceTier
 	price_unit_tiers          *[]*types.PriceTier
@@ -47455,6 +47456,55 @@ func (m *PriceMutation) ResetTierMode() {
 	delete(m.clearedFields, price.FieldTierMode)
 }
 
+// SetBucketSize sets the "bucket_size" field.
+func (m *PriceMutation) SetBucketSize(ts types.WindowSize) {
+	m.bucket_size = &ts
+}
+
+// BucketSize returns the value of the "bucket_size" field in the mutation.
+func (m *PriceMutation) BucketSize() (r types.WindowSize, exists bool) {
+	v := m.bucket_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBucketSize returns the old "bucket_size" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldBucketSize(ctx context.Context) (v types.WindowSize, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBucketSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBucketSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBucketSize: %w", err)
+	}
+	return oldValue.BucketSize, nil
+}
+
+// ClearBucketSize clears the value of the "bucket_size" field.
+func (m *PriceMutation) ClearBucketSize() {
+	m.bucket_size = nil
+	m.clearedFields[price.FieldBucketSize] = struct{}{}
+}
+
+// BucketSizeCleared returns if the "bucket_size" field was cleared in this mutation.
+func (m *PriceMutation) BucketSizeCleared() bool {
+	_, ok := m.clearedFields[price.FieldBucketSize]
+	return ok
+}
+
+// ResetBucketSize resets all changes to the "bucket_size" field.
+func (m *PriceMutation) ResetBucketSize() {
+	m.bucket_size = nil
+	delete(m.clearedFields, price.FieldBucketSize)
+}
+
 // SetTiers sets the "tiers" field.
 func (m *PriceMutation) SetTiers(tt []*types.PriceTier) {
 	m.tiers = &tt
@@ -48233,7 +48283,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -48317,6 +48367,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.tier_mode != nil {
 		fields = append(fields, price.FieldTierMode)
+	}
+	if m.bucket_size != nil {
+		fields = append(fields, price.FieldBucketSize)
 	}
 	if m.tiers != nil {
 		fields = append(fields, price.FieldTiers)
@@ -48421,6 +48474,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.FilterValues()
 	case price.FieldTierMode:
 		return m.TierMode()
+	case price.FieldBucketSize:
+		return m.BucketSize()
 	case price.FieldTiers:
 		return m.Tiers()
 	case price.FieldPriceUnitTiers:
@@ -48512,6 +48567,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFilterValues(ctx)
 	case price.FieldTierMode:
 		return m.OldTierMode(ctx)
+	case price.FieldBucketSize:
+		return m.OldBucketSize(ctx)
 	case price.FieldTiers:
 		return m.OldTiers(ctx)
 	case price.FieldPriceUnitTiers:
@@ -48743,6 +48800,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTierMode(v)
 		return nil
+	case price.FieldBucketSize:
+		v, ok := value.(types.WindowSize)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBucketSize(v)
+		return nil
 	case price.FieldTiers:
 		v, ok := value.([]*types.PriceTier)
 		if !ok {
@@ -48948,6 +49012,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldTierMode) {
 		fields = append(fields, price.FieldTierMode)
 	}
+	if m.FieldCleared(price.FieldBucketSize) {
+		fields = append(fields, price.FieldBucketSize)
+	}
 	if m.FieldCleared(price.FieldTiers) {
 		fields = append(fields, price.FieldTiers)
 	}
@@ -49036,6 +49103,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ClearTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ClearBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ClearTiers()
@@ -49158,6 +49228,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ResetTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ResetBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ResetTiers()

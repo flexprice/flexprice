@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -86,7 +87,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				return err
 			}
 			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
-			if err := s.validateBucketArray(txCtx, lineItem.MeterID, lineItem.CommitmentWindowed, hasCumulative, lineItem.CommitmentTimeBuckets); err != nil {
+			if err := s.validateBucketArray(txCtx, lineItem.MeterID, lineItem.PriceID, lineItem.CommitmentWindowed, hasCumulative, lineItem.CommitmentTimeBuckets); err != nil {
 				return err
 			}
 		}
@@ -567,7 +568,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 					return err
 				}
 				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
-				if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
+				if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.PriceID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
 					return err
 				}
 			}
@@ -676,24 +677,30 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Window commitment requires a meter with a bucket_size.
+	// Window commitment needs a bucket size, resolved from the price with the
+	// meter as the legacy fallback.
 	if lineItem.CommitmentWindowed {
 		if lineItem.MeterID == "" {
 			return ierr.NewError("meter is required for window-based commitment").
-				WithHint("Window commitment requires a meter with bucket_size configured").
+				WithHint("Window commitment requires a metered price with a bucket size configured").
 				Mark(ierr.ErrValidation)
 		}
 		m, err := s.MeterRepo.GetMeter(ctx, lineItem.MeterID)
 		if err != nil {
 			return err
 		}
-		if !m.HasBucketSize() {
-			return ierr.NewError("window commitment requires meter with bucket_size").
-				WithHint("Configure bucket_size on the meter to use window-based commitment").
+		p, err := s.resolveLineItemPrice(ctx, lineItem.PriceID)
+		if err != nil {
+			return err
+		}
+		if !price.IsBucketed(p, m) {
+			return ierr.NewError("window commitment requires a bucket size").
+				WithHint("Set bucket_size on this price to use time-of-day buckets").
 				WithReportableDetails(map[string]interface{}{
-					"meter_id":         m.ID,
-					"aggregation_type": m.Aggregation.Type,
-					"bucket_size":      m.Aggregation.BucketSize,
+					"meter_id":          m.ID,
+					"price_id":          lineItem.PriceID,
+					"aggregation_type":  m.Aggregation.Type,
+					"meter_bucket_size": m.Aggregation.BucketSize,
 				}).
 				Mark(ierr.ErrValidation)
 		}
@@ -859,7 +866,7 @@ func (s *subscriptionService) createBucketPricesForLineItems(
 		if err := s.createBucketPrices(ctx, li.ID, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil); err != nil {
 			return err
 		}
-		if err := s.validateBucketArray(ctx, li.MeterID, li.CommitmentWindowed, hasCumulative, li.CommitmentTimeBuckets); err != nil {
+		if err := s.validateBucketArray(ctx, li.MeterID, li.PriceID, li.CommitmentWindowed, hasCumulative, li.CommitmentTimeBuckets); err != nil {
 			return err
 		}
 	}
@@ -991,6 +998,7 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 func (s *subscriptionService) validateBucketArray(
 	ctx context.Context,
 	meterID string,
+	priceID string,
 	commitmentWindowed bool,
 	hasCumulativeCommitment bool,
 	buckets types.TimeOfDayBuckets,
@@ -1026,7 +1034,11 @@ func (s *subscriptionService) validateBucketArray(
 		if err != nil {
 			return err
 		}
-		if err := buckets.ValidateWindowAlignment(m.Aggregation.BucketSize.ToMinutes()); err != nil {
+		p, err := s.resolveLineItemPrice(ctx, priceID)
+		if err != nil {
+			return err
+		}
+		if err := buckets.ValidateWindowAlignment(price.ResolveBucketSize(p, m).ToMinutes()); err != nil {
 			return err
 		}
 	}
@@ -1126,4 +1138,18 @@ func (s *subscriptionService) validateSubscriptionLevelCommitment(sub *subscript
 	}
 
 	return nil
+}
+
+// resolveLineItemPrice fetches the price backing a line item so bucketing can be
+// resolved through it. A missing price ID is not an error: the caller falls back
+// to the meter's legacy bucket size, which is the grandfathered behaviour.
+func (s *subscriptionService) resolveLineItemPrice(ctx context.Context, priceID string) (*price.Price, error) {
+	if priceID == "" {
+		return nil, nil
+	}
+	p, err := s.PriceRepo.Get(ctx, priceID)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }

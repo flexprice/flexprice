@@ -32,9 +32,9 @@ type SubscriptionTimezoneE2ETestSuite struct {
 	testutil.BaseServiceTestSuite
 	service SubscriptionService
 
-	plan     *plan.Plan
-	meter    *meter.Meter
-	price    *price.Price
+	plan      *plan.Plan
+	meter     *meter.Meter
+	price     *price.Price
 	threshold decimal.Decimal
 }
 
@@ -421,9 +421,9 @@ func (s *SubscriptionTimezoneE2ETestSuite) TestTimezone_ThresholdCron_MultipleTz
 	//   PST:  500 events → $ 5.00 → skip     (under $10)
 	//   Rome: 2000 events → $20.00 → invoice (over $10)
 	type scenario struct {
-		id         string
-		tz         string
-		events     int
+		id           string
+		tz           string
+		events       int
 		wantInvoiced bool
 	}
 	scenarios := []scenario{
@@ -511,4 +511,3 @@ func (s *SubscriptionTimezoneE2ETestSuite) TestTimezone_ThresholdCron_EventNearI
 	s.Require().Len(invoices, 1)
 	s.Equal(string(types.InvoiceBillingReasonAutoInvoiceThreshold), invoices[0].BillingReason)
 }
-

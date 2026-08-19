@@ -267,7 +267,7 @@ func grantPricingGuard(measure types.EntitlementGrantMeasure, item *subscription
 		default:
 			return errGrantNonAdditiveAggregation
 		}
-		if m.Aggregation.BucketSize != "" {
+		if priceDomain.IsBucketed(price, m) {
 			return errGrantBucketedMeter
 		}
 	}

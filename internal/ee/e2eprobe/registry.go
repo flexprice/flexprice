@@ -32,8 +32,8 @@ type Seeds struct {
 	AlertCanaryExternalCustomerID string
 
 	// New coverage additions (2026-08-12 plan)
-	SharedCouponID     string            // "" if seed hasn't run yet
-	SharedCouponCode   string            // canonical code used for attaching to subs
+	SharedCouponID     string // "" if seed hasn't run yet
+	SharedCouponCode   string // canonical code used for attaching to subs
 	SharedTaxRateID    string
 	SharedTaxRateCode  string            // canonical code used for tax associations
 	BucketedFeatureIDs map[string]string // lookup_key -> feature id
