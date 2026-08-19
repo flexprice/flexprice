@@ -388,6 +388,10 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
+	if err := types.ValidateTaxMetadata(r.Metadata); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -542,6 +546,10 @@ func (r *UpdatePriceRequest) Validate() error {
 		return ierr.NewError("effective_from requires at least one critical field").
 			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, or price_unit_tiers").
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := types.ValidateTaxMetadata(r.Metadata); err != nil {
+		return err
 	}
 
 	return nil

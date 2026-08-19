@@ -77,6 +77,13 @@ func NewProvider(cfg *config.Configuration) Provider {
 	switch cfg.Auth.Provider {
 	case types.AuthProviderSupabase:
 		return NewSupabaseAuth(cfg)
+	case types.AuthProviderSAML:
+		// Nil when the enterprise SAML package is not linked in; an
+		// unconfigured deployment then behaves as it did before.
+		if samlProviderFactory != nil {
+			return samlProviderFactory(cfg)
+		}
+		return NewFlexpriceAuth(cfg)
 	default:
 		return NewFlexpriceAuth(cfg)
 	}

@@ -190,44 +190,38 @@ func (m *InMemoryPaymentStore) DeleteWithExpectedStatus(ctx context.Context, id 
 	return m.Delete(ctx, id)
 }
 
+// Delete archives the payment, mirroring the real repository: the row survives with
+// status=archived and its payment_status intact, so callers can still read why the
+// payment ended.
 func (m *InMemoryPaymentStore) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// First check if the payment exists
-	_, err := m.InMemoryStore.Get(ctx, id)
+	p, err := m.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	// Remove from InMemoryStore
-	err = m.InMemoryStore.Delete(ctx, id)
-	if err != nil {
-		return err
-	}
+	p.Status = types.StatusArchived
 
-	// Remove from createdInOrder
-	for i, payment := range m.createdInOrder {
-		if payment.ID == id {
-			m.createdInOrder = append(m.createdInOrder[:i], m.createdInOrder[i+1:]...)
-			break
-		}
-	}
-
-	return nil
+	return m.InMemoryStore.Update(ctx, id, p)
 }
 
-// GetByIdempotencyKey retrieves a payment by idempotency key
+// GetByIdempotencyKey retrieves a payment by idempotency key.
+//
+// This scans directly rather than going through List: the real repository matches
+// only on (idempotency_key, tenant_id, environment_id) with no status predicate, so
+// it still finds an archived payment. List applies the published-only default, which
+// would hide one and turn an idempotency conflict into a spurious not-found.
 func (m *InMemoryPaymentStore) GetByIdempotencyKey(ctx context.Context, key string) (*payment.Payment, error) {
-	payments, err := m.List(ctx, &types.PaymentFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-	})
-	if err != nil {
-		return nil, err
-	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	for _, p := range payments {
-		if p.IdempotencyKey == key {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	for _, p := range m.createdInOrder {
+		if p.IdempotencyKey == key && p.TenantID == tenantID && p.EnvironmentID == environmentID {
 			return p, nil
 		}
 	}
@@ -340,11 +334,9 @@ func (m *InMemoryPaymentStore) ListAttempts(ctx context.Context, paymentID strin
 		}
 	}
 
-	if len(result) == 0 {
-		return nil, ierr.NewError("no attempts found").
-			WithHint(fmt.Sprintf("No attempts found for payment: %s", paymentID)).
-			Mark(ierr.ErrNotFound)
-	}
+	// No not-found here: the real repository runs a plain query and returns an empty
+	// slice for a payment with no attempts. Inventing an error would let code that
+	// mishandles "no attempts yet" pass against this store and fail against Postgres.
 
 	// Sort by attempt number (ascending)
 	sort.Slice(result, func(i, j int) bool {
@@ -410,6 +402,16 @@ func paymentFilterFn(ctx context.Context, p *payment.Payment, filter interface{}
 
 	// Apply environment filter
 	if !CheckEnvironmentFilter(ctx, p.EnvironmentID) {
+		return false
+	}
+
+	// Mirror PaymentQueryOptions.ApplyStatusFilter: an unset status means published only,
+	// so archived payments drop out of listings here exactly as they do in the repository.
+	if f.GetStatus() == "" {
+		if p.Status != types.StatusPublished {
+			return false
+		}
+	} else if string(p.Status) != f.GetStatus() {
 		return false
 	}
 

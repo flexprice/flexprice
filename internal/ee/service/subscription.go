@@ -8058,11 +8058,12 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	item *dto.AutoInvoiceThresholdBillingResultItem,
 ) error {
 
-	// Calculate current-period usage amount.
-	usageResp, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+	// Calculate current-period usage amount from meter_usage.
+	usageResp, err := s.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      sub.CurrentPeriodStart,
 		EndTime:        effectiveTime,
+		Source:         string(types.UsageSourceInvoiceCreation),
 	})
 	if err != nil {
 		return err

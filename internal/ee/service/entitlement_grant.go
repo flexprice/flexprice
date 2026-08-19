@@ -455,16 +455,67 @@ func (s *entitlementGrantService) computeGrantWindow(
 		"cycleEnd", cycleEnd,
 		"eventTime", at,
 		"grantDuration", dur,
+		"durationUnit", ec.GrantDurationUnit,
+		"allocationBehavior", ec.GrantAllocationBehavior,
 	)
 
-	// The clamp to cycle_end keeps next-cycle events (sub object not yet rolled)
-	// out; an empty/inverted range simply finds nothing.
+	// subscription_period: window is the whole cycle. Skip the earliestUncoveredUsage
+	// query — the event timestamp is not used for validFrom, and openIfSlotFree
+	// terminates after one grant per cycle (lastEnd == cycleEnd on the next pass).
+	if ec.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		s.Logger.Debug(ctx, "computed grant window (subscription_period)",
+			"validFrom", cycleStart, "validTo", cycleEnd)
+		return cycleStart, cycleEnd, true, nil
+	}
+
+	// hour/day/week: no uncovered usage in the cycle → no grant (windows are
+	// anchored to first-event time, so nothing to anchor without an event).
 	firstUncoveredEventAt, err := s.earliestUncoveredUsage(ctx, meta, sub, ec, coveredUntil, searchUntil)
 	if err != nil || firstUncoveredEventAt == nil {
 		return time.Time{}, time.Time{}, false, err
 	}
 
 	validFrom := *firstUncoveredEventAt
+
+	if ec.GrantAllocationBehavior == types.EntitlementGrantAllocationBehaviorUnitStart {
+		// N-unit buckets anchored at the unit boundary containing cycleStart.
+		// Count strides until the next stride starts after firstEvent; the
+		// containing stride is the aligned start. Uses calendar arithmetic
+		// (AddDate) for day/week so DST transitions do not drift the boundary.
+		// Hour uses fixed .Add because top-of-hour instants remain stable in
+		// UTC across DST transitions.
+		n := lo.FromPtr(ec.GrantDurationValue)
+		if n < 1 {
+			n = 1
+		}
+		tz := sub.Timezone
+		var anchor time.Time
+		var advance func(time.Time) time.Time
+		switch ec.GrantDurationUnit {
+		case types.EntitlementGrantDurationUnitHour:
+			anchor = types.FloorToStartOfHour(cycleStart, tz)
+			stride := time.Duration(n) * time.Hour
+			advance = func(t time.Time) time.Time { return t.Add(stride) }
+		case types.EntitlementGrantDurationUnitDay:
+			anchor = types.FloorToStartOfDay(cycleStart, tz)
+			advance = func(t time.Time) time.Time { return types.AdvanceDays(t, n, tz) }
+		case types.EntitlementGrantDurationUnitWeek:
+			anchor = types.FloorToStartOfWeek(cycleStart, tz)
+			advance = func(t time.Time) time.Time { return types.AdvanceDays(t, 7*n, tz) }
+		}
+		if !anchor.IsZero() && advance != nil {
+			bucket := anchor
+			for {
+				next := advance(bucket)
+				if firstUncoveredEventAt.Before(next) {
+					break
+				}
+				bucket = next
+			}
+			validFrom = latestOf(bucket, coveredUntil)
+		}
+	}
+
 	validTo := validFrom.Add(dur)
 	// Cap at cycle_end AND absorb a sub-minimum trailing remainder in one rule
 	if cycleEnd.Sub(validTo) < types.EntitlementGrantMinDuration {

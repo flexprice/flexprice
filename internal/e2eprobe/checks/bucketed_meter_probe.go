@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -70,9 +71,14 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 	}
 	values := []int{10, 20, 30}
 
+	// The bucket-aligned timestamp repeats for every Run inside the same
+	// bucket, so the id must also carry this Run's nonce — otherwise an
+	// earlier Run's row satisfies the verification below and the check passes
+	// without its own events ever landing.
+	nonce := now.UnixNano()
 	eventIDs := make([]string, 3)
 	for i, t := range ts {
-		evID := fmt.Sprintf("e2eprobe-bkt-%s-%d-%d", spec.eventName, t.UnixNano(), i)
+		evID := fmt.Sprintf("e2eprobe-bkt-%s-%d-%d-%d", spec.eventName, t.UnixNano(), i, nonce)
 		eventIDs[i] = evID
 		tsStr := t.Format(time.RFC3339Nano)
 		if _, err := p.client.Events().Ingest(ctx, types.IngestEventRequest{
@@ -97,7 +103,7 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 	}
 
 	// Verify raw ingestion first — separates ingest failures from aggregation lag.
-	if err := p.pollRawEvents(ctx, spec.eventName, customerExt, featID, eventIDs); err != nil {
+	if err := p.pollRawEvents(ctx, spec, customerExt, featID, eventIDs, ts[0]); err != nil {
 		return err
 	}
 
@@ -108,34 +114,64 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-func (p *BucketedMeterProbe) pollRawEvents(ctx context.Context, eventName, custExt, featID string, wantIDs []string) error {
-	deadline := time.Now().Add(30 * time.Second)
+// pollRawEvents verifies each ingested event by its event_id.
+//
+// The events are deliberately backdated by up to 3 bucket durations, and the
+// persistent customer also receives continuous event-ingest-driver traffic on
+// the same event names. A plain (customer, event_name) query returns the most
+// recent page in timestamp-DESC order, so the backdated rows sit far below the
+// page window and are never observed. Filtering by event_id sidesteps
+// pagination entirely; the explicit time range keeps the older buckets inside
+// the server's default 7-day window.
+func (p *BucketedMeterProbe) pollRawEvents(ctx context.Context, spec bucketedSpec, custExt, featID string, wantIDs []string, oldest time.Time) error {
+	// Staging drains the ingest topic at roughly ten events/second, so allow
+	// generous headroom over the burst this probe (and its neighbours) creates.
+	deadline := time.Now().Add(90 * time.Second)
+	start := oldest.Add(-spec.duration)
+	pageSize := int64(10)
+	found := make(map[string]bool, len(wantIDs))
 	for {
-		resp, err := p.client.Events().ListRaw(ctx, types.GetEventsRequest{
-			ExternalCustomerID: &custExt,
-			EventName:          &eventName,
-		})
-		if err == nil && resp.GetEventsResponse != nil {
-			seen := 0
-			for _, want := range wantIDs {
-				for _, ev := range resp.GetEventsResponse.Events {
-					if ev.ID != nil && *ev.ID == want {
-						seen++
-						break
-					}
+		end := time.Now().UTC()
+		for _, want := range wantIDs {
+			if found[want] {
+				continue
+			}
+			eventID := want
+			resp, err := p.client.Events().ListRaw(ctx, types.GetEventsRequest{
+				ExternalCustomerID: &custExt,
+				EventName:          &spec.eventName,
+				EventID:            &eventID,
+				StartTime:          &start,
+				EndTime:            &end,
+				PageSize:           &pageSize,
+			})
+			if err != nil || resp.GetEventsResponse == nil {
+				continue
+			}
+			for _, ev := range resp.GetEventsResponse.Events {
+				if ev.ID != nil && *ev.ID == want {
+					found[want] = true
+					break
 				}
 			}
-			if seen == len(wantIDs) {
-				return nil
-			}
+		}
+		if len(found) == len(wantIDs) {
+			return nil
 		}
 		if time.Now().After(deadline) {
+			missing := make([]string, 0, len(wantIDs))
+			for _, want := range wantIDs {
+				if !found[want] {
+					missing = append(missing, want)
+				}
+			}
 			return e2eprobe.Errorf(map[string]string{
 				"step":                 "raw_verify",
 				"external_customer_id": custExt,
-				"event_name":           eventName,
+				"event_name":           spec.eventName,
 				"feature_id":           featID,
-			}, "raw event verification timeout — not all %d events present", len(wantIDs))
+				"missing_event_ids":    strings.Join(missing, ","),
+			}, "raw event verification timeout — %d of %d events present", len(found), len(wantIDs))
 		}
 		select {
 		case <-ctx.Done():

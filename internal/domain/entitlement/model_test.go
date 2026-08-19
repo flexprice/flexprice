@@ -121,3 +121,77 @@ func TestEntitlement_Validate_GrantRejectsZeroOrNegativeQuota(t *testing.T) {
 		}
 	}
 }
+
+func TestEntitlement_Validate_DayUnitStartAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitDay
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorUnitStart
+	if err := e.Validate(); err != nil {
+		t.Fatalf("day + unit_start should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_DayFirstUsageAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitDay
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorFirstUsage
+	if err := e.Validate(); err != nil {
+		t.Fatalf("day + first_usage should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_DayEmptyBehaviorAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitDay
+	// GrantAllocationBehavior left as zero value
+	if err := e.Validate(); err != nil {
+		t.Fatalf("day + empty behavior should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_WeekUnitStartAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitWeek
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorUnitStart
+	if err := e.Validate(); err != nil {
+		t.Fatalf("week + unit_start should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_HourUnitStartAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitHour
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorUnitStart
+	if err := e.Validate(); err != nil {
+		t.Fatalf("hour + unit_start should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_SubscriptionPeriodAccepted(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitSubscriptionPeriod
+	e.GrantDurationValue = nil
+	e.GrantAllocationBehavior = ""
+	if err := e.Validate(); err != nil {
+		t.Fatalf("subscription_period should validate, got %v", err)
+	}
+}
+
+func TestEntitlement_Validate_SubscriptionPeriodWithDurationValueRejected(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitSubscriptionPeriod
+	// GrantDurationValue kept from fullGrant() (non-nil) — must be rejected
+	if err := e.Validate(); err == nil {
+		t.Fatalf("subscription_period with duration_value must be rejected")
+	}
+}
+
+func TestEntitlement_Validate_SubscriptionPeriodWithBehaviorRejected(t *testing.T) {
+	e := fullGrant()
+	e.GrantDurationUnit = types.EntitlementGrantDurationUnitSubscriptionPeriod
+	e.GrantDurationValue = nil
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorUnitStart
+	if err := e.Validate(); err == nil {
+		t.Fatalf("subscription_period with allocation_behavior must be rejected")
+	}
+}

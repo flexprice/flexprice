@@ -19,6 +19,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/chargebee/chargebee-go/v3 v3.39.0
 	github.com/cockroachdb/errors v1.11.3
+	github.com/crewjam/saml v0.5.1
 	github.com/flexprice/go-sdk/v2 v2.0.24
 	github.com/getsentry/sentry-go v0.43.0
 	github.com/gin-gonic/gin v1.12.0
@@ -78,6 +79,7 @@ require (
 )
 
 require (
+	github.com/beevik/etree v1.7.0 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
@@ -89,8 +91,11 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.1 // indirect
+	github.com/russellhaering/goxmldsig v1.6.1 // indirect
 	github.com/sv-tools/openapi v0.4.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
 	go.opencensus.io v0.24.0 // indirect

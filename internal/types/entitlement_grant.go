@@ -98,9 +98,10 @@ func (t EntitlementGrantScopeEntityType) String() string { return string(t) }
 type EntitlementGrantDurationUnit string
 
 const (
-	EntitlementGrantDurationUnitHour EntitlementGrantDurationUnit = "hour"
-	EntitlementGrantDurationUnitDay  EntitlementGrantDurationUnit = "day"
-	EntitlementGrantDurationUnitWeek EntitlementGrantDurationUnit = "week"
+	EntitlementGrantDurationUnitHour               EntitlementGrantDurationUnit = "hour"
+	EntitlementGrantDurationUnitDay                EntitlementGrantDurationUnit = "day"
+	EntitlementGrantDurationUnitWeek               EntitlementGrantDurationUnit = "week"
+	EntitlementGrantDurationUnitSubscriptionPeriod EntitlementGrantDurationUnit = "subscription_period"
 )
 
 func (u EntitlementGrantDurationUnit) Validate() error {
@@ -111,10 +112,11 @@ func (u EntitlementGrantDurationUnit) Validate() error {
 		EntitlementGrantDurationUnitHour,
 		EntitlementGrantDurationUnitDay,
 		EntitlementGrantDurationUnitWeek,
+		EntitlementGrantDurationUnitSubscriptionPeriod,
 	}
 	if !lo.Contains(allowed, u) {
 		return ierr.NewError("invalid entitlement grant duration unit").
-			WithHint("grant_duration_unit must be hour, day, or week").
+			WithHint("grant_duration_unit must be hour, day, week, or subscription_period").
 			WithReportableDetails(map[string]interface{}{"grant_duration_unit": u}).
 			Mark(ierr.ErrValidation)
 	}
@@ -125,6 +127,12 @@ func (u EntitlementGrantDurationUnit) String() string { return string(u) }
 
 // EntitlementGrantDurationOf converts (value, unit) into a time.Duration.
 func EntitlementGrantDurationOf(value int, unit EntitlementGrantDurationUnit) (time.Duration, error) {
+	if unit == EntitlementGrantDurationUnitSubscriptionPeriod {
+		return 0, ierr.NewError("grant_duration is not a fixed duration for subscription_period").
+			WithHint("subscription_period grants derive their window from the subscription cycle; do not call GrantDuration for this unit").
+			WithReportableDetails(map[string]interface{}{"grant_duration_unit": unit}).
+			Mark(ierr.ErrValidation)
+	}
 	if value <= 0 {
 		return 0, ierr.NewError("grant_duration_value must be positive").
 			WithHint("Provide a positive integer for grant_duration_value").
@@ -160,6 +168,35 @@ func EntitlementGrantDurationOf(value int, unit EntitlementGrantDurationUnit) (t
 
 // EntitlementGrantMinDuration is the minimum grant window; shorter trails are skipped.
 const EntitlementGrantMinDuration = time.Hour
+
+// EntitlementGrantAllocationBehavior controls how validFrom is anchored when a
+// grant is opened. Only meaningful for fixed-duration units (hour, day, week);
+// ignored for subscription_period. Empty string is treated as first_usage.
+type EntitlementGrantAllocationBehavior string
+
+const (
+	EntitlementGrantAllocationBehaviorFirstUsage EntitlementGrantAllocationBehavior = "first_usage"
+	EntitlementGrantAllocationBehaviorUnitStart  EntitlementGrantAllocationBehavior = "unit_start"
+)
+
+func (b EntitlementGrantAllocationBehavior) Validate() error {
+	if b == "" {
+		return nil
+	}
+	allowed := []EntitlementGrantAllocationBehavior{
+		EntitlementGrantAllocationBehaviorFirstUsage,
+		EntitlementGrantAllocationBehaviorUnitStart,
+	}
+	if !lo.Contains(allowed, b) {
+		return ierr.NewError("invalid entitlement grant allocation behavior").
+			WithHint("grant_allocation_behavior must be first_usage or unit_start").
+			WithReportableDetails(map[string]interface{}{"grant_allocation_behavior": b}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (b EntitlementGrantAllocationBehavior) String() string { return string(b) }
 
 // EntitlementGrantStatus tracks quota state: `active` until usage crosses
 // quota, then `exhausted`. Expiry is not a status — it is derived from

@@ -234,6 +234,17 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, userRepo domainUser.Repository, logger *logger.Logger) gin.HandlerFunc {
 	authProvider := auth.NewProvider(cfg)
 
+	// SSO tokens are validated separately from password-login tokens because the
+	// provider handling password login cannot necessarily validate them: a
+	// deployment using Supabase validates against the Supabase claim schema,
+	// while a SAML login mints Flexprice claims for a user that has no Supabase
+	// account, so every request after a successful SSO login came back 401.
+	//
+	// This validator is strictly stricter than the ordinary one — it additionally
+	// requires SAML to be enabled on the deployment and the token to carry the
+	// SSO marker — so routing a token to it can never be an advantage.
+	ssoValidator := auth.NewSSOTokenValidator(cfg)
+
 	return func(c *gin.Context) {
 		// First check for API key
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
@@ -263,7 +274,19 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := authProvider.ValidateToken(c.Request.Context(), tokenString)
+
+		// Which validator to run is decided by an unverified claim, which is safe
+		// because it decides only that — being sent to the SSO validator is not an
+		// advantage, since that validator verifies the same signature and then
+		// requires the marker again along with SAML being enabled. A caller
+		// setting the marker on a token the ordinary provider would have accepted
+		// only causes their own token to be refused.
+		validate := authProvider.ValidateToken
+		if auth.IsSSOToken(tokenString) {
+			validate = ssoValidator.Validate
+		}
+
+		claims, err := validate(c.Request.Context(), tokenString)
 		if err != nil {
 			logger.Error(c.Request.Context(), "failed to validate token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})

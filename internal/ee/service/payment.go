@@ -471,6 +471,69 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	return dto.NewPaymentResponse(p), nil
 }
 
+// RecordAttempt appends a PaymentAttempt carrying the gateway's outcome for one charge
+// attempt, without touching the parent payment's status. A per-attempt outcome is the
+// gateway's verdict on one try, not our decision about the payment as a whole.
+func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error {
+	if paymentID == "" {
+		return ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	p, err := s.PaymentRepo.Get(ctx, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if !p.TrackAttempts {
+		return nil
+	}
+
+	latestAttempt, err := s.PaymentRepo.GetLatestAttempt(ctx, paymentID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return err
+	}
+
+	attemptNumber := 1
+	if latestAttempt != nil {
+		attemptNumber = latestAttempt.AttemptNumber + 1
+	}
+
+	attempt := &payment.PaymentAttempt{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
+		PaymentID:     paymentID,
+		AttemptNumber: attemptNumber,
+		PaymentStatus: req.PaymentStatus,
+		Metadata:      types.Metadata{},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if req.ErrorMessage != "" {
+		attempt.ErrorMessage = lo.ToPtr(req.ErrorMessage)
+	}
+	if req.GatewayAttemptID != "" {
+		attempt.GatewayAttemptID = lo.ToPtr(req.GatewayAttemptID)
+	}
+
+	if err := attempt.Validate(); err != nil {
+		return err
+	}
+
+	if err := s.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "recorded payment attempt",
+		"payment_id", paymentID,
+		"attempt_number", attemptNumber,
+		"attempt_status", req.PaymentStatus,
+		"gateway_attempt_id", req.GatewayAttemptID,
+	)
+
+	return nil
+}
+
 // ListPayments lists payments based on filter
 func (s *paymentService) ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
 	if filter == nil {
@@ -829,7 +892,7 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 		Amount:            req.Invoice.AmountDue,
 		Currency:          req.Invoice.Currency,
 		PaymentStatus:     types.PaymentStatusInitiated,
-		TrackAttempts:     false, // checkout payments are promoted via webhook callback, not attempt tracking
+		TrackAttempts:     true, // gateway declines are recorded as attempts, leaving the payment open for a retry
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}

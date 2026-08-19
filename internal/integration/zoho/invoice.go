@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -32,6 +33,7 @@ type InvoiceService struct {
 	taxSvc       ZohoTaxService
 	customerRepo customer.Repository
 	invoiceRepo  invoice.Repository
+	priceRepo    price.Repository
 	mappingRepo  entityintegrationmapping.Repository
 	logger       *logger.Logger
 }
@@ -43,6 +45,7 @@ func NewInvoiceService(
 	taxSvc ZohoTaxService,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
+	priceRepo price.Repository,
 	mappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) ZohoInvoiceService {
@@ -53,6 +56,7 @@ func NewInvoiceService(
 		taxSvc:       taxSvc,
 		customerRepo: customerRepo,
 		invoiceRepo:  invoiceRepo,
+		priceRepo:    priceRepo,
 		mappingRepo:  mappingRepo,
 		logger:       logger,
 	}
@@ -134,6 +138,14 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
+
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
+	reqPayload.CustomFields = servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -337,6 +349,11 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		"tax_id", taxRes.TaxID,
 		"tax_exemption_id", taxRes.TaxExemptionID)
 
+	hsnByPriceID := s.resolveHSNSAC(ctx, inputs)
+	for i := range inputs {
+		inputs[i].HSNOrSAC = hsnByPriceID[inputs[i].PriceID]
+	}
+
 	priceToItemID := map[string]string{}
 	if len(inputs) > 0 {
 		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, taxRes)
@@ -369,6 +386,7 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 			Rate:        rate,
 			Discount:    li.LineItemDiscount.Add(li.InvoiceLevelDiscount),
 			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
+			HSNOrSAC:    hsnByPriceID[lo.FromPtr(li.PriceID)],
 			//TaxID:          taxRes.TaxID,
 			//TaxExemptionID: taxRes.TaxExemptionID,
 		})
@@ -410,12 +428,87 @@ func (s *InvoiceService) normalizeRateAndQuantity(li *invoice.InvoiceLineItem, s
 
 }
 
+const zohoAPIDateFormat = "2006-01-02"
+
 func formatPeriodDescription(fallback string, start, end *time.Time) string {
 	if start == nil || end == nil {
 		return fallback
 	}
 	if fallback != "" {
-		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
+		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), inclusiveEnd(end).Format("2006-01-02"))
 	}
-	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
+	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), inclusiveEnd(end).Format("2006-01-02"))
+}
+
+// inclusiveEnd converts FlexPrice's exclusive period end into the inclusive last
+// day a tax invoice displays: a period ending 2026-05-01T00:00 reads as 30/04/2026.
+func inclusiveEnd(end *time.Time) time.Time {
+	return end.Add(-time.Nanosecond)
+}
+
+func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *time.Time) []CustomField {
+	if settings == nil || !settings.ServicePeriodCustomFields.IsConfigured() {
+		return nil
+	}
+	if start == nil || end == nil {
+		return nil
+	}
+
+	return []CustomField{
+		NewCustomField(settings.ServicePeriodCustomFields.StartFieldID, start.Format(zohoAPIDateFormat)),
+		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(end).Format(zohoAPIDateFormat)),
+	}
+}
+
+func (s *InvoiceService) resolveHSNSAC(ctx context.Context, inputs []ItemSyncInput) map[string]string {
+	out := make(map[string]string, len(inputs))
+	if len(inputs) == 0 {
+		return out
+	}
+
+	priceIDs := lo.Uniq(lo.Map(inputs, func(in ItemSyncInput, _ int) string { return in.PriceID }))
+	priceIDs = lo.Compact(priceIDs)
+	if len(priceIDs) == 0 || s.priceRepo == nil {
+		return out
+	}
+
+	prices, err := s.priceRepo.ListAll(ctx, types.NewNoLimitPriceFilter().WithPriceIDs(priceIDs))
+	if err != nil {
+		s.logger.Error(ctx, "failed to load prices for HSN/SAC resolution, omitting the code",
+			"price_count", len(priceIDs),
+			"error", err)
+		return out
+	}
+
+	pricesByID := lo.SliceToMap(prices, func(p *price.Price) (string, *price.Price) { return p.ID, p })
+
+	// Pull in root plan prices for any override that does not carry its own code.
+	rootIDs := make([]string, 0)
+	for _, p := range prices {
+		if p.HSNSAC() != "" {
+			continue
+		}
+		if rootID := p.GetRootPriceID(); rootID != "" && rootID != p.ID {
+			if _, ok := pricesByID[rootID]; !ok {
+				rootIDs = append(rootIDs, rootID)
+			}
+		}
+	}
+
+	if len(rootIDs) > 0 {
+		roots, err := s.priceRepo.ListAll(ctx, types.NewNoLimitPriceFilter().WithPriceIDs(lo.Uniq(rootIDs)))
+		if err != nil {
+			s.logger.Error(ctx, "failed to load root prices for HSN/SAC resolution",
+				"root_price_count", len(rootIDs),
+				"error", err)
+		}
+		for _, p := range roots {
+			pricesByID[p.ID] = p
+		}
+	}
+
+	for _, in := range inputs {
+		out[in.PriceID] = price.ResolveHSNSAC(pricesByID[in.PriceID], pricesByID)
+	}
+	return out
 }

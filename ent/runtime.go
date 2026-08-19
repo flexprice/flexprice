@@ -850,8 +850,12 @@ func init() {
 	entitlementDescDisplayOrder := entitlementFields[10].Descriptor()
 	// entitlement.DefaultDisplayOrder holds the default value on creation for the display_order field.
 	entitlement.DefaultDisplayOrder = entitlementDescDisplayOrder.Default.(int)
+	// entitlementDescGrantAllocationBehavior is the schema descriptor for grant_allocation_behavior field.
+	entitlementDescGrantAllocationBehavior := entitlementFields[18].Descriptor()
+	// entitlement.DefaultGrantAllocationBehavior holds the default value on creation for the grant_allocation_behavior field.
+	entitlement.DefaultGrantAllocationBehavior = types.EntitlementGrantAllocationBehavior(entitlementDescGrantAllocationBehavior.Default.(string))
 	// entitlementDescAggregationMode is the schema descriptor for aggregation_mode field.
-	entitlementDescAggregationMode := entitlementFields[19].Descriptor()
+	entitlementDescAggregationMode := entitlementFields[20].Descriptor()
 	// entitlement.DefaultAggregationMode holds the default value on creation for the aggregation_mode field.
 	entitlement.DefaultAggregationMode = types.EntitlementAggregationMode(entitlementDescAggregationMode.Default.(string))
 	// entitlementDescID is the schema descriptor for id field.

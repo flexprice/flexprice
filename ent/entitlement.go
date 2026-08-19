@@ -68,6 +68,8 @@ type Entitlement struct {
 	GrantDurationValue *int `json:"grant_duration_value,omitempty"`
 	// GrantDurationUnit holds the value of the "grant_duration_unit" field.
 	GrantDurationUnit types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	// How to anchor validFrom when opening a grant; meaningful for hour, day, and week duration units.
+	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	// GrantQuota holds the value of the "grant_quota" field.
 	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
 	// AggregationMode holds the value of the "aggregation_mode" field.
@@ -89,7 +91,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldAggregationMode:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldGrantAllocationBehavior, entitlement.FieldAggregationMode:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -267,6 +269,12 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.GrantDurationUnit = types.EntitlementGrantDurationUnit(value.String)
 			}
+		case entitlement.FieldGrantAllocationBehavior:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_allocation_behavior", values[i])
+			} else if value.Valid {
+				e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehavior(value.String)
+			}
 		case entitlement.FieldGrantQuota:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_quota", values[i])
@@ -404,6 +412,9 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("grant_duration_unit=")
 	builder.WriteString(fmt.Sprintf("%v", e.GrantDurationUnit))
+	builder.WriteString(", ")
+	builder.WriteString("grant_allocation_behavior=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantAllocationBehavior))
 	builder.WriteString(", ")
 	if v := e.GrantQuota; v != nil {
 		builder.WriteString("grant_quota=")

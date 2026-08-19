@@ -80,6 +80,13 @@ type PlanOps interface {
 	Create(ctx context.Context, req types.CreatePlanRequest) (*dtos.CreatePlanResponse, error)
 	Query(ctx context.Context, filter types.PlanFilter) (*dtos.QueryPlanResponse, error)
 	Get(ctx context.Context, id string) (*dtos.GetPlanResponse, error)
+
+	// SyncPrices pushes prices added to the plan after a subscription was
+	// created onto that subscription's line items. Line items snapshot the
+	// plan at create time, so a seed meter added later is invisible to every
+	// existing subscription — and to every read path that filters usage by
+	// active-subscription line items — until this runs.
+	SyncPrices(ctx context.Context, planID string) (*dtos.SyncPlanPricesResponse, error)
 }
 
 type PriceOps interface {
@@ -252,6 +259,10 @@ func (o planOps) Query(ctx context.Context, f types.PlanFilter) (*dtos.QueryPlan
 }
 func (o planOps) Get(ctx context.Context, id string) (*dtos.GetPlanResponse, error) {
 	return o.s.GetPlan(ctx, id)
+}
+
+func (o planOps) SyncPrices(ctx context.Context, planID string) (*dtos.SyncPlanPricesResponse, error) {
+	return o.s.SyncPlanPrices(ctx, planID)
 }
 
 type priceOps struct{ s *flexprice.Prices }

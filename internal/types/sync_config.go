@@ -60,6 +60,37 @@ type InvoiceSyncSettings struct {
 	// For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
 	// qty=3, rate=$100. Empty string means no normalization (keep original).
 	NormalizeFixedTo BillingPeriod `json:"normalize_fixed_to,omitempty"`
+
+	// ServicePeriodCustomFields names the Zoho custom fields that receive the
+	// invoice's service start and end dates.
+	ServicePeriodCustomFields *ServicePeriodCustomFields `json:"service_period_custom_fields,omitempty"`
+}
+
+// ServicePeriodCustomFields holds the Zoho custom field IDs for the service period.
+type ServicePeriodCustomFields struct {
+	StartFieldID string `json:"start_field_id,omitempty"`
+	EndFieldID   string `json:"end_field_id,omitempty"`
+}
+
+// IsConfigured reports whether both field IDs are present. A half-configured pair
+// would render a start date with no end date, so both are required together.
+func (s *ServicePeriodCustomFields) IsConfigured() bool {
+	if s == nil {
+		return false
+	}
+	return s.StartFieldID != "" && s.EndFieldID != ""
+}
+
+func (s *ServicePeriodCustomFields) Validate() error {
+	if s == nil {
+		return nil
+	}
+	if (s.StartFieldID == "") != (s.EndFieldID == "") {
+		return ierr.NewError("service period custom fields must be set together").
+			WithHint("Provide both start_field_id and end_field_id, or neither").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // NormalizedFixedQuantity returns how many units of NormalizeFixedTo fit between start and end.
@@ -155,6 +186,12 @@ func (s *SyncConfig) Validate() error {
 			return ierr.NewError("invalid normalize_fixed_to billing period").
 				WithHint(err.Error()).
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if s.InvoiceSyncSettings != nil {
+		if err := s.InvoiceSyncSettings.ServicePeriodCustomFields.Validate(); err != nil {
+			return err
 		}
 	}
 

@@ -91,6 +91,27 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	}
 	start := end.Add(-window)
 
+	// Usage analytics only returns meters carried by the customer's active
+	// subscription line items (see meterUsageService.activeSubscriptionMeterIDs).
+	// Line items snapshot the plan at subscription-create time, so a meter
+	// seeded after the persistent subs were created reports nothing until
+	// seed-ensure's plan price sync lands. That's a seed-drift window, not a
+	// broken aggregation pipeline — skip instead of paging.
+	onSub, err := p.meterOnActiveSubscription(ctx, extCustID, seeds.MeterIDs[eventName])
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{
+			"external_customer_id": extCustID,
+			"event_name":           eventName,
+		}, "resolve subscription line items for %s: %w", extCustID, err)
+	}
+	if !onSub {
+		p.logInfo(ctx, "meter-aggregation-probe: meter not on customer's active subscription, skipping",
+			"event_name", eventName,
+			"external_customer_id", extCustID,
+			"run_id", p.runID)
+		return nil
+	}
+
 	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
 		ExternalCustomerID: &extCustID,
 		StartTime:          &start,
@@ -123,6 +144,50 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 		eventName, window)
 }
 
+// meterOnActiveSubscription reports whether meterID appears on any line item
+// of the customer's subscriptions. An unknown meter ID (seed map miss) counts
+// as present so the assertion still runs.
+func (p *MeterAggregationProbe) meterOnActiveSubscription(ctx context.Context, extCustID, meterID string) (bool, error) {
+	if meterID == "" {
+		return true, nil
+	}
+	ext := extCustID
+	active := types.SubscriptionStatusActive
+	listResp, err := p.client.Subscriptions().Query(ctx, types.SubscriptionFilter{
+		ExternalCustomerID: &ext,
+		SubscriptionStatus: []types.SubscriptionStatus{active},
+	})
+	if err != nil {
+		return false, err
+	}
+	if listResp.ListSubscriptionsResponse == nil {
+		return false, nil
+	}
+	for _, sub := range listResp.ListSubscriptionsResponse.Items {
+		if sub.ID == nil {
+			continue
+		}
+		// Belt and braces: a server that ignores the status filter must not
+		// let a cancelled sub's line items mask a real aggregation failure.
+		if sub.SubscriptionStatus != nil && *sub.SubscriptionStatus != active {
+			continue
+		}
+		subResp, err := p.client.Subscriptions().Get(ctx, *sub.ID)
+		if err != nil {
+			return false, err
+		}
+		if subResp.SubscriptionResponse == nil {
+			continue
+		}
+		for _, li := range subResp.SubscriptionResponse.LineItems {
+			if li.MeterID != nil && *li.MeterID == meterID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // sortedMeterEventNames returns the event names from meterIDs in stable sorted order.
 func sortedMeterEventNames(meterIDs map[string]string) []string {
 	names := make([]string, 0, len(meterIDs))
@@ -131,6 +196,13 @@ func sortedMeterEventNames(meterIDs map[string]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (p *MeterAggregationProbe) logInfo(ctx context.Context, msg string, kv ...any) {
+	if p.logger == nil {
+		return
+	}
+	p.logger.Info(ctx, msg, kv...)
 }
 
 func (p *MeterAggregationProbe) logDebug(ctx context.Context, msg string, kv ...any) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/shopspring/decimal"
 )
@@ -49,8 +50,18 @@ type ContactCreateRequest struct {
 	ContactType     string          `json:"contact_type,omitempty"`
 	CustomerSubType string          `json:"customer_sub_type,omitempty"`
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`
+	ShippingAddress *ContactAddress `json:"shipping_address,omitempty"`
 	ContactPersons  []ContactPerson `json:"contact_persons,omitempty"`
+
+	// India (GST) edition fields. Omitted entirely for non-Indian contacts.
+	GSTNo          string `json:"gst_no,omitempty"`
+	PlaceOfContact string `json:"place_of_contact,omitempty"`
+	PANNo          string `json:"pan_no,omitempty"`
 }
+
+// ContactUpdateRequest is the body for PUT /books/v3/contacts/{id}. Zoho replaces
+// the contact wholesale, so this carries the same shape as the create request.
+type ContactUpdateRequest = ContactCreateRequest
 
 type ContactResponse struct {
 	ContactID      string `json:"contact_id"`
@@ -69,6 +80,8 @@ type ItemCreateRequest struct {
 	TaxID          string  `json:"tax_id,omitempty"`
 	IsTaxable      *bool   `json:"is_taxable,omitempty"`
 	TaxExemptionID string  `json:"tax_exemption_id,omitempty"`
+	// HSNOrSAC classifies the service for Indian GST. Ignored by non-India orgs.
+	HSNOrSAC string `json:"hsn_or_sac,omitempty"`
 }
 
 type ItemResponse struct {
@@ -100,6 +113,28 @@ type InvoiceLineItem struct {
 	Discount       decimal.Decimal `json:"discount,omitzero"`
 	TaxID          string          `json:"tax_id,omitempty"`
 	TaxExemptionID string          `json:"tax_exemption_id,omitempty"`
+	HSNOrSAC       string          `json:"hsn_or_sac,omitempty"`
+}
+
+// CustomField carries a Zoho custom field value. The field must already exist in
+// the Zoho org; its ID comes from the connection's sync config.
+type CustomField struct {
+	CustomFieldID string `json:"customfield_id,omitempty"`
+	APIName       string `json:"api_name,omitempty"`
+	Value         string `json:"value"`
+}
+
+// apiNamePrefix marks a configured reference as an api_name rather than a numeric
+// customfield_id. Zoho generates these as "cf_<label_slug>".
+const apiNamePrefix = "cf_"
+
+func NewCustomField(ref, value string) CustomField {
+	ref = strings.TrimSpace(ref)
+	if strings.HasPrefix(ref, apiNamePrefix) {
+		return CustomField{APIName: ref, Value: value}
+	}
+
+	return CustomField{CustomFieldID: ref, Value: value}
 }
 
 type InvoiceCreateRequest struct {
@@ -115,6 +150,12 @@ type InvoiceCreateRequest struct {
 	Adjustment          decimal.Decimal   `json:"adjustment,omitzero"`
 	DiscountType        string            `json:"discount_type,omitempty"`
 	IsDiscountBeforeTax bool              `json:"is_discount_before_tax,omitempty"`
+
+	// PlaceOfSupply is the GST state code the supply is made to. It drives Zoho's
+	// IGST vs CGST/SGST split. Zoho falls back to the contact's place_of_contact
+	// when omitted, but sending it pins the value at invoice time.
+	PlaceOfSupply string        `json:"place_of_supply,omitempty"`
+	CustomFields  []CustomField `json:"custom_fields,omitempty"`
 }
 
 type InvoiceResponse struct {

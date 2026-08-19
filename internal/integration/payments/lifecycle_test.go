@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -17,7 +18,7 @@ import (
 type PaymentLifecycleSuite struct {
 	testutil.BaseServiceTestSuite
 	lifecycle *payments.PaymentLifecycle
-	testData struct {
+	testData  struct {
 		customer *customer.Customer
 		invoice  *invoice.Invoice
 	}
@@ -296,6 +297,148 @@ func (s *PaymentLifecycleSuite) TestRecordPaymentSuccess_TerminalStateError() {
 		GatewayPaymentID:   "gw_pay_004",
 	})
 	s.Error(err)
+}
+
+// ── RecordFailedAttempt ────────────────────────────────────────────────────
+
+func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_LeavesPaymentOpen() {
+	ctx := s.GetContext()
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
+	s.NoError(err)
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_020"))
+
+	err = s.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_020",
+		ErrorMessage:       "card declined",
+	})
+	s.NoError(err)
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusPending, payment.PaymentStatus,
+		"a decline must not move the parent out of its open status")
+
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)
+	s.NoError(err)
+	s.Require().Len(attempts, 1)
+	s.Equal(types.PaymentStatusFailed, attempts[0].PaymentStatus)
+	s.Equal(1, attempts[0].AttemptNumber)
+}
+
+func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_IncrementsAttemptNumber() {
+	ctx := s.GetContext()
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
+	s.NoError(err)
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_021"))
+
+	declineParams := payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_021",
+		ErrorMessage:       "insufficient funds",
+	}
+	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, declineParams))
+	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, declineParams))
+
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)
+	s.NoError(err)
+	s.Require().Len(attempts, 2)
+	s.ElementsMatch([]int{1, 2}, []int{attempts[0].AttemptNumber, attempts[1].AttemptNumber})
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusPending, payment.PaymentStatus)
+}
+
+func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_ThenSuccessSettlesPayment() {
+	ctx := s.GetContext()
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
+	s.NoError(err)
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_022"))
+
+	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_022",
+		ErrorMessage:       "card declined",
+	}))
+
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_023",
+		SucceededAt:        time.Now().UTC(),
+	}))
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, s.testData.invoice.ID)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, inv.PaymentStatus)
+}
+
+// A declined transaction must not land on the parent's GatewayPaymentID: that field
+// names the transaction that settled the payment, and syncPaymentStatusFromGateway
+// prefers it over GatewayTrackingID. Pointing it at a dead transaction would make the
+// sync fetch FAILED and seal a payment the customer can still retry.
+func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_DoesNotClaimGatewayPaymentID() {
+	ctx := s.GetContext()
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
+	s.NoError(err)
+
+	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_declined_txn",
+		ErrorMessage:       "card declined",
+	}))
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
+	s.NoError(err)
+	s.NotEqual("gw_declined_txn", lo.FromPtr(payment.GatewayPaymentID))
+
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)
+	s.NoError(err)
+	s.Require().Len(attempts, 1)
+	s.Require().NotNil(attempts[0].GatewayAttemptID)
+	s.Equal("gw_declined_txn", *attempts[0].GatewayAttemptID,
+		"the declined transaction belongs on the attempt")
+}
+
+func (s *PaymentLifecycleSuite) TestRecordSucceededAttempt_AppendsWithoutSettlingParent() {
+	ctx := s.GetContext()
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
+	s.NoError(err)
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_030"))
+
+	s.NoError(s.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_030",
+		ErrorMessage:       "card declined",
+	}))
+	s.NoError(s.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
+		FlexpricePaymentID: id,
+		GatewayPaymentID:   "gw_pay_031",
+	}))
+
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)
+	s.NoError(err)
+	s.Require().Len(attempts, 2)
+
+	byNumber := map[int]types.PaymentStatus{}
+	for _, a := range attempts {
+		byNumber[a.AttemptNumber] = a.PaymentStatus
+	}
+	s.Equal(types.PaymentStatusFailed, byNumber[1])
+	s.Equal(types.PaymentStatusSucceeded, byNumber[2])
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusPending, payment.PaymentStatus,
+		"recording an attempt must not settle the parent — that is RecordPaymentSuccess's job")
+}
+
+func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_RequiresPaymentID() {
+	s.Error(s.lifecycle.RecordFailedAttempt(s.GetContext(), payments.RecordFailedAttemptParams{}))
 }
 
 // ── RecordPaymentFailure ─────────────────────────────────────────────────────

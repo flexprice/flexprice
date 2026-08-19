@@ -2178,6 +2178,11 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	// Create preview response
 	response := dto.NewInvoiceResponse(inv)
 
+	// Previews persist no tax_applied rows, so synthesise the per-rate
+	// breakdown that WithTaxes would otherwise load from the DB — without it
+	// the response carries total_tax but an empty taxes[] array.
+	response.WithTaxes(dto.BuildPreviewTaxes(inv, invReq.PreparedTaxRates))
+
 	// Get customer information
 	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
@@ -2232,6 +2237,11 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 
 	// Create preview response
 	response := dto.NewInvoiceResponse(inv)
+
+	// Previews persist no tax_applied rows, so synthesise the per-rate
+	// breakdown that WithTaxes would otherwise load from the DB — without it
+	// the response carries total_tax but an empty taxes[] array.
+	response.WithTaxes(dto.BuildPreviewTaxes(inv, invReq.PreparedTaxRates))
 
 	// Get customer information
 	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)

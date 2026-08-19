@@ -32,11 +32,12 @@ type Entitlement struct {
 
 	// Grant config; all-or-nothing set (see validateGrantConfig). Presence of a
 	// grant config turns the entitlement into a time-boxed bucket source.
-	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
-	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
-	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
-	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty"`
-	AggregationMode    types.EntitlementAggregationMode   `json:"aggregation_mode,omitempty"`
+	GrantMeasure            types.EntitlementGrantMeasure            `json:"grant_measure,omitempty"`
+	GrantDurationValue      *int                                     `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit       types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
+	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
+	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty"`
+	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
 
 	types.BaseModel
 }
@@ -65,7 +66,17 @@ func (e *Entitlement) HasGrantConfig() bool {
 }
 
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
-	if e == nil || e.GrantDurationValue == nil {
+	if e == nil {
+		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
+			Mark(ierr.ErrValidation)
+	}
+	if e.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		// subscription_period grants have no fixed duration; the window is
+		// the subscription cycle. Callers must branch on GrantDurationUnit
+		// and never use this returned value for that unit.
+		return 0, nil
+	}
+	if e.GrantDurationValue == nil {
 		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}
@@ -207,17 +218,46 @@ func (e *Entitlement) validateGrantConfig() error {
 	if err := e.GrantDurationUnit.Validate(); err != nil {
 		return err
 	}
+
+	if err := e.GrantAllocationBehavior.Validate(); err != nil {
+		return err
+	}
+
+	// subscription_period: no duration_value, no allocation_behavior.
+	if e.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		if e.GrantDurationValue != nil {
+			return ierr.NewError("grant_duration_value must not be set for subscription_period grants").
+				WithHint("subscription_period grants derive their window from the subscription cycle; omit grant_duration_value").
+				WithReportableDetails(map[string]interface{}{
+					"grant_duration_value": e.GrantDurationValue,
+					"grant_duration_unit":  e.GrantDurationUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if e.GrantAllocationBehavior != "" {
+			return ierr.NewError("grant_allocation_behavior must not be set for subscription_period grants").
+				WithHint("subscription_period grants always align with the cycle; omit grant_allocation_behavior").
+				WithReportableDetails(map[string]interface{}{
+					"grant_allocation_behavior": e.GrantAllocationBehavior,
+					"grant_duration_unit":       e.GrantDurationUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	dur, err := e.GrantDuration()
 	if err != nil {
 		return err
 	}
-	if dur < types.EntitlementGrantMinDuration {
-		return ierr.NewError("grant_duration must be at least 1 hour").
-			WithReportableDetails(map[string]interface{}{
-				"grant_duration_value": e.GrantDurationValue,
-				"grant_duration_unit":  e.GrantDurationUnit,
-			}).
-			Mark(ierr.ErrValidation)
+	if e.GrantDurationUnit != types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		if dur < types.EntitlementGrantMinDuration {
+			return ierr.NewError("grant_duration must be at least 1 hour").
+				WithReportableDetails(map[string]interface{}{
+					"grant_duration_value": e.GrantDurationValue,
+					"grant_duration_unit":  e.GrantDurationUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
@@ -235,27 +275,28 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 	}
 
 	return &Entitlement{
-		ID:                  e.ID,
-		EntityType:          types.EntitlementEntityType(e.EntityType),
-		EntityID:            e.EntityID,
-		FeatureID:           e.FeatureID,
-		FeatureType:         types.FeatureType(e.FeatureType),
-		IsEnabled:           e.IsEnabled,
-		UsageLimit:          e.UsageLimit,
-		UsageResetPeriod:    types.EntitlementUsageResetPeriod(e.UsageResetPeriod),
-		IsSoftLimit:         e.IsSoftLimit,
-		StaticValue:         e.StaticValue,
-		EnvironmentID:       e.EnvironmentID,
-		DisplayOrder:        e.DisplayOrder,
-		ConfigValue:         e.ConfigValue,
-		ParentEntitlementID: e.ParentEntitlementID,
-		StartDate:           e.StartDate,
-		EndDate:             e.EndDate,
-		GrantMeasure:        e.GrantMeasure,
-		GrantDurationValue:  e.GrantDurationValue,
-		GrantDurationUnit:   e.GrantDurationUnit,
-		GrantQuota:          e.GrantQuota,
-		AggregationMode:     e.AggregationMode,
+		ID:                      e.ID,
+		EntityType:              types.EntitlementEntityType(e.EntityType),
+		EntityID:                e.EntityID,
+		FeatureID:               e.FeatureID,
+		FeatureType:             types.FeatureType(e.FeatureType),
+		IsEnabled:               e.IsEnabled,
+		UsageLimit:              e.UsageLimit,
+		UsageResetPeriod:        types.EntitlementUsageResetPeriod(e.UsageResetPeriod),
+		IsSoftLimit:             e.IsSoftLimit,
+		StaticValue:             e.StaticValue,
+		EnvironmentID:           e.EnvironmentID,
+		DisplayOrder:            e.DisplayOrder,
+		ConfigValue:             e.ConfigValue,
+		ParentEntitlementID:     e.ParentEntitlementID,
+		StartDate:               e.StartDate,
+		EndDate:                 e.EndDate,
+		GrantMeasure:            e.GrantMeasure,
+		GrantDurationValue:      e.GrantDurationValue,
+		GrantDurationUnit:       e.GrantDurationUnit,
+		GrantAllocationBehavior: e.GrantAllocationBehavior,
+		GrantQuota:              e.GrantQuota,
+		AggregationMode:         e.AggregationMode,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

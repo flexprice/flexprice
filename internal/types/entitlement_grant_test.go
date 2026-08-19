@@ -77,6 +77,7 @@ func TestEntitlementGrantDurationOf(t *testing.T) {
 		{"max weeks accepted", 15250, EntitlementGrantDurationUnitWeek, 15250 * 7 * 24 * time.Hour, false},
 		{"overflowing weeks rejected", 15251, EntitlementGrantDurationUnitWeek, 0, true},
 		{"overflowing hours rejected", 2562048, EntitlementGrantDurationUnitHour, 0, true},
+		{"subscription_period is not a fixed duration", 1, EntitlementGrantDurationUnitSubscriptionPeriod, 0, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,6 +93,35 @@ func TestEntitlementGrantDurationOf(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Fatalf("want %v, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestEntitlementGrantDurationUnit_Validate(t *testing.T) {
+	cases := []struct {
+		name    string
+		u       EntitlementGrantDurationUnit
+		wantErr bool
+	}{
+		{"", "", false},
+		{"hour is valid", EntitlementGrantDurationUnitHour, false},
+		{"day is valid", EntitlementGrantDurationUnitDay, false},
+		{"week is valid", EntitlementGrantDurationUnitWeek, false},
+		{"subscription_period is valid", EntitlementGrantDurationUnitSubscriptionPeriod, false},
+		{"unknown value is rejected", "month", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.u.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tc.u)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for %q: %v", tc.u, err)
+				}
 			}
 		})
 	}
@@ -149,5 +179,32 @@ func TestEntitlementGrantFilter_WithFeatureIDs_IsSugarForScope(t *testing.T) {
 	}
 	if len(f.ScopeEntityIDs) != 2 || f.ScopeEntityIDs[0] != "feat_a" || f.ScopeEntityIDs[1] != "feat_b" {
 		t.Fatalf("expected scope entity ids [feat_a feat_b], got %v", f.ScopeEntityIDs)
+	}
+}
+
+func TestEntitlementGrantAllocationBehavior_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		b       EntitlementGrantAllocationBehavior
+		wantErr bool
+	}{
+		{name: "empty is valid (defaults to first_usage)", b: "", wantErr: false},
+		{name: "first_usage is valid", b: EntitlementGrantAllocationBehaviorFirstUsage, wantErr: false},
+		{name: "unit_start is valid", b: EntitlementGrantAllocationBehaviorUnitStart, wantErr: false},
+		{name: "unknown value is rejected", b: "cycle_start", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.b.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tc.b)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for %q: %v", tc.b, err)
+				}
+			}
+		})
 	}
 }
