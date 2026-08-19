@@ -399,13 +399,22 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,
 	}
+	attemptReq := dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded}
 	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
 		id := providerResult.ProviderPaymentIntentID
 		updateReq.GatewayPaymentID = &id
+		attemptReq.GatewayAttemptID = id
 	}
+
 	paySvc := NewPaymentService(s.ServiceParams)
 	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
 		return err
+	}
+
+	// After the settle, so a payment that never succeeded leaves no succeeded attempt.
+	if err := paySvc.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
+		s.Logger.Error(ctx, "failed to record succeeded attempt",
+			"payment_id", paymentID, "error", err)
 	}
 
 	return invSvc.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, nil)

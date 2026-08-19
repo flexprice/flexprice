@@ -7,6 +7,24 @@ server:
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
   secret: "super_secret"
+  # SAML single sign-on. Per-tenant identity provider details live in the
+  # tenant's saml_config setting, not here.
+  saml:
+    # Deployment-wide switch for the whole feature. Off means the SAML routes
+    # are not mounted and no tenant may store a configuration.
+    #
+    # This is the only SAML policy that is set here. Everything about how a
+    # tenant authenticates — its identity provider, whether SSO is on, whether
+    # password login is refused — lives in that tenant's saml_config setting.
+    enabled: false
+    # This deployment's own origin (scheme and host); the SAML paths are built
+    # onto it. Not per-tenant: one deployment has one API origin, and the tenant
+    # appears in the path rather than the origin. It must not be taken from the
+    # request, because it is signed into the AuthnRequest as the ACS URL.
+    base_url: "http://localhost:8080"
+    # This deployment's frontend, where the browser lands after a successful
+    # assertion, carrying the token.
+    dashboard_url: "http://localhost:3000/auth/callback"
   supabase:
     base_url: "http://localhost:54321"
     service_key: "<supabase service key>"

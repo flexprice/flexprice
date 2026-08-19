@@ -69,15 +69,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
-	// Create a new payment attempt if tracking is enabled
-	var attempt *payment.PaymentAttempt
-	if paymentObj.TrackAttempts {
-		attempt, err = p.createNewAttempt(ctx, paymentObj)
-		if err != nil {
-			return paymentObj, err
-		}
-	}
-
 	// For payment links, if status is INITIATED, we need to create the payment link
 	// If status is already PENDING, we don't need to do anything more
 	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink && paymentObj.PaymentStatus == types.PaymentStatusInitiated {
@@ -133,31 +124,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				"payment_id": paymentObj.ID,
 			}).
 			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Update attempt status if tracking is enabled
-	if paymentObj.TrackAttempts && attempt != nil {
-		if processErr != nil {
-			// For payment links, keep attempt as pending even on error
-			if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
-				attempt.PaymentStatus = types.PaymentStatusPending
-				attempt.ErrorMessage = lo.ToPtr(processErr.Error())
-			} else {
-				attempt.PaymentStatus = types.PaymentStatusFailed
-				attempt.ErrorMessage = lo.ToPtr(processErr.Error())
-			}
-		} else {
-			// For payment links, keep attempt as pending
-			if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
-				attempt.PaymentStatus = types.PaymentStatusPending
-			} else {
-				attempt.PaymentStatus = types.PaymentStatusSucceeded
-			}
-		}
-		attempt.UpdatedAt = time.Now().UTC()
-		if err := p.PaymentRepo.UpdateAttempt(ctx, attempt); err != nil {
-			p.Logger.Error(ctx, "failed to update payment attempt", "error", err)
-		}
 	}
 
 	// Update payment status based on processing result
@@ -747,35 +713,6 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	}
 
 	return nil
-}
-
-func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *payment.Payment) (*payment.PaymentAttempt, error) {
-	// Get latest attempt to determine attempt number
-	latestAttempt, err := p.PaymentRepo.GetLatestAttempt(ctx, paymentObj.ID)
-	if err != nil && !ierr.IsNotFound(err) {
-		return nil, err
-	}
-
-	attemptNumber := 1
-	if latestAttempt != nil {
-		attemptNumber = latestAttempt.AttemptNumber + 1
-	}
-
-	attempt := &payment.PaymentAttempt{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
-		PaymentID:     paymentObj.ID,
-		AttemptNumber: attemptNumber,
-		PaymentStatus: types.PaymentStatusProcessing,
-		Metadata:      types.Metadata{},
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-
-	if err := p.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
-		return nil, err
-	}
-
-	return attempt, nil
 }
 
 func (p *paymentProcessor) dispatchWhopMarkPaid(ctx context.Context, invoiceID string) {

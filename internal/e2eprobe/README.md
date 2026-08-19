@@ -16,17 +16,23 @@ make run-e2eprobe
 
 `seed-ensure` is fully self-contained — no manual tenant prep is required. On first run (or any run where entities are missing) the harness idempotently provisions:
 
-1. **11 features** (each with an embedded meter): 8 baseline aggregations (COUNT, SUM, AVG, COUNT_UNIQUE, LATEST, MAX, SUM_WITH_MULTIPLIER, SUM/api-filter) plus 3 bucketed meters (MAX/15MIN, SUM/HOUR, MAX/DAY) for the bucketed-meter-probe.
+1. **12 features** (each with an embedded meter): 8 baseline aggregations (COUNT, SUM, AVG, COUNT_UNIQUE, LATEST, MAX, SUM_WITH_MULTIPLIER, SUM/api-filter), 3 bucketed meters (MAX/15MIN, SUM/HOUR, MAX/DAY) for the bucketed-meter-probe, and `e2eprobe_sum_commit` for commitment-true-up-probe — the last one carries no entitlement, so billed usage is exactly units x price with no allowance absorbing the first $1.00.
 2. **1 shared coupon** (`E2EPROBE_COUPON_10PCT`, 10% percentage, one-time cadence) reused by coupon-application-probe and attached to persistent cust #1's sub.
 3. **1 shared tax rate** (`E2EPROBE_TAX_10PCT`, 10% percentage, EXTERNAL scope) reused by tax-application-probe and attached to persistent cust #0's sub.
 4. **10 persistent customers** tagged `metadata.e2eprobe_cohort = "persistent"`.
 5. **1 plan** (`e2eprobe_plan`) with metadata `e2eprobe = "true"`.
-6. **12 prices** attached to the plan: 1 base recurring fixed fee ($19.99/mo) + 1 usage price per feature ($0.01/unit).
-7. **7 plan-level soft-limit entitlements** (was 8): one on each non-bucketed metered feature EXCEPT `e2eprobe_sum_multiplier_feature`, which is reserved for the additive grant (see next bullet).
+6. **13 prices** attached to the plan: 1 base recurring fixed fee ($19.99/mo) + 1 usage price per feature ($0.01/unit).
+7. **7 plan-level soft-limit entitlements**: one on each non-bucketed metered feature EXCEPT `e2eprobe_sum_multiplier_feature` (reserved for the additive grant, see next bullet) and `e2eprobe_sum_commit_feature` (entitlement-free by design).
 8. **1 additive grant entitlement** on `e2eprobe_sum_multiplier_feature` (grant_measure=quantity, quota=1000, duration=1 hour, aggregation_mode=additive). Post-create config-echo verified at seed time via raw HTTP GET, since SDK v2.0.24 doesn't expose grant fields on `EntitlementResponse`.
 9. **10 subscriptions** — one per persistent customer — on the e2eprobe plan (monthly, anniversary cycle). New subs carry a $5/mo commitment (1.5× overage factor); cust #1's sub additionally carries the shared coupon via SubscriptionCoupons. Draft subscriptions are activated automatically.
 10. **1 tax association** linking the shared tax rate to persistent cust #0's subscription (idempotent — covers both new and existing subs).
 11. **3 wallets** on the first 3 persistent customers (`e2eprobe-cust-persistent-0/1/2`), each topped up to $100.00 USD.
+
+Subscription line items snapshot the plan at create time, so a feature seeded
+after the persistent subs were created is invisible to every usage read path
+(they filter by active-subscription line items). `seed-ensure` detects that
+drift and triggers the plan price sync; `meter-aggregation-probe` skips any
+meter that isn't yet on the customer's subscription rather than paging.
 
 Every step is idempotent: re-running seed-ensure against a tenant that already has all entities is a no-op.
 
@@ -67,7 +73,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 
 | Kind | Name | Schedule | What it does |
 | ---- | ---- | -------- | ------------ |
-| bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 8 features/meters, 10 customers, 1 plan, 9 prices, 10 subs, 3 wallets |
+| bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 12 features/meters, 10 customers, 1 plan, 13 prices, 10 subs, 3 wallets; syncs plan prices onto subs when line items drift |
 | driver | event-ingest-driver | Rate(5/s) | Varied event ingest using the deck |
 | probe | analytics-probe | 2m | `GetUsageAnalytics` rotating params |
 | probe | meter-aggregation-probe | 3m | Asserts each seed meter produces >0 usage over a 30-min window (round-robin; all 8 meters covered every 24 min) |

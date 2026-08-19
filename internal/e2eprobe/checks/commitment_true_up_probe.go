@@ -15,7 +15,7 @@ import (
 
 // CommitmentTrueUpProbe creates a fresh ephemeral customer + sub with a
 // $5/mo commitment (1.5× overage), ingests a deterministic amount of usage
-// on e2eprobe_sum ($0.01/unit), then calls GetInvoicePreview and asserts
+// on e2eprobe_sum_commit ($0.01/unit), then calls GetInvoicePreview and asserts
 // the resulting math. The plan carries a $19.99 monthly fixed base fee
 // (`e2eprobe_base_price` in seed_ensure.go); expected preview totals below
 // bake that in.
@@ -27,6 +27,13 @@ import (
 //   - Even runs (cursor%2 == 0): over-commitment (700 events × $0.01 = $7.00).
 //     Preview total must equal commitment + (usage - commitment) × 1.5 + base
 //     = $5 + $2 × 1.5 + $19.99 = $27.99 (epsilon $0.01).
+
+// CommitmentEventName is the entitlement-free seed meter this probe bills
+// against. Every other metered seed feature carries a 100-unit monthly
+// entitlement, which silently absorbs the first $1.00 of usage and makes
+// exact preview totals unassertable.
+const CommitmentEventName = "e2eprobe_sum_commit"
+
 type CommitmentTrueUpProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
@@ -83,6 +90,10 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 		CommitmentAmount:   &commitAmount,
 		CommitmentDuration: &commitDuration,
 		OverageFactor:      &overageFactor,
+		// Without enable_true_up the billing service skips the true-up line
+		// item entirely (see billingService.CalculateUsageCharges), so the
+		// under-leg assertion below can never pass.
+		EnableTrueUp: boolPtr(true),
 		Metadata: map[string]string{
 			"e2eprobe":        "true",
 			"e2eprobe_cohort": "ephemeral",
@@ -99,16 +110,22 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 	}
 	p.reg.RegisterEphemeral("subscription", subID, now)
 
-	// Ingest e2eprobe_sum events (priced at $0.01/unit); amount=1 per event.
+	// Ingest CommitmentEventName events (priced at $0.01/unit); amount=1 per event.
+	// expectedUsage is the COMMITMENT-ADJUSTED usage amount the subscription
+	// usage API reports once every event has landed — not the raw
+	// units × price total. Over the commitment the API already applies the
+	// 1.5x overage factor ($5 committed + $2 overage × 1.5 = $8.00), so
+	// polling for the raw $7.00 returns while ~10% of the events are still
+	// draining and the preview below is then short by that remainder.
 	n := 100
 	expectedUsage := 1.00
 	if overLeg {
 		n = 700
-		expectedUsage = 7.00
+		expectedUsage = 8.00
 	}
 	for i := 0; i < n; i++ {
 		if _, err := p.client.Events().Ingest(ctx, types.IngestEventRequest{
-			EventName:          "e2eprobe_sum",
+			EventName:          CommitmentEventName,
 			ExternalCustomerID: ext,
 			Properties: map[string]string{
 				"amount":          "1",

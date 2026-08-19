@@ -104,9 +104,16 @@ func (Entitlement) Fields() []ent.Field {
 			Nillable(),
 
 		field.String("grant_duration_unit").
-			SchemaType(map[string]string{"postgres": "varchar(10)"}).
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			Optional().
 			GoType(types.EntitlementGrantDurationUnit("")),
+
+		field.String("grant_allocation_behavior").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Optional().
+			Default(string(types.EntitlementGrantAllocationBehaviorFirstUsage)).
+			GoType(types.EntitlementGrantAllocationBehavior("")).
+			Comment("How to anchor validFrom when opening a grant; meaningful for hour, day, and week duration units."),
 
 		field.Other("grant_quota", decimal.Decimal{}).
 			SchemaType(map[string]string{"postgres": "numeric(25,15)"}).

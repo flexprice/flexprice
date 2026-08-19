@@ -137,6 +137,12 @@ func (d *dryRunPlans) Get(ctx context.Context, id string) (*dtos.GetPlanResponse
 	return d.inner.Get(ctx, id)
 }
 
+// SyncPrices mutates existing subscriptions' line items — never run it in dry run.
+func (d *dryRunPlans) SyncPrices(ctx context.Context, planID string) (*dtos.SyncPlanPricesResponse, error) {
+	dryLog(ctx, d.lg, "Plans.SyncPrices", "plan_id", planID)
+	return &dtos.SyncPlanPricesResponse{}, nil
+}
+
 // ── Prices ────────────────────────────────────────────────────────────
 
 type dryRunPrices struct {

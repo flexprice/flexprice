@@ -60,16 +60,16 @@ func TestSeedEnsure(t *testing.T) {
 				// subs and wallets are empty — they'll be created
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     0,  // all 11 found via Query
+			wantFeaturesCreated:     0, // all seed features found via Query
 			wantCustomersCreated:    1,  // 10 pre-populated; alert canary still needs creating
 			wantPlansCreated:        0,  // plan found via Query
-			wantPricesCreated:       12, // base + 11 usage prices
+			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            11,
-			wantFeatureIDs:          11,
+			wantMeterIDs:            len(seedFeatureSpecs),
+			wantFeatureIDs:          len(seedFeatureSpecs),
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},
@@ -80,23 +80,23 @@ func TestSeedEnsure(t *testing.T) {
 				fc.customers.getErr = errNotFound
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     11,
+			wantFeaturesCreated:     len(seedFeatureSpecs),
 			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
-			wantPricesCreated:       12, // base + 11 usage
+			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            11,
-			wantFeatureIDs:          11,
+			wantMeterIDs:            len(seedFeatureSpecs),
+			wantFeatureIDs:          len(seedFeatureSpecs),
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},
 		{
 			name: "PartialExisting: features exist but plan/subs/wallets don't",
 			setup: func(fc *fakeClient) {
-				// Pre-populate 11 features.
+				// Pre-populate every seed feature.
 				for _, spec := range seedFeatureSpecs {
 					lk := spec.lookupKey
 					mID := "meter_" + spec.eventName
@@ -117,13 +117,13 @@ func TestSeedEnsure(t *testing.T) {
 			wantFeaturesCreated:     0,
 			wantCustomersCreated:    1,  // alert canary still needs creating
 			wantPlansCreated:        1,
-			wantPricesCreated:       12,
+			wantPricesCreated:       len(seedFeatureSpecs) + 1,
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            11,
-			wantFeatureIDs:          11,
+			wantMeterIDs:            len(seedFeatureSpecs),
+			wantFeatureIDs:          len(seedFeatureSpecs),
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},

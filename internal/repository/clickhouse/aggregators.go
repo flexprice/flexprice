@@ -133,10 +133,6 @@ func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustome
 	return externalCustomerFilter, customerFilter, args
 }
 
-func formatClickHouseDateTime(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05.000")
-}
-
 // normalizeCHTimezone returns a valid IANA timezone name for ClickHouse
 // toStartOf* functions, defaulting to UTC for empty, "UTC", or unresolvable
 // values. Passing an invalid name straight to ClickHouse would error the query,
@@ -291,18 +287,24 @@ func appendArgs(base []interface{}, groups ...[]interface{}) []interface{} {
 	return base
 }
 
+// parseTimeConditions binds start/end time.Time values directly to `?` placeholders.
+// The clickhouse-go driver's formatTime emits an explicit `'UTC'` third arg when the
+// value's location doesn't match the server's, so the timestamp is compared as a UTC
+// instant regardless of server timezone. Formatting to a string first and wrapping in
+// toDateTime64('...', 3) omits the timezone and lets the server reinterpret the value
+// in its local tz — the exact bug this replaces.
 func parseTimeConditions(params *events.UsageParams) ([]string, []interface{}) {
 	var conditions []string
 	var args []interface{}
 
 	if !params.StartTime.IsZero() {
-		conditions = append(conditions, "timestamp >= toDateTime64(?, 3)")
-		args = append(args, formatClickHouseDateTime(params.StartTime))
+		conditions = append(conditions, "timestamp >= ?")
+		args = append(args, params.StartTime.UTC())
 	}
 
 	if !params.EndTime.IsZero() {
-		conditions = append(conditions, "timestamp < toDateTime64(?, 3)")
-		args = append(args, formatClickHouseDateTime(params.EndTime))
+		conditions = append(conditions, "timestamp < ?")
+		args = append(args, params.EndTime.UTC())
 	}
 
 	return conditions, args
@@ -880,8 +882,8 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
 
 	query := fmt.Sprintf(`
         WITH
-            toDateTime64(?, 3) AS period_start,
-            toDateTime64(?, 3) AS period_end,
+            ? AS period_start,
+            ? AS period_end,
             dateDiff('second', period_start, period_end) AS total_seconds
         SELECT
             %s sum(
@@ -912,9 +914,11 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
 		groupByClause,
 	)
 
+	// Bind period_start/period_end as time.Time so the driver emits an explicit UTC
+	// timezone. See parseTimeConditions for the full rationale.
 	args := appendArgs([]interface{}{
-		formatClickHouseDateTime(params.StartTime),
-		formatClickHouseDateTime(params.EndTime),
+		params.StartTime.UTC(),
+		params.EndTime.UTC(),
 		params.PropertyName,
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),

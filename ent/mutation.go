@@ -23620,42 +23620,43 @@ func (m *CustomerMutation) ResetEdge(name string) error {
 // EntitlementMutation represents an operation that mutates the Entitlement nodes in the graph.
 type EntitlementMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *string
-	tenant_id               *string
-	status                  *string
-	created_at              *time.Time
-	updated_at              *time.Time
-	created_by              *string
-	updated_by              *string
-	environment_id          *string
-	entity_type             *types.EntitlementEntityType
-	entity_id               *string
-	feature_id              *string
-	feature_type            *types.FeatureType
-	is_enabled              *bool
-	usage_limit             *int64
-	addusage_limit          *int64
-	usage_reset_period      *types.EntitlementUsageResetPeriod
-	is_soft_limit           *bool
-	static_value            *string
-	display_order           *int
-	adddisplay_order        *int
-	parent_entitlement_id   *string
-	start_date              *time.Time
-	end_date                *time.Time
-	config_value            *map[string]interface{}
-	grant_measure           *types.EntitlementGrantMeasure
-	grant_duration_value    *int
-	addgrant_duration_value *int
-	grant_duration_unit     *types.EntitlementGrantDurationUnit
-	grant_quota             *decimal.Decimal
-	aggregation_mode        *types.EntitlementAggregationMode
-	clearedFields           map[string]struct{}
-	done                    bool
-	oldValue                func(context.Context) (*Entitlement, error)
-	predicates              []predicate.Entitlement
+	op                        Op
+	typ                       string
+	id                        *string
+	tenant_id                 *string
+	status                    *string
+	created_at                *time.Time
+	updated_at                *time.Time
+	created_by                *string
+	updated_by                *string
+	environment_id            *string
+	entity_type               *types.EntitlementEntityType
+	entity_id                 *string
+	feature_id                *string
+	feature_type              *types.FeatureType
+	is_enabled                *bool
+	usage_limit               *int64
+	addusage_limit            *int64
+	usage_reset_period        *types.EntitlementUsageResetPeriod
+	is_soft_limit             *bool
+	static_value              *string
+	display_order             *int
+	adddisplay_order          *int
+	parent_entitlement_id     *string
+	start_date                *time.Time
+	end_date                  *time.Time
+	config_value              *map[string]interface{}
+	grant_measure             *types.EntitlementGrantMeasure
+	grant_duration_value      *int
+	addgrant_duration_value   *int
+	grant_duration_unit       *types.EntitlementGrantDurationUnit
+	grant_allocation_behavior *types.EntitlementGrantAllocationBehavior
+	grant_quota               *decimal.Decimal
+	aggregation_mode          *types.EntitlementAggregationMode
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*Entitlement, error)
+	predicates                []predicate.Entitlement
 }
 
 var _ ent.Mutation = (*EntitlementMutation)(nil)
@@ -24883,6 +24884,55 @@ func (m *EntitlementMutation) ResetGrantDurationUnit() {
 	delete(m.clearedFields, entitlement.FieldGrantDurationUnit)
 }
 
+// SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) {
+	m.grant_allocation_behavior = &tgab
+}
+
+// GrantAllocationBehavior returns the value of the "grant_allocation_behavior" field in the mutation.
+func (m *EntitlementMutation) GrantAllocationBehavior() (r types.EntitlementGrantAllocationBehavior, exists bool) {
+	v := m.grant_allocation_behavior
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantAllocationBehavior returns the old "grant_allocation_behavior" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantAllocationBehavior(ctx context.Context) (v types.EntitlementGrantAllocationBehavior, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantAllocationBehavior is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantAllocationBehavior requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantAllocationBehavior: %w", err)
+	}
+	return oldValue.GrantAllocationBehavior, nil
+}
+
+// ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) ClearGrantAllocationBehavior() {
+	m.grant_allocation_behavior = nil
+	m.clearedFields[entitlement.FieldGrantAllocationBehavior] = struct{}{}
+}
+
+// GrantAllocationBehaviorCleared returns if the "grant_allocation_behavior" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantAllocationBehaviorCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantAllocationBehavior]
+	return ok
+}
+
+// ResetGrantAllocationBehavior resets all changes to the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) ResetGrantAllocationBehavior() {
+	m.grant_allocation_behavior = nil
+	delete(m.clearedFields, entitlement.FieldGrantAllocationBehavior)
+}
+
 // SetGrantQuota sets the "grant_quota" field.
 func (m *EntitlementMutation) SetGrantQuota(d decimal.Decimal) {
 	m.grant_quota = &d
@@ -25002,7 +25052,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -25075,6 +25125,9 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.grant_duration_unit != nil {
 		fields = append(fields, entitlement.FieldGrantDurationUnit)
 	}
+	if m.grant_allocation_behavior != nil {
+		fields = append(fields, entitlement.FieldGrantAllocationBehavior)
+	}
 	if m.grant_quota != nil {
 		fields = append(fields, entitlement.FieldGrantQuota)
 	}
@@ -25137,6 +25190,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.GrantDurationValue()
 	case entitlement.FieldGrantDurationUnit:
 		return m.GrantDurationUnit()
+	case entitlement.FieldGrantAllocationBehavior:
+		return m.GrantAllocationBehavior()
 	case entitlement.FieldGrantQuota:
 		return m.GrantQuota()
 	case entitlement.FieldAggregationMode:
@@ -25198,6 +25253,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldGrantDurationValue(ctx)
 	case entitlement.FieldGrantDurationUnit:
 		return m.OldGrantDurationUnit(ctx)
+	case entitlement.FieldGrantAllocationBehavior:
+		return m.OldGrantAllocationBehavior(ctx)
 	case entitlement.FieldGrantQuota:
 		return m.OldGrantQuota(ctx)
 	case entitlement.FieldAggregationMode:
@@ -25379,6 +25436,13 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGrantDurationUnit(v)
 		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		v, ok := value.(types.EntitlementGrantAllocationBehavior)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantAllocationBehavior(v)
+		return nil
 	case entitlement.FieldGrantQuota:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
@@ -25507,6 +25571,9 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldGrantDurationUnit) {
 		fields = append(fields, entitlement.FieldGrantDurationUnit)
 	}
+	if m.FieldCleared(entitlement.FieldGrantAllocationBehavior) {
+		fields = append(fields, entitlement.FieldGrantAllocationBehavior)
+	}
 	if m.FieldCleared(entitlement.FieldGrantQuota) {
 		fields = append(fields, entitlement.FieldGrantQuota)
 	}
@@ -25568,6 +25635,9 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldGrantDurationUnit:
 		m.ClearGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		m.ClearGrantAllocationBehavior()
 		return nil
 	case entitlement.FieldGrantQuota:
 		m.ClearGrantQuota()
@@ -25651,6 +25721,9 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldGrantDurationUnit:
 		m.ResetGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		m.ResetGrantAllocationBehavior()
 		return nil
 	case entitlement.FieldGrantQuota:
 		m.ResetGrantQuota()

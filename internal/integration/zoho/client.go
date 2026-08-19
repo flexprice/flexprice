@@ -23,6 +23,7 @@ type ZohoClient interface {
 	HasZohoBooksConnection(ctx context.Context) bool
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
+	UpdateContact(ctx context.Context, contactID string, req *ContactUpdateRequest) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
 	// GetInvoice fetches a Zoho Books invoice by ID (used to read the live balance/customer_id before mark-paid).
 	GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error)
@@ -115,6 +116,17 @@ func (c *Client) CreateContact(ctx context.Context, req *ContactCreateRequest) (
 		Contact ContactResponse `json:"contact"`
 	}
 	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/contacts", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Contact, nil
+}
+
+func (c *Client) UpdateContact(ctx context.Context, contactID string, req *ContactUpdateRequest) (*ContactResponse, error) {
+	var resp struct {
+		Contact ContactResponse `json:"contact"`
+	}
+	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Contact, nil

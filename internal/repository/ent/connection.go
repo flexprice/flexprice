@@ -157,31 +157,23 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	r.log.Debug(ctx, "getting connection by provider",
 		"provider_type", provider)
 
-	// Create a filter to get connections by provider (tenant/environment inferred from ctx)
-	filter := &types.ConnectionFilter{
-		ProviderType: provider,
-	}
-
-	// Use the List function internally
-	connections, err := r.List(ctx, filter)
+	connections, err := r.ListAllPublished(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, err
 	}
 
-	if len(connections) == 0 {
-		SetSpanError(span, ierr.ErrNotFound)
-		return nil, ierr.NewError("connection not found").
-			WithHintf("Connection with provider %s was not found in this environment", provider).
-			Mark(ierr.ErrNotFound)
+	for _, c := range connections {
+		if c.ProviderType == provider {
+			SetSpanSuccess(span)
+			return c, nil
+		}
 	}
 
-	SetSpanSuccess(span)
-
-	// Cache the result
-	r.SetCache(ctx, connections[0])
-
-	return connections[0], nil
+	SetSpanError(span, ierr.ErrNotFound)
+	return nil, ierr.NewError("connection not found").
+		WithHintf("Connection with provider %s was not found in this environment", provider).
+		Mark(ierr.ErrNotFound)
 }
 
 // ListPublishedByProvider returns every published connection for a provider across all tenants and

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -138,6 +139,15 @@ func (s *SeedEnsure) Run(ctx context.Context) error {
 	if err := s.ensureSubscriptions(ctx, &seeds); err != nil {
 		return err
 	}
+	// Non-fatal: repairs line-item drift on pre-existing subs. A failure here
+	// degrades bucketed-meter coverage, it doesn't invalidate the seed set.
+	if err := s.ensureSubscriptionPriceSync(ctx, &seeds); err != nil {
+		if s.logger != nil {
+			s.logger.Info(ctx, "seed-ensure: subscription price sync failed; continuing",
+				"error", err.Error(),
+			)
+		}
+	}
 	if err := s.ensurePersistentTaxAssociation(ctx, &seeds); err != nil {
 		return err
 	}
@@ -163,6 +173,11 @@ type featureSpec struct {
 	expression  *string
 	filters     []types.MeterFilter
 	aggLabel    string
+	// noEntitlement keeps ensurePlanEntitlements from provisioning the
+	// standard 100-unit monthly entitlement on this feature. Probes that
+	// assert exact billed amounts need a meter whose usage is never
+	// partially absorbed by an entitlement allowance.
+	noEntitlement bool
 }
 
 var seedFeatureSpecs = func() []featureSpec {
@@ -226,6 +241,14 @@ var seedFeatureSpecs = func() []featureSpec {
 			lookupKey: "e2eprobe_max_day_feature", eventName: "e2eprobe_max_day",
 			displayName: "E2EProbe Max Day", aggType: types.AggregationTypeMax,
 			field: strPtr("amount"), bucketSize: bucketSizePtr(types.WindowSizeDay), aggLabel: "max_day",
+		},
+		{
+			// Reserved for CommitmentTrueUpProbe: entitlement-free so the
+			// billed amount equals units x price with nothing absorbed by an
+			// allowance. See CommitmentEventName.
+			lookupKey: "e2eprobe_sum_commit_feature", eventName: CommitmentEventName,
+			displayName: "E2EProbe Sum (commitment)", aggType: types.AggregationTypeSum,
+			field: strPtr("amount"), aggLabel: "sum_commit", noEntitlement: true,
 		},
 	}
 }()
@@ -478,6 +501,22 @@ var bucketedFeatureLookupKeys = func() map[string]bool {
 	return m
 }()
 
+// entitlementExemptLookupKeys is every feature ensurePlanEntitlements must
+// leave alone: bucketed meters (server rejects entitlements on them) plus
+// specs that opted out via noEntitlement.
+var entitlementExemptLookupKeys = func() map[string]bool {
+	m := map[string]bool{}
+	for k := range bucketedFeatureLookupKeys {
+		m[k] = true
+	}
+	for _, spec := range seedFeatureSpecs {
+		if spec.noEntitlement {
+			m[spec.lookupKey] = true
+		}
+	}
+	return m
+}()
+
 // grantOnlyFeatures is the set of feature lookup keys reserved for
 // grant entitlements. ensurePlanEntitlements skips these; the grant
 // entitlement is created by ensureEntitlementGrants instead. The DB
@@ -518,7 +557,7 @@ func (s *SeedEnsure) ensurePlanEntitlements(ctx context.Context, out *e2eprobe.S
 	// slot, and adding a soft-limit here would DB-conflict.
 	lookupKeys := make([]string, 0, len(seedFeatureSpecs))
 	for _, spec := range seedFeatureSpecs {
-		if bucketedFeatureLookupKeys[spec.lookupKey] {
+		if entitlementExemptLookupKeys[spec.lookupKey] {
 			continue
 		}
 		if grantOnlyFeatures[spec.lookupKey] {
@@ -872,11 +911,15 @@ func (s *SeedEnsure) ensureEntitlementGrants(ctx context.Context, out *e2eprobe.
 	}
 
 	// Create the additive grant entitlement.
+	// Server enum is uppercase ("PLAN"/"SUBSCRIPTION"/"ADDON"); passing
+	// lowercase fails validation with "Only PLAN, ADDON, and SUBSCRIPTION
+	// entity types are supported" (see internal/types/entitlement.go:51 and
+	// internal/ee/service/entitlement.go:107). Use the SDK constant to avoid drift.
 	createReq := e2eprobe.GrantEntitlementInput{
 		FeatureID:          featID,
 		FeatureType:        "metered",
 		PlanID:             planID,
-		EntityType:         "plan",
+		EntityType:         string(types.EntitlementEntityTypePlan),
 		EntityID:           planID,
 		IsEnabled:          true,
 		GrantMeasure:       "quantity",
@@ -1056,6 +1099,126 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 // Unlike coupons (attached at sub-create via SubscriptionCoupons), tax
 // associations are a separate API call, so this covers both freshly-
 // created and pre-existing seed subs.
+
+// ensureSubscriptionPriceSync repairs persistent subscriptions whose line
+// items predate a plan price.
+//
+// Subscription line items snapshot the plan at create time. Every usage read
+// path filters by the meters on a customer's ACTIVE subscription line items
+// (meterUsageService.activeSubscriptionMeterIDs), so a meter seeded after the
+// persistent subs were created returns zero usage forever — even though its
+// events ingest and aggregate fine. That is what silently broke
+// meter-aggregation-probe and bucketed-meter-probe's analytics assertion for
+// the three bucketed meters added on 2026-08-12.
+//
+// The repair is idempotent and only fires on drift: compare the meters the
+// plan prices against the meters each persistent sub carries, and trigger the
+// plan price sync when any are missing. The sync runs as a background
+// workflow server-side; line items appear shortly after.
+func (s *SeedEnsure) ensureSubscriptionPriceSync(ctx context.Context, seeds *e2eprobe.Seeds) error {
+	if len(seeds.PlanIDs) == 0 || len(seeds.PersistentSubIDs) == 0 {
+		return nil
+	}
+	planID := seeds.PlanIDs[0]
+
+	planEntityType := types.PriceEntityTypePlan
+	priceResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
+		PlanIds:    []string{planID},
+		EntityType: &planEntityType,
+	})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
+	}
+	pricedMeters := map[string]bool{}
+	if priceResp.ListPricesResponse != nil {
+		for _, pr := range priceResp.ListPricesResponse.Items {
+			if pr.MeterID != nil && *pr.MeterID != "" {
+				pricedMeters[*pr.MeterID] = true
+			}
+		}
+	}
+	if len(pricedMeters) == 0 {
+		return nil
+	}
+
+	missing := map[string]bool{}
+	for _, subID := range seeds.PersistentSubIDs {
+		subResp, err := s.client.Subscriptions().Get(ctx, subID)
+		if err != nil {
+			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "subscription_id": subID}, "get sub %s: %w", subID, err)
+		}
+		if subResp.SubscriptionResponse == nil {
+			continue
+		}
+		have := map[string]bool{}
+		for _, li := range subResp.SubscriptionResponse.LineItems {
+			if li.MeterID != nil && *li.MeterID != "" {
+				have[*li.MeterID] = true
+			}
+		}
+		for meterID := range pricedMeters {
+			if !have[meterID] {
+				missing[meterID] = true
+			}
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	if _, err := s.client.Plans().SyncPrices(ctx, planID); err != nil {
+		// A sync already running for this plan answers 409 already_exists.
+		// That's the outcome we want, not a failure — the in-flight run
+		// covers the same drift.
+		if isSyncInProgress(err) {
+			if s.logger != nil {
+				s.logger.Info(ctx, "seed-ensure: plan price sync already in progress; skipping",
+					"plan_id", planID,
+					"missing_meter_ids", strings.Join(sortedKeys(missing), ","),
+				)
+			}
+			return nil
+		}
+		return e2eprobe.Errorf(map[string]string{"plan_id": planID, "missing_meter_ids": strings.Join(sortedKeys(missing), ",")}, "sync plan prices onto subscriptions: %w", err)
+	}
+	if s.logger != nil {
+		s.logger.Info(ctx, "seed-ensure: synced plan prices onto persistent subscriptions",
+			"plan_id", planID,
+			"missing_meter_ids", strings.Join(sortedKeys(missing), ","),
+			"subscription_count", len(seeds.PersistentSubIDs),
+		)
+	}
+	return nil
+}
+
+// isSyncInProgress reports whether the error is the plan price sync's
+// "a sync is already running for this plan" conflict.
+//
+// A bare 409 is deliberately not enough: an unrelated conflict would then be
+// swallowed as "someone else is syncing" and never reach the caller's error
+// path. Match the sync's own already_exists code instead.
+func isSyncInProgress(err error) bool {
+	if err == nil {
+		return false
+	}
+	var errResp *sdkerrors.ErrorResponse
+	if errors.As(err, &errResp) && errResp.Code != nil && *errResp.Code == types.ErrorCodeAlreadyExists {
+		return true
+	}
+	return strings.Contains(err.Error(), string(types.ErrorCodeAlreadyExists))
+}
+
+// sortedKeys returns the map keys in stable order so log lines and error
+// attributes don't churn between runs.
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2eprobe.Seeds) error {
 	if out.SharedTaxRateCode == "" {
 		return nil // tax rate seed didn't run — soft skip

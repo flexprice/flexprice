@@ -10,12 +10,27 @@ import (
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
+	"github.com/samber/lo"
 )
 
 type SettingsService interface {
 	// GetSettingByKey returns a setting as a DTO response (for API endpoints)
 	// Use this when you need the full Setting object with metadata (ID, timestamps, etc.)
+	//
+	// Access-checked: keys governing authentication are refused to callers who
+	// may not administer them. Server-side code acting with no user in context
+	// must use GetSettingByKeyUnchecked instead.
 	GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
+
+	// GetSettingByKeyUnchecked returns a setting without the caller checks that
+	// GetSettingByKey applies.
+	//
+	// It exists for work the server does on its own behalf, where there is no
+	// user to check: the SAML endpoints run before a session exists and must
+	// read the tenant's identity provider configuration to serve a login at all.
+	// Never call it while handling a request on behalf of a caller — that is
+	// what GetSettingByKey is for.
+	GetSettingByKeyUnchecked(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 
 	// UpdateSettingByKey updates a setting with partial values (merges with existing)
 	// Use this for API endpoints that accept partial updates
@@ -38,7 +53,103 @@ func NewSettingsService(params ServiceParams) SettingsService {
 // isTenantLevelSetting checks if a setting is tenant-level (no environment_id)
 // Tenant-level settings apply across all environments for a tenant
 func isTenantLevelSetting(key types.SettingKey) bool {
-	return key == types.SettingKeyTenantConfig
+	// SAML is tenant-level because an identity provider is per-organisation, and
+	// because the pre-login endpoints run with no environment in context.
+	return key == types.SettingKeyTenantConfig ||
+		key == types.SettingKeySAMLConfig
+}
+
+// requireSAMLEnabled refuses a saml_config request on a deployment that does not
+// offer SAML.
+//
+// Writes are already restricted to super admins by the router. What the router
+// cannot know is whether the feature exists at all: with auth.saml.enabled
+// false no SAML routes are served, and a stored configuration could only sit
+// there looking as though SSO were set up.
+func (s *settingsService) requireSAMLEnabled(key types.SettingKey) error {
+	if key != types.SettingKeySAMLConfig {
+		return nil
+	}
+
+	if s.Config == nil || !s.Config.Auth.SAML.Enabled {
+		return ierr.NewError("saml is not enabled for this deployment").
+			WithHint("SAML single sign-on is not available on this deployment").
+			Mark(ierr.ErrNotFound)
+	}
+	return nil
+}
+
+// requireSuperAdminToReadSAMLConfig keeps the identity provider configuration
+// away from callers who may not administer it.
+//
+// Settings reads carry the ordinary setting:read permission, which most keys
+// should: an invoice prefix is configuration the dashboard shows to any member.
+// This one is different. It names the identity provider the tenant trusts and
+// whether Flexprice has approved it, which is a map of what to attack, and the
+// fields most likely to be added next — an SP private key, a directory-sync
+// token — would be secret outright. Someone who may not change how people log
+// in has no reason to read it either.
+//
+// Checked here rather than on the route because the route is shared by every
+// key, and gating all of them on super_admin would take reads away from the
+// settings the dashboard legitimately shows to everyone.
+func requireSuperAdminToReadSAMLConfig(ctx context.Context, key types.SettingKey) error {
+	if key != types.SettingKeySAMLConfig {
+		return nil
+	}
+
+	if types.IsServiceAccount(ctx) || !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
+		return ierr.NewError("saml configuration requires a super admin user").
+			WithHint("This action requires a user account with Super Admin access").
+			Mark(ierr.ErrPermissionDenied)
+	}
+	return nil
+}
+
+// apiImmutableSettingFields lists the fields of a setting that the settings API
+// may never write, whatever the caller's role.
+//
+// The settings API is generic: it merges whatever keys a request carries into
+// the stored value. That is fine for configuration a tenant owns, but not for a
+// field that records a Flexprice-side decision about that tenant — the tenant
+// would be able to grant it to itself in the same request that sets everything
+// else.
+//
+// Fields listed here are carried over from the stored value on update and are
+// changed out of band, directly in the database.
+func apiImmutableSettingFields(key types.SettingKey) []string {
+	if key == types.SettingKeySAMLConfig {
+		// "active" is Flexprice's approval that this tenant may serve SSO at
+		// all, granted after its claim to the identity provider is checked.
+		// A tenant that could set it would be approving itself.
+		return []string{"active"}
+	}
+	return nil
+}
+
+// mergePreservingImmutableFields applies a partial update over the stored value
+// while holding the key's API-immutable fields at what is already stored.
+//
+// A request naming a protected field is ignored rather than rejected: the field
+// is not part of the API's contract, so a caller is not expected to know it
+// exists — a configuration blob round-tripped through GET and back through PUT
+// would otherwise fail on a field the caller never meant to set.
+func mergePreservingImmutableFields(key types.SettingKey, stored, update map[string]interface{}) map[string]interface{} {
+	protected := map[string]interface{}{}
+	for _, field := range apiImmutableSettingFields(key) {
+		if v, ok := stored[field]; ok {
+			protected[field] = v
+		}
+	}
+
+	for k, v := range update {
+		stored[k] = v
+	}
+
+	for field, v := range protected {
+		stored[field] = v
+	}
+	return stored
 }
 
 // fetchSetting fetches a setting from the repository
@@ -212,6 +323,18 @@ func UpdateSetting[T types.SettingConfig](s *settingsService, ctx context.Contex
 //   - Don't use if you need to work with the typed config directly
 //   - Don't call repository methods directly - always use service methods
 func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
+	if err := s.requireSAMLEnabled(key); err != nil {
+		return nil, err
+	}
+	if err := requireSuperAdminToReadSAMLConfig(ctx, key); err != nil {
+		return nil, err
+	}
+	return s.GetSettingByKeyUnchecked(ctx, key)
+}
+
+// GetSettingByKeyUnchecked is the read itself, with no caller checks. See the
+// interface for when it is legitimate to call.
+func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
 	switch key {
 	case types.SettingKeyInvoiceConfig:
 		return getSettingByKey[types.InvoiceConfig](s, ctx, key)
@@ -239,6 +362,8 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
+	case types.SettingKeySAMLConfig:
+		return getSettingByKey[types.SAMLConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -258,6 +383,10 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 //   - Don't use in business logic if you want to replace the entire setting
 //   - Don't call repository methods directly - always use service methods
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
+	if err := s.requireSAMLEnabled(key); err != nil {
+		return nil, err
+	}
+
 	if err := req.Validate(key); err != nil {
 		return nil, err
 	}
@@ -289,6 +418,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
+	case types.SettingKeySAMLConfig:
+		return updateSettingByKey[types.SAMLConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -305,6 +436,10 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 // WHEN NOT TO USE:
 //   - Don't call repository methods directly - always use service methods
 func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
+	if err := s.requireSAMLEnabled(key); err != nil {
+		return err
+	}
+
 	// Check if setting exists
 	_, err := s.fetchSetting(ctx, key)
 	if ent.IsNotFound(err) {
@@ -373,9 +508,7 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	}
 
 	// Merge request values with current values
-	for k, v := range req.Value {
-		currentMap[k] = v
-	}
+	currentMap = mergePreservingImmutableFields(key, currentMap, req.Value)
 
 	// Convert merged map back to typed struct for validation
 	merged, err := utils.ToStruct[T](currentMap)

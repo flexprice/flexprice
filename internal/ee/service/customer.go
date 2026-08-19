@@ -281,8 +281,31 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
+	s.syncCustomerUpdateToZoho(ctx, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+func (s *customerService) syncCustomerUpdateToZoho(ctx context.Context, cust *customer.Customer) {
+	if s.IntegrationFactory == nil || s.ConnectionRepo == nil {
+		return
+	}
+
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
+	if err != nil || conn == nil {
+		return
+	}
+
+	integ, err := s.IntegrationFactory.GetZohoBooksIntegration(ctx)
+	if err != nil || integ == nil || integ.CustomerSvc == nil {
+		return
+	}
+
+	if err := integ.CustomerSvc.SyncCustomerUpdate(ctx, cust); err != nil {
+		s.Logger.Error(ctx, "failed to sync customer update to Zoho Books",
+			"customer_id", cust.ID,
+			"error", err)
+	}
 }
 
 func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {

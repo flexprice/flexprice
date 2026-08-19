@@ -2231,6 +2231,12 @@ func (s *meterUsageService) ConvertToBillingCharges(
 // rows belong to a subscription. For Parent subscriptions the inherited-child
 // customers are folded in only when includeChildren is true; otherwise the
 // query stays scoped to the owning customer.
+//
+// It never returns an empty slice: callers feed the result straight into
+// MeterUsageQueryParams.ExternalCustomerIDs, and BuildWhereClause drops the
+// external_customer_id predicate when that slice is empty. An empty return
+// would therefore widen every downstream meter_usage query to the entire
+// tenant instead of narrowing it. Unresolvable customers are an error.
 func (s *meterUsageService) resolveExternalCustomerIDs(ctx context.Context, sub *subscription.Subscription, includeChildren bool) ([]string, error) {
 	internalIDs := []string{sub.CustomerID}
 	if includeChildren && sub.SubscriptionType == types.SubscriptionTypeParent {
@@ -2265,7 +2271,25 @@ func (s *meterUsageService) resolveExternalCustomerIDs(ctx context.Context, sub 
 			externalIDs = append(externalIDs, cust.ExternalID)
 		}
 	}
-	return lo.Uniq(externalIDs), nil
+	externalIDs = lo.Uniq(externalIDs)
+
+	// Fail closed rather than silently querying the whole tenant. CustomerRepo.List
+	// matches published customers only — CustomerQueryOptions.ApplyStatusFilter turns
+	// an unset status into status = 'published' — so a customer soft-deleted while its
+	// subscription stayed active resolves to zero rows and lands here.
+	if len(externalIDs) == 0 {
+		return nil, ierr.NewError("no resolvable customer for subscription").
+			WithHint("The subscription's customer could not be resolved. It may have been deleted while the subscription remained active.").
+			WithReportableDetails(map[string]any{
+				"subscription_id":        sub.ID,
+				"customer_id":            sub.CustomerID,
+				"looked_up_customer_ids": internalIDs,
+				"include_children":       includeChildren,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return externalIDs, nil
 }
 
 // listLineItemsForUsageWindow retrieves line items active within the usage window.

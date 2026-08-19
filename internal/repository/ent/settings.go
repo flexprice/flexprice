@@ -270,39 +270,59 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingK
 		return err
 	}
 
-	client := r.client.Writer(ctx)
-
 	r.log.Debug(ctx, "deleting setting by key", "key", string(key))
 
-	_, err = client.Settings.Update().
-		Where(
-			settings.Key(string(key)),
-			settings.TenantID(types.GetTenantID(ctx)),
-			settings.EnvironmentID(types.GetEnvironmentID(ctx)),
-			settings.Status(string(types.StatusPublished)),
-		).
-		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+	if err := r.archiveSetting(ctx, key, types.GetEnvironmentID(ctx), "Failed to delete setting by key"); err != nil {
+		return err
+	}
 
-	if err != nil {
-		if ent.IsNotFound(err) {
+	// Delete from cache
+	r.DeleteCache(ctx, setting)
+	return nil
+}
+
+// archiveSetting retires the published row for a key.
+//
+// Deletion history is kept: uniqueness applies only to published rows, so
+// archived rows accumulate and a key can be deleted, recreated and deleted
+// again without colliding with its own tombstone.
+func (r *settingsRepository) archiveSetting(ctx context.Context, key types.SettingKey, environmentID, failureHint string) error {
+	return r.client.WithTx(ctx, func(ctx context.Context) error {
+		client := r.client.Writer(ctx)
+
+		archived, err := client.Settings.Update().
+			Where(
+				settings.Key(string(key)),
+				settings.TenantID(types.GetTenantID(ctx)),
+				settings.EnvironmentID(environmentID),
+				settings.Status(string(types.StatusPublished)),
+			).
+			SetStatus(string(types.StatusArchived)).
+			SetUpdatedAt(time.Now().UTC()).
+			SetUpdatedBy(types.GetUserID(ctx)).
+			Save(ctx)
+
+		if err != nil {
 			return ierr.WithError(err).
+				WithHint(failureHint).
+				Mark(ierr.ErrDatabase)
+		}
+
+		// A bulk update matching nothing returns (0, nil) rather than a
+		// not-found error, so the count is the only way to notice. The caller
+		// checks the setting exists before getting here, but that check and this
+		// update are separate statements, and a concurrent delete between them
+		// would otherwise archive nothing and report success.
+		if archived == 0 {
+			return ierr.NewErrorf("setting with key %s was not found", string(key)).
 				WithHintf("Setting with key %s was not found", string(key)).
 				WithReportableDetails(map[string]any{
 					"key": string(key),
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		return ierr.WithError(err).
-			WithHint("Failed to delete setting by key").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Delete from cache
-	r.DeleteCache(ctx, setting)
-	return nil
+		return nil
+	})
 }
 
 func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) error {
@@ -312,34 +332,11 @@ func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, 
 		return err
 	}
 
-	client := r.client.Writer(ctx)
-
 	r.log.Debug(ctx, "deleting tenant-level setting by key", "key", string(key))
 
-	_, err = client.Settings.Update().
-		Where(
-			settings.Key(string(key)),
-			settings.TenantID(types.GetTenantID(ctx)),
-			settings.EnvironmentID(""),
-			settings.Status(string(types.StatusPublished)),
-		).
-		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHintf("Tenant-level setting with key %s was not found", string(key)).
-				WithReportableDetails(map[string]any{
-					"key": string(key),
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to delete tenant-level setting by key").
-			Mark(ierr.ErrDatabase)
+	// Tenant-level rows carry an empty environment_id.
+	if err := r.archiveSetting(ctx, key, "", "Failed to delete tenant-level setting by key"); err != nil {
+		return err
 	}
 
 	// Delete from cache

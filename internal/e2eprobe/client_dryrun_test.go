@@ -55,6 +55,10 @@ func (f *fakePlanOps) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, e
 	return &dtos.GetPlanResponse{}, nil
 }
 
+func (f *fakePlanOps) SyncPrices(_ context.Context, _ string) (*dtos.SyncPlanPricesResponse, error) {
+	return nil, nil
+}
+
 type fakeFeatureOps struct{ createCalled int32 }
 
 func (f *fakeFeatureOps) Create(_ context.Context, _ types.CreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {

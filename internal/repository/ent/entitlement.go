@@ -88,6 +88,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetGrantMeasure(e.GrantMeasure).
 		SetNillableGrantDurationValue(e.GrantDurationValue).
 		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetGrantAllocationBehavior(e.GrantAllocationBehavior).
 		SetNillableGrantQuota(e.GrantQuota).
 		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	if e.ConfigValue != nil {
@@ -321,6 +322,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetGrantMeasure(e.GrantMeasure).
 		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetGrantAllocationBehavior(e.GrantAllocationBehavior).
 		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	// SetNillable* with nil is a no-op, so clearing a grant config needs explicit Clear.
 	if e.GrantDurationValue != nil {
@@ -454,6 +456,7 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetGrantMeasure(e.GrantMeasure).
 			SetNillableGrantDurationValue(e.GrantDurationValue).
 			SetGrantDurationUnit(e.GrantDurationUnit).
+			SetGrantAllocationBehavior(e.GrantAllocationBehavior).
 			SetNillableGrantQuota(e.GrantQuota).
 			SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 		if e.ConfigValue != nil {

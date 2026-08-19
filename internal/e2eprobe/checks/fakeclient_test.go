@@ -135,9 +135,10 @@ func (f *fakeCustomers) Query(_ context.Context, _ types.CustomerFilter) (*dtos.
 // --- Plans ---
 
 type fakePlans struct {
-	mu      sync.Mutex
-	created []types.CreatePlanRequest
-	plans   []types.PlanResponse
+	mu            sync.Mutex
+	created       []types.CreatePlanRequest
+	plans         []types.PlanResponse
+	syncedPlanIDs []string
 }
 
 func (f *fakePlans) Create(_ context.Context, req types.CreatePlanRequest) (*dtos.CreatePlanResponse, error) {
@@ -168,6 +169,13 @@ func (f *fakePlans) Query(_ context.Context, filter types.PlanFilter) (*dtos.Que
 }
 func (f *fakePlans) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, error) {
 	return &dtos.GetPlanResponse{}, nil
+}
+
+func (f *fakePlans) SyncPrices(_ context.Context, planID string) (*dtos.SyncPlanPricesResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.syncedPlanIDs = append(f.syncedPlanIDs, planID)
+	return &dtos.SyncPlanPricesResponse{}, nil
 }
 
 // --- Prices ---
@@ -247,6 +255,10 @@ type fakeSubscriptions struct {
 	cancelErr           error
 	getEntitlementsResp *dtos.GetSubscriptionEntitlementsResponse
 	getEntitlementsErr  error
+	// queryReturnsAll makes Query ignore the filter and return every stored
+	// sub, for tests that look subs up by external customer id (which this
+	// fake does not index).
+	queryReturnsAll bool
 }
 
 func (f *fakeSubscriptions) Create(_ context.Context, req types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
@@ -295,7 +307,7 @@ func (f *fakeSubscriptions) Query(_ context.Context, filter types.SubscriptionFi
 	defer f.mu.Unlock()
 	var matched []types.SubscriptionResponse
 	for _, sub := range f.subs {
-		if filter.ExternalCustomerID != nil || filter.PlanID != nil {
+		if !f.queryReturnsAll && (filter.ExternalCustomerID != nil || filter.PlanID != nil) {
 			// Only return if it matches all provided filters; since fakeSubscriptions
 			// stores by ID and doesn't track ExternalCustomerID/PlanID, return empty
 			// unless the caller pre-populated desired subs via direct map manipulation.

@@ -109,6 +109,10 @@ func (fakeSyncCustomerSvc) GetOrCreateZohoCustomer(_ context.Context, _ *custome
 	return "zoho_cust_1", nil
 }
 
+func (fakeSyncCustomerSvc) SyncCustomerUpdate(_ context.Context, _ *customer.Customer) error {
+	return nil
+}
+
 type fakeSyncItemSyncSvc struct{}
 
 func (fakeSyncItemSyncSvc) EnsureItemsMapped(_ context.Context, inputs []ItemSyncInput, _ *ItemTaxResolution) (map[string]string, error) {

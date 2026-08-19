@@ -128,7 +128,7 @@ type CustomerResponse struct {
 
 func EmptyCustomerResponse() *CustomerResponse {
 	return &CustomerResponse{
-		Customer: &customer.Customer{},
+		Customer:     &customer.Customer{},
 		Integrations: []*EntityIntegrationMappingResponse{},
 	}
 }
@@ -173,6 +173,10 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
+	if err := types.ValidateTaxMetadata(r.Metadata); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -212,6 +216,10 @@ func (r *UpdateCustomerRequest) Validate() error {
 				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	if err := types.ValidateTaxMetadata(r.Metadata); err != nil {
+		return err
 	}
 
 	return nil

@@ -32,6 +32,7 @@ const (
 	SettingKeyBonusCreditsTopupConfig     SettingKey = "bonus_credits_topup_config"
 	SettingKeyPaymentMandateLimits        SettingKey = "payment_mandate_limits"
 	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
+	SettingKeySAMLConfig                  SettingKey = "saml_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -50,6 +51,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyBonusCreditsTopupConfig,
 		SettingKeyPaymentMandateLimits,
 		SettingKeyDraftInvoiceRecomputeConfig,
+		SettingKeySAMLConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -754,6 +756,20 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultPaymentMandateLimitsMap,
 			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
 		},
+		SettingKeySAMLConfig: {
+			Key: SettingKeySAMLConfig,
+			DefaultValue: map[string]interface{}{
+				"enabled":         false,
+				"active":          false,
+				"enforce_sso":     false,
+				"idp_entity_id":   "",
+				"idp_sso_url":     "",
+				"idp_certificate": "",
+				"email_attribute": "",
+				"default_role":    string(RoleAllReader),
+			},
+			Description: "SAML 2.0 identity provider configuration for dashboard single sign-on",
+		},
 		SettingKeyDraftInvoiceRecomputeConfig: {
 			Key:          SettingKeyDraftInvoiceRecomputeConfig,
 			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
@@ -886,6 +902,12 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
+	case SettingKeySAMLConfig:
+		// Validated against the raw value rather than the decoded struct: the
+		// rules that matter (certificate parses, identity provider is https,
+		// role is one a user may actually hold) live in the SAML package.
+		return validateSAMLConfig(value)
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -949,3 +971,79 @@ func ValidateTimezone(timezone string) error {
 	_, err := time.LoadLocation(resolvedTimezone)
 	return err
 }
+
+// SAMLConfig is a tenant's SAML identity provider configuration.
+//
+// Stored as a tenant-level setting rather than its own table: an identity
+// provider is per-organisation, and tenant-level settings are readable without
+// an environment in context, which the pre-login SSO endpoints require.
+//
+// Only the identity provider's public signing certificate is held here, so
+// plain JSONB storage is appropriate.
+type SAMLConfig struct {
+	// Enabled is the tenant's own switch, set through the settings API.
+	Enabled bool `json:"enabled"`
+
+	// Active is Flexprice's approval that this tenant may serve SSO. It is not
+	// settable through the API (see apiImmutableSettingFields) and is flipped
+	// directly in the database once the tenant's claim to its identity provider
+	// has been checked. Both flags must be on before a login is served.
+	Active bool `json:"active"`
+
+	// EnforceSSO refuses password login for this tenant's users, super admins
+	// excepted so an identity provider outage is recoverable.
+	EnforceSSO bool `json:"enforce_sso"`
+
+	// IDPEntityID identifies the identity provider; it must match the Issuer of
+	// every assertion we accept.
+	IDPEntityID string `json:"idp_entity_id"`
+	// IDPSSOUrl is where a user is redirected to authenticate.
+	IDPSSOUrl string `json:"idp_sso_url"`
+	// IDPCertificate is the PEM-encoded X.509 certificate whose key signs
+	// assertions. Assertions signed by anything else are rejected.
+	IDPCertificate string `json:"idp_certificate"`
+
+	// EmailAttribute names the assertion attribute carrying the user's email.
+	// Empty means use the NameID.
+	EmailAttribute string `json:"email_attribute"`
+
+	// DefaultRole is granted to just-in-time provisioned users.
+	DefaultRole string `json:"default_role"`
+}
+
+// samlConfigValidator holds the SAML package's validation function.
+//
+// The real checks — certificate parsing, the https rule, the assignable-role
+// rule — need the SAML implementation, which this package cannot import: the
+// SAML package already imports types, so a direct call would be a cycle.
+// Registration runs the other way instead, exactly as the auth provider does.
+var samlConfigValidator func(value map[string]interface{}) error
+
+// RegisterSAMLConfigValidator installs the SAML package's validator. Called from
+// that package's init, so importing it anywhere in the binary is enough.
+func RegisterSAMLConfigValidator(fn func(value map[string]interface{}) error) {
+	samlConfigValidator = fn
+}
+
+// validateSAMLConfig runs the registered validator against a raw settings value.
+//
+// A missing validator means the SAML package is not linked into this binary, so
+// the key cannot be configured here. Refusing is the safe direction: accepting
+// the write would store a configuration nothing had checked, which is precisely
+// how an unvalidated certificate or an http identity provider would get in.
+func validateSAMLConfig(value map[string]interface{}) error {
+	if samlConfigValidator == nil {
+		return ierr.NewError("saml is not available in this build").
+			WithHint("SAML single sign-on is not available on this deployment").
+			Mark(ierr.ErrNotFound)
+	}
+	return samlConfigValidator(value)
+}
+
+// Validate implements SettingConfig.
+//
+// It is deliberately empty: this type is the decoded shape, and the substantive
+// checks run through validateSAMLConfig against the raw value, which is what the
+// settings path calls. Putting rules here as well would mean two places to keep
+// in step.
+func (c SAMLConfig) Validate() error { return nil }

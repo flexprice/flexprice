@@ -14,10 +14,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -80,6 +82,7 @@ type webhookTestPaymentService struct {
 	interfaces.PaymentService
 	payment     *dto.PaymentResponse
 	updateCalls []dto.UpdatePaymentRequest
+	attempts    []dto.RecordAttemptRequest
 }
 
 func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
@@ -92,6 +95,23 @@ func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, r
 		s.payment.PaymentStatus = types.PaymentStatus(*req.PaymentStatus)
 	}
 	return s.payment, nil
+}
+
+func (s *webhookTestPaymentService) RecordAttempt(_ context.Context, _ string, req dto.RecordAttemptRequest) error {
+	s.attempts = append(s.attempts, req)
+	return nil
+}
+
+// failedAttempts returns only the declined attempts, so assertions stay focused on
+// charge failures rather than every attempt the handler records.
+func (s *webhookTestPaymentService) failedAttempts() []dto.RecordAttemptRequest {
+	var out []dto.RecordAttemptRequest
+	for _, a := range s.attempts {
+		if a.PaymentStatus == types.PaymentStatusFailed {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ── fake interfaces.InvoiceService — used only by handlePaymentCaptured's standalone fallback ──
@@ -115,10 +135,14 @@ func (webhookTestInvoiceService) ReconcilePaymentStatus(_ context.Context, _ str
 type webhookTestCheckoutSessionService struct {
 	interfaces.CheckoutSessionService
 	session       *dto.CheckoutSessionResponse // returned by List, matched by session.ID (see note on suite below)
+	listErr       error
 	completeCalls []string
 }
 
 func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
 	if s.session == nil || len(filter.CheckoutPaymentIDs) == 0 || filter.CheckoutPaymentIDs[0] != s.session.ID {
 		return &dto.ListCheckoutSessionsResponse{}, nil
 	}
@@ -176,7 +200,12 @@ func (s *WebhookCheckoutBranchingSuite) SetupTest() {
 
 	s.client = &webhookTestRazorpayClient{}
 	s.paymentSvc = &webhookTestPaymentService{
-		payment: &dto.PaymentResponse{ID: "pay_flex_001", PaymentStatus: types.PaymentStatusInitiated},
+		payment: &dto.PaymentResponse{
+			ID:                "pay_flex_001",
+			PaymentStatus:     types.PaymentStatusInitiated,
+			PaymentMethodType: types.PaymentMethodTypePaymentLink,
+			GatewayTrackingID: lo.ToPtr("plink_test001"),
+		},
 	}
 	s.checkoutSvc = &webhookTestCheckoutSessionService{}
 	s.mappingSvc = &webhookTestMappingService{
@@ -186,7 +215,8 @@ func (s *WebhookCheckoutBranchingSuite) SetupTest() {
 	razorpayPaymentSvc := razorpay.NewPaymentService(
 		s.client, nil, nil, webhookTestLocker{}, logger.NewNoopLogger(),
 	)
-	s.handler = NewHandler(s.client, razorpayPaymentSvc, webhookTestMappingStore{}, logger.NewNoopLogger())
+	lifecycle := payments.NewPaymentLifecycle(s.paymentSvc, webhookTestInvoiceService{}, logger.NewNoopLogger())
+	s.handler = NewHandler(s.client, razorpayPaymentSvc, webhookTestMappingStore{}, lifecycle, logger.NewNoopLogger())
 
 	s.services = &ServiceDependencies{
 		PaymentService:                  s.paymentSvc,
@@ -295,6 +325,170 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refund
 	s.NoError(err)
 	s.Require().Len(s.client.refundCalls, 1)
 	s.Equal("pay_rzp_001", s.client.refundCalls[0])
+}
+
+// ── payment.failed: a decline is one attempt, not our decision to stop ───────
+
+func (s *WebhookCheckoutBranchingSuite) makeFailedEvent() *RazorpayWebhookEvent {
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentFailed)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.ErrorDescription = "card declined"
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+	return event
+}
+
+func (s *WebhookCheckoutBranchingSuite) pendingSession() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending},
+	}
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_RecordsAttemptAndLeavesPaymentOpen() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Require().Len(s.paymentSvc.failedAttempts(), 1)
+	s.Equal("card declined", s.paymentSvc.failedAttempts()[0].ErrorMessage)
+	s.Equal("pay_rzp_001", s.paymentSvc.failedAttempts()[0].GatewayAttemptID)
+	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
+		"a decline on an open checkout session must not seal the payment")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_RecordEachAttempt() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	s.Len(s.paymentSvc.failedAttempts(), 2)
+	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_StandaloneLink_LeavesPaymentOpen() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Require().Len(s.paymentSvc.failedAttempts(), 1)
+	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
+		"a standalone payment link stays open too — the customer can retry on the same link")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkPayment_SealsPayment() {
+	s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeCard
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus,
+		"a one-shot card charge has no retry vehicle, so a decline is final")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonPendingSession_SealsPayment() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired},
+	}
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_SessionLookupError_DoesNotSeal() {
+	s.checkoutSvc.listErr = ierr.NewError("db unavailable").Mark(ierr.ErrDatabase)
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Empty(s.paymentSvc.failedAttempts())
+	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
+		"an unreadable session must fail open: sealing a live payment loses the capture")
+}
+
+// A card charge is finished when it declines, so a checkout-session outage must not
+// stop it sealing. Only payment links need the lookup at all.
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkSealsEvenIfSessionLookupFails() {
+	s.checkoutSvc.listErr = ierr.NewError("db unavailable").Mark(ierr.ErrDatabase)
+	s.paymentSvc.payment.PaymentMethodType = types.PaymentMethodTypeCard
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus,
+		"a card decline must seal regardless of checkout-session availability")
+}
+
+// If the lookup fails we cannot tell whether this payment belongs to a dead checkout.
+// Falling through to the standalone branch would settle it and reconcile an archived
+// invoice instead of refunding the late capture; leaving it PENDING is recoverable.
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SessionLookupError_DoesNotSettle() {
+	s.checkoutSvc.listErr = ierr.NewError("db unavailable").Mark(ierr.ErrDatabase)
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	captured := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	captured.Payload.Payment.Entity.ID = "pay_rzp_late"
+	captured.Payload.Payment.Entity.Amount = 50000
+	captured.Payload.Payment.Entity.Currency = "INR"
+	captured.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	err := s.handler.handlePaymentCaptured(s.ctx, captured, s.services)
+
+	s.Error(err, "an unreadable session is surfaced, not swallowed")
+	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
+		"an unreadable session must not be treated as 'no session' and settled")
+	s.Empty(s.client.refundCalls)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_ThenCaptured_Succeeds() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	captured := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	captured.Payload.Payment.Entity.ID = "pay_rzp_002"
+	captured.Payload.Payment.Entity.Amount = 50000
+	captured.Payload.Payment.Entity.Currency = "INR"
+	captured.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, captured, s.services))
+
+	s.Require().Len(s.checkoutSvc.completeCalls, 1,
+		"the retry must still complete the checkout session")
+}
+
+// The winning charge belongs in the ledger too: without it the attempt history shows
+// only declines and never says which transaction actually collected the money.
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_Standalone_RecordsSucceededAttempt() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	captured := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	captured.Payload.Payment.Entity.ID = "pay_rzp_002"
+	captured.Payload.Payment.Entity.Amount = 50000
+	captured.Payload.Payment.Entity.Currency = "INR"
+	captured.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, captured, s.services))
+
+	s.Require().Len(s.paymentSvc.attempts, 2, "one decline then one capture")
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.attempts[0].PaymentStatus)
+	s.Equal(types.PaymentStatusSucceeded, s.paymentSvc.attempts[1].PaymentStatus)
+	s.Equal("pay_rzp_002", s.paymentSvc.attempts[1].GatewayAttemptID,
+		"the succeeded attempt names the transaction that collected")
+	s.Equal(types.PaymentStatusSucceeded, s.paymentSvc.payment.PaymentStatus)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_NoSessionFound_FallsThroughToStandalone() {

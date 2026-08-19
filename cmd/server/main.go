@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -314,6 +315,7 @@ func main() {
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	serviceParams service.ServiceParams,
 	redisCache cache.RedisCache,
 	locker cache.Locker,
 	meterService service.MeterService,
@@ -423,6 +425,7 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
+		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }

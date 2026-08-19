@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -180,8 +181,122 @@ type ServerConfig struct {
 type AuthConfig struct {
 	Provider types.AuthProvider `mapstructure:"provider" validate:"required"`
 	Secret   string             `mapstructure:"secret" validate:"required"`
+	SAML     SAMLConfig         `mapstructure:"saml"`
 	Supabase SupabaseConfig     `mapstructure:"supabase"`
 	APIKey   APIKeyConfig       `mapstructure:"api_key"`
+}
+
+// SAMLConfig holds deployment-level SAML settings. Per-tenant identity provider
+// details live in the tenant's saml_config setting, not here.
+type SAMLConfig struct {
+	// Enabled is the deployment-wide switch for the whole SAML feature. When it
+	// is off the SAML routes are not mounted at all and no tenant may store a
+	// configuration, so a deployment that does not offer SSO exposes none of it
+	// and cannot accumulate configurations that silently do nothing.
+	//
+	// Defaults to off: SSO is opt-in per deployment.
+	Enabled bool `mapstructure:"enabled"`
+
+	// BaseURL is the externally reachable origin of this deployment — scheme and
+	// host only; the SAML paths are built onto it. It is deployment-level rather
+	// than per-tenant because a deployment has exactly one API origin, and
+	// because it must not come from the inbound request: it is signed into the
+	// AuthnRequest as the ACS URL and checked again when the assertion arrives,
+	// so a request-derived origin would let a caller controlling the Host header
+	// have assertions delivered to a host of their choosing.
+	//
+	// Nothing tenant-specific lives here. The tenant appears in the path, which
+	// the SP builds, so one origin serves every tenant.
+	BaseURL string `mapstructure:"base_url"`
+
+	// DashboardURL receives the browser redirect after a successful assertion,
+	// carrying the minted token. Deployment-level for the same reason: it names
+	// this deployment's own frontend, and taking it from the request would make
+	// the callback an open redirect.
+	DashboardURL string `mapstructure:"dashboard_url"`
+}
+
+// validate refuses a SAML deployment that cannot serve a working login.
+//
+// Only enforced when the feature is on, so a deployment that does not offer SSO
+// is unaffected by any of it.
+//
+// Both URLs must be absolute: BaseURL builds the entity ID and ACS URL published
+// in our metadata, and a relative value produces endpoints an identity provider
+// cannot call back. Both must be https away from loopback: the assertion and the
+// minted token both travel through the browser, so plaintext exposes them in
+// transit. Loopback is exempt because it never leaves the machine and is how
+// this is developed against a local identity provider.
+func (c SAMLConfig) validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	for _, field := range []struct{ name, raw string }{
+		{"auth.saml.base_url", c.BaseURL},
+		{"auth.saml.dashboard_url", c.DashboardURL},
+	} {
+		value := strings.TrimSpace(field.raw)
+		if value == "" {
+			return fmt.Errorf("%s is required when auth.saml.enabled is true", field.name)
+		}
+
+		u, err := url.Parse(value)
+		if err != nil || u.Host == "" {
+			return fmt.Errorf("%s must be an absolute URL (got %q)", field.name, field.raw)
+		}
+		if u.Scheme != "https" && !isLoopbackHost(u.Hostname()) {
+			return fmt.Errorf("%s must use https (plain http is allowed only for localhost) (got %q)", field.name, field.raw)
+		}
+	}
+	return nil
+}
+
+// validateSAMLDependencies refuses to start a SAML deployment without Redis.
+//
+// The AuthnRequest IDs that make an assertion single-use are held in Redis. The
+// redirect that starts a login and the callback that finishes it are separate
+// requests, and a load balancer may route them to different replicas, so
+// process-local state fails roughly (N-1)/N of logins on an N-replica
+// deployment — at random, and looking like an identity provider fault rather
+// than a Flexprice one.
+//
+// Failing at boot is much kinder than that: a deployment either has the state
+// store SAML needs, or it does not offer SAML.
+func (c Configuration) validateSAMLDependencies() error {
+	if !c.Auth.SAML.Enabled {
+		return nil
+	}
+	if !c.Cache.Enabled || !c.Cache.Redis.Enabled {
+		return fmt.Errorf("auth.saml.enabled requires cache.enabled and cache.redis.enabled: " +
+			"SAML keeps outstanding login requests in Redis so a login started on one replica " +
+			"can be completed on another")
+	}
+
+	// auth.secret is the HMAC key the SSO token is signed with. An empty key
+	// still produces a verifiable signature, so a deployment that boots without
+	// one accepts a token anybody can mint — the forger names any user in any
+	// tenant, and the middleware then loads that user and grants their roles.
+	//
+	// The warn-only validateSecrets does not cover this: it checks auth.secret
+	// only under the Flexprice provider, so a Supabase deployment offering SSO
+	// with no secret set started silently. Hard-failing is safe here for the
+	// same reason as the checks above — it applies only when SSO is switched
+	// on, so it cannot take down a deployment that does not offer it.
+	if strings.TrimSpace(c.Auth.Secret) == "" {
+		return fmt.Errorf("auth.saml.enabled requires a non-empty auth.secret (FLEXPRICE_AUTH_SECRET): " +
+			"it signs the SSO token, and an empty key lets anyone mint one naming any user")
+	}
+	return nil
+}
+
+// isLoopbackHost reports whether a host never leaves this machine.
+func isLoopbackHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 type SupabaseConfig struct {
@@ -1004,6 +1119,22 @@ func NewValidatedConfig() (*Configuration, error) {
 	// clean via a staging deploy.
 	if err := cfg.validateSecrets(); err != nil {
 		log.Printf("[config] WARNING: %v", err)
+	}
+
+	// Scoped hard fail, unlike the warn-only check above. It applies only when
+	// auth.saml.enabled is on, so a deployment that does not offer SSO cannot be
+	// taken down by it — the risk that made the rest of this function warn-only.
+	//
+	// Failing at boot is the right trade here because the alternative is worse
+	// than a crash: with an empty or relative base URL the SP metadata a
+	// customer uploads to their identity provider contains unusable endpoints,
+	// and the failure surfaces much later as an audience mismatch on every
+	// assertion, pointing at signatures rather than at configuration.
+	if err := cfg.Auth.SAML.validate(); err != nil {
+		return nil, err
+	}
+	if err := cfg.validateSAMLDependencies(); err != nil {
+		return nil, err
 	}
 	return cfg, nil
 }

@@ -14,9 +14,10 @@ import (
 
 // ItemSyncInput holds per-price data needed to create a Zoho item.
 type ItemSyncInput struct {
-	PriceID string
-	Name    string
-	Rate    decimal.Decimal
+	PriceID  string
+	Name     string
+	Rate     decimal.Decimal
+	HSNOrSAC string
 }
 
 // ZohoItemSyncService manages syncing FlexPrice prices as items in Zoho Books.
@@ -101,6 +102,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		ProductType: "service",
 		SKU:         in.PriceID,
 		IsTaxable:   &isTaxable,
+		HSNOrSAC:    in.HSNOrSAC,
 	}
 
 	itemResp, err := s.Client.CreateItem(ctx, createReq)

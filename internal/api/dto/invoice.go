@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -577,26 +578,12 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		taxableAmount = decimal.Zero
 	}
 
-	if len(r.PreparedTaxRates) > 0 {
-		for _, tr := range r.PreparedTaxRates {
-			var taxAmount decimal.Decimal
-			switch tr.TaxRateType {
-			case types.TaxRateTypePercentage:
-				if tr.PercentageValue != nil {
-					taxAmount = taxableAmount.Mul(*tr.PercentageValue).Div(decimal.NewFromInt(100))
-				}
-			case types.TaxRateTypeFixed:
-				if tr.FixedValue != nil {
-					taxAmount = *tr.FixedValue
-				}
-			default:
-				continue
-			}
-			if taxAmount.IsNegative() {
-				taxAmount = decimal.Zero
-			}
-			totalTax = totalTax.Add(taxAmount)
+	for _, tr := range r.PreparedTaxRates {
+		taxAmount, ok := previewTaxAmount(tr, taxableAmount, inv.Currency)
+		if !ok {
+			continue
 		}
+		totalTax = totalTax.Add(taxAmount)
 	}
 
 	// 4) Update invoice preview totals
@@ -610,6 +597,90 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
 	return inv, nil
+}
+
+// previewTaxAmount computes the tax owed on taxableAmount for a single
+// prepared tax rate. The second return is false when the rate carries no
+// usable value (nil percentage/fixed amount, or an unknown rate type), in
+// which case the caller skips it.
+//
+// Shared by the preview total (ToInvoice) and the preview breakdown
+// (BuildPreviewTaxes) so the two can never drift apart.
+func previewTaxAmount(tr *TaxRateResponse, taxableAmount decimal.Decimal, currency string) (decimal.Decimal, bool) {
+	// TaxRateResponse embeds *taxrate.TaxRate, so a zero-value response
+	// dereferences nil on the field reads below.
+	if tr == nil || tr.TaxRate == nil {
+		return decimal.Zero, false
+	}
+	var taxAmount decimal.Decimal
+	switch tr.TaxRateType {
+	case types.TaxRateTypePercentage:
+		if tr.PercentageValue == nil {
+			return decimal.Zero, false
+		}
+		taxAmount = taxableAmount.Mul(*tr.PercentageValue).Div(decimal.NewFromInt(100))
+	case types.TaxRateTypeFixed:
+		if tr.FixedValue == nil {
+			return decimal.Zero, false
+		}
+		taxAmount = *tr.FixedValue
+	default:
+		return decimal.Zero, false
+	}
+	if taxAmount.IsNegative() {
+		taxAmount = decimal.Zero
+	}
+	// Round per line, matching the persisted tax path — otherwise a rate that
+	// produces more precision than the currency carries shows fractional-cent
+	// entries that don't add up to what is eventually charged.
+	return taxAmount.Round(types.GetCurrencyPrecision(currency)), true
+}
+
+// BuildPreviewTaxes synthesises the per-rate tax breakdown for an invoice
+// preview.
+//
+// Persisted invoices carry tax_applied rows that the response loads via
+// WithTaxes. A preview writes nothing, so without this the response reports
+// a non-zero total_tax with an empty taxes[] array and callers cannot see
+// which rate produced the charge. The records are in-memory only: no ID and
+// no persistence, mirroring the rest of the preview invoice.
+func BuildPreviewTaxes(inv *invoice.Invoice, preparedTaxRates []*TaxRateResponse) []*TaxAppliedResponse {
+	if inv == nil || len(preparedTaxRates) == 0 {
+		return nil
+	}
+	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount)
+	if taxableAmount.IsNegative() {
+		taxableAmount = decimal.Zero
+	}
+
+	taxes := make([]*TaxAppliedResponse, 0, len(preparedTaxRates))
+	for _, tr := range preparedTaxRates {
+		taxAmount, ok := previewTaxAmount(tr, taxableAmount, inv.Currency)
+		if !ok {
+			continue
+		}
+		taxes = append(taxes, &TaxAppliedResponse{
+			TaxApplied: taxapplied.TaxApplied{
+				TaxRateID:     tr.ID,
+				EntityType:    types.TaxRateEntityTypeInvoice,
+				EntityID:      inv.ID,
+				TaxableAmount: taxableAmount,
+				TaxAmount:     taxAmount,
+				Currency:      inv.Currency,
+				AppliedAt:     time.Now().UTC(),
+				EnvironmentID: inv.EnvironmentID,
+				BaseModel: types.BaseModel{
+					TenantID: inv.TenantID,
+					Status:   types.StatusPublished,
+				},
+			},
+			TaxRate: tr,
+		})
+	}
+	if len(taxes) == 0 {
+		return nil
+	}
+	return taxes
 }
 
 // Validate validates the invoice coupon DTO
