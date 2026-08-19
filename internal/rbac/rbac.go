@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -30,16 +31,48 @@ type Role struct {
 
 // NewRBACService loads roles.json from config and optimizes for fast lookups
 func NewRBACService(cfg *config.Configuration) (*RBACService, error) {
-	// Get roles path from config or use default
-	configPath := cfg.RBAC.RolesConfigPath
-	if configPath == "" {
-		configPath = "./config/rbac/roles.json"
+	// Resolve roles.json against several working directories.
+	//
+	// The path in config.yaml is relative, and the correct relative path
+	// depends on where the process runs. From a source checkout the file is at
+	// internal/config/rbac/roles.json; in the container the Dockerfile copies
+	// internal/config to ./config, so it is at config/rbac/roles.json. One
+	// literal cannot satisfy both, and getting it wrong crashloops every pod at
+	// startup with
+	//
+	//   failed to read config: open internal/config/rbac/roles.json:
+	//   no such file or directory
+	//
+	// which reads as a packaging fault and is really a working-directory
+	// mismatch. This mirrors how viper already locates config.yaml itself: it
+	// registers several AddConfigPath candidates for exactly the same reason.
+	//
+	// The configured value is tried first, so an explicit absolute path still
+	// wins and nothing that works today changes behaviour.
+	candidates := make([]string, 0, 3)
+	if p := cfg.RBAC.RolesConfigPath; p != "" {
+		candidates = append(candidates, p)
 	}
+	candidates = append(candidates,
+		"config/rbac/roles.json",          // container: Dockerfile copies internal/config -> ./config
+		"internal/config/rbac/roles.json", // source checkout, run from the repo root
+	)
 
-	// Load JSON
-	data, err := os.ReadFile(configPath)
+	var (
+		data []byte
+		err  error
+	)
+	for _, p := range candidates {
+		data, err = os.ReadFile(p)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config: %w", err)
+		return nil, fmt.Errorf(
+			"failed to read roles config (tried %s): %w",
+			strings.Join(candidates, ", "), err,
+		)
 	}
 
 	// Parse as: role_id -> role definition (with name, description, permissions)
