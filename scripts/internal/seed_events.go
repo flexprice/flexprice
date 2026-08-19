@@ -58,22 +58,24 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 	// Generate properties based on meter configuration
 	properties := make(map[string]interface{})
 
-	// Handle properties based on meter aggregation and filters
+	for _, filter := range selectedMeter.Filters {
+		if len(filter.Values) > 0 {
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+		}
+	}
+
 	if selectedMeter.Aggregation.Type == types.AggregationSum ||
-		selectedMeter.Aggregation.Type == types.AggregationAvg {
-		// For sum/avg aggregation, we need to generate a value for the aggregation field
-		if selectedMeter.Aggregation.Field != "" {
+		selectedMeter.Aggregation.Type == types.AggregationAvg ||
+		selectedMeter.Aggregation.Type == types.AggregationMax {
+		// Generate a value for aggregation types that use the aggregation field.
+		if selectedMeter.Aggregation.Field != "" && properties[selectedMeter.Aggregation.Field] == nil {
 			// Generate a random value between 1 and 1000
 			properties[selectedMeter.Aggregation.Field] = rand.Int63n(1000) + 1
 		}
 	}
 
-	// Apply filter values if available
-	for _, filter := range selectedMeter.Filters {
-		if len(filter.Values) > 0 {
-			// Select a random value from the filter values
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
-		}
+	if selectedMeter.Aggregation.Type == types.AggregationMax && selectedMeter.Aggregation.GroupBy != "" && properties[selectedMeter.Aggregation.GroupBy] == nil {
+		properties[selectedMeter.Aggregation.GroupBy] = fmt.Sprintf("group-%d", rand.Int63n(100)+1)
 	}
 
 	// Generate timestamp within last 72 hours
