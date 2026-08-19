@@ -645,6 +645,17 @@ kafkaConfig:
   consumerGroup: "flexprice-consumer"
   topic: "events"
   topicLazy: "events_lazy"
+  # Batched-ingest topic, read by the app as FLEXPRICE_KAFKA_TOPIC_BULK.
+  #
+  # Unlike topic/topicLazy this has no default in the Go config and is not
+  # `validate:"required"`, so leaving it unset passes startup validation and
+  # only fails later, when a batched publish targets the empty topic name.
+  #
+  # It is also created by the migration Job's topic step. Brokers with
+  # auto-creation disabled (the MSK default) will not create it on first
+  # publish, so an unset value there is a runtime failure rather than a
+  # first-use delay.
+  topicBulk: "events_bulk"
   tls: false
   # Broker CA for private/self-signed Kafka certificates. Leave name empty for
   # brokers with publicly-trusted certs (MSK, Confluent Cloud) — the pods then
@@ -753,14 +764,14 @@ migration:
   # cover heap plus JVM overhead, or the kernel OOM-kills the container (exit
   # 137, no logs) instead of the JVM reporting it.
   kafkaTopics:
-    heapOpts: "-Xmx256m -Xms128m"
+    heapOpts: "-Xmx512m -Xms256m"
     resources:
       limits:
         cpu: "500m"
-        memory: "512Mi"
+        memory: "1Gi"
       requests:
         cpu: "100m"
-        memory: "256Mi"
+        memory: "512Mi"
   # Pinned helper images used by the migration Job init containers. Override
   # `registry` per image if your cluster only allows pulls from a private
   # mirror (common in regulated AWS accounts). All three images are multi-arch.

@@ -454,22 +454,39 @@ spec:
                 KAFKA_TOPICS_CMD="kafka-topics.sh"
               fi
 
-              # Helper: create topic if it does not exist
+              # Count failures rather than swallowing them.
+              #
+              # `|| true` on its own makes this step report success no matter
+              # what: a run where the admin client died on the FIRST topic and
+              # created none still printed "✅ Kafka topics ready" and exited 0.
+              # The app then starts against a broker with no topics and, where
+              # auto-creation is off (the MSK default), fails at first publish
+              # -- a long way from the step that was actually at fault.
+              #
+              # --if-not-exists already makes a re-run a no-op, so a non-zero
+              # exit here means a real failure and not a pre-existing topic.
+              FAILED=0
               create_topic() {
                 TOPIC=$1
                 PARTITIONS=${2:-1}
                 REPLICATION=${3:-1}
                 echo "→ Creating topic: ${TOPIC} (partitions=${PARTITIONS}, replication=${REPLICATION})"
-                $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" \
+                if ! $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" \
                   --create --if-not-exists \
                   --topic "${TOPIC}" \
                   --partitions "${PARTITIONS}" \
-                  --replication-factor "${REPLICATION}" || true
+                  --replication-factor "${REPLICATION}"; then
+                  echo "  ✗ FAILED to create ${TOPIC}"
+                  FAILED=$((FAILED + 1))
+                fi
               }
 
               # All topics used by FlexPrice
               create_topic "{{ .Values.kafkaConfig.topic }}"
               create_topic "{{ .Values.kafkaConfig.topicLazy }}"
+              {{- with .Values.kafkaConfig.topicBulk }}
+              create_topic "{{ . }}"
+              {{- end }}
               create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}"
               create_topic "{{ .Values.eventPostProcessing.topic }}"
               create_topic "{{ .Values.eventPostProcessing.topicBackfill }}"
@@ -478,8 +495,21 @@ spec:
               create_topic "wallet_alert"
               create_topic "onboarding_events"
 
+              if [ "${FAILED}" -ne 0 ]; then
+                echo "❌ ${FAILED} topic(s) could not be created."
+                echo "   OutOfMemoryError above means the admin client heap is too"
+                echo "   small: raise migration.kafkaTopics.heapOpts (and keep"
+                echo "   resources.limits.memory comfortably above it)."
+                exit 1
+              fi
+
               echo "✅ Kafka topics ready"
-              $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
+
+              # Listing is diagnostic only. It is a second admin-client session
+              # and can OOM on its own after every topic was created, which
+              # would fail the whole migration over a log line.
+              $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list || \
+                echo "(could not list topics; creation already succeeded)"
           # Must stay comfortably above KAFKA_HEAP_OPTS above: the limit has to
           # cover the heap plus JVM overhead (metaspace, thread stacks, direct
           # buffers), or the kernel OOM-kills the container instead of the JVM

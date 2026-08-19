@@ -479,6 +479,17 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.kafkaConfig.topic | quote }}
 - name: FLEXPRICE_KAFKA_TOPIC_LAZY
   value: {{ .Values.kafkaConfig.topicLazy | quote }}
+{{- /*
+  topic_bulk has no default in the Go config (unlike topic/topic_lazy, which are
+  `validate:"required"` and fail fast when unset). An empty TopicBulk therefore
+  passes validation and only surfaces when a batched-ingest publish is attempted
+  against topic "", so emit it only when configured rather than emitting an
+  empty string.
+*/}}
+{{- with .Values.kafkaConfig.topicBulk }}
+- name: FLEXPRICE_KAFKA_TOPIC_BULK
+  value: {{ . | quote }}
+{{- end }}
 - name: FLEXPRICE_KAFKA_TLS
   value: {{ .Values.kafkaConfig.tls | quote }}
 {{- /*
