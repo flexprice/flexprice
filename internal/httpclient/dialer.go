@@ -104,3 +104,9 @@ func NewPublicOnlyClient(timeout time.Duration) *http.Client {
 		CheckRedirect: RejectRedirects,
 	}
 }
+
+// NewPublicOnlySendClient is NewPublicOnlyClient behind the Client interface,
+// for callers that go through Send rather than holding an *http.Client.
+func NewPublicOnlySendClient(timeout time.Duration) Client {
+	return &DefaultClient{client: NewPublicOnlyClient(timeout)}
+}

@@ -10,7 +10,7 @@
 //
 // Example usage:
 //
-//	processor := NewFileProcessor(httpClient, logger)
+//	processor := NewFileProcessor(logger)
 //	content, err := processor.DownloadFile(ctx, &task.Task{FileURL: "https://drive.google.com/file/d/123/view"})
 //	if err != nil {
 //	    // Handle error - simple error message, no complex error objects
