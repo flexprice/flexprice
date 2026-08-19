@@ -29,8 +29,8 @@ ADD INDEX IF NOT EXISTS external_customer_id_idx external_customer_id TYPE bloom
 
 -- Set Index for event_name
 ALTER TABLE flexprice.events
-ADD INDEX event_name_idx event_name TYPE set(0) GRANULARITY 8192;
+ADD INDEX IF NOT EXISTS event_name_idx event_name TYPE set(0) GRANULARITY 8192;
 
 -- Set Index for source
 ALTER TABLE flexprice.events
-ADD INDEX source_idx source TYPE set(0) GRANULARITY 8192;
+ADD INDEX IF NOT EXISTS source_idx source TYPE set(0) GRANULARITY 8192;
