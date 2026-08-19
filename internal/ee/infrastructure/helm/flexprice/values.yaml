@@ -741,6 +741,26 @@ migration:
     kafka: true          # Create Kafka topics (idempotent, safe to re-run)
     ent: true            # Run Ent framework migrations
     seed: false          # Run seed data (optional, set to true to enable)
+
+  # The create-kafka-topics init container runs the JVM-based kafka-topics
+  # tool. Its heap is set explicitly rather than left to the JVM's default,
+  # which derives from the cgroup limit (~1/4 of it) and at the previous
+  # hardcoded 256Mi came to ~64Mi -- too little for the admin client to read
+  # broker metadata over TLS. It died with OutOfMemoryError once per topic, and
+  # no message named memory as the cause.
+  #
+  # Keep `resources.limits.memory` well above the -Xmx value: the limit must
+  # cover heap plus JVM overhead, or the kernel OOM-kills the container (exit
+  # 137, no logs) instead of the JVM reporting it.
+  kafkaTopics:
+    heapOpts: "-Xmx256m -Xms128m"
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
   # Pinned helper images used by the migration Job init containers. Override
   # `registry` per image if your cluster only allows pulls from a private
   # mirror (common in regulated AWS accounts). All three images are multi-arch.

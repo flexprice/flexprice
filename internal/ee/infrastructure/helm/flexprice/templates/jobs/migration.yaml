@@ -426,6 +426,21 @@ spec:
         # This init container creates all required topics idempotently.
         - name: create-kafka-topics
           image: "{{ if .Values.kafkaConfig.enabled }}bitnami/kafka:latest{{ else }}confluentinc/cp-kafka:{{ .Values.kafkaConfig.internal.image.tag | default "7.7.1" }}{{ end }}"
+          env:
+            # The JVM sizes its default max heap from the cgroup memory limit --
+            # roughly a quarter of it. At the 256Mi limit this container used to
+            # carry, that is ~64Mi, and the admin client exhausts it while
+            # reading broker metadata over TLS:
+            #
+            #   java.lang.OutOfMemoryError: Java heap space
+            #     at org.apache.kafka.common.network.NetworkReceive.readFrom
+            #   ERROR ... The AdminClient thread has exited. Call: createTopics
+            #
+            # Every topic then fails in turn, so the step reports errors per
+            # topic rather than one cause, and none of them mention memory.
+            # Setting the heap explicitly decouples it from the limit.
+            - name: KAFKA_HEAP_OPTS
+              value: {{ .Values.migration.kafkaTopics.heapOpts | default "-Xmx256m -Xms128m" | quote }}
           command:
             - sh
             - -c
@@ -465,13 +480,12 @@ spec:
 
               echo "✅ Kafka topics ready"
               $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
+          # Must stay comfortably above KAFKA_HEAP_OPTS above: the limit has to
+          # cover the heap plus JVM overhead (metaspace, thread stacks, direct
+          # buffers), or the kernel OOM-kills the container instead of the JVM
+          # throwing -- which surfaces as exit code 137 and no log line at all.
           resources:
-            limits:
-              cpu: "200m"
-              memory: "256Mi"
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
+            {{- toYaml .Values.migration.kafkaTopics.resources | nindent 12 }}
         {{- end }}
 
       containers:
