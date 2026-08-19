@@ -5,20 +5,23 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // DealSyncService handles synchronization of subscription data with HubSpot deals
 type DealSyncService struct {
-	client           HubSpotClient
-	customerRepo     customer.Repository
-	subscriptionRepo subscription.Repository
-	priceRepo        price.Repository
-	logger           *logger.Logger
+	client                       HubSpotClient
+	customerRepo                 customer.Repository
+	subscriptionRepo             subscription.Repository
+	priceRepo                    price.Repository
+	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	logger                       *logger.Logger
 }
 
 // NewDealSyncService creates a new HubSpot deal sync service
@@ -27,15 +30,188 @@ func NewDealSyncService(
 	customerRepo customer.Repository,
 	subscriptionRepo subscription.Repository,
 	priceRepo price.Repository,
+	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *DealSyncService {
 	return &DealSyncService{
-		client:           client,
-		customerRepo:     customerRepo,
-		subscriptionRepo: subscriptionRepo,
-		priceRepo:        priceRepo,
-		logger:           logger,
+		client:                       client,
+		customerRepo:                 customerRepo,
+		subscriptionRepo:             subscriptionRepo,
+		priceRepo:                    priceRepo,
+		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		logger:                       logger,
 	}
+}
+
+// getLineItemMapping looks up the published HubSpot mapping for a subscription line
+// item, or returns (nil, nil) if none exists yet.
+func (s *DealSyncService) getLineItemMapping(ctx context.Context, lineItemID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = lineItemID
+	filter.EntityType = types.IntegrationEntityTypeSubscriptionLineItem
+	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+
+	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to look up HubSpot line item mapping").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(mappings) == 0 {
+		return nil, nil
+	}
+	return mappings[0], nil
+}
+
+// SyncLineItemCreated creates a HubSpot line item for a single FIXED-price subscription
+// line item and associates it with dealID. Idempotent: a no-op if a published mapping
+// already exists for lineItemID — backstopped by a partial unique index on
+// entity_integration_mapping (tenant_id, environment_id, entity_type, entity_id,
+// provider_type) WHERE status = 'published', so a losing racer's Create fails with
+// ErrAlreadyExists rather than silently double-inserting.
+func (s *DealSyncService) SyncLineItemCreated(ctx context.Context, subscriptionID, lineItemID, dealID string) error {
+	existing, err := s.getLineItemMapping(ctx, lineItemID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		s.logger.Info(ctx, "HubSpot line item mapping already exists, skipping create",
+			"line_item_id", lineItemID, "hubspot_line_item_id", existing.ProviderEntityID)
+		return nil
+	}
+
+	sub, lineItems, err := s.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to fetch subscription for line item sync",
+			"error", err, "subscription_id", subscriptionID, "line_item_id", lineItemID)
+		return ierr.WithError(err).
+			WithHint("Failed to fetch subscription for HubSpot line item sync").
+			Mark(ierr.ErrInternal)
+	}
+
+	lineItem, found := lo.Find(lineItems, func(li *subscription.SubscriptionLineItem) bool {
+		return li.ID == lineItemID
+	})
+	if !found {
+		s.logger.Info(ctx, "line item not found on subscription, skipping HubSpot sync",
+			"subscription_id", subscriptionID, "line_item_id", lineItemID)
+		return nil
+	}
+
+	priceObj, err := s.priceRepo.Get(ctx, lineItem.PriceID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to fetch price for line item; cannot create accurate HubSpot line item",
+			"error", err, "price_id", lineItem.PriceID, "line_item_id", lineItem.ID, "deal_id", dealID)
+		return ierr.WithError(err).
+			WithHint("Price not found; cannot create accurate HubSpot line item").
+			Mark(ierr.ErrInternal)
+	}
+
+	unitPrice := priceObj.Amount
+	totalAmount := unitPrice.Mul(lineItem.Quantity)
+	billingFreq := s.mapBillingFrequency(sub.BillingPeriod)
+
+	description := string(lineItem.PriceType) + " pricing"
+	if lineItem.DisplayName != "" {
+		description = lineItem.DisplayName + " (" + string(lineItem.PriceType) + " pricing)"
+	}
+
+	req := &DealLineItemCreateRequest{
+		Properties: DealLineItemProperties{
+			Name:                 lineItem.DisplayName,
+			Price:                unitPrice.String(),
+			Quantity:             lineItem.Quantity.String(),
+			Amount:               totalAmount.String(),
+			Discount:             "0",
+			RecurringBillingFreq: billingFreq,
+			Description:          description,
+		},
+		Associations: []LineItemAssociation{
+			{
+				To: AssociationTarget{ID: dealID},
+				Types: []AssociationType{
+					{
+						AssociationCategory: string(AssociationCategoryHubSpotDefined),
+						AssociationTypeID:   AssociationTypeLineItemToDeal,
+					},
+				},
+			},
+		},
+	}
+
+	s.logger.Info(ctx, "creating HubSpot line item",
+		"deal_id", dealID, "line_item_id", lineItem.ID,
+		"quantity", lineItem.Quantity.String(), "unit_price", unitPrice.String())
+
+	resp, err := s.client.CreateDealLineItem(ctx, req)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create HubSpot line item",
+			"error", err, "line_item_id", lineItem.ID, "deal_id", dealID)
+		return ierr.WithError(err).
+			WithHint("Failed to create HubSpot line item").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         lineItem.ID,
+		EntityType:       types.IntegrationEntityTypeSubscriptionLineItem,
+		ProviderType:     string(types.SecretProviderHubSpot),
+		ProviderEntityID: resp.ID,
+		Metadata:         map[string]interface{}{"deal_id": dealID},
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		// HubSpot line item now exists but we couldn't record it locally — a Temporal
+		// retry would find no mapping and duplicate it. Compensate by deleting the
+		// just-created line item so the retry starts clean.
+		if delErr := s.client.DeleteDealLineItem(ctx, resp.ID); delErr != nil && !ierr.IsNotFound(delErr) {
+			s.logger.Error(ctx, "failed to compensate orphaned HubSpot line item after mapping persist failure",
+				"error", delErr, "compensation_failed", true,
+				"hubspot_line_item_id", resp.ID, "line_item_id", lineItem.ID)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to persist HubSpot line item mapping").
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.logger.Info(ctx, "successfully created HubSpot line item",
+		"line_item_id", lineItem.ID, "hubspot_line_item_id", resp.ID, "deal_id", dealID)
+	return nil
+}
+
+// SyncLineItemDeleted deletes the HubSpot line item mapped to lineItemID, if any. A
+// 404 from HubSpot (already deleted) self-heals the stale mapping instead of erroring.
+func (s *DealSyncService) SyncLineItemDeleted(ctx context.Context, lineItemID string) error {
+	mapping, err := s.getLineItemMapping(ctx, lineItemID)
+	if err != nil {
+		return err
+	}
+	if mapping == nil {
+		s.logger.Info(ctx, "no HubSpot line item mapping found, skipping delete",
+			"line_item_id", lineItemID)
+		return nil
+	}
+
+	if err := s.client.DeleteDealLineItem(ctx, mapping.ProviderEntityID); err != nil && !ierr.IsNotFound(err) {
+		s.logger.Error(ctx, "failed to delete HubSpot line item",
+			"error", err, "line_item_id", lineItemID, "hubspot_line_item_id", mapping.ProviderEntityID)
+		return ierr.WithError(err).
+			WithHint("Failed to delete HubSpot line item").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if err := s.entityIntegrationMappingRepo.Delete(ctx, mapping); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to delete HubSpot line item mapping").
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.logger.Info(ctx, "successfully deleted HubSpot line item",
+		"line_item_id", lineItemID, "hubspot_line_item_id", mapping.ProviderEntityID)
+	return nil
 }
 
 // SyncSubscriptionToDeal creates HubSpot line items from subscription and associates them with a deal

@@ -610,6 +610,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildTaskProcessingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalHubSpotDealSyncWorkflow:
 		return s.buildHubSpotDealSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalHubSpotDealLineItemSyncWorkflow:
+		return s.buildHubSpotDealLineItemSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalHubSpotInvoiceSyncWorkflow:
 		return s.buildHubSpotInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalScheduleSubscriptionBillingWorkflow:
@@ -788,6 +790,25 @@ func (s *temporalService) buildHubSpotDealSyncInput(_ context.Context, tenantID,
 
 	return nil, errors.NewError("invalid input for HubSpot deal sync workflow").
 		WithHint("Provide HubSpotDealSyncWorkflowInput with subscription_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildHubSpotDealLineItemSyncInput builds input for the HubSpot deal line item sync workflow
+func (s *temporalService) buildHubSpotDealLineItemSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.HubSpotDealLineItemSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.HubSpotDealLineItemSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for HubSpot deal line item sync workflow").
+		WithHint("Provide HubSpotDealLineItemSyncWorkflowInput with subscription_id, line_item_id, and operation").
 		Mark(errors.ErrValidation)
 }
 

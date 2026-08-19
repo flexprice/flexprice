@@ -342,12 +342,24 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		// checkout + net credit/zero → immediate path (ignore checkout)
 	}
 
-	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
+	changedLineItems, changedInvoices, lineItemDeltas, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
 	if err != nil {
 		return nil, err
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+
+	// subscriptionModificationService only holds ServiceParams (unexported field), not a
+	// *subscriptionService, so publishLineItemEvents is reached via a throwaway concrete
+	// instance sharing the same ServiceParams — this is the idiomatic pattern already used
+	// elsewhere in this package (see checkout_session_actions.go).
+	lineItemPublisher := &subscriptionService{ServiceParams: s.serviceParams}
+	for _, delta := range lineItemDeltas {
+		lineItemPublisher.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.ended}, types.WebhookEventSubscriptionLineItemDeleted)
+		lineItemPublisher.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.new}, types.WebhookEventSubscriptionLineItemCreated)
+	}
 
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)

@@ -134,6 +134,31 @@ func TestAbsorbDeliveryError_MissingEntityUsesSkipLogSemantics(t *testing.T) {
 	})
 }
 
+func TestDeliverWebhook_InternalOnlyEventSkipsDelivery(t *testing.T) {
+	t.Parallel()
+
+	h := &handler{
+		// Svix disabled and no native tenant config at all — if the internal-only
+		// skip did not short-circuit before deliverSvix/deliverNative, this would
+		// fail with ErrNotFound (no tenant config) rather than returning nil.
+		config: &config.Webhook{
+			Enabled: true,
+			Svix:    config.Svix{Enabled: false},
+			Tenants: map[string]config.TenantWebhookConfig{},
+		},
+		logger: testLogger(t),
+		// systemEventRepo intentionally nil — guards must handle this safely
+	}
+
+	err := h.DeliverWebhook(context.Background(), &types.WebhookEvent{
+		ID:            "sev_1",
+		TenantID:      "ten_1",
+		EnvironmentID: "env_1",
+		EventName:     types.WebhookEventSubscriptionLineItemCreated,
+	})
+	require.NoError(t, err)
+}
+
 func TestAbsorbDeliveryError_RealErrorNoPanicWithoutRepo(t *testing.T) {
 	t.Parallel()
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -242,12 +243,25 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	if err != nil {
 		return err
 	}
-	if _, err := modSvc.applyQuantityChange(ctx, quantityChangeReq); err != nil {
+	_, lineItemDeltas, err := modSvc.applyQuantityChange(ctx, quantityChangeReq)
+	if err != nil {
 		return err
 	}
 
 	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceID, paymentID, providerResult); err != nil {
 		return err
+	}
+
+	// subscriptionModificationService only holds serviceParams (unexported field), not a
+	// *subscriptionService, so publishLineItemEvents is reached via a throwaway concrete
+	// instance sharing the same ServiceParams, matching this file's own existing pattern
+	// (see completeAddAddonCheckout's subSvc construction just below in this same file).
+	lineItemPublisher := &subscriptionService{ServiceParams: s.ServiceParams}
+	for _, delta := range lineItemDeltas {
+		lineItemPublisher.publishLineItemEvents(ctx, params.SubscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.ended}, types.WebhookEventSubscriptionLineItemDeleted)
+		lineItemPublisher.publishLineItemEvents(ctx, params.SubscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.new}, types.WebhookEventSubscriptionLineItemCreated)
 	}
 
 	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
