@@ -169,6 +169,11 @@ func QuotaCrossedAt(v time.Time) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldQuotaCrossedAt, v))
 }
 
+// Metadata applies equality check predicate on the "metadata" field. It's identical to MetadataEQ.
+func Metadata(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldEQ(FieldMetadata, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldTenantID, v))
@@ -1374,6 +1379,56 @@ func QuotaCrossedAtIsNil() predicate.EntitlementGrant {
 // QuotaCrossedAtNotNil applies the NotNil predicate on the "quota_crossed_at" field.
 func QuotaCrossedAtNotNil() predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldNotNull(FieldQuotaCrossedAt))
+}
+
+// MetadataEQ applies the EQ predicate on the "metadata" field.
+func MetadataEQ(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldEQ(FieldMetadata, v))
+}
+
+// MetadataNEQ applies the NEQ predicate on the "metadata" field.
+func MetadataNEQ(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldNEQ(FieldMetadata, v))
+}
+
+// MetadataIn applies the In predicate on the "metadata" field.
+func MetadataIn(vs ...types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldIn(FieldMetadata, vs...))
+}
+
+// MetadataNotIn applies the NotIn predicate on the "metadata" field.
+func MetadataNotIn(vs ...types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldNotIn(FieldMetadata, vs...))
+}
+
+// MetadataGT applies the GT predicate on the "metadata" field.
+func MetadataGT(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldGT(FieldMetadata, v))
+}
+
+// MetadataGTE applies the GTE predicate on the "metadata" field.
+func MetadataGTE(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldGTE(FieldMetadata, v))
+}
+
+// MetadataLT applies the LT predicate on the "metadata" field.
+func MetadataLT(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldLT(FieldMetadata, v))
+}
+
+// MetadataLTE applies the LTE predicate on the "metadata" field.
+func MetadataLTE(v types.Metadata) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldLTE(FieldMetadata, v))
+}
+
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldNotNull(FieldMetadata))
 }
 
 // And groups predicates with the AND operator between them.

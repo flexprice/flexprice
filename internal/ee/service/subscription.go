@@ -5077,6 +5077,11 @@ func (s *subscriptionService) persistAddonAttach(ctx context.Context, params *ad
 
 	creditGrantProration := s.addonCreditGrantProration(ctx, sub, addonRequestedStart, req.ProrationBehavior)
 
+	// Resolved BEFORE the association exists, so the pre-addon entitlement set is
+	// what decides each feature's pooled slot and its unprorated quota.
+	entitlementGrantProration := s.addonEntitlementGrantProration(
+		ctx, sub, addonRequestedStart, req.ProrationBehavior, req.AddonID, addonAssociation.ID)
+
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if len(req.OverrideLineItems) > 0 {
 			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, req.OverrideLineItems, lineItems, priceMap); err != nil {
@@ -5111,6 +5116,13 @@ func (s *subscriptionService) persistAddonAttach(ctx context.Context, params *ad
 		// anchored at the addon attach date so mid-cycle grants apply immediately.
 		// Kept in-transaction so grant application is atomic with the addon attach.
 		if err := s.materializeAddonCreditGrants(ctx, sub, req.AddonID, addonRequestedStart, addonAssociation.EndDate, creditGrantProration); err != nil {
+			return err
+		}
+
+		// Materialize this cycle's prorated quota. The evaluator opens grants
+		// lazily from a usage-driven tick with no request in scope, so the attach
+		// has to write the cycle's row itself for the proration to exist at all.
+		if err := s.materializeAddonEntitlementGrantProration(ctx, sub, entitlementGrantProration, addonAssociation.ID); err != nil {
 			return err
 		}
 

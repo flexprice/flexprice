@@ -78,8 +78,7 @@ func (EntitlementGrant) Fields() []ent.Field {
 		field.Other("quota", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
-			}).
-			Immutable(),
+			}),
 
 		field.Other("usage", decimal.Decimal{}).
 			SchemaType(map[string]string{
@@ -110,12 +109,20 @@ func (EntitlementGrant) Fields() []ent.Field {
 		field.Time("quota_crossed_at").
 			Optional().
 			Nillable(),
+
+		field.Other("metadata", types.Metadata{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional().
+			Default(types.Metadata{}),
 	}
 }
 
 // Two indexes serve every production read; snapshot writes (usage,
-// grant_status, last_computed_at) touch no indexed column, so updates stay
-// HOT and the indexes don't churn as the table grows.
+// grant_status, last_computed_at) and quota top-ups (quota, metadata,
+// quota_crossed_at) touch no indexed column, so updates stay HOT and the
+// indexes don't churn as the table grows.
 func (EntitlementGrant) Indexes() []ent.Index {
 	return []ent.Index{
 		// Serves the INSERT race (valid_from is deterministic under

@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // InMemoryEntitlementGrantStore implements entitlementgrant.Repository in memory.
@@ -215,6 +216,55 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 	existing.QuotaCrossedAt = g.QuotaCrossedAt
 	existing.UpdatedAt = time.Now().UTC()
 	return s.InMemoryStore.Update(ctx, g.ID, existing)
+}
+
+// TopUpQuota mirrors the ent repo's single-statement increment: quota grows by
+// delta, metadata merges rather than replaces, and quota_crossed_at is resolved
+// against the snapshot usage — cleared when the top-up restores headroom,
+// otherwise advanced but never rewound.
+func (s *InMemoryEntitlementGrantStore) TopUpQuota(
+	ctx context.Context,
+	id string,
+	delta decimal.Decimal,
+	at time.Time,
+	meta types.Metadata,
+) (*entitlementgrant.EntitlementGrant, error) {
+	// Read-modify-write, unlike the real repo's single statement: InMemoryStore's
+	// mutex is not reentrant, so holding it across Get would deadlock. Tests drive
+	// this single-threaded, and the atomicity that matters is the DB's.
+	existing, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, errors.WithError(err).
+			WithHint("Entitlement grant not found").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(errors.ErrNotFound)
+	}
+
+	updated := entitlementgrant.NewEntitlementGrantBuilder(existing).
+		WithQuota(existing.Quota.Add(delta)).
+		WithMergedMetadata(meta).
+		Build()
+	if updated.Metadata == nil {
+		updated.Metadata = types.Metadata{}
+	}
+	if updated.QuotaCrossedAt != nil {
+		switch {
+		case updated.Usage.LessThan(updated.Quota):
+			updated.QuotaCrossedAt = nil
+		case updated.QuotaCrossedAt.Before(at):
+			crossed := at.UTC()
+			updated.QuotaCrossedAt = &crossed
+		}
+	}
+	updated.UpdatedAt = time.Now().UTC()
+
+	if err := s.InMemoryStore.Update(ctx, id, updated); err != nil {
+		return nil, errors.WithError(err).
+			WithHint("Failed to top up entitlement grant quota").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(errors.ErrDatabase)
+	}
+	return updated, nil
 }
 
 func (s *InMemoryEntitlementGrantStore) LatestWindowEndBySlot(

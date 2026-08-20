@@ -315,16 +315,30 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			errs = append(errs, err)
 		}
 
-		// Record the quota exhaustion timestamp, once per grant.
-		// NOTE: this is the EVALUATION time, not the exact crossing time.
-		// finding that exactly needs extra ClickHouse queries (binary search on the
-		// running usage). Billing only charges usage AFTER this timestamp, so
+		// Exhaustion is DERIVED from the refreshed usage each tick, not latched.
+		// On every pre-existing path this is a no-op: usage is recomputed over a
+		// fixed window and only grows as events land, so once usage >= quota it
+		// stays there and derived == latched. The single case it changes is a
+		// mid-cycle quota top-up (an addon attach raises quota, never usage) —
+		// precisely when a grant should drop back under quota, and the reason
+		// the top-up itself never has to touch status.
+		//
+		// quota_crossed_at still records the EVALUATION time, not the exact
+		// crossing: finding that needs a binary search on running usage in
+		// ClickHouse. Billing only charges usage AFTER this timestamp, so
 		// overage accrued before detection is never billed: pro-customer,
 		// bounded by the debounce delay. If exactness is ever needed, the
 		// upgrade path is the binary-searched crossing (see ERD decisions).
-		cross := g.QuotaCrossedAt
-		if cross == nil && usage.GreaterThanOrEqual(g.Quota) {
-			cross = &at
+		exhausted := usage.GreaterThanOrEqual(g.Quota)
+		status := types.EntitlementGrantStatusActive
+		
+		var cross *time.Time
+		if exhausted {
+			status = types.EntitlementGrantStatusExhausted
+			// Keep the first crossing we recorded; only stamp a new one.
+			if cross = g.QuotaCrossedAt; cross == nil {
+				cross = &at
+			}
 		}
 
 		// Snapshot the refreshed state; last_computed_at >= valid_to marks a
@@ -332,10 +346,8 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		builder := entitlementgrant.NewEntitlementGrantBuilder(g).
 			WithUsage(usage).
 			WithLastComputedAt(&at).
-			WithQuotaCrossedAt(cross)
-		if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
-			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
-		}
+			WithQuotaCrossedAt(cross).
+			WithGrantStatus(status)
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
 				"grant_id", g.ID, "error", err)
@@ -414,9 +426,17 @@ func (s *alertService) transitionEntitlementGrantAlert(
 		return nil
 	}
 	ratio := usage.Div(g.Quota)
+
+	// Below quota is logged as a recovery rather than skipped. LogAlert dedups on
+	// the previous state, so without an `ok` transition a re-exhaustion after a
+	// quota top-up looks unchanged and is swallowed — the customer would be told
+	// once, top up, exhaust again, and never hear about it. No webhook fires for
+	// `ok` (AlertTypeEntitlementGrantExhausted maps only in_alarm), and LogAlert
+	// skips `ok` when no prior alert exists, so grants that never crossed stay
+	// silent.
+	alertStatus := types.AlertStateInAlarm
 	if ratio.LessThan(decimal.NewFromInt(1)) {
-		// not exhausted yet, AlertStateOk
-		return nil
+		alertStatus = types.AlertStateOk
 	}
 
 	parentEntityType := string(types.AlertEntityTypeSubscription)
@@ -428,7 +448,7 @@ func (s *alertService) transitionEntitlementGrantAlert(
 		ParentEntityID:   &g.SubscriptionID,
 		CustomerID:       &custID,
 		AlertType:        types.AlertTypeEntitlementGrantExhausted,
-		AlertStatus:      types.AlertStateInAlarm,
+		AlertStatus:      alertStatus,
 		AlertInfo: types.AlertInfo{
 			ValueAtTime: ratio,
 			Timestamp:   at,

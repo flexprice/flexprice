@@ -923,6 +923,10 @@ func init() {
 	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
 	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
 	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
+	// entitlementgrantDescMetadata is the schema descriptor for metadata field.
+	entitlementgrantDescMetadata := entitlementgrantFields[14].Descriptor()
+	// entitlementgrant.DefaultMetadata holds the default value on creation for the metadata field.
+	entitlementgrant.DefaultMetadata = entitlementgrantDescMetadata.Default.(types.Metadata)
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()
 	entityintegrationmappingMixinFields0 := entityintegrationmappingMixin[0].Fields()
 	_ = entityintegrationmappingMixinFields0

@@ -198,9 +198,11 @@ func (b EntitlementGrantAllocationBehavior) Validate() error {
 
 func (b EntitlementGrantAllocationBehavior) String() string { return string(b) }
 
-// EntitlementGrantStatus tracks quota state: `active` until usage crosses
-// quota, then `exhausted`. Expiry is not a status — it is derived from
-// `valid_to <= now`, so closed grants are never written back.
+// EntitlementGrantStatus tracks quota state: `exhausted` while usage >= quota,
+// `active` otherwise. It is derived on every evaluation tick, not latched — a
+// mid-cycle quota top-up can move a grant back to `active`. Expiry is not a
+// status — it is derived from `valid_to <= now`, so closed grants are never
+// written back.
 type EntitlementGrantStatus string
 
 const (

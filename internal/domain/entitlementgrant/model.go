@@ -29,7 +29,8 @@ type EntitlementGrant struct {
 	// QuotaCrossedAt is set once, when the evaluator first sees usage >= quota
 	// It holds the evaluation time, not the exact event-level crossing.
 	QuotaCrossedAt *time.Time `json:"quota_crossed_at,omitempty"`
-	EnvironmentID  string     `json:"environment_id"`
+	Metadata      types.Metadata `json:"metadata,omitempty"`
+	EnvironmentID string         `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -73,6 +74,21 @@ func (g *EntitlementGrant) Overage() decimal.Decimal {
 		return decimal.Zero
 	}
 	return over
+}
+
+// MetadataValue reads one metadata key, nil-safe on both the grant and the map.
+func (g *EntitlementGrant) MetadataValue(key string) (string, bool) {
+	if g == nil || g.Metadata == nil {
+		return "", false
+	}
+	v, ok := g.Metadata[key]
+	return v, ok
+}
+
+// HasMetadataKey reports whether the key is present, regardless of its value.
+func (g *EntitlementGrant) HasMetadataKey(key string) bool {
+	_, ok := g.MetadataValue(key)
+	return ok
 }
 
 func (g *EntitlementGrant) Validate() error {
@@ -154,6 +170,7 @@ func FromEnt(e *ent.EntitlementGrant) *EntitlementGrant {
 		GrantStatus:         e.GrantStatus,
 		LastComputedAt:      e.LastComputedAt,
 		QuotaCrossedAt:      e.QuotaCrossedAt,
+		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
