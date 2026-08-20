@@ -292,7 +292,7 @@ spec:
         # --clickhouse-dir defaults to migrations/clickhouse, relative to the
         # image WORKDIR /app, so no flag is needed.
         - name: run-clickhouse-migrations
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /bin/sh
@@ -310,7 +310,12 @@ spec:
                 exit 1
               fi
               echo "Using: ${MIGRATE_BINARY}"
+              {{- if .Values.migration.clickhouseFile }}
+              echo "Applying baseline: {{ .Values.migration.clickhouseFile }}"
+              ${MIGRATE_BINARY} clickhouse --file {{ .Values.migration.clickhouseFile | quote }} || exit 1
+              {{- else }}
               ${MIGRATE_BINARY} clickhouse || exit 1
+              {{- end }}
               echo "✅ ClickHouse migrations complete"
           env:
             {{- include "flexprice.env" . | nindent 12 }}
@@ -326,7 +331,7 @@ spec:
         {{- if .Values.migration.steps.ent }}
         # ── 7. Run Ent framework migrations ──────────────────────────────────
         - name: run-ent-migrations
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /bin/sh
@@ -537,18 +542,18 @@ spec:
               }
 
               # All topics used by FlexPrice
-              create_topic "{{ .Values.kafkaConfig.topic }}"
-              create_topic "{{ .Values.kafkaConfig.topicLazy }}"
+              create_topic "{{ .Values.kafkaConfig.topic }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "{{ .Values.kafkaConfig.topicLazy }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
               {{- with .Values.kafkaConfig.topicBulk }}
-              create_topic "{{ . }}"
+              create_topic "{{ . }}" "{{ $.Values.migration.kafkaTopics.partitions | default 3 }}"
               {{- end }}
-              create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}"
-              create_topic "{{ .Values.eventPostProcessing.topic }}"
-              create_topic "{{ .Values.eventPostProcessing.topicBackfill }}"
-              create_topic "{{ .Values.webhook.topic }}"
-              create_topic "events_backfill"
-              create_topic "wallet_alert"
-              create_topic "onboarding_events"
+              create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "{{ .Values.eventPostProcessing.topic }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "{{ .Values.eventPostProcessing.topicBackfill }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "{{ .Values.webhook.topic }}" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "events_backfill" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "wallet_alert" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
+              create_topic "onboarding_events" "{{ .Values.migration.kafkaTopics.partitions | default 3 }}"
 
               if [ "${FAILED}" -ne 0 ]; then
                 echo "❌ ${FAILED} topic(s) could not be created."
@@ -580,7 +585,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if .Values.migration.command }}
           command:

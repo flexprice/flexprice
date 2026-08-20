@@ -862,6 +862,14 @@ migration:
   activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)
   ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
   command: ""  # Custom command to run (if empty, uses default migration steps)
+  # Apply a SINGLE ClickHouse baseline .sql via `migrate clickhouse --file`
+  # instead of scanning migrations/clickhouse/. Empty = scan the directory (the
+  # incremental, non-Replicated set). Set to a baseline path for a replicated
+  # cluster, e.g. migrations/baseline/clickhouse_baseline_replicated_20260819.sql
+  # — its tables use Replicated* engines + ON CLUSTER, which the directory set
+  # does not. Requires a migrate binary that supports --file (flexprice #2617).
+  clickhouseFile: ""
+
   # Migration steps to run (all enabled by default)
   steps:
     postgresSetup: true  # Create schema and extensions in PostgreSQL
@@ -881,6 +889,10 @@ migration:
   # cover heap plus JVM overhead, or the kernel OOM-kills the container (exit
   # 137, no logs) instead of the JVM reporting it.
   kafkaTopics:
+    # Partitions for every topic the create-kafka-topics step makes. Default 3 so
+    # even dev has room to parallelise consumers; 1 was too few. Fresh topics only —
+    # raising an existing topic's partitions needs kafka-topics --alter.
+    partitions: 3
     heapOpts: "-Xmx512m -Xms256m"
     resources:
       limits:
