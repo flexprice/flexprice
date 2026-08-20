@@ -77,6 +77,12 @@ func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, in
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	sourceFeatures, err := a.params.FeatureRepo.List(sourceCtx, filter)
 	if err != nil {
+		a.params.Logger.Error(ctx, "CloneEnvironmentFeatures failed to list source features",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"source_environment_id", input.SourceEnvironmentID,
+			"target_environment_id", input.TargetEnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list features from source environment").
 			Mark(ierr.ErrDatabase)
@@ -85,6 +91,12 @@ func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, in
 	// Build index of existing target features by lookup_key for idempotency check
 	targetFeatures, err := a.params.FeatureRepo.List(targetCtx, filter)
 	if err != nil {
+		a.params.Logger.Error(ctx, "CloneEnvironmentFeatures failed to list target features",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"source_environment_id", input.SourceEnvironmentID,
+			"target_environment_id", input.TargetEnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list features from target environment").
 			Mark(ierr.ErrDatabase)
@@ -249,6 +261,12 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 	// Build feature/meter ID maps: source → target by lookup_key
 	featureIDMap, meterIDMap, err := a.buildCrossEnvIDMaps(sourceCtx, targetCtx)
 	if err != nil {
+		a.params.Logger.Error(ctx, "CloneEnvironmentPlans failed to build cross-env ID maps",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"source_environment_id", input.SourceEnvironmentID,
+			"target_environment_id", input.TargetEnvironmentID,
+		)
 		return nil, err
 	}
 
@@ -260,6 +278,12 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 	planFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	sourcePlans, err := a.params.PlanRepo.List(sourceCtx, planFilter)
 	if err != nil {
+		a.params.Logger.Error(ctx, "CloneEnvironmentPlans failed to list source plans",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"source_environment_id", input.SourceEnvironmentID,
+			"target_environment_id", input.TargetEnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list plans from source environment").
 			Mark(ierr.ErrDatabase)
@@ -268,6 +292,12 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 	// Build index of existing target plans by lookup_key for idempotency
 	targetPlans, err := a.params.PlanRepo.List(targetCtx, planFilter)
 	if err != nil {
+		a.params.Logger.Error(ctx, "CloneEnvironmentPlans failed to list target plans",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"source_environment_id", input.SourceEnvironmentID,
+			"target_environment_id", input.TargetEnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list plans from target environment").
 			Mark(ierr.ErrDatabase)

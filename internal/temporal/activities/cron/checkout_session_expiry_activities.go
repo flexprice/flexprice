@@ -27,6 +27,9 @@ func (a *CheckoutSessionExpiryActivities) ExpireCheckoutSessionsActivity(ctx con
 	now := time.Now().UTC()
 	r, err := a.checkoutSvc.CleanupAllExpiredSessions(ctx, &now)
 	if err != nil {
+		a.logger.Error(ctx, "ExpireCheckoutSessionsActivity failed",
+			"error", err,
+		)
 		return nil, err
 	}
 	return &cronModels.CheckoutSessionExpiryWorkflowResult{

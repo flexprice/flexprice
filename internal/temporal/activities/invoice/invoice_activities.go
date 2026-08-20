@@ -74,6 +74,12 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 
 	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
 	if err != nil {
+		s.logger.Error(ctx, "CreateDraftForCurrentSubscriptionPeriodActivity failed",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 	periodStart := sub.CurrentPeriodStart

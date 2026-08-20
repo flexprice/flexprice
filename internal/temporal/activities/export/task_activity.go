@@ -137,6 +137,12 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 
 	existingTask, err := a.taskRepo.Get(ctx, input.TaskID)
 	if err != nil {
+		a.logger.Error(ctx, "UpdateTaskStatus activity failed",
+			"error", err,
+			"task_id", input.TaskID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvID,
+		)
 		return ierr.WithError(err).
 			WithHint("Failed to get task").
 			Mark(ierr.ErrDatabase)
@@ -218,6 +224,12 @@ func (a *TaskActivity) CompleteTask(ctx context.Context, input CompleteTaskInput
 
 	existingTask, err := a.taskRepo.Get(ctx, input.TaskID)
 	if err != nil {
+		a.logger.Error(ctx, "CompleteTask activity failed",
+			"error", err,
+			"task_id", input.TaskID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvID,
+		)
 		return ierr.WithError(err).
 			WithHint("Failed to get task").
 			Mark(ierr.ErrDatabase)

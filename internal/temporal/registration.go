@@ -78,12 +78,12 @@ func RegisterWorkflowsAndActivities(
 
 	// Create activity instances with dependencies
 	planService := service.NewPlanService(params)
-	planActivities := planActivities.NewPlanActivities(planService)
+	planActivities := planActivities.NewPlanActivities(planService, params.Logger)
 
 	prepareEventsActivities := prepareProcessedEventsActivities.NewPrepareProcessedEventsActivities(params)
 
 	taskService := service.NewTaskService(params)
-	taskActivities := taskActivities.NewTaskActivities(taskService)
+	taskActivities := taskActivities.NewTaskActivities(taskService, params.Logger)
 
 	// QuickBooks price sync activities
 	qbPriceSyncActivities := qbActivities.NewQuickBooksPriceSyncActivities(
@@ -272,7 +272,7 @@ func RegisterWorkflowsAndActivities(
 
 	// Reprocess raw events activities
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
-	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService)
+	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService, params.Logger)
 
 	// Cron workflow activities (reuses subscriptionService and walletService from above)
 	creditGrantService := service.NewCreditGrantService(params)
@@ -298,7 +298,7 @@ func RegisterWorkflowsAndActivities(
 	marketplaceFlushActivities := marketplaceActivities.NewFlushActivities(params, mktplaceReporter, params.Logger)
 
 	cronBundle := &cronActivityBundle{
-		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService),
+		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService, params.Logger),
 		subscription:                 cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
 		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),

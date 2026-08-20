@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	models "github.com/flexprice/flexprice/internal/temporal/models/events"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/activity"
@@ -16,12 +17,14 @@ const RawEventsActivityPrefix = "RawEventsActivities"
 // ReprocessRawEventsActivities contains all raw event reprocessing activities
 type ReprocessRawEventsActivities struct {
 	rawEventsReprocessingService service.RawEventsReprocessingService
+	logger                       *logger.Logger
 }
 
 // NewReprocessRawEventsActivities creates a new ReprocessRawEventsActivities instance
-func NewReprocessRawEventsActivities(rawEventsReprocessingService service.RawEventsReprocessingService) *ReprocessRawEventsActivities {
+func NewReprocessRawEventsActivities(rawEventsReprocessingService service.RawEventsReprocessingService, log *logger.Logger) *ReprocessRawEventsActivities {
 	return &ReprocessRawEventsActivities{
 		rawEventsReprocessingService: rawEventsReprocessingService,
+		logger:                       log,
 	}
 }
 
@@ -73,6 +76,13 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 			"external_customer_ids", input.ExternalCustomerIDs,
 			"event_names", input.EventNames,
 			"error", err)
+		a.logger.Error(ctx, "ReprocessRawEvents activity failed",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"external_customer_ids", input.ExternalCustomerIDs,
+			"event_names", input.EventNames,
+		)
 		return response, ierr.WithError(err).
 			WithHint("Failed to reprocess raw events").
 			WithReportableDetails(map[string]interface{}{

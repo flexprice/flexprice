@@ -55,6 +55,12 @@ func (a *InvoiceSyncActivities) MarkWhopInvoicePaid(
 				err,
 			)
 		}
+		a.logger.Error(ctx, "MarkWhopInvoicePaid activity failed to get Whop integration",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 

@@ -67,6 +67,13 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 	// Load the full subscription with line items.
 	sub, _, fetchErr := paddleIntegration.SyncSvc.GetSubscriptionWithLineItems(ctx, input.SubscriptionID)
 	if fetchErr != nil {
+		a.logger.Error(ctx, "SyncSubscriptionToPaddle activity failed: fetch subscription",
+			"error", fetchErr,
+			"subscription_id", input.SubscriptionID,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return fmt.Errorf("fetching subscription: %w", fetchErr)
 	}
 
@@ -91,6 +98,13 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 		if ierr.IsValidation(prodErr) {
 			return temporal.NewNonRetryableApplicationError(prodErr.Error(), "ValidationError", prodErr)
 		}
+		a.logger.Error(ctx, "SyncSubscriptionToPaddle activity failed: sync products",
+			"error", prodErr,
+			"subscription_id", input.SubscriptionID,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return fmt.Errorf("syncing products: %w", prodErr)
 	}
 
@@ -139,6 +153,14 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 				"invoice_id", input.InvoiceID)
 			return &models.SubscriptionSyncStatusResult{Status: "activated"}, nil
 		}
+		a.logger.Error(ctx, "CheckSubscriptionSyncStatus activity failed: get integration",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"subscription_id", input.SubscriptionID,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 
@@ -148,6 +170,12 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 	if subID == "" || customerID == "" {
 		inv, invErr := paddleIntegration.SyncSvc.GetInvoiceByID(ctx, input.InvoiceID)
 		if invErr != nil {
+			a.logger.Error(ctx, "CheckSubscriptionSyncStatus activity failed: fetch invoice",
+				"error", invErr,
+				"invoice_id", input.InvoiceID,
+				"tenant_id", input.TenantID,
+				"environment_id", input.EnvironmentID,
+			)
 			return nil, fmt.Errorf("fetching invoice to resolve subscription_id: %w", invErr)
 		}
 		if subID == "" {
@@ -169,6 +197,14 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 
 	activated, err := paddleIntegration.SyncSvc.GetSubscriptionMappingStatus(ctx, subID)
 	if err != nil {
+		a.logger.Error(ctx, "CheckSubscriptionSyncStatus activity failed: get subscription mapping status",
+			"error", err,
+			"subscription_id", subID,
+			"invoice_id", input.InvoiceID,
+			"customer_id", customerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 	if activated {

@@ -55,6 +55,12 @@ func (a *AlertActivities) SpendAndEntitlementAlertsActivity(ctx context.Context,
 
 	ctx, cust, err := a.prepare(ctx, input.TenantID, input.EnvironmentID, input.CustomerID)
 	if err != nil {
+		a.logger.Error(ctx, "SpendAndEntitlementAlertsActivity failed to prepare",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"customer_id", input.CustomerID,
+		)
 		return err
 	}
 	if cust == nil {
@@ -62,7 +68,16 @@ func (a *AlertActivities) SpendAndEntitlementAlertsActivity(ctx context.Context,
 		return nil
 	}
 
-	return service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust, input.SpendAlertsEnabled, input.EntitlementAlertsEnabled)
+	if err := service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust, input.SpendAlertsEnabled, input.EntitlementAlertsEnabled); err != nil {
+		a.logger.Error(ctx, "SpendAndEntitlementAlertsActivity failed",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"customer_id", input.CustomerID,
+		)
+		return err
+	}
+	return nil
 }
 
 // WalletAlertsActivity evaluates wallet-balance alerts and auto-topup.
@@ -75,6 +90,12 @@ func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models
 
 	ctx, cust, err := a.prepare(ctx, input.TenantID, input.EnvironmentID, input.CustomerID)
 	if err != nil {
+		a.logger.Error(ctx, "WalletAlertsActivity failed to prepare",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"customer_id", input.CustomerID,
+		)
 		return err
 	}
 	if cust == nil {
@@ -84,5 +105,14 @@ func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models
 
 	// Run-id-seeded idempotency: retries within the same firing dedupe to one topup.
 	autoTopupSeed := activity.GetInfo(ctx).WorkflowExecution.RunID
-	return service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust, autoTopupSeed)
+	if err := service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust, autoTopupSeed); err != nil {
+		a.logger.Error(ctx, "WalletAlertsActivity failed",
+			"error", err,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"customer_id", input.CustomerID,
+		)
+		return err
+	}
+	return nil
 }

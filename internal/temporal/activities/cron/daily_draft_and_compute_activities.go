@@ -46,6 +46,9 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	subs, err := a.invoiceService.ListSubscriptionsDueForDailyDraftCompute(ctx)
 	if err != nil {
 		log.Error("Failed to list subscriptions due for daily draft-and-compute", "error", err)
+		a.logger.Error(ctx, "DailyDraftAndComputeActivity failed to list subscriptions",
+			"error", err,
+		)
 		return nil, err
 	}
 	result.TotalDueSubscriptions = len(subs)
@@ -82,7 +85,14 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 		"failed", result.FailedCount)
 
 	if result.FailedCount > 0 {
-		return nil, fmt.Errorf("failed to trigger %d daily draft-and-compute workflows", result.FailedCount)
+		err := fmt.Errorf("failed to trigger %d daily draft-and-compute workflows", result.FailedCount)
+		a.logger.Error(ctx, "DailyDraftAndComputeActivity had subscription failures",
+			"error", err,
+			"failed_count", result.FailedCount,
+			"triggered_count", result.TriggeredCount,
+			"total_due_subscriptions", result.TotalDueSubscriptions,
+		)
+		return nil, err
 	}
 
 	return result, nil

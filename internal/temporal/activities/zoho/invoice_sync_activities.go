@@ -33,6 +33,12 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", "ConnectionNotFound", err)
 		}
+		a.logger.Error(ctx, "SyncInvoiceToZoho activity failed to get Zoho Books integration",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
@@ -58,8 +64,23 @@ func (a *InvoiceSyncActivities) MarkZohoBooksInvoicePaid(ctx context.Context, in
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", "ConnectionNotFound", err)
 		}
+		a.logger.Error(ctx, "MarkZohoBooksInvoicePaid activity failed to get Zoho Books integration",
+			"error", err,
+			"invoice_id", input.InvoiceID(),
+			"tenant_id", input.TenantID(),
+			"environment_id", input.EnvironmentID(),
+		)
 		return err
 	}
 
-	return zohoIntegration.InvoiceSvc.MarkInvoicePaidInZoho(ctx, input.InvoiceID())
+	if err := zohoIntegration.InvoiceSvc.MarkInvoicePaidInZoho(ctx, input.InvoiceID()); err != nil {
+		a.logger.Error(ctx, "MarkZohoBooksInvoicePaid activity failed",
+			"error", err,
+			"invoice_id", input.InvoiceID(),
+			"tenant_id", input.TenantID(),
+			"environment_id", input.EnvironmentID(),
+		)
+		return err
+	}
+	return nil
 }

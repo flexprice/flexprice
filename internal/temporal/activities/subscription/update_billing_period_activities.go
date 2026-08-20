@@ -53,6 +53,12 @@ func (s *BillingActivities) CheckDraftSubscriptionActivity(
 
 	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
 	if err != nil {
+		s.logger.Error(ctx, "CheckDraftSubscriptionActivity failed",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 
@@ -91,6 +97,12 @@ func (s *BillingActivities) CalculatePeriodsActivity(
 
 	periods, err := subscriptionService.CalculateBillingPeriods(ctx, input.SubscriptionID)
 	if err != nil {
+		s.logger.Error(ctx, "CalculatePeriodsActivity failed",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 
@@ -165,6 +177,12 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	// Get the subscription
 	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
 	if err != nil {
+		s.logger.Error(ctx, "UpdateCurrentPeriodActivity failed",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 
@@ -287,6 +305,12 @@ func (s *BillingActivities) CheckCancellationActivity(
 
 	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
 	if err != nil {
+		s.logger.Error(ctx, "CheckCancellationActivity failed",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, err
 	}
 
