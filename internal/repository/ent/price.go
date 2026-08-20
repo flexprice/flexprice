@@ -803,6 +803,14 @@ func (r *priceRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 		).
 		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Price with lookup key %s was not found", lookupKey).
+				WithReportableDetails(map[string]interface{}{
+					"lookup_key": lookupKey,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get price by lookup key").
 			WithReportableDetails(map[string]interface{}{
