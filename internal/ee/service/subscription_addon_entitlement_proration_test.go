@@ -178,7 +178,7 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_ExistingFeature
 	s.True(got.Quota.Equal(want), "expected quota %s, got %s", want, got.Quota)
 	s.True(got.ValidFrom.Equal(s.testData.subscription.CurrentPeriodStart), "window start must not move")
 	s.True(got.ValidTo.Equal(s.testData.subscription.CurrentPeriodEnd), "window end must not move")
-	s.Equal("true", got.Metadata["proration_applied"])
+	s.Equal("true", got.Metadata["proration_applied"], "a mid-cycle attach is scaled")
 	s.NotEmpty(got.Metadata["proration_coefficient"])
 }
 
@@ -259,9 +259,10 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_ReplayAppliesOn
 		"replay must not top up twice: %s became %s", afterFirst.Quota, afterReplay.Quota)
 }
 
-// proration_behavior other than create_prorations is a no-op, same gate as the
-// credit-grant path.
-func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_BehaviorNone_IsNoOp() {
+// proration_behavior only decides whether the addon's allowance is SCALED, not
+// whether it lands. Credit grants already hand over full credits here, so the
+// quota must follow or the two disagree about the same attach.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_BehaviorNone_GrantsFullQuota() {
 	featureID := s.seedGrantFeature("feat_eg_none")
 	s.seedGrantEC("ent_aaa_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
 	existing := s.seedCycleGrant("ent_aaa_plan", featureID, 1000)
@@ -271,13 +272,17 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_BehaviorNone_Is
 
 	got, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), existing.ID)
 	s.Require().NoError(err)
-	s.True(got.Quota.Equal(decimal.NewFromInt(1000)), "quota must be untouched, got %s", got.Quota)
-	s.Empty(got.Metadata["proration_applied"])
+	s.True(got.Quota.Equal(decimal.NewFromInt(1600)),
+		"unprorated attach adds the addon's full quota, expected 1600, got %s", got.Quota)
+	s.Equal("false", got.Metadata["proration_applied"], "the delta was not scaled")
+	s.Equal("1", got.Metadata["proration_coefficient"])
+	s.True(got.ValidFrom.Equal(s.testData.subscription.CurrentPeriodStart), "window must not move")
 }
 
-// Attaching at (or before) the period start needs no proration — the evaluator
-// already opens the full quota.
-func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_AtPeriodStart_IsNoOp() {
+// An attach at the period start covers the whole cycle, so the coefficient is 1
+// and the full quota lands — the row must not be left at the plan's allowance
+// while the addon's credits are granted in full.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_AtPeriodStart_GrantsFullQuota() {
 	featureID := s.seedGrantFeature("feat_eg_start")
 	s.seedGrantEC("ent_aaa_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
 	existing := s.seedCycleGrant("ent_aaa_plan", featureID, 1000)
@@ -288,7 +293,9 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_AtPeriodStart_I
 
 	got, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), existing.ID)
 	s.Require().NoError(err)
-	s.True(got.Quota.Equal(decimal.NewFromInt(1000)), "quota must be untouched, got %s", got.Quota)
+	s.True(got.Quota.Equal(decimal.NewFromInt(1600)),
+		"a full-period attach adds the full quota, expected 1600, got %s", got.Quota)
+	s.Equal("1", got.Metadata["proration_coefficient"])
 }
 
 // An attach in the last instant of a period prorates to a sliver. numeric(25,15)

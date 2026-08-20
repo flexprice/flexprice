@@ -64,9 +64,6 @@ func (s *subscriptionService) addonEntitlementGrantProration(
 	addonID string,
 	associationID string,
 ) []addonEntitlementGrantProrationEntry {
-	if behavior != types.ProrationBehaviorCreateProrations {
-		return nil
-	}
 	// Dep guard, matching the pre-invoice refresh: partially-wired services stay
 	// on the old path rather than panicking.
 	if s.EntitlementGrantRepo == nil || s.EntitlementRepo == nil {
@@ -90,11 +87,8 @@ func (s *subscriptionService) addonEntitlementGrantProration(
 			"error", err.Error())
 		return nil
 	}
-	// Attaching at (or before) the period start already gets the full quota from
-	// the evaluator; there is nothing to prorate.
-	if !startDate.After(p.Start) {
-		return nil
-	}
+
+	shouldProrate := behavior == types.ProrationBehaviorCreateProrations && startDate.After(p.Start)
 
 	addonECs := s.grantConfigECsForAddon(ctx, addonID)
 	if len(addonECs) == 0 {
@@ -108,7 +102,7 @@ func (s *subscriptionService) addonEntitlementGrantProration(
 	for _, ec := range addonECs {
 		entry, ok := s.resolveAddonGrantProrationEntry(
 			ctx, sub, ec, preAddonByFeature[ec.FeatureID], liveByFeature[ec.FeatureID],
-			p.Start, p.End, startDate, associationID)
+			p.Start, p.End, startDate, associationID, shouldProrate)
 		if !ok {
 			continue
 		}
@@ -127,11 +121,17 @@ func (s *subscriptionService) resolveAddonGrantProrationEntry(
 	liveGrants []*entitlementgrant.EntitlementGrant,
 	cycleStart, cycleEnd, startDate time.Time,
 	associationID string,
+	shouldProrate bool,
 ) (addonEntitlementGrantProrationEntry, bool) {
+	prorationDate := cycleStart
+	if shouldProrate {
+		prorationDate = startDate
+	}
+
 	res, err := proration.CalculateEntitlementGrantProration(proration.EntitlementGrantProrationParams{
 		PeriodStart:   cycleStart,
 		PeriodEnd:     cycleEnd,
-		ProrationDate: startDate,
+		ProrationDate: prorationDate,
 		Strategy:      types.StrategySecondBased,
 		OriginalQuota: lo.FromPtr(addonEC.GrantQuota),
 	})
@@ -144,7 +144,7 @@ func (s *subscriptionService) resolveAddonGrantProrationEntry(
 	}
 
 	if !res.ProratedQuota.IsPositive() {
-		s.Logger.Info(ctx, "skipping entitlement grant proration; prorated quota is not positive",
+		s.Logger.Info(ctx, "skipping addon entitlement grant allocation; quota is not positive",
 			"subscription_id", sub.ID,
 			"entitlement_id", addonEC.ID,
 			"coefficient", res.Coefficient.String())
@@ -160,6 +160,8 @@ func (s *subscriptionService) resolveAddonGrantProrationEntry(
 		coverageStart: cycleStart,
 		metadata:      res.AuditMetadata(entitlementGrantProrationSource),
 	}
+
+	entry.metadata["proration_applied"] = lo.Ternary(shouldProrate, "true", "false")
 	entry.metadata[addonEntitlementGrantProrationKey(associationID)] = res.Coefficient.String()
 
 	// Parallel: every EC owns its own slot, so the addon's grant is a new budget
