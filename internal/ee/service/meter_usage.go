@@ -1985,26 +1985,29 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 // fetchMeters fetches meter configurations for the requested meter IDs.
 func (s *meterUsageService) fetchMeters(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*meter.Meter, error) {
-	filter := types.NewNoLimitMeterFilter()
+	// Known ID set → per-id cache path. Empty set → fall back to full tenant list.
 	if len(params.MeterIDs) > 0 {
-		filter.MeterIDs = params.MeterIDs
+		meters, err := s.MeterRepo.ListByIDs(ctx, params.MeterIDs)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to fetch meters for detailed analytics").
+				Mark(ierr.ErrDatabase)
+		}
+		return meters, nil
 	}
 
-	meters, err := s.MeterRepo.List(ctx, filter)
+	meters, err := s.MeterRepo.List(ctx, types.NewNoLimitMeterFilter())
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch meters for detailed analytics").
 			Mark(ierr.ErrDatabase)
 	}
 
-	if len(params.MeterIDs) == 0 {
-		meterIDs := make([]string, len(meters))
-		for i, m := range meters {
-			meterIDs[i] = m.ID
-		}
-		params.MeterIDs = meterIDs
+	meterIDs := make([]string, len(meters))
+	for i, m := range meters {
+		meterIDs[i] = m.ID
 	}
-
+	params.MeterIDs = meterIDs
 	return meters, nil
 }
 

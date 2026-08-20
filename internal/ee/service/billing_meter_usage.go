@@ -104,9 +104,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 	}
 	meterIDs = lo.Uniq(meterIDs)
 
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}

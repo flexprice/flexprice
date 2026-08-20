@@ -455,10 +455,8 @@ func (s *billingService) CalculateUsageCharges(
 	}
 	meterIDs = lo.Uniq(meterIDs)
 
-	// Fetch all meters at once
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	// Fetch all meters at once (routes through per-id cache).
+	meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return nil, err
 	}
