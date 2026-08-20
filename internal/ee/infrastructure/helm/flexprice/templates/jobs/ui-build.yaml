@@ -1,4 +1,17 @@
-{{- if and .Values.frontend.enabled .Values.frontend.build.enabled }}
+{{- if .Values.frontend.build.enabled }}
+{{- /*
+  Gated on build.enabled ALONE, deliberately not on frontend.enabled.
+
+  frontend.enabled governs SERVING — whether this chart runs a frontend
+  Deployment or the gcsproxy sidecar. Building is a separate concern, and on
+  AWS the two come apart entirely: EKS environments serve the UI with nginx
+  proxying an S3 bucket through a gateway VPC endpoint, deployed from the
+  infrastructure repo rather than from this chart, so they run with
+  frontend.enabled=false and still need the bundle built.
+
+  Requiring both would have made this Job silently render nothing in exactly
+  the environments that have no other way to publish a build.
+*/}}
 {{- /*
   Build the frontend in-cluster and sync the bundle into the bucket the UI is
   served from.
@@ -129,12 +142,23 @@ spec:
       {{- end }}
 
       {{- /*
-        Off at POD level, so no container gets the token by default and the
-        untrusted build stage cannot reach the credential. The sync container
-        mounts it back explicitly below: default-deny, opt in for the one
-        container that needs it.
+        On GCP: off at POD level, so no container gets the token by default and
+        the untrusted build stage cannot reach the credential. The sync
+        container mounts it back explicitly below — default-deny, opt in for
+        the one container that needs it.
+
+        On AWS: ON, because it has to be. IRSA delivers credentials through a
+        mutating webhook that injects the projected token into EVERY container
+        in the pod, with no per-container scope to switch off. Turning automount
+        off here would leave the sync container unable to authenticate at all.
+
+        So on AWS the build container CAN reach the role. That is bounded rather
+        than solved: the role should grant write on the UI bucket and nothing
+        else, which makes the worst case a corrupted UI bundle rather than
+        movement into anything further. The infrastructure repo's IRSA role for
+        this Job is scoped exactly that way.
       */}}
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ eq .Values.frontend.build.cloud "aws" }}
 
       volumes:
         - name: workspace
@@ -229,11 +253,16 @@ spec:
 
       containers:
         - name: sync
-          image: {{ .Values.frontend.build.syncImage | quote }}
+          image: {{ .Values.frontend.build.syncImage | default (eq .Values.frontend.build.cloud "aws" | ternary "amazon/aws-cli:latest" "google/cloud-sdk:alpine") | quote }}
           imagePullPolicy: {{ .Values.frontend.build.imagePullPolicy | default "IfNotPresent" }}
           env:
             - name: BUCKET
-              value: {{ .Values.frontend.gcs.bucket | quote }}
+              value: {{ eq .Values.frontend.build.cloud "aws" | ternary .Values.frontend.s3.bucket .Values.frontend.gcs.bucket | quote }}
+            {{- if eq .Values.frontend.build.cloud "aws" }}
+            {{- /* The CLI cannot resolve a bucket without a region. */}}
+            - name: AWS_REGION
+              value: {{ required "frontend.build.awsRegion is required when cloud is aws" .Values.frontend.build.awsRegion | quote }}
+            {{- end }}
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -250,12 +279,45 @@ spec:
             - -c
             - |
               set -eu
+              {{- if eq .Values.frontend.build.cloud "aws" }}
+              echo "identity: $(aws sts get-caller-identity --query Arn --output text)"
+              {{- else }}
               echo "identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+              {{- end }}
 
               test -f /workspace/dist/index.html || {
                 echo "build produced no dist — refusing to sync"; exit 1; }
 
               cd /workspace/dist
+              {{- if eq .Values.frontend.build.cloud "aws" }}
+
+              # Assets first, index.html second, and only then the prune that
+              # --delete performs. Content-hashed filenames mean a new build
+              # never overwrites an old asset, so during the upload the bucket
+              # holds both generations and keeps serving the old shell.
+              #
+              # Deleting first — which the hand-rolled sync in the
+              # infrastructure repo used to do — opens a window where the
+              # bucket holds a fresh index.html naming assets that are already
+              # gone. Unattended in a Job, that is an outage nobody triggered.
+              aws s3 sync . "s3://$BUCKET" --delete \
+                --exclude index.html \
+                --cache-control "public,max-age=31536000,immutable"
+
+              # The shell must always be fresh: it is the manifest naming the
+              # hashed assets, and a stale one pins filenames that are gone.
+              # Writing it last makes the cutover a single object PUT.
+              #
+              # Not gzipped at rest, unlike the standalone sync-ui.sh: the
+              # nginx in front of this bucket does `gzip on`, so the wire is
+              # compressed either way and only stored bytes differ. The GCS
+              # branch below makes the same trade.
+              aws s3 cp index.html "s3://$BUCKET/index.html" \
+                --cache-control "no-cache, must-revalidate" \
+                --content-type "text/html; charset=utf-8"
+
+              echo "Synced dist/ -> s3://$BUCKET"
+              {{- else }}
 
               # rsync computes the difference rather than deleting first, so
               # there is never a window where index.html names assets that are
@@ -272,6 +334,7 @@ spec:
                 --cache-control="no-cache, must-revalidate"
 
               echo "Synced dist/ -> gs://$BUCKET"
+              {{- end }}
 ---
 {{- /*
   The Job's own ServiceAccount.

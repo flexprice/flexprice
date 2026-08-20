@@ -396,6 +396,14 @@ frontend:
     pullPolicy: IfNotPresent
   # ── mode: gcsproxy ───────────────────────────────────────────────────────────
   # Only read when mode is "gcsproxy".
+  s3:
+    # S3 bucket holding the built SPA, for build.cloud=aws.
+    #
+    # Only the build Job reads this. The chart has no S3 serving mode — on EKS
+    # the UI is served by nginx proxying the bucket through an S3 gateway VPC
+    # endpoint, deployed from the infrastructure repo rather than from here.
+    # This is the bucket that nginx reads.
+    bucket: ""
   gcs:
     # GCS bucket holding the built SPA. Required in this mode.
     bucket: ""
@@ -423,6 +431,17 @@ frontend:
   # deployed, rather than rolling back a release that was fine.
   build:
     enabled: false
+    # Which object store the bundle is synced to: "gcp" or "aws".
+    #
+    # The build half — clone, npm ci, vite build — is identical either way.
+    # This picks the sync half, the image that runs it, and how the pod proves
+    # its identity:
+    #   gcp  gcloud storage rsync into frontend.gcs.bucket, authenticating with
+    #        a projected token (see tokenAudience).
+    #   aws  aws s3 sync into frontend.s3.bucket, authenticating with IRSA.
+    cloud: gcp
+    # Required when cloud is aws — the CLI cannot resolve a bucket without it.
+    awsRegion: ""
     # false renders an ordinary Job that persists after it finishes, which is
     # what the terragrunt path applies. true adds the Helm hook annotations for
     # ArgoCD-driven environments — at the cost of the Job, and its logs, being
@@ -450,19 +469,28 @@ frontend:
     # this container executes the whole public npm dependency tree, so the base
     # image is the one part that should not move underneath a deploy.
     image: node:22-bookworm@sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a
-    # Cloud SDK only — no build tooling. This container holds the credential,
-    # so its contents are the blast radius.
-    syncImage: google/cloud-sdk:alpine
+    # Cloud CLI only — no build tooling. This container holds the credential,
+    # so its contents are the blast radius. Empty picks the default for
+    # `cloud`: google/cloud-sdk:alpine or amazon/aws-cli:latest.
+    syncImage: ""
     imagePullPolicy: IfNotPresent
-    # Workload Identity binding for the Job's OWN ServiceAccount, which needs
-    # WRITE access to the bucket. Distinct from frontend.serviceAccount, which
+    # Identity binding for the Job's OWN ServiceAccount, which needs WRITE
+    # access to the bucket. Distinct from frontend.serviceAccount, which
     # gcsproxy reads as: binding write access to that one would let the
     # internet-facing serving pod overwrite the bundle it serves.
+    #
+    #   gcp  iam.gke.io/gcp-service-account: ui-build@<project>.iam.gserviceaccount.com
+    #   aws  eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/<role>
+    #
+    # On AWS, scope that role to the UI bucket alone. IRSA injects its token
+    # into every container in the pod, so the build container — which runs the
+    # whole public npm dependency tree — can assume it too; a tight role is
+    # what bounds that to a corrupted bundle rather than anything worse.
     serviceAccountAnnotations: {}
-    #   iam.gke.io/gcp-service-account: ui-build@<project>.iam.gserviceaccount.com
-    # <project>.svc.id.goog. Set alongside the annotation above: it is the
-    # audience the metadata server expects when exchanging the projected token
-    # for a GCP access token, and the sync cannot authenticate without it.
+    # GCP ONLY: <project>.svc.id.goog. Set alongside the annotation above — it
+    # is the audience the metadata server expects when exchanging the projected
+    # token for a GCP access token, and the sync cannot authenticate without
+    # it. Leave empty on AWS, where IRSA's webhook handles this.
     tokenAudience: ""
     nodeSelector: {}
     # tsc -b && vite build needs more than node's default heap. Keep
