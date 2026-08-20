@@ -266,8 +266,14 @@ func (s *entitlementGrantService) openMissingGrants(
 ) ([]*entitlementgrant.EntitlementGrant, error) {
 	opened := make([]*entitlementgrant.EntitlementGrant, 0)
 	for _, sub := range subs {
+		// An EC "holds this cycle's row" when its slot has a window reaching past
+		// the cycle start — i.e. the row this cycle's pool already lives in.
+		holdsCycleRow := func(ecID string) bool {
+			lastEnd, ok := latestEndBySlot[grantSlotKey(ecID, sub.ID)]
+			return ok && lastEnd.After(sub.CurrentPeriodStart)
+		}
 		for _, featureECs := range s.eligibleGrantConfigsByFeature(ctx, sub, ecsBySub[sub.ID]) {
-			for _, candidate := range grantCandidatesForFeature(featureECs) {
+			for _, candidate := range grantCandidatesForFeature(featureECs, holdsCycleRow) {
 				slotOpened, err := s.openIfSlotFree(ctx, sub, candidate, latestEndBySlot, meta, at)
 				if err != nil {
 					return nil, err
@@ -314,8 +320,31 @@ func (s *entitlementGrantService) eligibleGrantConfigsByFeature(
 }
 
 // grantCandidatesForFeature: parallel → one candidate per EC; additive → one
-// candidate on the primary (lowest-ID) EC with the summed quota.
-func grantCandidatesForFeature(featureECs []*entitlement.Entitlement) []grantCandidate {
+// candidate on the slot-owning EC with the summed quota.
+//
+// The additive pool is conceptually per-feature, but a slot is keyed by
+// entitlement_config_id, so the pool has to borrow one EC's id to address
+// itself. The borrowed id carries no meaning — the quota is the sum either way.
+//
+// holdsCycleRow reports whether an EC already owns this cycle's row, and that
+// EC keeps ownership; only when none does (the cycle's first tick) does the
+// lowest id break the tie. Lowest-id alone is deterministic but NOT stable:
+// attaching an addon adds an EC to the set, and lowest({plan}) != lowest({plan,
+// addon}) whenever the addon's EC was authored first. Ownership would move to a
+// slot that has never been used, openIfSlotFree would find it empty, and a
+// second full-quota row would open beside the first. Two rows for one pool push
+// billing into the merged-overage branch, which ANDs the budgets — so the
+// tighter quota binds and the addon the customer paid for caps them instead of
+// topping them up. Ownership is re-derived freely at the next cycle, when the
+// pool has no live row.
+//
+// Pre-existing duplicates (rows opened on two ECs of one feature before this
+// rule landed) are left alone: this keeps the choice stable, it does not merge
+// rows that already exist.
+func grantCandidatesForFeature(
+	featureECs []*entitlement.Entitlement,
+	holdsCycleRow func(ecID string) bool,
+) []grantCandidate {
 	parallel := lo.SomeBy(featureECs, func(ec *entitlement.Entitlement) bool {
 		return ec.AggregationMode == types.EntitlementAggregationModeParallel
 	})
@@ -325,13 +354,24 @@ func grantCandidatesForFeature(featureECs []*entitlement.Entitlement) []grantCan
 		})
 	}
 
-	primary := featureECs[0]
+	lowest := featureECs[0]
 	total := decimal.Zero
+	var incumbent *entitlement.Entitlement
 	for _, ec := range featureECs {
-		if ec.ID < primary.ID {
-			primary = ec
+		if ec.ID < lowest.ID {
+			lowest = ec
+		}
+		if holdsCycleRow != nil && holdsCycleRow(ec.ID) {
+			if incumbent == nil || ec.ID < incumbent.ID {
+				incumbent = ec
+			}
 		}
 		total = total.Add(lo.FromPtr(ec.GrantQuota))
+	}
+
+	primary := lowest
+	if incumbent != nil {
+		primary = incumbent
 	}
 	return []grantCandidate{{ec: primary, quota: total}}
 }

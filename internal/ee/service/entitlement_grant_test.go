@@ -1979,3 +1979,142 @@ func (s *EntitlementGrantSuite) TestEvaluate_NeverExhausted_LogsNothing() {
 	s.Equal(0, inAlarm)
 	s.Equal(0, okCount, "an always-healthy grant must not accumulate ok logs")
 }
+
+// -----------------------------------------------------------------------------
+// Additive slot ownership is sticky within a cycle
+// -----------------------------------------------------------------------------
+
+// additiveECOnFeature builds a subscription_period grant EC with an explicit id
+// so the tests can control ULID ordering (ids sort by authoring time, and the
+// point of these tests is that authoring order must NOT decide the outcome).
+func (s *EntitlementGrantSuite) additiveECOnFeature(
+	id, featureID string,
+	entityType types.EntitlementEntityType,
+	entityID string,
+	quota int64,
+) *entitlement.Entitlement {
+	dv := 1
+	q := decimal.NewFromInt(quota)
+	ec := &entitlement.Entitlement{
+		ID:                 id,
+		FeatureID:          featureID,
+		FeatureType:        types.FeatureTypeMetered,
+		EntityType:         entityType,
+		EntityID:           entityID,
+		IsEnabled:          true,
+		GrantMeasure:       types.EntitlementGrantMeasureQuantity,
+		GrantDurationValue: &dv,
+		GrantDurationUnit:  types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		GrantQuota:         &q,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), ec)
+	s.Require().NoError(err)
+	return ec
+}
+
+func (s *EntitlementGrantSuite) grantRowsForCustomer() []*entitlementgrant.EntitlementGrant {
+	rows, err := s.GetStores().EntitlementGrantRepo.List(
+		s.GetContext(), types.NewNoLimitEntitlementGrantFilter())
+	s.Require().NoError(err)
+	return rows
+}
+
+// An EC joining a feature mid-cycle must not take the pool's slot away from the
+// row that already holds it — even when its id sorts lower (the addon was
+// authored before the plan). Two rows would flip billing into the merged-overage
+// branch, where the TIGHTER quota binds and the addon caps the customer instead
+// of topping them up.
+func (s *EntitlementGrantSuite) TestEnsureGrants_LowerIdECJoiningMidCycle_KeepsIncumbentSlot() {
+	m := s.simpleMeter("meter-sticky")
+	f := s.simpleFeature("feat-sticky", m.ID)
+	p := s.simplePlan("plan-sticky")
+	cust := s.simpleCustomer("cust-sticky")
+	sub := s.simpleSubscription("sub-sticky", cust.ID, p.ID)
+
+	// Plan EC authored later -> HIGH id.
+	planEC := s.additiveECOnFeature("ent_zzz_plan", f.ID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, p.ID, 100)
+
+	first, _, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(time.Hour))
+	s.Require().NoError(err)
+	s.Require().Len(first, 1)
+	s.Equal(planEC.ID, first[0].EntitlementConfigID)
+	s.True(first[0].Quota.Equal(decimal.NewFromInt(100)))
+
+	// Addon EC authored earlier -> LOW id, joins mid-cycle.
+	s.additiveECOnFeature("ent_aaa_addon", f.ID, types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION, sub.ID, 60)
+
+	_, _, err = s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(2*time.Hour))
+	s.Require().NoError(err)
+
+	rows := s.grantRowsForCustomer()
+	s.Require().Len(rows, 1, "an additive pool must stay ONE row for the cycle, got %d", len(rows))
+	s.Equal(planEC.ID, rows[0].EntitlementConfigID,
+		"the incumbent EC must keep the slot even though the joining EC sorts lower")
+	s.True(rows[0].Quota.Equal(decimal.NewFromInt(100)),
+		"the open window keeps its quota; raising it mid-cycle is the top-up's job, got %s", rows[0].Quota)
+}
+
+// Ownership is only sticky WITHIN a cycle. Once the pool has no live row the
+// rule re-derives from scratch, and the summed quota lands on one row.
+func (s *EntitlementGrantSuite) TestEnsureGrants_NextCycleRederivesOwnerAndSumsQuota() {
+	m := s.simpleMeter("meter-rederive")
+	f := s.simpleFeature("feat-rederive", m.ID)
+	p := s.simplePlan("plan-rederive")
+	cust := s.simpleCustomer("cust-rederive")
+	sub := s.simpleSubscription("sub-rederive", cust.ID, p.ID)
+
+	s.additiveECOnFeature("ent_zzz_plan", f.ID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, p.ID, 100)
+	_, _, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(time.Hour))
+	s.Require().NoError(err)
+
+	s.additiveECOnFeature("ent_aaa_addon", f.ID, types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION, sub.ID, 60)
+
+	// Roll the period: the previous row ends exactly at the old cycle end, so it
+	// no longer counts as holding the new cycle's row.
+	prevEnd := sub.CurrentPeriodEnd
+	sub.CurrentPeriodStart = prevEnd
+	sub.CurrentPeriodEnd = prevEnd.Add(30 * 24 * time.Hour)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, _, err = s.grantService.EnsureGrants(s.GetContext(), cust, prevEnd.Add(time.Hour))
+	s.Require().NoError(err)
+
+	rows := s.grantRowsForCustomer()
+	newCycle := lo.Filter(rows, func(g *entitlementgrant.EntitlementGrant, _ int) bool {
+		return g.ValidFrom.Equal(prevEnd)
+	})
+	s.Require().Len(newCycle, 1, "the new cycle must open exactly one pooled row, got %d", len(newCycle))
+	s.True(newCycle[0].Quota.Equal(decimal.NewFromInt(160)),
+		"the new cycle pools plan + addon, expected 160, got %s", newCycle[0].Quota)
+}
+
+// Parallel is untouched: each EC keeps its own slot and its own quota.
+func (s *EntitlementGrantSuite) TestEnsureGrants_ParallelECsStillGetOwnSlots() {
+	m := s.simpleMeter("meter-par")
+	f := s.simpleFeature("feat-par", m.ID)
+	p := s.simplePlan("plan-par")
+	cust := s.simpleCustomer("cust-par")
+	sub := s.simpleSubscription("sub-par", cust.ID, p.ID)
+
+	a := s.additiveECOnFeature("ent_zzz_plan", f.ID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, p.ID, 100)
+	a.AggregationMode = types.EntitlementAggregationModeParallel
+	_, err := s.GetStores().EntitlementRepo.Update(s.GetContext(), a)
+	s.Require().NoError(err)
+
+	b := s.additiveECOnFeature("ent_aaa_addon", f.ID, types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION, sub.ID, 60)
+	b.AggregationMode = types.EntitlementAggregationModeParallel
+	_, err = s.GetStores().EntitlementRepo.Update(s.GetContext(), b)
+	s.Require().NoError(err)
+
+	_, _, err = s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(time.Hour))
+	s.Require().NoError(err)
+
+	rows := s.grantRowsForCustomer()
+	s.Require().Len(rows, 2, "parallel ECs are independent budgets, one row each")
+	byEC := lo.SliceToMap(rows, func(g *entitlementgrant.EntitlementGrant) (string, decimal.Decimal) {
+		return g.EntitlementConfigID, g.Quota
+	})
+	s.True(byEC["ent_zzz_plan"].Equal(decimal.NewFromInt(100)))
+	s.True(byEC["ent_aaa_addon"].Equal(decimal.NewFromInt(60)))
+}
