@@ -877,6 +877,7 @@ migration:
     kafka: true          # Create Kafka topics (idempotent, safe to re-run)
     ent: true            # Run Ent framework migrations
     seed: false          # Run seed data (optional, set to true to enable)
+    verify: true         # Fatally assert CH tables + kafka topics exist post-migration
 
   # The create-kafka-topics init container runs the JVM-based kafka-topics
   # tool. Its heap is set explicitly rather than left to the JVM's default,
