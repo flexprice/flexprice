@@ -191,10 +191,8 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 		}
 
 		if len(meterIDs) > 0 {
-			// Create a filter to fetch all meters
-			meterFilter := types.NewNoLimitMeterFilter()
-			meterFilter.MeterIDs = meterIDs
-			meters, err := s.MeterRepo.List(ctx, meterFilter)
+			// Route through per-id cache instead of a raw List filter.
+			meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 			if err != nil {
 				return nil, err
 			}

@@ -119,9 +119,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 
 	// STEP4: Resolve meter metadata in bulk so we know how to interpret the
 	// usage value (regular vs bucketed) when calling PriceService.
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -217,9 +217,7 @@ func (s *entitlementGrantService) buildGrantEvalMeta(
 		return f.MeterID, f.MeterID != ""
 	}))
 	if len(meterIDs) > 0 {
-		meterFilter := types.NewNoLimitMeterFilter()
-		meterFilter.MeterIDs = meterIDs
-		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 		if err != nil {
 			return nil, err
 		}
