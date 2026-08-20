@@ -748,3 +748,51 @@ lint: build-loglint
 ## lint-ci: run loglint on internal/ (errors only — LL008 warnings ignored)
 lint-ci: build-loglint
 	@out=$$(go vet -vettool=./tools/bin/loglint ./internal/... 2>&1 | grep -v "^#" | grep -v "warning:"); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
+
+# ---- CLI (cli/ is a separate Go module: github.com/flexprice/cli) ----
+
+.PHONY: cli-build
+cli-build:
+	cd cli && go build -o bin/flexprice .
+
+.PHONY: cli-test
+cli-test:
+	cd cli && go test -race ./...
+
+.PHONY: cli-vet
+cli-vet:
+	cd cli && go vet ./...
+
+.PHONY: sync-cli-spec
+sync-cli-spec:
+	mkdir -p cli/spec
+	cp docs/swagger/swagger-3-0.json cli/spec/openapi.json
+	@echo "Synced OpenAPI spec into cli/spec/openapi.json"
+
+# TODO: manual-only for now — not called from cli-release.yml. Check with the
+# team before wiring this into automated releases; see cli/tools/gendocs/main.go.
+.PHONY: cli-docs
+cli-docs:
+	cd cli && go run ./tools/gendocs
+
+# Smoke suite: the CLI's own contract (streams, exit codes, help, safety).
+# Needs no server, so it is safe to run anywhere and in CI.
+#   make cli-smoke
+#   FLEXPRICE_API_KEY=sk_... make cli-smoke        # also exercises live reads
+.PHONY: cli-smoke
+cli-smoke:
+	@cli/scripts/smoke.sh
+
+# End-to-end lifecycle against the INDIA region: builds feature → plan → price
+# → entitlement → coupon → customer → subscription → wallet → events →
+# invoice, verifies each, then tears it all down.
+#   make cli-e2e                       # prompts for the API key
+#   FLEXPRICE_API_KEY=sk_... make cli-e2e
+#   make cli-e2e-dry                   # print every command, call nothing
+.PHONY: cli-e2e
+cli-e2e:
+	@cli/scripts/e2e.sh
+
+.PHONY: cli-e2e-dry
+cli-e2e-dry:
+	@cli/scripts/e2e.sh --dry-run

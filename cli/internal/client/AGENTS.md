@@ -1,0 +1,98 @@
+---
+layer: client
+owns:
+  - "cli/internal/client/**"
+---
+
+# Client Layer
+
+> The only package that makes a network call. Every request goes through
+> here, hand-written or spec-dispatched.
+
+## Purpose
+
+Issues HTTP requests, applies retry policy, redacts `--debug` output, and
+normalizes every error response this API returns into one type. Nothing
+outside this package touches `net/http` for talking to Flexprice.
+
+## Key files
+| File | Role |
+|---|---|
+| `client.go` | `Client`, `New`, `Do`, `retryPolicy`, `sameOriginRedirect`, `--debug` redaction |
+| `errors.go` | `APIError`, `NewAPIError` — normalizes three response envelope shapes |
+
+## Request path
+
+```
+Do(ctx, method, path, query, body)
+  → build *http.Request, set x-api-key + User-Agent
+  → retryablehttp with retryPolicy as CheckRetry
+  → non-2xx → NewAPIError(status, body, method, path)
+  → 2xx → raw bytes returned as-is
+```
+
+## Patterns to follow
+
+- Every request goes through `Do`. Do not add a second function that issues
+  requests, even for a "simple" one-off call.
+- Always thread `ctx` through — no request without a context.
+- `Options.Timeout` defaults to 30s (`DefaultTimeout`) if unset; do not
+  construct a `Client` with an unbounded timeout.
+
+## Invariants (must hold)
+
+- `retryPolicy` retries only `GET`/`HEAD`/`PUT`/`DELETE`/`OPTIONS` on 5xx or
+  a transport error, plus `429` for every method. Never add POST/PATCH to
+  the retried set without solving the duplicate-write problem first (see
+  Pitfalls below).
+- `--debug` redaction (`safeKeys` in `client.go`) is an allowlist, not a
+  denylist. A field not on the list is redacted even if it looks harmless —
+  do not "fix" a redacted field you want to see by widening the list without
+  checking whether it can carry free text.
+- `New`'s `BaseURL` handling returns an error via `c.baseErr` rather than
+  panicking or silently defaulting — checked lazily on the first `Do` call so
+  `New` itself has no error return.
+- `sameOriginRedirect` refuses any redirect that changes scheme or host.
+  Never relax this to "follow redirects" without re-checking that custom
+  headers (`x-api-key`) can't be forwarded to a third party.
+
+## Common pitfalls
+
+- **Retrying a non-idempotent write can duplicate it.** The first
+  implementation used `go-retryablehttp`'s default policy, which inspects
+  only the status code, never the method — it retried `POST` exactly like
+  `GET`. `CreateSubscriptionRequest` has no idempotency key at all, and where
+  a body-level `idempotency_key` exists elsewhere, the server generates one
+  containing a timestamp if the caller omits it, so it differs per attempt
+  even though the retried body is byte-identical — server-side dedup does not
+  save you. Fixed by `retryPolicy`; adding POST back to the retried methods
+  re-opens this bug.
+- **A malformed `--base-url` used to fail deep in the HTTP stack** with a
+  confusing `unsupported protocol scheme ""` rather than naming the actual
+  cause. `New` now validates `Scheme`/`Host` are present and surfaces a clear
+  error instead.
+- **`NewAPIError` used to let one malformed field discard an otherwise-valid
+  message — a real, shipped bug.** It gated copying `Code`/`Message` on the
+  *whole* `json.Unmarshal` call succeeding, but Go's decoder partially
+  populates a struct even when one field type-mismatches. A body like
+  `{"code":"validation_error","message":"plan_id is required","details":[]}`
+  (details as an array, not the expected object) had its correctly-decoded
+  `Code`/`Message` thrown away in favor of the generic `http.StatusText`
+  fallback, purely because `details` didn't match. `envelope.Details` is now
+  `json.RawMessage`, decoded lazily and best-effort — a mismatch there can no
+  longer take sibling fields down with it. If you add a new field to
+  `envelope`, decode it the same way rather than adding it to the struct
+  that gates the whole parse.
+
+- **A redirect could send the API key to any host, silently.** Go's
+  `net/http` strips `Authorization`/`Cookie` on a cross-host redirect but
+  forwards custom headers unconditionally, so a compromised or misconfigured
+  origin returning a bare 302 walked off with `x-api-key`. Fixed by
+  `sameOriginRedirect` as `CheckRedirect`. Its refusal is also excluded from
+  `retryPolicy` — it's deterministic, so retrying only adds delay.
+
+## Related layers
+
+- `internal/spec` — builds the `*Request` this package's `Do` executes
+- `internal/cmd` — the only caller of `client.New`/`Do`
+- `internal/exitcode` — `APIError.ExitCode()` maps into these constants

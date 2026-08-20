@@ -1,0 +1,89 @@
+Send events, inspect how they metered, and drive the Flexprice API from your terminal.
+
+Start with: flexprice init
+
+Usage:
+  flexprice [flags]
+  flexprice [command]
+
+Setup
+  config                  Manage profiles
+  env                     Inspect environments
+  init                    Set up the CLI (guided)
+  login                   Store credentials for a region and environment
+  logout                  Remove a stored profile and its key
+  open                    Open Flexprice in your browser
+  version                 Print the CLI version and embedded spec build
+  whoami                  Show the active profile, environment and key backend
+
+Core billing
+  checkout                Hosted checkout sessions
+  customers               Manage the people and organisations you bill
+  invoices                Draft, finalize and void billing documents
+  payments                Payment attempts and their outcomes
+  subscription-line-items Individual charges on a subscription
+  subscription-schedules  Planned future changes to a subscription
+  subscriptions           Active plan assignments and their lifecycle
+
+Usage & metering
+  costs                   Cost sheets derived from usage
+  entitlements            What a customer's plan grants them access to
+  events                  Raw usage events you send in for metering
+  features                Capabilities that can be metered or gated
+
+Credits & discounts
+  coupon-associations     Which coupons apply to which subscriptions
+  coupons                 Discount codes and their rules
+  credit-grants           Prepaid and promotional credit allocations
+  credit-notes            Refunds and credit memos against invoices
+  wallets                 Prepaid credit balances held by a customer
+
+Catalog & pricing
+  addons                  Optional extras attachable to a plan
+  plans                   Pricing models customers can subscribe to
+  price-units             Units of measurement used by prices
+  prices                  Individual pricing units within a plan
+  tax-associations        Which tax rates apply to which entities
+  tax-rates               Tax rates available to apply
+
+Platform
+  environments            Isolated spaces within your tenant
+  groups                  Collections of users or entities
+  integrations            Connections to Stripe, HubSpot and others
+  rbac                    Roles and permissions
+  secrets                 API keys and integration credentials
+  tenants                 Your top-level account
+  users                   People with access to your tenant
+
+Automation
+  alert-settings          How and when alerts fire
+  alerts                  Threshold and anomaly notifications
+  scheduled-tasks         Work queued to run later
+  tasks                   Background jobs and their status
+  workflows               Long-running billing processes
+
+Advanced
+  completion              Generate the autocompletion script for the specified shell
+  delete                  Issue a raw DELETE against the API
+  get                     Issue a raw GET against the API
+  help                    Help about any command
+  post                    Issue a raw POST against the API
+  resources               List every resource this CLI can act on
+
+Flags:
+      --all               page through every record (prints the last page; use --output json with --limit for bulk export)
+      --api-key string    API key (CI use; prefer flexprice login)
+      --base-url string   override the API base URL
+      --columns strings   columns to show in table output
+      --debug             dump requests and responses, secrets redacted
+  -h, --help              help for flexprice
+      --limit int         maximum records to return (default 20)
+      --no-color          disable coloured output
+      --no-input          never prompt; fail instead of asking
+      --output string     output format: table, json, yaml (default "table")
+  -p, --profile string    profile to use for this command
+      --quiet             suppress progress output
+      --region string     region key, e.g. us or in
+  -v, --version           version for flexprice
+
+Use "flexprice [command] --help" for more information about a command.

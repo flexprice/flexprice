@@ -1,0 +1,289 @@
+# Curated command vocabulary for the Flexprice CLI, keyed by resource and action.
+#
+# This is the map, not the derivation. Where the REST surface does not follow a
+# clean CRUD shape (search-as-list, sub-resources, versioned duplicates) the
+# curated name wins over whatever cli/tools/bootstrap-commands would derive.
+# Anything left unmapped here still works: the registry falls back to a derived
+# `flexprice <tag> <operationId>`-shaped name and logs a warning, it just will not
+# read as nicely. See cli/internal/spec/registry.go and design doc §5.
+resources:
+  addons:
+    create: createAddon
+    list: queryAddon
+    retrieve: getAddon
+    lookup: getAddonByLookupKey
+    update: updateAddon
+    delete: deleteAddon
+    columns: [id, lookup_key, name, addon_status, created_at]
+
+  alert-settings:
+    create: createAlertSettings
+    list: queryAlertSettings
+    retrieve: getAlertSettings
+    update: updateAlertSettings
+    delete: deleteAlertSettings
+
+  alerts:
+    list: queryAlertLog
+
+  checkout:
+    create: createCheckoutSession
+    retrieve: getCheckoutSession
+    delete: deleteCheckoutSession
+
+  costs:
+    create: createCostsheet
+    list: queryCostsheet
+    retrieve: getCostsheet
+    active: getActiveCostsheet
+    analytics: getDetailedCostAnalytics
+    analytics-v2: getDetailedCostAnalyticsV2
+    update: updateCostsheet
+    delete: deleteCostsheet
+
+  coupon-associations:
+    list: listCouponAssociations
+    retrieve: getCouponAssociation
+
+  coupons:
+    create: createCoupon
+    list: queryCoupon
+    retrieve: getCoupon
+    lookup: getCouponByCode
+    update: updateCoupon
+    delete: deleteCoupon
+
+  credit-grants:
+    create: createCreditGrant
+    retrieve: getCreditGrant
+    for-addon: getAddonCreditGrants
+    for-plan: getPlanCreditGrants
+    update: updateCreditGrant
+    delete: deleteCreditGrant
+
+  credit-notes:
+    create: createCreditNote
+    retrieve: getCreditNote
+    # operationId is processCreditNote; the path and the user-facing behavior are
+    # "finalize", so that is the CLI verb.
+    finalize: processCreditNote
+    void: voidCreditNote
+
+  customers:
+    create: createCustomer
+    # No GET /customers. Listing is POST /customers/search.
+    list: queryCustomer
+    retrieve: getCustomer
+    by-external-id: getCustomerByExternalId
+    update: updateCustomer
+    delete: deleteCustomer
+    entitlements: getCustomerEntitlements
+    entitlements-by-external-id: getCustomerEntitlementsByExternalID
+    upcoming-grants: getCustomerUpcomingGrants
+    usage: getCustomerUsageSummary
+    subscriptions: getSubscriptionsForCustomer
+    columns: [id, external_id, name, email, created_at]
+
+  entitlements:
+    create: createEntitlement
+    create-bulk: createEntitlementsBulk
+    list: queryEntitlement
+    retrieve: getEntitlement
+    for-addon: getAddonEntitlements
+    for-plan: getPlanEntitlements
+    update: updateEntitlement
+    delete: deleteEntitlement
+
+  environments:
+    clone: cloneEnvironment
+
+  events:
+    ingest: ingestEvent
+    ingest-bulk: ingestEventsBulk
+    list: listRawEvents
+    retrieve: getEvent
+    analytics: getUsageAnalytics
+    usage: getUsageStatistics
+    usage-by-meter: getUsageByMeter
+    huggingface-inference: getHuggingfaceInferenceData
+
+  features:
+    create: createFeature
+    list: queryFeature
+    clone: cloneFeature
+    update: updateFeature
+    delete: deleteFeature
+
+  groups:
+    create: createGroup
+    list: queryGroup
+    retrieve: getGroup
+    delete: deleteGroup
+
+  integrations:
+    link: linkIntegrationMapping
+    unlink: delinkIntegrationMapping
+    mappings: getEntityIntegrationMappings
+    config: getIntegrationConfig
+
+  invoices:
+    create: createInvoice
+    list: queryInvoice
+    retrieve: getInvoice
+    update: updateInvoice
+    finalize: finalizeInvoice
+    void: voidInvoice
+    pdf: getInvoicePdf
+    preview: getInvoicePreview
+    # V1 (recalculateInvoice) is excluded below; V2 is what "recalculate" means now.
+    recalculate: recalculateInvoiceV2
+    payment-attempt: attemptInvoicePayment
+    payment-status: updateInvoicePaymentStatus
+    customer-summary: getCustomerInvoiceSummary
+    trigger-comms-webhook: triggerInvoiceCommsWebhook
+    columns: [id, invoice_number, invoice_status, payment_status, total, currency, created_at]
+
+  payments:
+    create: createPayment
+    list: listPayments
+    retrieve: getPayment
+    update: updatePayment
+    delete: deletePayment
+    process: processPayment
+
+  plans:
+    create: createPlan
+    list: queryPlan
+    retrieve: getPlan
+    clone: clonePlan
+    update: updatePlan
+    delete: deletePlan
+    sync-prices: syncPlanPrices
+    columns: [id, name, lookup_key, plan_status, created_at]
+
+  price-units:
+    create: createPriceUnit
+    list: listPriceUnits
+    search: queryPriceUnit
+    retrieve: getPriceUnit
+    lookup: getPriceUnitByCode
+    update: updatePriceUnit
+    delete: deletePriceUnit
+
+  prices:
+    create: createPrice
+    create-bulk: createPricesBulk
+    list: queryPrice
+    retrieve: getPrice
+    lookup: getPriceByLookupKey
+    update: updatePrice
+    delete: deletePrice
+
+  rbac:
+    list: listRbacRoles
+    retrieve: getRbacRole
+
+  scheduled-tasks:
+    create: createScheduledTask
+    list: listScheduledTasks
+    retrieve: getScheduledTask
+    update: updateScheduledTask
+    delete: deleteScheduledTask
+    run: triggerScheduledTaskRun
+    schedule-draft-finalization: scheduleDraftFinalization
+    schedule-billing-period-update: scheduleUpdateBillingPeriod
+
+  secrets:
+    create: createApiKey
+    list: listApiKeys
+    delete: deleteApiKey
+
+  subscriptions:
+    create: createSubscription
+    list: querySubscription
+    retrieve: getSubscription
+    retrieve-v2: getSubscriptionV2
+    update: updateSubscription
+    cancel: cancelSubscription
+    activate: activateSubscription
+    usage: getSubscriptionUsage
+    entitlements: getSubscriptionEntitlements
+    upcoming-grants: getSubscriptionUpcomingGrants
+    addon-associations: getSubscriptionAddonAssociations
+    add-addon: addSubscriptionAddon
+    remove-addon: removeSubscriptionAddon
+    change-preview: previewSubscriptionChange
+    change-execute: executeSubscriptionChange
+    modify-preview: previewSubscriptionModify
+    modify-execute: executeSubscriptionModify
+    columns: [id, customer_id, plan_id, subscription_status, current_period_end]
+
+  subscription-line-items:
+    create: createSubscriptionLineItem
+    list: querySubscriptionLineItems
+    update: updateSubscriptionLineItem
+    delete: deleteSubscriptionLineItem
+
+  subscription-schedules:
+    list: listAllSubscriptionSchedules
+    list-for-subscription: listSubscriptionSchedules
+    retrieve: getSubscriptionSchedule
+    cancel: cancelSubscriptionSchedule
+
+  tasks:
+    list: listTasks
+    retrieve: getTask
+    update-status: updateTaskStatus
+    download: downloadTaskExport
+    result: getTaskResult
+
+  tax-associations:
+    create: createTaxAssociation
+    list: listTaxAssociations
+    retrieve: getTaxAssociation
+    update: updateTaxAssociation
+    delete: deleteTaxAssociation
+
+  tax-rates:
+    create: createTaxRate
+    # operationId is getTaxRates (plural, GET /taxes/rates with no id) — it is a
+    # list endpoint despite the "get" prefix.
+    list: getTaxRates
+    retrieve: getTaxRate
+    update: updateTaxRate
+    delete: deleteTaxRate
+
+  tenants:
+    retrieve: getTenantById
+    billing-usage: getTenantBillingUsage
+    update: updateTenant
+
+  users:
+    create: createUser
+    list: queryUser
+    me: getUserInfo
+    update-me: updateUser
+    # updateServiceAccount/deleteServiceAccount are PUT/DELETE /users/{id} — despite
+    # the operationId, this is the generic update/delete-by-id path for a user.
+    update: updateServiceAccount
+    delete: deleteServiceAccount
+
+  wallets:
+    create: createWallet
+    list: queryWallet
+    retrieve: getWallet
+    update: updateWallet
+    balance: getWalletBalance
+    by-customer: getWalletsByCustomerId
+    list-for-customer: getCustomerWallets
+    transactions: getWalletTransactions
+    search-transactions: queryWalletTransaction
+    top-up: topUpWallet
+    terminate: terminateWallet
+
+  workflows:
+    list: queryWorkflow
+
+# recalculateInvoice (V1) is superseded by recalculateInvoiceV2, which is mapped
+# above as invoices.recalculate.
+exclude: [recalculateInvoice]

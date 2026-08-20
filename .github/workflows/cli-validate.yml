@@ -1,0 +1,37 @@
+name: CLI spec validation
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'docs/swagger/swagger-3-0.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+
+      # Fails the build when the embedded spec has drifted from docs/swagger.
+      - name: Spec is in sync
+        run: |
+          cp docs/swagger/swagger-3-0.json /tmp/expected.json
+          if ! diff -q /tmp/expected.json cli/spec/openapi.json > /dev/null; then
+            echo "::error::cli/spec/openapi.json is stale. Run: make sync-cli-spec"
+            exit 1
+          fi
+
+      # Hard-fails only on collisions and dangling mappings; unmapped operations warn.
+      - name: Registry is valid
+        run: cd cli && go test ./internal/spec/ -run TestRegistry -v
+
+      - name: Report unmapped operations
+        run: |
+          cd cli && go run ./tools/bootstrap-commands > /tmp/derived.yaml
+          echo "::notice::New operations may need names in cli/spec/commands.yaml"
+
+      - name: Tests
+        run: cd cli && go test -race ./...

@@ -1,0 +1,48 @@
+# goreleaser runs from inside this directory (cli/), not the monorepo root: the
+# calling workflow step sets `workdir: cli` for goreleaser-action. That makes
+# every relative path below — `main: .`, the implicit `dist: dist` output
+# directory, `before.hooks` running `go mod tidy` — resolve against cli/go.mod,
+# which is what a release build actually needs (the monorepo root has no
+# go.mod of its own for the CLI module). Do not add a `dist:` override that
+# points outside this directory.
+version: 2
+project_name: flexprice
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: flexprice
+    main: .
+    binary: flexprice
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - repository:
+      owner: flexprice
+      name: homebrew-tap
+      token: "{{ .Env.SDK_DEPLOY_GIT_TOKEN }}"
+    homepage: https://flexprice.io
+    description: Usage-based billing from your terminal
+    license: Apache-2.0
+
+release:
+  # Releases are published on the mirror, which is where users look for them.
+  github:
+    owner: flexprice
+    name: cli

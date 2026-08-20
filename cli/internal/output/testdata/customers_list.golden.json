@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "created_at": "2026-01-01T00:00:00Z",
+      "email": "ada@example.com",
+      "external_id": "acme",
+      "id": "cust_01"
+    },
+    {
+      "created_at": "2026-01-02T00:00:00Z",
+      "email": "bob@example.com",
+      "external_id": "globex",
+      "id": "cust_02"
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "total": 2
+  }
+}

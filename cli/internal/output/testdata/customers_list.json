@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"id": "cust_01", "external_id": "acme", "email": "ada@example.com", "created_at": "2026-01-01T00:00:00Z"},
+    {"id": "cust_02", "external_id": "globex", "email": "bob@example.com", "created_at": "2026-01-02T00:00:00Z"}
+  ],
+  "pagination": {"total": 2, "limit": 20, "offset": 0}
+}

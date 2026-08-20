@@ -1,0 +1,27 @@
+name: CLI spec sync
+
+on:
+  push:
+    branches: [develop]
+    paths: ['docs/swagger/swagger-3-0.json']
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync spec into the CLI module
+        run: make sync-cli-spec
+
+      - name: Open a pull request if the spec changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/cli-spec-sync
+          title: 'chore(cli): sync OpenAPI spec'
+          commit-message: 'chore(cli): sync OpenAPI spec'
+          body: |
+            The API spec changed. This updates the CLI's embedded copy.
+
+            If new operations appeared, they currently resolve under
+            auto-derived names. Give them proper names in
+            `cli/spec/commands.yaml` before release.
