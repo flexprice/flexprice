@@ -650,6 +650,16 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 
 			subFilter := types.NewNoLimitSubscriptionFilter()
 			subFilter.SubscriptionIDs = subscriptionIDs
+			// Must mirror the discovery query in ListPlanLineItemsToCreateV2 —
+			// SubRepo.List defaults to subscription_status=active when unset,
+			// which would silently drop trialing/draft/incomplete subs and
+			// surface as "price or subscription not found for v2 sync".
+			subFilter.SubscriptionStatus = []types.SubscriptionStatus{
+				types.SubscriptionStatusActive,
+				types.SubscriptionStatusTrialing,
+				types.SubscriptionStatusDraft,
+				types.SubscriptionStatusIncomplete,
+			}
 			subs, serr := s.SubRepo.List(ctx, subFilter)
 			if serr != nil {
 				return nil, serr
