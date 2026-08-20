@@ -236,3 +236,75 @@ func TestTopUpQuota_SurvivesConcurrentSnapshot(t *testing.T) {
 		"snapshot write clobbered the topped-up quota: %s", after.Quota)
 	assert.True(t, after.Usage.Equal(decimal.NewFromInt(42)))
 }
+
+// Phase 3 derives exhaustion each tick, so the snapshot must be able to CLEAR
+// quota_crossed_at. SetNillable silently skips a nil, which would strand a
+// stale overage window on a grant that is back under quota.
+func TestUpdateSnapshot_ClearsQuotaCrossedAt(t *testing.T) {
+	repo := newTestEntitlementGrantRepository(t)
+	ctx := testGrantContext()
+
+	crossed := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Microsecond)
+	g := createTestGrant(t, repo, ctx, func(g *domainGrant.EntitlementGrant) {
+		g.QuotaCrossedAt = &crossed
+		g.GrantStatus = types.EntitlementGrantStatusExhausted
+		g.Usage = decimal.NewFromInt(1500)
+	})
+	require.NotNil(t, g.QuotaCrossedAt)
+
+	cleared := domainGrant.NewEntitlementGrantBuilder(g).
+		WithUsage(decimal.NewFromInt(900)).
+		WithGrantStatus(types.EntitlementGrantStatusActive).
+		WithQuotaCrossedAt(nil).
+		Build()
+	require.NoError(t, repo.UpdateSnapshot(ctx, cleared))
+
+	after, err := repo.Get(ctx, g.ID)
+	require.NoError(t, err)
+	assert.Nil(t, after.QuotaCrossedAt, "snapshot must clear quota_crossed_at, not skip the nil")
+	assert.Equal(t, types.EntitlementGrantStatusActive, after.GrantStatus)
+	assert.True(t, after.Usage.Equal(decimal.NewFromInt(900)))
+}
+
+func TestUpdateSnapshot_SetsQuotaCrossedAt(t *testing.T) {
+	repo := newTestEntitlementGrantRepository(t)
+	ctx := testGrantContext()
+	g := createTestGrant(t, repo, ctx, nil)
+	require.Nil(t, g.QuotaCrossedAt)
+
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	crossed := domainGrant.NewEntitlementGrantBuilder(g).
+		WithUsage(decimal.NewFromInt(1500)).
+		WithGrantStatus(types.EntitlementGrantStatusExhausted).
+		WithQuotaCrossedAt(&at).
+		Build()
+	require.NoError(t, repo.UpdateSnapshot(ctx, crossed))
+
+	after, err := repo.Get(ctx, g.ID)
+	require.NoError(t, err)
+	require.NotNil(t, after.QuotaCrossedAt)
+	assert.True(t, after.QuotaCrossedAt.UTC().Equal(at))
+	assert.Equal(t, types.EntitlementGrantStatusExhausted, after.GrantStatus)
+}
+
+// The snapshot writes usage/status/crossing only — a tick must not roll back a
+// quota top-up or wipe its metadata.
+func TestUpdateSnapshot_LeavesQuotaAndMetadataAlone(t *testing.T) {
+	repo := newTestEntitlementGrantRepository(t)
+	ctx := testGrantContext()
+	g := createTestGrant(t, repo, ctx, nil)
+
+	_, err := repo.TopUpQuota(ctx, g.ID, decimal.NewFromInt(300), time.Now().UTC(),
+		types.Metadata{"proration_addon_assoc_a1": "0.5"})
+	require.NoError(t, err)
+
+	require.NoError(t, repo.UpdateSnapshot(ctx, domainGrant.NewEntitlementGrantBuilder(g).
+		WithUsage(decimal.NewFromInt(900)).
+		WithGrantStatus(types.EntitlementGrantStatusActive).
+		Build()))
+
+	after, err := repo.Get(ctx, g.ID)
+	require.NoError(t, err)
+	assert.True(t, after.Quota.Equal(decimal.NewFromInt(1300)), "quota rolled back to %s", after.Quota)
+	assert.Equal(t, "0.5", after.Metadata["proration_addon_assoc_a1"])
+}

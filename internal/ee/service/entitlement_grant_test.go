@@ -1798,3 +1798,184 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_Value2_DSTF
 	s.True(from.Equal(time.Date(2026, 11, 2, 5, 0, 0, 0, time.UTC)),
 		"expected 2026-11-02T05:00Z (Mon 00:00 EST, DST-safe across multiple strides), got %s", from)
 }
+
+// -----------------------------------------------------------------------------
+// Derived exhaustion (quota is mutable via top-up, so status/crossing are
+// recomputed each tick instead of latched)
+// -----------------------------------------------------------------------------
+
+// tick runs the real refresh path — ensure grants, then evaluate — and returns
+// the stored grant afterwards.
+func (s *EntitlementGrantSuite) tick(cust *customer.Customer, sub *subscription.Subscription, at time.Time) *entitlementgrant.EntitlementGrant {
+	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(
+		s.GetContext(), cust, []*subscription.Subscription{sub}, at)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(grants)
+	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
+		s.GetContext(), cust, meta, grants, at))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), grants[0].ID)
+	s.Require().NoError(err)
+	return stored
+}
+
+func (s *EntitlementGrantSuite) alertLogsFor(grantID string) (inAlarm, ok int) {
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(
+		s.GetContext(), types.AlertEntityTypeEntitlementGrant, grantID, 50)
+	s.Require().NoError(err)
+	for _, l := range logs {
+		switch l.AlertStatus {
+		case types.AlertStateInAlarm:
+			inAlarm++
+		case types.AlertStateOk:
+			ok++
+		}
+	}
+	return inAlarm, ok
+}
+
+// Deriving instead of latching must not change any pre-existing path: usage is
+// recomputed over a fixed window and only grows, so a grant that crossed stays
+// crossed and keeps its ORIGINAL crossing time.
+func (s *EntitlementGrantSuite) TestEvaluate_DerivedExhaustion_NoOpWhileUsageOnlyGrows() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	first := sub.CurrentPeriodStart.Add(30 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 110)
+
+	t1 := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	crossed := s.tick(cust, sub, t1)
+	s.Equal(types.EntitlementGrantStatusExhausted, crossed.GrantStatus)
+	s.Require().NotNil(crossed.QuotaCrossedAt)
+	s.True(crossed.QuotaCrossedAt.Equal(t1))
+
+	// More usage lands; the grant is still over quota.
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(150*time.Minute), 50)
+	t2 := sub.CurrentPeriodStart.Add(3 * time.Hour)
+	after := s.tick(cust, sub, t2)
+
+	s.True(after.Usage.Equal(decimal.NewFromInt(160)), "usage should be 160, got %s", after.Usage)
+	s.Equal(types.EntitlementGrantStatusExhausted, after.GrantStatus, "still over quota, still exhausted")
+	s.Require().NotNil(after.QuotaCrossedAt)
+	s.True(after.QuotaCrossedAt.Equal(t1),
+		"the FIRST crossing must be preserved, not re-stamped to %s (got %s)", t2, after.QuotaCrossedAt)
+
+	inAlarm, okCount := s.alertLogsFor(after.ID)
+	s.Equal(1, inAlarm, "a still-exhausted grant must not re-alert")
+	s.Equal(0, okCount)
+}
+
+// A quota top-up is the one event that moves a grant back under quota. The
+// top-up itself never touches grant_status; the next tick derives it.
+func (s *EntitlementGrantSuite) TestEvaluate_QuotaTopUpUnExhaustsGrant() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	first := sub.CurrentPeriodStart.Add(30 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 110)
+
+	t1 := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	crossed := s.tick(cust, sub, t1)
+	s.Equal(types.EntitlementGrantStatusExhausted, crossed.GrantStatus)
+	s.Require().NotNil(crossed.QuotaCrossedAt)
+
+	// Addon attaches mid-cycle: quota 100 -> 150, usage stays 110.
+	toppedUp, err := s.GetStores().EntitlementGrantRepo.TopUpQuota(
+		s.GetContext(), crossed.ID, decimal.NewFromInt(50),
+		sub.CurrentPeriodStart.Add(150*time.Minute), types.Metadata{"proration_addon_assoc_a1": "0.5"})
+	s.Require().NoError(err)
+	s.True(toppedUp.Quota.Equal(decimal.NewFromInt(150)))
+	s.Equal(types.EntitlementGrantStatusExhausted, toppedUp.GrantStatus,
+		"the top up must leave grant_status to the evaluator")
+	s.Nil(toppedUp.QuotaCrossedAt, "the top up restored headroom, so the overage window is dropped")
+
+	t2 := sub.CurrentPeriodStart.Add(3 * time.Hour)
+	after := s.tick(cust, sub, t2)
+
+	s.True(after.Quota.Equal(decimal.NewFromInt(150)), "the tick must not roll the quota back")
+	s.True(after.Usage.Equal(decimal.NewFromInt(110)))
+	s.Equal(types.EntitlementGrantStatusActive, after.GrantStatus, "back under quota, so active again")
+	s.Nil(after.QuotaCrossedAt)
+	s.Equal("0.5", after.Metadata["proration_addon_assoc_a1"], "the tick must not wipe the top-up metadata")
+}
+
+// The derived rule is also the safety net for a crossing left behind by any
+// other route (e.g. a top-up whose snapshot usage lagged the true usage).
+func (s *EntitlementGrantSuite) TestEvaluate_ClearsStaleCrossingWhenUnderQuota() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	first := sub.CurrentPeriodStart.Add(30 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 40)
+
+	t1 := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	g := s.tick(cust, sub, t1)
+	s.Equal(types.EntitlementGrantStatusActive, g.GrantStatus)
+
+	// Force the inconsistent state: exhausted with a crossing, but usage under quota.
+	stale := t1.Add(-time.Hour)
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.UpdateSnapshot(s.GetContext(),
+		entitlementgrant.NewEntitlementGrantBuilder(g).
+			WithGrantStatus(types.EntitlementGrantStatusExhausted).
+			WithQuotaCrossedAt(&stale).
+			Build()))
+
+	after := s.tick(cust, sub, sub.CurrentPeriodStart.Add(3*time.Hour))
+	s.Equal(types.EntitlementGrantStatusActive, after.GrantStatus)
+	s.Nil(after.QuotaCrossedAt, "usage < quota must clear the crossing outright")
+}
+
+// Without an `ok` transition the alert-log dedup swallows the second
+// exhaustion, so a customer who tops up and exhausts again is never told.
+func (s *EntitlementGrantSuite) TestEvaluate_ReExhaustionAfterTopUpFiresSecondAlert() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	first := sub.CurrentPeriodStart.Add(30 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 110)
+
+	t1 := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	g := s.tick(cust, sub, t1)
+	inAlarm, okCount := s.alertLogsFor(g.ID)
+	s.Equal(1, inAlarm, "first exhaustion alerts")
+	s.Equal(0, okCount)
+
+	// Top up well clear of current usage, then let the tick record the recovery.
+	_, err := s.GetStores().EntitlementGrantRepo.TopUpQuota(
+		s.GetContext(), g.ID, decimal.NewFromInt(100),
+		sub.CurrentPeriodStart.Add(150*time.Minute), nil)
+	s.Require().NoError(err)
+
+	t2 := sub.CurrentPeriodStart.Add(3 * time.Hour)
+	recovered := s.tick(cust, sub, t2)
+	s.Equal(types.EntitlementGrantStatusActive, recovered.GrantStatus)
+	inAlarm, okCount = s.alertLogsFor(g.ID)
+	s.Equal(1, inAlarm)
+	s.Equal(1, okCount, "recovery must be logged so the next exhaustion is a state change")
+
+	// Blow through the raised quota: 110 + 100 = 210 > 200.
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(210*time.Minute), 100)
+	t3 := sub.CurrentPeriodStart.Add(4 * time.Hour)
+	reExhausted := s.tick(cust, sub, t3)
+
+	s.True(reExhausted.Usage.Equal(decimal.NewFromInt(210)))
+	s.Equal(types.EntitlementGrantStatusExhausted, reExhausted.GrantStatus)
+	s.Require().NotNil(reExhausted.QuotaCrossedAt)
+	s.True(reExhausted.QuotaCrossedAt.Equal(t3),
+		"the second crossing is a NEW one, stamped at the re-exhaustion tick")
+
+	inAlarm, okCount = s.alertLogsFor(g.ID)
+	s.Equal(2, inAlarm, "re-exhaustion must alert again instead of being deduped away")
+	s.Equal(1, okCount)
+}
+
+// A grant that never crosses must stay silent — LogAlert skips `ok` when there
+// is no prior alert, so the new recovery logging adds no noise.
+func (s *EntitlementGrantSuite) TestEvaluate_NeverExhausted_LogsNothing() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(30*time.Minute), 40)
+	g := s.tick(cust, sub, sub.CurrentPeriodStart.Add(2*time.Hour))
+	_ = s.tick(cust, sub, sub.CurrentPeriodStart.Add(3*time.Hour))
+
+	inAlarm, okCount := s.alertLogsFor(g.ID)
+	s.Equal(0, inAlarm)
+	s.Equal(0, okCount, "an always-healthy grant must not accumulate ok logs")
+}
