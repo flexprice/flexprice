@@ -70,6 +70,20 @@ func (egu *EntitlementGrantUpdate) ClearUpdatedBy() *EntitlementGrantUpdate {
 	return egu
 }
 
+// SetQuota sets the "quota" field.
+func (egu *EntitlementGrantUpdate) SetQuota(d decimal.Decimal) *EntitlementGrantUpdate {
+	egu.mutation.SetQuota(d)
+	return egu
+}
+
+// SetNillableQuota sets the "quota" field if the given value is not nil.
+func (egu *EntitlementGrantUpdate) SetNillableQuota(d *decimal.Decimal) *EntitlementGrantUpdate {
+	if d != nil {
+		egu.SetQuota(*d)
+	}
+	return egu
+}
+
 // SetUsage sets the "usage" field.
 func (egu *EntitlementGrantUpdate) SetUsage(d decimal.Decimal) *EntitlementGrantUpdate {
 	egu.mutation.SetUsage(d)
@@ -152,6 +166,18 @@ func (egu *EntitlementGrantUpdate) ClearQuotaCrossedAt() *EntitlementGrantUpdate
 	return egu
 }
 
+// SetMetadata sets the "metadata" field.
+func (egu *EntitlementGrantUpdate) SetMetadata(t types.Metadata) *EntitlementGrantUpdate {
+	egu.mutation.SetMetadata(t)
+	return egu
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (egu *EntitlementGrantUpdate) ClearMetadata() *EntitlementGrantUpdate {
+	egu.mutation.ClearMetadata()
+	return egu
+}
+
 // Mutation returns the EntitlementGrantMutation object of the builder.
 func (egu *EntitlementGrantUpdate) Mutation() *EntitlementGrantMutation {
 	return egu.mutation
@@ -220,6 +246,9 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if egu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := egu.mutation.Quota(); ok {
+		_spec.SetField(entitlementgrant.FieldQuota, field.TypeOther, value)
+	}
 	if value, ok := egu.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
@@ -240,6 +269,12 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if egu.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
+	}
+	if value, ok := egu.mutation.Metadata(); ok {
+		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
+	}
+	if egu.mutation.MetadataCleared() {
+		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, egu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -298,6 +333,20 @@ func (eguo *EntitlementGrantUpdateOne) SetNillableUpdatedBy(s *string) *Entitlem
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (eguo *EntitlementGrantUpdateOne) ClearUpdatedBy() *EntitlementGrantUpdateOne {
 	eguo.mutation.ClearUpdatedBy()
+	return eguo
+}
+
+// SetQuota sets the "quota" field.
+func (eguo *EntitlementGrantUpdateOne) SetQuota(d decimal.Decimal) *EntitlementGrantUpdateOne {
+	eguo.mutation.SetQuota(d)
+	return eguo
+}
+
+// SetNillableQuota sets the "quota" field if the given value is not nil.
+func (eguo *EntitlementGrantUpdateOne) SetNillableQuota(d *decimal.Decimal) *EntitlementGrantUpdateOne {
+	if d != nil {
+		eguo.SetQuota(*d)
+	}
 	return eguo
 }
 
@@ -380,6 +429,18 @@ func (eguo *EntitlementGrantUpdateOne) SetNillableQuotaCrossedAt(t *time.Time) *
 // ClearQuotaCrossedAt clears the value of the "quota_crossed_at" field.
 func (eguo *EntitlementGrantUpdateOne) ClearQuotaCrossedAt() *EntitlementGrantUpdateOne {
 	eguo.mutation.ClearQuotaCrossedAt()
+	return eguo
+}
+
+// SetMetadata sets the "metadata" field.
+func (eguo *EntitlementGrantUpdateOne) SetMetadata(t types.Metadata) *EntitlementGrantUpdateOne {
+	eguo.mutation.SetMetadata(t)
+	return eguo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (eguo *EntitlementGrantUpdateOne) ClearMetadata() *EntitlementGrantUpdateOne {
+	eguo.mutation.ClearMetadata()
 	return eguo
 }
 
@@ -481,6 +542,9 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	if eguo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := eguo.mutation.Quota(); ok {
+		_spec.SetField(entitlementgrant.FieldQuota, field.TypeOther, value)
+	}
 	if value, ok := eguo.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
@@ -501,6 +565,12 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	}
 	if eguo.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
+	}
+	if value, ok := eguo.mutation.Metadata(); ok {
+		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
+	}
+	if eguo.mutation.MetadataCleared() {
+		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
 	_node = &EntitlementGrant{config: eguo.config}
 	_spec.Assign = _node.assignValues

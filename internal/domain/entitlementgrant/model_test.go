@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -170,5 +171,128 @@ func TestBuilder_CopiesAndUpdates(t *testing.T) {
 
 	if NewEntitlementGrantBuilder(nil).WithID("eg_x").Build().ID != "eg_x" {
 		t.Fatalf("nil-seeded builder should construct from scratch")
+	}
+}
+
+func TestMetadataAccessors_NilSafe(t *testing.T) {
+	var nilGrant *EntitlementGrant
+	if _, ok := nilGrant.MetadataValue("k"); ok {
+		t.Fatal("nil grant must not report a metadata value")
+	}
+	if nilGrant.HasMetadataKey("k") {
+		t.Fatal("nil grant must not report a metadata key")
+	}
+
+	g := baseGrant() // Metadata is nil
+	if _, ok := g.MetadataValue("k"); ok {
+		t.Fatal("nil metadata map must not report a value")
+	}
+	if g.HasMetadataKey("k") {
+		t.Fatal("nil metadata map must not report a key")
+	}
+
+	// An empty-string value must still count as present — the idempotency
+	// marker is looked up by key, not by truthiness.
+	g.Metadata = types.Metadata{"marker": ""}
+	v, ok := g.MetadataValue("marker")
+	if !ok || v != "" {
+		t.Fatalf("expected present empty value, got (%q, %v)", v, ok)
+	}
+	if !g.HasMetadataKey("marker") {
+		t.Fatal("expected HasMetadataKey to see an empty-valued key")
+	}
+}
+
+func TestFromEnt_CarriesMetadata(t *testing.T) {
+	md := types.Metadata{"proration_coefficient": "0.5", "proration_addon_assoc_a1": "0.5"}
+	got := FromEnt(&ent.EntitlementGrant{
+		ID:                  "eg_1",
+		EntitlementConfigID: "ent_1",
+		CustomerID:          "cust_1",
+		SubscriptionID:      "sub_1",
+		ScopeEntityType:     types.EntitlementGrantScopeFeature,
+		ScopeEntityID:       "feat_1",
+		Measure:             types.EntitlementGrantMeasureQuantity,
+		Quota:               decimal.NewFromInt(100),
+		ValidFrom:           time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC),
+		ValidTo:             time.Date(2026, 7, 17, 5, 0, 0, 0, time.UTC),
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		Metadata:            md,
+	})
+	if got == nil {
+		t.Fatal("FromEnt returned nil")
+	}
+	if len(got.Metadata) != 2 {
+		t.Fatalf("expected 2 metadata keys, got %d", len(got.Metadata))
+	}
+	if got.Metadata["proration_addon_assoc_a1"] != "0.5" {
+		t.Fatalf("idempotency marker did not survive FromEnt: %v", got.Metadata)
+	}
+}
+
+func TestFromEnt_NilMetadataStaysNil(t *testing.T) {
+	got := FromEnt(&ent.EntitlementGrant{ID: "eg_1"})
+	if got.Metadata != nil {
+		t.Fatalf("expected nil metadata to stay nil, got %v", got.Metadata)
+	}
+}
+
+func TestBuilder_WithMetadataReplaces(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"old": "1"}
+
+	got := NewEntitlementGrantBuilder(g).
+		WithMetadata(types.Metadata{"new": "2"}).
+		Build()
+
+	if _, ok := got.Metadata["old"]; ok {
+		t.Fatalf("WithMetadata must replace wholesale, got %v", got.Metadata)
+	}
+	if got.Metadata["new"] != "2" {
+		t.Fatalf("expected new key, got %v", got.Metadata)
+	}
+}
+
+func TestBuilder_WithMergedMetadataMergesAndOverrides(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"keep": "1", "overwrite": "old"}
+
+	got := NewEntitlementGrantBuilder(g).
+		WithMergedMetadata(types.Metadata{"overwrite": "new", "added": "2"}).
+		Build()
+
+	if got.Metadata["keep"] != "1" {
+		t.Fatalf("merge dropped an existing key: %v", got.Metadata)
+	}
+	if got.Metadata["overwrite"] != "new" {
+		t.Fatalf("merge did not override: %v", got.Metadata)
+	}
+	if got.Metadata["added"] != "2" {
+		t.Fatalf("merge did not add: %v", got.Metadata)
+	}
+}
+
+func TestBuilder_WithMergedMetadataEmptyIsNoOp(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"keep": "1"}
+
+	got := NewEntitlementGrantBuilder(g).WithMergedMetadata(nil).Build()
+	if got.Metadata["keep"] != "1" {
+		t.Fatalf("nil merge must not clear metadata, got %v", got.Metadata)
+	}
+}
+
+// The builder copies the source grant, so a merge must not mutate the original —
+// the attach path builds off a grant it also still reads.
+func TestBuilder_MetadataIsDeepCopied(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"keep": "1"}
+
+	_ = NewEntitlementGrantBuilder(g).
+		WithMergedMetadata(types.Metadata{"added": "2"}).
+		Build()
+
+	if _, leaked := g.Metadata["added"]; leaked {
+		t.Fatalf("builder mutated the source grant's metadata: %v", g.Metadata)
 	}
 }

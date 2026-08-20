@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // SlotWindowEnd is one (config, subscription) slot's latest window end —
@@ -45,4 +46,8 @@ type Repository interface {
 	// (config, customer, subscription) slot, any status, or (nil, nil) if none.
 	// Used only to re-read the winner after losing the INSERT race.
 	FindLastBySlot(ctx context.Context, entitlementConfigID, customerID, subscriptionID string) (*EntitlementGrant, error)
+
+	// TopUpQuota adds delta to the grant's quota and merges meta over the
+	// existing metadata.
+	TopUpQuota(ctx context.Context, id string, delta decimal.Decimal, at time.Time, meta types.Metadata) (*EntitlementGrant, error)
 }

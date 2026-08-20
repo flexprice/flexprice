@@ -59,7 +59,9 @@ type EntitlementGrant struct {
 	LastComputedAt *time.Time `json:"last_computed_at,omitempty"`
 	// QuotaCrossedAt holds the value of the "quota_crossed_at" field.
 	QuotaCrossedAt *time.Time `json:"quota_crossed_at,omitempty"`
-	selectValues   sql.SelectValues
+	// Metadata holds the value of the "metadata" field.
+	Metadata     types.Metadata `json:"metadata,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -73,6 +75,8 @@ func (*EntitlementGrant) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case entitlementgrant.FieldCreatedAt, entitlementgrant.FieldUpdatedAt, entitlementgrant.FieldValidFrom, entitlementgrant.FieldValidTo, entitlementgrant.FieldLastComputedAt, entitlementgrant.FieldQuotaCrossedAt:
 			values[i] = new(sql.NullTime)
+		case entitlementgrant.FieldMetadata:
+			values[i] = new(types.Metadata)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -216,6 +220,12 @@ func (eg *EntitlementGrant) assignValues(columns []string, values []any) error {
 				eg.QuotaCrossedAt = new(time.Time)
 				*eg.QuotaCrossedAt = value.Time
 			}
+		case entitlementgrant.FieldMetadata:
+			if value, ok := values[i].(*types.Metadata); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil {
+				eg.Metadata = *value
+			}
 		default:
 			eg.selectValues.Set(columns[i], values[i])
 		}
@@ -315,6 +325,9 @@ func (eg *EntitlementGrant) String() string {
 		builder.WriteString("quota_crossed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", eg.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

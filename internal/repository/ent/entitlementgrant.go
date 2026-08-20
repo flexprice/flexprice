@@ -2,9 +2,11 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
@@ -74,6 +76,7 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetNillableQuotaCrossedAt(g.QuotaCrossedAt).
+		SetMetadata(defaultedMetadata(g.Metadata)).
 		SetTenantID(g.TenantID).
 		SetEnvironmentID(g.EnvironmentID).
 		SetStatus(string(g.Status)).
@@ -219,6 +222,85 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
+}
+
+// quota_crossed_at is resolved against the snapshot usage already on the row
+// (an UPDATE's right-hand sides all see the pre-update values, so
+// `usage < quota + delta` tests the NEW quota):
+//
+//   - never crossed          → stays NULL. GREATEST would return the top-up
+//     time here and invent an overage window on a healthy grant.
+//   - top up restored headroom → cleared. Leaving it set would bill
+//     [topUpTime, valid_to) on a bucket that is no longer exhausted, which is
+//     the normal outcome of attaching an addon.
+//   - still over the new quota → advanced, never rewound, so the billable
+//     window can only shrink under replay or out-of-order calls.
+func (r *entitlementGrantRepository) TopUpQuota(
+	ctx context.Context,
+	id string,
+	delta decimal.Decimal,
+	at time.Time,
+	meta types.Metadata,
+) (*domainGrant.EntitlementGrant, error) {
+	span := StartRepositorySpan(ctx, "entitlement_grant", "top_up_quota", map[string]interface{}{
+		"id":        id,
+		"delta":     delta.String(),
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	metaJSON, err := json.Marshal(defaultedMetadata(meta))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to encode entitlement grant metadata").
+			Mark(ierr.ErrValidation)
+	}
+
+	const query = `
+		UPDATE entitlement_grants
+		SET quota            = quota + $1::numeric,
+		    metadata         = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+		    quota_crossed_at = CASE
+		                         WHEN quota_crossed_at IS NULL       THEN NULL
+		                         WHEN usage < quota + $1::numeric    THEN NULL
+		                         WHEN quota_crossed_at < $3          THEN $3
+		                         ELSE quota_crossed_at
+		                       END,
+		    updated_at       = $4,
+		    updated_by       = $5
+		WHERE id             = $6
+		  AND tenant_id      = $7
+		  AND environment_id = $8
+	`
+	res, err := r.client.Writer(ctx).ExecContext(
+		ctx, query,
+		delta.String(),
+		string(metaJSON),
+		at.UTC(),
+		time.Now().UTC(),
+		types.GetUserID(ctx),
+		id,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to top up entitlement grant quota").
+			WithReportableDetails(map[string]interface{}{"id": id, "delta": delta.String()}).
+			Mark(ierr.ErrDatabase)
+	}
+	if affected, aerr := res.RowsAffected(); aerr == nil && affected == 0 {
+		return nil, ierr.NewError("entitlement grant not found for quota top up").
+			WithHint("Entitlement grant not found").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Re-read inside the caller's transaction so the returned row reflects the
+	// increment that just landed.
+	return r.Get(ctx, id)
 }
 
 func (r *entitlementGrantRepository) LatestWindowEndBySlot(
@@ -457,6 +539,15 @@ func defaultedGrantStatus(s types.EntitlementGrantStatus) types.EntitlementGrant
 		return types.EntitlementGrantStatusActive
 	}
 	return s
+}
+
+// defaultedMetadata keeps a nil map out of the jsonb column so the merge
+// operator in TopUpQuota never has to reason about NULL.
+func defaultedMetadata(m types.Metadata) types.Metadata {
+	if m == nil {
+		return types.Metadata{}
+	}
+	return m
 }
 
 // defaultedScopeEntityType lands an unset scope on feature, which is the only
