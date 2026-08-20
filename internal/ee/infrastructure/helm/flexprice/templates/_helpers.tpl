@@ -599,32 +599,32 @@ All service addresses are resolved via named templates above so this block stays
 {{- end }}
 {{- /* ---- Observability ---- */}}
 - name: FLEXPRICE_SENTRY_ENABLED
-  value: {{ .Values.sentry.enabled | quote }}
-{{- if .Values.sentry.enabled }}
+  value: {{ .Values.app.observability.sentry.enabled | quote }}
+{{- if .Values.app.observability.sentry.enabled }}
 - name: FLEXPRICE_SENTRY_DSN
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.secretName" . }}
       key: sentry-dsn
 - name: FLEXPRICE_SENTRY_ENVIRONMENT
-  value: {{ .Values.sentry.environment | quote }}
+  value: {{ .Values.app.observability.sentry.environment | quote }}
 - name: FLEXPRICE_SENTRY_SAMPLE_RATE
-  value: {{ .Values.sentry.sampleRate | quote }}
+  value: {{ .Values.app.observability.sentry.sampleRate | quote }}
 {{- end }}
 - name: FLEXPRICE_PYROSCOPE_ENABLED
-  value: {{ .Values.pyroscope.enabled | quote }}
-{{- if .Values.pyroscope.enabled }}
+  value: {{ .Values.app.observability.pyroscope.enabled | quote }}
+{{- if .Values.app.observability.pyroscope.enabled }}
 - name: FLEXPRICE_PYROSCOPE_SERVER_ADDRESS
-  value: {{ .Values.pyroscope.serverAddress | quote }}
+  value: {{ .Values.app.observability.pyroscope.serverAddress | quote }}
 - name: FLEXPRICE_PYROSCOPE_APPLICATION_NAME
-  value: {{ .Values.pyroscope.applicationName | quote }}
+  value: {{ .Values.app.observability.pyroscope.applicationName | quote }}
 - name: FLEXPRICE_PYROSCOPE_SAMPLE_RATE
-  value: {{ .Values.pyroscope.sampleRate | quote }}
+  value: {{ .Values.app.observability.pyroscope.sampleRate | quote }}
 - name: FLEXPRICE_PYROSCOPE_DISABLE_GC_RUNS
-  value: {{ .Values.pyroscope.disableGCRuns | quote }}
-{{- if .Values.pyroscope.basicAuthUser }}
+  value: {{ .Values.app.observability.pyroscope.disableGCRuns | quote }}
+{{- if .Values.app.observability.pyroscope.basicAuthUser }}
 - name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_USER
-  value: {{ .Values.pyroscope.basicAuthUser | quote }}
+  value: {{ .Values.app.observability.pyroscope.basicAuthUser | quote }}
 - name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_PASSWORD
   valueFrom:
     secretKeyRef:
@@ -660,7 +660,7 @@ All service addresses are resolved via named templates above so this block stays
       key: encryption-key
 {{- end }}
 {{- /* ---- Email ---- */}}
-{{- if .Values.email.enabled }}
+{{- if .Values.app.email.enabled }}
 - name: FLEXPRICE_EMAIL_ENABLED
   value: "true"
 - name: FLEXPRICE_EMAIL_RESEND_API_KEY
@@ -669,11 +669,11 @@ All service addresses are resolved via named templates above so this block stays
       name: {{ include "flexprice.secretName" . }}
       key: email-resend-api-key
 - name: FLEXPRICE_EMAIL_FROM_ADDRESS
-  value: {{ .Values.email.fromAddress | quote }}
+  value: {{ .Values.app.email.fromAddress | quote }}
 - name: FLEXPRICE_EMAIL_REPLY_TO
-  value: {{ .Values.email.replyTo | quote }}
+  value: {{ .Values.app.email.replyTo | quote }}
 - name: FLEXPRICE_EMAIL_CALENDAR_URL
-  value: {{ .Values.email.calendarUrl | quote }}
+  value: {{ .Values.app.email.calendarUrl | quote }}
 {{- end }}
 {{- /* ---- Event processing ---- */}}
 - name: FLEXPRICE_EVENT_PROCESSING_TOPIC
@@ -843,3 +843,22 @@ rather than rejected.
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+flexprice.image — the app image reference.
+
+Prefers an immutable digest when image.digest is set: renders
+"<repository>@<digest>" and ignores the tag entirely. Otherwise renders
+"<repository>:<tag>", tag defaulting to .Chart.AppVersion, the prior behaviour.
+
+A digest and a tag cannot both appear in one reference ("repo@sha256:x:tag" is
+invalid), so digest wins outright when present. This lets a client pin exactly
+the bytes shipped — the workloads and the migration Job all resolve through here.
+*/}}
+{{- define "flexprice.image" -}}
+{{- if .Values.image.digest -}}
+{{ .Values.image.repository }}@{{ .Values.image.digest }}
+{{- else -}}
+{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+{{- end -}}
+{{- end -}}

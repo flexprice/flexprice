@@ -1032,26 +1032,6 @@ otel:
     authHeader: ""      # e.g. "signoz-ingestion-key"
     sampleRate: ""      # empty → app default (1.0 = 100%); e.g. "0.2" to sample 20%
 
-# Sentry configuration
-sentry:
-  enabled: false
-  dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
-  environment: "production"
-  sampleRate: 1.0
-
-# Pyroscope configuration
-pyroscope:
-  enabled: false
-  serverAddress: ""
-  applicationName: "flexprice"
-  basicAuthUser: ""
-  basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
-  sampleRate: 100
-  disableGCRuns: false
-  profileTypes:
-    - "cpu"
-    - "memory"
-
 # S3 configuration
 s3:
   enabled: false
@@ -1345,19 +1325,41 @@ billing:
   tenantId: ""
   environmentId: ""
 
-# Email configuration
-email:
-  enabled: false
-  resendApiKey: "" # secret — bound via FLEXPRICE_EMAIL_RESEND_API_KEY (config.go BindEnv); not rendered in configmap
-  fromAddress: ""
-  replyTo: ""
-  calendarUrl: ""
-  zapierWebhookUrl: "" # plain value (user-signup automation) — rendered into config.yaml
-
 # App URL configuration
 app:
   customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
   oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
+
+  # Observability (Sentry error tracking + Pyroscope continuous profiling)
+  observability:
+    # Sentry configuration
+    sentry:
+      enabled: false
+      dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
+      environment: "production"
+      sampleRate: 1.0
+
+    # Pyroscope configuration
+    pyroscope:
+      enabled: false
+      serverAddress: ""
+      applicationName: "flexprice"
+      basicAuthUser: ""
+      basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
+      sampleRate: 100
+      disableGCRuns: false
+      profileTypes:
+        - "cpu"
+        - "memory"
+
+  # Email configuration
+  email:
+    enabled: false
+    resendApiKey: "" # secret — bound via FLEXPRICE_EMAIL_RESEND_API_KEY (config.go BindEnv); not rendered in configmap
+    fromAddress: ""
+    replyTo: ""
+    calendarUrl: ""
+    zapierWebhookUrl: "" # plain value (user-signup automation) — rendered into config.yaml
 
 # Checkout flow base URL → rendered into config.yaml as checkout.base_url
 checkout:
