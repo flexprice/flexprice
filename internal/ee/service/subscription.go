@@ -2031,55 +2031,64 @@ func (s *subscriptionService) CancelSubscription(
 	// non-zero invoice on cancellation is incorrect — skip invoice creation.
 	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
 
-	// Step 5: Execute in transaction
+	// Step 6 (pre-tx, pure computation): Calculate proration.
+	// Trialing subscriptions have not been charged yet, so proration is not applicable.
+	// This is a read-only aggregation over the live subscription state; running it
+	// outside the tx does not change semantics.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
+		prorationService := NewProrationService(s.ServiceParams)
+		prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
+			ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)
+		if err != nil {
+			return nil, err
+		}
+		prorationDetails, totalCreditAmount = s.convertProrationResultToDetails(prorationResult)
+	}
+
+	// Determine whether this cancellation should generate a final usage invoice.
+	// Default to skip (no final invoice) when policy is empty; only generate when explicitly requested.
+	invoicePolicy := req.CancelImmediatelyInvoicePolicy
+	if invoicePolicy == "" {
+		invoicePolicy = types.CancelImmediatelyInvoicePolicySkip
+	}
+	// Scheduled cancellations (end_of_period and scheduled_date) do not generate an
+	// immediate invoice — billing continues until the effective date.
+	isScheduled := req.CancellationType == types.CancellationTypeEndOfPeriod ||
+		req.CancellationType == types.CancellationTypeScheduledDate
+	shouldCreateInvoice := !isScheduled &&
+		invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
+
+	// Pre-tx (before the atomic cancel block): Create the final usage invoice.
+	// Runs outside the cancel tx so a Postgres connection is not held during the
+	// synchronous Stripe HTTP charge inside ProcessDraftInvoice → attemptPaymentForSubscriptionInvoice.
+	// Called BEFORE TerminateSubscriptionResources so invoice computation reads
+	// still-active line items.
+	// Fail-open: a failure here does not roll back the cancel; log and continue,
+	// mirroring cancelAllPendingSchedules / createCancellationSchedule below.
+	if shouldCreateInvoice {
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
+		paymentParams = paymentParams.NormalizePaymentParameters()
+		inv, _, invErr := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: subscription.ID,
+			PeriodStart:    subscription.CurrentPeriodStart,
+			PeriodEnd:      effectiveDate,
+			ReferencePoint: types.ReferencePointCancel,
+		}, paymentParams, types.InvoiceFlowCancel, false)
+		if invErr != nil {
+			logger.Error(ctx, "failed to create cancellation invoice; continuing with cancel",
+				"error", invErr,
+				"subscription_id", subscription.ID)
+		} else if inv != nil {
+			logger.Info(ctx, "created invoice for subscription",
+				"subscription_id", subscription.ID,
+				"invoice_id", inv.ID)
+		}
+	}
+
+	// Step 5: Atomic cancel core — status change + resource termination + scheduling.
+	// Kept small so the connection is held only for the short critical section.
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-
-		// Step 6: Calculate proration using unified function
-		// Trialing subscriptions have not been charged yet, so proration is not applicable.
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
-			prorationService := NewProrationService(s.ServiceParams)
-			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
-				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)
-			if err != nil {
-				return err
-			}
-
-			// Convert proration result to response format
-			prorationDetails, totalCreditAmount = s.convertProrationResultToDetails(prorationResult)
-		}
-
-		// Default to skip (no final invoice) when policy is empty; only generate when explicitly requested
-		invoicePolicy := req.CancelImmediatelyInvoicePolicy
-		if invoicePolicy == "" {
-			invoicePolicy = types.CancelImmediatelyInvoicePolicySkip
-		}
-		// Scheduled cancellations (end_of_period and scheduled_date) do not generate an
-		// immediate invoice — billing continues until the effective date.
-		isScheduled := req.CancellationType == types.CancellationTypeEndOfPeriod ||
-			req.CancellationType == types.CancellationTypeScheduledDate
-		shouldCreateInvoice := !isScheduled &&
-			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
-		if shouldCreateInvoice {
-			invoiceService := NewInvoiceService(s.ServiceParams)
-			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
-			paymentParams = paymentParams.NormalizePaymentParameters()
-			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
-				SubscriptionID: subscription.ID,
-				PeriodStart:    subscription.CurrentPeriodStart,
-				PeriodEnd:      effectiveDate,
-				ReferencePoint: types.ReferencePointCancel,
-			}, paymentParams, types.InvoiceFlowCancel, false)
-			if err != nil {
-				return err
-			}
-
-			if inv != nil {
-				s.Logger.Info(ctx, "created invoice for subscription",
-					"subscription_id", subscription.ID,
-					"invoice_id", inv.ID)
-			}
-
-		}
 
 		// Step 6.5: Capture original state BEFORE modification (for scheduled cancellations)
 		var originalState *subscriptionOriginalState
@@ -2132,16 +2141,6 @@ func (s *subscriptionService) CancelSubscription(
 			}
 		}
 
-		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
-		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
-			walletService := NewWalletService(s.ServiceParams)
-			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
-			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey)
-			if err != nil {
-				return err
-			}
-		}
-
 		return nil
 	})
 
@@ -2150,6 +2149,20 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, ierr.WithError(err).
 			WithHint("Failed to process subscription cancellation").
 			Mark(ierr.ErrDatabase)
+	}
+
+	// Step 9 (post-tx): Top up wallet for proration credit. Uses an idempotency key
+	// (cancelKey) so a retry after transient failure is safe. Fail-open like the
+	// invoice creation above — the atomic cancel has already committed.
+	if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
+		walletService := NewWalletService(s.ServiceParams)
+		cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
+		if _, walletErr := walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey); walletErr != nil {
+			logger.Error(ctx, "failed to top up wallet for proration credit; cancel already committed",
+				"error", walletErr,
+				"subscription_id", subscription.ID,
+				"credit_amount", totalCreditAmount.Abs().String())
+		}
 	}
 
 	if !req.SuppressWebhook {
