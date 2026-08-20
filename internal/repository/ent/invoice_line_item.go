@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -298,6 +299,137 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 			Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
+	return nil
+}
+
+// UpdateBulk updates the mutable field set of many invoice line items in a single
+// SQL round-trip via UPDATE ... FROM (VALUES ...). Mirrors Update: amount, quantity,
+// prepaid_credits_applied, line_item_discount, invoice_level_discount, metadata,
+// commitment_info, status, updated_at, updated_by, and adjusted_entitlement_quantity
+// (SET when non-nil, CLEAR when nil). Missing IDs are silently skipped; tenant and
+// environment scoping is enforced in the outer WHERE.
+func (r *invoiceLineItemRepository) UpdateBulk(ctx context.Context, items []*domaininvoice.InvoiceLineItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "update_bulk", map[string]interface{}{
+		"item_count": len(items),
+	})
+	defer FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	updatedAt := time.Now().UTC()
+	updatedBy := types.GetUserID(ctx)
+
+	// 12 placeholders per row (id + 11 mutable columns) plus 2 constant params.
+	// pq's per-statement parameter limit is 65 535; cap chunks to 5000 rows.
+	const paramsPerRow = 12
+	const maxRowsPerChunk = 5000
+
+	err := r.client.WithTx(ctx, func(ctx context.Context) error {
+		writer := r.client.Writer(ctx)
+		for start := 0; start < len(items); start += maxRowsPerChunk {
+			end := start + maxRowsPerChunk
+			if end > len(items) {
+				end = len(items)
+			}
+			chunk := items[start:end]
+
+			valuesRows := make([]string, 0, len(chunk))
+			args := make([]interface{}, 0, paramsPerRow*len(chunk)+2)
+			args = append(args, tenantID, envID)
+			argIdx := 3
+
+			for _, it := range chunk {
+				metadataJSON, mErr := json.Marshal(it.Metadata)
+				if mErr != nil {
+					return ierr.WithError(mErr).
+						WithHint("failed to marshal invoice line item metadata").
+						WithReportableDetails(map[string]any{"line_item_id": it.ID}).
+						Mark(ierr.ErrValidation)
+				}
+				var commitmentArg interface{}
+				if it.CommitmentInfo != nil {
+					cInfoJSON, cErr := json.Marshal(it.CommitmentInfo)
+					if cErr != nil {
+						return ierr.WithError(cErr).
+							WithHint("failed to marshal invoice line item commitment_info").
+							WithReportableDetails(map[string]any{"line_item_id": it.ID}).
+							Mark(ierr.ErrValidation)
+					}
+					commitmentArg = cInfoJSON
+				}
+				var adjQtyArg interface{}
+				if it.AdjustedEntitlementQuantity != nil {
+					adjQtyArg = it.AdjustedEntitlementQuantity.String()
+				}
+
+				valuesRows = append(valuesRows, fmt.Sprintf(
+					"($%d::text, $%d::numeric, $%d::numeric, $%d::numeric, $%d::numeric, $%d::numeric, $%d::jsonb, $%d::jsonb, $%d::text, $%d::timestamptz, $%d::text, $%d::numeric)",
+					argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4, argIdx+5,
+					argIdx+6, argIdx+7, argIdx+8, argIdx+9, argIdx+10, argIdx+11,
+				))
+				argIdx += paramsPerRow
+
+				args = append(args,
+					it.ID,
+					it.Amount.String(),
+					it.Quantity.String(),
+					it.PrepaidCreditsApplied.String(),
+					it.LineItemDiscount.String(),
+					it.InvoiceLevelDiscount.String(),
+					metadataJSON,
+					commitmentArg,
+					string(it.Status),
+					updatedAt,
+					updatedBy,
+					adjQtyArg,
+				)
+			}
+
+			query := fmt.Sprintf(`
+				UPDATE invoice_line_items AS t SET
+					amount                        = v.amount,
+					quantity                      = v.quantity,
+					prepaid_credits_applied       = v.prepaid_credits_applied,
+					line_item_discount            = v.line_item_discount,
+					invoice_level_discount        = v.invoice_level_discount,
+					metadata                      = v.metadata,
+					commitment_info               = v.commitment_info,
+					status                        = v.status,
+					updated_at                    = v.updated_at,
+					updated_by                    = v.updated_by,
+					adjusted_entitlement_quantity = v.adjusted_entitlement_quantity
+				FROM (VALUES %s) AS v(
+					id, amount, quantity, prepaid_credits_applied, line_item_discount,
+					invoice_level_discount, metadata, commitment_info, status,
+					updated_at, updated_by, adjusted_entitlement_quantity
+				)
+				WHERE t.id             = v.id
+				  AND t.tenant_id      = $1
+				  AND t.environment_id = $2
+			`, strings.Join(valuesRows, ", "))
+
+			if _, err := writer.ExecContext(ctx, query, args...); err != nil {
+				return ierr.WithError(err).
+					WithHint("failed to bulk update invoice line items").
+					WithReportableDetails(map[string]any{
+						"count":       len(chunk),
+						"batch_start": start,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
 	SetSpanSuccess(span)
 	return nil
 }

@@ -64,6 +64,23 @@ func (s *InMemoryInvoiceLineItemStore) Update(ctx context.Context, item *invoice
 	return nil
 }
 
+// UpdateBulk mirrors the ent repo semantics: missing IDs are silently skipped.
+func (s *InMemoryInvoiceLineItemStore) UpdateBulk(ctx context.Context, items []*invoice.InvoiceLineItem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if _, exists := s.data[item.ID]; !exists {
+			continue
+		}
+		cp := *item
+		s.data[item.ID] = &cp
+	}
+	return nil
+}
+
 func (s *InMemoryInvoiceLineItemStore) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
