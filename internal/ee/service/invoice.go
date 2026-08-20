@@ -3412,9 +3412,10 @@ func (s *invoiceService) reconcileLineItems(
 		}
 	}
 
-	// Update matched items in-place
-	for _, item := range toUpdate {
-		if err := s.InvoiceLineItemRepo.Update(ctx, item); err != nil {
+	// Update matched items in-place. Single SQL round-trip via UpdateBulk so
+	// recalculates with many line items don't fan out into N sequential UPDATEs.
+	if len(toUpdate) > 0 {
+		if err := s.InvoiceLineItemRepo.UpdateBulk(ctx, toUpdate); err != nil {
 			return nil, err
 		}
 	}

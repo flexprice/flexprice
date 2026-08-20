@@ -25,6 +25,11 @@ type LineItemRepository interface {
 	// LineItemDiscount, InvoiceLevelDiscount, Metadata, Status, timestamps.
 	Update(ctx context.Context, item *InvoiceLineItem) error
 
+	// UpdateBulk applies Update to many line items in a single SQL round-trip.
+	// Missing IDs are silently skipped (unlike Update, which returns ErrNotFound).
+	// Tenant/environment scoping is enforced.
+	UpdateBulk(ctx context.Context, items []*InvoiceLineItem) error
+
 	// Delete soft-deletes a line item.
 	Delete(ctx context.Context, id string) error
 
