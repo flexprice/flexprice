@@ -410,6 +410,74 @@ frontend:
     resources:
       requests: {cpu: "50m", memory: "64Mi"}
       limits: {cpu: "250m", memory: "128Mi"}
+  # Build the SPA in-cluster and sync it into gcs.bucket.
+  #
+  # gcsproxy serves whatever is in that bucket; nothing else in this chart puts
+  # anything THERE. Without this, publishing a build means an operator cloning
+  # the frontend, building it locally with the right VITE_* values, and syncing
+  # with their own credentials.
+  #
+  # Runs as a post-install/post-upgrade hook, NOT pre- like the migration: an
+  # unmigrated database is dangerous and must block the release, a stale UI is
+  # not. A failed build here leaves the previous bundle serving and the backend
+  # deployed, rather than rolling back a release that was fine.
+  build:
+    enabled: false
+    # false renders an ordinary Job that persists after it finishes, which is
+    # what the terragrunt path applies. true adds the Helm hook annotations for
+    # ArgoCD-driven environments — at the cost of the Job, and its logs, being
+    # deleted when it ends.
+    asHook: true
+    repoUrl: https://github.com/flexprice/flexprice-front.git
+    # MUST be an immutable tag or commit sha, never a branch.
+    #
+    # The Job's name embeds a checksum of this and buildEnv. A moving ref makes
+    # that checksum constant, so ArgoCD records the hook completed for that name
+    # and never recreates it: the build silently never runs again while
+    # everything else rolls out normally, and the bucket keeps serving the old
+    # bundle with nothing to surface it. The template refuses "main" outright.
+    ref: ""
+    # VITE_* values baked into the bundle at build time. These are
+    # per-environment — VITE_API_URL differs per region — which is why the
+    # bundle cannot be shared across environments.
+    buildEnv: {}
+    #   VITE_APP_ENV: self-hosted
+    #   VITE_API_URL: https://billing.example.com/v1
+    #   VITE_AUTH_ENABLED: "true"
+    #   VITE_AUTH_PROVIDER: flexprice
+    #   VITE_SVIX_URL: https://billing.example.com
+    # Must satisfy flexprice-front's engines.node (>=22.22.0). Digest-pinned:
+    # this container executes the whole public npm dependency tree, so the base
+    # image is the one part that should not move underneath a deploy.
+    image: node:22-bookworm@sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a
+    # Cloud SDK only — no build tooling. This container holds the credential,
+    # so its contents are the blast radius.
+    syncImage: google/cloud-sdk:alpine
+    imagePullPolicy: IfNotPresent
+    # Workload Identity binding for the Job's OWN ServiceAccount, which needs
+    # WRITE access to the bucket. Distinct from frontend.serviceAccount, which
+    # gcsproxy reads as: binding write access to that one would let the
+    # internet-facing serving pod overwrite the bundle it serves.
+    serviceAccountAnnotations: {}
+    #   iam.gke.io/gcp-service-account: ui-build@<project>.iam.gserviceaccount.com
+    # <project>.svc.id.goog. Set alongside the annotation above: it is the
+    # audience the metadata server expects when exchanging the projected token
+    # for a GCP access token, and the sync cannot authenticate without it.
+    tokenAudience: ""
+    nodeSelector: {}
+    # tsc -b && vite build needs more than node's default heap. Keep
+    # resources.limits.memory ABOVE this, so node fails with a readable JS heap
+    # error rather than being OOM-killed with a bare exit 137.
+    maxOldSpaceMb: 6144
+    resources:
+      requests: {cpu: "1", memory: "4Gi"}
+      limits: {cpu: "2", memory: "8Gi"}
+    syncResources:
+      requests: {cpu: "100m", memory: "256Mi"}
+      limits: {cpu: "500m", memory: "512Mi"}
+    # Kills a wedged npm install rather than leaving it holding a node.
+    activeDeadlineSeconds: 2400
+    ttlSecondsAfterFinished: 3600
   # nginx sidecar that fronts gcsproxy and terminates the Service port.
   nginx:
     image: nginx:1.27-alpine
