@@ -155,11 +155,12 @@ func (s *SubscriptionSchedule) SetCancellationResult(result *CancellationResult)
 const PlanChangeConfigVersionV2 = "v2"
 
 type PlanChangeV2Configuration struct {
-	Version        string                      `json:"version"`
-	TargetPlanID   string                      `json:"target_plan_id"`
-	EntityPolicies *EntityChangePoliciesConfig `json:"entity_policies,omitempty"`
-	IdempotencyKey *string                     `json:"idempotency_key,omitempty"`
-	ChangeMetadata map[string]string           `json:"change_metadata,omitempty"`
+	Version                string                       `json:"version"`
+	TargetPlanID           string                       `json:"target_plan_id"`
+	EntityPolicies         *EntityChangePoliciesConfig  `json:"entity_policies,omitempty"`
+	IdempotencyKey         *string                      `json:"idempotency_key,omitempty"`
+	ChangeMetadata         map[string]string            `json:"change_metadata,omitempty"`
+	BillingPeriodBehaviour types.BillingPeriodBehaviour `json:"billing_period_behaviour,omitempty"`
 }
 
 type EntityChangePoliciesConfig struct {

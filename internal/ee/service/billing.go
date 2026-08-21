@@ -2045,6 +2045,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		PreparedTaxRates: preparedTaxRates,
 	}
 
+	if params.InvoiceType != "" {
+		req.InvoiceType = params.InvoiceType
+	}
+	if params.BillingReason != "" {
+		req.BillingReason = params.BillingReason
+	}
+
 	return req, nil
 }
 

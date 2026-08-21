@@ -78,3 +78,44 @@ func (p OnPendingSchedulePolicy) Validate() error {
 	}
 	return nil
 }
+
+// BillingPeriodBehaviour decides what a plan change does to the subscription's billing
+// anchor and period bounds.
+type BillingPeriodBehaviour string
+
+const (
+	// BillingPeriodBehaviourUnchanged keeps the anchor and period bounds. Default.
+	BillingPeriodBehaviourUnchanged BillingPeriodBehaviour = "unchanged"
+
+	// BillingPeriodBehaviourResetAtEffect moves the anchor to the moment the change
+	// takes effect and starts a full new period there. For a period-end change that
+	// instant is already the anchor, so nothing moves.
+	BillingPeriodBehaviourResetAtEffect BillingPeriodBehaviour = "reset_at_effect"
+
+	// BillingPeriodBehaviourResetAt resets to a caller-supplied instant.
+	BillingPeriodBehaviourResetAt BillingPeriodBehaviour = "reset_at"
+)
+
+var BillingPeriodBehaviourValues = []BillingPeriodBehaviour{
+	BillingPeriodBehaviourUnchanged,
+	BillingPeriodBehaviourResetAtEffect,
+	BillingPeriodBehaviourResetAt,
+}
+
+func (b BillingPeriodBehaviour) String() string { return string(b) }
+
+func (b BillingPeriodBehaviour) Validate() error {
+	if b == "" {
+		return nil
+	}
+	if !lo.Contains(BillingPeriodBehaviourValues, b) {
+		return ierr.NewError("invalid billing_period_behaviour").
+			WithHint("Behaviour must be one of the allowed values").
+			WithReportableDetails(map[string]any{
+				"billing_period_behaviour": string(b),
+				"allowed":                  BillingPeriodBehaviourValues,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}

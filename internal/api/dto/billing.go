@@ -169,12 +169,14 @@ func (p *CalculateChargesParams) Validate() error {
 
 // CreateInvoiceRequestForChargesParams holds inputs for CreateInvoiceRequestForCharges.
 type CreateInvoiceRequestForChargesParams struct {
-	Subscription *subscription.Subscription `validate:"required"`
-	Result       *BillingCalculationResult  // nil produces a zero-amount invoice
-	PeriodStart  time.Time                  `validate:"required"`
-	PeriodEnd    time.Time                  `validate:"required"`
-	Description  string
-	Metadata     types.Metadata
+	Subscription  *subscription.Subscription `validate:"required"`
+	Result        *BillingCalculationResult  // nil produces a zero-amount invoice
+	PeriodStart   time.Time                  `validate:"required"`
+	PeriodEnd     time.Time                  `validate:"required"`
+	Description   string
+	Metadata      types.Metadata
+	InvoiceType   types.InvoiceType
+	BillingReason types.InvoiceBillingReason
 }
 
 // Validate enforces struct tags.
@@ -206,4 +208,3 @@ type CalculateUsageChargesResult struct {
 	LineItems   []CreateInvoiceLineItemRequest
 	TotalAmount decimal.Decimal
 }
-

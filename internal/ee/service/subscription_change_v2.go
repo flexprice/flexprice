@@ -34,7 +34,9 @@ func (c lineItemChange) isAddon() bool {
 }
 
 type planChangeRequest struct {
-	sub            *subscription.Subscription
+	currentSub *subscription.Subscription
+	updatedSub *subscription.Subscription
+
 	fromPlan       *plan.Plan
 	toPlan         *plan.Plan
 	effectiveAt    time.Time
@@ -47,6 +49,13 @@ type planChangeRequest struct {
 
 	grants         *planChangeGrants
 	staleOverrides []*entitlement.Entitlement
+
+	resetAnchor bool
+
+	// outgoingUsage bills the outgoing plan's usage and is set only under a reset; settlementQuote is
+	// the net of credits against charges, nil when the change settles no money.
+	outgoingUsage   *dto.CreateInvoiceRequest
+	settlementQuote *LineItemProrationSummary
 
 	changes  []*dto.EntityChangeResult
 	warnings []string
@@ -111,13 +120,20 @@ func (s *subscriptionService) resolvePlanChange(
 	}
 
 	r := &planChangeRequest{
-		sub:            sub,
+		currentSub:     sub,
 		fromPlan:       fromPlan.Plan,
 		toPlan:         toPlan.Plan,
 		effectiveAt:    effectiveAt,
 		behavior:       req.ProrationBehavior,
 		idempotencyKey: lo.FromPtr(req.IdempotencyKey),
+		resetAnchor:    req.ResetsAnchorAtEffective() && !req.IsDeferred(),
 	}
+
+	updatedSub, err := projectSubscriptionAfterChange(r)
+	if err != nil {
+		return nil, err
+	}
+	r.updatedSub = updatedSub
 
 	carried, opening, closing, err := s.resolveLineItems(ctx, sub, targetPrices, toPlan, effectiveAt)
 	if err != nil {
@@ -136,6 +152,21 @@ func (s *subscriptionService) resolvePlanChange(
 	r.warnings = addonsWarnings
 	r.changeType = planChangeType(r)
 
+	// The settlement is resolved here, before any write, so preview and execute quote the
+	// same documents and settling them is order-independent.
+	if r.resetAnchor {
+		if r.outgoingUsage, err = s.outgoingUsageInvoiceRequest(ctx, r); err != nil {
+			return nil, err
+		}
+		if r.settlementQuote, err = s.resetQuote(ctx, r); err != nil {
+			return nil, err
+		}
+	} else if r.behavior == types.ProrationBehaviorCreateProrations {
+		if r.settlementQuote, err = s.computePlanChange(ctx, r); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.resolveCreditGrantMigration(ctx, r); err != nil {
 		return nil, err
 	}
@@ -151,7 +182,7 @@ func (s *subscriptionService) resolvePlanChange(
 // arrive with the new one. Preview and execute both call it; only execute applies it.
 func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r *planChangeRequest) error {
 	filter := types.NewNoLimitCreditGrantFilter()
-	filter.SubscriptionIDs = []string{r.sub.ID}
+	filter.SubscriptionIDs = []string{r.currentSub.ID}
 	filter.PlanIDs = []string{r.fromPlan.ID}
 	filter.WithStatus(types.StatusPublished)
 
@@ -178,7 +209,8 @@ func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r
 		if cg == nil || cg.CreditGrant == nil {
 			continue
 		}
-		grants.create = append(grants.create, PlanCreditGrantRequest(cg, r.sub.ID, r.toPlan.ID))
+
+		grants.create = append(grants.create, dto.NewSubscriptionScopedCreditGrantRequest(cg, r.currentSub.ID, r.toPlan.ID))
 		grants.createdFrom = append(grants.createdFrom, cg.CreditGrant)
 	}
 	r.grants = grants
@@ -229,7 +261,7 @@ func (s *subscriptionService) resolveStaleEntitlementOverrides(ctx context.Conte
 	}
 
 	subEnts, err := entitlementSvc.ListEntitlements(ctx, types.NewNoLimitEntitlementFilter().
-		WithEntityIDs([]string{r.sub.ID}).
+		WithEntityIDs([]string{r.currentSub.ID}).
 		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished))
 	if err != nil {
@@ -274,7 +306,7 @@ func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planCh
 
 	if len(r.grants.cancel) > 0 {
 		if err := NewCreditGrantService(s.ServiceParams).CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
-			SubscriptionID: r.sub.ID,
+			SubscriptionID: r.currentSub.ID,
 			PlanID:         lo.ToPtr(r.fromPlan.ID),
 			EffectiveDate:  lo.ToPtr(r.effectiveAt),
 		}); err != nil {
@@ -282,12 +314,12 @@ func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planCh
 		}
 	}
 
-	if err := s.handleCreditGrantsWithStart(ctx, r.sub, r.grants.create, r.effectiveAt, nil, nil); err != nil {
+	if err := s.handleCreditGrantsWithStart(ctx, r.updatedSub, r.grants.create, r.effectiveAt, nil, nil); err != nil {
 		return err
 	}
 
 	s.Logger.Info(ctx, "migrated credit grants for plan change",
-		"subscription_id", r.sub.ID,
+		"subscription_id", r.currentSub.ID,
 		"from_plan_id", r.fromPlan.ID,
 		"to_plan_id", r.toPlan.ID,
 		"cancelled_grants", len(r.grants.cancel),
@@ -311,7 +343,7 @@ func (s *subscriptionService) closeStaleEntitlementOverrides(ctx context.Context
 		}
 
 		s.Logger.Info(ctx, "closed stale subscription entitlement override on plan change",
-			"subscription_id", r.sub.ID,
+			"subscription_id", r.currentSub.ID,
 			"entitlement_id", closed.ID,
 			"feature_id", closed.FeatureID,
 			"from_plan_id", r.fromPlan.ID,
@@ -358,6 +390,12 @@ func (s *subscriptionService) checkPlanChangePreconditions(
 		return fail("subscription has a pending cancellation",
 			"Clear the pending cancellation before changing plan",
 			map[string]any{"subscription_id": sub.ID})
+	}
+
+	if req.ResetsAnchorAtEffective() && sub.BillingCycle == types.BillingCycleCalendar {
+		return fail("the billing period cannot be reset on a calendar-aligned subscription",
+			"Calendar billing keeps every period on a calendar boundary. Use billing_period_behaviour='unchanged', or move the subscription to anniversary billing.",
+			map[string]any{"subscription_id": sub.ID, "billing_cycle": sub.BillingCycle})
 	}
 
 	// TODO: Handle mixed billing periods correctly.
@@ -612,7 +650,7 @@ func (s *subscriptionService) applyDroppedAddons(ctx context.Context, r *planCha
 		// KNOWN LIMITATION: grants are tagged by addon_id only, so concurrent
 		// attachments of the same addon cannot be cancelled independently.
 		if err := NewCreditGrantService(s.ServiceParams).CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
-			SubscriptionID: r.sub.ID,
+			SubscriptionID: r.currentSub.ID,
 			AddonID:        lo.ToPtr(association.AddonID),
 			EffectiveDate:  lo.ToPtr(r.effectiveAt),
 		}); err != nil {
@@ -627,25 +665,17 @@ func (s *subscriptionService) computePlanChange(
 	ctx context.Context,
 	r *planChangeRequest,
 ) (*LineItemProrationSummary, error) {
-	entries := make([]LineItemProrationEntry, 0, len(r.closing)+len(r.opening))
-	for _, move := range r.closing {
-		entries = append(entries, LineItemProrationEntry{
-			LineItem: move.lineItem,
-			Price:    move.price,
-			Action:   types.ProrationActionRemoveItem,
-		})
-	}
-	for _, move := range r.opening {
-		entries = append(entries, LineItemProrationEntry{
-			LineItem:    move.lineItem,
-			Price:       move.price,
-			Action:      types.ProrationActionAddItem,
-			NewQuantity: move.lineItem.Quantity,
-		})
+	entries := append(
+		prorationEntries(types.ProrationActionRemoveItem, r.closing),
+		prorationEntries(types.ProrationActionAddItem, r.opening)...,
+	)
+
+	if len(entries) == 0 {
+		return emptyProrationSummary(r.currentSub), nil
 	}
 
 	return NewLineItemProrationService(s.ServiceParams).Compute(ctx, LineItemProrationRequest{
-		Subscription:  r.sub,
+		Subscription:  r.currentSub,
 		Entries:       entries,
 		EffectiveDate: r.effectiveAt,
 		Behavior:      r.behavior,
@@ -668,12 +698,7 @@ func (s *subscriptionService) PreviewPlanChange(
 		return nil, err
 	}
 
-	quote, err := s.computePlanChange(ctx, r)
-	if err != nil {
-		return nil, err
-	}
-
-	preview, err := s.previewPlanChangeSettlement(ctx, r, quote)
+	preview, err := s.settlePlanChange(ctx, r, true)
 	if err != nil {
 		return nil, err
 	}
@@ -683,7 +708,7 @@ func (s *subscriptionService) PreviewPlanChange(
 		return nil, err
 	}
 
-	resp := buildPlanChangeResponse(r, r.sub, req)
+	resp := buildPlanChangeResponse(r, r.updatedSub, req)
 	resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
 	resp.ChangedResources.Invoices = preview
 	resp.SupersededSchedules = superseded
@@ -722,17 +747,12 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		r, err := s.resolvePlanChange(txCtx, sub, req, effectiveAt)
-		if err != nil {
-			return err
-		}
-
-		quote, err := s.computePlanChange(txCtx, r)
-		if err != nil {
-			return err
-		}
-
 		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, executingScheduleID)
+		if err != nil {
+			return err
+		}
+
+		r, err := s.resolvePlanChange(txCtx, sub, req, effectiveAt)
 		if err != nil {
 			return err
 		}
@@ -745,10 +765,16 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		swapped, err := s.applyPlanSwap(txCtx, r)
+		swappedSub, err := s.applyPlanSwap(txCtx, r)
 		if err != nil {
 			return err
 		}
+
+		anchoredSub, err := s.applyAnchorReset(txCtx, r, swappedSub)
+		if err != nil {
+			return err
+		}
+		r.updatedSub = anchoredSub
 
 		if err := s.migrateCreditGrants(txCtx, r); err != nil {
 			return err
@@ -758,12 +784,12 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		changedInvoices, err := s.settlePlanChange(txCtx, r, quote)
+		changedInvoices, err := s.settlePlanChange(txCtx, r, false)
 		if err != nil {
 			return err
 		}
 
-		resp = buildPlanChangeResponse(r, swapped, req)
+		resp = buildPlanChangeResponse(r, anchoredSub, req)
 		resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
 		resp.ChangedResources.Invoices = changedInvoices
 		resp.SupersededSchedules = superseded
@@ -865,7 +891,7 @@ func (s *subscriptionService) applyPlanSwap(
 	ctx context.Context,
 	r *planChangeRequest,
 ) (*subscription.Subscription, error) {
-	if err := s.SubRepo.UpdatePlan(ctx, r.sub.ID, r.toPlan.ID); err != nil {
+	if err := s.SubRepo.UpdatePlan(ctx, r.currentSub.ID, r.toPlan.ID); err != nil {
 		return nil, err
 	}
 
@@ -874,53 +900,284 @@ func (s *subscriptionService) applyPlanSwap(
 		return nil, err
 	}
 
-	if err := s.PlanPriceSyncRepo.ReanchorSubSyncedSequence(ctx, r.sub.ID, targetSeq); err != nil {
+	if err := s.PlanPriceSyncRepo.ReanchorSubSyncedSequence(ctx, r.currentSub.ID, targetSeq); err != nil {
 		return nil, err
 	}
 
-	swapped := *r.sub
+	swapped := *r.updatedSub
 	swapped.PlanID = r.toPlan.ID
 	swapped.SyncedPriceSequence = targetSeq
 	return &swapped, nil
 }
 
-// Net charge → one invoice (credits as lines); net credit → wallet (invoice totals can't go negative).
-func (s *subscriptionService) settlePlanChange(
+func (s *subscriptionService) applyAnchorReset(
 	ctx context.Context,
 	r *planChangeRequest,
-	quote *LineItemProrationSummary,
-) ([]dto.ChangedInvoice, error) {
-	if r.behavior != types.ProrationBehaviorCreateProrations {
+	swapped *subscription.Subscription,
+) (*subscription.Subscription, error) {
+	if !r.resetAnchor {
+		return swapped, nil
+	}
+
+	reset := *swapped
+	reset.BillingAnchor = r.updatedSub.BillingAnchor
+	reset.CurrentPeriodStart = r.updatedSub.CurrentPeriodStart
+	reset.CurrentPeriodEnd = r.updatedSub.CurrentPeriodEnd
+
+	if err := s.SubRepo.Update(ctx, &reset); err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "reset subscription billing anchor on plan change",
+		"subscription_id", reset.ID,
+		"billing_anchor", reset.BillingAnchor,
+		"current_period_start", reset.CurrentPeriodStart,
+		"current_period_end", reset.CurrentPeriodEnd,
+		"previous_period_start", r.currentSub.CurrentPeriodStart,
+		"previous_period_end", r.currentSub.CurrentPeriodEnd)
+
+	return &reset, nil
+}
+
+// projectSubscriptionAfterChange is the subscription the change would leave behind,
+// computed without writing anything. Under reset_at_effective the term restarts at
+// effectiveAt, so the new period is a full period and never the remainder of the old one.
+func projectSubscriptionAfterChange(r *planChangeRequest) (*subscription.Subscription, error) {
+	projected := *r.currentSub
+	projected.PlanID = r.toPlan.ID
+
+	if !r.resetAnchor {
+		return &projected, nil
+	}
+
+	periodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart:  r.effectiveAt,
+		BillingAnchor:       r.effectiveAt,
+		Unit:                projected.BillingPeriodCount,
+		Period:              projected.BillingPeriod,
+		SubscriptionEndDate: projected.EndDate,
+		Timezone:            projected.Timezone,
+	})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to calculate the new billing period end after resetting the anchor").
+			WithReportableDetails(map[string]any{
+				"subscription_id": projected.ID,
+				"effective_at":    r.effectiveAt,
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	projected.BillingAnchor = r.effectiveAt
+	projected.CurrentPeriodStart = r.effectiveAt
+	projected.CurrentPeriodEnd = periodEnd
+	return &projected, nil
+}
+
+// resetQuote prices the term restart against both snapshots: removals against the period
+// the change interrupts (credit for time paid for but no longer covered), additions
+// against the period it opens (a full period, because effectiveAt is its start).
+func (s *subscriptionService) resetQuote(
+	ctx context.Context,
+	r *planChangeRequest,
+) (*LineItemProrationSummary, error) {
+	prorationSvc := NewLineItemProrationService(s.ServiceParams)
+
+	credit, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  r.currentSub,
+		Entries:       prorationEntries(types.ProrationActionRemoveItem, r.closing, r.carried),
+		EffectiveDate: r.effectiveAt,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Reason:        "plan change with billing period reset",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	charge, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  r.updatedSub,
+		Entries:       prorationEntries(types.ProrationActionAddItem, r.opening, r.carried),
+		EffectiveDate: r.effectiveAt,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Reason:        "plan change with billing period reset",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	merged := emptyProrationSummary(r.currentSub)
+	summaries := []*LineItemProrationSummary{credit, charge}
+	for _, summary := range summaries {
+		if summary == nil {
+			continue
+		}
+
+		merged.Results = append(merged.Results, summary.Results...)
+		merged.ChargeLineItems = append(merged.ChargeLineItems, summary.ChargeLineItems...)
+		merged.CreditLineItems = append(merged.CreditLineItems, summary.CreditLineItems...)
+		merged.TotalChargeAmount = merged.TotalChargeAmount.Add(summary.TotalChargeAmount)
+		merged.TotalCreditAmount = merged.TotalCreditAmount.Add(summary.TotalCreditAmount)
+	}
+
+	return merged, nil
+}
+
+func prorationEntries(
+	action types.ProrationAction,
+	moves ...[]*lineItemChange,
+) []LineItemProrationEntry {
+	entries := make([]LineItemProrationEntry, 0)
+	for _, group := range moves {
+		for _, move := range group {
+			entry := LineItemProrationEntry{
+				LineItem: move.lineItem,
+				Price:    move.price,
+				Action:   action,
+			}
+			if action == types.ProrationActionAddItem {
+				entry.NewQuantity = move.lineItem.Quantity
+			}
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries
+}
+
+// outgoingUsageInvoiceRequest bills the usage consumed on the outgoing plan before the
+// reset cut its period short. Without it that usage is never invoiced: the period never
+// reaches its boundary, and the next roll's window starts at effectiveAt.
+func (s *subscriptionService) outgoingUsageInvoiceRequest(
+	ctx context.Context,
+	r *planChangeRequest,
+) (*dto.CreateInvoiceRequest, error) {
+	billingSvc := NewBillingService(s.ServiceParams)
+
+	prepared, err := billingSvc.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   r.currentSub,
+		PeriodStart:    r.currentSub.CurrentPeriodStart,
+		PeriodEnd:      r.effectiveAt,
+		ReferencePoint: types.ReferencePointCancel,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	usageCharges := lo.Filter(prepared.LineItems, func(line dto.CreateInvoiceLineItemRequest, _ int) bool {
+		return lo.FromPtr(line.PriceType) == string(types.PRICE_TYPE_USAGE)
+	})
+	if len(usageCharges) == 0 {
 		return nil, nil
 	}
 
-	switch {
-	case quote.NetAmount().GreaterThan(decimal.Zero):
-		inv, err := NewInvoiceService(s.ServiceParams).CreateInvoice(ctx, planChangeInvoiceRequest(r, quote))
-		if err != nil {
-			return nil, err
+	usageChargesTotal := decimal.Zero
+	for _, charge := range usageCharges {
+		usageChargesTotal = usageChargesTotal.Add(charge.Amount)
+	}
+
+	req, err := billingSvc.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
+		Subscription:  r.currentSub,
+		Result:        &dto.BillingCalculationResult{UsageCharges: usageCharges, TotalAmount: usageChargesTotal, Currency: r.currentSub.Currency},
+		PeriodStart:   r.currentSub.CurrentPeriodStart,
+		PeriodEnd:     r.effectiveAt,
+		Description:   "Usage on the previous plan up to the change",
+		Metadata:      types.Metadata{},
+		InvoiceType:   types.InvoiceTypeOneOff,
+		BillingReason: types.InvoiceBillingReasonSubscriptionUpdate,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !req.Total.IsPositive() {
+		return nil, nil
+	}
+
+	req.IdempotencyKey = lo.ToPtr(planChangeIdempotencyKey(r, "outgoing_usage"))
+	return req, nil
+}
+
+// settlePlanChange raises the settlement resolved for this change: the outgoing plan's
+// usage as its own invoice, and the net of credits against charges as either an invoice or
+// a wallet credit. With preview set it quotes the same documents without writing, so the
+// two cannot describe different outcomes.
+func (s *subscriptionService) settlePlanChange(
+	ctx context.Context,
+	r *planChangeRequest,
+	preview bool,
+) ([]dto.ChangedInvoice, error) {
+	invoiceSvc := NewInvoiceService(s.ServiceParams)
+	changed := make([]dto.ChangedInvoice, 0, 2)
+
+	raiseInvoice := func(req dto.CreateInvoiceRequest) error {
+		if preview {
+			inv, err := invoiceSvc.CreatePreviewInvoice(ctx, req)
+			if err != nil {
+				return err
+			}
+
+			changed = append(changed, dto.ChangedInvoice{
+				Action:  dto.ChangedInvoiceActionCreated,
+				Status:  dto.ChangedInvoiceStatusPreview,
+				Invoice: inv,
+			})
+			return nil
 		}
 
-		return []dto.ChangedInvoice{{
+		inv, err := invoiceSvc.CreateInvoice(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		changed = append(changed, dto.ChangedInvoice{
 			ID:      inv.ID,
 			Action:  dto.ChangedInvoiceActionCreated,
 			Status:  dto.ChangedInvoiceStatusFromPaymentStatus(inv.PaymentStatus),
 			Invoice: inv,
-		}}, nil
+		})
+		return nil
+	}
 
-	case quote.NetAmount().LessThan(decimal.Zero):
-		walletSvc := NewWalletService(s.ServiceParams)
-		txn, err := walletSvc.TopUpWalletForProratedCharge(
-			ctx, r.sub.GetInvoicingCustomerID(), quote.NetAmount().Abs(), r.sub.Currency, planChangeIdempotencyKey(r),
+	if r.outgoingUsage != nil {
+		if err := raiseInvoice(*r.outgoingUsage); err != nil {
+			return nil, err
+		}
+	}
+
+	if r.settlementQuote == nil {
+		return changed, nil
+	}
+
+	net := r.settlementQuote.NetAmount()
+	switch {
+	case net.IsPositive():
+		if err := raiseInvoice(planChangeInvoiceRequest(r, r.settlementQuote)); err != nil {
+			return nil, err
+		}
+
+	// A net credit is paid to the wallet, never invoiced.
+	case net.IsNegative() && preview:
+		changed = append(changed, walletCreditChangedInvoice(&dto.WalletTransactionResponse{
+			Transaction: &wallet.Transaction{
+				CustomerID:        r.currentSub.GetInvoicingCustomerID(),
+				Amount:            net.Abs(),
+				Currency:          r.currentSub.Currency,
+				TransactionReason: types.TransactionReasonSubscriptionCredit,
+			},
+		}, dto.ChangedInvoiceStatusPreview))
+
+	case net.IsNegative():
+		txn, err := NewWalletService(s.ServiceParams).TopUpWalletForProratedCharge(
+			ctx, r.currentSub.GetInvoicingCustomerID(), net.Abs(), r.currentSub.Currency,
+			planChangeIdempotencyKey(r, ""),
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		return []dto.ChangedInvoice{walletCreditChangedInvoice(txn, dto.ChangedInvoiceStatusWalletIssued)}, nil
-	default:
-		return nil, nil
+		changed = append(changed, walletCreditChangedInvoice(txn, dto.ChangedInvoiceStatusWalletIssued))
 	}
+
+	return changed, nil
 }
 
 // One request, two uses: CreateInvoice raises it on execute, CreatePreviewInvoice
@@ -931,15 +1188,15 @@ func planChangeInvoiceRequest(r *planChangeRequest, quote *LineItemProrationSumm
 	lineItems = append(lineItems, quote.ChargeLineItems...)
 	lineItems = append(lineItems, quote.CreditLineItems...)
 
-	billingPeriod := string(r.sub.BillingPeriod)
-	periodEnd := r.sub.CurrentPeriodEnd
-	idempotencyKey := planChangeIdempotencyKey(r)
+	billingPeriod := string(r.updatedSub.BillingPeriod)
+	periodEnd := r.updatedSub.CurrentPeriodEnd
+	idempotencyKey := planChangeIdempotencyKey(r, "")
 
 	return dto.CreateInvoiceRequest{
-		CustomerID:     r.sub.GetInvoicingCustomerID(),
-		SubscriptionID: &r.sub.ID,
+		CustomerID:     r.currentSub.GetInvoicingCustomerID(),
+		SubscriptionID: &r.currentSub.ID,
 		InvoiceType:    types.InvoiceTypeOneOff,
-		Currency:       r.sub.Currency,
+		Currency:       r.currentSub.Currency,
 		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
 		AmountDue:      quote.NetAmount(),
 		Total:          quote.NetAmount(),
@@ -963,7 +1220,12 @@ func buildPlanChangeResponse(
 		EffectiveAt:  r.effectiveAt,
 		FromPlan:     planChangeSummary(r.fromPlan),
 		ToPlan:       planChangeSummary(r.toPlan),
-
+		BillingPeriod: dto.SubscriptionChangeBillingPeriodResult{
+			Behaviour:          req.EffectiveBillingPeriodBehaviour(),
+			BillingAnchor:      sub.BillingAnchor,
+			CurrentPeriodStart: sub.CurrentPeriodStart,
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd,
+		},
 		EntityChanges: r.changes,
 		Warnings:      r.warnings,
 		Metadata:      req.Metadata,
@@ -1035,52 +1297,24 @@ func planChangeChangedLineItems(r *planChangeRequest) []dto.ChangedLineItem {
 	return items
 }
 
-// previewPlanChangeSettlement quotes what settlePlanChange would do, through the
-// same request and the same two branches, so preview and execute cannot drift.
-func (s *subscriptionService) previewPlanChangeSettlement(
-	ctx context.Context,
-	r *planChangeRequest,
-	quote *LineItemProrationSummary,
-) ([]dto.ChangedInvoice, error) {
-	if r.behavior != types.ProrationBehaviorCreateProrations || quote.NetAmount().IsZero() {
-		return nil, nil
-	}
-
-	// A net credit is paid to the wallet, never invoiced.
-	if quote.NetAmount().IsNegative() {
-		return []dto.ChangedInvoice{walletCreditChangedInvoice(&dto.WalletTransactionResponse{
-			Transaction: &wallet.Transaction{
-				CustomerID:        r.sub.GetInvoicingCustomerID(),
-				Amount:            quote.NetAmount().Abs(),
-				Currency:          r.sub.Currency,
-				TransactionReason: types.TransactionReasonSubscriptionCredit,
-			},
-		}, dto.ChangedInvoiceStatusPreview)}, nil
-	}
-
-	inv, err := NewInvoiceService(s.ServiceParams).CreatePreviewInvoice(ctx, planChangeInvoiceRequest(r, quote))
-	if err != nil {
-		return nil, err
-	}
-
-	return []dto.ChangedInvoice{{
-		Action:  dto.ChangedInvoiceActionCreated,
-		Status:  dto.ChangedInvoiceStatusPreview,
-		Invoice: inv,
-	}}, nil
-}
-
-func planChangeIdempotencyKey(r *planChangeRequest) string {
+// The key is what stops a retry double-billing: CreateInvoice returns an existing draft
+// under the same key and rejects an existing finalized one, so two documents sharing a key
+// would make the second fail as already-existing.
+func planChangeIdempotencyKey(r *planChangeRequest, document string) string {
 	inputs := map[string]interface{}{
-		"subscription_id": r.sub.ID,
+		"subscription_id": r.currentSub.ID,
 		"target_plan_id":  r.toPlan.ID,
+	}
+
+	if document != "" {
+		inputs["document"] = document
 	}
 
 	if r.idempotencyKey != "" {
 		inputs["client_key"] = r.idempotencyKey
 	} else {
-		inputs["subscription_version"] = r.sub.Version
-		inputs["subscription_updated_at"] = r.sub.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		inputs["subscription_version"] = r.currentSub.Version
+		inputs["subscription_updated_at"] = r.currentSub.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
 
 	return idempotency.NewGenerator().GenerateKey(idempotency.ScopePlanChange, inputs)
@@ -1091,9 +1325,11 @@ func PlanChangeV2RequestFromConfig(config *subscription.PlanChangeV2Configuratio
 		TargetPlanID: config.TargetPlanID,
 		// Pinned, not replayed from the blob: a deferred change is only ever
 		// accepted with none, and the boundary invoice already bills the new plan.
-		ProrationBehavior: types.ProrationBehaviorNone,
-		IdempotencyKey:    config.IdempotencyKey,
-		Metadata:          config.ChangeMetadata,
+		ProrationBehavior:      types.ProrationBehaviorNone,
+		IdempotencyKey:         config.IdempotencyKey,
+		Metadata:               config.ChangeMetadata,
+		BillingPeriodBehaviour: config.BillingPeriodBehaviour,
+		ChangeAt:               lo.ToPtr(types.ScheduleTypePeriodEnd),
 	}
 
 	if config.EntityPolicies != nil && config.EntityPolicies.Addons != nil {
@@ -1297,21 +1533,22 @@ func (s *subscriptionService) schedulePlanChangeForPeriodEnd(
 			return err
 		}
 
+		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, "")
+		if err != nil {
+			return err
+		}
+
 		scheduledAt := sub.CurrentPeriodEnd
 		r, err := s.resolvePlanChange(txCtx, sub, req, scheduledAt)
 		if err != nil {
 			return err
 		}
 
-		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, "")
-		if err != nil {
-			return err
-		}
-
 		config := &subscription.PlanChangeV2Configuration{
-			TargetPlanID:   req.TargetPlanID,
-			IdempotencyKey: req.IdempotencyKey,
-			ChangeMetadata: req.Metadata,
+			TargetPlanID:           req.TargetPlanID,
+			IdempotencyKey:         req.IdempotencyKey,
+			ChangeMetadata:         req.Metadata,
+			BillingPeriodBehaviour: req.BillingPeriodBehaviour,
 		}
 		if req.EntityPolicies != nil && req.EntityPolicies.Addons != nil {
 			config.EntityPolicies = &subscription.EntityChangePoliciesConfig{

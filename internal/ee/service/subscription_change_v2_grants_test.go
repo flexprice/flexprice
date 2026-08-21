@@ -105,7 +105,7 @@ func (s *SubscriptionChangeV2Suite) materialisePlanGrants(planID string) []*cred
 
 	created := make([]*creditgrant.CreditGrant, 0, len(planGrants.Items))
 	for _, pg := range planGrants.Items {
-		req := PlanCreditGrantRequest(pg, s.td.sub.ID, planID)
+		req := dto.NewSubscriptionScopedCreditGrantRequest(pg, s.td.sub.ID, planID)
 		cg := &creditgrant.CreditGrant{
 			ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
 			Name:           req.Name,

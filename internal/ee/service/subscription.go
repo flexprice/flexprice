@@ -373,7 +373,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			s.Logger.Info(ctx, "plan has credit grants", "plan_id", plan.ID, "credit_grants_count", len(planCreditGrants.Items))
 			creditGrantRequests = make([]dto.CreateCreditGrantRequest, 0, len(planCreditGrants.Items))
 			for _, cg := range planCreditGrants.Items {
-				creditGrantRequests = append(creditGrantRequests, PlanCreditGrantRequest(cg, sub.ID, plan.ID))
+				creditGrantRequests = append(creditGrantRequests, dto.NewSubscriptionScopedCreditGrantRequest(cg, sub.ID, plan.ID))
 			}
 		}
 	}
@@ -1588,30 +1588,6 @@ func (s *subscriptionService) addonCreditGrantProration(
 		ProrationDate: startDate,
 		Strategy:      types.StrategySecondBased,
 		Source:        "addon_attach",
-	}
-}
-
-func PlanCreditGrantRequest(
-	cg *dto.CreditGrantResponse,
-	subscriptionID string,
-	planID string,
-) dto.CreateCreditGrantRequest {
-	return dto.CreateCreditGrantRequest{
-		Name:                   cg.Name,
-		Scope:                  types.CreditGrantScopeSubscription,
-		Credits:                cg.Credits,
-		Cadence:                cg.Cadence,
-		ExpirationType:         cg.ExpirationType,
-		Priority:               cg.Priority,
-		SubscriptionID:         lo.ToPtr(subscriptionID),
-		Period:                 cg.Period,
-		PlanID:                 lo.ToPtr(planID),
-		ExpirationDuration:     cg.ExpirationDuration,
-		ExpirationDurationUnit: cg.ExpirationDurationUnit,
-		Metadata:               cg.Metadata,
-		PeriodCount:            cg.PeriodCount,
-		ConversionRate:         cg.ConversionRate,
-		TopupConversionRate:    cg.TopupConversionRate,
 	}
 }
 
