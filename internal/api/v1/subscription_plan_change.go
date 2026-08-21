@@ -52,6 +52,8 @@ func (h *SubscriptionHandler) PreviewSubscriptionPlanChangeV2(c *gin.Context) {
 // @Description Only one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
 // @Description
 // @Description Set on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.
+// @Description
+// @Description Plan-level credit grants are re-materialised: the outgoing plan's future grants are cancelled at the change instant and the target plan's are scheduled from it. Addon-sourced grants are untouched. Credits already granted are never clawed back — reclaiming spent credits would drive wallet balances negative — so a customer keeps what they have already received. Subscription-scoped entitlement overrides inherited from the outgoing plan are closed at the same instant, since after the swap they suppress nothing and would otherwise stack with the new plan's entitlement on the same feature. All of this is reported in entity_changes on both preview and execute.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json

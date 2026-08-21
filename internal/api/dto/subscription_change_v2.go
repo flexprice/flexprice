@@ -92,11 +92,14 @@ func (p *EntityChangePolicy) BehaviourFor(referenceID string) types.EntityChange
 	return types.EntityChangeBehaviourCarry
 }
 
+// EntityChangeResult reports one entity the plan change carried, dropped or added.
+// ReferenceID identifies the affected record (addon association, credit grant,
+// entitlement); EntityID identifies what it came from (addon, plan).
 type EntityChangeResult struct {
-	EntityType  types.SubscriptionLineItemEntityType `json:"entity_type"`
-	ReferenceID string                               `json:"reference_id"`
-	EntityID    string                               `json:"entity_id"`
-	Behaviour   types.EntityChangeBehaviour          `json:"behaviour"`
+	EntityType  types.SubscriptionChangeEntityType `json:"entity_type"`
+	ReferenceID string                             `json:"reference_id"`
+	EntityID    string                             `json:"entity_id"`
+	Behaviour   types.EntityChangeBehaviour        `json:"behaviour"`
 }
 
 func (r *SubscriptionChangeV2Request) Validate() error {

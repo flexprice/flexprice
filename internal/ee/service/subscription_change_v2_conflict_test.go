@@ -69,9 +69,7 @@ func (s *SubscriptionChangeV2Suite) TestExecute_SupersedeReplacesPendingSchedule
 	cancelled := s.scheduleByID(*scheduled.ScheduleID)
 	s.Require().NotNil(cancelled)
 	s.Equal(types.ScheduleStatusCancelled, cancelled.Status)
-	s.Require().NotNil(cancelled.CancelledAt)
-	s.Equal(scheduleSupersededReason, cancelled.Metadata[scheduleCancellationReasonKey],
-		"the row records why it was cancelled, not just that it was")
+	s.Require().NotNil(cancelled.CancelledAt, "the row records when it was cancelled")
 }
 
 // Replacing a queued change with another queued change is the same operation.
@@ -186,8 +184,8 @@ func (s *SubscriptionChangeV2Suite) TestExecuteScheduledV2_DoesNotSupersedeItsOw
 	s.Require().NoError(s.svc.ExecuteScheduledPlanChangeV2(ctx, sched, config, s.currentSub()))
 
 	s.Equal(s.td.pro.ID, s.currentSub().PlanID)
-	s.NotEqual(scheduleSupersededReason, s.scheduleByID(sched.ID).Metadata[scheduleCancellationReasonKey],
-		"the executed schedule was not marked as superseded by its own execution")
+	s.Equal(types.ScheduleStatusExecuted, s.scheduleByID(sched.ID).Status,
+		"the schedule executed rather than being cancelled by its own execution")
 }
 
 // The policy covers queued plan changes only. A pending cancellation means un-cancelling

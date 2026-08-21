@@ -6,6 +6,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -43,10 +45,27 @@ type planChangeRequest struct {
 	closing []*lineItemChange
 	opening []*lineItemChange
 
+	grants         *planChangeGrants
+	staleOverrides []*entitlement.Entitlement
+
 	changes  []*dto.EntityChangeResult
 	warnings []string
 
 	changeType types.SubscriptionChangeType
+}
+
+// planChangeGrants is the credit-grant migration a plan change performs. Plan-level
+// grants are materialised per subscription at creation time.
+type planChangeGrants struct {
+	// cancel holds the subscription's grants materialised from the outgoing plan.
+	cancel []*creditgrant.CreditGrant
+
+	// create holds the target plan's grants mapped to subscription-scoped requests.
+	create []dto.CreateCreditGrantRequest
+
+	// createdFrom keeps the target plan grant behind each create entry, so preview can
+	// name what it would materialise before any row exists.
+	createdFrom []*creditgrant.CreditGrant
 }
 
 func (s *subscriptionService) resolvePlanChange(
@@ -116,7 +135,190 @@ func (s *subscriptionService) resolvePlanChange(
 	r.changes = addonsChanges
 	r.warnings = addonsWarnings
 	r.changeType = planChangeType(r)
+
+	if err := s.resolveCreditGrantMigration(ctx, r); err != nil {
+		return nil, err
+	}
+
+	if err := s.resolveStaleEntitlementOverrides(ctx, r); err != nil {
+		return nil, err
+	}
+
 	return r, nil
+}
+
+// resolveCreditGrantMigration works out which grants leave with the old plan and which
+// arrive with the new one. Preview and execute both call it; only execute applies it.
+func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r *planChangeRequest) error {
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.SubscriptionIDs = []string{r.sub.ID}
+	filter.PlanIDs = []string{r.fromPlan.ID}
+	filter.WithStatus(types.StatusPublished)
+
+	outgoing, err := s.CreditGrantRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	targetGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByPlan(ctx, r.toPlan.ID)
+	if err != nil {
+		return err
+	}
+
+	grants := &planChangeGrants{}
+	for _, cg := range outgoing {
+		// Already closed at or before the change instant: nothing future to cancel.
+		if cg.EndDate != nil && !cg.EndDate.After(r.effectiveAt) {
+			continue
+		}
+		grants.cancel = append(grants.cancel, cg)
+	}
+
+	for _, cg := range targetGrants.Items {
+		if cg == nil || cg.CreditGrant == nil {
+			continue
+		}
+		grants.create = append(grants.create, PlanCreditGrantRequest(cg, r.sub.ID, r.toPlan.ID))
+		grants.createdFrom = append(grants.createdFrom, cg.CreditGrant)
+	}
+	r.grants = grants
+
+	for _, cg := range grants.cancel {
+		r.changes = append(r.changes, &dto.EntityChangeResult{
+			EntityType:  types.SubscriptionChangeEntityTypeCreditGrant,
+			ReferenceID: cg.ID,
+			EntityID:    r.fromPlan.ID,
+			Behaviour:   types.EntityChangeBehaviourDrop,
+		})
+	}
+
+	for _, cg := range grants.createdFrom {
+		r.changes = append(r.changes, &dto.EntityChangeResult{
+			EntityType:  types.SubscriptionChangeEntityTypeCreditGrant,
+			ReferenceID: cg.ID,
+			EntityID:    r.toPlan.ID,
+			Behaviour:   types.EntityChangeBehaviourAdd,
+		})
+	}
+
+	return nil
+}
+
+// resolveStaleEntitlementOverrides finds subscription-scoped entitlements whose parent is
+// an entitlement of the outgoing plan. After the swap they suppress nothing and stack with
+// the new plan's entitlement on the same feature, so they must be closed.
+func (s *subscriptionService) resolveStaleEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
+	entitlementSvc := NewEntitlementService(s.ServiceParams)
+
+	fromPlanEnts, err := entitlementSvc.ListEntitlements(ctx, types.NewNoLimitEntitlementFilter().
+		WithEntityIDs([]string{r.fromPlan.ID}).
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		return err
+	}
+	if len(fromPlanEnts.Items) == 0 {
+		return nil
+	}
+
+	fromPlanEntIDs := make(map[string]bool, len(fromPlanEnts.Items))
+	for _, ent := range fromPlanEnts.Items {
+		if ent != nil {
+			fromPlanEntIDs[ent.ID] = true
+		}
+	}
+
+	subEnts, err := entitlementSvc.ListEntitlements(ctx, types.NewNoLimitEntitlementFilter().
+		WithEntityIDs([]string{r.sub.ID}).
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		return err
+	}
+
+	for _, ent := range subEnts.Items {
+		if ent == nil || ent.Entitlement == nil {
+			continue
+		}
+		if !fromPlanEntIDs[lo.FromPtr(ent.ParentEntitlementID)] {
+			continue
+		}
+		// Already closed at or before the change instant: nothing left to suppress.
+		if ent.EndDate != nil && !ent.EndDate.After(r.effectiveAt) {
+			continue
+		}
+
+		r.staleOverrides = append(r.staleOverrides, ent.Entitlement)
+		r.changes = append(r.changes, &dto.EntityChangeResult{
+			EntityType:  types.SubscriptionChangeEntityTypeEntitlement,
+			ReferenceID: ent.ID,
+			EntityID:    ent.FeatureID,
+			Behaviour:   types.EntityChangeBehaviourDrop,
+		})
+	}
+
+	return nil
+}
+
+// migrateCreditGrants cancels the outgoing plan's grants and materialises the target
+// plan's, both dated at the change instant.
+//
+// TODO: a change landing mid-period under the default billing_period_behaviour
+// ("unchanged") grants the target plan's first period in full even though only part of
+// that period remains. addonCreditGrantProration (subscription.go) already solves this
+// exact shape for addons and is the intended reuse.
+func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planChangeRequest) error {
+	if r.grants == nil {
+		return nil
+	}
+
+	if len(r.grants.cancel) > 0 {
+		if err := NewCreditGrantService(s.ServiceParams).CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
+			SubscriptionID: r.sub.ID,
+			PlanID:         lo.ToPtr(r.fromPlan.ID),
+			EffectiveDate:  lo.ToPtr(r.effectiveAt),
+		}); err != nil {
+			return err
+		}
+	}
+
+	if err := s.handleCreditGrantsWithStart(ctx, r.sub, r.grants.create, r.effectiveAt, nil, nil); err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "migrated credit grants for plan change",
+		"subscription_id", r.sub.ID,
+		"from_plan_id", r.fromPlan.ID,
+		"to_plan_id", r.toPlan.ID,
+		"cancelled_grants", len(r.grants.cancel),
+		"created_grants", len(r.grants.create),
+		"effective_at", r.effectiveAt)
+
+	return nil
+}
+
+// closeStaleEntitlementOverrides end-dates the overrides resolved above at the change
+// instant.
+func (s *subscriptionService) closeStaleEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
+	for _, ent := range r.staleOverrides {
+		closed := entitlement.NewEntitlementBuilder(ent).
+			WithEndDate(r.effectiveAt).
+			WithUpdatedBy(types.GetUserID(ctx)).
+			Build()
+
+		if _, err := s.EntitlementRepo.Update(ctx, closed); err != nil {
+			return err
+		}
+
+		s.Logger.Info(ctx, "closed stale subscription entitlement override on plan change",
+			"subscription_id", r.sub.ID,
+			"entitlement_id", closed.ID,
+			"feature_id", closed.FeatureID,
+			"from_plan_id", r.fromPlan.ID,
+			"effective_at", r.effectiveAt)
+	}
+
+	return nil
 }
 
 func (s *subscriptionService) checkPlanChangePreconditions(
@@ -308,7 +510,7 @@ func (s *subscriptionService) resolveAddonChanges(
 
 		behaviour := policy.BehaviourFor(association.ID)
 		changes = append(changes, &dto.EntityChangeResult{
-			EntityType:  types.SubscriptionLineItemEntityTypeAddon,
+			EntityType:  types.SubscriptionChangeEntityTypeAddon,
 			ReferenceID: association.ID,
 			EntityID:    association.AddonID,
 			Behaviour:   behaviour,
@@ -545,6 +747,14 @@ func (s *subscriptionService) executePlanChangeAt(
 
 		swapped, err := s.applyPlanSwap(txCtx, r)
 		if err != nil {
+			return err
+		}
+
+		if err := s.migrateCreditGrants(txCtx, r); err != nil {
+			return err
+		}
+
+		if err := s.closeStaleEntitlementOverrides(txCtx, r); err != nil {
 			return err
 		}
 

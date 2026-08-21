@@ -499,6 +499,9 @@ type CancelFutureSubscriptionGrantsRequest struct {
 	// AddonID, when set, scopes cancellation to grants materialized from this addon
 	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
 	AddonID *string `json:"addon_id,omitempty"`
+	// PlanID, when set, scopes cancellation to grants materialized from this plan
+	// (via plan_id provenance), so a plan swap leaves addon-sourced grants alone.
+	PlanID *string `json:"plan_id,omitempty"`
 }
 
 // Validate validates the cancel future subscription grants request

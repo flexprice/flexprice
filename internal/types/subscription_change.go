@@ -10,12 +10,26 @@ type EntityChangeBehaviour string
 const (
 	EntityChangeBehaviourCarry EntityChangeBehaviour = "carry"
 	EntityChangeBehaviourDrop  EntityChangeBehaviour = "drop"
+	EntityChangeBehaviourAdd   EntityChangeBehaviour = "add"
 )
 
+// EntityChangeBehaviourValues is the set a caller may request. It deliberately excludes
+// the report-only behaviours.
 var EntityChangeBehaviourValues = []EntityChangeBehaviour{
 	EntityChangeBehaviourCarry,
 	EntityChangeBehaviourDrop,
 }
+
+type SubscriptionChangeEntityType string
+
+const (
+	SubscriptionChangeEntityTypePlan        SubscriptionChangeEntityType = "plan"
+	SubscriptionChangeEntityTypeAddon       SubscriptionChangeEntityType = "addon"
+	SubscriptionChangeEntityTypeCreditGrant SubscriptionChangeEntityType = "credit_grant"
+	SubscriptionChangeEntityTypeEntitlement SubscriptionChangeEntityType = "entitlement"
+)
+
+func (t SubscriptionChangeEntityType) String() string { return string(t) }
 
 func (d EntityChangeBehaviour) String() string { return string(d) }
 
