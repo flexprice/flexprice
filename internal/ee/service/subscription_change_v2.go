@@ -492,15 +492,11 @@ func (s *subscriptionService) ExecutePlanChange(
 		return nil, err
 	}
 
-	if err := s.checkNoPendingPlanChangeSchedule(ctx, subscriptionID); err != nil {
-		return nil, err
-	}
-
 	if req.IsDeferred() {
 		return s.schedulePlanChangeForPeriodEnd(ctx, subscriptionID, req)
 	}
 
-	return s.executePlanChangeAt(ctx, subscriptionID, req, effectiveAt)
+	return s.executePlanChangeAt(ctx, subscriptionID, req, effectiveAt, "")
 }
 
 func (s *subscriptionService) executePlanChangeAt(
@@ -508,12 +504,17 @@ func (s *subscriptionService) executePlanChangeAt(
 	subscriptionID string,
 	req dto.SubscriptionChangeV2Request,
 	effectiveAt time.Time,
+	executingScheduleID string,
 ) (*dto.SubscriptionChangeV2Response, error) {
 	var resp *dto.SubscriptionChangeV2Response
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		sub, err := s.loadSubscriptionForPlanChange(txCtx, subscriptionID, true)
 		if err != nil {
+			return err
+		}
+
+		if err := s.checkNoPendingPlanChangeSchedule(txCtx, subscriptionID, executingScheduleID); err != nil {
 			return err
 		}
 
@@ -915,7 +916,7 @@ func (s *subscriptionService) ExecuteScheduledPlanChangeV2(
 	}
 
 	resp, err := s.executePlanChangeAt(
-		ctx, schedule.SubscriptionID, PlanChangeV2RequestFromConfig(config), schedule.ScheduledAt,
+		ctx, schedule.SubscriptionID, PlanChangeV2RequestFromConfig(config), schedule.ScheduledAt, schedule.ID,
 	)
 	if err != nil {
 		if !IsTerminalPlanChangeError(err) {
@@ -972,14 +973,18 @@ func (s *subscriptionService) failPlanChangeSchedule(
 
 // checkNoPendingPlanChangeSchedule rejects a second plan change while one is already
 // queued.
-func (s *subscriptionService) checkNoPendingPlanChangeSchedule(ctx context.Context, subscriptionID string) error {
+func (s *subscriptionService) checkNoPendingPlanChangeSchedule(
+	ctx context.Context,
+	subscriptionID string,
+	executingScheduleID string,
+) error {
 	existing, err := s.SubScheduleRepo.GetPendingBySubscriptionAndType(
 		ctx, subscriptionID, types.SubscriptionScheduleChangeTypePlanChange,
 	)
 	if err != nil {
 		return err
 	}
-	if existing == nil {
+	if existing == nil || existing.ID == executingScheduleID {
 		return nil
 	}
 
@@ -1010,60 +1015,81 @@ func (s *subscriptionService) schedulePlanChangeForPeriodEnd(
 	subscriptionID string,
 	req dto.SubscriptionChangeV2Request,
 ) (*dto.SubscriptionChangeV2Response, error) {
-	sub, err := s.loadSubscriptionForPlanChange(ctx, subscriptionID, false)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		resp       *dto.SubscriptionChangeV2Response
+		scheduleID string
+		changeType types.SubscriptionChangeType
+	)
 
-	scheduledAt := sub.CurrentPeriodEnd
-	r, err := s.resolvePlanChange(ctx, sub, req, scheduledAt)
-	if err != nil {
-		return nil, err
-	}
-
-	config := &subscription.PlanChangeV2Configuration{
-		TargetPlanID:   req.TargetPlanID,
-		IdempotencyKey: req.IdempotencyKey,
-		ChangeMetadata: req.Metadata,
-	}
-	if req.EntityPolicies != nil && req.EntityPolicies.Addons != nil {
-		config.EntityPolicies = &subscription.EntityChangePoliciesConfig{
-			Addons: &subscription.EntityChangePolicyConfig{
-				DefaultBehaviour: req.EntityPolicies.Addons.DefaultBehaviour,
-				Overrides:        req.EntityPolicies.Addons.Overrides,
-			},
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		sub, err := s.loadSubscriptionForPlanChange(txCtx, subscriptionID, true)
+		if err != nil {
+			return err
 		}
-	}
-	schedule := subscription.NewPendingScheduleBuilder(
-		ctx, sub, types.SubscriptionScheduleChangeTypePlanChange, scheduledAt,
-	).Build()
-	if err := schedule.SetPlanChangeV2Config(config); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to serialize the plan change configuration").
-			Mark(ierr.ErrInternal)
-	}
 
-	if err := s.SubScheduleRepo.Create(ctx, schedule); err != nil {
-		if ierr.IsAlreadyExists(err) {
-			return nil, ierr.WithError(err).
-				WithHint("A plan change is already scheduled for this subscription. Cancel it before requesting another one.").
-				WithReportableDetails(map[string]any{"subscription_id": subscriptionID}).
-				Mark(ierr.ErrValidation)
+		if err := s.checkNoPendingPlanChangeSchedule(txCtx, subscriptionID, ""); err != nil {
+			return err
 		}
+
+		scheduledAt := sub.CurrentPeriodEnd
+		r, err := s.resolvePlanChange(txCtx, sub, req, scheduledAt)
+		if err != nil {
+			return err
+		}
+
+		config := &subscription.PlanChangeV2Configuration{
+			TargetPlanID:   req.TargetPlanID,
+			IdempotencyKey: req.IdempotencyKey,
+			ChangeMetadata: req.Metadata,
+		}
+		if req.EntityPolicies != nil && req.EntityPolicies.Addons != nil {
+			config.EntityPolicies = &subscription.EntityChangePoliciesConfig{
+				Addons: &subscription.EntityChangePolicyConfig{
+					DefaultBehaviour: req.EntityPolicies.Addons.DefaultBehaviour,
+					Overrides:        req.EntityPolicies.Addons.Overrides,
+				},
+			}
+		}
+
+		schedule := subscription.NewPendingScheduleBuilder(
+			txCtx, sub, types.SubscriptionScheduleChangeTypePlanChange, scheduledAt,
+		).Build()
+		if err := schedule.SetPlanChangeV2Config(config); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to serialize the plan change configuration").
+				Mark(ierr.ErrInternal)
+		}
+
+		if err := s.SubScheduleRepo.Create(txCtx, schedule); err != nil {
+			if ierr.IsAlreadyExists(err) {
+				return ierr.WithError(err).
+					WithHint("A plan change is already scheduled for this subscription. Cancel it before requesting another one.").
+					WithReportableDetails(map[string]any{"subscription_id": subscriptionID}).
+					Mark(ierr.ErrValidation)
+			}
+			return err
+		}
+
+		scheduleID = schedule.ID
+		changeType = r.changeType
+
+		resp = buildPlanChangeResponse(r, sub, req)
+		resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
+		resp.IsScheduled = true
+		resp.ScheduleID = &schedule.ID
+		resp.ScheduledAt = &schedule.ScheduledAt
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	s.Logger.Info(ctx, "plan change scheduled for period end",
 		"subscription_id", subscriptionID,
-		"schedule_id", schedule.ID,
-		"scheduled_at", schedule.ScheduledAt,
+		"schedule_id", scheduleID,
+		"scheduled_at", *resp.ScheduledAt,
 		"target_plan_id", req.TargetPlanID,
-		"change_type", r.changeType)
+		"change_type", changeType)
 
-	resp := buildPlanChangeResponse(r, sub, req)
-	resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
-	resp.IsScheduled = true
-	resp.ScheduleID = &schedule.ID
-	resp.ScheduledAt = &schedule.ScheduledAt
 	return resp, nil
 }
