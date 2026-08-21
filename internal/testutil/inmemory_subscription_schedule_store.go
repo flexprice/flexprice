@@ -57,20 +57,18 @@ func (s *InMemorySubscriptionScheduleStore) Update(ctx context.Context, schedule
 	if err := s.InMemoryStore.Update(ctx, schedule.ID, schedule); err != nil {
 		return err
 	}
-	// Update index if subscription ID changed
+	// Re-point the index at the updated value. Callers that build an updated copy
+	// (the domain builders all do) would otherwise leave the index serving the stale
+	// pointer, which the ent repository never does.
 	s.mu.Lock()
-	if oldSchedule.SubscriptionID != schedule.SubscriptionID {
-		// Remove from old subscription's list
-		schedules := s.schedulesBySubscription[oldSchedule.SubscriptionID]
-		for i, sched := range schedules {
-			if sched.ID == schedule.ID {
-				s.schedulesBySubscription[oldSchedule.SubscriptionID] = append(schedules[:i], schedules[i+1:]...)
-				break
-			}
+	schedules := s.schedulesBySubscription[oldSchedule.SubscriptionID]
+	for i, sched := range schedules {
+		if sched.ID == schedule.ID {
+			s.schedulesBySubscription[oldSchedule.SubscriptionID] = append(schedules[:i], schedules[i+1:]...)
+			break
 		}
-		// Add to new subscription's list
-		s.schedulesBySubscription[schedule.SubscriptionID] = append(s.schedulesBySubscription[schedule.SubscriptionID], schedule)
 	}
+	s.schedulesBySubscription[schedule.SubscriptionID] = append(s.schedulesBySubscription[schedule.SubscriptionID], schedule)
 	s.mu.Unlock()
 	return nil
 }

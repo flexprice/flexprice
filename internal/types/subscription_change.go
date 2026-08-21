@@ -34,3 +34,33 @@ func (d EntityChangeBehaviour) Validate() error {
 	}
 	return nil
 }
+
+type OnPendingSchedulePolicy string
+
+const (
+	OnPendingSchedulePolicyReject    OnPendingSchedulePolicy = "reject"
+	OnPendingSchedulePolicySupersede OnPendingSchedulePolicy = "supersede"
+)
+
+var OnPendingSchedulePolicyValues = []OnPendingSchedulePolicy{
+	OnPendingSchedulePolicyReject,
+	OnPendingSchedulePolicySupersede,
+}
+
+func (p OnPendingSchedulePolicy) String() string { return string(p) }
+
+func (p OnPendingSchedulePolicy) Validate() error {
+	if p == "" {
+		return nil
+	}
+	if !lo.Contains(OnPendingSchedulePolicyValues, p) {
+		return ierr.NewError("invalid on_pending_schedule policy").
+			WithHint("Policy must be one of the allowed values").
+			WithReportableDetails(map[string]any{
+				"on_pending_schedule": string(p),
+				"allowed":             OnPendingSchedulePolicyValues,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}

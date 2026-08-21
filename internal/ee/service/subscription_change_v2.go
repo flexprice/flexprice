@@ -476,9 +476,15 @@ func (s *subscriptionService) PreviewPlanChange(
 		return nil, err
 	}
 
+	superseded, err := s.previewPendingScheduleSupersede(ctx, subscriptionID, req)
+	if err != nil {
+		return nil, err
+	}
+
 	resp := buildPlanChangeResponse(r, r.sub, req)
 	resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
 	resp.ChangedResources.Invoices = preview
+	resp.SupersededSchedules = superseded
 	return resp, nil
 }
 
@@ -514,16 +520,17 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		if err := s.checkNoPendingPlanChangeSchedule(txCtx, subscriptionID, executingScheduleID); err != nil {
-			return err
-		}
-
 		r, err := s.resolvePlanChange(txCtx, sub, req, effectiveAt)
 		if err != nil {
 			return err
 		}
 
 		quote, err := s.computePlanChange(txCtx, r)
+		if err != nil {
+			return err
+		}
+
+		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, executingScheduleID)
 		if err != nil {
 			return err
 		}
@@ -549,6 +556,7 @@ func (s *subscriptionService) executePlanChangeAt(
 		resp = buildPlanChangeResponse(r, swapped, req)
 		resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
 		resp.ChangedResources.Invoices = changedInvoices
+		resp.SupersededSchedules = superseded
 		return nil
 	})
 	if err != nil {
@@ -971,31 +979,83 @@ func (s *subscriptionService) failPlanChangeSchedule(
 	}
 }
 
-// checkNoPendingPlanChangeSchedule rejects a second plan change while one is already
-// queued.
-func (s *subscriptionService) checkNoPendingPlanChangeSchedule(
+func (s *subscriptionService) conflictingPlanChangeSchedule(
 	ctx context.Context,
 	subscriptionID string,
 	executingScheduleID string,
-) error {
+) (*subscription.SubscriptionSchedule, error) {
 	existing, err := s.SubScheduleRepo.GetPendingBySubscriptionAndType(
 		ctx, subscriptionID, types.SubscriptionScheduleChangeTypePlanChange,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if existing == nil || existing.ID == executingScheduleID {
-		return nil
+		return nil, nil
 	}
 
-	return ierr.NewError("a plan change is already scheduled for this subscription").
-		WithHint("Cancel the existing schedule before requesting another one.").
-		WithReportableDetails(map[string]any{
-			"subscription_id": subscriptionID,
-			"schedule_id":     existing.ID,
-			"scheduled_at":    existing.ScheduledAt,
-		}).
-		Mark(ierr.ErrValidation)
+	return existing, nil
+}
+
+func (s *subscriptionService) resolvePendingPlanChangeSchedule(
+	ctx context.Context,
+	subscriptionID string,
+	req dto.SubscriptionChangeV2Request,
+	executingScheduleID string,
+) ([]string, error) {
+	existing, err := s.conflictingPlanChangeSchedule(ctx, subscriptionID, executingScheduleID)
+	if err != nil || existing == nil {
+		return nil, err
+	}
+
+	if !req.SupersedesPendingSchedule() {
+		return nil, ierr.NewError("a plan change is already scheduled for this subscription").
+			WithHint("Cancel the existing schedule first, or set on_conflict_policies.on_pending_schedule to 'supersede' to replace it with this request.").
+			WithReportableDetails(map[string]any{
+				"subscription_id": subscriptionID,
+				"schedule_id":     existing.ID,
+				"scheduled_at":    existing.ScheduledAt,
+				"policy_field":    "on_conflict_policies.on_pending_schedule",
+				"policy_value":    types.OnPendingSchedulePolicySupersede.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	superseded := subscription.NewSubscriptionScheduleBuilder(existing).
+		WithStatus(types.ScheduleStatusCancelled).
+		WithCancelledAt(time.Now().UTC()).
+		WithUpdatedBy(types.GetUserID(ctx)).
+		Build()
+
+	if err := s.SubScheduleRepo.Update(ctx, superseded); err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "cancelled pending plan change superseded by a newer request",
+		"subscription_id", subscriptionID,
+		"schedule_id", superseded.ID,
+		"scheduled_at", superseded.ScheduledAt,
+		"target_plan_id", req.TargetPlanID)
+
+	return []string{superseded.ID}, nil
+}
+
+// previewPendingScheduleSupersede reports what execute would cancel, without writing.
+func (s *subscriptionService) previewPendingScheduleSupersede(
+	ctx context.Context,
+	subscriptionID string,
+	req dto.SubscriptionChangeV2Request,
+) ([]string, error) {
+	if !req.SupersedesPendingSchedule() {
+		return nil, nil
+	}
+
+	existing, err := s.conflictingPlanChangeSchedule(ctx, subscriptionID, "")
+	if err != nil || existing == nil {
+		return nil, err
+	}
+
+	return []string{existing.ID}, nil
 }
 
 // resolveEffectiveAt is the instant a request would take effect: the period boundary
@@ -1027,12 +1087,13 @@ func (s *subscriptionService) schedulePlanChangeForPeriodEnd(
 			return err
 		}
 
-		if err := s.checkNoPendingPlanChangeSchedule(txCtx, subscriptionID, ""); err != nil {
+		scheduledAt := sub.CurrentPeriodEnd
+		r, err := s.resolvePlanChange(txCtx, sub, req, scheduledAt)
+		if err != nil {
 			return err
 		}
 
-		scheduledAt := sub.CurrentPeriodEnd
-		r, err := s.resolvePlanChange(txCtx, sub, req, scheduledAt)
+		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, "")
 		if err != nil {
 			return err
 		}
@@ -1078,6 +1139,8 @@ func (s *subscriptionService) schedulePlanChangeForPeriodEnd(
 		resp.IsScheduled = true
 		resp.ScheduleID = &schedule.ID
 		resp.ScheduledAt = &schedule.ScheduledAt
+		resp.SupersededSchedules = superseded
+
 		return nil
 	})
 	if err != nil {

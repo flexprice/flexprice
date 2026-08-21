@@ -19,11 +19,36 @@ type SubscriptionChangeV2Request struct {
 	// it now; "end_of_period" schedules it at the subscription's current period end.
 	ChangeAt *types.ScheduleType `json:"change_at,omitempty"`
 
+	OnConflictPolicies *SubscriptionChangeConflictPolicies `json:"on_conflict_policies,omitempty"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 func (r *SubscriptionChangeV2Request) IsDeferred() bool {
 	return r != nil && r.ChangeAt != nil && *r.ChangeAt == types.ScheduleTypePeriodEnd
+}
+
+// SubscriptionChangeConflictPolicies decides how the change reacts to state that
+// would otherwise block it.
+type SubscriptionChangeConflictPolicies struct {
+	// OnPendingSchedule applies to a queued plan change only. A pending cancellation
+	// or pause is still rejected outright: clearing those would mean un-cancelling or
+	// auto-resuming the subscription.
+	OnPendingSchedule types.OnPendingSchedulePolicy `json:"on_pending_schedule,omitempty"`
+}
+
+func (p *SubscriptionChangeConflictPolicies) Validate() error {
+	if p == nil {
+		return nil
+	}
+	return p.OnPendingSchedule.Validate()
+}
+
+// SupersedesPendingSchedule reports whether a queued plan change should be cancelled
+// in favour of this request.
+func (r *SubscriptionChangeV2Request) SupersedesPendingSchedule() bool {
+	return r != nil && r.OnConflictPolicies != nil &&
+		r.OnConflictPolicies.OnPendingSchedule == types.OnPendingSchedulePolicySupersede
 }
 
 type SubscriptionChangeEntityPolicies struct {
@@ -95,6 +120,10 @@ func (r *SubscriptionChangeV2Request) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := r.OnConflictPolicies.Validate(); err != nil {
+		return err
+	}
+
 	if r.EntityPolicies != nil {
 		return r.EntityPolicies.Addons.Validate()
 	}
@@ -117,6 +146,10 @@ type SubscriptionChangeV2Response struct {
 	IsScheduled bool       `json:"is_scheduled"`
 	ScheduleID  *string    `json:"schedule_id,omitempty"`
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+
+	// SupersededSchedules lists the plan-change schedules this request cancelled under
+	// on_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.
+	SupersededSchedules []string `json:"superseded_schedules,omitempty"`
 
 	Warnings []string          `json:"warnings,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
