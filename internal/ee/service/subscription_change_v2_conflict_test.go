@@ -47,6 +47,10 @@ func (s *SubscriptionChangeV2Suite) scheduleByID(id string) *subscription.Subscr
 			return sched
 		}
 	}
+
+	// Callers dereference the result, so a miss must fail the assertion rather than
+	// panic the whole suite.
+	s.Require().Failf("schedule not found", "no schedule with id %s on subscription %s", id, s.td.sub.ID)
 	return nil
 }
 

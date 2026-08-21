@@ -121,9 +121,6 @@ func (p *EntityChangePolicy) BehaviourFor(referenceID string) types.EntityChange
 	return types.EntityChangeBehaviourCarry
 }
 
-// EntityChangeResult reports one entity the plan change carried, dropped or added.
-// ReferenceID identifies the affected record (addon association, credit grant,
-// entitlement); EntityID identifies what it came from (addon, plan).
 type EntityChangeResult struct {
 	EntityType  types.SubscriptionChangeEntityType `json:"entity_type"`
 	ReferenceID string                             `json:"reference_id"`
@@ -176,7 +173,7 @@ type SubscriptionChangeBillingPeriodResult struct {
 }
 
 // validateBillingPeriodBehaviour enforces the behaviour matrix. reset_at is rejected
-// outright rather than inferred as reset_at_effective: the enum already has a value that
+// outright rather than inferred as reset_at_effect: the enum already has a value that
 // says "reset at effective", so inferring one from the other would only hide a mistake.
 func (r *SubscriptionChangeV2Request) validateBillingPeriodBehaviour() error {
 	if err := r.BillingPeriodBehaviour.Validate(); err != nil {
@@ -185,13 +182,13 @@ func (r *SubscriptionChangeV2Request) validateBillingPeriodBehaviour() error {
 
 	if r.BillingPeriodConfig != nil {
 		return ierr.NewError("billing_period_config is not supported yet").
-			WithHint("Remove billing_period_config. Use billing_period_behaviour='reset_at_effective' to restart the term at the change instant.").
+			WithHint("Remove billing_period_config. Use billing_period_behaviour='reset_at_effect' to restart the term at the change instant.").
 			Mark(ierr.ErrValidation)
 	}
 
 	if r.BillingPeriodBehaviour == types.BillingPeriodBehaviourResetAt {
 		return ierr.NewError("billing_period_behaviour 'reset_at' is not supported yet").
-			WithHint("Use 'reset_at_effective' to restart the term at the change instant.").
+			WithHint("Use 'reset_at_effect' to restart the term at the change instant.").
 			WithReportableDetails(map[string]any{
 				"supported": []types.BillingPeriodBehaviour{
 					types.BillingPeriodBehaviourUnchanged,

@@ -43,13 +43,13 @@ func (s *SubscriptionChangeV2Suite) TestExecute_BillingPeriodBehaviourValidation
 			},
 		},
 		{
-			name: "reset_at_effective on an immediate change is accepted",
+			name: "reset_at_effect on an immediate change is accepted",
 			mutate: func(r *dto.SubscriptionChangeV2Request) {
 				r.BillingPeriodBehaviour = types.BillingPeriodBehaviourResetAtEffect
 			},
 		},
 		{
-			name: "reset_at_effective with prorations is rejected",
+			name: "reset_at_effect with prorations is rejected",
 			mutate: func(r *dto.SubscriptionChangeV2Request) {
 				r.BillingPeriodBehaviour = types.BillingPeriodBehaviourResetAtEffect
 				r.ProrationBehavior = types.ProrationBehaviorCreateProrations
@@ -66,19 +66,19 @@ func (s *SubscriptionChangeV2Suite) TestExecute_BillingPeriodBehaviourValidation
 		{
 			name: "billing_period is reserved",
 			mutate: func(r *dto.SubscriptionChangeV2Request) {
-				r.BillingPeriodConfig = &dto.SubscriptionChangeBillingPeriod{
+				r.BillingPeriodConfig = &dto.BillingPeriodConfig{
 					BillingPeriodCount: lo.ToPtr(3),
 				}
 			},
-			wantErr: "billing_period is not supported yet",
+			wantErr: "billing_period_config is not supported yet",
 		},
 		{
 			name: "billing_period is reserved even alongside a supported behaviour",
 			mutate: func(r *dto.SubscriptionChangeV2Request) {
 				r.BillingPeriodBehaviour = types.BillingPeriodBehaviourResetAtEffect
-				r.BillingPeriodConfig = &dto.SubscriptionChangeBillingPeriod{}
+				r.BillingPeriodConfig = &dto.BillingPeriodConfig{}
 			},
-			wantErr: "billing_period is not supported yet",
+			wantErr: "billing_period_config is not supported yet",
 		},
 		{
 			name: "an unknown behaviour is rejected",

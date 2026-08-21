@@ -47,8 +47,8 @@ type planChangeRequest struct {
 	closing []*lineItemChange
 	opening []*lineItemChange
 
-	grants         *planChangeGrants
-	staleOverrides []*entitlement.Entitlement
+	grants           *planChangeGrants
+	closingOverrides []*entitlement.Entitlement
 
 	resetAnchor bool
 
@@ -69,12 +69,8 @@ type planChangeGrants struct {
 	// cancel holds the subscription's grants materialised from the outgoing plan.
 	cancel []*creditgrant.CreditGrant
 
-	// create holds the target plan's grants mapped to subscription-scoped requests.
-	create []dto.CreateCreditGrantRequest
-
-	// createdFrom keeps the target plan grant behind each create entry, so preview can
-	// name what it would materialise before any row exists.
-	createdFrom []*creditgrant.CreditGrant
+	// opening holds the target plan's grants.
+	opening []*dto.CreditGrantResponse
 }
 
 func (s *subscriptionService) resolvePlanChange(
@@ -171,7 +167,7 @@ func (s *subscriptionService) resolvePlanChange(
 		return nil, err
 	}
 
-	if err := s.resolveStaleEntitlementOverrides(ctx, r); err != nil {
+	if err := s.resolveClosingEntitlementOverrides(ctx, r); err != nil {
 		return nil, err
 	}
 
@@ -209,9 +205,7 @@ func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r
 		if cg == nil || cg.CreditGrant == nil {
 			continue
 		}
-
-		grants.create = append(grants.create, dto.NewSubscriptionScopedCreditGrantRequest(cg, r.currentSub.ID, r.toPlan.ID))
-		grants.createdFrom = append(grants.createdFrom, cg.CreditGrant)
+		grants.opening = append(grants.opening, cg)
 	}
 	r.grants = grants
 
@@ -224,7 +218,7 @@ func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r
 		})
 	}
 
-	for _, cg := range grants.createdFrom {
+	for _, cg := range grants.opening {
 		r.changes = append(r.changes, &dto.EntityChangeResult{
 			EntityType:  types.SubscriptionChangeEntityTypeCreditGrant,
 			ReferenceID: cg.ID,
@@ -236,10 +230,10 @@ func (s *subscriptionService) resolveCreditGrantMigration(ctx context.Context, r
 	return nil
 }
 
-// resolveStaleEntitlementOverrides finds subscription-scoped entitlements whose parent is
+// resolveClosingEntitlementOverrides finds subscription-scoped entitlements whose parent is
 // an entitlement of the outgoing plan. After the swap they suppress nothing and stack with
 // the new plan's entitlement on the same feature, so they must be closed.
-func (s *subscriptionService) resolveStaleEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
+func (s *subscriptionService) resolveClosingEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
 	entitlementSvc := NewEntitlementService(s.ServiceParams)
 
 	fromPlanEnts, err := entitlementSvc.ListEntitlements(ctx, types.NewNoLimitEntitlementFilter().
@@ -280,7 +274,7 @@ func (s *subscriptionService) resolveStaleEntitlementOverrides(ctx context.Conte
 			continue
 		}
 
-		r.staleOverrides = append(r.staleOverrides, ent.Entitlement)
+		r.closingOverrides = append(r.closingOverrides, ent.Entitlement)
 		r.changes = append(r.changes, &dto.EntityChangeResult{
 			EntityType:  types.SubscriptionChangeEntityTypeEntitlement,
 			ReferenceID: ent.ID,
@@ -314,7 +308,12 @@ func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planCh
 		}
 	}
 
-	if err := s.handleCreditGrantsWithStart(ctx, r.updatedSub, r.grants.create, r.effectiveAt, nil, nil); err != nil {
+	create := make([]dto.CreateCreditGrantRequest, 0, len(r.grants.opening))
+	for _, cg := range r.grants.opening {
+		create = append(create, dto.NewSubscriptionScopedCreditGrantRequest(cg, r.currentSub.ID, r.toPlan.ID))
+	}
+
+	if err := s.handleCreditGrantsWithStart(ctx, r.updatedSub, create, r.effectiveAt, nil, nil); err != nil {
 		return err
 	}
 
@@ -323,16 +322,15 @@ func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planCh
 		"from_plan_id", r.fromPlan.ID,
 		"to_plan_id", r.toPlan.ID,
 		"cancelled_grants", len(r.grants.cancel),
-		"created_grants", len(r.grants.create),
+		"created_grants", len(r.grants.opening),
 		"effective_at", r.effectiveAt)
 
 	return nil
 }
 
-// closeStaleEntitlementOverrides end-dates the overrides resolved above at the change
-// instant.
-func (s *subscriptionService) closeStaleEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
-	for _, ent := range r.staleOverrides {
+// closeEntitlementOverrides end-dates the overrides resolved above at the change instant.
+func (s *subscriptionService) closeEntitlementOverrides(ctx context.Context, r *planChangeRequest) error {
+	for _, ent := range r.closingOverrides {
 		closed := entitlement.NewEntitlementBuilder(ent).
 			WithEndDate(r.effectiveAt).
 			WithUpdatedBy(types.GetUserID(ctx)).
@@ -342,7 +340,7 @@ func (s *subscriptionService) closeStaleEntitlementOverrides(ctx context.Context
 			return err
 		}
 
-		s.Logger.Info(ctx, "closed stale subscription entitlement override on plan change",
+		s.Logger.Info(ctx, "closed subscription entitlement override on plan change",
 			"subscription_id", r.currentSub.ID,
 			"entitlement_id", closed.ID,
 			"feature_id", closed.FeatureID,
@@ -780,7 +778,7 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		if err := s.closeStaleEntitlementOverrides(txCtx, r); err != nil {
+		if err := s.closeEntitlementOverrides(txCtx, r); err != nil {
 			return err
 		}
 
@@ -940,7 +938,7 @@ func (s *subscriptionService) applyAnchorReset(
 }
 
 // projectSubscriptionAfterChange is the subscription the change would leave behind,
-// computed without writing anything. Under reset_at_effective the term restarts at
+// computed without writing anything. Under reset_at_effect the term restarts at
 // effectiveAt, so the new period is a full period and never the remainder of the old one.
 func projectSubscriptionAfterChange(r *planChangeRequest) (*subscription.Subscription, error) {
 	projected := *r.currentSub

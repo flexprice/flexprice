@@ -13,8 +13,6 @@ const (
 	EntityChangeBehaviourAdd   EntityChangeBehaviour = "add"
 )
 
-// EntityChangeBehaviourValues is the set a caller may request. It deliberately excludes
-// the report-only behaviours.
 var EntityChangeBehaviourValues = []EntityChangeBehaviour{
 	EntityChangeBehaviourCarry,
 	EntityChangeBehaviourDrop,
