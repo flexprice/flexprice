@@ -21,6 +21,14 @@ type Claims struct {
 	TenantID      string `json:"tenant_id"`
 	Email         string `json:"email,omitempty"`
 	EnvironmentID string `json:"environment_id,omitempty"`
+
+	// EmailVerified reports whether the identity provider has confirmed the
+	// user controls Email. Only the Supabase provider populates it — the
+	// flexprice and SSO providers leave it false because their tokens carry no
+	// equivalent claim, so it must never be read as a general-purpose gate.
+	// Consult it only on paths that have already established the provider is
+	// Supabase; see authService.SignUp.
+	EmailVerified bool `json:"email_verified,omitempty"`
 }
 
 // DashboardClaims represents the claims in a customer dashboard JWT token

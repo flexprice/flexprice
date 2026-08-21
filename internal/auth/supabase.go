@@ -63,7 +63,11 @@ func (s *supabaseAuth) SignUp(ctx context.Context, req AuthRequest) (*AuthRespon
 			Mark(ierr.ErrPermissionDenied)
 	}
 
-	if claims.Email != req.Email {
+	// Compared case-insensitively so this agrees with the signup guard, which
+	// normalizes both sides. An exact comparison here would let a case-variant
+	// address clear the guard and then fail this check, surfacing a permission
+	// problem as an opaque system error.
+	if !strings.EqualFold(strings.TrimSpace(claims.Email), strings.TrimSpace(req.Email)) {
 		return nil, ierr.NewError("email mismatch").
 			Mark(ierr.ErrPermissionDenied)
 	}
@@ -151,7 +155,33 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		TenantID:      tenantID,
 		Email:         email,
 		EnvironmentID: environmentID,
+		EmailVerified: supabaseEmailVerified(claims),
 	}, nil
+}
+
+// supabaseEmailVerified reads Supabase's email-confirmation flag from a
+// validated token's claims.
+//
+// Only the top-level claim is trusted. GoTrue sets it from the identity
+// provider, so it reflects the provider's own confirmation state.
+//
+// The copy nested under user_metadata is deliberately NOT consulted, even
+// though it is often present and carries the same name. user_metadata is
+// writable by the user through the ordinary client SDK — auth.updateUser with a
+// data field, which this codebase already calls from the browser during
+// password reset — so treating it as proof of confirmation would let a caller
+// mark their own unconfirmed address verified and walk straight through the
+// signup guard. Supabase's own guidance is that user_metadata is for
+// non-sensitive profile data and app_metadata is the server-controlled
+// equivalent; a verification flag belongs in neither, so only the provider's
+// top-level claim is authoritative here.
+//
+// A token without the claim yields false. That is the safe default: a provider
+// that does not tell us the email was confirmed is treated as not having
+// confirmed it.
+func supabaseEmailVerified(claims jwt.MapClaims) bool {
+	verified, ok := claims["email_verified"].(bool)
+	return ok && verified
 }
 
 func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {

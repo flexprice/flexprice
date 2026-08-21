@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
@@ -53,6 +54,23 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 				"email": req.Email,
 			}).
 			Mark(ierr.ErrAlreadyExists)
+	}
+
+	// Require the provider to have confirmed the email before an account and
+	// tenant are created for it.
+	//
+	// Without this the check lives entirely in the Supabase project's "Confirm
+	// email" setting, which the backend cannot observe: a project configured
+	// without confirmation issues a session straight away, and that session is
+	// indistinguishable here from a confirmed one. Enforcing it in code keeps
+	// account creation correct independently of how the project is configured.
+	//
+	// Scoped to Supabase because only its tokens carry the claim; the flexprice
+	// and SSO providers would always read false and be rejected outright.
+	if s.authProvider.GetProvider() == types.AuthProviderSupabase {
+		if err := s.refuseUnverifiedEmail(ctx, req.Token, req.Email); err != nil {
+			return nil, err
+		}
 	}
 
 	// Generate a tenant ID
@@ -117,6 +135,53 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 	}
 
 	return response, nil
+}
+
+// refuseUnverifiedEmail blocks account creation when the Supabase token does
+// not assert that the email has been confirmed.
+//
+// The token is re-validated here rather than trusting anything the caller sent
+// alongside it: the signup handler accepts the token from the request body or
+// an Authorization header, so the email and the verification flag are only
+// trustworthy once the signature has been checked.
+//
+// The email on the token is also required to match the email being registered,
+// so a token issued for one address cannot be used to create an account for
+// another.
+func (s *authService) refuseUnverifiedEmail(ctx context.Context, token, email string) error {
+	if token == "" {
+		return ierr.NewError("token is required").
+			WithHint("A verified sign-in is required to create an account").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	claims, err := s.authProvider.ValidateToken(ctx, token)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("A verified sign-in is required to create an account").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	if !strings.EqualFold(strings.TrimSpace(claims.Email), strings.TrimSpace(email)) {
+		s.Logger.Info(ctx, "signup refused because the token email does not match the registered email",
+			"token_email", claims.Email,
+			"request_email", email,
+		)
+		return ierr.NewError("token email does not match the registered email").
+			WithHint("A verified sign-in is required to create an account").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	if !claims.EmailVerified {
+		s.Logger.Info(ctx, "signup refused because the email is not verified",
+			"email", email,
+		)
+		return ierr.NewError("email is not verified").
+			WithHint("Confirm your email address before creating an account, then sign in again.").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	return nil
 }
 
 // refusePasswordLoginUnderSSO blocks password login for a tenant that has SSO
