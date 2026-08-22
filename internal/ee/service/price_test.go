@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -30,6 +31,7 @@ type PriceServiceSuite struct {
 	planRepo      *testutil.InMemoryPlanStore
 	priceUnitRepo *testutil.InMemoryPriceUnitStore
 	addonRepo     *testutil.InMemoryAddonStore
+	featureRepo   *testutil.InMemoryFeatureStore
 	logger        *logger.Logger
 }
 
@@ -44,6 +46,7 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.planRepo = testutil.NewInMemoryPlanStore()
 	s.priceUnitRepo = testutil.NewInMemoryPriceUnitStore()
 	s.addonRepo = testutil.NewInMemoryAddonStore()
+	s.featureRepo = testutil.NewInMemoryFeatureStore()
 	s.logger = logger.NewNoopLogger()
 
 	serviceParams := ServiceParams{
@@ -53,6 +56,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		AddonRepo:     s.addonRepo,
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
+		FeatureRepo:   s.featureRepo,
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
@@ -190,6 +194,135 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	s.NotNil(resp)
 	s.Equal(2, resp.Pagination.Total)
 	s.Len(resp.Items, 0) // Ensure no prices are retrieved
+}
+
+// TestGetPrices_ExpandFeatures verifies that expand=features attaches each price's
+// metered feature reporting unit (e.g. raw usage in "second" displayed as "minute"),
+// resolved via the price's meter_id, and that it is absent when not requested.
+func (s *PriceServiceSuite) TestGetPrices_ExpandFeatures() {
+	testMeter := &meter.Meter{
+		ID:        "meter-reporting",
+		Name:      "Test Meter",
+		EventName: "call",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+	conversionRate := decimal.NewFromInt(60)
+	_ = s.featureRepo.Create(s.ctx, &feature.Feature{
+		ID:      "feature-reporting",
+		Name:    "Call Minutes",
+		Type:    types.FeatureTypeMetered,
+		MeterID: "meter-reporting",
+		ReportingUnit: &types.ReportingUnit{
+			UnitSingular:   "minute",
+			UnitPlural:     "minutes",
+			ConversionRate: &conversionRate,
+		},
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	})
+
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:         "price-reporting",
+		Amount:     decimal.NewFromInt(1),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-reporting",
+		MeterID:    "meter-reporting",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
+	})
+
+	// Without expand=features, reporting unit is not attached
+	priceFilter := types.NewPriceFilter()
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
+	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Nil(resp.Items[0].Feature)
+
+	// With expand=features, reporting unit is attached from the meter's feature
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandFeatures))
+	resp, err = s.priceService.GetPrices(s.ctx, priceFilter)
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Require().NotNil(resp.Items[0].Feature)
+	s.Require().NotNil(resp.Items[0].Feature.ReportingUnit)
+	s.Equal("minute", resp.Items[0].Feature.ReportingUnit.UnitSingular)
+	s.Equal("minutes", resp.Items[0].Feature.ReportingUnit.UnitPlural)
+	s.True(conversionRate.Equal(*resp.Items[0].Feature.ReportingUnit.ConversionRate))
+}
+
+// TestGetPrices_ExpandFeatures_IgnoresDeletedFeature verifies that a deleted feature
+// left pointing at a meter (meter_id has no DB uniqueness constraint) is not picked up
+// over the live published feature on the same meter.
+func (s *PriceServiceSuite) TestGetPrices_ExpandFeatures_IgnoresDeletedFeature() {
+	testMeter := &meter.Meter{
+		ID:        "meter-reporting-2",
+		Name:      "Test Meter",
+		EventName: "call",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+	deletedConversionRate := decimal.NewFromInt(1)
+	deletedBaseModel := types.GetDefaultBaseModel(s.ctx)
+	deletedBaseModel.Status = types.StatusDeleted
+	_ = s.featureRepo.Create(s.ctx, &feature.Feature{
+		ID:      "feature-deleted",
+		Name:    "Old Deleted Feature",
+		Type:    types.FeatureTypeMetered,
+		MeterID: "meter-reporting-2",
+		ReportingUnit: &types.ReportingUnit{
+			UnitSingular:   "wrong-unit",
+			UnitPlural:     "wrong-units",
+			ConversionRate: &deletedConversionRate,
+		},
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     deletedBaseModel,
+	})
+
+	liveConversionRate := decimal.NewFromInt(60)
+	_ = s.featureRepo.Create(s.ctx, &feature.Feature{
+		ID:      "feature-live",
+		Name:    "Live Feature",
+		Type:    types.FeatureTypeMetered,
+		MeterID: "meter-reporting-2",
+		ReportingUnit: &types.ReportingUnit{
+			UnitSingular:   "minute",
+			UnitPlural:     "minutes",
+			ConversionRate: &liveConversionRate,
+		},
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	})
+
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:         "price-reporting-2",
+		Amount:     decimal.NewFromInt(1),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-reporting-2",
+		MeterID:    "meter-reporting-2",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
+	})
+
+	priceFilter := types.NewPriceFilter()
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandFeatures))
+	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Require().NotNil(resp.Items[0].Feature)
+	s.Require().NotNil(resp.Items[0].Feature.ReportingUnit)
+	s.Equal("minute", resp.Items[0].Feature.ReportingUnit.UnitSingular)
+	s.True(liveConversionRate.Equal(*resp.Items[0].Feature.ReportingUnit.ConversionRate))
 }
 
 // TestGetPrices_EmptyEntityIDsDoesNotSuppressResults is a regression test for the bug where

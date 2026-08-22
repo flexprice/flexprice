@@ -170,6 +170,12 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 			expandFields = append(expandFields, string(types.ExpandPriceUnit))
 		}
 
+		// If features should be expanded (root level or nested under prices), propagate to prices
+		// so each price's reporting unit (e.g. usage displayed in "minutes" vs raw "seconds") is attached
+		if filter.GetExpand().Has(types.ExpandFeatures) || filter.GetExpand().GetNested(types.ExpandPrices).Has(types.ExpandFeatures) {
+			expandFields = append(expandFields, string(types.ExpandFeatures))
+		}
+
 		// Set expand string if any expansions are requested
 		if len(expandFields) > 0 {
 			priceFilter = priceFilter.WithExpand(strings.Join(expandFields, ","))

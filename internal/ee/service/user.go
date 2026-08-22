@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -17,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/nedpals/supabase-go"
 	"github.com/samber/lo"
 )
@@ -620,8 +622,6 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 	return s.userRepo.Delete(ctx, id)
 }
 
-const chatSupportTokenTTL = 2 * time.Hour
-
 func (s *userService) CreateSupportChatToken(ctx context.Context) (*dto.SupportChatTokenResponse, error) {
 	if s.cfg == nil || s.cfg.ChatSupport.AppID == "" || s.cfg.ChatSupport.IdentitySecret == "" {
 		return nil, ierr.NewError("chat support identity verification is not configured").
@@ -640,36 +640,22 @@ func (s *userService) CreateSupportChatToken(ctx context.Context) (*dto.SupportC
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
-	expiresAt := now.Add(chatSupportTokenTTL)
-
-	claims := dto.ChatSupportClaims{
-		Email:             u.Email,
-		Name:              u.Name,
-		ContactExternalID: u.ID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Audience:  jwt.ClaimStrings{s.cfg.ChatSupport.AppID},
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-		},
-	}
-	if u.Tenant != nil {
-		claims.AccountExternalID = u.Tenant.ID
-		if claims.Name == "" {
-			claims.Name = u.Tenant.Name
-		}
-	}
-
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.cfg.ChatSupport.IdentitySecret))
+	secretBytes, err := hex.DecodeString(s.cfg.ChatSupport.IdentitySecret)
 	if err != nil {
-		s.logger.Error(ctx, "failed to sign support chat token", "error", err, "user_id", u.ID)
+
 		return nil, ierr.WithError(err).
-			WithHint("Failed to sign the support chat token").
+			WithHint("chat_support.identity_secret must be a hex string").
+			Mark(ierr.ErrInternal)
+	}
+
+	mac := hmac.New(sha256.New, secretBytes)
+	if _, err := mac.Write([]byte(u.Email)); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to hash the support chat email").
 			Mark(ierr.ErrInternal)
 	}
 
 	return &dto.SupportChatTokenResponse{
-		Token:     token,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
+		Token: hex.EncodeToString(mac.Sum(nil)),
 	}, nil
 }

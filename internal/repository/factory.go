@@ -156,7 +156,7 @@ func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository
 }
 
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
-	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
 }
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {

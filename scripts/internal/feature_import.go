@@ -93,7 +93,7 @@ func newFeatureImportScript(tenantID, environmentID, planID string) (*featureImp
 	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
-	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
+	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient, redisCache)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
 	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(pgClient, log, cacheClient)

@@ -61,7 +61,7 @@ func SyncBillingCustomers() error {
 	priceRepo := ent.NewPriceRepository(client, logger, redisCache)
 	meterRepo := ent.NewMeterRepository(client, logger, cacheClient)
 	entitlementRepo := ent.NewEntitlementRepository(client, logger, cacheClient, redisCache)
-	featureRepo := ent.NewFeatureRepository(client, logger, cacheClient)
+	featureRepo := ent.NewFeatureRepository(client, logger, cacheClient, redisCache)
 	authRepo := ent.NewAuthRepository(client, logger)
 	systemEventRepo := ent.NewSystemEventRepository(client)
 

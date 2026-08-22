@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -681,6 +684,61 @@ func (s *UserServiceSuite) TestDeleteUser() {
 		err := s.userService.DeleteUser(ctx, "sa-1")
 		s.NoError(err)
 	})
+}
+
+func (s *UserServiceSuite) TestCreateSupportChatToken() {
+	const (
+		appID  = "pylon-app-id"
+		secret = "deadbeefdeadbeefdeadbeefdeadbeef"
+		email  = "support@example.com"
+	)
+
+	ctx := testutil.SetupContext()
+	_ = s.userRepo.Create(ctx, &user.User{
+		ID:        types.DefaultUserID,
+		Email:     email,
+		Name:      "Support User",
+		Type:      types.UserTypeUser,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	})
+	s.userService.cfg = &config.Configuration{
+		ChatSupport: config.ChatSupportConfig{
+			AppID:          appID,
+			IdentitySecret: secret,
+		},
+	}
+
+	resp, err := s.userService.CreateSupportChatToken(ctx)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Empty(resp.ExpiresAt)
+
+	secretBytes, err := hex.DecodeString(secret)
+	s.Require().NoError(err)
+	mac := hmac.New(sha256.New, secretBytes)
+	_, err = mac.Write([]byte(email))
+	s.Require().NoError(err)
+	s.Equal(hex.EncodeToString(mac.Sum(nil)), resp.Token)
+}
+
+func (s *UserServiceSuite) TestCreateSupportChatToken_InvalidHexSecret() {
+	ctx := testutil.SetupContext()
+	_ = s.userRepo.Create(ctx, &user.User{
+		ID:        types.DefaultUserID,
+		Email:     "support@example.com",
+		Type:      types.UserTypeUser,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	})
+	s.userService.cfg = &config.Configuration{
+		ChatSupport: config.ChatSupportConfig{
+			AppID:          "pylon-app-id",
+			IdentitySecret: "not-a-hex-string",
+		},
+	}
+
+	resp, err := s.userService.CreateSupportChatToken(ctx)
+	s.Require().Error(err)
+	s.Nil(resp)
 }
 
 // ---------------------------------------------------------------------------

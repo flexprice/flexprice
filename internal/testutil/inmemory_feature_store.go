@@ -314,6 +314,21 @@ func (s *InMemoryFeatureStore) ListByIDs(ctx context.Context, featureIDs []strin
 	return s.List(ctx, filter)
 }
 
+// GetFeaturesByMeterIDs returns the published feature for each of the given meter IDs.
+func (s *InMemoryFeatureStore) GetFeaturesByMeterIDs(ctx context.Context, meterIDs []string) ([]*feature.Feature, error) {
+	if len(meterIDs) == 0 {
+		return []*feature.Feature{}, nil
+	}
+
+	filter := &types.FeatureFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		MeterIDs:    meterIDs,
+	}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+
+	return s.List(ctx, filter)
+}
+
 // GetByGroupIDs returns features that belong to any of the given group IDs.
 func (s *InMemoryFeatureStore) GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*feature.Feature, error) {
 	if len(groupIDs) == 0 {

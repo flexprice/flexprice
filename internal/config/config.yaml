@@ -226,6 +226,12 @@ otel:
     # spans stay 100%). 0.2 caps the fan-out; set 1.0 for full debug fidelity.
     storage_spans_enabled: false
     storage_spans_sample_rate: 0.2
+    # Cache spans get a per-type opt-in on top of storage_spans_enabled — they
+    # fire on every get/set/delete on hot paths, so operators may want DB/CH
+    # spans without the cache fan-out. Both default false and both also
+    # require storage_spans_enabled=true (that stays the master kill switch).
+    redis_cache_spans_enabled: false
+    in_memory_cache_spans_enabled: false
     # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
     # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
     capture_exceptions: true

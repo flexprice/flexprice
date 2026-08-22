@@ -493,11 +493,17 @@ type OtelTracesConfig struct {
 	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
-	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // master switch for ALL DB/ClickHouse/cache child spans (can be noisy)
 	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
 	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
 	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
 	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
+	// Cache spans are the noisiest fan-out (fire on every get/set/delete on hot
+	// paths), so they get a per-type opt-in on top of StorageSpansEnabled.
+	// Both default false, and both require StorageSpansEnabled=true to emit —
+	// StorageSpansEnabled is the master kill switch for all storage spans.
+	RedisCacheSpansEnabled    bool `mapstructure:"redis_cache_spans_enabled" default:"false"`    // db.system=redis cache spans (also requires storage_spans_enabled)
+	InMemoryCacheSpansEnabled bool `mapstructure:"in_memory_cache_spans_enabled" default:"false"` // db.system=in_memory cache spans (also requires storage_spans_enabled)
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.

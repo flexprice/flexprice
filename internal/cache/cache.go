@@ -104,6 +104,7 @@ const (
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
 	PrefixPublishedConnections   = "published_connections:"
+	PrefixMeterFeature           = "meter:feature:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

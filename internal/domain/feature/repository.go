@@ -17,6 +17,10 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	ListByIDs(ctx context.Context, featureIDs []string) ([]*Feature, error)
 
+	// GetFeaturesByMeterIDs returns the published feature for each of the given meter IDs
+	// (a meter has at most one published feature).
+	GetFeaturesByMeterIDs(ctx context.Context, meterIDs []string) ([]*Feature, error)
+
 	// Group-related operations
 	GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*Feature, error)
 	ClearByGroupID(ctx context.Context, groupID string) error

@@ -465,7 +465,7 @@ func (s *entitlementGrantService) computeGrantWindow(
 	if ec.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
 		s.Logger.Debug(ctx, "computed grant window (subscription_period)",
 			"validFrom", cycleStart, "validTo", cycleEnd)
-		return cycleStart, cycleEnd, true, nil
+		return coveredUntil, cycleEnd, true, nil
 	}
 
 	// hour/day/week: no uncovered usage in the cycle → no grant (windows are

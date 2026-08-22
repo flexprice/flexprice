@@ -456,15 +456,44 @@ func (s *Service) IsSentryEnabled() bool {
 	return s.sentryEnabled
 }
 
-// IsStorageSpansEnabled reports whether per-query storage spans (DB, cache,
-// ClickHouse) should be created. Controlled by
-// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (default: false) to avoid span
-// volume explosion before operators have a feel for the cost.
+// IsStorageSpansEnabled is the master switch for ALL per-query storage spans
+// (DB, ClickHouse, cache). When false, no storage span emits regardless of
+// per-type toggles. Controlled by FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED
+// (default: false) to avoid span volume explosion before operators have a
+// feel for the cost. When true, DB and ClickHouse spans emit; cache spans
+// additionally require their per-type flag — see IsRedisCacheSpansEnabled /
+// IsInMemoryCacheSpansEnabled.
 func (s *Service) IsStorageSpansEnabled() bool {
 	if s == nil {
 		return false
 	}
 	return s.tracingEnabled && s.cfg.Otel.Traces.StorageSpansEnabled
+}
+
+// IsRedisCacheSpansEnabled reports whether Redis cache spans (db.system=redis)
+// should be created. Requires the master IsStorageSpansEnabled to also be true
+// — this flag is an opt-in for the noisy cache fan-out on top of the storage
+// master switch, not a replacement for it. Controlled by
+// FLEXPRICE_OTEL_TRACES_REDIS_CACHE_SPANS_ENABLED (default: false).
+func (s *Service) IsRedisCacheSpansEnabled() bool {
+	if s == nil {
+		return false
+	}
+	return s.IsStorageSpansEnabled() && s.cfg.Otel.Traces.RedisCacheSpansEnabled
+}
+
+// IsInMemoryCacheSpansEnabled reports whether in-memory cache spans
+// (db.system=in_memory) should be created. Requires the master
+// IsStorageSpansEnabled to also be true — this flag is an opt-in on top of
+// the storage master switch. In-memory hits have a completely different
+// latency profile from Redis and are gated separately so operators can enable
+// only what they need. Controlled by
+// FLEXPRICE_OTEL_TRACES_IN_MEMORY_CACHE_SPANS_ENABLED (default: false).
+func (s *Service) IsInMemoryCacheSpansEnabled() bool {
+	if s == nil {
+		return false
+	}
+	return s.IsStorageSpansEnabled() && s.cfg.Otel.Traces.InMemoryCacheSpansEnabled
 }
 
 // storageSpanSampled applies otel.traces.storage_spans_sample_rate as a per-trace
@@ -728,10 +757,18 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 // storage_spans_sample_rate (per-trace), so every storage span — DB, ClickHouse,
 // repository — obeys both regardless of call path.
 func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
+	return s.startStorageSpanGated(ctx, name, op, dbSystem, s.IsStorageSpansEnabled(), params)
+}
+
+// startStorageSpanGated is the common implementation. The caller passes an
+// explicit spanEnabled gate so DB/CH callers can use the storage_spans_enabled
+// switch while cache callers use their per-type flag. The per-trace sample
+// rate throttle and the always-on metrics path are shared.
+func (s *Service) startStorageSpanGated(ctx context.Context, name, op, dbSystem string, spanEnabled bool, params map[string]interface{}) (*Span, context.Context) {
 	if s == nil { // a nil tracing service is a valid no-op (tracing not wired)
 		return nil, ctx
 	}
-	spanOn := s.IsStorageSpansEnabled() && s.storageSpanSampled(ctx)
+	spanOn := spanEnabled && s.storageSpanSampled(ctx)
 	if !spanOn && !s.metricsEnabled {
 		return nil, ctx
 	}
@@ -844,12 +881,29 @@ func (s *Service) StartRepositorySpan(ctx context.Context, dbSystem, repository,
 // the same code path and are tagged the same way (cache.entity distinguishes
 // what was accessed).
 //
-// Gated by otel.traces.storage_spans_enabled (via startStorageSpan) — cache
-// spans fire on every get/set/delete, so they share the same noise/volume
-// tradeoff as the other storage spans.
+// Gated per db.system on top of the storage master switch:
+//   - otel.traces.storage_spans_enabled must be true for ANY cache span to
+//     emit (master kill switch shared with DB/ClickHouse spans).
+//   - db.system=redis     additionally requires otel.traces.redis_cache_spans_enabled.
+//   - db.system=in_memory additionally requires otel.traces.in_memory_cache_spans_enabled.
+//
+// Both per-type flags default false because cache calls fire on every
+// get/set/delete and are the noisiest fan-out in a trace. Splitting the flag
+// lets operators enable DB/ClickHouse spans without dragging in cache noise,
+// while still using storage_spans_enabled as a single kill switch when they
+// want everything off.
 func (s *Service) StartCacheSpan(ctx context.Context, dbSystem, cacheEntity, operation string, params map[string]interface{}) (*Span, context.Context) {
+	var spanEnabled bool
+	switch dbSystem {
+	case "redis":
+		spanEnabled = s.IsRedisCacheSpansEnabled()
+	case "in_memory":
+		spanEnabled = s.IsInMemoryCacheSpansEnabled()
+	default:
+		spanEnabled = s.IsStorageSpansEnabled()
+	}
 	name := fmt.Sprintf("cache.%s.%s", cacheEntity, operation)
-	span, newCtx := s.startStorageSpan(ctx, name, "cache."+operation, dbSystem, params)
+	span, newCtx := s.startStorageSpanGated(ctx, name, "cache."+operation, dbSystem, spanEnabled, params)
 	if span != nil {
 		span.SetData("cache.entity", cacheEntity)
 		span.SetData("cache.operation", operation)
