@@ -549,6 +549,12 @@ type OtelMetricsConfig struct {
 	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
 	// SDK series are higher volume than app DB/cache metrics.
 	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
+	// HTTPServerEnabled keeps otelgin's http.server.request.duration instead of
+	// dropping it, so request rate / latency / error rate per route come from
+	// metrics rather than from spans. Off by default (~31% of our own ingestion,
+	// and SigNoz already derives it); turn it on where the backend cannot store
+	// traces and this is the only source of API latency.
+	HTTPServerEnabled bool `mapstructure:"http_server_enabled" default:"false"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.

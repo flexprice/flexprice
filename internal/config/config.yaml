@@ -243,7 +243,7 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
     auth_value: ""
 
-  # App-level DB/cache metrics (always-on aggregate signal, unsampled). Service-level
+  # App-level metrics (always-on aggregate signal, unsampled). Service-level
   # resource only (no per-pod host attrs) to keep metric cardinality — and cost — flat.
   metrics:
     enabled: false
@@ -253,6 +253,10 @@ otel:
     auth_value: ""
     interval_seconds: 60
     temporal_enabled: false
+    # Keep http.server.request.duration (request rate / latency / error rate per
+    # route). Off here — SigNoz derives it from traces; turn it on where the
+    # backend cannot store traces.
+    http_server_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling

@@ -2,12 +2,16 @@ package tracing
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -242,4 +246,149 @@ func TestTemporalMetricsHandler(t *testing.T) {
 			t.Fatal("expected non-nil Temporal MetricsHandler")
 		}
 	})
+}
+
+// meterWithHTTPViews builds a MeterProvider with the views initMeter installs.
+func meterWithHTTPViews(t *testing.T, httpServerEnabled bool) (metric.Meter, *sdkmetric.ManualReader) {
+	t.Helper()
+	s := &Service{cfg: &config.Configuration{
+		Otel: config.OtelConfig{Metrics: config.OtelMetricsConfig{HTTPServerEnabled: httpServerEnabled}},
+	}}
+	reader := sdkmetric.NewManualReader()
+	opts := append([]sdkmetric.Option{sdkmetric.WithReader(reader)}, s.httpMetricViews()...)
+	return sdkmetric.NewMeterProvider(opts...).Meter("test"), reader
+}
+
+// recordHTTPServerMetrics emits what otelgin does, with its full attribute set.
+func recordHTTPServerMetrics(t *testing.T, meter metric.Meter) {
+	t.Helper()
+	dur, err := meter.Float64Histogram("http.server.request.duration")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := meter.Int64Histogram("http.server.request.body.size")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := meter.Float64Histogram("http.client.request.duration")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attrs := metric.WithAttributes(
+		attribute.String("http.request.method", "POST"),
+		attribute.String("http.route", "/v1/events"),
+		attribute.Int("http.response.status_code", 200),
+		attribute.String("server.address", "api.flexprice.io"),
+		attribute.Int("server.port", 8080),
+		attribute.String("network.protocol.version", "1.1"),
+	)
+	dur.Record(context.Background(), 0.12, attrs)
+	body.Record(context.Background(), 512, attrs)
+	client.Record(context.Background(), 0.05, attrs)
+}
+
+// Flag off keeps today's behaviour: every HTTP metric is dropped.
+func TestHTTPServerMetricsDroppedByDefault(t *testing.T) {
+	meter, reader := meterWithHTTPViews(t, false)
+	recordHTTPServerMetrics(t, meter)
+
+	got := collect(t, reader)
+	for _, name := range []string{
+		"http.server.request.duration",
+		"http.server.request.body.size",
+		"http.client.request.duration",
+	} {
+		if len(got[name]) != 0 {
+			t.Errorf("%s should be dropped when http_server_enabled is false; got %v", name, got[name])
+		}
+	}
+}
+
+// Flag on: request duration survives trimmed; body-size and client stay dropped.
+func TestHTTPServerMetricsKeptWhenEnabled(t *testing.T) {
+	meter, reader := meterWithHTTPViews(t, true)
+	recordHTTPServerMetrics(t, meter)
+
+	got := collect(t, reader)
+	dps := got["http.server.request.duration"]
+	if len(dps) != 1 {
+		t.Fatalf("expected 1 request-duration point, got %v", dps)
+	}
+	if !hasDP(dps, map[string]string{
+		"http.request.method":       "POST",
+		"http.route":                "/v1/events",
+		"http.response.status_code": "200",
+	}) {
+		t.Errorf("expected route/method/status attributes to survive; got %v", dps)
+	}
+	for _, dropped := range []string{"server.address", "server.port", "network.protocol.version"} {
+		if _, ok := dps[0][dropped]; ok {
+			t.Errorf("attribute %q should have been filtered out; got %v", dropped, dps[0])
+		}
+	}
+	if len(got["http.server.request.body.size"]) != 0 {
+		t.Errorf("body-size histogram should stay dropped; got %v", got["http.server.request.body.size"])
+	}
+	if len(got["http.client.request.duration"]) != 0 {
+		t.Errorf("http.client.* should stay dropped; got %v", got["http.client.request.duration"])
+	}
+}
+
+// service.instance.id must be on both resources and has no off switch: without it
+// N replicas write one series with independent counter resets.
+func TestResourcesAlwaysCarryInstanceID(t *testing.T) {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		t.Skip("hostname unavailable")
+	}
+
+	s := &Service{cfg: &config.Configuration{}}
+
+	// Both signals carry it, so a suspect series leads to that replica's spans.
+	for name, build := range map[string]func(context.Context) (*resource.Resource, error){
+		"metrics": s.newMetricResource,
+		"traces":  s.newResource,
+	} {
+		res, err := build(context.Background())
+		if err != nil {
+			t.Fatalf("%s resource: %v", name, err)
+		}
+		got, ok := instanceIDOf(res)
+		if !ok {
+			t.Errorf("service.instance.id missing from the %s resource", name)
+			continue
+		}
+		if got != host {
+			t.Errorf("%s service.instance.id = %q, want hostname %q", name, got, host)
+		}
+	}
+}
+
+// instanceIDOf returns the resource's service.instance.id, if it has one.
+func instanceIDOf(res *resource.Resource) (string, bool) {
+	for _, kv := range res.Attributes() {
+		if kv.Key == semconv.ServiceInstanceIDKey {
+			return kv.Value.AsString(), true
+		}
+	}
+	return "", false
+}
+
+// WithFromEnv merges last, so a deployment can override the hostname identity.
+func TestMetricResourceInstanceIDEnvOverride(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.instance.id=pod-from-downward-api")
+
+	s := &Service{cfg: &config.Configuration{}}
+	res, err := s.newMetricResource(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := instanceIDOf(res)
+	if !ok {
+		t.Fatal("service.instance.id missing from the metric resource")
+	}
+	if got != "pod-from-downward-api" {
+		t.Fatalf("service.instance.id = %q, want the env override to win", got)
+	}
 }

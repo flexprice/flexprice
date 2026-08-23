@@ -249,6 +249,18 @@ func (s *Service) baseResourceAttrs() []attribute.KeyValue {
 	if mode := string(s.cfg.Deployment.Mode); mode != "" {
 		attrs = append(attrs, attribute.String("app.component", mode))
 	}
+
+	// service.instance.id identifies which replica emitted this, on both signals.
+	// Metrics need it: without it every replica exports the same label set, so one
+	// series takes samples from N writers whose cumulative counters reset
+	// independently — duplicates get dropped and a rolling restart reads as a
+	// phantom spike. Aggregate it away at query time (sum by (job) (rate(x[5m])) —
+	// rate() per series first) or in a collector, not here.
+	// Hostname is the pod name on k8s and the container ID on ECS;
+	// OTEL_RESOURCE_ATTRIBUTES overrides it.
+	if host, err := os.Hostname(); err == nil && host != "" {
+		attrs = append(attrs, semconv.ServiceInstanceID(host))
+	}
 	return attrs
 }
 
@@ -267,10 +279,9 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 	)
 }
 
-// newMetricResource builds a SERVICE-LEVEL resource (no host.name/process attrs).
-// Metric series cardinality = label combinations × resource series; per-pod
-// host attributes would multiply every series by the running pod count, so they
-// are deliberately omitted to keep metric cost flat.
+// newMetricResource builds a SERVICE-LEVEL resource: no host.name/process attrs,
+// which would multiply every series without adding anything service.instance.id
+// does not already say.
 func (s *Service) newMetricResource(ctx context.Context) (*resource.Resource, error) {
 	return resource.New(ctx,
 		resource.WithAttributes(s.baseResourceAttrs()...),
@@ -312,24 +323,12 @@ func (s *Service) initMeter(ctx context.Context) error {
 	if interval <= 0 {
 		interval = 60 * time.Second
 	}
-	mp := sdkmetric.NewMeterProvider(
+	opts := []sdkmetric.Option{
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(interval))),
-		// Drop the framework's auto-emitted HTTP metrics (http.server.* / http.client.*).
-		// Turning on the MeterProvider auto-enabled these; they were ~31% of metric
-		// ingestion and are referenced by no dashboard or alert. Body-size histograms
-		// are unwanted, and request latency is already covered by APM (derived from
-		// traces). NOTE: if API traces are ever sampled below 100%, re-add a coarse
-		// http.server.request.duration here as the always-on latency source.
-		sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "http.server.*"},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
-		)),
-		sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "http.client.*"},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
-		)),
-	)
+	}
+	opts = append(opts, s.httpMetricViews()...)
+	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
 	s.meterProvider = mp
 
@@ -348,6 +347,35 @@ func (s *Service) initMeter(ctx context.Context) error {
 	s.meterInitDone = true
 	s.logger.Info(ctx, "OTel metrics initialized", "endpoint", mc.Endpoint, "interval", interval.String())
 	return nil
+}
+
+// httpMetricViews decides what happens to the HTTP metrics otelgin emits for free.
+// Everything is dropped by default (~31% of ingestion, and SigNoz derives the same
+// view from spans). http_server_enabled keeps request.duration for deployments with
+// no trace backend, trimmed to bounded attributes — the raw semconv set adds
+// server.address/port and protocol version, which cost series and say nothing here.
+func (s *Service) httpMetricViews() []sdkmetric.Option {
+	drop := func(pattern string) sdkmetric.Option {
+		return sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: pattern},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		))
+	}
+
+	var views []sdkmetric.Option
+	if s.cfg.Otel.Metrics.HTTPServerEnabled {
+		// First matching view wins, so this must precede the http.server.* drop.
+		views = append(views, sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "http.server.request.duration"},
+			sdkmetric.Stream{AttributeFilter: attribute.NewAllowKeysFilter(
+				"http.request.method",
+				"http.route",
+				"http.response.status_code",
+				"error.type",
+			)},
+		)))
+	}
+	return append(views, drop("http.server.*"), drop("http.client.*"))
 }
 
 // newMetricExporter builds the OTLP metric exporter (gRPC or HTTP), mirroring
