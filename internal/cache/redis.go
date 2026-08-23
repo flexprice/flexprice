@@ -34,7 +34,24 @@ type redisCacheImpl struct {
 // Redis cache instance
 var redisCache *redisCacheImpl
 
-// NewRedisCache creates a new Redis cache
+// NewRedisCache creates a new Redis cache.
+//
+// It builds its own config and logger rather than taking them as fx-injected
+// parameters — every other RedisCache-typed provider in main.go's fx graph
+// (NewRedisLocker included) receives the app's already-validated config and
+// logger, but this one is called with zero dependencies, and several
+// standalone scripts under scripts/ call it the same parameterless way. Both
+// call sites are preserved here rather than reshaped into main.go's fx graph.
+//
+// The logger matters beyond convenience: every Redis GET/SET/DEL error inside
+// redisCacheImpl.* is reported through whatever logger InitializeRedisCache was
+// given, and it is given exactly once (redisCache is a package singleton). A
+// noop logger here means every later Redis error from this cache — including
+// the SAML AuthnRequest tracker's Set/Get — is silently discarded for the
+// process lifetime, with nothing distinguishing "Redis is fine" from "Redis
+// calls are failing and nobody can see it." Using the real structured logger
+// keeps that failure mode observable; noop remains only the fallback for when
+// building the real logger itself fails.
 func NewRedisCache() RedisCache {
 	if redisCache == nil {
 		cfg, err := config.NewConfig()
@@ -42,8 +59,11 @@ func NewRedisCache() RedisCache {
 			logger.NewNoopLogger().Error(context.Background(), "Failed to initialize Redis cache", "error", err)
 			return nil
 		}
-		noop := logger.NewNoopLogger()
-		InitializeRedisCache(cfg, noop)
+		log, err := logger.NewLogger(cfg)
+		if err != nil {
+			log = logger.NewNoopLogger()
+		}
+		InitializeRedisCache(cfg, log)
 	}
 	return redisCache
 }
