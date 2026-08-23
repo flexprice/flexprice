@@ -633,11 +633,27 @@ spec:
               CH_HTTP_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ if .Values.clickhouse.namespace }}.{{ .Values.clickhouse.namespace }}.svc.cluster.local{{ end }}{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
               CH_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 1 }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
               CH_SCHEME="{{ if .Values.clickhouse.tls }}https{{ else }}http{{ end }}"
+              # Resolved into a variable instead of templated inline at the end of
+              # the wget call. Inline, the left-chomp on the conditional eats the
+              # preceding newline, so the previous line's trailing backslash ends up
+              # mid-line rather than last on its line:
+              #
+              #   --header="X-ClickHouse-Key: ..." \ 2>/dev/null || echo 0)
+              #
+              # A backslash only continues a line when it is the final character.
+              # There it escapes the space instead, wget receives " 2" as a
+              # positional argument and exits with `bad address ' 2'`, the
+              # `|| echo 0` sets n=0, and every table is reported MISSING against a
+              # ClickHouse that migrated correctly.
+              CH_INSECURE=""
+              {{- if $.Values.clickhouse.tlsSkipVerify }}
+              CH_INSECURE="--no-check-certificate"
+              {{- end }}
               for t in events meter_usage; do
                 n=$(wget -qO- "${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}/?query=SELECT+count()+FROM+system.tables+WHERE+database='{{ .Values.clickhouse.database }}'+AND+name='${t}'" \
                     --header="X-ClickHouse-User: ${FLEXPRICE_CLICKHOUSE_USERNAME}" \
                     --header="X-ClickHouse-Key: ${FLEXPRICE_CLICKHOUSE_PASSWORD}" \
-                    {{- if $.Values.clickhouse.tlsSkipVerify }} --no-check-certificate{{- end }} 2>/dev/null || echo 0)
+                    ${CH_INSECURE} 2>/dev/null || echo 0)
                 [ "$n" = "1" ] || { echo "❌ MISSING ClickHouse table: ${t}"; exit 1; }
                 echo "  ✅ ${t}"
               done
@@ -645,10 +661,29 @@ spec:
               {{- if .Values.migration.steps.kafka }}
               echo "verify: Kafka topics"
               KAFKA_BROKER="{{ include "flexprice.kafkaBrokers" . }}"
-              KAFKA_TOPICS_CMD="kafka-topics"
-              if command -v kafka-topics.sh >/dev/null 2>&1; then
+              KAFKA_TOPICS_CMD=""
+              if command -v kafka-topics >/dev/null 2>&1; then
+                KAFKA_TOPICS_CMD="kafka-topics"
+              elif command -v kafka-topics.sh >/dev/null 2>&1; then
                 KAFKA_TOPICS_CMD="kafka-topics.sh"
               fi
+              # Unlike create-kafka-topics, which runs in the cp-kafka image, this
+              # step runs in the APPLICATION image -- which ships no Kafka CLI. The
+              # previous default assumed `kafka-topics` was present. When it is not,
+              # the --list below fails, its stderr is swallowed by 2>/dev/null,
+              # EXISTING comes back empty, and every topic is reported MISSING
+              # against a broker that holds all of them.
+              #
+              # A verification that cannot run is worse than one that is skipped: it
+              # fails the deploy and blames the infrastructure. Skip and say so.
+              if [ -z "${KAFKA_TOPICS_CMD}" ]; then
+                echo "  (kafka CLI not present in this image -- skipping topic verification)"
+                echo "  topics are created and listed by the create-kafka-topics step"
+              else
+              # NOTE: this branch is deliberately NOT indented. It contains a
+              # <<'PROPS' heredoc whose terminator must land at column 0 after YAML
+              # strips the block scalar's common indent; indenting the branch would
+              # leave "  PROPS", which never closes the heredoc.
               CMD_CONFIG=""
               {{- if or .Values.kafkaConfig.useSASL .Values.kafkaConfig.tls }}
               CMD_CONFIG=/tmp/kafka-admin.properties
@@ -680,6 +715,7 @@ spec:
               done
               [ "${MISSING}" -eq 0 ] || { echo "❌ ${MISSING} required Kafka topic(s) missing"; exit 1; }
               echo "  ✅ core topics present"
+              fi
               {{- end }}
               echo "✅ verify-migrations complete"
           env:
