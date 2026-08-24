@@ -8,13 +8,6 @@ import (
 	"strings"
 )
 
-// ZohoBooksInvoiceWebhookStatus* are Zoho Books invoice status strings we match on inbound webhooks.
-const (
-	ZohoBooksInvoiceWebhookStatusPaid   = "paid"
-	ZohoBooksInvoiceWebhookStatusVoid   = "void"
-	ZohoBooksInvoiceWebhookStatusVoided = "voided"
-)
-
 // zohoJSONScalarString unmarshals JSON string, number, or null (Zoho often sends amounts as numbers).
 type zohoJSONScalarString string
 

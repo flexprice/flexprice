@@ -141,3 +141,5 @@ shannon-setup/
 .worktrees/
 
 .context/
+
+*.code-workspace

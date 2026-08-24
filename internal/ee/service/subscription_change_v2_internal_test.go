@@ -53,7 +53,7 @@ func TestPlanChangeType_CountsQuantity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := planChangeType(&planChangeRequest{closing: tt.closing, opening: tt.opening})
+			got := planChangeType(&planChangeRequest{closingLineItems: tt.closing, openingLineItems: tt.opening})
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -61,7 +61,7 @@ func TestPlanChangeType_CountsQuantity(t *testing.T) {
 
 func planChangeKeyRequest(sub *subscription.Subscription, clientKey string) *planChangeRequest {
 	return &planChangeRequest{
-		sub:            sub,
+		currentSub:     sub,
 		toPlan:         &plan.Plan{ID: "plan_pro"},
 		effectiveAt:    time.Now().UTC(),
 		idempotencyKey: clientKey,
@@ -76,28 +76,33 @@ func TestPlanChangeIdempotencyKey(t *testing.T) {
 	sub := &subscription.Subscription{ID: "subs_1", Version: 3}
 	sub.UpdatedAt = readAt
 
-	first := planChangeIdempotencyKey(planChangeKeyRequest(sub, ""))
+	first := planChangeIdempotencyKey(planChangeKeyRequest(sub, ""), "")
 	require.NotEmpty(t, first)
 
 	t.Run("stable across retries of the same attempt", func(t *testing.T) {
 		retry := planChangeKeyRequest(sub, "")
 		retry.effectiveAt = retry.effectiveAt.Add(time.Minute) // a later wall clock
-		assert.Equal(t, first, planChangeIdempotencyKey(retry))
+		assert.Equal(t, first, planChangeIdempotencyKey(retry, ""))
 	})
 
 	t.Run("moves once the subscription has been written", func(t *testing.T) {
 		changed := *sub
 		changed.UpdatedAt = readAt.Add(time.Hour)
-		assert.NotEqual(t, first, planChangeIdempotencyKey(planChangeKeyRequest(&changed, "")))
+		assert.NotEqual(t, first, planChangeIdempotencyKey(planChangeKeyRequest(&changed, ""), ""))
+	})
+
+	t.Run("each document a change raises gets its own key", func(t *testing.T) {
+		// Two documents sharing a key would make the second fail as already-existing.
+		assert.NotEqual(t, first, planChangeIdempotencyKey(planChangeKeyRequest(sub, ""), "outgoing_usage"))
 	})
 
 	t.Run("a client key replaces the derived one", func(t *testing.T) {
-		withKey := planChangeIdempotencyKey(planChangeKeyRequest(sub, "caller-supplied"))
+		withKey := planChangeIdempotencyKey(planChangeKeyRequest(sub, "caller-supplied"), "")
 		assert.NotEqual(t, first, withKey)
 
 		later := *sub
 		later.UpdatedAt = readAt.Add(time.Hour)
-		assert.Equal(t, withKey, planChangeIdempotencyKey(planChangeKeyRequest(&later, "caller-supplied")),
+		assert.Equal(t, withKey, planChangeIdempotencyKey(planChangeKeyRequest(&later, "caller-supplied"), ""),
 			"the caller's key is the whole identity of the attempt")
 	})
 }

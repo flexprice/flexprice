@@ -1334,14 +1334,18 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 		return err
 	}
 
-	// Get credit grants for this subscription. When AddonID is set, scope the
-	// cancellation to grants materialized from that addon (addon_id provenance),
-	// leaving plan-sourced and other-addon grants untouched.
+	// Get credit grants for this subscription. AddonID and PlanID scope the
+	// cancellation by provenance: an addon detach must leave plan-sourced grants
+	// alone, and a plan swap must leave addon-sourced grants alone. With neither
+	// set, every grant on the subscription is cancelled.
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
 	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
 		filter.AddonIDs = []string{lo.FromPtr(req.AddonID)}
+	}
+	if req.PlanID != nil && lo.FromPtr(req.PlanID) != "" {
+		filter.PlanIDs = []string{lo.FromPtr(req.PlanID)}
 	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
@@ -1352,6 +1356,10 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		for _, grant := range creditGrants {
+			if req.EffectiveDate != nil && grant.EndDate != nil && !grant.EndDate.After(lo.FromPtr(req.EffectiveDate)) {
+				continue
+			}
+
 			if err := s.DeleteCreditGrant(ctx, dto.DeleteCreditGrantRequest{CreditGrantID: grant.ID, EffectiveDate: req.EffectiveDate}); err != nil {
 				return err
 			}

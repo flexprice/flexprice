@@ -232,6 +232,25 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 	}
 
+	// Fetch price sync status if requested. Not bulk-fetchable (each plan has
+	// its own current sequence and stale-subscription count), so this is one
+	// query pair per plan — fine for the opt-in, small-N callers (e.g. a
+	// single-plan lookup by ID) this expand is meant for.
+	// TODO(perf): serial per-plan fetch degrades on a large unfiltered
+	// listing (up to QueryFilter's 1000-row cap, i.e. up to 2000 sequential
+	// queries). Consider a bulk repository method or a bounded errgroup if
+	// this expand starts getting combined with wide plan listings.
+	syncStatusByPlanID := make(map[string]*dto.PlanPriceSyncStatusResponse)
+	if filter.GetExpand().Has(types.ExpandPriceSyncStatus) {
+		for _, planID := range planIDs {
+			status, err := s.planPriceSyncStatus(ctx, planID)
+			if err != nil {
+				return nil, err
+			}
+			syncStatusByPlanID[planID] = status
+		}
+	}
+
 	// Build response with expanded fields
 	for i, plan := range plans {
 
@@ -248,6 +267,11 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		// Add credit grants if available
 		if creditGrants, ok := creditGrantsByPlanID[plan.ID]; ok {
 			response.Items[i].CreditGrants = creditGrants
+		}
+
+		// Add price sync status if available
+		if syncStatus, ok := syncStatusByPlanID[plan.ID]; ok {
+			response.Items[i].PriceSyncStatus = syncStatus
 		}
 	}
 
@@ -770,6 +794,35 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 			LineItemsCreated:          lineItemsCreated,
 			LineItemsTerminated:       lineItemsTerminated,
 		},
+	}, nil
+}
+
+// planPriceSyncStatus reports how many of the plan's eligible subscriptions
+// are still behind the plan's current price sequence. Attached to
+// PlanResponse.PriceSyncStatus so the frontend can disable the sync trigger
+// once every subscription is caught up (count 0), instead of inferring
+// "nothing to do" from workflow run state alone.
+func (s *planService) planPriceSyncStatus(ctx context.Context, planID string) (*dto.PlanPriceSyncStatusResponse, error) {
+	targetSeq, err := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	if targetSeq == 0 {
+		return &dto.PlanPriceSyncStatusResponse{
+			Synced: true,
+		}, nil
+	}
+
+	unsyncedCount, err := s.PlanPriceSyncRepo.CountUnsyncedSubscriptions(ctx, planID, targetSeq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PlanPriceSyncStatusResponse{
+		CurrentSequence:           targetSeq,
+		UnsyncedSubscriptionCount: unsyncedCount,
+		Synced:                    unsyncedCount == 0,
 	}, nil
 }
 

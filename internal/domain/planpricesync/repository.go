@@ -118,6 +118,12 @@ type Repository interface {
 
 	// ReanchorSubSyncedSequence sets synced_price_sequence forward or backward.
 	ReanchorSubSyncedSequence(ctx context.Context, subscriptionID string, seq int64) error
+
+	// CountUnsyncedSubscriptions returns how many of the plan's subscriptions
+	// are stale relative to targetSeq (synced_price_sequence < targetSeq).
+	// Mirrors the `stale_subs` eligibility filter used by
+	// ListPlanLineItemsToCreateV2, without paging.
+	CountUnsyncedSubscriptions(ctx context.Context, planID string, targetSeq int64) (int64, error)
 }
 
 // ListPlanLineItemsToCreateV2Params drives the V2 discovery query.

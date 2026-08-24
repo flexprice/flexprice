@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"fmt"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -19,11 +20,65 @@ type SubscriptionChangeV2Request struct {
 	// it now; "end_of_period" schedules it at the subscription's current period end.
 	ChangeAt *types.ScheduleType `json:"change_at,omitempty"`
 
+	OnConflictPolicies *SubscriptionChangeConflictPolicies `json:"on_conflict_policies,omitempty"`
+
+	// BillingPeriodBehaviour controls the billing anchor. Omitted means "unchanged":
+	// the swap is priced as a prorated delta inside the running period.
+	BillingPeriodBehaviour types.BillingPeriodBehaviour `json:"billing_period_behaviour,omitempty"`
+	BillingPeriodConfig    *BillingPeriodConfig         `json:"billing_period_config,omitempty"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 func (r *SubscriptionChangeV2Request) IsDeferred() bool {
 	return r != nil && r.ChangeAt != nil && *r.ChangeAt == types.ScheduleTypePeriodEnd
+}
+
+// BillingPeriodConfig defines the billing period for any recurring entity.
+type BillingPeriodConfig struct {
+	BillingCycle       *types.BillingCycle  `json:"billing_cycle,omitempty"`
+	BillingPeriodUnit  *types.BillingPeriod `json:"billing_period_unit,omitempty"`
+	BillingPeriodCount *int                 `json:"billing_period_count,omitempty"`
+	BillingAnchor      *time.Time           `json:"billing_anchor,omitempty"`
+}
+
+// EffectiveBillingPeriodBehaviour resolves the omitted case, so the response never echoes
+// an empty behaviour back at the caller.
+func (r *SubscriptionChangeV2Request) EffectiveBillingPeriodBehaviour() types.BillingPeriodBehaviour {
+	if r == nil || r.BillingPeriodBehaviour == "" {
+		return types.BillingPeriodBehaviourUnchanged
+	}
+
+	return r.BillingPeriodBehaviour
+}
+
+// AnchorAtEffect reports whether the change restarts the term at the instant it
+// takes effect.
+func (r *SubscriptionChangeV2Request) AnchorAtEffect() bool {
+	return r != nil && r.BillingPeriodBehaviour == types.BillingPeriodBehaviourAnchorAtEffect
+}
+
+// SubscriptionChangeConflictPolicies decides how the change reacts to state that
+// would otherwise block it.
+type SubscriptionChangeConflictPolicies struct {
+	// OnPendingSchedule applies to a queued plan change only. A pending cancellation
+	// or pause is still rejected outright: clearing those would mean un-cancelling or
+	// auto-resuming the subscription.
+	OnPendingSchedule types.OnPendingSchedulePolicy `json:"on_pending_schedule,omitempty"`
+}
+
+func (p *SubscriptionChangeConflictPolicies) Validate() error {
+	if p == nil {
+		return nil
+	}
+	return p.OnPendingSchedule.Validate()
+}
+
+// SupersedesPendingSchedule reports whether a queued plan change should be cancelled
+// in favour of this request.
+func (r *SubscriptionChangeV2Request) SupersedesPendingSchedule() bool {
+	return r != nil && r.OnConflictPolicies != nil &&
+		r.OnConflictPolicies.OnPendingSchedule == types.OnPendingSchedulePolicySupersede
 }
 
 type SubscriptionChangeEntityPolicies struct {
@@ -34,6 +89,7 @@ type EntityChangePolicy struct {
 	DefaultBehaviour types.EntityChangeBehaviour `json:"default_behaviour,omitempty"`
 
 	// Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.
+	// That is the id an EntityChangeResult reports as EntityID.
 	Overrides map[string]types.EntityChangeBehaviour `json:"overrides,omitempty"`
 }
 
@@ -54,11 +110,11 @@ func (p *EntityChangePolicy) Validate() error {
 	return nil
 }
 
-func (p *EntityChangePolicy) BehaviourFor(referenceID string) types.EntityChangeBehaviour {
+func (p *EntityChangePolicy) BehaviourFor(entityID string) types.EntityChangeBehaviour {
 	if p == nil {
 		return types.EntityChangeBehaviourCarry
 	}
-	if d, ok := p.Overrides[referenceID]; ok && d != "" {
+	if d, ok := p.Overrides[entityID]; ok && d != "" {
 		return d
 	}
 	if p.DefaultBehaviour != "" {
@@ -67,11 +123,15 @@ func (p *EntityChangePolicy) BehaviourFor(referenceID string) types.EntityChange
 	return types.EntityChangeBehaviourCarry
 }
 
+// EntityChangeResult is one entity the change touched. EntityID identifies the entity
+// itself and is the id an addon override is keyed by; ReferenceID is what that entity
+// refers to — the catalogue addon, the plan a credit grant belongs to, the feature an
+// entitlement covers.
 type EntityChangeResult struct {
-	EntityType  types.SubscriptionLineItemEntityType `json:"entity_type"`
-	ReferenceID string                               `json:"reference_id"`
-	EntityID    string                               `json:"entity_id"`
-	Behaviour   types.EntityChangeBehaviour          `json:"behaviour"`
+	EntityType  types.SubscriptionChangeEntityType `json:"entity_type"`
+	ReferenceID string                             `json:"reference_id"`
+	EntityID    string                             `json:"entity_id"`
+	Behaviour   types.EntityChangeBehaviour        `json:"behaviour"`
 }
 
 func (r *SubscriptionChangeV2Request) Validate() error {
@@ -95,9 +155,64 @@ func (r *SubscriptionChangeV2Request) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := r.OnConflictPolicies.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.validateBillingPeriodBehaviour(); err != nil {
+		return err
+	}
+
 	if r.EntityPolicies != nil {
 		return r.EntityPolicies.Addons.Validate()
 	}
+	return nil
+}
+
+// SubscriptionChangeBillingPeriodResult is the anchor state after the change. For a
+// deferred change it is the state at request time: the boundary has not arrived yet.
+type SubscriptionChangeBillingPeriodResult struct {
+	Behaviour          types.BillingPeriodBehaviour `json:"behaviour"`
+	BillingAnchor      time.Time                    `json:"billing_anchor"`
+	CurrentPeriodStart time.Time                    `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time                    `json:"current_period_end"`
+}
+
+// validateBillingPeriodBehaviour enforces the behaviour matrix. reset_at is rejected
+// outright rather than inferred as reset_at_effect: the enum already has a value that
+// says "reset at effective", so inferring one from the other would only hide a mistake.
+func (r *SubscriptionChangeV2Request) validateBillingPeriodBehaviour() error {
+	if err := r.BillingPeriodBehaviour.Validate(); err != nil {
+		return err
+	}
+
+	if r.BillingPeriodConfig != nil {
+		return ierr.NewError("billing_period_config is not supported yet").
+			WithHint(fmt.Sprintf(
+				"Remove billing_period_config. Use billing_period_behaviour='%s' to restart the term at the change instant.",
+				types.BillingPeriodBehaviourAnchorAtEffect,
+			)).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.BillingPeriodBehaviour == types.BillingPeriodBehaviourAnchorAtConfig {
+		return ierr.NewError(fmt.Sprintf(
+			"billing_period_behaviour '%s' is not supported yet",
+			types.BillingPeriodBehaviourAnchorAtConfig,
+		)).
+			WithHint(fmt.Sprintf(
+				"Use '%s' to restart the term at the change instant.",
+				types.BillingPeriodBehaviourAnchorAtEffect,
+			)).
+			WithReportableDetails(map[string]any{
+				"supported": []types.BillingPeriodBehaviour{
+					types.BillingPeriodBehaviourUnchanged,
+					types.BillingPeriodBehaviourAnchorAtEffect,
+				},
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
@@ -117,6 +232,11 @@ type SubscriptionChangeV2Response struct {
 	IsScheduled bool       `json:"is_scheduled"`
 	ScheduleID  *string    `json:"schedule_id,omitempty"`
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+
+	// SupersededSchedules lists the plan-change schedules this request cancelled under
+	// on_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.
+	SupersededSchedules []string                              `json:"superseded_schedules,omitempty"`
+	BillingPeriod       SubscriptionChangeBillingPeriodResult `json:"billing_period"`
 
 	Warnings []string          `json:"warnings,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`

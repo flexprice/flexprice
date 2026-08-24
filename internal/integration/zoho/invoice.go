@@ -264,6 +264,20 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		return nil
 	}
 
+	zohoInv, err = s.ensureApprovedForPayment(ctx, flexpriceInvoiceID, zohoInv)
+	if err != nil {
+		return err
+	}
+	if zohoInv == nil {
+		return nil
+	}
+	if !zohoInv.Balance.IsPositive() {
+		s.logger.Info(ctx, "Zoho invoice balance settled while awaiting approval, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID,
+			"zoho_invoice_id", zohoInvoiceID)
+		return nil
+	}
+
 	// Zoho's total is tax-inclusive while Flexprice's is tax-exclusive, so log both sides of the
 	// amount being settled to explain any mismatch between the two systems' figures.
 	s.logger.Info(ctx, "recording Zoho customer payment for synced invoice",

@@ -72,6 +72,18 @@ type InvoiceSyncSettings struct {
 	// MetadataCustomFields copies metadata values onto Zoho invoice custom fields
 	// verbatim.
 	MetadataCustomFields []MetadataCustomField `json:"metadata_custom_fields,omitempty"`
+
+	// SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval
+	// flow before recording payment. Zoho rejects payments on draft invoices, and merchants
+	// configure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for
+	// that rule to fire, then pay.
+	SubmitForApproval bool `json:"submit_for_approval,omitempty"`
+}
+
+// IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the
+// merchant's Zoho Books approval flow before payment is recorded against them.
+func (s *InvoiceSyncSettings) IsSubmitForApprovalEnabled() bool {
+	return s != nil && s.SubmitForApproval
 }
 
 type MetadataCustomFieldSource string

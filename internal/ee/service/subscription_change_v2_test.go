@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -66,10 +67,12 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 		PriceUnitRepo:              st.PriceUnitRepo,
 		EventRepo:                  st.EventRepo,
 		MeterRepo:                  st.MeterRepo,
+		MeterUsageRepo:             st.MeterUsageRepo,
 		CustomerRepo:               st.CustomerRepo,
 		InvoiceRepo:                st.InvoiceRepo,
 		InvoiceLineItemRepo:        st.InvoiceLineItemRepo,
 		EntitlementRepo:            st.EntitlementRepo,
+		EntitlementGrantRepo:       st.EntitlementGrantRepo,
 		EnvironmentRepo:            st.EnvironmentRepo,
 		FeatureRepo:                st.FeatureRepo,
 		TenantRepo:                 st.TenantRepo,
@@ -391,6 +394,59 @@ func (s *SubscriptionChangeV2Suite) TestPreviewMatchesExecute() {
 	s.Len(preview.ChangedResources.LineItems, len(executed.ChangedResources.LineItems))
 }
 
+// The swap re-anchors the subscription to the target plan's price sequence, so a preview
+// that still reports the outgoing plan's is describing a subscription execute never leaves.
+func (s *SubscriptionChangeV2Suite) TestPreviewMatchesExecute_OnTheTargetPriceSequence() {
+	ctx := s.GetContext()
+
+	s.createUsagePriceWithSequence(s.td.pro.ID, 7)
+	s.Require().EqualValues(0, s.currentSub().SyncedPriceSequence)
+
+	req := s.changeRequest(s.td.pro.ID, types.ProrationBehaviorNone)
+
+	preview, err := s.svc.PreviewPlanChange(ctx, s.td.sub.ID, req)
+	s.Require().NoError(err)
+	s.EqualValues(7, preview.Subscription.SyncedPriceSequence)
+
+	executed, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID, req, time.Now().UTC())
+	s.Require().NoError(err)
+	s.Equal(preview.Subscription.SyncedPriceSequence, executed.Subscription.SyncedPriceSequence)
+	s.EqualValues(7, s.currentSub().SyncedPriceSequence, "and the stored row agrees")
+}
+
+func (s *SubscriptionChangeV2Suite) createUsagePriceWithSequence(planID string, sequence int64) *price.Price {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:        "seq_meter",
+		EventName:   "seq_event",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "units"},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	p := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(1),
+		Currency:           "usd",
+		Type:               types.PRICE_TYPE_USAGE,
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planID,
+		MeterID:            m.ID,
+		LookupKey:          "seq_calls",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		Sequence:           sequence,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	return p
+}
+
 // A net credit is paid to the wallet, never invoiced, so the quote has to say so:
 // an invoice in the preview that execute does not raise is a lie to the caller,
 // and its totals would have to be negative to boot.
@@ -656,7 +712,7 @@ func (s *SubscriptionChangeV2Suite) TestExecute_AddonCarriesByDefault() {
 
 	s.Require().Len(resp.EntityChanges, 1)
 	s.Equal(types.EntityChangeBehaviourCarry, resp.EntityChanges[0].Behaviour)
-	s.Equal(assoc.ID, resp.EntityChanges[0].ReferenceID)
+	s.Equal(assoc.ID, resp.EntityChanges[0].EntityID)
 }
 
 func (s *SubscriptionChangeV2Suite) TestExecute_AddonDropClosesAttachment() {

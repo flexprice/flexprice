@@ -148,8 +148,15 @@ func (s *SubscriptionChangeV2Suite) TestPreview_DeferredPricesAtTheBoundary() {
 	s.True(resp.EffectiveAt.Equal(s.td.periodEnd),
 		"preview must report the instant it actually priced, not now")
 	s.Empty(resp.ChangedResources.Invoices, "proration none quotes no money")
-	s.False(resp.IsScheduled, "preview writes nothing")
-	s.Nil(s.pendingPlanChange())
+
+	// Mirrors what execute would return, without the write: the schedule id is the one
+	// thing preview cannot know, because the row does not exist yet.
+	s.True(resp.IsScheduled, "a deferred request is reported as scheduled")
+	s.Require().NotNil(resp.ScheduledAt)
+	s.True(resp.ScheduledAt.Equal(s.td.periodEnd))
+	s.Nil(resp.ScheduleID)
+	s.Equal(s.td.starter.ID, resp.Subscription.PlanID, "nothing has moved off the current plan yet")
+	s.Nil(s.pendingPlanChange(), "preview writes nothing")
 
 	for _, item := range resp.ChangedResources.LineItems {
 		switch item.ChangeAction {

@@ -8154,7 +8154,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Change a subscription's plan in place. Subscription id, billing anchor and period bounds are preserved; line items are sliced and settled in one transaction.\n\nchange_at controls timing. Omitted or 'immediate' applies the change now. 'end_of_period' records a pending schedule that executes at the subscription's current period end: the response returns is_scheduled, schedule_id and scheduled_at instead of a completed change, and nothing is swapped or billed until the boundary.\n\nscheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away — inspect scheduled_at to see this.\n\nOnly one plan change may be pending per subscription; request a second one and this returns 400. Cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.",
+                "description": "Change a subscription's plan in place. Subscription id, billing anchor and period bounds are preserved; line items are sliced and settled in one transaction.\n\nchange_at controls timing. Omitted or 'immediate' applies the change now. 'end_of_period' records a pending schedule that executes at the subscription's current period end: the response returns is_scheduled, schedule_id and scheduled_at instead of a completed change, and nothing is swapped or billed until the boundary.\n\nscheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away — inspect scheduled_at to see this.\n\nOnly one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.\n\nSet on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14099,6 +14099,23 @@ const docTemplate = `{
                 }
             }
         },
+        "BillingPeriodConfig": {
+            "type": "object",
+            "properties": {
+                "billing_anchor": {
+                    "type": "string"
+                },
+                "billing_cycle": {
+                    "$ref": "#/definitions/types.BillingCycle"
+                },
+                "billing_period_count": {
+                    "type": "integer"
+                },
+                "billing_period_unit": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                }
+            }
+        },
         "BillingPeriodInfo": {
             "type": "object",
             "properties": {
@@ -17761,7 +17778,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.EntityChangeBehaviour"
                 },
                 "overrides": {
-                    "description": "Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.",
+                    "description": "Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.\nThat is the id an EntityChangeResult reports as EntityID.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/types.EntityChangeBehaviour"
@@ -17779,7 +17796,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "entity_type": {
-                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
+                    "$ref": "#/definitions/types.SubscriptionChangeEntityType"
                 },
                 "reference_id": {
                     "type": "string"
@@ -19948,6 +19965,20 @@ const docTemplate = `{
                 }
             }
         },
+        "PlanPriceSyncStatusResponse": {
+            "type": "object",
+            "properties": {
+                "current_sequence": {
+                    "type": "integer"
+                },
+                "synced": {
+                    "type": "boolean"
+                },
+                "unsynced_subscription_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "PlanResponse": {
             "type": "object",
             "properties": {
@@ -19989,6 +20020,14 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "price_sync_status": {
+                    "description": "PriceSyncStatus reports how many subscriptions are still behind this\nplan's current price sequence. Only populated on the list/search\nendpoint (GetPlans) when ` + "`" + `expand=price_sync_status` + "`" + ` is requested,\nsince computing it is extra per-plan work most callers don't need.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/PlanPriceSyncStatusResponse"
+                        }
+                    ]
                 },
                 "prices": {
                     "description": "TODO: Add inline addons",
@@ -20040,6 +20079,14 @@ const docTemplate = `{
                 },
                 "price_id": {
                     "type": "string"
+                }
+            }
+        },
+        "PriceFeatureResponse": {
+            "type": "object",
+            "properties": {
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 }
             }
         },
@@ -20133,6 +20180,9 @@ const docTemplate = `{
                 "environment_id": {
                     "description": "EnvironmentID is the environment identifier for the price",
                     "type": "string"
+                },
+                "feature": {
+                    "$ref": "#/definitions/PriceFeatureResponse"
                 },
                 "group": {
                     "$ref": "#/definitions/GroupResponse"
@@ -20814,6 +20864,36 @@ const docTemplate = `{
                 }
             }
         },
+        "SubscriptionChangeBillingPeriodResult": {
+            "type": "object",
+            "properties": {
+                "behaviour": {
+                    "$ref": "#/definitions/types.BillingPeriodBehaviour"
+                },
+                "billing_anchor": {
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "type": "string"
+                }
+            }
+        },
+        "SubscriptionChangeConflictPolicies": {
+            "type": "object",
+            "properties": {
+                "on_pending_schedule": {
+                    "description": "OnPendingSchedule applies to a queued plan change only. A pending cancellation\nor pause is still rejected outright: clearing those would mean un-cancelling or\nauto-resuming the subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.OnPendingSchedulePolicy"
+                        }
+                    ]
+                }
+            }
+        },
         "SubscriptionChangeEntityPolicies": {
             "type": "object",
             "properties": {
@@ -21050,6 +21130,17 @@ const docTemplate = `{
                 "target_plan_id"
             ],
             "properties": {
+                "billing_period_behaviour": {
+                    "description": "BillingPeriodBehaviour controls the billing anchor. Omitted means \"unchanged\":\nthe swap is priced as a prorated delta inside the running period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriodBehaviour"
+                        }
+                    ]
+                },
+                "billing_period_config": {
+                    "$ref": "#/definitions/BillingPeriodConfig"
+                },
                 "change_at": {
                     "description": "ChangeAt controls when the change takes effect. nil or \"immediate\" applies\nit now; \"end_of_period\" schedules it at the subscription's current period end.",
                     "allOf": [
@@ -21070,6 +21161,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "on_conflict_policies": {
+                    "$ref": "#/definitions/SubscriptionChangeConflictPolicies"
+                },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
@@ -21081,6 +21175,9 @@ const docTemplate = `{
         "SubscriptionChangeV2Response": {
             "type": "object",
             "properties": {
+                "billing_period": {
+                    "$ref": "#/definitions/SubscriptionChangeBillingPeriodResult"
+                },
                 "change_type": {
                     "$ref": "#/definitions/types.SubscriptionChangeType"
                 },
@@ -21117,6 +21214,13 @@ const docTemplate = `{
                 },
                 "subscription": {
                     "$ref": "#/definitions/SubscriptionResponse"
+                },
+                "superseded_schedules": {
+                    "description": "SupersededSchedules lists the plan-change schedules this request cancelled under\non_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "to_plan": {
                     "$ref": "#/definitions/PlanSummary"
@@ -25916,6 +26020,19 @@ const docTemplate = `{
                 "BILLING_PERIOD_ONETIME"
             ]
         },
+        "types.BillingPeriodBehaviour": {
+            "type": "string",
+            "enum": [
+                "unchanged",
+                "anchor_at_effect",
+                "anchor_at_config"
+            ],
+            "x-enum-varnames": [
+                "BillingPeriodBehaviourUnchanged",
+                "BillingPeriodBehaviourAnchorAtEffect",
+                "BillingPeriodBehaviourAnchorAtConfig"
+            ]
+        },
         "types.BillingTier": {
             "type": "string",
             "enum": [
@@ -26624,11 +26741,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "carry",
-                "drop"
+                "drop",
+                "add"
             ],
             "x-enum-varnames": [
                 "EntityChangeBehaviourCarry",
-                "EntityChangeBehaviourDrop"
+                "EntityChangeBehaviourDrop",
+                "EntityChangeBehaviourAdd"
             ]
         },
         "types.EntitySyncConfig": {
@@ -27289,6 +27408,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.OnPendingSchedulePolicy": {
+            "type": "string",
+            "enum": [
+                "reject",
+                "supersede"
+            ],
+            "x-enum-varnames": [
+                "OnPendingSchedulePolicyReject",
+                "OnPendingSchedulePolicySupersede"
+            ]
         },
         "types.PaginationResponse": {
             "type": "object",
@@ -28087,6 +28217,23 @@ const docTemplate = `{
                 "StatusPublished",
                 "StatusDeleted",
                 "StatusArchived"
+            ]
+        },
+        "types.SubscriptionChangeEntityType": {
+            "type": "string",
+            "enum": [
+                "plan",
+                "addon",
+                "credit_grant",
+                "entitlement",
+                "entitlement_grant"
+            ],
+            "x-enum-varnames": [
+                "SubscriptionChangeEntityTypePlan",
+                "SubscriptionChangeEntityTypeAddon",
+                "SubscriptionChangeEntityTypeCreditGrant",
+                "SubscriptionChangeEntityTypeEntitlement",
+                "SubscriptionChangeEntityTypeEntitlementGrant"
             ]
         },
         "types.SubscriptionChangeType": {

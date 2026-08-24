@@ -187,6 +187,19 @@ func (r *InMemoryPlanPriceSyncStore) StampSubsAsSynced(
 	return updated, nil
 }
 
+// CountUnsyncedSubscriptions returns how many of the plan's candidate subs are
+// stale relative to targetSeq. Mirrors staleSubsForPlan with no limit.
+func (r *InMemoryPlanPriceSyncStore) CountUnsyncedSubscriptions(
+	ctx context.Context,
+	planID string,
+	targetSeq int64,
+) (int64, error) {
+	if planID == "" {
+		return 0, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
+	}
+	return int64(len(r.staleSubsForPlan(ctx, planID, targetSeq, 0))), nil
+}
+
 // ListPlanLineItemsToCreateV2 returns missing (sub, price) pairs and the full
 // set of stale sub IDs for a plan. A sub is stale when
 // synced_price_sequence < TargetSeq. A pair is missing when a candidate plan

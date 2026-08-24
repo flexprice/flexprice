@@ -1734,9 +1734,10 @@ func (s *billingService) ClassifyLineItems(
 		// Fixed, equal billing period: existing behavior (advance → both slices; arrear → CurrentPeriodArrear).
 		if item.InvoiceCadence == types.InvoiceCadenceAdvance {
 			result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
-			// Only include in next period if still active when that period starts.
-			// Ended items were already handled via proration invoices and must not be re-billed.
-			if item.EndDate.IsZero() || !item.EndDate.Before(nextPeriodStart) {
+			// Only include in next period if still active after that period starts.
+			// Ended items were already handled via proration invoices and must not be
+			// re-billed; an item ending exactly at nextPeriodStart covers nothing of it.
+			if item.EndDate.IsZero() || item.EndDate.After(nextPeriodStart) {
 				result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
 			}
 		}
@@ -2042,6 +2043,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		InvoiceCoupons:   validCoupons,
 		LineItemCoupons:  validLineItemCoupons,
 		PreparedTaxRates: preparedTaxRates,
+	}
+
+	if params.InvoiceType != "" {
+		req.InvoiceType = params.InvoiceType
+	}
+	if params.BillingReason != "" {
+		req.BillingReason = params.BillingReason
 	}
 
 	return req, nil

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/url"
 	"testing"
+
+	"github.com/flexprice/flexprice/internal/integration/zoho"
 )
 
 func TestZohoWebhookInvoiceStatusVoid(t *testing.T) {
@@ -14,10 +16,10 @@ func TestZohoWebhookInvoiceStatusVoid(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{ZohoBooksInvoiceWebhookStatusVoid, true},
+		{zoho.InvoiceStatusVoid, true},
 		{"VOID", true},
 		{" voided ", true},
-		{ZohoBooksInvoiceWebhookStatusPaid, false},
+		{zoho.InvoiceStatusPaid, false},
 		{"", false},
 	} {
 		if got := zohoWebhookInvoiceStatusVoid(tc.in); got != tc.want {

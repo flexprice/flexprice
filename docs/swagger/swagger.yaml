@@ -830,6 +830,17 @@ definitions:
         description: period_start is the start of the new billing period
         type: string
     type: object
+  BillingPeriodConfig:
+    properties:
+      billing_anchor:
+        type: string
+      billing_cycle:
+        $ref: '#/definitions/types.BillingCycle'
+      billing_period_count:
+        type: integer
+      billing_period_unit:
+        $ref: '#/definitions/types.BillingPeriod'
+    type: object
   BillingPeriodInfo:
     properties:
       end_time:
@@ -3510,8 +3521,9 @@ definitions:
       overrides:
         additionalProperties:
           $ref: '#/definitions/types.EntityChangeBehaviour'
-        description: Overrides is keyed by addon_associations.id (instance), not catalogue
-          addon_id.
+        description: |-
+          Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.
+          That is the id an EntityChangeResult reports as EntityID.
         type: object
     type: object
   EntityChangeResult:
@@ -3521,7 +3533,7 @@ definitions:
       entity_id:
         type: string
       entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
+        $ref: '#/definitions/types.SubscriptionChangeEntityType'
       reference_id:
         type: string
     type: object
@@ -5128,6 +5140,15 @@ definitions:
       voided_at:
         type: string
     type: object
+  PlanPriceSyncStatusResponse:
+    properties:
+      current_sequence:
+        type: integer
+      synced:
+        type: boolean
+      unsynced_subscription_count:
+        type: integer
+    type: object
   PlanResponse:
     properties:
       created_at:
@@ -5156,6 +5177,14 @@ definitions:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
+      price_sync_status:
+        allOf:
+        - $ref: '#/definitions/PlanPriceSyncStatusResponse'
+        description: |-
+          PriceSyncStatus reports how many subscriptions are still behind this
+          plan's current price sequence. Only populated on the list/search
+          endpoint (GetPlans) when `expand=price_sync_status` is requested,
+          since computing it is extra per-plan work most callers don't need.
       prices:
         description: 'TODO: Add inline addons'
         items:
@@ -5191,6 +5220,11 @@ definitions:
         type: string
       price_id:
         type: string
+    type: object
+  PriceFeatureResponse:
+    properties:
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
     type: object
   PriceLookupResult:
     properties:
@@ -5262,6 +5296,8 @@ definitions:
       environment_id:
         description: EnvironmentID is the environment identifier for the price
         type: string
+      feature:
+        $ref: '#/definitions/PriceFeatureResponse'
       group:
         $ref: '#/definitions/GroupResponse'
       group_id:
@@ -5733,6 +5769,27 @@ definitions:
     required:
     - action
     type: object
+  SubscriptionChangeBillingPeriodResult:
+    properties:
+      behaviour:
+        $ref: '#/definitions/types.BillingPeriodBehaviour'
+      billing_anchor:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+    type: object
+  SubscriptionChangeConflictPolicies:
+    properties:
+      on_pending_schedule:
+        allOf:
+        - $ref: '#/definitions/types.OnPendingSchedulePolicy'
+        description: |-
+          OnPendingSchedule applies to a queued plan change only. A pending cancellation
+          or pause is still rejected outright: clearing those would mean un-cancelling or
+          auto-resuming the subscription.
+    type: object
   SubscriptionChangeEntityPolicies:
     properties:
       addons:
@@ -5889,6 +5946,14 @@ definitions:
     type: object
   SubscriptionChangeV2Request:
     properties:
+      billing_period_behaviour:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriodBehaviour'
+        description: |-
+          BillingPeriodBehaviour controls the billing anchor. Omitted means "unchanged":
+          the swap is priced as a prorated delta inside the running period.
+      billing_period_config:
+        $ref: '#/definitions/BillingPeriodConfig'
       change_at:
         allOf:
         - $ref: '#/definitions/types.ScheduleType'
@@ -5903,6 +5968,8 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      on_conflict_policies:
+        $ref: '#/definitions/SubscriptionChangeConflictPolicies'
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
       target_plan_id:
@@ -5913,6 +5980,8 @@ definitions:
     type: object
   SubscriptionChangeV2Response:
     properties:
+      billing_period:
+        $ref: '#/definitions/SubscriptionChangeBillingPeriodResult'
       change_type:
         $ref: '#/definitions/types.SubscriptionChangeType'
       changed_resources:
@@ -5940,6 +6009,13 @@ definitions:
         type: string
       subscription:
         $ref: '#/definitions/SubscriptionResponse'
+      superseded_schedules:
+        description: |-
+          SupersededSchedules lists the plan-change schedules this request cancelled under
+          on_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.
+        items:
+          type: string
+        type: array
       to_plan:
         $ref: '#/definitions/PlanSummary'
       warnings:
@@ -9438,6 +9514,16 @@ definitions:
     - BILLING_PERIOD_QUARTER
     - BILLING_PERIOD_HALF_YEAR
     - BILLING_PERIOD_ONETIME
+  types.BillingPeriodBehaviour:
+    enum:
+    - unchanged
+    - anchor_at_effect
+    - anchor_at_config
+    type: string
+    x-enum-varnames:
+    - BillingPeriodBehaviourUnchanged
+    - BillingPeriodBehaviourAnchorAtEffect
+    - BillingPeriodBehaviourAnchorAtConfig
   types.BillingTier:
     enum:
     - VOLUME
@@ -9959,10 +10045,12 @@ definitions:
     enum:
     - carry
     - drop
+    - add
     type: string
     x-enum-varnames:
     - EntityChangeBehaviourCarry
     - EntityChangeBehaviourDrop
+    - EntityChangeBehaviourAdd
   types.EntitySyncConfig:
     properties:
       inbound:
@@ -10466,6 +10554,14 @@ definitions:
       subscription_id:
         type: string
     type: object
+  types.OnPendingSchedulePolicy:
+    enum:
+    - reject
+    - supersede
+    type: string
+    x-enum-varnames:
+    - OnPendingSchedulePolicyReject
+    - OnPendingSchedulePolicySupersede
   types.PaginationResponse:
     properties:
       limit:
@@ -11060,6 +11156,20 @@ definitions:
     - StatusPublished
     - StatusDeleted
     - StatusArchived
+  types.SubscriptionChangeEntityType:
+    enum:
+    - plan
+    - addon
+    - credit_grant
+    - entitlement
+    - entitlement_grant
+    type: string
+    x-enum-varnames:
+    - SubscriptionChangeEntityTypePlan
+    - SubscriptionChangeEntityTypeAddon
+    - SubscriptionChangeEntityTypeCreditGrant
+    - SubscriptionChangeEntityTypeEntitlement
+    - SubscriptionChangeEntityTypeEntitlementGrant
   types.SubscriptionChangeType:
     enum:
     - upgrade
@@ -17622,7 +17732,9 @@ paths:
 
         scheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away — inspect scheduled_at to see this.
 
-        Only one plan change may be pending per subscription; request a second one and this returns 400. Cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
+        Only one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
+
+        Set on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.
       operationId: executeSubscriptionPlanChangeV2
       parameters:
       - description: Subscription ID

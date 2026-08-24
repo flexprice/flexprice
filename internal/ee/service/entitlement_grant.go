@@ -464,7 +464,7 @@ func (s *entitlementGrantService) computeGrantWindow(
 	// terminates after one grant per cycle (lastEnd == cycleEnd on the next pass).
 	if ec.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
 		s.Logger.Debug(ctx, "computed grant window (subscription_period)",
-			"validFrom", cycleStart, "validTo", cycleEnd)
+			"validFrom", coveredUntil, "validTo", cycleEnd)
 		return coveredUntil, cycleEnd, true, nil
 	}
 

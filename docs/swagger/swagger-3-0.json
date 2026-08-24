@@ -9788,7 +9788,7 @@
           "Subscriptions"
         ],
         "summary": "Execute a plan change (v2, swap in place)",
-        "description": "Change a subscription's plan in place. Subscription id, billing anchor and period bounds are preserved; line items are sliced and settled in one transaction.\n\nchange_at controls timing. Omitted or 'immediate' applies the change now. 'end_of_period' records a pending schedule that executes at the subscription's current period end: the response returns is_scheduled, schedule_id and scheduled_at instead of a completed change, and nothing is swapped or billed until the boundary.\n\nscheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away \u2014 inspect scheduled_at to see this.\n\nOnly one plan change may be pending per subscription; request a second one and this returns 400. Cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.",
+        "description": "Change a subscription's plan in place. Subscription id, billing anchor and period bounds are preserved; line items are sliced and settled in one transaction.\n\nchange_at controls timing. Omitted or 'immediate' applies the change now. 'end_of_period' records a pending schedule that executes at the subscription's current period end: the response returns is_scheduled, schedule_id and scheduled_at instead of a completed change, and nothing is swapped or billed until the boundary.\n\nscheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away \u2014 inspect scheduled_at to see this.\n\nOnly one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.\n\nSet on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.",
         "operationId": "executeSubscriptionPlanChangeV2",
         "parameters": [
           {
@@ -16343,6 +16343,24 @@
           }
         }
       },
+      "BillingPeriodConfig": {
+        "type": "object",
+        "properties": {
+          "billing_anchor": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "billing_cycle": {
+            "$ref": "#/components/schemas/types.BillingCycle"
+          },
+          "billing_period_count": {
+            "type": "integer"
+          },
+          "billing_period_unit": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          }
+        }
+      },
       "BillingPeriodInfo": {
         "type": "object",
         "properties": {
@@ -19758,7 +19776,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/types.EntityChangeBehaviour"
             },
-            "description": "Overrides is keyed by addon_associations.id (instance), not catalogue addon_id."
+            "description": "Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.\nThat is the id an EntityChangeResult reports as EntityID."
           }
         }
       },
@@ -19772,7 +19790,7 @@
             "type": "string"
           },
           "entity_type": {
-            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
+            "$ref": "#/components/schemas/types.SubscriptionChangeEntityType"
           },
           "reference_id": {
             "type": "string"
@@ -21932,6 +21950,20 @@
           }
         }
       },
+      "PlanPriceSyncStatusResponse": {
+        "type": "object",
+        "properties": {
+          "current_sequence": {
+            "type": "integer"
+          },
+          "synced": {
+            "type": "boolean"
+          },
+          "unsynced_subscription_count": {
+            "type": "integer"
+          }
+        }
+      },
       "PlanResponse": {
         "type": "object",
         "properties": {
@@ -21974,6 +22006,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "price_sync_status": {
+            "$ref": "#/components/schemas/PlanPriceSyncStatusResponse"
           },
           "prices": {
             "type": "array",
@@ -22026,6 +22061,14 @@
           },
           "price_id": {
             "type": "string"
+          }
+        }
+      },
+      "PriceFeatureResponse": {
+        "type": "object",
+        "properties": {
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
           }
         }
       },
@@ -22115,6 +22158,9 @@
           "environment_id": {
             "type": "string",
             "description": "EnvironmentID is the environment identifier for the price"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/PriceFeatureResponse"
           },
           "group": {
             "$ref": "#/components/schemas/GroupResponse"
@@ -22750,6 +22796,34 @@
           }
         }
       },
+      "SubscriptionChangeBillingPeriodResult": {
+        "type": "object",
+        "properties": {
+          "behaviour": {
+            "$ref": "#/components/schemas/types.BillingPeriodBehaviour"
+          },
+          "billing_anchor": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current_period_start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SubscriptionChangeConflictPolicies": {
+        "type": "object",
+        "properties": {
+          "on_pending_schedule": {
+            "$ref": "#/components/schemas/types.OnPendingSchedulePolicy"
+          }
+        }
+      },
       "SubscriptionChangeEntityPolicies": {
         "type": "object",
         "properties": {
@@ -22908,6 +22982,12 @@
         ],
         "type": "object",
         "properties": {
+          "billing_period_behaviour": {
+            "$ref": "#/components/schemas/types.BillingPeriodBehaviour"
+          },
+          "billing_period_config": {
+            "$ref": "#/components/schemas/BillingPeriodConfig"
+          },
           "change_at": {
             "$ref": "#/components/schemas/types.ScheduleType"
           },
@@ -22923,6 +23003,9 @@
               "type": "string"
             }
           },
+          "on_conflict_policies": {
+            "$ref": "#/components/schemas/SubscriptionChangeConflictPolicies"
+          },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
@@ -22934,6 +23017,9 @@
       "SubscriptionChangeV2Response": {
         "type": "object",
         "properties": {
+          "billing_period": {
+            "$ref": "#/components/schemas/SubscriptionChangeBillingPeriodResult"
+          },
           "change_type": {
             "$ref": "#/components/schemas/types.SubscriptionChangeType"
           },
@@ -22972,6 +23058,13 @@
           },
           "subscription": {
             "$ref": "#/components/schemas/SubscriptionResponse"
+          },
+          "superseded_schedules": {
+            "type": "array",
+            "description": "SupersededSchedules lists the plan-change schedules this request cancelled under\non_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.",
+            "items": {
+              "type": "string"
+            }
           },
           "to_plan": {
             "$ref": "#/components/schemas/PlanSummary"
@@ -27665,6 +27758,20 @@
         ],
         "x-speakeasy-name-override": "BillingPeriod"
       },
+      "types.BillingPeriodBehaviour": {
+        "type": "string",
+        "enum": [
+          "unchanged",
+          "anchor_at_effect",
+          "anchor_at_config"
+        ],
+        "x-enum-varnames": [
+          "BillingPeriodBehaviourUnchanged",
+          "BillingPeriodBehaviourAnchorAtEffect",
+          "BillingPeriodBehaviourAnchorAtConfig"
+        ],
+        "x-speakeasy-name-override": "BillingPeriodBehaviour"
+      },
       "types.BillingTier": {
         "type": "string",
         "enum": [
@@ -28416,11 +28523,13 @@
         "type": "string",
         "enum": [
           "carry",
-          "drop"
+          "drop",
+          "add"
         ],
         "x-enum-varnames": [
           "EntityChangeBehaviourCarry",
-          "EntityChangeBehaviourDrop"
+          "EntityChangeBehaviourDrop",
+          "EntityChangeBehaviourAdd"
         ],
         "x-speakeasy-name-override": "EntityChangeBehaviour"
       },
@@ -29092,6 +29201,18 @@
           }
         },
         "x-speakeasy-name-override": "ModifySubscriptionParams"
+      },
+      "types.OnPendingSchedulePolicy": {
+        "type": "string",
+        "enum": [
+          "reject",
+          "supersede"
+        ],
+        "x-enum-varnames": [
+          "OnPendingSchedulePolicyReject",
+          "OnPendingSchedulePolicySupersede"
+        ],
+        "x-speakeasy-name-override": "OnPendingSchedulePolicy"
       },
       "types.PaginationResponse": {
         "type": "object",
@@ -29915,6 +30036,24 @@
           "StatusArchived"
         ],
         "x-speakeasy-name-override": "Status"
+      },
+      "types.SubscriptionChangeEntityType": {
+        "type": "string",
+        "enum": [
+          "plan",
+          "addon",
+          "credit_grant",
+          "entitlement",
+          "entitlement_grant"
+        ],
+        "x-enum-varnames": [
+          "SubscriptionChangeEntityTypePlan",
+          "SubscriptionChangeEntityTypeAddon",
+          "SubscriptionChangeEntityTypeCreditGrant",
+          "SubscriptionChangeEntityTypeEntitlement",
+          "SubscriptionChangeEntityTypeEntitlementGrant"
+        ],
+        "x-speakeasy-name-override": "SubscriptionChangeEntityType"
       },
       "types.SubscriptionChangeType": {
         "type": "string",

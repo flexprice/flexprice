@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainconn "github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -98,7 +99,7 @@ func (h *Handler) handleInvoice(ctx context.Context, inv *InvoicePayload, deps *
 	switch {
 	case zohoWebhookInvoiceStatusVoid(st):
 		return h.handleInvoiceVoided(ctx, zohoInvID, deps)
-	case strings.EqualFold(st, ZohoBooksInvoiceWebhookStatusPaid):
+	case strings.EqualFold(st, zoho.InvoiceStatusPaid):
 		return h.handleInvoicePaid(ctx, zohoInvID, inv, deps)
 	default:
 		return nil
@@ -360,7 +361,7 @@ func (h *Handler) findCustomerMapping(ctx context.Context, zohoContactID string,
 // zohoWebhookInvoiceStatusVoid matches Zoho Books invoice statuses for a voided invoice.
 func zohoWebhookInvoiceStatusVoid(st string) bool {
 	switch strings.ToLower(strings.TrimSpace(st)) {
-	case ZohoBooksInvoiceWebhookStatusVoid, ZohoBooksInvoiceWebhookStatusVoided:
+	case zoho.InvoiceStatusVoid, zoho.InvoiceStatusVoided:
 		return true
 	default:
 		return false

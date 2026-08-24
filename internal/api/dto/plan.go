@@ -130,6 +130,11 @@ type PlanResponse struct {
 	Prices       []*PriceResponse       `json:"prices,omitempty"`
 	Entitlements []*EntitlementResponse `json:"entitlements,omitempty"`
 	CreditGrants []*CreditGrantResponse `json:"credit_grants,omitempty"`
+	// PriceSyncStatus reports how many subscriptions are still behind this
+	// plan's current price sequence. Only populated on the list/search
+	// endpoint (GetPlans) when `expand=price_sync_status` is requested,
+	// since computing it is extra per-plan work most callers don't need.
+	PriceSyncStatus *PlanPriceSyncStatusResponse `json:"price_sync_status,omitempty"`
 }
 
 type UpdatePlanRequest struct {
@@ -191,6 +196,16 @@ type SynchronizationSummary struct {
 	TotalPrices   int `json:"total_prices"`
 	ActivePrices  int `json:"active_prices"`
 	ExpiredPrices int `json:"expired_prices"`
+}
+
+// PlanPriceSyncStatusResponse reports how many of a plan's subscriptions are
+// still behind the plan's current price sequence (i.e. not yet reconciled by
+// a sync run). UnsyncedSubscriptionCount == 0 means every eligible
+// subscription is caught up and a sync run would be a no-op.
+type PlanPriceSyncStatusResponse struct {
+	CurrentSequence           int64 `json:"current_sequence"`
+	UnsyncedSubscriptionCount int64 `json:"unsynced_subscription_count"`
+	Synced                    bool  `json:"synced"`
 }
 
 // ClonePlanRequest represents the request to clone a plan

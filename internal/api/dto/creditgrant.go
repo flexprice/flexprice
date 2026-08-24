@@ -50,6 +50,33 @@ type CreateCreditGrantRequest struct {
 	FirstPeriodProration *FirstPeriodProration `json:"-"`
 }
 
+// NewSubscriptionScopedCreditGrantRequest maps a plan-scoped credit grant to the
+// subscription-scoped request that materialises it. Subscription creation and plan
+// change both build the request here so the two paths cannot drift apart.
+func NewSubscriptionScopedCreditGrantRequest(
+	cg *CreditGrantResponse,
+	subscriptionID string,
+	planID string,
+) CreateCreditGrantRequest {
+	return CreateCreditGrantRequest{
+		Name:                   cg.Name,
+		Scope:                  types.CreditGrantScopeSubscription,
+		Credits:                cg.Credits,
+		Cadence:                cg.Cadence,
+		ExpirationType:         cg.ExpirationType,
+		Priority:               cg.Priority,
+		SubscriptionID:         lo.ToPtr(subscriptionID),
+		Period:                 cg.Period,
+		PlanID:                 lo.ToPtr(planID),
+		ExpirationDuration:     cg.ExpirationDuration,
+		ExpirationDurationUnit: cg.ExpirationDurationUnit,
+		Metadata:               cg.Metadata,
+		PeriodCount:            cg.PeriodCount,
+		ConversionRate:         cg.ConversionRate,
+		TopupConversionRate:    cg.TopupConversionRate,
+	}
+}
+
 // FirstPeriodProration describes the billing period a mid-cycle grant lands in.
 // It is consumed once, when the first credit grant application is created, and is
 // deliberately never persisted on the grant: every later period is a whole period
@@ -499,6 +526,9 @@ type CancelFutureSubscriptionGrantsRequest struct {
 	// AddonID, when set, scopes cancellation to grants materialized from this addon
 	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
 	AddonID *string `json:"addon_id,omitempty"`
+	// PlanID, when set, scopes cancellation to grants materialized from this plan
+	// (via plan_id provenance), so a plan swap leaves addon-sourced grants alone.
+	PlanID *string `json:"plan_id,omitempty"`
 }
 
 // Validate validates the cancel future subscription grants request

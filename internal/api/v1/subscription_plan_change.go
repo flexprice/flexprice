@@ -47,7 +47,9 @@ func (h *SubscriptionHandler) PreviewSubscriptionPlanChangeV2(c *gin.Context) {
 // @Description
 // @Description scheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away — inspect scheduled_at to see this.
 // @Description
-// @Description Only one plan change may be pending per subscription; request a second one and this returns 400. Cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
+// @Description Only one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
+// @Description
+// @Description Set on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json

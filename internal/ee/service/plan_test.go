@@ -54,6 +54,7 @@ func (s *PlanServiceSuite) SetupTest() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		IntegrationFactory:       s.GetIntegrationFactory(),
 		ConnectionRepo:           s.GetStores().ConnectionRepo,
+		PlanPriceSyncRepo:        s.GetStores().PlanPriceSyncRepo,
 	}
 	s.service = NewPlanService(s.params)
 }
