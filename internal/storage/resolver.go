@@ -152,7 +152,17 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 		}
 		return signer, nil
 	case PurposeExport:
-		return r.cfg.FlexpriceGCSExports.SignerServiceAccountEmail, nil
+		signer := r.cfg.FlexpriceGCSExports.SignerServiceAccountEmail
+		if signer == "" {
+			// Same asymmetry as invoice: managed GCS export uploads succeed with no
+			// signer, but every presigned download URL (task download endpoint) then
+			// fails under ambient Workload Identity, which cannot self-sign. Reject
+			// at construction rather than at first download.
+			return "", ierr.NewError("no GCS signer service account configured for export storage; set FLEXPRICE_FLEXPRICE_GCS_EXPORTS_SIGNER_SERVICE_ACCOUNT_EMAIL").
+				WithHint("Set flexprice_gcs_exports.signer_service_account_email (FLEXPRICE_FLEXPRICE_GCS_EXPORTS_SIGNER_SERVICE_ACCOUNT_EMAIL) to a service account with roles/iam.serviceAccountTokenCreator; uploads would succeed but every presigned export download link would fail without it").
+				Mark(ierr.ErrValidation)
+		}
+		return signer, nil
 	default:
 		return "", unsupportedPurpose(purpose)
 	}

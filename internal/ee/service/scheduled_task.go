@@ -193,7 +193,13 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 			return nil, err
 		}
 	} else {
-		// For non-managed connections: full validation required
+		// For non-managed (BYOB) connections: full validation required. Provider is
+		// derived from the connection, not the caller's JSON — otherwise a BYOB GCS
+		// request arrives with an empty provider, S3JobConfig.Validate treats it as
+		// S3, and rejects it for missing an irrelevant AWS region.
+		if req.JobConfig != nil {
+			req.JobConfig.Provider = conn.ProviderType
+		}
 		if err := req.JobConfig.Validate(); err != nil {
 			s.logger.Error(ctx, "invalid job config for custom S3 connection", "error", err)
 			return nil, err

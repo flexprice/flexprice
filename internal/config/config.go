@@ -243,6 +243,15 @@ func (c *FlexpriceS3ExportsConfig) Validate() error {
 				WithHint("Set both aws_access_key_id and aws_secret_access_key (FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_ACCESS_KEY_ID / FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_SECRET_ACCESS_KEY), or set credential_source to \"ambient\" or \"federation\"").
 				Mark(ierr.ErrValidation)
 		}
+	default:
+		// ResolvedCredentialSource returns CredentialSource verbatim when set, so an
+		// unrecognized value (a typo like "amibent") reaches here. Reject it rather
+		// than falling through to unintended ambient credentials — the boot path
+		// skips Configuration.Validate() and its oneof struct tag, so this is the
+		// only place a direct caller catches the typo.
+		return ierr.NewError("invalid flexprice_s3_exports.credential_source").
+			WithHint("credential_source must be one of \"static\", \"ambient\", or \"federation\"").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -280,7 +289,9 @@ type FlexpriceGCSExportsConfig struct {
 	// SignerServiceAccountEmail is the identity used to sign presigned GET URLs.
 	// Under Workload Identity the ambient credentials cannot self-sign, so this
 	// must name a service account the running identity may impersonate
-	// (roles/iam.serviceAccountTokenCreator). Empty disables presigning.
+	// (roles/iam.serviceAccountTokenCreator). Empty means export uploads succeed
+	// but every presigned download link fails, so the resolver rejects an empty
+	// value when the resolved provider is GCS (mirrors the invoice signer).
 	SignerServiceAccountEmail string `mapstructure:"signer_service_account_email" validate:"omitempty"`
 }
 

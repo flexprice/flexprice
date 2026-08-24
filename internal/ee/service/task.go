@@ -1221,13 +1221,19 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Check if connection is Flexprice-managed
 	isFlexpriceManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
 
-	// For Flexprice-managed, verify bucket matches config. The expected bucket is
-	// provider-specific: managed GCS connections write to FlexpriceGCSExports,
-	// managed S3 connections to FlexpriceS3Exports.
+	// For Flexprice-managed, verify bucket matches the connection's recorded
+	// destination. The recorded bucket (conn.SyncConfig.Storage.Bucket) is
+	// authoritative — buildS3Storage writes to it and only falls back to the
+	// current platform config for legacy rows with an empty bucket. Validating
+	// against the recorded bucket (not the live platform config) keeps previously
+	// generated URLs valid across a platform bucket rotation.
 	if isFlexpriceManaged {
-		expectedBucket := s.Config.FlexpriceS3Exports.Bucket
-		if conn.ProviderType == types.SecretProviderGCS {
-			expectedBucket = s.Config.FlexpriceGCSExports.Bucket
+		expectedBucket := conn.SyncConfig.Storage.Bucket
+		if expectedBucket == "" {
+			expectedBucket = s.Config.FlexpriceS3Exports.Bucket
+			if conn.ProviderType == types.SecretProviderGCS {
+				expectedBucket = s.Config.FlexpriceGCSExports.Bucket
+			}
 		}
 		if bucket != expectedBucket {
 			s.Logger.Info(ctx, "bucket mismatch for Flexprice-managed export",

@@ -256,10 +256,11 @@ func TestAssumeRole_ErrorIsRedacted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, uploadErr := s.Upload(ctx, &storage.UploadRequest{Key: "k", Data: []byte("d")})
-	if uploadErr != nil {
-		assert.NotContains(t, uploadErr.Error(), roleARN)
-		assert.NotContains(t, uploadErr.Error(), externalID)
-	}
+	// The upload MUST fail (fake non-STS endpoint) — otherwise the redaction
+	// assertions below are skipped and the security property goes unverified.
+	require.Error(t, uploadErr)
+	assert.NotContains(t, uploadErr.Error(), roleARN)
+	assert.NotContains(t, uploadErr.Error(), externalID)
 }
 
 func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {

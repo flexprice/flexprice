@@ -910,14 +910,18 @@ func (s *connectionService) validateStorageReachable(ctx context.Context, conn *
 	err = storageProvider.ValidateConnection(verifyCtx)
 	cancel()
 	if err != nil {
-		s.Logger.Error(ctx, "storage connection verification failed",
+		// Best-effort only: ValidateConnection probes at the bucket level (S3
+		// HeadBucket / GCS bucket Attrs), which needs s3:ListBucket /
+		// storage.buckets.get. An export credential can validly be scoped to
+		// object-level PutObject/GetObject alone, so a probe failure does NOT mean
+		// the connection is unusable — blocking here would reject least-privilege
+		// credentials that the export workflow would accept. Log and allow; a
+		// genuinely broken connection surfaces on the first export.
+		s.Logger.Info(ctx, "storage connection reachability probe failed; allowing connection (bucket-level probe may lack permission an object-scoped export credential does not need)",
 			"connection_id", conn.ID,
 			"provider_type", conn.ProviderType,
 			"bucket", bucket,
 			"error", err)
-		return ierr.WithError(err).
-			WithHintf("Could not reach bucket %q for the %s connection. Verify credentials and bucket name before retrying.", bucket, conn.ProviderType).
-			Mark(ierr.ErrValidation)
 	}
 
 	return nil
