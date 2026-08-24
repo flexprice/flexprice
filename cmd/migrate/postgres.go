@@ -39,7 +39,7 @@ func newPostgresCmd() *cobra.Command {
 	// sync check needs to SEE those changes to fail a PR that forgot the migration,
 	// so it runs against a throwaway database with this flag set.
 	cmd.Flags().BoolVar(&allowIndexChanges, "allow-index-changes", false,
-		"Include index modifications in the diff (CI verification only, never production)")
+		"Include index modifications in the diff (CI/draft only, never production)")
 	cmd.Flags().StringVar(&file, "file", "", "Apply a raw .sql file (e.g. a baseline) instead of Ent auto-migration")
 
 	return cmd
@@ -147,7 +147,14 @@ func runPostgresMigration(dryRun bool, timeout int, allowIndexChanges bool) erro
 	// start dropping columns (data loss). So the set is default + ModifyIndex.
 	skip := schema.DropIndex | schema.DropColumn | schema.ModifyIndex
 	if allowIndexChanges {
-		// CI verification path only — see the --allow-index-changes flag.
+		// CI / draft path only: unskip ModifyIndex so a changed index predicate or
+		// column list is visible. Production keeps it skipped (RCA 2026-06-25).
+		//
+		// DropIndex stays skipped even here. Unskipping it makes Ent propose
+		// dropping every index the database has that the Ent schema does not
+		// declare — and production has many, some deliberate. That is a report for
+		// a human, not DDL to auto-draft. See ORPHANED INDEXES in
+		// migrations/versioned/README.md.
 		skip = schema.DropIndex | schema.DropColumn
 	}
 	migrateOpts := []schema.MigrateOption{schema.WithSkipChanges(skip)}

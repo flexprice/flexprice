@@ -102,7 +102,28 @@ docker run -d --name mig-pg -e POSTGRES_USER=flexprice \
   -p 5440:5432 postgres:16
 ```
 
-## Index predicates — now cosmetic
+## Orphaned indexes — a known, unsolved gap
+
+`DropIndex` is in the skip set at every level, including CI. So an index that exists
+in a database but is not declared in `ent/schema/` is never reported and never
+removed. Two ways they appear:
+
+- **Ent renames on change.** Adding a column to an index gives it a new name, so the
+  diff emits `CREATE` for the new one and nothing for the one it replaced. Both then
+  exist. This is how
+  `entitlement_tenant_id_environment_id_entity_type_entity_id_feat` ended up
+  duplicating the index Ent manages — migration `20260825000400` cleans that one up.
+- **Deliberate hand-made indexes** added during an incident and never declared.
+
+Unskipping `DropIndex` was tried and reverted: against the production baseline it
+proposes dropping a dozen indexes the schema does not declare, some of them
+deliberate. That is a report for a human, not DDL to auto-draft.
+
+Nothing here detects them yet. The mechanism to build is a one-directional
+comparison the other way — objects the database has that Ent does not declare —
+run as a report against real deployments, not as a PR gate.
+
+## Index predicates — cosmetic, but keep the convention
 
 Ent compares index predicates as strings. `checkout_status IN ('a','b')` is stored by
 Postgres as `= ANY (...)`, the comparison never converges, and Ent proposes rebuilding
@@ -115,10 +136,18 @@ sync check compares end states rather than proposed statements, so both spelling
 deparse to the same stored form and cancel out — verified: reverting `usagerecord.go`
 to the naive spelling leaves `make migrate-check-sync` green.
 
-What it still costs is a noisy draft. `make migrate-generate` will offer to rebuild
-indexes that do not need rebuilding, and whoever reviews has to recognise and delete
-those lines. So keep writing predicates in the stored form — copy `pg_get_indexdef`
-output — but treat it as readability, not a correctness gate.
+What it still costs is a noisy draft, and that is not harmless. `make
+migrate-generate` runs with `--allow-index-changes` so it can draft a genuine
+predicate change — measured: a real change drafts exactly the `DROP` + `CREATE` pair
+you want. But a non-canonical spelling drafts the **same two statements** for an
+index that needs nothing.
+
+The reviewer cannot tell those apart by looking. Miss it, and you ship a migration
+that drops and rebuilds an index for no reason — on `events` or `feature_usage` that
+is an incident, not a nit.
+
+So keep writing predicates in the stored form. Copy `pg_get_indexdef` output. It is
+not a correctness gate any more; it is what keeps generated drafts trustworthy.
 
 ## Open decision — ClickHouse `ON CLUSTER`
 

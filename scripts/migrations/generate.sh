@@ -22,7 +22,7 @@ DATABASE_URL="$BASE/mig_draft?sslmode=disable" dbmate --migrations-dir "$DIR" --
 DDL="$(FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
        FLEXPRICE_POSTGRES_USER="$PGUSER_" FLEXPRICE_POSTGRES_PASSWORD="$PGPASS_" \
        FLEXPRICE_POSTGRES_DBNAME="mig_draft" FLEXPRICE_POSTGRES_SSLMODE="disable" \
-       go run ./cmd/migrate postgres --dry-run 2>/dev/null | grep -v '^$' || true)"
+       go run ./cmd/migrate postgres --dry-run --allow-index-changes 2>/dev/null | grep -v '^$' || true)"
 
 if [ -z "$DDL" ]; then
   echo "nothing to generate — migrations already cover the Ent schema"
