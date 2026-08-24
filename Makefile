@@ -195,15 +195,15 @@ endef
 
 # Run all tests
 test: install-typst
-	$(call run-go-test,-v -race ./internal/...)
+	$(call run-go-test,-v -race ./internal/... ./cmd/server)
 
 # Run tests with verbose output
 test-verbose:
-	$(call run-go-test,-v ./internal/...)
+	$(call run-go-test,-v ./internal/... ./cmd/server)
 
 # Run tests with coverage report
 test-coverage:
-	go test -coverprofile=coverage.out ./internal/...
+	go test -coverprofile=coverage.out ./internal/... ./cmd/server
 	go tool cover -html=coverage.out -o coverage.html
 
 # Database related targets

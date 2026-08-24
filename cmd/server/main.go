@@ -309,6 +309,7 @@ func main() {
 			startServer,
 		),
 	)
+	opts = append(opts, fx.StartTimeout(3*time.Minute))
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -586,10 +587,18 @@ func startTemporalWorker(
 	webhookService *webhook.WebhookService,
 ) {
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			if err := temporalService.Start(ctx); err != nil {
+		OnStart: func(ctx context.Context) (err error) {
+			if err = temporalService.Start(ctx); err != nil {
 				return fmt.Errorf("start temporal service: %w", err)
 			}
+			defer func() {
+				if err == nil {
+					return
+				}
+				if stopErr := temporalService.Stop(ctx); stopErr != nil {
+					log.Error(ctx, "Failed to stop Temporal service after startup failure", "error", stopErr)
+				}
+			}()
 
 			if err := temporalservice.EnsureSchedules(ctx, temporalClient, log); err != nil {
 				return fmt.Errorf("ensure temporal server schedules: %w", err)
