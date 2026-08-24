@@ -329,7 +329,17 @@ else:
 
 Correctness invariant: **every event contributes to `value` exactly once**. Events with `ingested_at ≤ T_high_water` are in `base` (via CH). Events with `ingested_at > T_high_water` that arrive during rebuild go into `delta:{G}`. The atomic `base + delta` merge captures both without duplication.
 
-**Small residual race:** an event whose consumer-processing occurs during rebuild but whose CH `ingested_at` is ≤ T_high_water (i.e., consumer is >30s slower than CH insert visibility) can be counted in both `base` and `delta` → over-count. This is bounded to a handful of events per rebuild and is fully corrected at the next snapshot re-anchor (§5.2 step 8). The 30s safety margin can be tuned per-env based on observed consumer lag.
+**Small residual race:** an event whose consumer-processing occurs during rebuild but whose CH `ingested_at` is ≤ T_high_water (i.e., consumer is >30s slower than CH insert visibility) can be counted in both `base` and `delta` → over-count. This is bounded to a handful of events per rebuild and is fully corrected at the next snapshot re-anchor (§5.2 step 8).
+
+**Safety-margin tuning caveat:** the 30s default is illustrative, not magic. It should be tuned per-env against observed p99 consumer lag between `meter_usage` insert and consumer processing:
+
+| If observed p99 consumer lag is… | Set safety margin to… | Effect |
+|---|---|---|
+| < 10s (healthy) | 30s (default) | Rare-to-none double-count on rebuild |
+| 30–60s (mildly lagging) | 90s | Slightly longer rebuild lock window, no double-count |
+| > 60s (chronically lagging) | Investigate consumer scaling first | Over-tuned safety margin masks a real backpressure problem |
+
+Under-tuned → over-count during rebuild (bounded, self-corrects at snapshot). Over-tuned → longer rebuild lock window (harmless as long as no read is fail-closed for that whole window; it usually isn't). Expose as an env-level config so ops can bump without a code change.
 
 **Persistence worker for grant crossings** (Temporal schedule, per env, every 5 min):
 
@@ -468,7 +478,16 @@ if billable:
 
 **Amount vs quantity measure:** ingest-time classification is a boolean (billable / not). Cache stores currency-denominated amounts. Amount-measure grants participate identically — the crossing check triggers on `grant.usage >= grant.quota` where `grant.usage` is currency for amount measure. The `qty × price` computation on billable ingest is the same math the snapshot workflow does at higher precision. Bounded straddle error (§5.1 step 5) is the only divergence.
 
-**Cached grant state on the ingest path:** the "check_billability" call reads `grant.quota_crossed_at` and `grant.valid_to` for every applicable grant. Cache these in-memory per subscription in the consumer process with a 30s TTL. On persistence-worker write to `quota_crossed_at`, publish a pub/sub invalidation to consumers. On cold start, first event per sub re-reads postgres.
+**Cached grant state on the ingest path:** the "check_billability" call reads `grant.quota_crossed_at` and `grant.valid_to` for every applicable grant. Cache these in-memory per subscription in the consumer process with a 30s TTL. On cold start, first event per sub re-reads postgres.
+
+**Invalidation strategy caveat — pub/sub vs TTL-only.** Two viable options for keeping the consumer's grant-state cache fresh; pick one based on how tight the freshness requirement is:
+
+| Option | How | Trade-off |
+|---|---|---|
+| **A. TTL-only (simpler, default)** | 30s TTL, no active invalidation. First event after TTL re-reads postgres. | Grant state is up to 30s stale after a persistence-worker write. Missed billability decisions for that window are still bounded — the inline crossing check keeps firing, and the snapshot re-anchor corrects at hour boundary. |
+| **B. TTL + Redis pub/sub invalidation** | Persistence worker publishes `invalidate:{sub}` on `quota_crossed_at` write; consumers subscribe and drop the cache entry. | Sub-second freshness on crossing detection. Requires consumers to hold an active Redis Pub/Sub connection; adds an extra failure mode (missed invalidation on network blip → same-as-A staleness for one TTL). |
+
+**Recommendation: start with A (TTL-only)**, add B only if the 30s staleness window is measurably hurting billing accuracy for a design partner. The snapshot workflow's synchronous EG-eval trigger (§5.2 step 3) already provides an hour-boundary correctness anchor, which bounds the impact of a stale consumer cache.
 
 ### 6.6 EG alerts
 
