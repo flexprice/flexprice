@@ -613,7 +613,7 @@ spec:
                 n=$(wget -qO- "${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}/?query=SELECT+count()+FROM+system.tables+WHERE+database='{{ .Values.clickhouse.database }}'+AND+name='${t}'" \
                     --header="X-ClickHouse-User: ${FLEXPRICE_CLICKHOUSE_USERNAME}" \
                     --header="X-ClickHouse-Key: ${FLEXPRICE_CLICKHOUSE_PASSWORD}" \
-                    {{- if $.Values.clickhouse.tlsSkipVerify }} --no-check-certificate{{- end }} 2>/dev/null || echo 0)
+                    {{ if $.Values.clickhouse.tlsSkipVerify }}--no-check-certificate {{ end }}2>/dev/null || echo 0)
                 [ "$n" = "1" ] || { echo "❌ MISSING ClickHouse table: ${t}"; exit 1; }
                 echo "  ✅ ${t}"
               done
