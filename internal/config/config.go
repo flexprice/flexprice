@@ -936,7 +936,7 @@ func NewConfig() (*Configuration, error) {
 			return nil, err
 		}
 	} else {
-		fmt.Printf("Using config file: %s\n", v.ConfigFileUsed())
+		fmt.Fprintf(os.Stderr, "Using config file: %s\n", v.ConfigFileUsed())
 	}
 
 	var cfg Configuration

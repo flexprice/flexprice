@@ -251,6 +251,11 @@ migrate-new:
 	@test -n "$(name)" || (echo "usage: make migrate-new name=add_currency"; exit 1)
 	@dbmate --migrations-dir $(MIGRATIONS_PG) new $(name)
 
+.PHONY: migrate-generate
+migrate-generate:
+	@test -n "$(name)" || (echo "usage: make migrate-generate name=add_currency"; exit 1)
+	@./scripts/migrations/generate.sh $(name)
+
 .PHONY: migrate-adopt
 migrate-adopt:
 	@test -n "$(url)" -a -n "$(version)" || \

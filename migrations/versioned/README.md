@@ -19,19 +19,23 @@ scripts/migrations/                adoption + the CI gates
 # 1. edit ent/schema/x.go
 make generate-ent
 
-# 2. draft the SQL — Ent still knows what the schema needs
-make migrate-ent-dry-run
+# 2. draft the migration — writes the file with the DDL already in it
+make migrate-generate name=add_currency_to_invoices
 
-# 3. create the file, paste the draft, then EDIT it
-make migrate-new name=add_currency_to_invoices
-
-# 4. locally
-make migrate-up
+# 3. EDIT the draft, then verify
 make migrate-check
 ```
 
-Step 3 is where `CONCURRENTLY`, lock timeouts and lane placement get added. The
-draft is a starting point, never the answer.
+`migrate-generate` builds a throwaway database from the committed migrations, asks
+Ent what is still missing, and writes that DDL into a new dbmate file. You do not
+write SQL from scratch. If nothing is missing it says so and writes nothing.
+
+**The draft is not the answer.** It has no `CONCURRENTLY`, no lane placement, and a
+`TODO` where the down block goes. Editing it is the review step, and it is where the
+decisions in this document get applied.
+
+Use `make migrate-new name=...` for an empty file when the change is not something
+Ent models — data backfills, functions, anything hand-written.
 
 ## Rules
 
@@ -98,15 +102,23 @@ docker run -d --name mig-pg -e POSTGRES_USER=flexprice \
   -p 5440:5432 postgres:16
 ```
 
-## Index predicates
+## Index predicates — now cosmetic
 
-Write `entsql.IndexWhere(...)` in the form Postgres stores, not the form that reads
-naturally. `checkout_status IN ('a','b')` is deparsed to `= ANY (...)`, the string
-comparison never converges, and Ent proposes rebuilding the index on every run
-forever. Copy `pg_get_indexdef` output.
+Ent compares index predicates as strings. `checkout_status IN ('a','b')` is stored by
+Postgres as `= ANY (...)`, the comparison never converges, and Ent proposes rebuilding
+the index on every run forever. Six of the eight statements pending against production
+on 2026-08-19 were exactly this and nothing else.
 
-Six of the eight statements pending against production on 2026-08-19 were this, and
-nothing else.
+**Under versioned migrations this stops mattering for correctness.** AutoMigrate no
+longer runs against a real database, so a phantom cannot cause DDL anywhere. And the
+sync check compares end states rather than proposed statements, so both spellings
+deparse to the same stored form and cancel out — verified: reverting `usagerecord.go`
+to the naive spelling leaves `make migrate-check-sync` green.
+
+What it still costs is a noisy draft. `make migrate-generate` will offer to rebuild
+indexes that do not need rebuilding, and whoever reviews has to recognise and delete
+those lines. So keep writing predicates in the stored form — copy `pg_get_indexdef`
+output — but treat it as readability, not a correctness gate.
 
 ## Open decision — ClickHouse `ON CLUSTER`
 

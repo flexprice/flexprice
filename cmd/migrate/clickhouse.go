@@ -44,7 +44,7 @@ func newClickHouseCmd() *cobra.Command {
 				l.Fatal(ctx, "ClickHouse migration failed", "error", err)
 			}
 			l.Info(ctx, "ClickHouse migrations completed successfully")
-			fmt.Println("Migration process completed")
+			fmt.Fprintln(os.Stderr, "Migration process completed")
 			return nil
 		},
 	}

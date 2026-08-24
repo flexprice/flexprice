@@ -71,7 +71,7 @@ func runPostgresSQLFile(file string, dryRun bool, timeout int) error {
 	if dryRun {
 		l.Info(ctx, "Dry run mode - printing SQL file without executing", "file", file)
 		fmt.Print(string(raw))
-		fmt.Println("Migration process completed")
+		fmt.Fprintln(os.Stderr, "Migration process completed")
 		return nil
 	}
 
@@ -104,7 +104,7 @@ func runPostgresSQLFile(file string, dryRun bool, timeout int) error {
 	}
 
 	l.Info(ctx, "PostgreSQL SQL file applied successfully", "file", file)
-	fmt.Println("Migration process completed")
+	fmt.Fprintln(os.Stderr, "Migration process completed")
 	return nil
 }
 
@@ -164,6 +164,6 @@ func runPostgresMigration(dryRun bool, timeout int, allowIndexChanges bool) erro
 		l.Info(ctx, "Migration completed successfully")
 	}
 
-	fmt.Println("Migration process completed")
+	fmt.Fprintln(os.Stderr, "Migration process completed")
 	return nil
 }
