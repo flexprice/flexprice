@@ -270,7 +270,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "idempotency_key IS NOT NULL AND checkout_status IN ('initiated', 'pending')",
+					Where: "((idempotency_key IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))",
 				},
 			},
 			{
@@ -283,7 +283,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CheckoutSessionsColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "checkout_status IN ('initiated', 'pending')",
+					Where: "((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text]))",
 				},
 			},
 		},
@@ -2541,7 +2541,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[10], UsageRecordsColumns[15], UsageRecordsColumns[16]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 		},

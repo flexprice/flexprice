@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Migrations apply in filename order. A file merged from a parallel branch with an
+# older timestamp than one already applied would silently never run on databases
+# that are past it. Reject at PR time.
+set -euo pipefail
+DIR="${1:-migrations/versioned/postgres}"
+BASE="${2:-origin/develop}"
+newest="$(git ls-tree -r --name-only "$BASE" -- "$DIR" 2>/dev/null \
+          | xargs -n1 basename 2>/dev/null | cut -d_ -f1 | sort -n | tail -1)"
+[ -n "$newest" ] || { echo "no committed migrations yet"; exit 0; }
+rc=0
+for f in $(git diff --name-only --diff-filter=A "$BASE"...HEAD -- "$DIR"); do
+  v="$(basename "$f" | cut -d_ -f1)"
+  if [ "$v" -lt "$newest" ]; then
+    echo "FAIL: $f ($v) predates already-committed $newest" >&2; rc=1
+  fi
+done
+[ $rc -eq 0 ] && echo "ordering ok"
+exit $rc

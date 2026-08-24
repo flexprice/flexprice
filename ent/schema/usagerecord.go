@@ -112,6 +112,6 @@ func (UsageRecord) Indexes() []ent.Index {
 		// The snapshot cron's idempotency guarantee.
 		index.Fields("tenant_id", "environment_id", "subscription_id", "period_start", "period_end").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }
