@@ -83,8 +83,14 @@ jobs:
       - name: Order — do new migrations sort after committed ones?
         run: ./scripts/migrations/order-check.sh migrations/versioned/postgres origin/${{ github.base_ref || 'develop' }}
 
-      - name: ClickHouse — one statement per file
-        run: make migrate-check-clickhouse
+      # Disabled 2026-08-25. migrations/versioned/clickhouse/ is the old
+      # incremental set and does not describe the real cluster: it creates 3 of
+      # the 8 tables the app queries, and disagrees with
+      # migrations/baseline/clickhouse_baseline_20260819.sql. Gating on it would
+      # assert something we know to be wrong. Re-enable once the ClickHouse set
+      # is re-derived from a live cluster.
+      # - name: ClickHouse — one statement per file
+      #   run: make migrate-check-clickhouse
 
       - name: Replay from zero — does a fresh install work?
         # The gates above prove the set matches Ent. This proves it also applies

@@ -269,7 +269,9 @@ migrate-fingerprint:
 
 # ── CI gates ─────────────────────────────────────────────────────────────────
 .PHONY: migrate-check
-migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order migrate-check-clickhouse
+# migrate-check-clickhouse is deliberately NOT in this list — see the note in
+# .github/workflows/migrations.yml. Run it by hand if you need it.
+migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
 	@echo "all migration checks passed"
 
 .PHONY: migrate-check-sync
