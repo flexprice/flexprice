@@ -177,7 +177,7 @@ Only prepaid-settled subs use this path — event ingestion for arrear subs is u
 ### 5.1 Event ingest (prepaid-settled subs only)
 
 1. Insert into ClickHouse `meter_usage` (unchanged).
-2. **Trust check** on `redis:sub_usage:{env}:{sub}` — see §5.5. If stale/missing, rebuild from `meter_usage FINAL` synchronously before continuing (rare).
+2. **Trust check** on `redis:sub_usage:{env}:{sub}` — see §5.4. If stale/missing, the ingest still succeeds via the delta-key rebuild-safe write path (§5.4); an async rebuild is triggered.
 3. `HINCRBYFLOAT` into redis current-window hash for `(sub_id, meter_id, current_window)`.
 4. **Inline grant-crossing detection** — for each grant applicable to `(sub, meter)`:
    ```
@@ -189,11 +189,19 @@ Only prepaid-settled subs use this path — event ingestion for arrear subs is u
      signal Temporal PersistCrossingActivity
    ```
    `grant.usage_cached` is postgres `grant.usage` refreshed on some interval (e.g. on each EG-eval pass and each snapshot). Slight staleness is safe — the `>=` check only ever *fires* the crossing detection; it can't miss one that already happened (that path is caught by EG-eval or snapshot fallback).
-5. **Maintain redis EG billable counter** (§6.5) — if any grant applicable to `(sub, meter)` is currently crossed (either `redis:grant_crossing:{grant_id}` set or postgres `grant.quota_crossed_at` set):
+5. **Maintain running billable cache** (§6.5) — decide billability at event time `T = event.timestamp` using cached grant state:
    ```
-   HINCRBYFLOAT redis:meter_billable_current:{env}:{sub}:{meter}:{window} by qty
-   HSETNX  ... _started_at = now, _last_snapshot_end = last_snapshot.window_end
+   billable = false
+   for each grant applicable to (sub, meter):
+     if grant.quota_crossed_at set
+        AND grant.quota_crossed_at <= T < grant.valid_to:
+       billable = true; break
+   if billable:
+     amount = qty × price(meter)
+     HINCRBYFLOAT redis:pending_billable:{env}:{sub}   value  by amount
+     // (rebuild-safe write path — see §5.4)
    ```
+   Billability is a per-event boolean based on parallel/additive grant state at `event.timestamp`. No range queries. For amount-measure grants, an event that straddles the crossing boundary (grant.usage goes from `quota − 3` to `quota + 5` in one event) is classified fully-billable or fully-not by this check — bounded error of ≤1 event's cost per crossing per grant, self-corrected at the next snapshot.
 6. Schedule Temporal workflow `SnapshotWorkflow(sub_id, window_start)` at `window_end + 2h` (Temporal dedup key: `(sub_id, window_start)`).
 
 The +2h buffer absorbs late-arriving events from network/queue lag. Events arriving *after* the buffer are handled by the [backdated-event flow](#7-backdated-event-handling).
@@ -216,7 +224,13 @@ Fires at `window_end + 2h`. Steps:
    - `reference_type = SUBSCRIPTION`, `reference_id = subscription_id`
    - `idempotency_key = (subscription_id, window_start)`
 7. Insert `subscription_usage_snapshots` row with `status = active`, `debit_wallet_txn_id = <returned>`, cumulative counters computed from previous row + delta.
-8. `HDEL` redis current-window key AND `redis:meter_billable_current:*:{sub}:*:{window}` keys.
+8. **Re-anchor the running billable cache** to ground truth for the slice already accrued after this window ended. Also HDEL the raw current-window per-meter hash. See §5.4 for the atomic sequence — critical to avoid losing events that arrived during the snapshot workflow itself:
+   ```
+   post_window_billable = adjustMeterUsageGrants(...) for [window_end, snapshot_run_time)
+                          // one bounded CH pass (~2h of meter_usage max)
+   atomic_reset_pending_billable_cache(sub, post_window_billable, _reset_at = snapshot_run_time)
+   HDEL redis:sub_usage:{env}:{sub}  (per-meter raw hash for the just-closed window fields)
+   ```
 9. Release lock.
 
 **Negative wallet balance is allowed.** The debit always succeeds; existing wallet low-balance / zero-balance alerts (already used by `PROMOTIONAL` and `PAID` wallets) are the customer-facing signal. Tenants are expected to wire these up as part of onboarding (see §8).
@@ -240,87 +254,122 @@ Writes into `subscription_meter_hourly_rollup` (`ReplacingMergeTree` collapses o
 
 Groups by `toStartOfHour(timestamp)` (event time), *filters by* `ingested_at` (wall-clock ingest time). A single reconciler pass may touch multiple hours if late-arriving events landed with older event timestamps.
 
-### 5.4 Redis trust check (make redis reads safe)
+### 5.4 Redis trust, rebuild, and fail-closed reads
 
-Every read from `redis:sub_usage:{env}:{sub}` or `redis:grant_crossing:{grant_id}` runs the following trust check first. The invariant: **redis is trustworthy only if it represents data that is fresher than the DB snapshot for the same subscription/grant**. If not, disregard redis, rebuild from `meter_usage FINAL`, and re-warm both DB and redis.
+Three redis key families need trust and recovery: raw per-meter current-window usage, grant crossing markers, and the running billable cache. All follow the same principle: **CH is the source of truth; redis is a cache with a rebuild protocol; reads fail-closed on missing/untrusted keys**.
 
-**Trust marker in redis current-window hash:**
-
-```
-redis:sub_usage:{env}:{sub}
-  _window_start        = <unix ts when snapshot workflow HDEL'd the previous state
-                          and reopened this window; equals last_snapshot.window_end>
-  {meter}__{window}    = <decimal usage>
-```
-
-**Trust marker in crossing key:**
+**Key families and trust markers:**
 
 ```
-redis:grant_crossing:{grant_id}
-  ts                       = <sub-second unix ts when crossing was detected>
-  detected_after_snapshot  = <last_snapshot.window_end at detection time>
+redis:sub_usage:{env}:{sub}                      # per-meter raw current-window usage (for EG-eval, inline crossing)
+  _window_start                                  = unix ts of last snapshot HDEL; must equal last_snapshot.window_end
+  {meter}__{window_start}__{window_end}          = decimal usage
+
+redis:grant_crossing:{grant_id}                  # inline crossing timestamp (for persistence worker)
+  ts                                             = sub-second unix ts when crossing detected
+  detected_after_snapshot                        = last_snapshot.window_end at detection time
+
+redis:pending_billable:{env}:{sub}               # running billable cache (for balance API)
+  value                                          = decimal accumulated since last _reset_at
+  _reset_at                                      = last snapshot re-anchor time (or rebuild time)
+  _state                                         = healthy | rebuilding
+  _rebuild_generation                            = monotonic counter, bumped every rebuild
 ```
 
-**Trust check for current-window read** (balance API, EG-eval, inline crossing detection):
+**Trust rule (applied on every read):** the marker `_reset_at` / `_window_start` / `detected_after_snapshot` must be `>= last_snapshot.window_end`. Any older marker is stale.
+
+#### Read behavior — fail-closed
+
+Real-time wallet balance API and entitlement usage API **return an error** (HTTP 503 with `code = cache_rebuilding`) when the corresponding redis key is missing or untrusted, AND simultaneously trigger the rebuild activity. Rationale: it is better for the customer-facing API to say "recomputing, retry in a few seconds" than to return a stale or reconstructed-but-lossy value. Rebuilds finish in milliseconds to seconds; retry succeeds.
+
+Non-realtime paths (EG-eval, snapshot workflow, backdated recompute) do **not** fail-closed — they either read from CH directly (snapshot, backdated recompute) or wait for the rebuild to complete before their next tick (EG-eval on next 5-min cadence).
+
+#### Rebuild protocol — no-data-loss with concurrent ingest
+
+Rebuild is a per-subscription single-writer activity. All three key families use the same shape:
+
+**Ingest during rebuild** uses a temporary delta key so no event is lost:
 
 ```
-redis_window_start = HGET redis:sub_usage:{env}:{sub}  _window_start
-pg_last_snapshot_end = latest snapshot.window_end for this sub (postgres, single indexed read)
-
-if redis_window_start is nil
-  OR redis_window_start < pg_last_snapshot_end:
-  // stale/missing — treat as untrusted
-  usage_by_meter = meter_usage FINAL for [pg_last_snapshot_end, now)
-  HSET redis:sub_usage:{env}:{sub} _window_start = pg_last_snapshot_end
-  HMSET redis:sub_usage:{env}:{sub} <per-meter usage>
-  return usage_by_meter
+# Lua script (atomic per event write)
+if HGET pending_billable_state == "rebuilding":
+    HINCRBYFLOAT redis:pending_billable_delta:{env}:{sub}:{generation}  value  by amount
+else if HGET pending_billable value exists:
+    HINCRBYFLOAT redis:pending_billable:{env}:{sub}  value  by amount
 else:
-  return HGETALL redis:sub_usage:{env}:{sub}
+    # key missing — bootstrap into rebuild mode
+    SET redis:pending_billable_state:{env}:{sub} = "rebuilding" NX EX 300
+    signal RebuildPendingBillableActivity(sub)
+    # write goes to delta so it's captured
+    HINCRBYFLOAT redis:pending_billable_delta:{env}:{sub}:{new_generation}  value  by amount
 ```
 
-**Trust check for grant crossing read:**
+**Rebuild activity** (idempotent, single-writer via redis lock):
 
 ```
-crossing = HGETALL redis:grant_crossing:{grant_id}
-pg_crossed_at  = grant.quota_crossed_at (postgres)
-pg_last_snapshot_end = latest snapshot.window_end for this sub
-
-if pg_crossed_at is set: return pg_crossed_at              // DB is authoritative once written
-if crossing is nil: return nil                              // no crossing yet
-if crossing.detected_after_snapshot < pg_last_snapshot_end:
-  // redis crossing marker predates the last DB snapshot — stale
-  DEL redis:grant_crossing:{grant_id}
-  return nil        // fall back to EG-eval / snapshot workflow to re-derive from CH
-return crossing.ts
+1. SETNX redis:rebuild_lock:{env}:{sub} = 1 EX 300; if not acquired → another rebuild is running, exit.
+2. Ensure state is "rebuilding" and generation G is fresh (bump if needed). All writes from now on go to delta:{G}.
+3. Pick T_high_water = now() − safety_margin (e.g. 30s) to guarantee CH visibility of any consumer-processed event with ingested_at ≤ T_high_water.
+4. Compute base from CH:
+      base = adjustMeterUsageGrants over [last_snapshot.window_end, T_high_water)
+             for pending_billable
+      raw  = SUM(qty_total) per meter for the current window
+             for sub_usage
+      crossing = walk meter_usage FINAL for grant_id
+             for grant_crossing (see EG-eval crossing re-derivation, §5.2 step 3)
+5. Atomically (Lua):
+      delta = GET pending_billable_delta:{G} or 0
+      DEL pending_billable_delta:{G}
+      HSET pending_billable value = base + delta,
+                            _reset_at = T_high_water,
+                            _state = "healthy",
+                            _rebuild_generation = G
+6. DEL redis:rebuild_lock:{env}:{sub}.
 ```
 
-**Persistence worker** (Temporal schedule, per env, every 5 min — reuses EG-eval cadence):
+Correctness invariant: **every event contributes to `value` exactly once**. Events with `ingested_at ≤ T_high_water` are in `base` (via CH). Events with `ingested_at > T_high_water` that arrive during rebuild go into `delta:{G}`. The atomic `base + delta` merge captures both without duplication.
+
+**Small residual race:** an event whose consumer-processing occurs during rebuild but whose CH `ingested_at` is ≤ T_high_water (i.e., consumer is >30s slower than CH insert visibility) can be counted in both `base` and `delta` → over-count. This is bounded to a handful of events per rebuild and is fully corrected at the next snapshot re-anchor (§5.2 step 8). The 30s safety margin can be tuned per-env based on observed consumer lag.
+
+**Persistence worker for grant crossings** (Temporal schedule, per env, every 5 min):
 
 ```
 for each redis:grant_crossing:{grant_id}:
-  trust-check the crossing (as above)
+  trust-check the crossing (marker >= last_snapshot.window_end)
   if trusted AND postgres grant.quota_crossed_at is nil:
     UPDATE entitlement_grants SET quota_crossed_at = crossing.ts
       WHERE id = grant_id AND quota_crossed_at IS NULL
 ```
 
-Once postgres holds `quota_crossed_at`, it's immutable. Redis key can then be lazily deleted (or left with a TTL) since all future reads short-circuit to postgres.
+Once postgres holds `quota_crossed_at`, it's immutable. Reads short-circuit to postgres, redis key can be lazily deleted or TTL'd.
 
-**Trust check rebuilds are rare.** They fire on: (a) redis eviction / restart, (b) a snapshot workflow that HDEL'd redis but crashed before the rebuild fires. Both are recoverable; neither loses data because `meter_usage` is source of truth.
+**Failure modes summary:**
+
+| Failure | Impact | Recovery |
+|---|---|---|
+| Balance API cache evicted | 503 on read; ingests write to delta | Rebuild activity, milliseconds to seconds |
+| Grant crossing key evicted | Missed inline detection until next 5-min EG-eval or snapshot | Auto-recovered by EG-eval / snapshot re-derivation |
+| Raw per-meter hash evicted | EG-eval and inline crossing miss for current window | Rebuild activity + fallback to `meter_usage FINAL` |
+| Consumer down for N min | No writes; cache goes stale by ≤ N min | Snapshot re-anchor at next hour boundary corrects; balance API returns stale-but-not-wrong (since ingests are Kafka-backed and will replay) |
+| Snapshot workflow fails mid-run | Snapshot row not written, cache not re-anchored | Temporal retry; on retry, idempotent via `(sub_id, window_start)` |
+
+**Redis eviction policy** should be `noeviction` (fail writes when memory-full) for this workload. `pending_billable` and `grant_crossing` keys carry no TTL. `sub_usage` per-meter hash carries a 24h TTL as a safety net (§4.4). Sizing redis for peak-sub × grants-per-sub is straightforward and small compared to CH; memory pressure is not the expected failure mode.
 
 ### 5.5 Cost profile — where CH is touched
 
 | Operation | `meter_usage FINAL` | Rollup query | Redis | Postgres |
 |---|---|---|---|---|
-| Event ingest (prepaid) | 1 insert | — | trust-check + 1 `HINCRBYFLOAT` (raw) + inline crossing check + 1 `HINCRBYFLOAT` (EG counter, only if any grant crossed) | — (cached grant + crossing reads only) |
-| Trust-check rebuild (rare, on redis miss) | 1 range scan (window bounded) | — | rewrite hash | — |
+| Event ingest (prepaid) | 1 insert | — | 1 `HINCRBYFLOAT` (raw per-meter) + inline crossing check + 1 `HINCRBYFLOAT` (pending_billable) via Lua atomic | — (cached grant + crossing reads only) |
+| Rebuild activity (rare, on eviction) | 1 range scan (bounded ~2h) + billing fold | — | rewrite pending_billable + delta merge | — |
 | Reconciler (hourly, per env) | 1 range scan by `ingested_at` | 1 batch insert | — | 1 `last_reconciled_max_ingested_at` update |
 | EG-eval (5-min debounced, per grant, prepaid) | — | 1 range scan (`FINAL`) | 1 `HGETALL` (current window) | grant.usage update |
 | Persistence worker (5-min, per env) | — | — | scan crossing keys | grant.quota_crossed_at UPDATE (only when nil) |
-| Snapshot workflow (per active sub per active hour) | 1 range scan (1h window) | — | 1 `HDEL` batch (raw + EG counter) + set `_window_start` | 1 snapshot row + wallet txn |
-| Balance API (prepaid) | Fallback only (EG counter trust-check miss, bounded to <1h) | — | 1 `HGETALL` + crossing check + 1 EG counter read | grant + wallet reads |
+| Snapshot workflow (per active sub per active hour) | 2 range scans (1h window + post-window re-anchor slice) | — | HDEL raw + atomic reset of pending_billable | 1 snapshot row + wallet txn |
+| Balance API (prepaid) | — (fail-closed on miss; rebuild is async) | — | 1 `HGET pending_billable` | 1 wallet read |
 | `mergedOverage` at invoice time (arrear) | Fringe only (rare mid-hour edges) | 1 per range | — | — |
 | Backdated event recompute | 1 per affected hour | — | — | affected snapshot rows |
+
+Balance API is now the leanest hot path: **1 redis HGET + 1 postgres wallet read, no CH touch, no fallback**. When redis is missing, it returns 503 rather than fall back — see §5.4.
 
 **Hot path never hits `meter_usage FINAL`** under normal operation. Only the reconciler (bounded to its `ingested_at` slice), the snapshot workflow (bounded to 1h per active sub), rare `mergedOverage` fringes, and rare trust-check rebuilds touch it. All are scheduled, invoice-time, or exceptional — not per-request.
 
@@ -368,89 +417,58 @@ Rationale for synthesis over fail-closed: keeps the customer's existing entitlem
 
 ### 6.4 Wallet balance API
 
-**Balance API uses the same overage computation as billing.** No approximation, no uniform-usage assumption. This is what makes "wallet balance as displayed" == "what a snapshot-right-now would debit" — the invariant customers rely on.
-
-Reuse `adjustMeterUsageGrants` / `mergedOverage` (`internal/ee/service/billing_meter_usage_grants.go`), which already handles:
-- Additive vs parallel grants (`perECOverage` fold, then `mergedOverage` for parallel).
-- Quantity vs amount measure (measure branching at the end of `adjustMeterUsageGrants`).
-- `first_usage` allocation behavior (encoded in grant `valid_from` set at grant open time — no special logic needed at billing).
-- Grant pricing guards (rejects tiered / bucketed / non-additive combinations).
+Balance API is a **single redis read + single postgres read**, or a 503:
 
 ```
-balance = wallet.current_balance
-        − billable_in_current_window
-        − pending_invoices
+value = HGET redis:pending_billable:{env}:{sub}  value
+if value is nil OR state is not "healthy" OR _reset_at < last_snapshot.window_end:
+   return 503 { code: "cache_rebuilding", retry_after: 5s }
+   (and trigger the rebuild activity — §5.4)
 
-billable_in_current_window computation:
-  raw_by_meter = trust_checked_read(redis:sub_usage:{env}:{sub})   // §5.4
-  billable = 0
-
-  for each (meter, raw_current) in raw_by_meter:
-    grants = load_active_grants(sub, meter, now)                   // postgres, indexed
-    
-    // Refresh grant.usage_now for exhaustion check (approximate is OK here —
-    // we only decide *whether* a grant is crossed. The billable-range math
-    // below reads exact usage from redis EG counter or CH.)
-    for each grant in grants:
-      grant.usage_now = grant.usage_cached + raw_current
-      grant.crossing_ts_now = trust_checked_crossing(grant.id) or (
-        last_snapshot.window_end if grant.usage_now >= grant.quota else nil
-      )
-
-    // Call the existing billing fold. Its mergedOverage step needs a
-    // usage_provider(interval) callback (small refactor to make it injectable).
-    result = adjustMeterUsageGrants(
-      item, matchingCharge, grants, priceService, meter, sub, extCustomerIDs,
-      usage_provider = balance_api_usage_provider,   // see below
-    )
-    billable += result.amount
-
-  return billable
-
-balance_api_usage_provider(interval [start, end)):
-  // interval is a merged billable range from mergedOverage;
-  // in the balance API it can only lie inside the current window
-  // (historical hours are already debited via snapshots).
-  if trust_checked_meter_billable_counter(sub, meter, current_window) valid
-     AND counter._started_at <= start:
-    return counter_value   // exact, O(1)
-  else:
-    // fallback — bounded to current window, at most 1h of meter_usage
-    return SELECT SUM(qty_total) FROM meter_usage FINAL
-             WHERE ... AND timestamp >= start AND timestamp < end
+balance = wallet.current_balance − value − pending_invoices
 ```
 
-**Fast path (normal case):** redis EG billable counter is present and covers the entire billable range → zero ClickHouse queries.
+Zero ClickHouse touch on the hot path. Zero interval math. Handles additive/parallel/quantity/amount/first_usage automatically because the classification happens at ingest time (§5.1 step 5) using existing grant-state semantics.
 
-**Fallback path:** counter stale/missing → single `meter_usage FINAL` query bounded to a partial hour (`[max(crossing_ts, last_snapshot.window_end), now)`). Cheap because bounded, rare because the counter is maintained inline (§5.1 step 5).
+**"Balance matches what a snapshot-right-now would debit"** holds because:
+- Each event classified billable at ingest AND persisted to CH via `meter_usage`.
+- The snapshot workflow uses the exact same billing code path (`adjustMeterUsageGrants`) against `meter_usage FINAL` — so its `billable_in_window` matches the sum of ingest-time increments (up to the bounded amount-measure straddle error, §5.1 step 5).
+- At snapshot, the workflow debits wallet by the exact billable, and re-anchors the cache to ground truth for `[window_end, now)` (§5.2 step 8) — so any accumulated ingest-time error is zeroed out on every snapshot boundary.
 
-### 6.5 Redis EG billable counter (fast-path storage for balance API)
+### 6.5 Running billable cache (details)
 
-Purpose: give the balance API an O(1) source for "usage in the current window while at least one applicable grant was crossed", which is exactly what `mergedOverage` needs when its billable range lies inside the current window.
+Purpose: give the balance API an O(1) source for "billable amount accrued since the last snapshot debit". Replaces the per-meter union counter from earlier drafts, which couldn't handle overage intervals spanning multiple snapshot windows.
 
-**Keys:**
+**Key:**
 
 ```
-redis:meter_billable_current:{env}:{sub}:{meter}:{window}
-  _started_at        = <first timestamp we started accumulating for this window>
-  _last_snapshot_end = <last_snapshot.window_end at counter creation, for trust check>
-  value              = decimal accumulated units
+redis:pending_billable:{env}:{sub}
+  value                = decimal accumulated (units of subscription currency)
+  _reset_at            = timestamp of last snapshot re-anchor (or rebuild)
+  _state               = healthy | rebuilding
+  _rebuild_generation  = monotonic counter, bumped every rebuild
 ```
 
-**Write path** (§5.1 step 5): on each event ingest for a prepaid-settled sub, if any grant applicable to `(sub, meter)` is currently crossed (redis crossing key set OR postgres `quota_crossed_at` set), `HINCRBYFLOAT` the value by `qty` and set `_started_at`/`_last_snapshot_end` on first write via `HSETNX`.
+**Write path (per event ingest, §5.1 step 5):**
+```
+billable = check_billability(event, applicable_grants_state)
+   // billable iff any grant is crossed with quota_crossed_at <= event.timestamp < valid_to
+if billable:
+  atomic_ingest_incr(sub, amount = qty × price)
+     // Lua script: writes to main key if state=healthy, delta:{G} if rebuilding, etc. — §5.4
+```
 
-**Read path** (§6.4 `balance_api_usage_provider`):
-- Trust check: `_last_snapshot_end == current last_snapshot.window_end` AND `_started_at <= interval.start`.
-- If trusted → return `value` as the merged-billable usage for that interval.
-- Else → fall back to `meter_usage FINAL` for the interval.
+**Read path (balance API, §6.4):** single `HGET value`; fail-closed on missing / stale marker.
 
-**Reset:** snapshot workflow HDELs these keys along with the raw current-window hash (§5.2 step 8).
+**Snapshot re-anchor (§5.2 step 8):** at the end of each snapshot workflow, after wallet debit, the workflow computes billable for `[window_end, snapshot_run_time)` via the same billing code path against `meter_usage FINAL` and atomically resets the cache to that value with `_reset_at = snapshot_run_time`. This bounds cache staleness to the snapshot cadence (~1h) and self-corrects any inline classification error.
 
-**Why per-meter union counter, not per-grant?** `mergedOverage` bills usage in the *union* of crossed grants' intervals (see §6.1). The union counter tracks exactly that — usage while any grant is crossed. Per-grant counters would over-count when parallel grants' intervals overlap.
+**Rebuild on eviction:** §5.4 rebuild protocol. Uses a versioned `delta:{G}` key to capture writes during rebuild without loss. Base computed from CH via `adjustMeterUsageGrants` for `[last_snapshot.window_end, T_high_water)`. Atomic merge on completion.
 
-**Amount vs quantity measure:** the counter stores **units** in both cases; the existing measure branching in `adjustMeterUsageGrants` prices units → money for quantity, or hands units to `GetMeterWindowCost` for amount. No branching needed in the counter itself.
+**Why per-subscription, not per-meter?** Billable is a **subscription-level** concept — the amount to debit from the wallet is a single decimal, not per-meter. Storing per-meter would force interval-merge math at read time (the failure mode of the previous design). Per-subscription single decimal collapses all parallel-grant complexity into ingest-time boolean logic.
 
-**One implementation caveat:** the "any grant crossed" check on the write path is a hot-path read of postgres `grant.quota_crossed_at` per applicable grant. Cache these per subscription in the consumer memory (invalidate on persistence-worker write or on 30s TTL). Consumers restart occasionally; on cold start, first event re-reads postgres.
+**Amount vs quantity measure:** ingest-time classification is a boolean (billable / not). Cache stores currency-denominated amounts. Amount-measure grants participate identically — the crossing check triggers on `grant.usage >= grant.quota` where `grant.usage` is currency for amount measure. The `qty × price` computation on billable ingest is the same math the snapshot workflow does at higher precision. Bounded straddle error (§5.1 step 5) is the only divergence.
+
+**Cached grant state on the ingest path:** the "check_billability" call reads `grant.quota_crossed_at` and `grant.valid_to` for every applicable grant. Cache these in-memory per subscription in the consumer process with a 30s TTL. On persistence-worker write to `quota_crossed_at`, publish a pub/sub invalidation to consumers. On cold start, first event per sub re-reads postgres.
 
 ### 6.6 EG alerts
 
@@ -619,4 +637,8 @@ Acceptable drift between redis, rollup, and `meter_usage` for the customer-facin
 - ~~Ordering barrier / blocking primitive for snapshot vs EG-eval~~ → **snapshot workflow triggers EG-eval synchronously** for its window as step 3 (§5.2).
 - ~~Grant-boundary precision (hour snap vs minute snap vs no snap)~~ → **minute-level rollup + inline crossing detection in event consumer**. Crossing detected on ingest with sub-second precision, persisted to postgres every 5 min. `mergedOverage` billable ranges are minute-aligned on the interior; ragged edges use small `meter_usage FINAL` fringe queries or minute snap (config-driven). See §5.1 step 4, §5.4 (trust check), §6.4.
 - ~~Trust in redis current-window and crossing values~~ → **trust marker (`_window_start` on the hash, `detected_after_snapshot` on the crossing key, `_last_snapshot_end` on the EG counter) compared against `last_snapshot.window_end` on every read**. Stale/missing → rebuild from `meter_usage FINAL` and re-warm both redis and DB. §5.4, §6.5.
-- ~~Balance API uniform-usage approximation~~ → **removed**. Balance API now reuses `adjustMeterUsageGrants` / `mergedOverage` from billing verbatim, with a redis EG billable counter as the O(1) fast path and `meter_usage FINAL` as the bounded fallback. "Wallet balance as displayed" is guaranteed to match "what a snapshot-right-now would debit". §6.4, §6.5.
+- ~~Balance API uniform-usage approximation~~ → **removed**. Billability is decided per-event at ingest time using existing parallel/additive grant-state semantics; the outcome is INCR'd into a per-subscription running cache. Balance API is a single HGET. §5.1 step 5, §6.4.
+- ~~Per-meter union counter for current-window overage~~ → **replaced by per-subscription running billable cache**. Union counter couldn't handle overage intervals spanning multiple snapshot windows (e.g. the EC3 case in reviewer feedback where a week-long grant's overage spans hours). Per-sub cache collapses all interval math into an ingest-time boolean. §6.5.
+- ~~"Rebuild redis from CH" hand-wave~~ → **explicit versioned-delta rebuild protocol** with no-data-loss guarantee under concurrent ingest. Single-writer via redis lock, ingests during rebuild route to `delta:{generation}`, atomic merge on completion. Small residual double-count (bounded to consumer-lag > safety-margin during rebuild) self-corrects at next snapshot re-anchor. §5.4.
+- ~~Real-time API on stale/missing cache~~ → **fail-closed** with HTTP 503 `code = cache_rebuilding` and asynchronous rebuild trigger. Retries succeed in milliseconds to seconds. Non-realtime paths (snapshot workflow, backdated recompute) don't fail-closed — they read directly from CH. §5.4.
+- ~~Amount-measure event straddling grant crossing~~ → **acknowledged bounded approximation** — an event that pushes `grant.usage` from `quota − 3` to `quota + 5` in one atomic write is classified fully-billable or fully-not by the ingest-time check. Error is bounded to ≤ 1 event's cost per crossing per grant, self-corrected at next snapshot re-anchor. §5.1 step 5.
