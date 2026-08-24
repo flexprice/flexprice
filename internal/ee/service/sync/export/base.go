@@ -183,11 +183,6 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 			Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Info(ctx, "uploading export",
-		"connection_id", request.ConnectionID,
-		"bucket", request.JobConfig.Bucket,
-		"region", request.JobConfig.Region)
-
 	store, err := s.storageResolver.ForConnection(ctx, request.ConnectionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -200,6 +195,14 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 	filenamePrefix := exporter.GetFilenamePrefix()
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
 	key := storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
+
+	// Log the resolved store's destination (store.FileURL encodes the bucket the
+	// upload actually targets) rather than request.JobConfig.Bucket, which is a
+	// separate field that can diverge from the connection row for managed rows.
+	s.logger.Info(ctx, "uploading export",
+		"connection_id", request.ConnectionID,
+		"provider", store.Provider(),
+		"destination", store.FileURL(key))
 
 	uploadResponse, err := store.Upload(ctx, &storage.UploadRequest{
 		Key:      key,

@@ -758,59 +758,8 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
-	// Flexprice-managed S3 connection. Like the GCS branch below, no credentials
-	// are stored on the connection row: the export path resolves credentials from
-	// PLATFORM config at runtime (see Factory.buildS3Storage), which may be
-	// static keys, the ambient AWS credential chain (EKS IRSA / EKS Pod Identity /
-	// ECS task role / EC2 instance profile), or GCP->AWS federation. Only the
-	// destination bucket/region and the tenant-isolating key prefix are set here.
-	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
-		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",
-			"tenant_id", conn.TenantID,
-			"connection_id", conn.ID)
-
-		if err := s.Config.FlexpriceS3Exports.Validate(); err != nil {
-			return nil, err
-		}
-
-		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceS3Exports.Bucket
-		conn.SyncConfig.Storage.Region = s.Config.FlexpriceS3Exports.Region
-		// Tenant + Environment isolation: tenant_id/environment_id
-		conn.SyncConfig.Storage.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
-
-		s.Logger.Info(ctx, "configured flexprice-managed S3 destination",
-			"bucket", conn.SyncConfig.Storage.Bucket,
-			"region", conn.SyncConfig.Storage.Region,
-			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
-			"credential_source", s.Config.FlexpriceS3Exports.ResolvedCredentialSource(),
-			"tenant_id", conn.TenantID,
-			"environment_id", conn.EnvironmentID)
-	}
-
-	// Flexprice-managed GCS connection. Unlike the S3 branch there are no
-	// credentials to inject: the export path authenticates with the deployment's
-	// ambient Workload Identity (see Factory.buildGCSStorage), so only the
-	// destination bucket and tenant-isolating key prefix are set here.
-	if conn.ProviderType == types.SecretProviderGCS && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
-		s.Logger.Info(ctx, "creating flexprice-managed GCS connection",
-			"tenant_id", conn.TenantID,
-			"connection_id", conn.ID)
-
-		if err := s.Config.FlexpriceGCSExports.Validate(); err != nil {
-			return nil, err
-		}
-
-		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceGCSExports.Bucket
-		// Region is meaningless for GCS; a bucket's location is fixed at creation.
-		conn.SyncConfig.Storage.Region = ""
-		// Tenant + Environment isolation: tenant_id/environment_id
-		conn.SyncConfig.Storage.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
-
-		s.Logger.Info(ctx, "configured flexprice-managed GCS destination",
-			"bucket", conn.SyncConfig.Storage.Bucket,
-			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
-			"tenant_id", conn.TenantID,
-			"environment_id", conn.EnvironmentID)
+	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	// Encrypt metadata
@@ -963,6 +912,56 @@ func (s *connectionService) GetConnections(ctx context.Context, filter *types.Co
 	}, nil
 }
 
+// applyManagedStorageConfig overrides caller-supplied destination fields for
+// Flexprice-managed connections. No credentials are stored on the row: the
+// export path resolves them from PLATFORM config at runtime (see
+// Factory.buildS3Storage / buildGCSStorage). Only the destination bucket/region
+// and the tenant-isolating key prefix are forced here so a caller cannot point a
+// managed connection at an arbitrary (or cross-tenant) bucket/prefix. Must run
+// on both create and update, or an update payload with is_flexprice_managed=true
+// and a caller-chosen key_prefix would poison tenant isolation.
+func (s *connectionService) applyManagedStorageConfig(ctx context.Context, conn *connection.Connection) error {
+	if conn.SyncConfig == nil || conn.SyncConfig.Storage == nil || !conn.SyncConfig.Storage.IsFlexpriceManaged {
+		return nil
+	}
+
+	keyPrefix := fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
+
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		if err := s.Config.FlexpriceS3Exports.Validate(); err != nil {
+			return err
+		}
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceS3Exports.Bucket
+		conn.SyncConfig.Storage.Region = s.Config.FlexpriceS3Exports.Region
+		conn.SyncConfig.Storage.KeyPrefix = keyPrefix
+		s.Logger.Info(ctx, "configured flexprice-managed S3 destination",
+			"connection_id", conn.ID,
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"region", conn.SyncConfig.Storage.Region,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"credential_source", s.Config.FlexpriceS3Exports.ResolvedCredentialSource(),
+			"tenant_id", conn.TenantID,
+			"environment_id", conn.EnvironmentID)
+	case types.SecretProviderGCS:
+		if err := s.Config.FlexpriceGCSExports.Validate(); err != nil {
+			return err
+		}
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceGCSExports.Bucket
+		// Region is meaningless for GCS; a bucket's location is fixed at creation.
+		conn.SyncConfig.Storage.Region = ""
+		conn.SyncConfig.Storage.KeyPrefix = keyPrefix
+		s.Logger.Info(ctx, "configured flexprice-managed GCS destination",
+			"connection_id", conn.ID,
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"tenant_id", conn.TenantID,
+			"environment_id", conn.EnvironmentID)
+	}
+
+	return nil
+}
+
 func (s *connectionService) UpdateConnection(ctx context.Context, id string, req dto.UpdateConnectionRequest) (*dto.ConnectionResponse, error) {
 	s.Logger.Debug(ctx, "updating connection", "connection_id", id)
 
@@ -989,6 +988,13 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	if req.SyncConfig != nil {
 		conn.SyncConfig = req.SyncConfig
+	}
+
+	// Re-apply managed destination overrides so an update payload with
+	// is_flexprice_managed=true cannot redirect exports to an arbitrary bucket
+	// or a cross-tenant key prefix.
+	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	// Update encrypted_secret_data if provided (e.g., webhook_verifier_token)

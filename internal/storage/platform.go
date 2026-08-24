@@ -72,7 +72,10 @@ func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider
 			Bucket: bucket,
 			Region: region,
 		}
-		if cfg.FlexpriceS3Exports.AWSAccessKeyID != "" {
+		// Static keys from flexprice_s3_exports are export-scoped (see the
+		// purpose comment above): PurposeInvoice must not pick them up, or an
+		// export-bucket-only credential would break invoice PDF upload/presign.
+		if purpose == PurposeExport && cfg.FlexpriceS3Exports.AWSAccessKeyID != "" {
 			s3Cfg.AWSAccessKeyID = cfg.FlexpriceS3Exports.AWSAccessKeyID
 			s3Cfg.AWSSecretAccessKey = cfg.FlexpriceS3Exports.AWSSecretAccessKey
 			s3Cfg.AWSSessionToken = cfg.FlexpriceS3Exports.AWSSessionToken
