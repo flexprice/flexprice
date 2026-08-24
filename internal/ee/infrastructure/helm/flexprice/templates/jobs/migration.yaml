@@ -625,6 +625,20 @@ spec:
               if command -v kafka-topics.sh >/dev/null 2>&1; then
                 KAFKA_TOPICS_CMD="kafka-topics.sh"
               fi
+              # verify-migrations runs in the application image, which does NOT ship
+              # a Kafka CLI. Without this guard "$KAFKA_TOPICS_CMD --list" is a
+              # command-not-found, 2>/dev/null||true empties EXISTING, and every
+              # topic falsely reports MISSING -- even though create-kafka-topics
+              # (which runs in cp-kafka, WITH the CLI) created them one container
+              # earlier. Skip the check with a clear message when no CLI is present
+              # rather than fail a correct deployment. (The topics were already
+              # asserted at creation.)
+              if ! command -v "${KAFKA_TOPICS_CMD}" >/dev/null 2>&1; then
+                echo "  [--] no Kafka CLI in this image (${KAFKA_TOPICS_CMD} absent) -- skipping topic verify."
+                echo "       topics were created + reported by the create-kafka-topics container."
+                echo "✅ migration verification complete (kafka topic check skipped)"
+                exit 0
+              fi
               CMD_CONFIG=""
               {{- if or .Values.kafkaConfig.useSASL .Values.kafkaConfig.tls }}
               CMD_CONFIG=/tmp/kafka-admin.properties
