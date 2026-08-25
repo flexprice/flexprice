@@ -51,20 +51,32 @@ RESIDUE="$(FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_"
   go run ./cmd/migrate postgres --dry-run --allow-index-changes 2>/dev/null | grep -v '^$' || true)"
 
 if [ -n "$RESIDUE" ]; then
+  # Refuse to write the file. A draft containing no-op DDL is a trap: the
+  # DROP+CREATE pair is indistinguishable from a real predicate change once it is
+  # sitting in a migration, and keeping it ships a pointless index rebuild on a hot
+  # table. Fixing the annotation takes two lines and the exact string is printed
+  # below, so blocking is cheaper than a draft nobody can safely review.
   echo >&2
-  echo "WARNING: some of the DDL below is a NO-OP and must not be kept." >&2
-  echo "Ent still proposes it after applying, which means it rebuilds an index that" >&2
-  echo "needs nothing. It looks identical to a real predicate change in the draft." >&2
+  echo "REFUSING TO DRAFT — an index predicate is written in a form Postgres does" >&2
+  echo "not store, so Ent proposes rebuilding that index forever." >&2
+  echo >&2
+  echo "These statements are NO-OPs. In a draft they are indistinguishable from a" >&2
+  echo "real predicate change:" >&2
   echo >&2
   echo "$RESIDUE" | sed 's/^/  /' >&2
   echo >&2
-  echo "Fix the schema annotation instead, then regenerate:" >&2
+  echo "Fix the annotation in ent/schema/, run 'make generate-ent', and try again:" >&2
+  echo >&2
   for idx in $(echo "$RESIDUE" | grep -oE 'INDEX "[a-z0-9_]+"' | grep -oE '"[a-z0-9_]+"' | tr -d '"' | sort -u); do
     want="$(psql -X -tAc "SELECT substring(indexdef from 'WHERE (.*)\$') FROM pg_indexes WHERE indexname='$idx';" \
             "$BASE/mig_draft?sslmode=disable" 2>/dev/null || true)"
-    [ -n "$want" ] && printf '    entsql.IndexWhere("%s")\n' "$want" >&2
+    # No attempt to name the source file: Ent derives the index name from a hash,
+    # so it does not appear in ent/schema/ to grep for. The table name in the
+    # statement above is enough to find it.
+    [ -n "$want" ] && printf '    entsql.IndexWhere("%s")\n\n' "$want" >&2
   done
-  echo >&2
+  echo "No file was written." >&2
+  exit 1
 fi
 
 FILE="$DIR/$(date -u +%Y%m%d%H%M%S)_${NAME}.sql"

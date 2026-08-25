@@ -181,8 +181,8 @@ The reviewer cannot tell those apart by looking. Miss it, and you ship a migrati
 that drops and rebuilds an index for no reason — on `events` or `feature_usage` that
 is an incident, not a nit.
 
-You do not have to remember this. `make migrate-check-phantom` enforces it, using a
-rule that needs no knowledge of what "canonical" means:
+You do not have to remember this. Two things enforce it, using a rule that needs no
+knowledge of what "canonical" means:
 
 > once the migrations satisfy Ent, Ent must have nothing left to propose.
 
@@ -202,7 +202,13 @@ store. Replace it with what Postgres actually stores:
     entsql.IndexWhere("((status)::text = 'published'::text)")
 ```
 
-It runs **after** the sync check, and only makes sense there: if a real migration is
+`make migrate-generate` applies the same test to its own draft and **refuses to
+write the file** when it finds residue. A draft containing no-op DDL is a trap: the
+`DROP`+`CREATE` pair is indistinguishable from a real predicate change once it is
+sitting in a migration. Fixing the annotation is two lines and the exact string is
+printed, so blocking is cheaper than a draft nobody can safely review.
+
+Both run **after** the sync check, and only make sense there: if a real migration is
 missing, the residue is that missing change rather than a phantom.
 
 ## Open decision — ClickHouse `ON CLUSTER`
