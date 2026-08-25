@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -29,6 +32,7 @@ type UserService interface {
 	UpdateUserRoles(ctx context.Context, id string, req *dto.UpdateUserRolesRequest) (*dto.UpdateUserRolesResponse, error)
 	DeleteUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
+	CreateSupportChatToken(ctx context.Context) (*dto.SupportChatTokenResponse, error)
 }
 
 type userService struct {
@@ -616,4 +620,42 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 	}
 
 	return s.userRepo.Delete(ctx, id)
+}
+
+func (s *userService) CreateSupportChatToken(ctx context.Context) (*dto.SupportChatTokenResponse, error) {
+	if s.cfg == nil || s.cfg.ChatSupport.AppID == "" || s.cfg.ChatSupport.IdentitySecret == "" {
+		return nil, ierr.NewError("chat support identity verification is not configured").
+			WithHint("Set chat_support.app_id and chat_support.identity_secret").
+			Mark(ierr.ErrInternal)
+	}
+
+	u, err := s.GetUserInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if u.Email == "" {
+		return nil, ierr.NewError("user has no email").
+			WithHint("Support chat identity verification requires a user with an email").
+			Mark(ierr.ErrValidation)
+	}
+
+	secretBytes, err := hex.DecodeString(s.cfg.ChatSupport.IdentitySecret)
+	if err != nil {
+
+		return nil, ierr.WithError(err).
+			WithHint("chat_support.identity_secret must be a hex string").
+			Mark(ierr.ErrInternal)
+	}
+
+	mac := hmac.New(sha256.New, secretBytes)
+	if _, err := mac.Write([]byte(u.Email)); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to hash the support chat email").
+			Mark(ierr.ErrInternal)
+	}
+
+	return &dto.SupportChatTokenResponse{
+		Token: hex.EncodeToString(mac.Sum(nil)),
+	}, nil
 }

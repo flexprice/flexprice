@@ -120,7 +120,7 @@ func SetupDummyBillingCustomer() error {
 	meterRepo := entRepo.NewMeterRepository(client, appLogger, cacheClient)
 	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, redisCache)
 	invoiceLineItemRepo := entRepo.NewInvoiceLineItemRepository(client, appLogger)
-	featureRepo := entRepo.NewFeatureRepository(client, appLogger, cacheClient)
+	featureRepo := entRepo.NewFeatureRepository(client, appLogger, cacheClient, redisCache)
 	entitlementRepo := entRepo.NewEntitlementRepository(client, appLogger, cacheClient, redisCache)
 	walletRepo := entRepo.NewWalletRepository(client, appLogger, redisCache)
 	tenantRepo := entRepo.NewTenantRepository(client, appLogger, cacheClient, redisCache)

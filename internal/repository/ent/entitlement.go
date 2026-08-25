@@ -317,6 +317,8 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetUsageResetPeriod(e.UsageResetPeriod).
 		SetStaticValue(e.StaticValue).
 		SetNillableParentEntitlementID(e.ParentEntitlementID).
+		SetNillableStartDate(e.StartDate).
+		SetNillableEndDate(e.EndDate).
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).

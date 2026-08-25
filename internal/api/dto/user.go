@@ -163,5 +163,11 @@ type ActiveEnvironmentAPIKeys struct {
 	APIKeys []ActiveAPIKey `json:"api_keys"`
 }
 
+// Token is the hex-encoded HMAC-SHA256 of the user's email, verified by Pylon via email_hash.
+type SupportChatTokenResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+}
+
 // ListUsersResponse is the response type for listing users with pagination
 type ListUsersResponse = types.ListResponse[*UserResponse] // @name ListUsersResponse

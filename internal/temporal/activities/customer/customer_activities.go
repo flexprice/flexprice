@@ -78,6 +78,12 @@ func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input m
 
 	customerResp, err := customerService.CreateCustomer(ctx, createCustomerReq)
 	if err != nil {
+		a.logger.Error(ctx, "CreateCustomerActivity failed",
+			"error", err,
+			"external_id", input.ExternalID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create customer").
 			WithReportableDetails(map[string]interface{}{
@@ -133,6 +139,13 @@ func (a *CustomerActivities) CreateWalletActivity(ctx context.Context, input mod
 	// Create the wallet
 	walletResp, err := walletService.CreateWallet(ctx, walletDTOReq)
 	if err != nil {
+		a.logger.Error(ctx, "CreateWalletActivity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"currency", input.WalletConfig.Currency,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create wallet").
 			WithReportableDetails(map[string]interface{}{
@@ -178,6 +191,13 @@ func (a *CustomerActivities) CreateSubscriptionActivity(ctx context.Context, inp
 		PlanID: input.SubscriptionConfig.PlanID,
 	})
 	if err != nil {
+		a.logger.Error(ctx, "CreateSubscriptionActivity failed to get prices for plan",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"plan_id", input.SubscriptionConfig.PlanID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get prices for plan").
 			WithReportableDetails(map[string]interface{}{
@@ -219,6 +239,14 @@ func (a *CustomerActivities) CreateSubscriptionActivity(ctx context.Context, inp
 	// Create the subscription
 	subResp, err := subscriptionService.CreateSubscription(ctx, *subDTOReq)
 	if err != nil {
+		a.logger.Error(ctx, "CreateSubscriptionActivity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"plan_id", input.SubscriptionConfig.PlanID,
+			"currency", currency,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create subscription").
 			WithReportableDetails(map[string]interface{}{

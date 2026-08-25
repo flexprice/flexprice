@@ -28,8 +28,9 @@ func NewDealSyncActivities(
 	}
 }
 
-// CreateLineItems creates HubSpot line items from subscription
-// This is the first step - it creates line items but doesn't update deal amount
+// CreateLineItems reconciles the subscription's line items into the HubSpot deal — updating
+// mapped ones and creating unmapped ones. The activity name is unchanged so that workflow
+// executions started before this change replay without a non-determinism error.
 func (a *DealSyncActivities) CreateLineItems(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
@@ -63,7 +64,7 @@ func (a *DealSyncActivities) CreateLineItems(
 	}
 
 	// Create line items - uses existing DealSyncService logic
-	err = hubspotIntegration.DealSyncSvc.SyncSubscriptionToDeal(ctx, input.SubscriptionID)
+	err = hubspotIntegration.DealSyncSvc.SyncSubscriptionLineItems(ctx, input.SubscriptionID)
 	if err != nil {
 		a.logger.Error(ctx, "failed to create line items",
 			"error", err,

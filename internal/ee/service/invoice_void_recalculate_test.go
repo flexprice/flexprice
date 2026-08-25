@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -559,7 +560,9 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PrepaidCreditsOnlyRefund()
 }
 
 func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PartiallyRefundedStatus() {
-	// PARTIALLY_REFUNDED is an allowed payment status for voiding
+	// PARTIALLY_REFUNDED is an allowed payment status for voiding.
+	// Voiding must only return the value that has NOT already been refunded,
+	// so cumulative RefundedAmount can never exceed the funded value.
 	prevRefunded := decimal.NewFromFloat(10.00)
 	amountPaid := decimal.NewFromFloat(60.00)
 	inv := s.buildFinalizedInvoice("inv_partial_refund", amountPaid, decimal.Zero, types.PaymentStatusPartiallyRefunded)
@@ -578,10 +581,141 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PartiallyRefundedStatus() 
 	s.Equal(types.InvoiceStatusVoided, updated.InvoiceStatus)
 	s.Equal(types.PaymentStatusRefunded, updated.PaymentStatus)
 
-	// RefundedAmount = previous ($10) + new refund ($60)
-	expectedTotal := prevRefunded.Add(amountPaid)
-	s.True(expectedTotal.Equal(updated.RefundedAmount),
-		"expected refunded_amount=%s, got=%s", expectedTotal, updated.RefundedAmount)
+	// Cumulative refunded value must equal the funded value ($60), not $60 on top of $10.
+	s.True(amountPaid.Equal(updated.RefundedAmount),
+		"expected refunded_amount=%s, got=%s", amountPaid, updated.RefundedAmount)
+}
+
+func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PartiallyRefundedDoesNotOverRefund() {
+	// Regression: voiding a partially refunded invoice must credit only the
+	// remaining unreimbursed value, never the full historical funded value.
+	// Funded = AmountPaid $100 + prepaid credits $20 = $120; $30 already refunded
+	// via a refund credit note, so voiding may return at most $90.
+	prevRefunded := decimal.NewFromFloat(30.00)
+	amountPaid := decimal.NewFromFloat(100.00)
+	prepaidCredits := decimal.NewFromFloat(20.00)
+	funded := amountPaid.Add(prepaidCredits)
+
+	existingWallet := s.buildPrepaidWallet("wallet_over_refund", decimal.NewFromFloat(40.00))
+	initialBalance := existingWallet.Balance
+
+	inv := s.buildFinalizedInvoice("inv_over_refund", amountPaid, prepaidCredits, types.PaymentStatusPartiallyRefunded)
+	stored, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	stored.RefundedAmount = prevRefunded
+	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
+
+	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	s.NoError(err)
+
+	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusVoided, updated.InvoiceStatus)
+
+	// Cumulative refunded value must never exceed the total funded value.
+	s.True(funded.Equal(updated.RefundedAmount),
+		"expected cumulative refunded_amount=%s, got=%s", funded, updated.RefundedAmount)
+	s.False(updated.RefundedAmount.GreaterThan(funded),
+		"cumulative refunded amount %s exceeds funded value %s", updated.RefundedAmount, funded)
+
+	expectedRefund := funded.Sub(prevRefunded) // $90
+	expectedBalance := initialBalance.Add(expectedRefund)
+	updatedWallet, err := s.walletRepo.GetWalletByID(s.GetContext(), existingWallet.ID)
+	s.NoError(err)
+	s.True(expectedBalance.Equal(updatedWallet.Balance),
+		"expected wallet balance=%s, got=%s", expectedBalance, updatedWallet.Balance)
+
+	txns := s.refundTxns(existingWallet.ID)
+	s.Len(txns, 1, "expected exactly one INVOICE_VOID_REFUND transaction")
+	s.True(expectedRefund.Equal(txns[0].CreditAmount),
+		"expected txn credit amount=%s, got=%s", expectedRefund, txns[0].CreditAmount)
+}
+
+func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_FullyRefundedValueYieldsNoWalletCredit() {
+	// Everything the customer funded has already been returned, so voiding
+	// must not credit the wallet again.
+	amountPaid := decimal.NewFromFloat(80.00)
+	inv := s.buildFinalizedInvoice("inv_fully_refunded_value", amountPaid, decimal.Zero, types.PaymentStatusPartiallyRefunded)
+
+	stored, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	stored.RefundedAmount = amountPaid
+	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
+
+	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	s.NoError(err)
+
+	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusVoided, updated.InvoiceStatus)
+	s.True(amountPaid.Equal(updated.RefundedAmount),
+		"expected refunded_amount to stay at %s, got=%s", amountPaid, updated.RefundedAmount)
+	s.Len(s.walletsByCustomer(), 0, "no wallet credit when nothing remains to refund")
+	// The funded value is fully returned, so the invoice must land on the terminal
+	// refunded status even though this void issued no additional credit.
+	s.Equal(types.PaymentStatusRefunded, updated.PaymentStatus)
+}
+
+// A refund credit note can land between the pre-transaction status check and the
+// refund calculation. The void must read the invoice under a row lock inside the
+// transaction so it credits the remaining value, not a stale larger one.
+func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_ConcurrentRefundDoesNotOverRefund() {
+	amountPaid := decimal.NewFromFloat(120.00)
+	concurrentRefund := decimal.NewFromFloat(50.00)
+
+	initialBalance := decimal.NewFromFloat(10.00)
+	existingWallet := s.buildPrepaidWallet("wallet_concurrent_refund", initialBalance)
+
+	inv := s.buildFinalizedInvoice("inv_concurrent_refund", amountPaid, decimal.Zero, types.PaymentStatusSucceeded)
+
+	// Simulate a refund credit note committing after VoidInvoice's initial read
+	// but before it takes the lock.
+	var once sync.Once
+	s.invoiceRepo.BeforeGetForUpdate = func(id string) {
+		if id != inv.ID {
+			return
+		}
+		once.Do(func() {
+			stored, err := s.invoiceRepo.Get(s.GetContext(), id)
+			s.NoError(err)
+			stored.RefundedAmount = concurrentRefund
+			stored.PaymentStatus = types.PaymentStatusPartiallyRefunded
+			s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
+		})
+	}
+	defer func() { s.invoiceRepo.BeforeGetForUpdate = nil }()
+
+	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	s.NoError(err)
+
+	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusVoided, updated.InvoiceStatus)
+	s.True(amountPaid.Equal(updated.RefundedAmount),
+		"cumulative refunded_amount must settle at funded value %s, got=%s", amountPaid, updated.RefundedAmount)
+
+	expectedRefund := amountPaid.Sub(concurrentRefund) // $70, not the stale $120
+	txns := s.refundTxns(existingWallet.ID)
+	s.Len(txns, 1)
+	s.True(expectedRefund.Equal(txns[0].CreditAmount),
+		"expected txn credit amount=%s, got=%s", expectedRefund, txns[0].CreditAmount)
+
+	updatedWallet, err := s.walletRepo.GetWalletByID(s.GetContext(), existingWallet.ID)
+	s.NoError(err)
+	s.True(initialBalance.Add(expectedRefund).Equal(updatedWallet.Balance),
+		"expected wallet balance=%s, got=%s", initialBalance.Add(expectedRefund), updatedWallet.Balance)
+}
+
+// The refund calculation must read invoice state only after the row lock is taken.
+func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_TakesRowLockBeforeRefund() {
+	inv := s.buildFinalizedInvoice("inv_lock_order", decimal.NewFromFloat(40.00), decimal.Zero, types.PaymentStatusSucceeded)
+	s.buildPrepaidWallet("wallet_lock_order", decimal.Zero)
+	s.invoiceRepo.ResetInvoiceAccessLog(inv.ID)
+
+	s.NoError(s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{}))
+
+	s.Contains(s.invoiceRepo.InvoiceAccessLog(inv.ID), "get_for_update",
+		"void must re-read the invoice under a row lock inside the transaction")
 }
 
 func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_Idempotency() {
@@ -613,22 +747,6 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoice_Validation() {
 				return "non_existent_invoice_id"
 			},
 			expectedError: "not found",
-		},
-		{
-			name: "invoice_is_draft",
-			setup: func() string {
-				inv := s.buildDraftInvoice("inv_draft_recalc")
-				return inv.ID
-			},
-			expectedError: "not voided",
-		},
-		{
-			name: "invoice_is_finalized",
-			setup: func() string {
-				inv := s.buildFinalizedInvoice("inv_fin_recalc", decimal.Zero, decimal.Zero, types.PaymentStatusPending)
-				return inv.ID
-			},
-			expectedError: "not voided",
 		},
 		{
 			name: "invoice_type_one_off",
@@ -794,6 +912,48 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoice_HappyPath() {
 	s.Equal(s.testData.subscription.ID, lo.FromPtr(newInv.SubscriptionID))
 	s.Equal(types.InvoiceTypeSubscription, newInv.InvoiceType)
 	s.NotEqual(types.InvoiceStatusVoided, newInv.InvoiceStatus)
+}
+
+// TestRecalculateInvoice_AutoVoidsNonVoidedInvoice verifies that calling RecalculateInvoice on a
+// DRAFT or FINALIZED subscription invoice voids it first (via VoidInvoice) instead of erroring,
+// then proceeds with the same replacement-invoice flow as an already-voided invoice.
+func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoice_AutoVoidsNonVoidedInvoice() {
+	tests := []struct {
+		name  string
+		build func() *invoice.Invoice
+	}{
+		{
+			name:  "draft",
+			build: func() *invoice.Invoice { return s.buildDraftInvoice("inv_draft_autovoid") },
+		},
+		{
+			name: "finalized",
+			build: func() *invoice.Invoice {
+				return s.buildFinalizedInvoice("inv_fin_autovoid", decimal.Zero, decimal.Zero, types.PaymentStatusPending)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			s.setupTestData()
+
+			inv := tt.build()
+
+			newInv, err := s.service.RecalculateInvoice(s.GetContext(), inv.ID)
+			s.Require().NoError(err, "auto-void-then-recalculate must succeed for this fixture")
+			s.NotNil(newInv)
+			s.NotEqual(inv.ID, newInv.ID, "new invoice must have a different ID")
+
+			// Original invoice must have been auto-voided and linked to the new invoice.
+			original, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
+			s.NoError(err)
+			s.Equal(types.InvoiceStatusVoided, original.InvoiceStatus)
+			s.NotNil(original.RecalculatedInvoiceID)
+			s.Equal(newInv.ID, *original.RecalculatedInvoiceID)
+		})
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

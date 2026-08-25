@@ -36,7 +36,7 @@ type Entitlement struct {
 	GrantDurationValue      *int                                     `json:"grant_duration_value,omitempty"`
 	GrantDurationUnit       types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
 	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
-	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty"`
+	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
 
 	types.BaseModel

@@ -1,0 +1,368 @@
+{{- if .Values.frontend.build.enabled }}
+{{- /*
+  Gated on build.enabled ALONE, deliberately not on frontend.enabled.
+
+  frontend.enabled governs SERVING — whether this chart runs a frontend
+  Deployment or the gcsproxy sidecar. Building is a separate concern, and on
+  AWS the two come apart entirely: EKS environments serve the UI with nginx
+  proxying an S3 bucket through a gateway VPC endpoint, deployed from the
+  infrastructure repo rather than from this chart, so they run with
+  frontend.enabled=false and still need the bundle built.
+
+  Requiring both would have made this Job silently render nothing in exactly
+  the environments that have no other way to publish a build.
+*/}}
+{{- /*
+  Build the frontend in-cluster and sync the bundle into the bucket the UI is
+  served from.
+
+  WHY THIS EXISTS
+
+  frontend.mode=gcsproxy serves a Vite build straight out of a bucket, which
+  makes a UI deploy an upload and nothing else — no restart, no rollout. But
+  nothing in this chart puts a bundle THERE. That has meant an operator cloning
+  flexprice-front, building it locally with the right per-environment VITE_*
+  values, and syncing with their own credentials, so every deploy carried
+  whatever their laptop happened to have.
+
+  This Job does the same work where the cluster can see it. It exists for
+  ArgoCD-delivered environments in particular: terragrunt-delivered ones drive
+  the equivalent from the infrastructure repo's ui-build unit, but under ArgoCD
+  there is no apply to hang that off.
+
+  post-upgrade, NOT pre-upgrade — UNLIKE THE MIGRATION
+
+  templates/jobs/migration.yaml runs pre-install,pre-upgrade because an
+  unmigrated database is dangerous: pods must not come up against it. A stale
+  UI is not dangerous. The previous bundle keeps serving perfectly well, and
+  the failure modes here are mundane — an npm registry blip, a transient
+  network error, a type error in a frontend commit.
+
+  As a pre-hook, any of those would fail the whole release and roll back a
+  backend deploy that was fine. As a post-hook, a failed UI build leaves the
+  previous bundle serving and the backend deployed. The two ship on different
+  cadences, and this keeps them able to.
+
+  TWO CONTAINERS
+
+  `npm ci` runs the entire public transitive dependency tree, including
+  arbitrary postinstall scripts. That code must not share a process namespace
+  with a credential that can write the bucket the UI is served from.
+
+    initContainer `build`  node, network, NO identity token.
+    container     `sync`   cloud SDK only, holds the identity, mounts the build
+                           output READ-ONLY.
+
+  automountServiceAccountToken is false at POD level and the sync container
+  mounts a projected token back. Pod level is not a stylistic choice: the field
+  does not exist on a container, so setting it there is silently ignored and
+  the token mounts anyway — the isolation would look right and do nothing.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  {{- /*
+    The name embeds a checksum of the frontend ref and the build environment —
+    the two things that decide what bundle comes out.
+
+    NOT the app image, unlike the migration Job. Migrations ship inside the app
+    image, so hashing it there is what makes a backend deploy re-run them. The
+    frontend is a different repository on a different cadence; hashing the app
+    image here would rebuild the UI on every backend release and change nothing
+    about the result.
+
+    This is why frontend.build.ref must be immutable — a tag or a commit sha,
+    never a branch. A moving ref produces a CONSTANT checksum: ArgoCD records
+    the hook as completed for that name and never recreates it, so the build
+    silently never runs again while everything else rolls out normally. That is
+    the same class of failure metadata.name on the migration Job documents, and
+    it is just as quiet here: the bucket keeps serving the old bundle and
+    nothing surfaces that the new one was never built.
+  */}}
+  {{- if eq (.Values.frontend.build.ref | default "main") "main" }}
+  {{- fail "frontend.build.ref must be an immutable tag or commit sha, not a branch: a moving ref yields a constant Job name, which ArgoCD records as already-completed and never runs again." }}
+  {{- end }}
+  name: {{ include "flexprice.fullname" . }}-ui-build-{{ printf "%s|%s" .Values.frontend.build.ref (toYaml .Values.frontend.build.buildEnv) | sha256sum | trunc 8 }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui-build
+  annotations:
+    {{- if .Values.frontend.build.asHook }}
+    "helm.sh/hook": post-install,post-upgrade
+    {{- /*
+      Weighted after the migration's -5 so ordering is explicit rather than
+      incidental. Nothing here depends on the app being up — the sync writes to
+      a bucket, not through the cluster — but a UI build competing with the
+      rollout for the same nodes helps nobody.
+    */}}
+    "helm.sh/hook-weight": "10"
+    {{- /*
+      hook-succeeded and hook-failed, matching the migration Job and for the
+      same reason: a FAILED Job left behind under a name derived from a
+      checksum collides with the retry. ArgoCD reports the hook already
+      completed and declines to run it, or the apply fails on an immutable Job
+      spec — which is what stalled the northamerica-northeast2 migration.
+
+      before-hook-creation is deliberately absent, also matching: ArgoCD
+      implements it by deleting the resource and immediately reconciling
+      against it, racing itself into "Resource batch/Job/<name> is missing".
+      The checksum in the name means there is no same-named predecessor to
+      clear anyway.
+
+      Logs are lost when the Job is removed. For a migration that is an
+      accepted trade; here it matters more, because an npm failure is diagnosed
+      from logs and nothing else. Set frontend.build.asHook=false to render an
+      ordinary Job that persists — the terragrunt path does exactly that.
+    */}}
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+    {{- end }}
+spec:
+  {{- /*
+    No retries. A failed build must stay failed and readable; retrying hides
+    the cause, and each attempt re-runs the sync.
+  */}}
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.frontend.build.activeDeadlineSeconds | default 2400 }}
+  ttlSecondsAfterFinished: {{ .Values.frontend.build.ttlSecondsAfterFinished | default 3600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ui-build
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.fullname" . }}-ui-build
+      restartPolicy: Never
+      {{- with .Values.frontend.build.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- /*
+        On GCP: off at POD level, so no container gets the token by default and
+        the untrusted build stage cannot reach the credential. The sync
+        container mounts it back explicitly below — default-deny, opt in for
+        the one container that needs it.
+
+        On AWS: ON, because it has to be. IRSA delivers credentials through a
+        mutating webhook that injects the projected token into EVERY container
+        in the pod, with no per-container scope to switch off. Turning automount
+        off here would leave the sync container unable to authenticate at all.
+
+        So on AWS the build container CAN reach the role. That is bounded rather
+        than solved: the role should grant write on the UI bucket and nothing
+        else, which makes the worst case a corrupted UI bundle rather than
+        movement into anything further. The infrastructure repo's IRSA role for
+        this Job is scoped exactly that way.
+      */}}
+      automountServiceAccountToken: {{ eq .Values.frontend.build.cloud "aws" }}
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        {{- if .Values.frontend.build.tokenAudience }}
+        - name: gcp-sa-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+                  {{- /* <project>.svc.id.goog — what the metadata server expects
+                         when exchanging this for a GCP access token. */}}
+                  audience: {{ .Values.frontend.build.tokenAudience | quote }}
+        {{- end }}
+
+      initContainers:
+        - name: build
+          image: {{ .Values.frontend.build.image | quote }}
+          imagePullPolicy: {{ .Values.frontend.build.imagePullPolicy | default "IfNotPresent" }}
+          env:
+            {{- range $k, $v := .Values.frontend.build.buildEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: REPO_URL
+              value: {{ .Values.frontend.build.repoUrl | quote }}
+            - name: REPO_REF
+              value: {{ .Values.frontend.build.ref | quote }}
+            {{- /* Iterated rather than hardcoded, so adding a VITE_* value is a
+                   values change and nothing else. */}}
+            - name: VITE_KEYS
+              value: {{ keys .Values.frontend.build.buildEnv | sortAlpha | join " " | quote }}
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size={{ .Values.frontend.build.maxOldSpaceMb | default 6144 }}"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          {{- /*
+            Bounded deliberately: this usually shares a node pool with live
+            workloads, and an unbounded build honouring a multi-GB NODE_OPTIONS
+            can evict them. Keep the memory limit ABOVE maxOldSpaceMb so node
+            hits its own heap ceiling and fails with a readable JS heap error
+            rather than a bare exit 137 from the kubelet.
+          */}}
+          resources:
+            {{- toYaml .Values.frontend.build.resources | nindent 12 }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              cd /workspace
+              # Public repository — https, no credential, nothing to leak into
+              # the Job's logs.
+              git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" src
+              cd src
+
+              SHA=$(git rev-parse HEAD)
+              echo "building $REPO_URL @ $REPO_REF ($SHA)"
+
+              # A fresh clone has no .env.local (it is gitignored), so nothing
+              # can shadow these — but remove them rather than assume. That
+              # shadowing has silently baked one environment's API URL into
+              # another environment's bundle before.
+              rm -f .env.local .env.local.bak .env.local.disabled
+              : > .env
+              for v in $VITE_KEYS; do
+                eval "val=\$$v"
+                echo "$v=$val" >> .env
+              done
+              echo "--- .env ---"; cat .env; echo "------------"
+
+              # ci, not install: package-lock.json is committed and must
+              # govern, so two runs of the same ref cannot resolve differently.
+              npm ci
+
+              # tsc -b && vite build — a type error fails the deploy here
+              # rather than shipping.
+              npm run build
+
+              test -f dist/index.html || { echo "build produced no dist/index.html"; exit 1; }
+
+              # Ships to the bucket, so "what is deployed" stays answerable.
+              cat > dist/build-info.json <<EOF
+              {"repo":"$REPO_URL","ref":"$REPO_REF","commit":"$SHA"}
+              EOF
+
+              cp -r dist /workspace/dist
+              echo "dist ready: $(find /workspace/dist -type f | wc -l) files"
+
+      containers:
+        - name: sync
+          image: {{ .Values.frontend.build.syncImage | default (eq .Values.frontend.build.cloud "aws" | ternary "amazon/aws-cli:latest" "google/cloud-sdk:alpine") | quote }}
+          imagePullPolicy: {{ .Values.frontend.build.imagePullPolicy | default "IfNotPresent" }}
+          env:
+            - name: BUCKET
+              value: {{ eq .Values.frontend.build.cloud "aws" | ternary .Values.frontend.s3.bucket .Values.frontend.gcs.bucket | quote }}
+            {{- if eq .Values.frontend.build.cloud "aws" }}
+            {{- /* The CLI cannot resolve a bucket without a region. */}}
+            - name: AWS_REGION
+              value: {{ required "frontend.build.awsRegion is required when cloud is aws" .Values.frontend.build.awsRegion | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
+            {{- if .Values.frontend.build.tokenAudience }}
+            - name: gcp-sa-token
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.frontend.build.syncResources | nindent 12 }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              {{- if eq .Values.frontend.build.cloud "aws" }}
+              echo "identity: $(aws sts get-caller-identity --query Arn --output text)"
+              {{- else }}
+              echo "identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+              {{- end }}
+
+              test -f /workspace/dist/index.html || {
+                echo "build produced no dist — refusing to sync"; exit 1; }
+
+              cd /workspace/dist
+              {{- if eq .Values.frontend.build.cloud "aws" }}
+
+              # Assets first, index.html second, and only then the prune that
+              # --delete performs. Content-hashed filenames mean a new build
+              # never overwrites an old asset, so during the upload the bucket
+              # holds both generations and keeps serving the old shell.
+              #
+              # Deleting first — which the hand-rolled sync in the
+              # infrastructure repo used to do — opens a window where the
+              # bucket holds a fresh index.html naming assets that are already
+              # gone. Unattended in a Job, that is an outage nobody triggered.
+              aws s3 sync . "s3://$BUCKET" --delete \
+                --exclude index.html \
+                --cache-control "public,max-age=31536000,immutable"
+
+              # The shell must always be fresh: it is the manifest naming the
+              # hashed assets, and a stale one pins filenames that are gone.
+              # Writing it last makes the cutover a single object PUT.
+              #
+              # Not gzipped at rest, unlike the standalone sync-ui.sh: the
+              # nginx in front of this bucket does `gzip on`, so the wire is
+              # compressed either way and only stored bytes differ. The GCS
+              # branch below makes the same trade.
+              aws s3 cp index.html "s3://$BUCKET/index.html" \
+                --cache-control "no-cache, must-revalidate" \
+                --content-type "text/html; charset=utf-8"
+
+              echo "Synced dist/ -> s3://$BUCKET"
+              {{- else }}
+
+              # rsync computes the difference rather than deleting first, so
+              # there is never a window where index.html names assets that are
+              # already gone. Content-hashed assets are immutable, so this
+              # default cache-control is right for everything except the shell.
+              gcloud storage rsync . "gs://$BUCKET" \
+                --recursive \
+                --delete-unmatched-destination-objects \
+                --cache-control="public,max-age=31536000,immutable"
+
+              # The shell must always be fresh: it is the manifest naming the
+              # hashed assets, and a stale one pins filenames that are gone.
+              gcloud storage objects update "gs://$BUCKET/index.html" \
+                --cache-control="no-cache, must-revalidate"
+
+              echo "Synced dist/ -> gs://$BUCKET"
+              {{- end }}
+---
+{{- /*
+  The Job's own ServiceAccount.
+
+  Deliberately NOT frontend.serviceAccount, which gcsproxy uses to READ the
+  bucket. That one is bound to a read-only identity; binding it to something
+  that can also write would hand the serving pod — which is exposed to the
+  internet through the Ingress — the ability to overwrite the bundle it serves.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "flexprice.fullname" . }}-ui-build
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "ui-build") | nindent 4 }}
+  {{- if .Values.frontend.build.asHook }}
+  annotations:
+    {{- /* Created before the Job that runs as it, and removed with it. */}}
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "9"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+    {{- with .Values.frontend.build.serviceAccountAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- else }}
+  {{- with .Values.frontend.build.serviceAccountAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+{{- end }}

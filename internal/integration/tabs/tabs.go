@@ -134,9 +134,9 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	// Find the Tabs invoice generated from the obligations (by contract + issue date).
-	issueDate := lo.FromPtr(inv.IssueDate)
-	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, issueDate.Format(time.DateOnly))
+	// Find the Tabs invoice generated from the obligations (by contract + billing-schedule start date).
+	billingStartDate := invoiceBillingStartDate(inv)
+	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, billingStartDate.Format(time.DateOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,7 @@ func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoi
 	}
 	obligationIDs := distinctObligationIDs(existingMappings)
 
-	billingStartDate := lo.FromPtr(inv.IssueDate)
+	billingStartDate := invoiceBillingStartDate(inv)
 	itemsByCategory := groupLineItemsByCategory(inv.LineItems)
 
 	// Aggregate only the categories present on the invoice (it may carry just one type of charge).
@@ -690,6 +690,15 @@ func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*
 	return nil
 }
 
+// invoiceBillingStartDate is the invoice's billing period start, falling back to its issue date for
+// invoice types (e.g. one-off, credit) that don't carry a period.
+func invoiceBillingStartDate(inv *invoice.Invoice) time.Time {
+	if inv.PeriodStart != nil {
+		return *inv.PeriodStart
+	}
+	return lo.FromPtr(inv.IssueDate)
+}
+
 // aggregateLineItems sums the line items' amounts and returns the group total and its service period.
 // Must be called with a non-empty group.
 func aggregateLineItems(items []*invoice.InvoiceLineItem) (total decimal.Decimal, serviceStart, serviceEnd time.Time) {
@@ -702,9 +711,9 @@ func aggregateLineItems(items []*invoice.InvoiceLineItem) (total decimal.Decimal
 	return total, serviceStart, serviceEnd
 }
 
-// fetchTabsInvoiceID returns the first Tabs invoice for the contract + issue date (empty if none yet).
-func (s *InvoiceService) fetchTabsInvoiceID(ctx context.Context, contractID string, issueDate string) (string, error) {
-	resp, err := s.client.ListInvoicesByContract(ctx, contractID, issueDate)
+// fetchTabsInvoiceID returns the first Tabs invoice for the contract + billing-schedule start date (empty if none yet).
+func (s *InvoiceService) fetchTabsInvoiceID(ctx context.Context, contractID string, billingStartDate string) (string, error) {
+	resp, err := s.client.ListInvoicesByContract(ctx, contractID, billingStartDate)
 	if err != nil {
 		return "", err
 	}

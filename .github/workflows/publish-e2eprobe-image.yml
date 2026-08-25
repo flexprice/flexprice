@@ -7,7 +7,7 @@ on:
       - main
     paths:
       - 'cmd/e2eprobe/**'
-      - 'internal/e2eprobe/**'
+      - 'internal/ee/e2eprobe/**'
       - 'go.mod'
       - 'go.sum'
       - 'Dockerfile.e2eprobe'

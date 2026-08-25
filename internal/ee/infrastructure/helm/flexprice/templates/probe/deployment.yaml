@@ -36,19 +36,27 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- /*
-        Dedicated ServiceAccount with NO API token.
+        Dedicated ServiceAccount; its token is mounted only for bootstrap.
 
-        Without this the pod runs as the namespace `default` ServiceAccount and
+        Without a dedicated SA the pod runs as the namespace `default` one and
         Kubernetes mounts its token, so a compromised probe image could reach
         the Kubernetes API with whatever the default SA is granted — on top of
         the probe's own API key and Slack webhook, which are mounted as env.
 
-        The probe talks only to the flexprice API over HTTPS. It needs no
-        cluster access at all, so the token is switched off on both the
-        ServiceAccount and the pod.
+        With bootstrap disabled the probe talks only to the flexprice API over
+        HTTPS and needs no cluster access, so no token is mounted — on either
+        the ServiceAccount or the pod.
+
+        With bootstrap enabled the probe must persist the API key it mints, so
+        a token is mounted and a Role grants get+patch on exactly one Secret,
+        by name. That Secret carries only the bootstrap output, so the added
+        exposure over the credentials already mounted as env is negligible.
+
+        Both this and the ServiceAccount-level flag in service.yaml must agree:
+        either one set to false leaves the pod without a token.
       */}}
       serviceAccountName: {{ include "flexprice.fullname" . }}-e2eprobe
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ .Values.e2eprobe.bootstrap.enabled }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -80,9 +88,15 @@ spec:
               secret-backed credential with a plaintext literal — the probe
               would keep running, authenticating with the wrong key.
               Reserved: E2EPROBE_API_KEY, E2EPROBE_SLACK_WEBHOOK_URL,
-              E2EPROBE_LISTENER_PORT, TMPDIR.
+              E2EPROBE_LISTENER_PORT, TMPDIR, E2EPROBE_EMAIL,
+              E2EPROBE_PASSWORD.
+
+              The credentials are reserved for the same reason as the key, and
+              more sharply: e2eprobe.env values are plaintext in the rendered
+              manifest, so a password set there would be readable by anyone who
+              can view the release.
             */}}
-            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" }}
+            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" "E2EPROBE_EMAIL" "E2EPROBE_PASSWORD" }}
             {{- range $k, $v := .Values.e2eprobe.env }}
             {{- if has $k $reserved }}
             {{- fail (printf "e2eprobe.env may not set %s — it is managed by the chart (reserved: %s)" $k (join ", " $reserved)) }}
@@ -93,13 +107,52 @@ spec:
             - name: E2EPROBE_API_KEY
               valueFrom:
                 secretKeyRef:
+                  {{- if .Values.e2eprobe.bootstrap.enabled }}
+                  {{- /*
+                    Bootstrap writes the key here, so this is where it is read
+                    back from on later boots. optional: true is what lets the
+                    very first pod start while the value is still empty.
+                  */}}
+                  name: {{ .Values.e2eprobe.bootstrap.secretName }}
+                  key: {{ .Values.e2eprobe.bootstrap.secretKey }}
+                  optional: true
+                  {{- else }}
                   name: {{ .Values.e2eprobe.existingSecret }}
                   key: {{ .Values.e2eprobe.secretKeys.apiKey }}
+                  {{- end }}
+            {{- if .Values.e2eprobe.bootstrap.enabled }}
+            - name: E2EPROBE_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.bootstrap.existingCredentialsSecret }}
+                  key: {{ .Values.e2eprobe.bootstrap.emailKey }}
+            - name: E2EPROBE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.bootstrap.existingCredentialsSecret }}
+                  key: {{ .Values.e2eprobe.bootstrap.passwordKey }}
+            - name: E2EPROBE_BOOTSTRAP_SECRET_NAME
+              value: {{ .Values.e2eprobe.bootstrap.secretName | quote }}
+            - name: E2EPROBE_BOOTSTRAP_SECRET_KEY
+              value: {{ .Values.e2eprobe.bootstrap.secretKey | quote }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- end }}
             - name: E2EPROBE_SLACK_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.e2eprobe.existingSecret }}
                   key: {{ .Values.e2eprobe.secretKeys.slackWebhookUrl }}
+                  {{- /*
+                    Optional so a bootstrap-only deployment need not also carry
+                    e2eprobe.existingSecret. Without this the pod fails to start
+                    with `secret "e2eprobe-secrets" not found` even though the
+                    probe treats an empty webhook as "Slack disabled" — which
+                    cost a debugging cycle on a real cluster.
+                  */}}
+                  optional: true
             - name: E2EPROBE_LISTENER_PORT
               value: {{ .Values.e2eprobe.service.port | quote }}
             - name: TMPDIR

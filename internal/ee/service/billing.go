@@ -1282,8 +1282,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		NextPeriodEnd:      nextPeriodEnd,
 	})
 
-	isMeterUsageEnabledForBilling := s.Config.FeatureFlag.IsMeterUsageEnabledForBilling(sub.TenantID)
-
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
 	var description string
@@ -1354,49 +1352,27 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 		// For current period arrear charges (meter_usage path when enabled for
 		// cumulative commitment support; falls back to raw-events CalculateCharges otherwise)
-		var arrearResult *dto.BillingCalculationResult
-		if isMeterUsageEnabledForBilling {
-			arrearResult, err = s.calculateMeterUsageCharges(
-				ctx,
-				sub,
-				arrearLineItems,
-				periodStart,
-				periodEnd,
-				classification.HasUsageCharges, // Include usage for arrear
-			)
-		} else {
-			arrearResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-				Subscription: sub,
-				LineItems:    arrearLineItems,
-				PeriodStart:  periodStart,
-				PeriodEnd:    periodEnd,
-				IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
-			})
-		}
+		arrearResult, err := s.calculateMeterUsageCharges(
+			ctx,
+			sub,
+			arrearLineItems,
+			periodStart,
+			periodEnd,
+			classification.HasUsageCharges, // Include usage for arrear
+		)
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		var advanceResult *dto.BillingCalculationResult
-		if isMeterUsageEnabledForBilling {
-			advanceResult, err = s.calculateMeterUsageCharges(
-				ctx,
-				sub,
-				advanceLineItems,
-				nextPeriodStart,
-				nextPeriodEnd,
-				false, // No usage for advance
-			)
-		} else {
-			advanceResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-				Subscription: sub,
-				LineItems:    advanceLineItems,
-				PeriodStart:  nextPeriodStart,
-				PeriodEnd:    nextPeriodEnd,
-				IncludeUsage: false, // No usage for advance
-			})
-		}
+		advanceResult, err := s.calculateMeterUsageCharges(
+			ctx,
+			sub,
+			advanceLineItems,
+			nextPeriodStart,
+			nextPeriodEnd,
+			false, // No usage for advance
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -1758,9 +1734,10 @@ func (s *billingService) ClassifyLineItems(
 		// Fixed, equal billing period: existing behavior (advance → both slices; arrear → CurrentPeriodArrear).
 		if item.InvoiceCadence == types.InvoiceCadenceAdvance {
 			result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
-			// Only include in next period if still active when that period starts.
-			// Ended items were already handled via proration invoices and must not be re-billed.
-			if item.EndDate.IsZero() || !item.EndDate.Before(nextPeriodStart) {
+			// Only include in next period if still active after that period starts.
+			// Ended items were already handled via proration invoices and must not be
+			// re-billed; an item ending exactly at nextPeriodStart covers nothing of it.
+			if item.EndDate.IsZero() || item.EndDate.After(nextPeriodStart) {
 				result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
 			}
 		}
@@ -2066,6 +2043,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		InvoiceCoupons:   validCoupons,
 		LineItemCoupons:  validLineItemCoupons,
 		PreparedTaxRates: preparedTaxRates,
+	}
+
+	if params.InvoiceType != "" {
+		req.InvoiceType = params.InvoiceType
+	}
+	if params.BillingReason != "" {
+		req.BillingReason = params.BillingReason
 	}
 
 	return req, nil

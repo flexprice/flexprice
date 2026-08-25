@@ -440,3 +440,47 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_UnmatchedSubLi
 		s.True(li.LineItemDiscount.IsZero(), "earlier line items sharing the price stay undiscounted")
 	}
 }
+
+// TestApplyCouponsToInvoice_SubscriptionAssociation_RepeatedCompute_NoDuplicateRows
+// covers a subscription-attached coupon (non-empty CouponAssociationID) recomputed
+// twice on the same invoice — e.g. an initial ComputeInvoice followed by a
+// finalization recompute. The row-existence idempotency check previously only ran
+// for one-off applications (nil CouponAssociationID), so association-based coupons
+// skipped it entirely and every recompute inserted another CouponApplication row,
+// which surfaced as the same discount listed twice on the invoice PDF.
+func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_SubscriptionAssociation_RepeatedCompute_NoDuplicateRows() {
+	ctx := s.GetContext()
+
+	c := s.createPublishedCoupon("sub-attached repeated", nil)
+
+	priceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	inv := s.createOneOffInvoiceWithLineItem(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), priceID, decimal.NewFromInt(100))
+	assocID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION)
+
+	req := dto.ApplyCouponsToInvoiceRequest{
+		Invoice: inv,
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{
+			{LineItemID: priceID, CouponID: c.ID, CouponAssociationID: &assocID},
+		},
+	}
+
+	// First compute pass (e.g. invoice creation).
+	_, err := s.service.ApplyCouponsToInvoice(ctx, req)
+	s.Require().NoError(err)
+
+	appFilter := types.NewNoLimitCouponApplicationFilter()
+	appFilter.InvoiceIDs = []string{inv.ID}
+	appFilter.CouponIDs = []string{c.ID}
+	firstRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(firstRows, 1, "first apply should persist exactly one CouponApplication")
+
+	// Second compute pass on the same invoice (e.g. finalization recompute).
+	inv.LineItems[0].LineItemDiscount = decimal.Zero
+	_, err = s.service.ApplyCouponsToInvoice(ctx, req)
+	s.Require().NoError(err)
+
+	secondRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(secondRows, 1, "recompute of a subscription-attached coupon must not persist duplicate CouponApplication rows")
+}

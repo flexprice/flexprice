@@ -17,18 +17,20 @@ import (
 )
 
 type featureRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts FeatureQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  FeatureQueryOptions
+	cache      cache.InMemoryCache
+	redisCache cache.RedisCache
 }
 
-func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainFeature.Repository {
+func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache, redisCache cache.RedisCache) domainFeature.Repository {
 	return &featureRepository{
-		client:    client,
-		log:       log,
-		queryOpts: FeatureQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  FeatureQueryOptions{},
+		cache:      cache,
+		redisCache: redisCache,
 	}
 }
 
@@ -325,6 +327,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, f.ID)
+	r.deleteFeatureCacheByMeterID(ctx, f.MeterID)
 	return nil
 }
 
@@ -341,6 +344,12 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 		"feature_id": id,
 	})
 	defer FinishSpan(span)
+
+	// Capture the meter ID before archiving so its by-meter-ID cache entry can be invalidated.
+	var meterID string
+	if existing, err := r.Get(ctx, id); err == nil && existing != nil {
+		meterID = existing.MeterID
+	}
 
 	_, err := client.Feature.Update().
 		Where(
@@ -374,6 +383,7 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, id)
+	r.deleteFeatureCacheByMeterID(ctx, meterID)
 	return nil
 }
 
@@ -429,6 +439,73 @@ func (r *featureRepository) ListByIDs(ctx context.Context, featureIDs []string) 
 
 	for _, f := range fetched {
 		r.SetCache(ctx, f)
+		result = append(result, f)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
+// GetFeaturesByMeterIDs returns the published feature for each of the given meter IDs
+// (a meter has at most one published feature), serving whatever is already cached
+// and querying only the remainder. Scoped by tenant and environment from context.
+func (r *featureRepository) GetFeaturesByMeterIDs(ctx context.Context, meterIDs []string) ([]*domainFeature.Feature, error) {
+	if len(meterIDs) == 0 {
+		return []*domainFeature.Feature{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "feature", "get_by_meter_ids", map[string]interface{}{
+		"meter_ids_count": len(meterIDs),
+	})
+	defer FinishSpan(span)
+
+	result := make([]*domainFeature.Feature, 0, len(meterIDs))
+	missing := make([]string, 0, len(meterIDs))
+	seen := make(map[string]struct{}, len(meterIDs))
+
+	for _, meterID := range meterIDs {
+		if meterID == "" {
+			continue
+		}
+		if _, dup := seen[meterID]; dup {
+			continue
+		}
+		seen[meterID] = struct{}{}
+
+		if cached := r.getFeatureCacheByMeterID(ctx, meterID); cached != nil {
+			result = append(result, cached)
+			continue
+		}
+		missing = append(missing, meterID)
+	}
+
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	client := r.client.Reader(ctx)
+	features, err := client.Feature.Query().
+		Where(
+			feature.MeterIDIn(missing...),
+			feature.TenantID(types.GetTenantID(ctx)),
+			feature.EnvironmentID(types.GetEnvironmentID(ctx)),
+			feature.Status(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get features by meter IDs").
+			WithReportableDetails(map[string]interface{}{
+				"meter_ids": missing,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	fetched := domainFeature.FromEntList(features)
+	for _, f := range fetched {
+		r.setFeatureCacheByMeterID(ctx, f)
 		result = append(result, f)
 	}
 
@@ -672,4 +749,49 @@ func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, featureID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+func (r *featureRepository) setFeatureCacheByMeterID(ctx context.Context, feature *domainFeature.Feature) {
+	if feature.MeterID == "" {
+		return
+	}
+	span, ctx := cache.StartRedisCacheSpan(ctx, "feature", "set_by_meter_id", map[string]interface{}{
+		"feature_id": feature.ID,
+		"meter_id":   feature.MeterID,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixMeterFeature, feature.MeterID)
+	r.redisCache.ForceCacheSet(ctx, cacheKey, feature, cache.ExpiryDefaultRedis)
+}
+
+func (r *featureRepository) getFeatureCacheByMeterID(ctx context.Context, meterID string) *domainFeature.Feature {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "feature", "get_by_meter_id", map[string]interface{}{
+		"meter_id": meterID,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixMeterFeature, meterID)
+	value, found := r.redisCache.ForceCacheGet(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+	f, ok := cache.UnmarshalCacheValue[domainFeature.Feature](value)
+	if !ok {
+		return nil
+	}
+	return f
+}
+
+func (r *featureRepository) deleteFeatureCacheByMeterID(ctx context.Context, meterID string) {
+	if meterID == "" {
+		return
+	}
+	span, ctx := cache.StartRedisCacheSpan(ctx, "feature", "delete_by_meter_id", map[string]interface{}{
+		"meter_id": meterID,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixMeterFeature, meterID)
+	r.redisCache.ForceCacheDelete(ctx, cacheKey)
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -96,6 +98,7 @@ func (s *SecretServiceSuite) setupTestData() {
 		DisplayID: "test1",
 		Roles:     []string{}, // Empty roles = full access
 		UserType:  "user",     // Default user type
+		UserID:    types.DefaultUserID,
 		BaseModel: types.BaseModel{
 			TenantID:  types.DefaultTenantID,
 			Status:    types.StatusPublished,
@@ -444,6 +447,215 @@ func (s *SecretServiceSuite) TestListIntegrations() {
 			s.Len(resp.Items, tt.expectedTotal)
 		})
 	}
+}
+
+// writerCtx returns a context for a non-super_admin human user holding the
+// wildcard all_writer role, the weakest principal that passes write(secret).
+func (s *SecretServiceSuite) writerCtx(userID string) context.Context {
+	ctx := context.WithValue(s.GetContext(), types.CtxUserID, userID)
+	ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeUser))
+	return context.WithValue(ctx, types.CtxRoles, []string{types.RoleAllWriter.String()})
+}
+
+func (s *SecretServiceSuite) superAdminCtx(userID string) context.Context {
+	ctx := context.WithValue(s.GetContext(), types.CtxUserID, userID)
+	ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeUser))
+	return context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+}
+
+// createServiceAccount persists a privileged service account owned by nobody in
+// particular, standing in for the target a writer must not be able to hijack.
+func (s *SecretServiceSuite) createServiceAccount(id string) *domainUser.User {
+	sa := &domainUser.User{
+		ID:    id,
+		Email: id + "@example.com",
+		Type:  types.UserTypeServiceAccount,
+		Roles: []string{types.RoleSuperAdmin.String()},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	s.Require().NoError(s.GetStores().UserRepo.Create(s.GetContext(), sa))
+	return sa
+}
+
+// A writer must not be able to mint a key that inherits another principal's
+// roles by naming it in service_account_id.
+func (s *SecretServiceSuite) TestCreateAPIKeyRejectsCrossPrincipalMinting() {
+	sa := s.createServiceAccount("user_privileged_sa")
+
+	writer := s.writerCtx("user_attacker")
+	_, _, err := s.service.CreateAPIKey(writer, &dto.CreateAPIKeyRequest{
+		Name:             "stolen",
+		Type:             types.SecretTypePrivateKey,
+		ServiceAccountID: sa.ID,
+	})
+	s.Require().Error(err, "writer must not mint a key for another service account")
+	s.True(ierr.IsPermissionDenied(err), "expected permission denied, got: %v", err)
+
+	// A service account may not escalate via its own key either, even when its
+	// stored roles include super_admin.
+	saCtx := context.WithValue(s.GetContext(), types.CtxUserID, sa.ID)
+	saCtx = context.WithValue(saCtx, types.CtxUserType, string(types.UserTypeServiceAccount))
+	saCtx = context.WithValue(saCtx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+	_, _, err = s.service.CreateAPIKey(saCtx, &dto.CreateAPIKeyRequest{
+		Name:             "self-mint",
+		Type:             types.SecretTypePrivateKey,
+		ServiceAccountID: sa.ID,
+	})
+	s.Require().Error(err, "service account must not mint service-account keys")
+	s.True(ierr.IsPermissionDenied(err), "expected permission denied, got: %v", err)
+}
+
+// A super_admin retains the ability to mint service-account keys, and the key
+// still inherits the target's roles.
+func (s *SecretServiceSuite) TestCreateAPIKeyAllowsSuperAdminCrossPrincipalMinting() {
+	sa := s.createServiceAccount("user_sa_for_admin")
+
+	resp, apiKey, err := s.service.CreateAPIKey(s.superAdminCtx("user_admin"), &dto.CreateAPIKeyRequest{
+		Name:             "legit",
+		Type:             types.SecretTypePrivateKey,
+		ServiceAccountID: sa.ID,
+	})
+	s.Require().NoError(err)
+	s.NotEmpty(apiKey)
+	s.Equal(sa.ID, resp.UserID)
+	s.Equal(string(types.UserTypeServiceAccount), resp.UserType)
+	s.Equal(sa.Roles, resp.Roles)
+}
+
+// A writer creating a key without service_account_id is bound to itself.
+func (s *SecretServiceSuite) TestCreateAPIKeyBindsToCaller() {
+	caller := &domainUser.User{
+		ID:    "user_self_writer",
+		Email: "self@example.com",
+		Type:  types.UserTypeUser,
+		Roles: []string{types.RoleAllWriter.String()},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	s.Require().NoError(s.GetStores().UserRepo.Create(s.GetContext(), caller))
+
+	resp, _, err := s.service.CreateAPIKey(s.writerCtx(caller.ID), &dto.CreateAPIKeyRequest{
+		Name: "own key",
+		Type: types.SecretTypePrivateKey,
+	})
+	s.Require().NoError(err)
+	s.Equal(caller.ID, resp.UserID)
+}
+
+// Listing must not expose keys belonging to other principals, and a supplied
+// user_id filter must not let a writer read around that scoping.
+func (s *SecretServiceSuite) TestListAPIKeysScopedToCaller() {
+	foreign := &secret.Secret{
+		ID:        "secret_foreign_key",
+		Name:      "Foreign Key",
+		Type:      types.SecretTypePrivateKey,
+		Provider:  types.SecretProviderFlexPrice,
+		Value:     s.encryptionSvc.Hash("foreign_api_key"),
+		DisplayID: "frgn1",
+		UserID:    "user_victim",
+		UserType:  string(types.UserTypeUser),
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	s.Require().NoError(s.secretRepo.Create(s.GetContext(), foreign))
+
+	own := &secret.Secret{
+		ID:        "secret_own_key",
+		Name:      "Own Key",
+		Type:      types.SecretTypePrivateKey,
+		Provider:  types.SecretProviderFlexPrice,
+		Value:     s.encryptionSvc.Hash("own_api_key"),
+		DisplayID: "own01",
+		UserID:    "user_attacker",
+		UserType:  string(types.UserTypeUser),
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	s.Require().NoError(s.secretRepo.Create(s.GetContext(), own))
+
+	writer := s.writerCtx("user_attacker")
+
+	resp, err := s.service.ListAPIKeys(writer, &types.SecretFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(resp.Items, "writer must still see its own key")
+	ids := lo.Map(resp.Items, func(item *dto.SecretResponse, _ int) string { return item.ID })
+	s.Contains(ids, own.ID)
+	s.NotContains(ids, foreign.ID)
+	for _, item := range resp.Items {
+		s.Equal("user_attacker", item.UserID, "writer listed a key owned by another principal")
+	}
+
+	// An attacker-supplied user_id must not widen the scope back out.
+	resp, err = s.service.ListAPIKeys(writer, &types.SecretFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+		UserID:      lo.ToPtr("user_victim"),
+	})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(resp.Items, "the user_id filter must be replaced, not intersected away")
+	ids = lo.Map(resp.Items, func(item *dto.SecretResponse, _ int) string { return item.ID })
+	s.Contains(ids, own.ID)
+	s.NotContains(ids, foreign.ID)
+	for _, item := range resp.Items {
+		s.Equal("user_attacker", item.UserID, "writer read another principal's keys via a user_id filter")
+	}
+
+	// A super_admin still sees the whole environment.
+	resp, err = s.service.ListAPIKeys(s.superAdminCtx("user_admin"), &types.SecretFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.Require().NoError(err)
+	s.GreaterOrEqual(len(resp.Items), 2, "super_admin must still see all keys")
+}
+
+// A writer must not be able to revoke a credential it does not own.
+func (s *SecretServiceSuite) TestDeleteRejectsForeignSecret() {
+	foreign := &secret.Secret{
+		ID:        "secret_foreign_delete",
+		Name:      "Foreign Key",
+		Type:      types.SecretTypePrivateKey,
+		Provider:  types.SecretProviderFlexPrice,
+		Value:     s.encryptionSvc.Hash("foreign_delete_key"),
+		DisplayID: "frgn2",
+		UserID:    "user_victim",
+		UserType:  string(types.UserTypeUser),
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	s.Require().NoError(s.secretRepo.Create(s.GetContext(), foreign))
+
+	err := s.service.Delete(s.writerCtx("user_attacker"), foreign.ID)
+	s.Require().Error(err, "writer must not revoke another principal's key")
+	s.True(ierr.IsPermissionDenied(err), "expected permission denied, got: %v", err)
+
+	// The key survives, and a super_admin can still revoke it.
+	still, err := s.secretRepo.Get(s.GetContext(), foreign.ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusPublished, still.Status)
+
+	s.Require().NoError(s.service.Delete(s.superAdminCtx("user_admin"), foreign.ID))
 }
 
 func (s *SecretServiceSuite) TestDelete() {

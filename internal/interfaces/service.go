@@ -119,7 +119,9 @@ type SubscriptionService interface {
 	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*dto.PriceResponse, error)
 
 	PreviewPlanChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeV2Request) (*dto.SubscriptionChangeV2Response, error)
-	ExecutePlanChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeV2Request) (*dto.SubscriptionChangeV2Response, error)
+	ExecutePlanChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeV2Request, effectiveAt time.Time) (*dto.SubscriptionChangeV2Response, error)
+
+	ExecuteScheduledPlanChangeV2(ctx context.Context, schedule *subscription.SubscriptionSchedule, config *subscription.PlanChangeV2Configuration, sub *subscription.Subscription) error
 
 	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error

@@ -263,6 +263,7 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewConnectionService,
 			service.NewMarketplaceService,
+			service.NewUsageRecordService,
 			service.NewEntityIntegrationMappingService,
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
@@ -346,6 +347,7 @@ func provideHandlers(
 	creditNoteService service.CreditNoteService,
 	connectionService service.ConnectionService,
 	marketplaceService service.MarketplaceService,
+	usageRecordService service.UsageRecordService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	integrationSyncService service.IntegrationSyncService,
 	svixClient *svix.Client,
@@ -408,6 +410,7 @@ func provideHandlers(
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		Marketplace:              v1.NewMarketplaceHandler(marketplaceService, logger),
+		UsageRecord:              v1.NewUsageRecordHandler(usageRecordService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, db, webhookService),
@@ -663,8 +666,6 @@ func registerRouterHandlers(
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
 		eventConsumptionSvc.RegisterBulkHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
 		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 		rawEventConsumptionSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)

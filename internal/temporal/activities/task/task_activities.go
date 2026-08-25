@@ -6,6 +6,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -15,12 +16,14 @@ const TaskActivityPrefix = "TaskActivities"
 // TaskActivities contains all task-related activities
 type TaskActivities struct {
 	taskService service.TaskService
+	logger      *logger.Logger
 }
 
 // NewTaskActivities creates a new TaskActivities instance
-func NewTaskActivities(taskService service.TaskService) *TaskActivities {
+func NewTaskActivities(taskService service.TaskService, logger *logger.Logger) *TaskActivities {
 	return &TaskActivities{
 		taskService: taskService,
+		logger:      logger,
 	}
 }
 
@@ -42,6 +45,12 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input models.ProcessTa
 	if err != nil {
 		// Check if it's a timeout error and provide better context
 		if isTimeoutError(err) {
+			a.logger.Error(ctx, "ProcessTask activity timed out",
+				"error", err,
+				"task_id", input.TaskID,
+				"tenant_id", input.TenantID,
+				"environment_id", input.EnvironmentID,
+			)
 			return nil, ierr.WithError(err).
 				WithHint("Task processing timed out. This may be due to a large file or network issues. Consider using streaming processing for very large files.").
 				WithReportableDetails(map[string]interface{}{
@@ -51,6 +60,12 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input models.ProcessTa
 				Mark(ierr.ErrHTTPClient)
 		}
 
+		a.logger.Error(ctx, "ProcessTask activity failed",
+			"error", err,
+			"task_id", input.TaskID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to process task").
 			WithReportableDetails(map[string]interface{}{
@@ -62,6 +77,12 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input models.ProcessTa
 	// Get the updated task to return results
 	task, err := a.taskService.GetTask(ctx, input.TaskID)
 	if err != nil {
+		a.logger.Error(ctx, "ProcessTask activity failed to fetch updated task",
+			"error", err,
+			"task_id", input.TaskID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get updated task").
 			Mark(ierr.ErrValidation)

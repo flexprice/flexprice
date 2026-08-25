@@ -87,15 +87,11 @@ func (s *InMemoryUsageRecordStore) ListUnsynced(ctx context.Context, tenantID, e
 	return result, nil
 }
 
-// List returns the usage records matching filter, reproducing the repository's semantics: always
-// scoped to the caller's tenant and environment, defaulting to published rows, sorted and paginated
-// per the embedded query filter.
-func (s *InMemoryUsageRecordStore) List(ctx context.Context, filter *types.UsageRecordFilter) ([]*usagerecord.UsageRecord, error) {
-	if filter == nil {
-		filter = types.NewUsageRecordFilter()
-	}
-
-	filterFn := func(ctx context.Context, r *usagerecord.UsageRecord, _ interface{}) bool {
+// usageRecordFilterFn builds the predicate List and Count both filter by, reproducing the
+// repository's semantics: always scoped to the caller's tenant and environment, defaulting to
+// published rows.
+func usageRecordFilterFn(filter *types.UsageRecordFilter) func(ctx context.Context, r *usagerecord.UsageRecord, _ interface{}) bool {
+	return func(ctx context.Context, r *usagerecord.UsageRecord, _ interface{}) bool {
 		if !CheckTenantFilter(ctx, r.TenantID) || !CheckEnvironmentFilter(ctx, r.EnvironmentID) {
 			return false
 		}
@@ -143,6 +139,17 @@ func (s *InMemoryUsageRecordStore) List(ctx context.Context, filter *types.Usage
 		}
 		return matchesUsageRecordDSLFilters(r, filter.Filters)
 	}
+}
+
+// List returns the usage records matching filter, reproducing the repository's semantics: always
+// scoped to the caller's tenant and environment, defaulting to published rows, sorted and paginated
+// per the embedded query filter.
+func (s *InMemoryUsageRecordStore) List(ctx context.Context, filter *types.UsageRecordFilter) ([]*usagerecord.UsageRecord, error) {
+	if filter == nil {
+		filter = types.NewUsageRecordFilter()
+	}
+
+	filterFn := usageRecordFilterFn(filter)
 
 	sortField, sortAsc := filter.GetSort(), filter.GetOrder() == types.OrderAsc
 	if len(filter.Sort) > 0 {
@@ -188,6 +195,14 @@ func (s *InMemoryUsageRecordStore) List(ctx context.Context, filter *types.Usage
 		result[i] = copyUsageRecord(item)
 	}
 	return result, nil
+}
+
+// Count returns the number of usage records matching filter, ignoring pagination.
+func (s *InMemoryUsageRecordStore) Count(ctx context.Context, filter *types.UsageRecordFilter) (int, error) {
+	if filter == nil {
+		filter = types.NewUsageRecordFilter()
+	}
+	return s.store.Count(ctx, filter, usageRecordFilterFn(filter))
 }
 
 func (s *InMemoryUsageRecordStore) MarkSynced(ctx context.Context, id string, syncs map[string]types.UsageRecordSyncEntry, synced bool) error {

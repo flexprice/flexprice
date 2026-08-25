@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -52,6 +54,7 @@ func (s *PlanServiceSuite) SetupTest() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		IntegrationFactory:       s.GetIntegrationFactory(),
 		ConnectionRepo:           s.GetStores().ConnectionRepo,
+		PlanPriceSyncRepo:        s.GetStores().PlanPriceSyncRepo,
 	}
 	s.service = NewPlanService(s.params)
 }
@@ -137,6 +140,69 @@ func (s *PlanServiceSuite) TestGetPlans() {
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(0, len(resp.Items))
+}
+
+// TestGetPlans_ExpandPricesFeatures verifies that POST /plans/search style filters
+// (expand="prices,features") propagate the "features" expand into the nested price
+// fetch, so each price carries its metered feature's reporting unit.
+func (s *PlanServiceSuite) TestGetPlans_ExpandPricesFeatures() {
+	_ = s.GetStores().PlanRepo.Create(s.GetContext(), &plan.Plan{
+		ID:        "plan-reporting",
+		Name:      "Plan With Reporting Unit",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	testMeter := &meter.Meter{
+		ID:        "meter-reporting",
+		Name:      "Test Meter",
+		EventName: "call",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_ = s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter)
+
+	conversionRate := decimal.NewFromInt(60)
+	_ = s.GetStores().FeatureRepo.Create(s.GetContext(), &feature.Feature{
+		ID:      "feature-reporting",
+		Name:    "Call Minutes",
+		Type:    types.FeatureTypeMetered,
+		MeterID: "meter-reporting",
+		ReportingUnit: &types.ReportingUnit{
+			UnitSingular:   "minute",
+			UnitPlural:     "minutes",
+			ConversionRate: &conversionRate,
+		},
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	_ = s.GetStores().PriceRepo.Create(s.GetContext(), &price.Price{
+		ID:         "price-reporting",
+		Amount:     decimal.NewFromInt(1),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-reporting",
+		MeterID:    "meter-reporting",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	planFilter := types.NewPlanFilter()
+	planFilter.PlanIDs = []string{"plan-reporting"}
+	planFilter.Expand = lo.ToPtr("prices,features")
+
+	resp, err := s.service.GetPlans(s.GetContext(), planFilter)
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Require().Len(resp.Items[0].Prices, 1)
+
+	s.Require().NotNil(resp.Items[0].Prices[0].Feature)
+	reportingUnit := resp.Items[0].Prices[0].Feature.ReportingUnit
+	s.Require().NotNil(reportingUnit)
+	s.Equal("minute", reportingUnit.UnitSingular)
+	s.Equal("minutes", reportingUnit.UnitPlural)
+	s.True(conversionRate.Equal(*reportingUnit.ConversionRate))
 }
 
 func (s *PlanServiceSuite) TestUpdatePlan() {

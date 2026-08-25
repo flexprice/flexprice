@@ -34,9 +34,23 @@ func (a *CustomerSyncActivities) SyncCustomerToNomod(ctx context.Context, input 
 
 	nomodIntegration, err := a.integrationFactory.GetNomodIntegration(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToNomod activity failed: get integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = nomodIntegration.CustomerSvc.EnsureCustomerSyncedToNomod(ctx, input.CustomerID, a.customerService)
-	return err
+	if _, err = nomodIntegration.CustomerSvc.EnsureCustomerSyncedToNomod(ctx, input.CustomerID, a.customerService); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToNomod activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

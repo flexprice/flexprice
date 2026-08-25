@@ -41,6 +41,7 @@ type HubSpotClient interface {
 	// Deal operations
 	UpdateDeal(ctx context.Context, dealID string, properties map[string]string) (*DealUpdateResponse, error)
 	CreateDealLineItem(ctx context.Context, req *DealLineItemCreateRequest) (*DealLineItemResponse, error)
+	UpdateDealLineItem(ctx context.Context, lineItemID string, properties *DealLineItemProperties) error
 	DeleteDealLineItem(ctx context.Context, lineItemID string) error
 
 	// Quote operations
@@ -740,6 +741,54 @@ func (c *Client) CreateDealLineItem(ctx context.Context, req *DealLineItemCreate
 	}
 
 	return &lineItem, nil
+}
+
+func (c *Client) UpdateDealLineItem(ctx context.Context, lineItemID string, properties *DealLineItemProperties) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/crm/v3/objects/line_items/%s", HubSpotAPIBaseURL, lineItemID)
+
+	reqBody, err := json.Marshal(map[string]interface{}{"properties": properties})
+	if err != nil {
+		return ierr.NewError("failed to marshal line item update request").Mark(ierr.ErrInternal)
+	}
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPatch,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+			"Content-Type":  "application/json",
+		},
+		Body: reqBody,
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		c.logger.Error(ctx, "http client error updating line item",
+			"error", err,
+			"url", url,
+			"line_item_id", lineItemID)
+		return ierr.NewError("failed to update line item in HubSpot").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		c.logger.Error(ctx, "hubspot update line item error",
+			"error", fmt.Sprintf("unexpected status %d", resp.StatusCode),
+			"status", resp.StatusCode,
+			"url", url,
+			"line_item_id", lineItemID)
+		return ierr.NewError("failed to update line item in HubSpot").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d", resp.StatusCode)).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
 }
 
 func (c *Client) DeleteDealLineItem(ctx context.Context, lineItemID string) error {

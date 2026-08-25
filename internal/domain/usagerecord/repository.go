@@ -26,6 +26,10 @@ type Repository interface {
 	// List returns the records matching filter.
 	List(ctx context.Context, filter *types.UsageRecordFilter) ([]*UsageRecord, error)
 
+	// Count returns the number of records matching filter, ignoring pagination. Used to compute the
+	// total for a paginated list response.
+	Count(ctx context.Context, filter *types.UsageRecordFilter) (int, error)
+
 	// MarkSynced writes the record's syncs map (one entry per connection it's been reported to) and
 	// the synced flag, which the caller sets true once every connection relevant to this record has
 	// an entry. The reporting cron builds the map in memory and calls this once per record.

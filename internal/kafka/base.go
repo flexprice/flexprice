@@ -36,6 +36,9 @@ func GetSaramaConfig(kafkaCfg *config.KafkaConfig) (*sarama.Config, error) {
 	// Enable auto commit to ensure offsets are committed regularly
 	saramaConfig.Consumer.Offsets.AutoCommit.Enable = true
 	saramaConfig.Consumer.Offsets.AutoCommit.Interval = 5000 * time.Millisecond // 5 seconds
+	// A non-zero retention makes Sarama use OffsetCommit v2; zero defers retention
+	// to the broker and retains Sarama's legacy OffsetCommit behavior.
+	saramaConfig.Consumer.Offsets.Retention = kafkaCfg.OffsetRetention
 
 	// When rebalancing happens, use the last committed offset
 	saramaConfig.Consumer.Offsets.Retry.Max = 3

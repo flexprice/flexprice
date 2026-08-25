@@ -47,6 +47,17 @@ type UserInviteResponse struct {
 	AuthRecord *auth.Auth
 }
 
+// EmailConfirmChecker is implemented by providers that can report, from their
+// own records rather than from a token, whether a user's email is confirmed.
+//
+// Kept separate from Provider because only Supabase has this notion: the
+// flexprice and SSO providers have no equivalent server-side state, and adding
+// it to Provider would force them to implement a method that could only ever
+// return a meaningless value.
+type EmailConfirmChecker interface {
+	EmailConfirmed(ctx context.Context, userID string) (bool, error)
+}
+
 type Provider interface {
 
 	// User Management

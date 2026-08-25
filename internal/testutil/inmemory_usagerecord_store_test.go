@@ -212,6 +212,45 @@ func TestInMemoryUsageRecordStore_ListFilters(t *testing.T) {
 	})
 }
 
+// Count backs the API's pagination total, which must reflect every matching row — not just the
+// current page — so a caller paging with a small limit can still compute the right number of pages.
+func TestInMemoryUsageRecordStore_Count(t *testing.T) {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, types.CtxTenantID, "tenant_1")
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, "env_1")
+
+	store := NewInMemoryUsageRecordStore()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	require.NoError(t, store.Create(ctx, usageRecordAt(ctx, "ur_count_1", "sub_1", now.Add(-3*time.Hour))))
+	require.NoError(t, store.Create(ctx, usageRecordAt(ctx, "ur_count_2", "sub_1", now.Add(-2*time.Hour))))
+	require.NoError(t, store.Create(ctx, usageRecordAt(ctx, "ur_count_3", "sub_2", now.Add(-1*time.Hour))))
+
+	t.Run("counts every matching row, ignoring the filter's own limit", func(t *testing.T) {
+		count, err := store.Count(ctx, &types.UsageRecordFilter{QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(1)}})
+		require.NoError(t, err)
+		require.Equal(t, 3, count)
+	})
+
+	t.Run("applies the same named filters as List", func(t *testing.T) {
+		count, err := store.Count(ctx, &types.UsageRecordFilter{SubscriptionID: "sub_1"})
+		require.NoError(t, err)
+		require.Equal(t, 2, count)
+	})
+
+	t.Run("Count and a limited List agree on the true total", func(t *testing.T) {
+		filter := &types.UsageRecordFilter{QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(1), Offset: lo.ToPtr(0)}}
+
+		page, err := store.List(ctx, filter)
+		require.NoError(t, err)
+		require.Len(t, page, 1, "the page itself is limited")
+
+		count, err := store.Count(ctx, filter)
+		require.NoError(t, err)
+		require.Equal(t, 3, count, "Count must report the total independent of the page's own limit")
+	})
+}
+
 // The invariant the cancellation flush rests on: every attempt computes the same window, so a retry
 // collides with the unique key and reuses the existing row instead of writing a second one. If the
 // window could shift between attempts the key would differ and nothing would catch the duplicate.

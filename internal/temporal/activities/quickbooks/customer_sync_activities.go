@@ -34,14 +34,34 @@ func (a *QuickBooksCustomerSyncActivities) SyncCustomerToQuickBooks(ctx context.
 
 	qbIntegration, err := a.integrationFactory.GetQuickBooksIntegration(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToQuickBooks activity failed to get QuickBooks integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
 	custResp, err := a.customerService.GetCustomer(ctx, input.CustomerID)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToQuickBooks activity failed to get customer",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = qbIntegration.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, custResp.Customer)
-	return err
+	if _, err := qbIntegration.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, custResp.Customer); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToQuickBooks activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

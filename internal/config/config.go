@@ -31,50 +31,52 @@ type Configuration struct {
 	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
 	// when nil, publishing is single-cluster. The `kafka` block is this deployment's own
 	// local cluster — consumed AND always written. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
-	KafkaSecondary             *KafkaConfig                     `mapstructure:"kafka_secondary" validate:"omitempty"`
-	ClickHouse                 ClickHouseConfig                 `validate:"required"`
-	Logging                    LoggingConfig                    `validate:"required"`
-	Postgres                   PostgresConfig                   `validate:"required"`
-	Sentry                     SentryConfig                     `validate:"required"`
-	Otel                       OtelConfig                       `validate:"omitempty"`
-	Pyroscope                  PyroscopeConfig                  `validate:"required"`
-	Event                      EventConfig                      `validate:"required"`
-	DynamoDB                   DynamoDBConfig                   `validate:"required"`
-	Temporal                   TemporalConfig                   `validate:"required"`
-	Webhook                    Webhook                          `validate:"omitempty"`
-	Secrets                    SecretsConfig                    `validate:"required"`
-	Billing                    BillingConfig                    `validate:"omitempty"`
-	S3                         S3Config                         `validate:"required"`
-	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
-	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
-	Cache                      CacheConfig                      `validate:"required"`
-	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
-	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
-	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
-	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
-	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
-	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
-	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
-	BulkEventConsumption       BulkEventConsumptionConfig       `mapstructure:"bulk_event_consumption" validate:"required"`
-	BulkMeterUsageTracking     BulkMeterUsageTrackingConfig     `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
-	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
-	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
-	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
-	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
-	RBAC                       RBACConfig                       `mapstructure:"rbac" validate:"omitempty"`
-	OAuth                      OAuthConfig                      `mapstructure:"oauth" validate:"required"`
-	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
-	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
-	Checkout                   CheckoutConfig                   `mapstructure:"checkout" validate:"omitempty"`
-	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
-	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
-	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
-	IntegrationEvents          IntegrationEventsConfig          `mapstructure:"integration_events" validate:"omitempty"`
-	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
-	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
-	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
-	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
-	Onboarding                 OnboardingConfig                 `mapstructure:"onboarding" validate:"omitempty"`
+	KafkaSecondary         *KafkaConfig                 `mapstructure:"kafka_secondary" validate:"omitempty"`
+	ClickHouse             ClickHouseConfig             `validate:"required"`
+	Logging                LoggingConfig                `validate:"required"`
+	Postgres               PostgresConfig               `validate:"required"`
+	Otel                   OtelConfig                   `validate:"omitempty"`
+	Pyroscope              PyroscopeConfig              `validate:"required"`
+	Event                  EventConfig                  `validate:"required"`
+	DynamoDB               DynamoDBConfig               `validate:"required"`
+	Temporal               TemporalConfig               `validate:"required"`
+	Webhook                Webhook                      `validate:"omitempty"`
+	Secrets                SecretsConfig                `validate:"required"`
+	Billing                BillingConfig                `validate:"omitempty"`
+	S3                     S3Config                     `validate:"required"`
+	FlexpriceS3Exports     FlexpriceS3ExportsConfig     `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	Marketplace            MarketplaceConfig            `mapstructure:"marketplace" validate:"omitempty"`
+	Cache                  CacheConfig                  `validate:"required"`
+	EventProcessing        EventProcessingConfig        `mapstructure:"event_processing" validate:"required"`
+	EventProcessingLazy    EventProcessingLazyConfig    `mapstructure:"event_processing_lazy" validate:"required"`
+	EventProcessingReplay  EventProcessingReplayConfig  `mapstructure:"event_processing_replay" validate:"required"`
+	MeterUsageTracking     MeterUsageTrackingConfig     `mapstructure:"meter_usage_tracking" validate:"required"`
+	MeterUsageTrackingLazy MeterUsageTrackingLazyConfig `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
+	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
+	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
+	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
+	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
+	OAuth                  OAuthConfig                  `mapstructure:"oauth" validate:"required"`
+	WalletBalanceAlert     WalletBalanceAlertConfig     `mapstructure:"wallet_balance_alert" validate:"required"`
+	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
+	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
+	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
+	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
+	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
+	IntegrationEvents      IntegrationEventsConfig      `mapstructure:"integration_events" validate:"omitempty"`
+	OnboardingEvents       OnboardingEventsConfig       `mapstructure:"onboarding_events" validate:"omitempty"`
+	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
+	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
+	Whop                   WhopConfig                   `mapstructure:"whop" validate:"omitempty"`
+	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
+	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
+}
+
+type ChatSupportConfig struct {
+	AppID          string `mapstructure:"app_id"`
+	IdentitySecret string `mapstructure:"identity_secret"`
 }
 
 type OnboardingConfig struct {
@@ -322,7 +324,10 @@ type KafkaConfig struct {
 	// do not define their own per-consumer-group topic_dlq. Empty disables DLQ for
 	// those handlers.
 	TopicDLQ string `mapstructure:"topic_dlq" default:""`
-	TLS      bool   `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	// OffsetRetention overrides the broker's offsets.retention.minutes for this client.
+	// Zero leaves retention to the broker.
+	OffsetRetention time.Duration `mapstructure:"offset_retention"`
+	TLS             bool          `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	// TLSCACertFile is the path to a PEM-encoded CA bundle used to verify the
 	// broker certificate. Empty (the default) means the OS trust store is used,
 	// which is correct for brokers with publicly-trusted certs (MSK, Confluent
@@ -440,7 +445,6 @@ type PostgresConfig struct {
 	MaxOpenConns           int    `mapstructure:"max_open_conns" default:"10"`
 	MaxIdleConns           int    `mapstructure:"max_idle_conns" default:"5"`
 	ConnMaxLifetimeMinutes int    `mapstructure:"conn_max_lifetime_minutes" default:"60"`
-	AutoMigrate            bool   `mapstructure:"auto_migrate" default:"false"`
 
 	// Reader endpoint configuration for read replicas
 	ReaderHost string `mapstructure:"reader_host"`
@@ -457,16 +461,6 @@ type APIKeyDetails struct {
 	UserID   string `mapstructure:"user_id" json:"user_id" validate:"required"`
 	Name     string `mapstructure:"name" json:"name" validate:"required"`      // description of what this key is for
 	IsActive bool   `mapstructure:"is_active" json:"is_active" default:"true"` // whether this key is active
-}
-
-// SentryConfig is retained only for transitional rollback. Error/exception
-// capture is now OTel-native (see internal/tracing.CaptureException and
-// internal/spanerr); Sentry is no longer the sink and defaults to disabled.
-type SentryConfig struct {
-	Enabled     bool    `mapstructure:"enabled" default:"false"`
-	DSN         string  `mapstructure:"dsn"`
-	Environment string  `mapstructure:"environment"`
-	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
 }
 
 // OtelConfig is the unified OTLP exporter configuration. Each signal (traces,
@@ -499,11 +493,17 @@ type OtelTracesConfig struct {
 	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
-	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // master switch for ALL DB/ClickHouse/cache child spans (can be noisy)
 	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
 	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
 	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
 	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
+	// Cache spans are the noisiest fan-out (fire on every get/set/delete on hot
+	// paths), so they get a per-type opt-in on top of StorageSpansEnabled.
+	// Both default false, and both require StorageSpansEnabled=true to emit —
+	// StorageSpansEnabled is the master kill switch for all storage spans.
+	RedisCacheSpansEnabled    bool `mapstructure:"redis_cache_spans_enabled" default:"false"`    // db.system=redis cache spans (also requires storage_spans_enabled)
+	InMemoryCacheSpansEnabled bool `mapstructure:"in_memory_cache_spans_enabled" default:"false"` // db.system=in_memory cache spans (also requires storage_spans_enabled)
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
@@ -549,6 +549,12 @@ type OtelMetricsConfig struct {
 	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
 	// SDK series are higher volume than app DB/cache metrics.
 	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
+	// HTTPServerEnabled keeps otelgin's http.server.request.duration instead of
+	// dropping it, so request rate / latency / error rate per route come from
+	// metrics rather than from spans. Off by default (~31% of our own ingestion,
+	// and SigNoz already derives it); turn it on where the backend cannot store
+	// traces and this is the only source of API latency.
+	HTTPServerEnabled bool `mapstructure:"http_server_enabled" default:"false"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
@@ -693,8 +699,6 @@ type MeterUsageTrackingConfig struct {
 	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
-	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
-	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`
 
 	// event.rejected webhook (fired when an event produces no meter usage); opt-in.
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
@@ -812,28 +816,6 @@ type EnvAccessConfig struct {
 	UserEnvMapping map[string]map[string][]string `mapstructure:"user_env_mapping" json:"user_env_mapping" validate:"omitempty"`
 }
 
-type FeatureFlagConfig struct {
-	EnableMeterUsageForBilling bool `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
-
-	// Per-tenant overrides for the meter-usage-for-billing rollout. Resolution order:
-	//   1. disabled_tenants — tenant force-disabled (highest priority)
-	//   2. enabled_tenants  — tenant force-enabled
-	//   3. global flag above — applies to everyone else
-	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
-	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
-}
-
-// IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
-// billing service for a specific tenant.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForBilling,
-		c.MeterUsageForBillingEnabledTenants,
-		c.MeterUsageForBillingDisabledTenants,
-	)
-}
-
 func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants, disabledTenants []string) bool {
 	if tenantID != "" {
 		if slices.Contains(disabledTenants, tenantID) {
@@ -861,21 +843,6 @@ type EmailConfig struct {
 	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
 	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
 	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
-}
-type CostSheetUsageTrackingConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"events"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service"`
-	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
-}
-
-type CostSheetUsageTrackingLazyConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"events_lazy"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`
-	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
 }
 
 type CheckoutConfig struct {

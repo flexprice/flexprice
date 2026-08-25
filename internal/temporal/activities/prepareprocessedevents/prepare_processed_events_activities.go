@@ -168,6 +168,13 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 	}
 	subsResponse, err := subscriptionService.ListSubscriptions(ctx, subscriptionFilter)
 	if err != nil {
+		logger.Error(ctx, "RolloutToSubscriptionsActivity failed",
+			"error", err,
+			"plan_id", input.PlanID,
+			"price_id", input.PriceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscriptions for plan").
 			Mark(ierr.ErrDatabase)

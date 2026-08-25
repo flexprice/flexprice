@@ -348,6 +348,7 @@ func (s *subscriptionModificationService) executeQuantityChange(
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	triggerHubSpotDealSync(ctx, sp, subscriptionID)
 
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)

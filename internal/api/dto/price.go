@@ -113,11 +113,19 @@ type UpdatePriceRequest struct {
 
 type PriceResponse struct {
 	*price.Price
-	Meter       *MeterResponse     `json:"meter,omitempty"`
-	Plan        *PlanResponse      `json:"plan,omitempty"`
-	Addon       *AddonResponse     `json:"addon,omitempty"`
-	Group       *GroupResponse     `json:"group,omitempty"`
-	PricingUnit *PriceUnitResponse `json:"pricing_unit,omitempty"`
+	Meter       *MeterResponse        `json:"meter,omitempty"`
+	Plan        *PlanResponse         `json:"plan,omitempty"`
+	Addon       *AddonResponse        `json:"addon,omitempty"`
+	Group       *GroupResponse        `json:"group,omitempty"`
+	PricingUnit *PriceUnitResponse    `json:"pricing_unit,omitempty"`
+	Feature     *PriceFeatureResponse `json:"feature,omitempty"`
+}
+
+// PriceFeatureResponse is the price-relevant view of the metered feature behind a price
+// (resolved via the price's meter_id). Only reporting_unit is populated today; add further
+// price-relevant feature fields here rather than growing PriceResponse directly.
+type PriceFeatureResponse struct {
+	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 }
 
 // ListPricesResponse represents the response for listing prices

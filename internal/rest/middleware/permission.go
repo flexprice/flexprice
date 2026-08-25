@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
 )
 
 // PermissionMiddleware handles RBAC permission checks
@@ -68,7 +67,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 			return
 		}
 
-		if rules.superAdminOnly && (types.IsServiceAccount(ctx) || !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String())) {
+		if rules.superAdminOnly && !types.IsSuperAdminUser(ctx) {
 			pm.logger.Info(ctx, "access denied: administrative action requires a super_admin user",
 				"user_id", types.GetUserID(ctx),
 				"tenant_id", types.GetTenantID(ctx),

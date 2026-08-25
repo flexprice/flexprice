@@ -571,14 +571,36 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 	// be handled at the service layer. For now, we skip coupon preview calculations here.
 	totalDiscount := decimal.Zero
 
-	// 3) Taxes on (subtotal - totalDiscount) using prepared tax rates
-	totalTax := decimal.Zero
-	taxableAmount := inv.Subtotal.Sub(totalDiscount)
+	// 3) Taxes are applied on (subtotal - totalDiscount) by
+	// RecalculatePreviewTotals below.
+
+	// 4) Update invoice preview totals
+	inv.TotalDiscount = totalDiscount
+	RecalculatePreviewTotals(inv, r.PreparedTaxRates)
+
+	return inv, nil
+}
+
+// RecalculatePreviewTotals recomputes a preview invoice's tax and totals from
+// its current subtotal and TotalDiscount, in the order a real invoice applies
+// them: discounts first, tax on what remains.
+//
+// Coupon discounts are resolved at the service layer (they need coupon
+// validation and the coupon repository), so the preview path sets
+// inv.TotalDiscount afterwards and calls this to bring tax and totals back in
+// step. Without the second pass, tax would stay computed against the
+// undiscounted subtotal.
+func RecalculatePreviewTotals(inv *invoice.Invoice, preparedTaxRates []*TaxRateResponse) {
+	if inv == nil {
+		return
+	}
+	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount)
 	if taxableAmount.IsNegative() {
 		taxableAmount = decimal.Zero
 	}
 
-	for _, tr := range r.PreparedTaxRates {
+	totalTax := decimal.Zero
+	for _, tr := range preparedTaxRates {
 		taxAmount, ok := previewTaxAmount(tr, taxableAmount, inv.Currency)
 		if !ok {
 			continue
@@ -586,17 +608,13 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		totalTax = totalTax.Add(taxAmount)
 	}
 
-	// 4) Update invoice preview totals
-	inv.TotalDiscount = totalDiscount
 	inv.TotalTax = totalTax
-	inv.Total = inv.Subtotal.Sub(totalDiscount).Add(totalTax)
+	inv.Total = taxableAmount.Add(totalTax)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
-
-	return inv, nil
 }
 
 // previewTaxAmount computes the tax owed on taxableAmount for a single

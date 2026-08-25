@@ -294,19 +294,6 @@ logging:
     endpoint: "ingest.signoz.io:443"
     # auth value from existingSecret key: logging-otel-auth-value
 
-sentry:
-  enabled: true
-  environment: "production"
-  sampleRate: 1.0
-  tracesSampleRate: 0.1
-  # dsn from existingSecret key: sentry-dsn
-
-pyroscope:
-  enabled: true
-  serverAddress: "https://profiles-prod-001.grafana.net"
-  basicAuthUser: "<grafana-cloud-user-id>"
-  # password from existingSecret key: pyroscope-basic-auth-password
-
 # ── Service monitor (Prometheus Operator) ────────────────────────────────────
 serviceMonitor:
   enabled: true
@@ -315,21 +302,34 @@ serviceMonitor:
   labels:
     release: kube-prometheus-stack
 
-# ── App URLs / billing ────────────────────────────────────────────────────────
+# ── App URLs / billing / observability / email ────────────────────────────────
 app:
   baseUrl: "https://api.flexprice.example.com"
+
+  observability:
+    sentry:
+      enabled: true
+      environment: "production"
+      sampleRate: 1.0
+      tracesSampleRate: 0.1
+      # dsn from existingSecret key: sentry-dsn
+
+    pyroscope:
+      enabled: true
+      serverAddress: "https://profiles-prod-001.grafana.net"
+      basicAuthUser: "<grafana-cloud-user-id>"
+      # password from existingSecret key: pyroscope-basic-auth-password
+
+  email:
+    enabled: true
+    provider: "resend"
+    from: "billing@flexprice.example.com"
+    # api key from existingSecret key: email-resend-api-key
 
 billing:
   # Override these with the real production tenant + environment IDs
   tenantId: "<prod-tenant-uuid>"
   environmentId: "<prod-environment-uuid>"
-
-# ── Email / webhooks ──────────────────────────────────────────────────────────
-email:
-  enabled: true
-  provider: "resend"
-  from: "billing@flexprice.example.com"
-  # api key from existingSecret key: email-resend-api-key
 
 webhook:
   enabled: true

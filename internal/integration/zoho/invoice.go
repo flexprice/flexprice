@@ -3,6 +3,7 @@ package zoho
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -145,7 +146,10 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	}
 
 	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
-	reqPayload.CustomFields = servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)
+	reqPayload.CustomFields = append(
+		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd),
+		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...,
+	)
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -255,6 +259,20 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 	}
 	if zohoInv == nil || !zohoInv.Balance.IsPositive() {
 		s.logger.Info(ctx, "Zoho invoice already has zero balance, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID,
+			"zoho_invoice_id", zohoInvoiceID)
+		return nil
+	}
+
+	zohoInv, err = s.ensureApprovedForPayment(ctx, flexpriceInvoiceID, zohoInv)
+	if err != nil {
+		return err
+	}
+	if zohoInv == nil {
+		return nil
+	}
+	if !zohoInv.Balance.IsPositive() {
+		s.logger.Info(ctx, "Zoho invoice balance settled while awaiting approval, skipping mark-paid",
 			"invoice_id", flexpriceInvoiceID,
 			"zoho_invoice_id", zohoInvoiceID)
 		return nil
@@ -458,6 +476,38 @@ func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *
 		NewCustomField(settings.ServicePeriodCustomFields.StartFieldID, start.Format(zohoAPIDateFormat)),
 		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(end).Format(zohoAPIDateFormat)),
 	}
+}
+
+// metadataCustomFields copies configured metadata values onto Zoho custom fields. A key
+// that is absent or blank is skipped rather than sent as an empty value.
+func metadataCustomFields(settings *types.InvoiceSyncSettings, invoiceMetadata, customerMetadata map[string]string) []CustomField {
+	if settings == nil || len(settings.MetadataCustomFields) == 0 {
+		return nil
+	}
+
+	out := make([]CustomField, 0, len(settings.MetadataCustomFields))
+	for _, m := range settings.MetadataCustomFields {
+		var source map[string]string
+		switch m.Source {
+		case types.MetadataCustomFieldSourceInvoice:
+			source = invoiceMetadata
+		case types.MetadataCustomFieldSourceCustomer:
+			source = customerMetadata
+		default:
+			continue
+		}
+
+		value := strings.TrimSpace(source[m.MetadataKey])
+		if value == "" {
+			continue
+		}
+		out = append(out, NewCustomField(m.Field, value))
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *InvoiceService) resolveHSNSAC(ctx context.Context, inputs []ItemSyncInput) map[string]string {

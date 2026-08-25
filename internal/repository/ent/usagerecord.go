@@ -369,3 +369,33 @@ func (r *usageRecordRepository) List(ctx context.Context, filter *types.UsageRec
 	SetSpanSuccess(span)
 	return domainUsageRecord.FromEntList(records), nil
 }
+
+// Count returns the number of usage records matching filter, ignoring pagination.
+func (r *usageRecordRepository) Count(ctx context.Context, filter *types.UsageRecordFilter) (int, error) {
+	client := r.client.Reader(ctx)
+
+	span := StartRepositorySpan(ctx, "usage_record", "count", map[string]interface{}{
+		"filter": filter,
+	})
+	defer FinishSpan(span)
+
+	query := client.UsageRecord.Query()
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, err
+	}
+
+	count, err := query.Count(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count usage records").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return count, nil
+}

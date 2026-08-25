@@ -129,3 +129,44 @@ func TestBuildPreviewTaxes_RoundsToCurrencyPrecision(t *testing.T) {
 	assert.Equal(t, "7.5", taxes[0].TaxAmount.String())
 	assert.Equal(t, "tenant_1", taxes[0].TenantID)
 }
+
+func TestRecalculatePreviewTotals_TaxesTheDiscountedSubtotal(t *testing.T) {
+	// A coupon resolved at the service layer sets TotalDiscount after
+	// ToInvoice has already taxed the full subtotal, so the second pass must
+	// tax what remains — not the original amount.
+	pct := decimal.NewFromInt(10)
+	rates := []*TaxRateResponse{
+		{TaxRate: &taxrate.TaxRate{ID: "taxrate_pct", TaxRateType: types.TaxRateTypePercentage, PercentageValue: &pct}},
+	}
+	inv := &invoice.Invoice{
+		ID:            "inv_preview",
+		Currency:      "usd",
+		Subtotal:      decimal.NewFromInt(100),
+		TotalDiscount: decimal.NewFromInt(20),
+	}
+
+	RecalculatePreviewTotals(inv, rates)
+
+	assert.Equal(t, "8", inv.TotalTax.String(), "tax must be 10%% of 80, not of 100")
+	assert.Equal(t, "88", inv.Total.String())
+	assert.Equal(t, "88", inv.AmountDue.String())
+	assert.Equal(t, "88", inv.AmountRemaining.String())
+}
+
+func TestRecalculatePreviewTotals_DiscountBeyondSubtotal(t *testing.T) {
+	pct := decimal.NewFromInt(10)
+	rates := []*TaxRateResponse{
+		{TaxRate: &taxrate.TaxRate{ID: "taxrate_pct", TaxRateType: types.TaxRateTypePercentage, PercentageValue: &pct}},
+	}
+	inv := &invoice.Invoice{
+		ID:            "inv_preview",
+		Currency:      "usd",
+		Subtotal:      decimal.NewFromInt(10),
+		TotalDiscount: decimal.NewFromInt(30),
+	}
+
+	RecalculatePreviewTotals(inv, rates)
+
+	assert.True(t, inv.TotalTax.IsZero(), "tax: %s", inv.TotalTax)
+	assert.True(t, inv.Total.IsZero(), "total: %s", inv.Total)
+}

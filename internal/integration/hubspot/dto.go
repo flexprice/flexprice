@@ -165,6 +165,9 @@ type DealLineItemProperties struct {
 	Discount             string `json:"discount,omitempty"`                  // Discount amount or percentage
 	RecurringBillingFreq string `json:"recurringbillingfrequency,omitempty"` // Billing frequency (e.g., "monthly", "annually")
 	Description          string `json:"description,omitempty"`               // Line item description / pricing model
+	// Date format "YYYY-MM-DD", matching QuoteProperties.ExpirationDate's convention.
+	RecurringBillingStartDate string `json:"hs_recurring_billing_start_date,omitempty"`
+	RecurringBillingEndDate   string `json:"hs_recurring_billing_end_date,omitempty"`
 }
 
 // LineItemAssociation represents an association between a line item and another object (deal, quote, etc.)

@@ -34,9 +34,23 @@ func (a *CustomerSyncActivities) SyncCustomerToStripe(ctx context.Context, input
 
 	stripeIntegration, err := a.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToStripe activity failed to get Stripe integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = stripeIntegration.CustomerSvc.EnsureCustomerSyncedToStripe(ctx, input.CustomerID, a.customerService)
-	return err
+	if _, err := stripeIntegration.CustomerSvc.EnsureCustomerSyncedToStripe(ctx, input.CustomerID, a.customerService); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToStripe activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

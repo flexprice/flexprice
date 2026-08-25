@@ -127,17 +127,25 @@ func SubscriptionScheduleResponseFromDomain(s *subscription.SubscriptionSchedule
 		UpdatedAt:          s.UpdatedAt,
 	}
 
-	// Parse configuration based on type
 	if s.ScheduleType == types.SubscriptionScheduleChangeTypePlanChange {
-		if config, err := s.GetPlanChangeConfig(); err == nil {
-			response.Configuration = config
-		}
-	}
-
-	// Parse execution result based on type
-	if s.ScheduleType == types.SubscriptionScheduleChangeTypePlanChange && s.ExecutionResult != nil {
-		if result, err := s.GetPlanChangeResult(); err == nil {
-			response.ExecutionResult = result
+		v2Config, err := s.GetPlanChangeV2Config()
+		switch {
+		case err == nil && v2Config.IsV2():
+			response.Configuration = v2Config
+			if s.ExecutionResult != nil {
+				if result, err := s.GetPlanChangeV2Result(); err == nil {
+					response.ExecutionResult = result
+				}
+			}
+		default:
+			if config, err := s.GetPlanChangeConfig(); err == nil {
+				response.Configuration = config
+			}
+			if s.ExecutionResult != nil {
+				if result, err := s.GetPlanChangeResult(); err == nil {
+					response.ExecutionResult = result
+				}
+			}
 		}
 	}
 

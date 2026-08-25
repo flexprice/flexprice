@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -89,142 +90,166 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		"alert_status", req.AlertStatus,
 	)
 
-	// Check for existing alert log using the unified GetLatestAlert method
-	// This method handles all alert types - with or without parent entities
-	existingAlert, err := s.AlertLogsRepo.GetLatestAlert(
-		ctx,
-		req.EntityType,
-		req.EntityID,
-		&req.AlertType,
-		req.ParentEntityType,
-		req.ParentEntityID,
-		req.AlertSettingID,
-		req.PeriodStart,
-	)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to check existing alert status").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Debug log to verify what we fetched from DB (NO CACHE!)
-	if existingAlert != nil {
-		s.Logger.Debug(ctx, "fetched existing alert from database",
-			"entity_type", req.EntityType,
-			"entity_id", req.EntityID,
-			"alert_type", req.AlertType,
-			"existing_alert_id", existingAlert.ID,
-			"existing_alert_status", existingAlert.AlertStatus,
-			"existing_alert_created_at", existingAlert.CreatedAt,
-			"requested_status", req.AlertStatus,
-		)
-	} else {
-		s.Logger.Debug(ctx, "no existing alert found in database",
-			"entity_type", req.EntityType,
-			"entity_id", req.EntityID,
-			"alert_type", req.AlertType,
-			"requested_status", req.AlertStatus,
-		)
-	}
-
-	// Business logic: Log alerts ONLY when state changes or when problems are detected
-	// Works for all alert types (wallet, feature, etc.) and all states (ok, info, warning, in_alarm)
-	shouldCreateLog := false
+	var alertLog *alertlogs.AlertLog
 	var webhookEventName string
 
-	// State transition rules:
-	// 1. No previous alert + OK state → Skip (system is healthy from start, no alert needed)
-	// 2. No previous alert + INFO/WARNING/IN_ALARM → Create (problem detected for first time)
-	// 3. Previous alert exists + status changed → Create (state transition)
-	// 4. Previous alert exists + status unchanged → Skip (no change)
+	// The read-decide-insert sequence runs inside one transaction under an advisory
+	// lock keyed on the alert stream, so concurrent evaluations of the same stream
+	// cannot both observe the pre-transition state and each insert a log row.
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: s.getAlertLogLockKey(ctx, req)}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire alert log lock").
+				Mark(ierr.ErrInternal)
+		}
 
-	if existingAlert == nil {
-		// No previous alert exists
-		if req.AlertStatus == types.AlertStateOk {
-			// System is healthy from the start - no need to log
-			s.Logger.Debug(ctx, "skipping alert - no previous alert and status is ok (system healthy)",
+		// Check for existing alert log using the unified GetLatestAlert method
+		// This method handles all alert types - with or without parent entities
+		existingAlert, err := s.AlertLogsRepo.GetLatestAlert(
+			ctx,
+			req.EntityType,
+			req.EntityID,
+			&req.AlertType,
+			req.ParentEntityType,
+			req.ParentEntityID,
+			req.AlertSettingID,
+			req.PeriodStart,
+		)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to check existing alert status").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Debug log to verify what we fetched from DB (NO CACHE!)
+		if existingAlert != nil {
+			s.Logger.Debug(ctx, "fetched existing alert from database",
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
 				"alert_type", req.AlertType,
-				"alert_status", req.AlertStatus,
+				"existing_alert_id", existingAlert.ID,
+				"existing_alert_status", existingAlert.AlertStatus,
+				"existing_alert_created_at", existingAlert.CreatedAt,
+				"requested_status", req.AlertStatus,
 			)
 		} else {
-			// Problem state detected for first time (INFO, WARNING or IN_ALARM) - create alert
-			shouldCreateLog = true
-			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-			s.Logger.Info(ctx, "creating alert - problem detected for first time",
+			s.Logger.Debug(ctx, "no existing alert found in database",
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
 				"alert_type", req.AlertType,
-				"alert_status", req.AlertStatus,
-				"webhook_event", webhookEventName,
+				"requested_status", req.AlertStatus,
 			)
 		}
-	} else if existingAlert.AlertStatus != req.AlertStatus {
-		// Previous alert exists BUT status is different - state changed, create log
-		shouldCreateLog = true
-		webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-		s.Logger.Info(ctx, "creating alert - state changed",
+
+		// Business logic: Log alerts ONLY when state changes or when problems are detected
+		// Works for all alert types (wallet, feature, etc.) and all states (ok, info, warning, in_alarm)
+		shouldCreateLog := false
+
+		// State transition rules:
+		// 1. No previous alert + OK state → Skip (system is healthy from start, no alert needed)
+		// 2. No previous alert + INFO/WARNING/IN_ALARM → Create (problem detected for first time)
+		// 3. Previous alert exists + status changed → Create (state transition)
+		// 4. Previous alert exists + status unchanged → Skip (no change)
+
+		if existingAlert == nil {
+			// No previous alert exists
+			if req.AlertStatus == types.AlertStateOk {
+				// System is healthy from the start - no need to log
+				s.Logger.Debug(ctx, "skipping alert - no previous alert and status is ok (system healthy)",
+					"entity_type", req.EntityType,
+					"entity_id", req.EntityID,
+					"alert_type", req.AlertType,
+					"alert_status", req.AlertStatus,
+				)
+			} else {
+				// Problem state detected for first time (INFO, WARNING or IN_ALARM) - create alert
+				shouldCreateLog = true
+				webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
+				s.Logger.Info(ctx, "creating alert - problem detected for first time",
+					"entity_type", req.EntityType,
+					"entity_id", req.EntityID,
+					"alert_type", req.AlertType,
+					"alert_status", req.AlertStatus,
+					"webhook_event", webhookEventName,
+				)
+			}
+		} else if existingAlert.AlertStatus != req.AlertStatus {
+			// Previous alert exists BUT status is different - state changed, create log
+			shouldCreateLog = true
+			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
+			s.Logger.Info(ctx, "creating alert - state changed",
+				"entity_type", req.EntityType,
+				"entity_id", req.EntityID,
+				"alert_type", req.AlertType,
+				"previous_status", existingAlert.AlertStatus,
+				"new_status", req.AlertStatus,
+				"webhook_event", webhookEventName,
+			)
+		} else {
+			// Previous alert exists AND status is the same - no change, skip
+			s.Logger.Debug(ctx, "skipping alert - status unchanged",
+				"entity_type", req.EntityType,
+				"entity_id", req.EntityID,
+				"alert_type", req.AlertType,
+				"current_status", existingAlert.AlertStatus,
+				"requested_status", req.AlertStatus,
+			)
+		}
+
+		if !shouldCreateLog {
+			return nil
+		}
+
+		// Create new alert log entry
+		alertLog = &alertlogs.AlertLog{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT_LOG),
+			EntityType:       req.EntityType,
+			EntityID:         req.EntityID,
+			ParentEntityType: req.ParentEntityType,
+			ParentEntityID:   req.ParentEntityID,
+			CustomerID:       req.CustomerID,
+			AlertSettingID:   req.AlertSettingID,
+			AlertType:        req.AlertType,
+			AlertStatus:      req.AlertStatus,
+			AlertInfo:        req.AlertInfo,
+			EnvironmentID:    types.GetEnvironmentID(ctx),
+			BaseModel: types.BaseModel{
+				TenantID:  types.GetTenantID(ctx),
+				Status:    types.StatusPublished,
+				CreatedAt: time.Now().UTC(),
+				UpdatedAt: time.Now().UTC(),
+				CreatedBy: types.GetUserID(ctx),
+				UpdatedBy: types.GetUserID(ctx),
+			},
+		}
+
+		if err := s.AlertLogsRepo.Create(ctx, alertLog); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create alert log").
+				Mark(ierr.ErrDatabase)
+		}
+
+		s.Logger.Info(ctx, "alert log created successfully",
+			"alert_log_id", alertLog.ID,
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
-			"previous_status", existingAlert.AlertStatus,
-			"new_status", req.AlertStatus,
+			"alert_status", req.AlertStatus,
 			"webhook_event", webhookEventName,
 		)
-	} else {
-		// Previous alert exists AND status is the same - no change, skip
-		s.Logger.Debug(ctx, "skipping alert - status unchanged",
-			"entity_type", req.EntityType,
-			"entity_id", req.EntityID,
-			"alert_type", req.AlertType,
-			"current_status", existingAlert.AlertStatus,
-			"requested_status", req.AlertStatus,
-		)
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	if !shouldCreateLog {
+	// No transition was recorded - nothing to publish.
+	if alertLog == nil {
 		return nil
 	}
 
-	// Create new alert log entry
-	alertLog := &alertlogs.AlertLog{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ALERT_LOG),
-		EntityType:       req.EntityType,
-		EntityID:         req.EntityID,
-		ParentEntityType: req.ParentEntityType,
-		ParentEntityID:   req.ParentEntityID,
-		CustomerID:       req.CustomerID,
-		AlertSettingID:   req.AlertSettingID,
-		AlertType:        req.AlertType,
-		AlertStatus:      req.AlertStatus,
-		AlertInfo:        req.AlertInfo,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel: types.BaseModel{
-			TenantID:  types.GetTenantID(ctx),
-			Status:    types.StatusPublished,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-			CreatedBy: types.GetUserID(ctx),
-			UpdatedBy: types.GetUserID(ctx),
-		},
-	}
-
-	if err := s.AlertLogsRepo.Create(ctx, alertLog); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to create alert log").
-			Mark(ierr.ErrDatabase)
-	}
-
-	s.Logger.Info(ctx, "alert log created successfully",
-		"alert_log_id", alertLog.ID,
-		"entity_type", req.EntityType,
-		"entity_id", req.EntityID,
-		"alert_type", req.AlertType,
-		"alert_status", req.AlertStatus,
-		"webhook_event", webhookEventName,
-	)
-
+	// Webhooks are published only after the transition commits, so a rolled-back
+	// transaction cannot emit an event for an alert log that does not exist.
 	switch req.AlertType {
 	case types.AlertTypeLowOngoingBalance, types.AlertTypeLowCreditBalance:
 		// Get wallet domain object directly from repository
@@ -298,6 +323,27 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 	}
 
 	return nil
+}
+
+// getAlertLogLockKey builds the advisory lock key identifying a single alert stream.
+// It mirrors the fields GetLatestAlert dedups on, so two evaluations that would read
+// the same "latest alert" row contend on the same lock.
+func (s *alertLogsService) getAlertLogLockKey(ctx context.Context, req *LogAlertRequest) string {
+	lockKey := "alert_logs:" +
+		types.GetTenantID(ctx) + ":" +
+		types.GetEnvironmentID(ctx) + ":" +
+		string(req.EntityType) + ":" +
+		req.EntityID + ":" +
+		string(req.AlertType) + ":" +
+		lo.FromPtr(req.ParentEntityType) + ":" +
+		lo.FromPtr(req.ParentEntityID) + ":" +
+		lo.FromPtr(req.AlertSettingID)
+
+	if req.PeriodStart != nil {
+		lockKey += ":" + req.PeriodStart.UTC().Format(time.RFC3339Nano)
+	}
+
+	return lockKey
 }
 
 // GetLatestAlert retrieves the latest alert log based on provided filters

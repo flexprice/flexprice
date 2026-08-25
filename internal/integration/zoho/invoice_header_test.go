@@ -284,3 +284,95 @@ func TestServicePeriodCustomFieldsUsesAPINames(t *testing.T) {
 	assert.Equal(t, "2026-04-30", got[1].Value, "period_end is exclusive; the invoice shows the prior day")
 	assert.Empty(t, got[0].CustomFieldID)
 }
+
+func TestMetadataCustomFields(t *testing.T) {
+	settings := &types.InvoiceSyncSettings{
+		MetadataCustomFields: []types.MetadataCustomField{
+			{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
+			{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "4069923000000000009"},
+			{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
+		},
+	}
+	customerMeta := map[string]string{"hubspot_company_id": "164213581519", "brand_name": "Mankind Pharma"}
+	invoiceMeta := map[string]string{"po_number": "4106065378"}
+
+	t.Run("copies values from the configured source", func(t *testing.T) {
+		assert.Equal(t, []CustomField{
+			{APIName: "cf_hubspot_id", Value: "164213581519"},
+			{CustomFieldID: "4069923000000000009", Value: "Mankind Pharma"},
+			{APIName: "cf_po", Value: "4106065378"},
+		}, metadataCustomFields(settings, invoiceMeta, customerMeta))
+	})
+
+	t.Run("skips absent and blank keys", func(t *testing.T) {
+		got := metadataCustomFields(settings, nil, map[string]string{
+			"hubspot_company_id": "164213581519",
+			"brand_name":         "   ",
+		})
+		assert.Equal(t, []CustomField{{APIName: "cf_hubspot_id", Value: "164213581519"}}, got)
+	})
+
+	t.Run("does not cross sources", func(t *testing.T) {
+		assert.Nil(t, metadataCustomFields(settings, customerMeta, nil),
+			"customer-sourced keys are not read off the invoice")
+	})
+
+	t.Run("nil when unconfigured", func(t *testing.T) {
+		assert.Nil(t, metadataCustomFields(nil, invoiceMeta, customerMeta))
+		assert.Nil(t, metadataCustomFields(&types.InvoiceSyncSettings{}, invoiceMeta, customerMeta))
+	})
+}
+
+func TestSyncInvoiceSendsMetadataCustomFieldsAlongsideServicePeriod(t *testing.T) {
+	inv := &invoice.Invoice{
+		ID:          "inv_3",
+		CustomerID:  "cust_3",
+		Currency:    "INR",
+		PeriodStart: tPtr("2026-08-01T00:00:00Z"),
+		PeriodEnd:   tPtr("2026-09-01T00:00:00Z"),
+		Metadata:    types.Metadata{"po_number": "4106065378"},
+		LineItems:   []*invoice.InvoiceLineItem{hsnLineItem("li_a", "price_a")},
+	}
+
+	client := &fakeSyncZohoClient{syncConfig: &types.SyncConfig{
+		InvoiceSyncSettings: &types.InvoiceSyncSettings{
+			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
+				StartFieldID: "cf_start",
+				EndFieldID:   "cf_end",
+			},
+			MetadataCustomFields: []types.MetadataCustomField{
+				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
+				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "cf_brand_name"},
+				{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
+				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "absent", Field: "cf_absent"},
+			},
+		},
+	}}
+
+	svc := &InvoiceService{
+		client:      client,
+		customerSvc: fakeSyncCustomerSvc{},
+		itemSyncSvc: &capturingItemSyncSvc{},
+		taxSvc:      fakeSyncTaxSvc{},
+		customerRepo: &gstCustomerRepo{metadata: map[string]string{
+			"hubspot_company_id": "164213581519",
+			"brand_name":         "Mankind Pharma",
+		}},
+		invoiceRepo: &fakeSyncInvoiceRepo{inv: inv},
+		priceRepo:   &fakeHSNPriceRepo{prices: map[string]*price.Price{}},
+		mappingRepo: &fakeSyncMappingRepo{},
+		logger:      logger.NewNoopLogger(),
+	}
+
+	_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_3"})
+	require.NoError(t, err)
+	require.NotNil(t, client.createInvoiceReq)
+
+	assert.Equal(t, []CustomField{
+		{APIName: "cf_start", Value: "2026-08-01"},
+		{APIName: "cf_end", Value: "2026-08-31"},
+		{APIName: "cf_hubspot_id", Value: "164213581519"},
+		{APIName: "cf_brand_name", Value: "Mankind Pharma"},
+		{APIName: "cf_po", Value: "4106065378"},
+	}, client.createInvoiceReq.CustomFields)
+}

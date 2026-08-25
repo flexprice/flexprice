@@ -31,6 +31,9 @@ func (a *SubscriptionCronActivities) ProcessAutoCancellationActivity(ctx context
 	log.Info("Processing subscription auto-cancellations")
 
 	if err := a.subscriptionService.ProcessAutoCancellationSubscriptions(ctx); err != nil {
+		a.logger.Error(ctx, "ProcessAutoCancellationActivity failed",
+			"error", err,
+		)
 		return nil, err
 	}
 
@@ -45,6 +48,9 @@ func (a *SubscriptionCronActivities) UpdateBillingPeriodsActivity(ctx context.Co
 	log.Info("Updating subscription billing periods (cron activity)")
 	_, err := a.subscriptionService.UpdateBillingPeriods(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "UpdateBillingPeriodsActivity failed",
+			"error", err,
+		)
 		return nil, err
 	}
 	return &cronModels.SubscriptionBillingPeriodsWorkflowResult{}, nil
@@ -56,6 +62,9 @@ func (a *SubscriptionCronActivities) ProcessTrialEndDueActivity(ctx context.Cont
 	log.Info("Processing trial end due subscriptions (cron activity)")
 	resp, err := a.subscriptionService.ProcessTrialEndDue(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "ProcessTrialEndDueActivity failed",
+			"error", err,
+		)
 		return nil, err
 	}
 	return &cronModels.SubscriptionTrialEndDueWorkflowResult{
@@ -73,6 +82,10 @@ func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context
 		runTime = time.Now()
 	}
 	if err := a.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx, runTime); err != nil {
+		a.logger.Error(ctx, "ProcessRenewalDueAlertsActivity failed",
+			"error", err,
+			"run_time", runTime,
+		)
 		return nil, err
 	}
 	return &cronModels.SubscriptionRenewalDueAlertsWorkflowResult{}, nil
@@ -85,6 +98,9 @@ func (a *SubscriptionCronActivities) ProcessAutoInvoiceThresholdBillingActivity(
 
 	result, err := a.subscriptionService.ProcessAutoInvoiceThresholdBilling(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "ProcessAutoInvoiceThresholdBillingActivity failed",
+			"error", err,
+		)
 		return nil, err
 	}
 

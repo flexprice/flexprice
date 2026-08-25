@@ -92,6 +92,13 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 					Mark(ierr.ErrNotFound),
 			)
 		}
+		a.logger.Error(ctx, "SyncPriceToQuickBooks activity failed to get QuickBooks integration",
+			"error", err,
+			"price_id", input.PriceID,
+			"plan_id", input.PlanID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get QuickBooks integration").
 			Mark(ierr.ErrInternal)
@@ -100,6 +107,13 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 	// Get plan
 	plan, err := a.planRepo.Get(ctx, input.PlanID)
 	if err != nil {
+		a.logger.Error(ctx, "SyncPriceToQuickBooks activity failed to get plan",
+			"error", err,
+			"price_id", input.PriceID,
+			"plan_id", input.PlanID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get plan").
 			WithReportableDetails(map[string]interface{}{
@@ -111,6 +125,13 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 	// Get price
 	priceModel, err := a.priceRepo.Get(ctx, input.PriceID)
 	if err != nil {
+		a.logger.Error(ctx, "SyncPriceToQuickBooks activity failed to get price",
+			"error", err,
+			"price_id", input.PriceID,
+			"plan_id", input.PlanID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get price").
 			WithReportableDetails(map[string]interface{}{

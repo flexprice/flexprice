@@ -100,11 +100,18 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 	// Hash the entire API key for storage
 	hashedKey := s.encryptionService.Hash(apiKey)
 
-	// Determine which user to get roles from
-	userID := req.ServiceAccountID
-	if userID == "" {
-		// No service_account_id provided - use authenticated user from context
-		userID = types.GetUserID(ctx)
+	// A key is minted for the authenticated caller by default. Naming another
+	// principal hands that principal's stored roles to a fresh secret, so it is
+	// an administrative act: only a super_admin user may do it, and never a
+	// service account acting through its own key.
+	userID := types.GetUserID(ctx)
+	if req.ServiceAccountID != "" {
+		if !types.IsSuperAdminUser(ctx) {
+			return nil, "", ierr.NewError("only super_admin users can create keys for another principal").
+				WithHint("Ask a tenant super_admin to mint or rotate service-account API keys").
+				Mark(ierr.ErrPermissionDenied)
+		}
+		userID = req.ServiceAccountID
 	}
 
 	// Fetch user to get roles and type
@@ -178,6 +185,13 @@ func (s *secretService) ListAPIKeys(ctx context.Context, filter *types.SecretFil
 	filter.Type = lo.ToPtr(types.SecretTypePrivateKey)
 	filter.Provider = lo.ToPtr(types.SecretProviderFlexPrice)
 	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	// Only an administrator sees the whole environment's keys. Everyone else is
+	// pinned to their own, overriding any user_id the caller supplied so the
+	// filter cannot be used to read around the scoping.
+	if !types.IsSuperAdminUser(ctx) {
+		filter.UserID = lo.ToPtr(types.GetUserID(ctx))
+	}
 
 	secrets, err := s.repo.List(ctx, filter)
 	if err != nil {
@@ -295,6 +309,22 @@ func (s *secretService) ListIntegrations(ctx context.Context, filter *types.Secr
 }
 
 func (s *secretService) Delete(ctx context.Context, id string) error {
+	// Revoking a credential the caller does not own is administrative: without
+	// this a writer could disable another principal's key by guessing its id.
+	if !types.IsSuperAdminUser(ctx) {
+		existing, err := s.repo.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		// Integration secrets are tenant-wide and carry no owning principal, so
+		// only API keys minted for someone else are withheld.
+		if existing.UserID != "" && existing.UserID != types.GetUserID(ctx) {
+			return ierr.NewError("cannot delete a secret owned by another principal").
+				WithHint("Ask a tenant super_admin to revoke this API key").
+				Mark(ierr.ErrPermissionDenied)
+		}
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}

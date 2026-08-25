@@ -29,6 +29,8 @@ type ZohoClient interface {
 	GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error)
 	// CreateCustomerPayment records a payment against one or more Zoho Books invoices.
 	CreateCustomerPayment(ctx context.Context, req *CustomerPaymentCreateRequest) (*CustomerPaymentResponse, error)
+	// SubmitInvoiceForApproval submits a draft Zoho Books invoice into the org's approval flow.
+	SubmitInvoiceForApproval(ctx context.Context, zohoInvoiceID string) error
 	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
 	SearchItemByName(ctx context.Context, name string) (*ItemResponse, error)
 	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
@@ -151,6 +153,11 @@ func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*Invoice
 		return nil, err
 	}
 	return &resp.Invoice, nil
+}
+
+func (c *Client) SubmitInvoiceForApproval(ctx context.Context, zohoInvoiceID string) error {
+	path := fmt.Sprintf("/books/v3/invoices/%s/submit", zohoInvoiceID)
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, nil, nil)
 }
 
 func (c *Client) CreateCustomerPayment(ctx context.Context, req *CustomerPaymentCreateRequest) (*CustomerPaymentResponse, error) {

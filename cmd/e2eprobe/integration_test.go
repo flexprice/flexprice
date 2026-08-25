@@ -10,8 +10,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/e2eprobe"
-	checks_pkg "github.com/flexprice/flexprice/internal/e2eprobe/checks"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/types"
 )
 

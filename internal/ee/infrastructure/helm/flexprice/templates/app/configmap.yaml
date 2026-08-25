@@ -91,19 +91,19 @@ data:
       level: {{ .Values.logging.level | quote }}
     
     sentry:
-      enabled: {{ .Values.sentry.enabled }}
-      environment: {{ .Values.sentry.environment | quote }}
-      sample_rate: {{ .Values.sentry.sampleRate }}
-    
+      enabled: {{ .Values.app.observability.sentry.enabled }}
+      environment: {{ .Values.app.observability.sentry.environment | quote }}
+      sample_rate: {{ .Values.app.observability.sentry.sampleRate }}
+
     pyroscope:
-      enabled: {{ .Values.pyroscope.enabled }}
-      server_address: {{ .Values.pyroscope.serverAddress | quote }}
-      application_name: {{ .Values.pyroscope.applicationName | quote }}
-      sample_rate: {{ .Values.pyroscope.sampleRate }}
-      disable_gc_runs: {{ .Values.pyroscope.disableGCRuns }}
-    {{- if .Values.pyroscope.profileTypes }}
+      enabled: {{ .Values.app.observability.pyroscope.enabled }}
+      server_address: {{ .Values.app.observability.pyroscope.serverAddress | quote }}
+      application_name: {{ .Values.app.observability.pyroscope.applicationName | quote }}
+      sample_rate: {{ .Values.app.observability.pyroscope.sampleRate }}
+      disable_gc_runs: {{ .Values.app.observability.pyroscope.disableGCRuns }}
+    {{- if .Values.app.observability.pyroscope.profileTypes }}
       profile_types:
-        {{- range .Values.pyroscope.profileTypes }}
+        {{- range .Values.app.observability.pyroscope.profileTypes }}
         - {{ . | quote }}
         {{- end }}
     {{- end }}
@@ -285,13 +285,13 @@ data:
       base_url: {{ .Values.checkout.baseUrl | quote }}
     
     email:
-      enabled: {{ .Values.email.enabled }}
-      from_address: {{ .Values.email.fromAddress | quote }}
-      reply_to: {{ .Values.email.replyTo | quote }}
-      calendar_url: {{ .Values.email.calendarUrl | quote }}
+      enabled: {{ .Values.app.email.enabled }}
+      from_address: {{ .Values.app.email.fromAddress | quote }}
+      reply_to: {{ .Values.app.email.replyTo | quote }}
+      calendar_url: {{ .Values.app.email.calendarUrl | quote }}
       # Plain config value (user-signup automation), not a secret → rendered here. The secret
       # (resend_api_key) is NOT rendered — it's bound from FLEXPRICE_EMAIL_RESEND_API_KEY via BindEnv.
-      zapier_webhook_url: {{ .Values.email.zapierWebhookUrl | quote }}
+      zapier_webhook_url: {{ .Values.app.email.zapierWebhookUrl | quote }}
     
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}

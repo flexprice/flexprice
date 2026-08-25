@@ -49,6 +49,9 @@ kafka:
   bulk_max_batch_size: 200
   bulk_max_batch_bytes: 524288
   topic_dlq: "staging_events_dlq"
+  # Keep this at least as long as the broker's offsets.retention.minutes.
+  # Set to 0s to defer to the broker.
+  offset_retention: 168h
   tls: false
   # Path to a PEM CA bundle for verifying the broker cert. Empty = OS trust
   # store (correct for MSK / Confluent Cloud). Set only for a private or
@@ -112,6 +115,7 @@ kafka:
 #   topic: "events"
 #   topic_lazy: "events_lazy"
 #   topic_dlq: "events_dlq"
+#   offset_retention: 168h
 #   tls: true
 #   use_sasl: true
 #   sasl_mechanism: "OAUTHBEARER"
@@ -161,17 +165,28 @@ postgres:
   max_open_conns: 10
   max_idle_conns: 5
   conn_max_lifetime_minutes: 60
-  auto_migrate: false
 
-# Sentry is decommissioned: error/exception capture is now OTel-native and lands
-# in SigNoz's Exceptions tab (see otel.traces.capture_exceptions below). These
-# keys are retained, default-off, only for transitional rollback and will be
-# removed in a follow-up.
-sentry:
-  enabled: false
-  dsn: "" # Set via FLEXPRICE_SENTRY_DSN env var
-  environment: "development" # Override via FLEXPRICE_SENTRY_ENVIRONMENT
-  sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
+# Redis configuration
+redis:
+  host: "localhost" # Redis server hostname
+  port: 6379 # Redis server port
+  username: "" # Redis data-node ACL user (optional); FLEXPRICE_REDIS_USERNAME
+  password: "" # Redis password (optional)
+  db: 0 # Redis database number
+  use_tls: false # Use TLS for Redis connection
+  pool_size: 10 # Maximum number of connections in the pool
+  timeout: 5s # Timeout for Redis operations
+  key_prefix: "flexprice:local"
+  # cluster_mode preserves the pre-existing hardcoded behaviour (the client
+  # was always *redis.ClusterClient). Set to false when targeting a single-node
+  # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
+  cluster_mode: true
+  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
+  sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
+  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
+  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
+  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
+  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Unified OpenTelemetry exporter — traces and logs share the same SigNoz
 # Cloud backend via OTLP/gRPC. Each signal can override the top-level defaults.
@@ -211,6 +226,12 @@ otel:
     # spans stay 100%). 0.2 caps the fan-out; set 1.0 for full debug fidelity.
     storage_spans_enabled: false
     storage_spans_sample_rate: 0.2
+    # Cache spans get a per-type opt-in on top of storage_spans_enabled — they
+    # fire on every get/set/delete on hot paths, so operators may want DB/CH
+    # spans without the cache fan-out. Both default false and both also
+    # require storage_spans_enabled=true (that stays the master kill switch).
+    redis_cache_spans_enabled: false
+    in_memory_cache_spans_enabled: false
     # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
     # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
     capture_exceptions: true
@@ -222,7 +243,7 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
     auth_value: ""
 
-  # App-level DB/cache metrics (always-on aggregate signal, unsampled). Service-level
+  # App-level metrics (always-on aggregate signal, unsampled). Service-level
   # resource only (no per-pod host attrs) to keep metric cardinality — and cost — flat.
   metrics:
     enabled: false
@@ -232,6 +253,10 @@ otel:
     auth_value: ""
     interval_seconds: 60
     temporal_enabled: false
+    # Keep http.server.request.duration (request rate / latency / error rate per
+    # route). Off here — SigNoz derives it from traces; turn it on where the
+    # backend cannot store traces.
+    http_server_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
@@ -405,8 +430,6 @@ meter_usage_tracking:
   consumer_group: "v1_meter_usage_tracking_service"
   topic_dlq: "meter_usage_tracking_service_dlq"
   redis_deduplication_enabled: false
-  wallet_alert_push_enabled: false
-  spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
 
@@ -427,33 +450,11 @@ usage_alerts:
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
 
-costsheet_usage_tracking:
-  enabled: false
-  topic: "events"
-  rate_limit: 1
-  consumer_group: "v1_costsheet_usage_tracking_service"
-  topic_dlq: "costsheet_usage_tracking_service_dlq"
-
-costsheet_usage_tracking_lazy:
-  enabled: false
-  topic: "events_lazy"
-  rate_limit: 1
-  consumer_group: "v1_costsheet_usage_tracking_service_lazy"
-  topic_dlq: "costsheet_usage_tracking_service_lazy_dlq"
-
 wallet_balance_alert:
   enabled: true
   topic: "wallet_alert"
   rate_limit: 1
   consumer_group: "v1_wallet_alert_service"
-
-feature_flag:
-  # Switch invoice billing to use meter-usage
-  enable_meter_usage_for_billing: false
-  # Per-tenant rollout overrides for meter-usage-for-billing. Resolution order per tenant:
-  #   disabled_tenants > enabled_tenants > global enable_* flag above.
-  meter_usage_for_billing_enabled_tenants: []
-  meter_usage_for_billing_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:
@@ -486,28 +487,6 @@ oauth:
 customer_portal:
   url: "http://localhost:3000"
   token_timeout_hours: 1
-
-# Redis configuration
-redis:
-  host: "localhost" # Redis server hostname
-  port: 6379 # Redis server port
-  username: "" # Redis data-node ACL user (optional); FLEXPRICE_REDIS_USERNAME
-  password: "" # Redis password (optional)
-  db: 0 # Redis database number
-  use_tls: false # Use TLS for Redis connection
-  pool_size: 10 # Maximum number of connections in the pool
-  timeout: 5s # Timeout for Redis operations
-  key_prefix: "flexprice:local"
-  # cluster_mode preserves the pre-existing hardcoded behaviour (the client
-  # was always *redis.ClusterClient). Set to false when targeting a single-node
-  # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
-  cluster_mode: true
-  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
-  sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
-  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
-  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
-  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
-  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
@@ -562,3 +541,7 @@ checkout:
 
 onboarding:
   default_tenant_name: "Flexprice"
+
+chat_support:
+  app_id: ""
+  identity_secret: ""

@@ -929,8 +929,11 @@ func (m *mockSubscriptionService) ValidateAndFilterPricesForSubscription(ctx con
 func (m *mockSubscriptionService) PreviewPlanChange(ctx context.Context, subscriptionID string, req apidto.SubscriptionChangeV2Request) (*apidto.SubscriptionChangeV2Response, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) ExecutePlanChange(ctx context.Context, subscriptionID string, req apidto.SubscriptionChangeV2Request) (*apidto.SubscriptionChangeV2Response, error) {
+func (m *mockSubscriptionService) ExecutePlanChange(ctx context.Context, subscriptionID string, req apidto.SubscriptionChangeV2Request, effectiveAt time.Time) (*apidto.SubscriptionChangeV2Response, error) {
 	return nil, nil
+}
+func (m *mockSubscriptionService) ExecuteScheduledPlanChangeV2(ctx context.Context, schedule *subscription.SubscriptionSchedule, config *subscription.PlanChangeV2Configuration, sub *subscription.Subscription) error {
+	return nil
 }
 func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, req *apidto.AddAddonRequest) (*apidto.AddAddonToSubscriptionResponse, error) {
 	return nil, nil

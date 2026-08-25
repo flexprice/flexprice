@@ -251,6 +251,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	}
 
 	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
 	return nil
 }
 
@@ -280,6 +281,7 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 	}
 
 	subSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
 	return nil
 }
 

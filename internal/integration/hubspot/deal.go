@@ -2,23 +2,28 @@ package hubspot
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
+
+// hubspotDateFormat is HubSpot's date-property format, matching QuoteProperties.ExpirationDate.
+const hubspotDateFormat = "2006-01-02"
 
 // DealSyncService handles synchronization of subscription data with HubSpot deals
 type DealSyncService struct {
-	client           HubSpotClient
-	customerRepo     customer.Repository
-	subscriptionRepo subscription.Repository
-	priceRepo        price.Repository
-	logger           *logger.Logger
+	client                       HubSpotClient
+	customerRepo                 customer.Repository
+	subscriptionRepo             subscription.Repository
+	priceRepo                    price.Repository
+	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	logger                       *logger.Logger
 }
 
 // NewDealSyncService creates a new HubSpot deal sync service
@@ -27,103 +32,209 @@ func NewDealSyncService(
 	customerRepo customer.Repository,
 	subscriptionRepo subscription.Repository,
 	priceRepo price.Repository,
+	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *DealSyncService {
 	return &DealSyncService{
-		client:           client,
-		customerRepo:     customerRepo,
-		subscriptionRepo: subscriptionRepo,
-		priceRepo:        priceRepo,
-		logger:           logger,
+		client:                       client,
+		customerRepo:                 customerRepo,
+		subscriptionRepo:             subscriptionRepo,
+		priceRepo:                    priceRepo,
+		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		logger:                       logger,
 	}
 }
 
-// SyncSubscriptionToDeal creates HubSpot line items from subscription and associates them with a deal
-func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscriptionID string) error {
-	s.logger.Info(ctx, "fetching subscription for deal sync",
-		"subscription_id", subscriptionID)
-
-	// Fetch subscription with line items
+// SyncSubscriptionLineItems makes a HubSpot deal's line items match the subscription's
+// FIXED-price line items. Mapped line items are updated in place; unmapped ones are created
+// and recorded. Safe to call repeatedly — this is the only sync entry point, and every
+// trigger site calls it with no further arguments.
+//
+// Mappings whose line item is no longer returned by the repository (it ended before the
+// current billing period) are deliberately left alone: their end date was already pushed to
+// HubSpot when they ended, so deleting them would wipe correct history off the deal.
+func (s *DealSyncService) SyncSubscriptionLineItems(ctx context.Context, subscriptionID string) error {
 	sub, lineItems, err := s.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to fetch subscription with line items",
-			"error", err,
-			"subscription_id", subscriptionID)
 		return ierr.WithError(err).
 			WithHint("Failed to fetch subscription").
 			Mark(ierr.ErrInternal)
 	}
 
-	// Assign line items to the subscription
-	sub.LineItems = lineItems
-
-	s.logger.Info(ctx, "fetching customer for deal sync",
-		"customer_id", sub.CustomerID,
-		"subscription_id", subscriptionID,
-		"line_items_count", len(lineItems))
-
-	// Fetch customer to get deal ID from metadata
 	cust, err := s.customerRepo.Get(ctx, sub.CustomerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to fetch customer",
-			"error", err,
-			"customer_id", sub.CustomerID,
-			"subscription_id", subscriptionID)
 		return ierr.WithError(err).
 			WithHint("Failed to fetch customer").
 			Mark(ierr.ErrInternal)
 	}
 
-	// Get deal ID from customer metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.logger.Info(ctx, "no HubSpot deal ID found in customer metadata",
+		s.logger.Info(ctx, "customer has no HubSpot deal ID, skipping line item sync",
 			"customer_id", cust.ID,
-			"subscription_id", subscriptionID,
-			"metadata", cust.Metadata)
-		return nil // Not an error - customer might not be from HubSpot
-	}
-
-	s.logger.Info(ctx, "found HubSpot deal ID, creating line items",
-		"deal_id", dealID,
-		"subscription_id", subscriptionID,
-		"line_items_count", len(sub.LineItems))
-
-	// Filter for ACTIVE and FIXED pricing only (flat rate)
-	var flatRateLineItems []*subscription.SubscriptionLineItem
-	now := time.Now()
-	for _, lineItem := range sub.LineItems {
-		if lineItem.PriceType == types.PRICE_TYPE_FIXED && lineItem.IsActive(now) {
-			flatRateLineItems = append(flatRateLineItems, lineItem)
-		}
-	}
-
-	if len(flatRateLineItems) == 0 {
-		s.logger.Info(ctx, "no active flat rate line items to sync",
-			"subscription_id", subscriptionID,
-			"deal_id", dealID,
-			"line_items_count", len(sub.LineItems))
+			"subscription_id", subscriptionID)
 		return nil
 	}
 
-	// Create HubSpot line items for each flat rate subscription line item
-	for _, lineItem := range flatRateLineItems {
-		if err := s.createHubSpotLineItem(ctx, lineItem, sub, dealID); err != nil {
-			s.logger.Error(ctx, "failed to create HubSpot line item",
+	fixedItems := lo.Filter(lineItems, func(li *subscription.SubscriptionLineItem, _ int) bool {
+		return li.PriceType == types.PRICE_TYPE_FIXED
+	})
+	if len(fixedItems) == 0 {
+		return nil
+	}
+
+	mappings, err := s.getLineItemMappings(ctx, lo.Map(fixedItems,
+		func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID }))
+	if err != nil {
+		return err
+	}
+
+	// Attempt every line item; a retry redoes only what is still missing.
+	var firstErr error
+	for _, lineItem := range fixedItems {
+		if err := s.syncLineItem(ctx, sub, lineItem, dealID, mappings[lineItem.ID]); err != nil {
+			s.logger.Error(ctx, "failed to sync line item to HubSpot deal",
 				"error", err,
 				"line_item_id", lineItem.ID,
+				"subscription_id", subscriptionID,
 				"deal_id", dealID)
-			// Continue with other line items even if one fails
-			continue
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 
-	s.logger.Info(ctx, "successfully synced subscription line items to HubSpot deal",
-		"subscription_id", subscriptionID,
-		"deal_id", dealID,
-		"synced_items", len(flatRateLineItems))
+	return firstErr
+}
+
+// getLineItemMappings returns published HubSpot mappings for the given line items, keyed by
+// line item ID. Line items with no mapping are simply absent from the map.
+func (s *DealSyncService) getLineItemMappings(
+	ctx context.Context,
+	lineItemIDs []string,
+) (map[string]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityIDs = lineItemIDs
+	filter.EntityType = types.IntegrationEntityTypeSubscriptionLineItem
+	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+
+	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to look up HubSpot line item mappings").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return lo.SliceToMap(mappings,
+		func(m *entityintegrationmapping.EntityIntegrationMapping) (string, *entityintegrationmapping.EntityIntegrationMapping) {
+			return m.EntityID, m
+		}), nil
+}
+
+// syncLineItem updates the mapped HubSpot line item, or creates one and records the mapping.
+func (s *DealSyncService) syncLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItem *subscription.SubscriptionLineItem,
+	dealID string,
+	mapping *entityintegrationmapping.EntityIntegrationMapping,
+) error {
+	props, err := s.buildLineItemProperties(ctx, sub, lineItem)
+	if err != nil {
+		return err
+	}
+
+	if mapping != nil {
+		return s.client.UpdateDealLineItem(ctx, mapping.ProviderEntityID, props)
+	}
+
+	resp, err := s.client.CreateDealLineItem(ctx, &DealLineItemCreateRequest{
+		Properties: *props,
+		Associations: []LineItemAssociation{
+			{
+				To: AssociationTarget{ID: dealID},
+				Types: []AssociationType{
+					{
+						AssociationCategory: string(AssociationCategoryHubSpotDefined),
+						AssociationTypeID:   AssociationTypeLineItemToDeal,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	newMapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         lineItem.ID,
+		EntityType:       types.IntegrationEntityTypeSubscriptionLineItem,
+		ProviderType:     string(types.SecretProviderHubSpot),
+		ProviderEntityID: resp.ID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+
+	if err := s.entityIntegrationMappingRepo.Create(ctx, newMapping); err != nil {
+		// The HubSpot line item exists but we could not record it, so a retry would create a
+		// second one. Remove it and let the retry start clean. A concurrent reconcile losing
+		// the unique-index race lands here too.
+		if delErr := s.client.DeleteDealLineItem(ctx, resp.ID); delErr != nil && !ierr.IsNotFound(delErr) {
+			s.logger.Error(ctx, "failed to remove orphaned HubSpot line item after mapping persist failure",
+				"error", delErr,
+				"hubspot_line_item_id", resp.ID,
+				"line_item_id", lineItem.ID)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to persist HubSpot line item mapping").
+			Mark(ierr.ErrDatabase)
+	}
 
 	return nil
+}
+
+// buildLineItemProperties maps a subscription line item to HubSpot line item properties.
+// The end date is sent only when set — an unset date must not overwrite a real value, and
+// `omitempty` on the field drops the key entirely.
+func (s *DealSyncService) buildLineItemProperties(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItem *subscription.SubscriptionLineItem,
+) (*DealLineItemProperties, error) {
+	priceObj, err := s.priceRepo.Get(ctx, lineItem.PriceID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Price not found; cannot build accurate HubSpot line item").
+			Mark(ierr.ErrInternal)
+	}
+
+	unitPrice := priceObj.Amount
+
+	description := string(lineItem.PriceType) + " pricing"
+	if lineItem.DisplayName != "" {
+		description = lineItem.DisplayName + " (" + string(lineItem.PriceType) + " pricing)"
+	}
+
+	props := &DealLineItemProperties{
+		Name:                 lineItem.DisplayName,
+		Price:                unitPrice.String(),
+		Quantity:             lineItem.Quantity.String(),
+		Amount:               unitPrice.Mul(lineItem.Quantity).String(),
+		Discount:             "0",
+		RecurringBillingFreq: s.mapBillingFrequency(sub.BillingPeriod),
+		Description:          description,
+	}
+
+	if !lineItem.StartDate.IsZero() {
+		props.RecurringBillingStartDate = lineItem.StartDate.UTC().Format(hubspotDateFormat)
+	}
+	if !lineItem.EndDate.IsZero() {
+		props.RecurringBillingEndDate = lineItem.EndDate.UTC().Format(hubspotDateFormat)
+	}
+
+	return props, nil
 }
 
 // UpdateDealAmountFromACV updates the deal amount based on HubSpot's calculated ACV
@@ -140,89 +251,6 @@ func (s *DealSyncService) UpdateDealAmountFromACV(ctx context.Context, customerI
 			"deal_id", dealID,
 			"customer_id", customerID)
 		return err
-	}
-
-	return nil
-}
-
-// createHubSpotLineItem creates a single HubSpot line item and associates it with a deal
-func (s *DealSyncService) createHubSpotLineItem(
-	ctx context.Context,
-	lineItem *subscription.SubscriptionLineItem,
-	sub *subscription.Subscription,
-	dealID string,
-) error {
-	// Fetch the price to get the actual amount
-	priceObj, err := s.priceRepo.Get(ctx, lineItem.PriceID)
-	if err != nil {
-		s.logger.Error(ctx, "failed to fetch price for line item; cannot create accurate HubSpot line item",
-			"error", err,
-			"price_id", lineItem.PriceID,
-			"line_item_id", lineItem.ID,
-			"deal_id", dealID)
-		return ierr.WithError(err).
-			WithHint("Price not found; cannot create accurate HubSpot line item").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Calculate unit price and total amount
-	unitPrice := priceObj.Amount
-	totalAmount := unitPrice.Mul(lineItem.Quantity)
-
-	// Calculate discount (default to 0 if not applicable)
-	discount := "0"
-
-	// Map billing frequency to HubSpot format
-	billingFreq := s.mapBillingFrequency(sub.BillingPeriod)
-
-	// Build description with pricing model
-	description := string(lineItem.PriceType) + " pricing"
-	if lineItem.DisplayName != "" {
-		description = lineItem.DisplayName + " (" + string(lineItem.PriceType) + " pricing)"
-	}
-
-	// Create line item request with all fields
-	lineItemReq := &DealLineItemCreateRequest{
-		Properties: DealLineItemProperties{
-			Name:                 lineItem.DisplayName,
-			Price:                unitPrice.String(),         // Unit price
-			Quantity:             lineItem.Quantity.String(), // Quantity
-			Amount:               totalAmount.String(),       // Total amount
-			Discount:             discount,                   // Discount
-			RecurringBillingFreq: billingFreq,                // Billing frequency
-			Description:          description,                // Pricing model in description
-		},
-		Associations: []LineItemAssociation{
-			{
-				To: AssociationTarget{
-					ID: dealID,
-				},
-				Types: []AssociationType{
-					{
-						AssociationCategory: string(AssociationCategoryHubSpotDefined),
-						AssociationTypeID:   AssociationTypeLineItemToDeal,
-					},
-				},
-			},
-		},
-	}
-
-	s.logger.Info(ctx, "creating HubSpot line item",
-		"deal_id", dealID,
-		"line_item_name", lineItem.DisplayName,
-		"quantity", lineItem.Quantity.String(),
-		"unit_price", unitPrice.String(),
-		"total_amount", totalAmount.String(),
-		"discount", discount,
-		"billing_frequency", billingFreq,
-		"pricing_model", lineItem.PriceType)
-
-	// Create the line item in HubSpot
-	_, err = s.client.CreateDealLineItem(ctx, lineItemReq)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to create HubSpot line item").
-			Mark(ierr.ErrHTTPClient)
 	}
 
 	return nil

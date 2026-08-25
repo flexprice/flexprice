@@ -277,6 +277,75 @@ func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 	return int(n), nil
 }
 
+// CountUnsyncedSubscriptions returns how many of the plan's subscriptions are
+// stale relative to targetSeq. Uses the same eligibility filter as the
+// `stale_subs` CTE in ListPlanLineItemsToCreateV2 (published, active/
+// trialing/draft/incomplete, subscription types that own plan line items),
+// scanned via the same partial index, but with no LIMIT/paging.
+func (r *planPriceSyncRepository) CountUnsyncedSubscriptions(
+	ctx context.Context,
+	planID string,
+	targetSeq int64,
+) (int64, error) {
+	if planID == "" {
+		return 0, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "plan_price_sync_v2", "count_unsynced_subscriptions", map[string]interface{}{
+		"plan_id":    planID,
+		"target_seq": targetSeq,
+	})
+	defer FinishSpan(span)
+
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM subscriptions
+		WHERE tenant_id = $1
+		  AND environment_id = $2
+		  AND status = '%s'
+		  AND plan_id = $3
+		  AND subscription_status IN ('%s','%s', '%s', '%s')
+		  AND subscription_type IN (%s)
+		  AND synced_price_sequence < $4
+	`,
+		string(types.StatusPublished),
+		string(types.SubscriptionStatusActive),
+		string(types.SubscriptionStatusTrialing),
+		string(types.SubscriptionStatusDraft),
+		string(types.SubscriptionStatusIncomplete),
+		strings.Join(lo.Map(types.SubscriptionTypesWithLineItems, func(t types.SubscriptionType, _ int) string { return fmt.Sprintf("'%s'", string(t)) }), ","),
+	)
+
+	rows, qerr := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, environmentID, planID, targetSeq)
+	if qerr != nil {
+		SetSpanError(span, qerr)
+		return 0, ierr.WithError(qerr).
+			WithHint("Failed to count unsynced subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var count int64
+	if rows.Next() {
+		if scanErr := rows.Scan(&count); scanErr != nil {
+			SetSpanError(span, scanErr)
+			return 0, ierr.WithError(scanErr).
+				WithHint("Failed to scan unsynced subscription count").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	if rerr := rows.Err(); rerr != nil {
+		SetSpanError(span, rerr)
+		return 0, ierr.WithError(rerr).Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return count, nil
+}
+
 // ReanchorSubSyncedSequence sets synced_price_sequence in either direction
 // (StampSubsAsSynced is forward-only and cannot express a lower target sequence).
 func (r *planPriceSyncRepository) ReanchorSubSyncedSequence(

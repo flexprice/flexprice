@@ -28,6 +28,7 @@ type Handlers struct {
 	Customer                 *v1.CustomerHandler
 	Connection               *v1.ConnectionHandler
 	Marketplace              *v1.MarketplaceHandler
+	UsageRecord              *v1.UsageRecordHandler
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
@@ -178,7 +179,8 @@ func NewRouter(
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)
 			user.PUT("/:id/roles", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.UpdateUserRoles)
 			user.DELETE("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.DeleteUser)
-			user.POST("/search", handlers.User.QueryUsers)
+			user.POST("/search", read(types.EntityUser, types.ActionRead), handlers.User.QueryUsers)
+			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}
 
 		environment := v1Private.Group("/environments")
@@ -530,7 +532,9 @@ func NewRouter(
 			// API Key routes
 			apiKeys := secrets.Group("/api/keys")
 			{
-				apiKeys.GET("", handlers.Secret.ListAPIKeys)
+				// Results are scoped to the caller in the service layer; a
+				// super_admin sees the whole environment.
+				apiKeys.GET("", read(types.EntitySecret, types.ActionRead), handlers.Secret.ListAPIKeys)
 				apiKeys.POST("", write(types.EntitySecret, types.ActionWrite), handlers.Secret.CreateAPIKey)
 				apiKeys.DELETE("/:id", write(types.EntitySecret, types.ActionWrite), handlers.Secret.DeleteAPIKey)
 			}
@@ -552,6 +556,11 @@ func NewRouter(
 			marketplace.POST("/agreements", write(types.EntityIntegration, types.ActionWrite), handlers.Marketplace.RegisterAgreement)
 		}
 
+		usageRecords := v1Private.Group("/usage-records")
+		{
+			usageRecords.POST("/search", handlers.UsageRecord.QueryUsageRecords)
+		}
+
 		// Costsheet routes
 		costsheets := v1Private.Group("/costs")
 		{
@@ -562,7 +571,6 @@ func NewRouter(
 			costsheets.DELETE("/:id", write(types.EntityCostsheet, types.ActionWrite), handlers.Costsheet.DeleteCostsheet)
 			costsheets.GET("/active", handlers.Costsheet.GetActiveCostsheetForTenant)
 			costsheets.POST("/analytics", handlers.RevenueAnalytics.GetDetailedCostAnalytics)
-			costsheets.POST("/analytics-v2", handlers.RevenueAnalytics.GetDetailedCostAnalyticsV2)
 		}
 
 		// Credit note routes

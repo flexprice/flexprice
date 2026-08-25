@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -70,30 +69,6 @@ func (s *MeterUsageTrackingEvaluationSuite) countAlertLogs() int {
 	return len(logs)
 }
 
-func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_UnknownCustomer_NoOp() {
-	event := &events.Event{
-		ID:                 "event_unknown_customer",
-		ExternalCustomerID: "does_not_exist",
-	}
-
-	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer)
-	})
-	s.Equal(0, s.countAlertLogs())
-}
-
-func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoActiveSubscriptions_NoOp() {
-	event := &events.Event{
-		ID:                 "event_no_subs",
-		ExternalCustomerID: s.customer.ExternalID,
-	}
-
-	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer)
-	})
-	s.Equal(0, s.countAlertLogs())
-}
-
 func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAlertSettingsConfigured_NoOp() {
 	ctx := s.GetContext()
 	now := time.Now().UTC()
@@ -128,16 +103,12 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAlert
 	}
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{lineItem}))
 
-	event := &events.Event{
-		ID:                 "event_no_alert_settings",
-		ExternalCustomerID: s.customer.ExternalID,
-	}
-
 	// No alert_settings row exists for this subscription, so this must return before ever
 	// attempting a billing calculation — which would otherwise fail/panic on this bare fixture
 	// (no price/meter usage data behind it).
 	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, s.customer)
+		err := NewAlertService(s.svc.ServiceParams).EvaluateSpendAlertsForCustomer(ctx, s.customer)
+		s.NoError(err)
 	})
 	s.Equal(0, s.countAlertLogs())
 }

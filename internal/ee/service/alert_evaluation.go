@@ -9,7 +9,6 @@ import (
 	domainAlert "github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
@@ -168,13 +167,6 @@ func (s *alertService) EvaluateWalletAlertsForCustomer(ctx context.Context, cust
 		}
 	}
 	return nil
-}
-
-// EvaluateSpendBreachForEvent is the sync per-event entry used when the debouncer is off.
-func (s *alertService) EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer) {
-	if err := s.EvaluateSpendAlertsForCustomer(ctx, cust); err != nil {
-		s.Logger.Error(ctx, "failed to evaluate spend alerts for event", "error", err, "event_id", event.ID, "customer_id", cust.ID)
-	}
 }
 
 // EvaluateSpendAndEntitlementAlertsForCustomer runs spend alerts and grant

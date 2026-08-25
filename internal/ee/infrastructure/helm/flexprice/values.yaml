@@ -396,6 +396,14 @@ frontend:
     pullPolicy: IfNotPresent
   # ── mode: gcsproxy ───────────────────────────────────────────────────────────
   # Only read when mode is "gcsproxy".
+  s3:
+    # S3 bucket holding the built SPA, for build.cloud=aws.
+    #
+    # Only the build Job reads this. The chart has no S3 serving mode — on EKS
+    # the UI is served by nginx proxying the bucket through an S3 gateway VPC
+    # endpoint, deployed from the infrastructure repo rather than from here.
+    # This is the bucket that nginx reads.
+    bucket: ""
   gcs:
     # GCS bucket holding the built SPA. Required in this mode.
     bucket: ""
@@ -410,6 +418,94 @@ frontend:
     resources:
       requests: {cpu: "50m", memory: "64Mi"}
       limits: {cpu: "250m", memory: "128Mi"}
+  # Build the SPA in-cluster and sync it into gcs.bucket.
+  #
+  # gcsproxy serves whatever is in that bucket; nothing else in this chart puts
+  # anything THERE. Without this, publishing a build means an operator cloning
+  # the frontend, building it locally with the right VITE_* values, and syncing
+  # with their own credentials.
+  #
+  # Runs as a post-install/post-upgrade hook, NOT pre- like the migration: an
+  # unmigrated database is dangerous and must block the release, a stale UI is
+  # not. A failed build here leaves the previous bundle serving and the backend
+  # deployed, rather than rolling back a release that was fine.
+  build:
+    enabled: false
+    # Which object store the bundle is synced to: "gcp" or "aws".
+    #
+    # The build half — clone, npm ci, vite build — is identical either way.
+    # This picks the sync half, the image that runs it, and how the pod proves
+    # its identity:
+    #   gcp  gcloud storage rsync into frontend.gcs.bucket, authenticating with
+    #        a projected token (see tokenAudience).
+    #   aws  aws s3 sync into frontend.s3.bucket, authenticating with IRSA.
+    cloud: gcp
+    # Required when cloud is aws — the CLI cannot resolve a bucket without it.
+    awsRegion: ""
+    # false renders an ordinary Job that persists after it finishes, which is
+    # what the terragrunt path applies. true adds the Helm hook annotations for
+    # ArgoCD-driven environments — at the cost of the Job, and its logs, being
+    # deleted when it ends.
+    asHook: true
+    repoUrl: https://github.com/flexprice/flexprice-front.git
+    # MUST be an immutable tag or commit sha, never a branch.
+    #
+    # The Job's name embeds a checksum of this and buildEnv. A moving ref makes
+    # that checksum constant, so ArgoCD records the hook completed for that name
+    # and never recreates it: the build silently never runs again while
+    # everything else rolls out normally, and the bucket keeps serving the old
+    # bundle with nothing to surface it. The template refuses "main" outright.
+    ref: ""
+    # VITE_* values baked into the bundle at build time. These are
+    # per-environment — VITE_API_URL differs per region — which is why the
+    # bundle cannot be shared across environments.
+    buildEnv: {}
+    #   VITE_APP_ENV: self-hosted
+    #   VITE_API_URL: https://billing.example.com/v1
+    #   VITE_AUTH_ENABLED: "true"
+    #   VITE_AUTH_PROVIDER: flexprice
+    #   VITE_SVIX_URL: https://billing.example.com
+    # Must satisfy flexprice-front's engines.node (>=22.22.0). Digest-pinned:
+    # this container executes the whole public npm dependency tree, so the base
+    # image is the one part that should not move underneath a deploy.
+    image: node:22-bookworm@sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a
+    # Cloud CLI only — no build tooling. This container holds the credential,
+    # so its contents are the blast radius. Empty picks the default for
+    # `cloud`: google/cloud-sdk:alpine or amazon/aws-cli:latest.
+    syncImage: ""
+    imagePullPolicy: IfNotPresent
+    # Identity binding for the Job's OWN ServiceAccount, which needs WRITE
+    # access to the bucket. Distinct from frontend.serviceAccount, which
+    # gcsproxy reads as: binding write access to that one would let the
+    # internet-facing serving pod overwrite the bundle it serves.
+    #
+    #   gcp  iam.gke.io/gcp-service-account: ui-build@<project>.iam.gserviceaccount.com
+    #   aws  eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/<role>
+    #
+    # On AWS, scope that role to the UI bucket alone. IRSA injects its token
+    # into every container in the pod, so the build container — which runs the
+    # whole public npm dependency tree — can assume it too; a tight role is
+    # what bounds that to a corrupted bundle rather than anything worse.
+    serviceAccountAnnotations: {}
+    # GCP ONLY: <project>.svc.id.goog. Set alongside the annotation above — it
+    # is the audience the metadata server expects when exchanging the projected
+    # token for a GCP access token, and the sync cannot authenticate without
+    # it. Leave empty on AWS, where IRSA's webhook handles this.
+    tokenAudience: ""
+    nodeSelector: {}
+    # tsc -b && vite build needs more than node's default heap. Keep
+    # resources.limits.memory ABOVE this, so node fails with a readable JS heap
+    # error rather than being OOM-killed with a bare exit 137.
+    maxOldSpaceMb: 6144
+    resources:
+      requests: {cpu: "1", memory: "4Gi"}
+      limits: {cpu: "2", memory: "8Gi"}
+    syncResources:
+      requests: {cpu: "100m", memory: "256Mi"}
+      limits: {cpu: "500m", memory: "512Mi"}
+    # Kills a wedged npm install rather than leaving it holding a node.
+    activeDeadlineSeconds: 2400
+    ttlSecondsAfterFinished: 3600
   # nginx sidecar that fronts gcsproxy and terminates the Service port.
   nginx:
     image: nginx:1.27-alpine
@@ -470,6 +566,27 @@ e2eprobe:
   secretKeys:
     apiKey: api-key
     slackWebhookUrl: slack-webhook-url
+  # Signup bootstrap, for airgapped deployments with no way to pre-provision an
+  # API key. The probe signs up, mints a key, and patches it into secretName.
+  #
+  # Requires the flexprice-native auth provider (auth.provider: "flexprice",
+  # the chart default). Supabase-backed deployments reject signup outright, and
+  # a tenant enforcing SSO refuses password login.
+  #
+  # Off by default: with this false the probe renders exactly as before, and
+  # its ServiceAccount token stays unmounted.
+  bootstrap:
+    enabled: false
+    # Dedicated Secret holding ONLY the bootstrap output. Keep it separate from
+    # existingSecret above: the probe is granted write access to this object,
+    # so it must never also carry the Slack webhook.
+    secretName: e2eprobe-bootstrap
+    secretKey: api-key
+    # Secret supplying the signup credentials. Never put a password in
+    # e2eprobe.env — the chart rejects that.
+    existingCredentialsSecret: e2eprobe-bootstrap-credentials
+    emailKey: email
+    passwordKey: password
   env: {}                 # E2EPROBE_* non-secret vars, set per region
   service: {port: 8765}
   resources:
@@ -645,6 +762,17 @@ kafkaConfig:
   consumerGroup: "flexprice-consumer"
   topic: "events"
   topicLazy: "events_lazy"
+  # Batched-ingest topic, read by the app as FLEXPRICE_KAFKA_TOPIC_BULK.
+  #
+  # Unlike topic/topicLazy this has no default in the Go config and is not
+  # `validate:"required"`, so leaving it unset passes startup validation and
+  # only fails later, when a batched publish targets the empty topic name.
+  #
+  # It is also created by the migration Job's topic step. Brokers with
+  # auto-creation disabled (the MSK default) will not create it on first
+  # publish, so an unset value there is a runtime failure rather than a
+  # first-use delay.
+  topicBulk: "events_bulk"
   tls: false
   # Broker CA for private/self-signed Kafka certificates. Leave name empty for
   # brokers with publicly-trusted certs (MSK, Confluent Cloud) — the pods then
@@ -714,11 +842,34 @@ kafkaConfig:
 # Set enabled=true to run database migrations as a Kubernetes Job
 migration:
   enabled: true  # Set to true to enable migration job
+
+  # Install the migration Job as a Helm pre-install/pre-upgrade HOOK (default),
+  # or as an ordinary chart resource.
+  #
+  # true  — ArgoCD and plain `helm install`. The Job runs before the app rolls
+  #         out and Helm owns its lifecycle.
+  #
+  # false — for delivery models where the Job is applied by something else, as
+  #         its own terraform unit ordered before the release. The hook's
+  #         delete-policy (hook-succeeded,hook-failed) removes the Job and its
+  #         logs the moment it fails, which is correct when a controller can
+  #         retry immediately and wrong when a human needs to read why it broke.
+  #         Set false ONLY when something else applies the Job; leaving both this
+  #         false and no external applier means migrations never run.
+  asHook: true
   timeout: 300  # Timeout in seconds for migration
   backoffLimit: 3  # Number of retries before marking job as failed
   activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)
   ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
   command: ""  # Custom command to run (if empty, uses default migration steps)
+  # Apply a SINGLE ClickHouse baseline .sql via `migrate clickhouse --file`
+  # instead of scanning migrations/clickhouse/. Empty = scan the directory (the
+  # incremental, non-Replicated set). Set to a baseline path for a replicated
+  # cluster, e.g. migrations/baseline/clickhouse_baseline_replicated_20260819.sql
+  # — its tables use Replicated* engines + ON CLUSTER, which the directory set
+  # does not. Requires a migrate binary that supports --file (flexprice #2617).
+  clickhouseFile: ""
+
   # Migration steps to run (all enabled by default)
   steps:
     postgresSetup: true  # Create schema and extensions in PostgreSQL
@@ -726,6 +877,59 @@ migration:
     kafka: true          # Create Kafka topics (idempotent, safe to re-run)
     ent: true            # Run Ent framework migrations
     seed: false          # Run seed data (optional, set to true to enable)
+    verify: true         # Fatally assert CH tables + kafka topics exist post-migration
+
+  # The create-kafka-topics init container runs the JVM-based kafka-topics
+  # tool. Its heap is set explicitly rather than left to the JVM's default,
+  # which derives from the cgroup limit (~1/4 of it) and at the previous
+  # hardcoded 256Mi came to ~64Mi -- too little for the admin client to read
+  # broker metadata over TLS. It died with OutOfMemoryError once per topic, and
+  # no message named memory as the cause.
+  #
+  # Keep `resources.limits.memory` well above the -Xmx value: the limit must
+  # cover heap plus JVM overhead, or the kernel OOM-kills the container (exit
+  # 137, no logs) instead of the JVM reporting it.
+  kafkaTopics:
+    # Partitions for every one of the built-in topics the create-kafka-topics
+    # step makes (events, events_lazy, events_bulk, events_dlq,
+    # events_post_processing, events_post_processing_backfill, system_events,
+    # events_backfill, wallet_alert, onboarding_events). Default 3 so even dev
+    # has room to parallelise consumers; 1 was too few. Fresh topics only —
+    # raising an existing topic's partitions needs kafka-topics --alter.
+    partitions: 3
+    # Replication factor for the same built-in topics. Default 1 to match a
+    # single-broker dev/Bitnami-subchart Kafka; raise it (e.g. 3) once the
+    # client points at a real multi-broker/MSK cluster.
+    replicationFactor: 1
+    # Extra client-declared topics, created IN ADDITION to the built-in list
+    # above. Leave empty (the default) to change nothing about today's
+    # behavior — this list is purely additive/override, never a replacement
+    # for the built-in topics.
+    #
+    # Each entry:
+    #   name:              (required) topic name
+    #   partitions:         optional, falls back to kafkaTopics.partitions above
+    #   replicationFactor:  optional, falls back to kafkaTopics.replicationFactor above
+    #   configs:            optional map of `kafka-topics --config key=value` pairs,
+    #                       e.g. retention.ms, cleanup.policy, min.insync.replicas
+    #
+    # Example:
+    # topics:
+    #   - name: custom_topic
+    #     partitions: 6
+    #     replicationFactor: 3
+    #     configs:
+    #       retention.ms: "604800000"
+    #       cleanup.policy: "delete"
+    topics: []
+    heapOpts: "-Xmx512m -Xms256m"
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+      requests:
+        cpu: "100m"
+        memory: "512Mi"
   # Pinned helper images used by the migration Job init containers. Override
   # `registry` per image if your cluster only allows pulls from a private
   # mirror (common in regulated AWS accounts). All three images are multi-arch.
@@ -856,26 +1060,6 @@ otel:
     endpoint: ""        # e.g. "ingest.in2.signoz.cloud:443"
     authHeader: ""      # e.g. "signoz-ingestion-key"
     sampleRate: ""      # empty → app default (1.0 = 100%); e.g. "0.2" to sample 20%
-
-# Sentry configuration
-sentry:
-  enabled: false
-  dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
-  environment: "production"
-  sampleRate: 1.0
-
-# Pyroscope configuration
-pyroscope:
-  enabled: false
-  serverAddress: ""
-  applicationName: "flexprice"
-  basicAuthUser: ""
-  basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
-  sampleRate: 100
-  disableGCRuns: false
-  profileTypes:
-    - "cpu"
-    - "memory"
 
 # S3 configuration
 s3:
@@ -1170,19 +1354,41 @@ billing:
   tenantId: ""
   environmentId: ""
 
-# Email configuration
-email:
-  enabled: false
-  resendApiKey: "" # secret — bound via FLEXPRICE_EMAIL_RESEND_API_KEY (config.go BindEnv); not rendered in configmap
-  fromAddress: ""
-  replyTo: ""
-  calendarUrl: ""
-  zapierWebhookUrl: "" # plain value (user-signup automation) — rendered into config.yaml
-
 # App URL configuration
 app:
   customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
   oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
+
+  # Observability (Sentry error tracking + Pyroscope continuous profiling)
+  observability:
+    # Sentry configuration
+    sentry:
+      enabled: false
+      dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
+      environment: "production"
+      sampleRate: 1.0
+
+    # Pyroscope configuration
+    pyroscope:
+      enabled: false
+      serverAddress: ""
+      applicationName: "flexprice"
+      basicAuthUser: ""
+      basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
+      sampleRate: 100
+      disableGCRuns: false
+      profileTypes:
+        - "cpu"
+        - "memory"
+
+  # Email configuration
+  email:
+    enabled: false
+    resendApiKey: "" # secret — bound via FLEXPRICE_EMAIL_RESEND_API_KEY (config.go BindEnv); not rendered in configmap
+    fromAddress: ""
+    replyTo: ""
+    calendarUrl: ""
+    zapierWebhookUrl: "" # plain value (user-signup automation) — rendered into config.yaml
 
 # Checkout flow base URL → rendered into config.yaml as checkout.base_url
 checkout:

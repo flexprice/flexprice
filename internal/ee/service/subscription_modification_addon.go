@@ -43,6 +43,7 @@ func (s *subscriptionModificationService) executeAddonModification(
 	// items appear only once payment lands, so there is no subscription update to announce.
 	if !result.PaymentPending() {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+		triggerHubSpotDealSync(ctx, s.serviceParams, subscriptionID)
 	}
 
 	return s.addonModifyResponse(ctx, subscriptionID, result, false)

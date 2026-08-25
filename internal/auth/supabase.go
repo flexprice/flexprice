@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -61,7 +63,11 @@ func (s *supabaseAuth) SignUp(ctx context.Context, req AuthRequest) (*AuthRespon
 			Mark(ierr.ErrPermissionDenied)
 	}
 
-	if claims.Email != req.Email {
+	// Compared case-insensitively so this agrees with the signup guard, which
+	// normalizes both sides. An exact comparison here would let a case-variant
+	// address clear the guard and then fail this check, surfacing a permission
+	// problem as an opaque system error.
+	if !strings.EqualFold(strings.TrimSpace(claims.Email), strings.TrimSpace(req.Email)) {
 		return nil, ierr.NewError("email mismatch").
 			Mark(ierr.ErrPermissionDenied)
 	}
@@ -150,6 +156,36 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 		Email:         email,
 		EnvironmentID: environmentID,
 	}, nil
+}
+
+// EmailConfirmed reports whether Supabase itself has recorded a confirmed
+// email for userID, read from the Admin API rather than from the access token.
+//
+// The token is not usable for this. GoTrue on this project puts email_verified
+// only inside user_metadata, which is writable by the user through the ordinary
+// client SDK (auth.updateUser with a data field, which this codebase already
+// calls from the browser during password reset). A caller could therefore mark
+// their own unconfirmed address verified and walk through the signup guard.
+// app_metadata would be server-controlled, but GoTrue does not put the flag
+// there, and a top-level claim is absent on this project's tokens.
+//
+// auth.users.email_confirmed_at is set by GoTrue when the confirmation link is
+// followed or when an OAuth identity supplies a confirmed address, and no
+// client-side call can write it. That makes it the only trustworthy source.
+func (s *supabaseAuth) EmailConfirmed(ctx context.Context, userID string) (bool, error) {
+	user, err := s.client.Admin.GetUser(ctx, userID)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Failed to read the user's email confirmation status").
+			Mark(ierr.ErrSystem)
+	}
+	if user == nil {
+		return false, ierr.NewError("user not found in auth provider").
+			WithHint("Failed to read the user's email confirmation status").
+			Mark(ierr.ErrSystem)
+	}
+
+	return user.EmailConfirmedAt != nil, nil
 }
 
 func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {
@@ -259,7 +295,34 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 		},
 	})
 	if err != nil {
-		return nil, err
+		// supabase-go returns a raw *supabase.ErrorResponse with no ierr classification,
+		// which would otherwise surface as an opaque HTTP 500 with an empty body. Wrap it
+		// so the caller gets a meaningful status/message, and detect the common
+		// "email already registered" conflict. Supabase auth users are global (not
+		// tenant-scoped), so an email absent from the Flexprice DB can still exist here.
+		if supaErr, ok := err.(*supabase.ErrorResponse); ok {
+			details := map[string]interface{}{
+				"email":          req.Email,
+				"supabase_code":  supaErr.Code,
+				"supabase_error": supaErr.Message,
+			}
+			if supaErr.Code == http.StatusConflict ||
+				supaErr.Code == http.StatusUnprocessableEntity ||
+				strings.Contains(strings.ToLower(supaErr.Message), "already") {
+				return nil, ierr.WithError(supaErr).
+					WithHint("A user with this email already exists in the authentication provider").
+					WithReportableDetails(details).
+					Mark(ierr.ErrAlreadyExists)
+			}
+			return nil, ierr.WithError(supaErr).
+				WithHintf("Authentication provider rejected user creation (code %d)", supaErr.Code).
+				WithReportableDetails(details).
+				Mark(ierr.ErrSystem)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create user in the authentication provider").
+			WithReportableDetails(map[string]interface{}{"email": req.Email}).
+			Mark(ierr.ErrSystem)
 	}
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil

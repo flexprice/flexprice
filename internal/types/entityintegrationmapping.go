@@ -22,6 +22,9 @@ const (
 	// IntegrationEntityTypeInvoiceLineItem maps a flexprice invoice line item to a provider-side
 	// charge (e.g. a Tabs obligation), used to make per-line-item invoice sync idempotent.
 	IntegrationEntityTypeInvoiceLineItem IntegrationEntityType = "invoice_line_item"
+	// IntegrationEntityTypeSubscriptionLineItem maps a flexprice subscription line item to a
+	// provider-side line item (e.g. a HubSpot deal line item), making per-line-item sync idempotent.
+	IntegrationEntityTypeSubscriptionLineItem IntegrationEntityType = "subscription_line_item"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -41,6 +44,7 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypeItemPrice,
 		IntegrationEntityTypePrice,
 		IntegrationEntityTypeInvoiceLineItem,
+		IntegrationEntityTypeSubscriptionLineItem,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").

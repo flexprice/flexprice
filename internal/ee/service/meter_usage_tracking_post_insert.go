@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -46,19 +45,10 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		event.CustomerID = cust.ID
 	}
 
-	// Debouncer supersedes the Kafka wallet-alert and inline spend-breach paths
-	// with one deduped Temporal workflow per customer.
+	// Start temporal workflow to evaluate usage alerts
 	if s.Config.UsageAlerts.Enabled {
 		s.scheduleUsageAlertWorkflow(ctx, cust)
 		return
-	}
-
-	if s.Config.MeterUsageTracking.WalletAlertPushEnabled {
-		s.publishWalletBalanceAlert(ctx, event, cust)
-	}
-
-	if s.Config.MeterUsageTracking.SpendAlertWebhookEnabled {
-		NewAlertService(s.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, cust)
 	}
 }
 
@@ -193,36 +183,6 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		"customer_id", cust.ID,
 		"workflow_id", workflowID,
 		"fires_in", delay.String(),
-	)
-}
-
-// publishWalletBalanceAlert publishes a wallet balance alert for the given event and customer.
-func (s *meterUsageTrackingService) publishWalletBalanceAlert(ctx context.Context, event *events.Event, cust *customer.Customer) {
-	alertEvent := &wallet.WalletBalanceAlertEvent{
-		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
-		Timestamp:             time.Now().UTC(),
-		Source:                EventSourceMeterUsage,
-		CustomerID:            cust.ID,
-		ForceCalculateBalance: false,
-		TenantID:              types.GetTenantID(ctx),
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-	}
-
-	walletBalanceAlertService := NewWalletBalanceAlertService(s.ServiceParams)
-	if err := walletBalanceAlertService.PublishEvent(ctx, alertEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish wallet balance alert after meter usage insert",
-			"error", err,
-			"event_id", event.ID,
-			"customer_id", cust.ID,
-			"alert_event_id", alertEvent.ID,
-		)
-		return
-	}
-
-	s.Logger.Debug(ctx, "wallet balance alert published after meter usage insert",
-		"event_id", event.ID,
-		"customer_id", cust.ID,
-		"alert_event_id", alertEvent.ID,
 	)
 }
 

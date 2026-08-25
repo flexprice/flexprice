@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -10,8 +11,9 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/e2eprobe"
-	checks_pkg "github.com/flexprice/flexprice/internal/e2eprobe/checks"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -21,7 +23,7 @@ import (
 // e2eprobe's structured logs land in the same SigNoz/Grafana pipeline as
 // the app's — auth via OTEL_EXPORTER_OTLP_HEADERS (single "name=value" pair).
 //
-// Traces already flow through internal/e2eprobe/otel.go, which uses the
+// Traces already flow through internal/ee/e2eprobe/otel.go, which uses the
 // SDK's implicit env var handling for endpoint/headers. This function
 // only wires LOGS, which take an explicit config path.
 func buildLoggingConfig(cfg *e2eprobe.Config) config.LoggingConfig {
@@ -66,6 +68,44 @@ func parseFirstOTLPHeader(raw string) (string, string, bool) {
 		return "", "", false
 	}
 	return name, value, true
+}
+
+// mintFunc provisions a fresh credential. Injected so tests need no network.
+type mintFunc func() (*bootstrap.Credentials, error)
+
+// resolveAPIKey returns the API key the probe should run with.
+//
+// The stored key always wins. Environment variables resolve at container
+// start, so a container restart inside the same pod re-reads the original
+// empty value; without this read the probe would mint a new key on every
+// crash loop and leak them, since nothing revokes them.
+func resolveAPIKey(ctx context.Context, cfg *e2eprobe.Config, store bootstrap.SecretStore, inCluster bool, mint mintFunc) (string, error) {
+	if inCluster && store != nil {
+		stored, _, err := store.Read(ctx, cfg.PodNamespace, cfg.BootstrapSecretName, cfg.BootstrapSecretKey)
+		if err != nil {
+			return "", fmt.Errorf("bootstrap step=read_secret: %w", err)
+		}
+		if stored != "" {
+			return stored, nil
+		}
+	}
+
+	creds, err := mint()
+	if err != nil {
+		return "", err
+	}
+
+	if inCluster && store != nil {
+		// Fatal on purpose: a probe that cannot persist its key would
+		// re-bootstrap on every restart, minting keys nothing cleans up.
+		if err := store.Write(ctx, cfg.PodNamespace, cfg.BootstrapSecretName, cfg.BootstrapSecretKey, creds); err != nil {
+			return "", fmt.Errorf("bootstrap step=persist: %w", err)
+		}
+	}
+
+	cfg.TenantID = creds.TenantID()
+	cfg.EnvironmentID = creds.EnvironmentID()
+	return creds.APIKey(), nil
 }
 
 func main() {
@@ -125,6 +165,33 @@ func main() {
 	}
 	runner := e2eprobe.NewRunner(reporter, lg, runID, globalAttrs)
 	runner.SetHeartbeatInterval(cfg.HeartbeatInterval)
+
+	if cfg.NeedsBootstrap() {
+		store, inCluster, err := bootstrap.NewK8sStore()
+		if err != nil {
+			lg.Error(ctx, "bootstrap: kubernetes client unavailable", "error", err)
+			os.Exit(1)
+		}
+
+		key, err := resolveAPIKey(ctx, cfg, store, inCluster, func() (*bootstrap.Credentials, error) {
+			return bootstrap.Run(ctx, http.DefaultClient, cfg.APIHost, cfg.Email, cfg.Password, "e2eprobe-"+runID)
+		})
+		if err != nil {
+			lg.Error(ctx, "bootstrap failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.APIKey = key
+
+		if !inCluster {
+			// No Secret exists outside a cluster, so hand the operator the
+			// credential they would otherwise have no way to keep.
+			lg.Info(ctx, "bootstrap complete (not in-cluster): store this key as E2EPROBE_API_KEY to skip bootstrap next run",
+				"api_key", cfg.APIKey, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		} else {
+			lg.Info(ctx, "bootstrap complete: credential written to secret",
+				"secret", cfg.BootstrapSecretName, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		}
+	}
 
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {

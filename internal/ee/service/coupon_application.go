@@ -19,12 +19,25 @@ type CouponCalculationResult struct {
 	TotalDiscountAmount          decimal.Decimal
 	TotalInvoiceLineItemDiscount decimal.Decimal
 	TotalInvoiceLevelDiscount    decimal.Decimal
+	// AppliedCoupons is populated by CalculateCouponsForInvoice so a preview
+	// can surface the same per-coupon breakdown a persisted invoice carries.
+	// ApplyCouponsToInvoice leaves it nil — its callers read the totals and
+	// the persisted rows instead.
+	AppliedCoupons []*dto.CouponApplicationResponse
 }
 
 type CouponApplicationService interface {
 	CreateCouponApplication(ctx context.Context, req dto.CreateCouponApplicationRequest) (*dto.CouponApplicationResponse, error)
 	GetCouponApplication(ctx context.Context, id string) (*dto.CouponApplicationResponse, error)
 	ApplyCouponsToInvoice(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*CouponCalculationResult, error)
+
+	// CalculateCouponsForInvoice runs the same discount computation as
+	// ApplyCouponsToInvoice and stops before any persistence: nothing is
+	// written, no redemption is counted. It exists for invoice previews,
+	// which must show the discounts a real invoice would carry without
+	// consuming the coupon. Line-item discounts are still set on the passed
+	// invoice's in-memory line items.
+	CalculateCouponsForInvoice(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*CouponCalculationResult, error)
 }
 
 type couponApplicationService struct {
@@ -115,10 +128,38 @@ func resolveInvoiceLineItemToBeDiscounted(
 	return target, ok
 }
 
-// ApplyCouponsToInvoice applies both invoice-level and line item-level coupons to an invoice.
-// This is the unified method that handles all coupon application logic.
-// CouponService.ApplyDiscount() handles all validation and calculation.
-func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*CouponCalculationResult, error) {
+// couponPreparation is the outcome of the pure computation phase: the totals,
+// the entities that would be persisted, and the coupons keyed by id (needed by
+// the persistence phase for redemption limits).
+type couponPreparation struct {
+	appliedCoupons                 []*dto.CouponApplicationResponse
+	lineItemCouponApplications     []*coupon_application.CouponApplication
+	invoiceLevelCouponApplications []*coupon_application.CouponApplication
+	couponsMap                     map[string]*coupon.Coupon
+	totalLineItemDiscount          decimal.Decimal
+	totalInvoiceLevelDiscount      decimal.Decimal
+}
+
+// CalculateCouponsForInvoice computes the discounts without writing anything.
+// See the interface for why previews need this.
+func (s *couponApplicationService) CalculateCouponsForInvoice(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*CouponCalculationResult, error) {
+	prep, err := s.prepareCouponApplications(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &CouponCalculationResult{
+		TotalDiscountAmount:          prep.totalLineItemDiscount.Add(prep.totalInvoiceLevelDiscount),
+		TotalInvoiceLineItemDiscount: prep.totalLineItemDiscount,
+		TotalInvoiceLevelDiscount:    prep.totalInvoiceLevelDiscount,
+		AppliedCoupons:               prep.appliedCoupons,
+	}, nil
+}
+
+// prepareCouponApplications runs the computation shared by
+// ApplyCouponsToInvoice and CalculateCouponsForInvoice. It writes nothing; the
+// only mutation is LineItemDiscount on the passed invoice's in-memory line
+// items, which both callers rely on.
+func (s *couponApplicationService) prepareCouponApplications(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*couponPreparation, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -127,13 +168,12 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 	invoiceCoupons := req.InvoiceCoupons
 	lineItemCoupons := req.LineItemCoupons
 
-	result := &CouponCalculationResult{
-		TotalDiscountAmount:          decimal.Zero,
-		TotalInvoiceLineItemDiscount: decimal.Zero,
-		TotalInvoiceLevelDiscount:    decimal.Zero,
-	}
 	if len(invoiceCoupons) == 0 && len(lineItemCoupons) == 0 {
-		return result, nil
+		return &couponPreparation{
+			couponsMap:                make(map[string]*coupon.Coupon),
+			totalLineItemDiscount:     decimal.Zero,
+			totalInvoiceLevelDiscount: decimal.Zero,
+		}, nil
 	}
 
 	s.Logger.Info(ctx, "applying coupons to invoice",
@@ -353,29 +393,46 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			"final_subtotal", discountResult.FinalPrice)
 	}
 
+	return &couponPreparation{
+		appliedCoupons:                 appliedCoupons,
+		lineItemCouponApplications:     lineItemCouponApplications,
+		invoiceLevelCouponApplications: invoiceLevelCouponApplications,
+		couponsMap:                     couponsMap,
+		totalLineItemDiscount:          totalLineItemDiscount,
+		totalInvoiceLevelDiscount:      totalInvoiceLevelDiscount,
+	}, nil
+}
+
+// ApplyCouponsToInvoice applies both invoice-level and line item-level coupons to an invoice.
+// This is the unified method that handles all coupon application logic.
+// CouponService.ApplyDiscount() handles all validation and calculation.
+func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, req dto.ApplyCouponsToInvoiceRequest) (*CouponCalculationResult, error) {
+	prep, err := s.prepareCouponApplications(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	inv := req.Invoice
+	appliedCoupons := prep.appliedCoupons
+	couponsMap := prep.couponsMap
+	totalLineItemDiscount := prep.totalLineItemDiscount
+	totalInvoiceLevelDiscount := prep.totalInvoiceLevelDiscount
+
 	// Step 3: Apply mutations in transaction (mutations at boundaries)
 	// Computation was pure, now we apply the results
 	totalDiscountAmount := totalLineItemDiscount.Add(totalInvoiceLevelDiscount)
 
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Enforce MaxRedemptions for one-off applications (nil CouponAssociationID).
-		// Subscription-attached coupons are already counted during createCouponAssociation;
-		// re-counting them here would multiply redemptions by number of invoices.
-		// Deduped by coupon_id so a coupon that appears on both a line item and at
-		// invoice level (or twice at line-item level) counts as one redemption per
-		// invoice, matching the "one use of the code" semantic.
-		// Idempotency: skip increment AND persistence if a CouponApplication for
-		// this (invoice_id, coupon_id) already exists — protects against
-		// ComputeInvoice retries after a failed FinalizeInvoice (line-item
-		// discounts get reset by reconcileLineItems but CouponApplication rows
-		// persist; without this, retries would over-count redemptions and insert
-		// duplicate application rows).
+		// Idempotency: for every coupon (one-off or subscription-attached), check
+		// whether a CouponApplication already exists for this (invoice_id, coupon_id)
+		// — protects against ComputeInvoice retries and recomputes (e.g. finalization
+		// re-running compute) after a prior pass already persisted applications for
+		// this invoice; without this, each recompute would insert duplicate
+		// application rows. Deduped by coupon_id so a coupon that appears on both a
+		// line item and at invoice level (or twice at line-item level) is checked once.
 		seen := make(map[string]bool)
 		alreadyPersisted := make(map[string]bool)
 		for _, ca := range appliedCoupons {
-			if ca.CouponApplication.CouponAssociationID != "" {
-				continue
-			}
 			couponID := ca.CouponApplication.CouponID
 			if seen[couponID] {
 				continue
@@ -388,7 +445,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 				CouponIDs:   []string{couponID},
 			})
 			if countErr != nil {
-				s.Logger.Error(txCtx, "failed to count existing coupon applications for redemption idempotency",
+				s.Logger.Error(txCtx, "failed to count existing coupon applications for idempotency",
 					"error", countErr,
 					"invoice_id", inv.ID,
 					"coupon_id", couponID)
@@ -399,6 +456,13 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 				continue
 			}
 
+			// Enforce MaxRedemptions for one-off applications (nil CouponAssociationID)
+			// only. Subscription-attached coupons are already counted during
+			// createCouponAssociation; re-counting them here would multiply
+			// redemptions by number of invoices.
+			if ca.CouponApplication.CouponAssociationID != "" {
+				continue
+			}
 			if err := s.CouponRepo.IncrementRedemptions(txCtx, couponID, couponsMap[couponID].MaxRedemptions); err != nil {
 				s.Logger.Error(txCtx, "failed to increment coupon redemptions",
 					"error", err,
@@ -408,11 +472,11 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			}
 		}
 
-		// Persist coupon applications. Skip one-off entries whose (invoice_id,
-		// coupon_id) already has rows from a prior compute — otherwise a retry
+		// Persist coupon applications. Skip entries whose (invoice_id, coupon_id)
+		// already has rows from a prior compute — otherwise a retry/recompute
 		// would insert duplicates.
 		for _, ca := range appliedCoupons {
-			if ca.CouponApplication.CouponAssociationID == "" && alreadyPersisted[ca.CouponApplication.CouponID] {
+			if alreadyPersisted[ca.CouponApplication.CouponID] {
 				continue
 			}
 			if err := s.CouponApplicationRepo.Create(txCtx, ca.CouponApplication); err != nil {
@@ -457,7 +521,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 	}
 
 	// Build result after mutations are applied
-	result = &CouponCalculationResult{
+	result := &CouponCalculationResult{
 		TotalDiscountAmount:          totalDiscountAmount,
 		TotalInvoiceLineItemDiscount: totalLineItemDiscount,
 		TotalInvoiceLevelDiscount:    totalInvoiceLevelDiscount,

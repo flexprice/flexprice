@@ -591,7 +591,13 @@ func (s ScheduleType) String() string {
 }
 
 func (s ScheduleType) Validate() error {
-	if s != "" && !lo.Contains(ScheduleTypeValues, s) {
+	if s == "" {
+		return ierr.NewError("schedule type cannot be empty string").
+			WithHint("Schedule type must be 'immediate', 'end_of_period'").
+			Mark(ierr.ErrValidation)
+	}
+
+	if !lo.Contains(ScheduleTypeValues, s) {
 		return ierr.NewError("invalid schedule type").
 			WithHint("Schedule type must be 'immediate', 'end_of_period'").
 			WithReportableDetails(map[string]any{

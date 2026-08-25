@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -238,4 +238,14 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *UserHandler) CreateSupportChatToken(c *gin.Context) {
+	resp, err := h.userService.CreateSupportChatToken(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

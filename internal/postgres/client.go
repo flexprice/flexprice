@@ -118,7 +118,6 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	logger.Debug(context.Background(), "connected to postgres writer",
 		"host", config.Postgres.Host,
 		"port", config.Postgres.Port,
-		"auto_migrate", config.Postgres.AutoMigrate,
 	)
 
 	// Initialize reader client
@@ -164,14 +163,6 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		// Use writer client as reader if no separate reader is configured
 		readerClient = writerClient
 		logger.Debug(context.Background(), "no separate reader configured, using writer for reads")
-	}
-
-	// Run the auto migration tool if enabled (only on writer)
-	if config.Postgres.AutoMigrate {
-		logger.Debug(context.Background(), "running auto migration")
-		if err := writerClient.Schema.Create(context.Background()); err != nil {
-			return nil, fmt.Errorf("failed creating schema resources: %w", err)
-		}
 	}
 
 	return &EntClients{

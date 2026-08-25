@@ -404,6 +404,7 @@ func (s *EntitlementQuantityTestSuite) TestCancelImmediate_GenerateInvoice_SetsA
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_NilSubLineItemIDs_SetsAdjustedEntitlementQuantity() {
 	s.setupEntitlement(100)
 	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart
@@ -477,6 +478,7 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_NilSubLineItemIDs_SetsA
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_OverwritesFullPayload() {
 	s.setupEntitlement(100)
 	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart
@@ -562,7 +564,7 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 //   - Item B (nil SubLineItemID) is not touched by the reconciler.
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedItemPreservesID() {
 	s.setupEntitlement(100)
-	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart

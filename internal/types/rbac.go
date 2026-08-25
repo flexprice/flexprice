@@ -1,5 +1,11 @@
 package types
 
+import (
+	"context"
+
+	"github.com/samber/lo"
+)
+
 type Role string
 
 func (r Role) String() string { return string(r) }
@@ -25,6 +31,16 @@ func (ut UserType) AllowedRoles() []Role {
 	default:
 		return nil
 	}
+}
+
+// IsSuperAdminUser reports whether the caller may act administratively over
+// other principals. A service account is never administrative, however its
+// stored roles read, so a leaked machine key cannot mint or enumerate
+// credentials beyond its own. This is the single definition of the rule shared
+// by the route guard and the service layer.
+func IsSuperAdminUser(ctx context.Context) bool {
+	return !IsServiceAccount(ctx) &&
+		lo.Contains(GetRoles(ctx), RoleSuperAdmin.String())
 }
 
 // RoleFilter filters the roles returned by GET /rbac/roles. Bound via
