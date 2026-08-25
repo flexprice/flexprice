@@ -139,4 +139,7 @@ shannon-setup/
 
 # Local git worktrees for isolated feature work (superpowers:using-git-worktrees)
 .worktrees/
-*.code-workspace/migrate
+*.code-workspace
+
+# compiled migrate binary from `go build ./cmd/migrate`
+/migrate
