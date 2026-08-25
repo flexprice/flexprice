@@ -18,7 +18,8 @@ set -euo pipefail
 PGHOST_="${PGHOST_:-localhost}"; PGPORT_="${PGPORT_:-5440}"
 PGUSER_="${PGUSER_:-flexprice}"; PGPASS_="${PGPASS_:-flexprice123}"
 DIR="${1:-migrations/versioned/postgres}"
-BASE="postgres://$PGUSER_:$PGPASS_@$PGHOST_:$PGPORT_"
+# Password via PGPASSWORD only — never in argv.
+BASE="postgres://$PGUSER_@$PGHOST_:$PGPORT_"
 export PGPASSWORD="$PGPASS_"
 
 for db in sync_a sync_b; do
@@ -32,6 +33,7 @@ DATABASE_URL="$BASE/sync_b?sslmode=disable" dbmate --migrations-dir "$DIR" --no-
 FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
 FLEXPRICE_POSTGRES_USER="$PGUSER_" FLEXPRICE_POSTGRES_PASSWORD="$PGPASS_" \
 FLEXPRICE_POSTGRES_DBNAME="sync_b" FLEXPRICE_POSTGRES_SSLMODE="disable" \
+FLEXPRICE_MIGRATE_UNSAFE=1 \
   go run ./cmd/migrate postgres --allow-index-changes >/dev/null 2>&1
 
 A="$(mktemp)"; B="$(mktemp)"

@@ -10,8 +10,19 @@
 -- no window where uniqueness is unenforced. Steps 2 and 3 drop and rename.
 --
 -- statement_timeout must be 0 on the connection: a build killed by a timeout leaves
--- an INVALID index that CREATE ... IF NOT EXISTS will silently skip forever.
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS entitlement_uniq_v2
+-- an INVALID index behind.
+--
+-- Deliberately NO 'IF NOT EXISTS'. With it, a retry after such a failure skips the
+-- broken index silently — and then 000200 drops the index that was still enforcing
+-- and 000300 renames the invalid one over it, leaving the table with no effective
+-- uniqueness. Without it the retry fails loudly with "relation already exists", and
+-- the operator clears it first:
+--
+--   DROP INDEX CONCURRENTLY IF EXISTS entitlement_uniq_v2;
+--
+-- Check for one before running this migration:
+--   SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+CREATE UNIQUE INDEX CONCURRENTLY entitlement_uniq_v2
   ON entitlements (tenant_id, environment_id, entity_type, entity_id, feature_id)
   WHERE (((status)::text = 'published'::text) AND ((aggregation_mode)::text <> 'parallel'::text));
 

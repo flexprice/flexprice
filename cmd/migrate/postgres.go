@@ -39,7 +39,7 @@ func newPostgresCmd() *cobra.Command {
 	// sync check needs to SEE those changes to fail a PR that forgot the migration,
 	// so it runs against a throwaway database with this flag set.
 	cmd.Flags().BoolVar(&allowIndexChanges, "allow-index-changes", false,
-		"Include index modifications in the diff (CI/draft only, never production)")
+		"Include index modifications in the diff (CI/draft only; requires FLEXPRICE_MIGRATE_UNSAFE=1)")
 	cmd.Flags().StringVar(&file, "file", "", "Apply a raw .sql file (e.g. a baseline) instead of Ent auto-migration")
 
 	return cmd
@@ -145,6 +145,14 @@ func runPostgresMigration(dryRun bool, timeout int, allowIndexChanges bool) erro
 	// IMPORTANT: WithSkipChanges OVERWRITES Ent's default skip set, which is
 	// (DropIndex | DropColumn). We MUST re-include both here, or auto-migrate would
 	// start dropping columns (data loss). So the set is default + ModifyIndex.
+	if allowIndexChanges && os.Getenv("FLEXPRICE_MIGRATE_UNSAFE") != "1" {
+		// A flag alone is too easy to reach in a deploy. Removing ModifyIndex from
+		// the skip set lets Ent drop and recreate predicate-sensitive indexes under
+		// exclusive locks — the 2026-06-25 incident. Requiring a second, deliberate
+		// signal means it cannot be turned on by editing a command line.
+		return fmt.Errorf("--allow-index-changes requires FLEXPRICE_MIGRATE_UNSAFE=1; " +
+			"it is for CI verification against throwaway databases, never a real deployment")
+	}
 	skip := schema.DropIndex | schema.DropColumn | schema.ModifyIndex
 	if allowIndexChanges {
 		// CI / draft path only: unskip ModifyIndex so a changed index predicate or

@@ -71,6 +71,19 @@ Records the baseline as applied and executes nothing.
 make migrate-adopt url="postgres://..." version=20260819000000
 ```
 
+Adoption records a **claim** that the database already contains everything those
+migrations would have created. Nothing verifies it afterwards, and if the claim is
+wrong dbmate skips that DDL forever. So pass a reference — a scratch database built
+from the same migration set — and the fingerprints must match before anything is
+written:
+
+```bash
+./scripts/migrations/adopt.sh "$PROD_URL" migrations/versioned/postgres \
+  20260819000000 --reference "$SCRATCH_URL"
+```
+
+Without `--reference` it warns and proceeds; treat that as a local-only shortcut.
+
 Verify with a fingerprint either side — it must be identical:
 
 ```bash
@@ -79,14 +92,24 @@ make migrate-fingerprint url="postgres://..."
 
 ## CI gates
 
-`make migrate-check` runs all four.
+`make migrate-check` runs the Postgres gates; CI adds two more.
 
-| Gate | Catches |
-|---|---|
-| `migrate-check-sync` | a schema change that shipped without a migration |
-| `migrate-check-checksum` | edits to a migration that already ran somewhere |
-| `migrate-check-order` | parallel branches merging out of timestamp order |
-| `migrate-check-clickhouse` | multi-statement ClickHouse files |
+| Gate | Runs in | Catches |
+|---|---|---|
+| ent codegen current | CI | a schema edit without `make generate-ent` — first, because a stale `ent/` makes every later gate read the wrong schema and pass |
+| `migrate-check-sync` | both | a schema change that shipped without a migration |
+| `migrate-check-checksum` | both | edits to a shipped migration, and migrations missing from `.hashes` |
+| `migrate-check-order` | both | parallel branches merging out of timestamp order |
+| replay from zero | CI | the set does not apply to an empty database |
+| `migrate-check-clickhouse` | neither — disabled | multi-statement ClickHouse files |
+
+`.hashes` is authoritative and is not rewritten by the check. Adding a migration
+means recording it deliberately:
+
+```bash
+./scripts/migrations/checksum-check.sh migrations/versioned migrations/versioned/.hashes --update
+git add migrations/versioned/.hashes
+```
 
 The sync check builds two throwaway databases — one from migrations alone, one from
 migrations plus Ent — and compares schema fingerprints. It compares **end states,

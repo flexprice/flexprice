@@ -12,7 +12,9 @@ NAME="${1:?usage: generate.sh <migration_name>}"
 DIR="${MIGRATIONS_PG:-migrations/versioned/postgres}"
 PGHOST_="${PGHOST_:-localhost}"; PGPORT_="${PGPORT_:-5440}"
 PGUSER_="${PGUSER_:-flexprice}"; PGPASS_="${PGPASS_:-flexprice123}"
-BASE="postgres://$PGUSER_:$PGPASS_@$PGHOST_:$PGPORT_"
+# Password via PGPASSWORD only — a URL passed as an argument is visible in
+# `ps aux`, CI logs and Kubernetes audit records.
+BASE="postgres://$PGUSER_@$PGHOST_:$PGPORT_"
 export PGPASSWORD="$PGPASS_"
 
 psql "$BASE/postgres?sslmode=disable" -q -c "DROP DATABASE IF EXISTS mig_draft;" \
@@ -22,7 +24,8 @@ DATABASE_URL="$BASE/mig_draft?sslmode=disable" dbmate --migrations-dir "$DIR" --
 DDL="$(FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
        FLEXPRICE_POSTGRES_USER="$PGUSER_" FLEXPRICE_POSTGRES_PASSWORD="$PGPASS_" \
        FLEXPRICE_POSTGRES_DBNAME="mig_draft" FLEXPRICE_POSTGRES_SSLMODE="disable" \
-       go run ./cmd/migrate postgres --dry-run --allow-index-changes 2>/dev/null | grep -v '^$' || true)"
+       FLEXPRICE_MIGRATE_UNSAFE=1 \
+       go run ./cmd/migrate postgres --dry-run --allow-index-changes | grep -v '^$')"
 
 if [ -z "$DDL" ]; then
   echo "nothing to generate — migrations already cover the Ent schema"
