@@ -158,7 +158,7 @@ Nothing here detects them yet. The mechanism to build is a one-directional
 comparison the other way — objects the database has that Ent does not declare —
 run as a report against real deployments, not as a PR gate.
 
-## Index predicates — cosmetic, but keep the convention
+## Index predicates — enforced by CI, not by memory
 
 Ent compares index predicates as strings. `checkout_status IN ('a','b')` is stored by
 Postgres as `= ANY (...)`, the comparison never converges, and Ent proposes rebuilding
@@ -181,8 +181,29 @@ The reviewer cannot tell those apart by looking. Miss it, and you ship a migrati
 that drops and rebuilds an index for no reason — on `events` or `feature_usage` that
 is an incident, not a nit.
 
-So keep writing predicates in the stored form. Copy `pg_get_indexdef` output. It is
-not a correctness gate any more; it is what keeps generated drafts trustworthy.
+You do not have to remember this. `make migrate-check-phantom` enforces it, using a
+rule that needs no knowledge of what "canonical" means:
+
+> once the migrations satisfy Ent, Ent must have nothing left to propose.
+
+So it builds a database from the migrations, asks Ent what it would still change,
+and fails on anything it names — because by definition that change is a no-op Ent
+will keep proposing forever. The failure prints the exact string to paste:
+
+```text
+phantom check: FAIL — Ent proposes changes the migrations already satisfy.
+  DROP INDEX "usagerecord_tenant_id_environm_38da5f..."
+  CREATE UNIQUE INDEX "usagerecord_..." WHERE status = 'published';
+
+Cause: an entsql.IndexWhere predicate is written in a form Postgres does not
+store. Replace it with what Postgres actually stores:
+
+  usagerecord_tenant_id_environm_38da5f...
+    entsql.IndexWhere("((status)::text = 'published'::text)")
+```
+
+It runs **after** the sync check, and only makes sense there: if a real migration is
+missing, the residue is that missing change rather than a phantom.
 
 ## Open decision — ClickHouse `ON CLUSTER`
 

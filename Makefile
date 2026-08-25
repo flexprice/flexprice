@@ -271,12 +271,16 @@ migrate-fingerprint:
 .PHONY: migrate-check
 # migrate-check-clickhouse is deliberately NOT in this list — see the note in
 # .github/workflows/migrations.yml. Run it by hand if you need it.
-migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
+migrate-check: migrate-check-sync migrate-check-phantom migrate-check-checksum migrate-check-order
 	@echo "all migration checks passed"
 
 .PHONY: migrate-check-sync
 migrate-check-sync:
 	@./scripts/migrations/synccheck.sh $(MIGRATIONS_PG)
+
+.PHONY: migrate-check-phantom
+migrate-check-phantom:
+	@./scripts/migrations/phantom-check.sh $(MIGRATIONS_PG)
 
 .PHONY: migrate-check-checksum
 migrate-check-checksum:

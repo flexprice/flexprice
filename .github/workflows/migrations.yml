@@ -92,6 +92,9 @@ jobs:
       - name: Sync check — is any schema change missing a migration?
         run: make migrate-check-sync
 
+      - name: Phantom check — any index predicate Postgres does not store?
+        run: make migrate-check-phantom
+
       - name: Checksum — was a shipped migration edited?
         run: make migrate-check-checksum
 
