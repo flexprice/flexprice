@@ -10,6 +10,10 @@ on:
       - 'migrations/**'
       - 'cmd/migrate/**'
       - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
       - '.github/workflows/migrations.yml'
   push:
     branches: [ main, develop ]
@@ -19,6 +23,16 @@ on:
       - 'migrations/**'
       - 'cmd/migrate/**'
       - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
+      - '.github/workflows/migrations.yml'
+
+# The job runs commands defined by the pull request, so it gets read-only scope and
+# the checkout credential is not persisted into .git/config.
+permissions:
+  contents: read
 
 jobs:
   migrations:
@@ -41,14 +55,15 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           # order-check compares new files against what is already on the base
           # branch, so it needs history rather than a shallow clone.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25.12'
           cache: true

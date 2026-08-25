@@ -240,7 +240,7 @@ MIGRATIONS_CH  ?= migrations/versioned/clickhouse
 
 .PHONY: migrate-up
 migrate-up:
-	@dbmate --migrations-dir $(MIGRATIONS_PG) --no-dump-schema up
+	@./scripts/migrations/apply.sh $(MIGRATIONS_PG)
 
 .PHONY: migrate-status
 migrate-status:

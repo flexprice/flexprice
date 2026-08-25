@@ -7,7 +7,7 @@ This replaces Ent AutoMigrate as the deploy mechanism. Ent stays as the *source 
 truth* for the schema and as the CI oracle — it is no longer what runs against a
 production database.
 
-```
+```text
 migrations/versioned/postgres/     dbmate, ledger `schema_migrations`
 migrations/versioned/clickhouse/   dbmate, one statement per file
 scripts/migrations/                adoption + the CI gates
@@ -49,16 +49,23 @@ reversal is unsafe. A silent empty down is unreadable in six months.
 single multi-statement query, which Postgres wraps in an implicit transaction — so
 `CREATE INDEX CONCURRENTLY` fails if anything precedes it, including a `SET`.
 
-**Timeouts come from the connection, not the file:**
+**Timeouts come from the connection, not the file**, because a `transaction:false`
+file may hold exactly one statement and there is no room for a `SET`. Apply through
+the wrapper rather than a bare `dbmate up`, which does not set them:
 
-```
-?options=-c%20lock_timeout%3D3s%20-c%20statement_timeout%3D30s
+```bash
+make migrate-up                      # or: ./scripts/migrations/apply.sh <dir>
 ```
 
-and for any file building an index concurrently, `statement_timeout=0`. A build
-killed by a timeout leaves an **INVALID** index that `IF NOT EXISTS` silently skips
-forever, costing write overhead while inspection reports it as present. Drop it
-before retrying.
+It sets `lock_timeout=3s` so a blocked `ALTER` gives up instead of queueing every
+query behind it, and `statement_timeout=0` because a `CREATE INDEX CONCURRENTLY`
+killed by a timeout leaves an **INVALID** index — one that costs write overhead
+forever while inspection reports it as present, so nothing retries it. Drop it
+before retrying:
+
+```bash
+psql "$URL" -c "SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;"
+```
 
 **ClickHouse takes one statement per file** — the protocol rejects multi-statement
 bodies outright. Enforced by `make migrate-check-clickhouse`.
