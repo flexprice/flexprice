@@ -208,15 +208,9 @@ finds residue. A draft containing no-op DDL is a trap: the
 sitting in a migration. Fixing the annotation is two lines and the exact string is
 printed, so blocking is cheaper than a draft nobody can safely review.
 
-`make migrate-check-phantom` runs the same test against a whole branch, for a
-predicate that arrived some other way — hand-written migration, a merge, or editing
-`ent/schema/` without generating. It is **not** a CI gate: a phantom is not a
-correctness problem, since Ent no longer runs against a real database. It can only
-pollute a future draft, and the generator already blocks that. Run it by hand if
-drafts start looking noisy.
-
-Both only make sense **after** the sync check passes: if a real migration is
-missing, the residue is that missing change rather than a phantom.
+This only makes sense once the migrations already satisfy Ent: if a real migration
+is missing, the residue is that missing change rather than a phantom. In practice
+that holds, because you run the generator precisely to write the missing one.
 
 ## Open decision — ClickHouse `ON CLUSTER`
 

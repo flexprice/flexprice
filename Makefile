@@ -278,10 +278,6 @@ migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
 migrate-check-sync:
 	@./scripts/migrations/synccheck.sh $(MIGRATIONS_PG)
 
-.PHONY: migrate-check-phantom
-migrate-check-phantom:
-	@./scripts/migrations/phantom-check.sh $(MIGRATIONS_PG)
-
 .PHONY: migrate-check-checksum
 migrate-check-checksum:
 	@./scripts/migrations/checksum-check.sh migrations/versioned

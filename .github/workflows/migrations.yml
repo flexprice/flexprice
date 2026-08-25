@@ -92,15 +92,6 @@ jobs:
       - name: Sync check — is any schema change missing a migration?
         run: make migrate-check-sync
 
-      # Disabled 2026-08-26. CI's job here is "does a .sql file exist for every
-      # schema change" — that is the sync check above. A phantom predicate is not a
-      # correctness problem: Ent no longer runs against a real database, so it can
-      # only pollute a future draft. scripts/migrations/generate.sh already refuses
-      # to write a draft when it finds one, which is where it actually hurts.
-      # Still available on demand: make migrate-check-phantom
-      # - name: Phantom check — any index predicate Postgres does not store?
-      #   run: make migrate-check-phantom
-
       - name: Checksum — was a shipped migration edited?
         run: make migrate-check-checksum
 
