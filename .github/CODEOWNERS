@@ -1,0 +1,5 @@
+# CODEOWNERS — default reviewers for all changes.
+# Team slugs must exist in the flexprice org. Branch protection must have
+# "Require review from Code Owners" enabled for this to gate merges.
+
+*       @flexprice/flexprice-oss-maintainers
