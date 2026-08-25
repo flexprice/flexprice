@@ -21,15 +21,50 @@ psql "$BASE/postgres?sslmode=disable" -q -c "DROP DATABASE IF EXISTS mig_draft;"
                                      -c "CREATE DATABASE mig_draft;" >/dev/null
 DATABASE_URL="$BASE/mig_draft?sslmode=disable" dbmate --migrations-dir "$DIR" --no-dump-schema up >/dev/null
 
-DDL="$(FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
+# Keep stderr, but only show it if the command actually failed — the structured
+# logger writes several JSON lines on every run and they are not useful here.
+RAW="$(mktemp)"; ERR="$(mktemp)"; trap 'rm -f "$RAW" "$ERR"' EXIT
+if ! FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
        FLEXPRICE_POSTGRES_USER="$PGUSER_" FLEXPRICE_POSTGRES_PASSWORD="$PGPASS_" \
        FLEXPRICE_POSTGRES_DBNAME="mig_draft" FLEXPRICE_POSTGRES_SSLMODE="disable" \
        FLEXPRICE_MIGRATE_UNSAFE=1 \
-       go run ./cmd/migrate postgres --dry-run --allow-index-changes | grep -v '^$')"
+       go run ./cmd/migrate postgres --dry-run --allow-index-changes > "$RAW" 2>"$ERR"; then
+  echo "FAIL: could not read the Ent schema" >&2; sed 's/^/  /' "$ERR" >&2; exit 1
+fi
+DDL="$(grep -v '^$' "$RAW" || true)"
 
 if [ -z "$DDL" ]; then
   echo "nothing to generate — migrations already cover the Ent schema"
   exit 0
+fi
+
+# Before drafting: apply what Ent wants to the scratch database, then ask again.
+# Anything it STILL proposes is a no-op it will keep proposing forever — a predicate
+# written in a form Postgres does not store. Those statements are indistinguishable
+# from a real predicate change once they are sitting in a draft, so warn here rather
+# than let them be pasted in.
+psql -X -q "$BASE/mig_draft?sslmode=disable" -c "$DDL" >/dev/null 2>&1 || true
+RESIDUE="$(FLEXPRICE_POSTGRES_HOST="$PGHOST_" FLEXPRICE_POSTGRES_PORT="$PGPORT_" \
+  FLEXPRICE_POSTGRES_USER="$PGUSER_" FLEXPRICE_POSTGRES_PASSWORD="$PGPASS_" \
+  FLEXPRICE_POSTGRES_DBNAME="mig_draft" FLEXPRICE_POSTGRES_SSLMODE="disable" \
+  FLEXPRICE_MIGRATE_UNSAFE=1 \
+  go run ./cmd/migrate postgres --dry-run --allow-index-changes 2>/dev/null | grep -v '^$' || true)"
+
+if [ -n "$RESIDUE" ]; then
+  echo >&2
+  echo "WARNING: some of the DDL below is a NO-OP and must not be kept." >&2
+  echo "Ent still proposes it after applying, which means it rebuilds an index that" >&2
+  echo "needs nothing. It looks identical to a real predicate change in the draft." >&2
+  echo >&2
+  echo "$RESIDUE" | sed 's/^/  /' >&2
+  echo >&2
+  echo "Fix the schema annotation instead, then regenerate:" >&2
+  for idx in $(echo "$RESIDUE" | grep -oE 'INDEX "[a-z0-9_]+"' | grep -oE '"[a-z0-9_]+"' | tr -d '"' | sort -u); do
+    want="$(psql -X -tAc "SELECT substring(indexdef from 'WHERE (.*)\$') FROM pg_indexes WHERE indexname='$idx';" \
+            "$BASE/mig_draft?sslmode=disable" 2>/dev/null || true)"
+    [ -n "$want" ] && printf '    entsql.IndexWhere("%s")\n' "$want" >&2
+  done
+  echo >&2
 fi
 
 FILE="$DIR/$(date -u +%Y%m%d%H%M%S)_${NAME}.sql"
