@@ -26,6 +26,10 @@ if [ -n "$REF" ]; then
   A="$(mktemp)"; B="$(mktemp)"
   psql -X -q "$URL" -f "$HERE/fingerprint.sql" > "$A"
   psql -X -q "$REF" -f "$HERE/fingerprint.sql" > "$B"
+  # Two empty results compare equal. Without this, a connection that reached the
+  # wrong (empty) database would look like a perfect match and adopt on nothing.
+  [ -s "$A" ] || { echo "FAIL: target database returned no schema" >&2; exit 1; }
+  [ -s "$B" ] || { echo "FAIL: reference database returned no schema" >&2; exit 1; }
   if ! diff -q "$A" "$B" >/dev/null; then
     echo "FAIL: this database does not match the reference — adopting would record a false claim." >&2
     diff "$A" "$B" | grep '^[<>]' | head -20 >&2

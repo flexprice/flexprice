@@ -265,7 +265,7 @@ migrate-adopt:
 .PHONY: migrate-fingerprint
 migrate-fingerprint:
 	@test -n "$(url)" || (echo "usage: make migrate-fingerprint url=postgres://..."; exit 1)
-	@psql -X -q "$(url)" -f scripts/migrations/fingerprint.sql | shasum -a 256
+	@./scripts/migrations/fingerprint.sh "$(url)"
 
 # ── CI gates ─────────────────────────────────────────────────────────────────
 .PHONY: migrate-check

@@ -90,6 +90,11 @@ Verify with a fingerprint either side — it must be identical:
 make migrate-fingerprint url="postgres://..."
 ```
 
+It fails rather than printing a hash if the database is unreachable or returns
+nothing. That matters: `psql ... | shasum` reports the *pipeline's* last status, so
+a failed connection still exits 0 and hashes the empty string —
+`e3b0c442...b7852b855` — and two unreachable databases then compare as identical.
+
 ## CI gates
 
 `make migrate-check` runs the Postgres gates; CI adds two more.
