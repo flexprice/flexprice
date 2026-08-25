@@ -5,7 +5,9 @@ set -euo pipefail
 DIR="${1:-migrations/versioned}"
 LOCK="${2:-migrations/versioned/.hashes}"
 NEW="$(mktemp)"
-find "$DIR" -name '*.sql' | sort | xargs shasum -a 256 > "$NEW"
+# Same GNU/BSD empty-input divergence as order-check.sh.
+find "$DIR" -name '*.sql' -print0 2>/dev/null | sort -z \
+  | xargs -0 -I{} shasum -a 256 {} > "$NEW" 2>/dev/null || true
 if [ ! -f "$LOCK" ]; then cp "$NEW" "$LOCK"; echo "seeded $LOCK"; exit 0; fi
 CHANGED="$(comm -23 <(sort "$LOCK") <(sort "$NEW") || true)"
 if [ -z "$CHANGED" ]; then cp "$NEW" "$LOCK"; echo "checksums ok"; exit 0; fi

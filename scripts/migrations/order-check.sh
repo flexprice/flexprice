@@ -5,8 +5,12 @@
 set -euo pipefail
 DIR="${1:-migrations/versioned/postgres}"
 BASE="${2:-origin/develop}"
+# No xargs: GNU xargs runs its command even on empty input (BSD does not), so
+# `xargs -n1 basename` with no committed migrations exits 123 and set -e kills the
+# script before the guard below can return 0. sed strips the directory portably
+# and is a no-op when the input is empty.
 newest="$(git ls-tree -r --name-only "$BASE" -- "$DIR" 2>/dev/null \
-          | xargs -n1 basename 2>/dev/null | cut -d_ -f1 | sort -n | tail -1)"
+          | sed 's#.*/##' | cut -d_ -f1 | sort -n | tail -1 || true)"
 [ -n "$newest" ] || { echo "no committed migrations yet"; exit 0; }
 rc=0
 for f in $(git diff --name-only --diff-filter=A "$BASE"...HEAD -- "$DIR"); do
