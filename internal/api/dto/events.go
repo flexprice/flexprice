@@ -25,9 +25,18 @@ import (
 
 type IngestEventRequest struct {
 	EventName          string                 `json:"event_name" validate:"required" binding:"required" example:"api_request" csv:"event_name"`
+	// EventID is the caller's idempotency key. CONTRACT: unique per logical event, and IMMUTABLE
+	// once sent — never reuse an event_id for a different event, and never resend the same event_id
+	// with a different timestamp. Events dedup on (event_id, timestamp) in both ClickHouse
+	// (ReplacingMergeTree, ORDER BY ...timestamp,id) and the analytics lake; a reused event_id with
+	// a changed timestamp is treated as a NEW event and double-counts. Reprocessing enforces this
+	// (rejects a timestamp change); recon flags any event_id seen under two timestamps. Omit to have
+	// one generated.
 	EventID            string                 `json:"event_id" example:"event123" csv:"event_id"`
 	CustomerID         string                 `json:"customer_id" example:"customer456" csv:"customer_id"`
 	ExternalCustomerID string                 `json:"external_customer_id" validate:"required" binding:"required" example:"customer456" csv:"external_customer_id"`
+	// Timestamp is the event's business time. IMMUTABLE per event_id (see EventID) — part of the
+	// dedup identity, so changing it for an existing event_id creates a duplicate.
 	Timestamp          time.Time              `json:"timestamp" example:"2024-03-20T15:04:05Z" csv:"-"` // Handled separately due to parsing
 	TimestampStr       string                 `json:"-" csv:"timestamp"`                                // Used for CSV parsing
 	Source             string                 `json:"source" example:"api" csv:"source"`
