@@ -71,6 +71,12 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Install squawk
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/squawk \
+            https://github.com/sbdchd/squawk/releases/download/v2.63.0/squawk-linux-x86_64
+          sudo chmod +x /usr/local/bin/squawk
+
       - name: Install dbmate and psql
         # Pinned to the same version the deployment image builds (Dockerfile
         # DBMATE_VERSION). `releases/latest` drifts, which would leave CI
@@ -96,6 +102,13 @@ jobs:
 
       - name: Sync check — is any schema change missing a migration?
         run: make migrate-check-sync
+
+      # Advisory for now — reports findings without failing the build. Flip to a
+      # gate once a couple of weeks of real PRs show the rule set is tuned.
+      # Enforceable locally today with `make migrate-check-lint`.
+      - name: Lint — is this migration safe to run?
+        continue-on-error: true
+        run: ./scripts/migrations/lint.sh origin/${{ github.base_ref || 'develop' }}
 
       - name: Checksum — was a shipped migration edited?
         run: make migrate-check-checksum

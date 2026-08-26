@@ -1,0 +1,38 @@
+# Lock-safety lint for migrations. See migrations/versioned/README.md.
+#
+# Only files ADDED by a pull request are linted — the baseline is a 3,700-line
+# pg_dump of production and reports 1,363 findings that describe history, not a
+# decision anyone is making now.
+
+excluded_rules = [
+  # ── Enforced on the connection, not in the file ───────────────────────────
+  # scripts/migrations/apply.sh sets lock_timeout=3s and statement_timeout=0.
+  # They cannot live in the SQL: a `transaction:false` file may contain exactly
+  # one statement, so there is no room for a SET. Squawk cannot see the
+  # connection, so these fire on every concurrent-index migration we write.
+  "require-lock-timeout",
+  "require-statement-timeout",
+  "require-timeout-settings",
+
+  # ── Type opinions Ent owns, not the migration author ──────────────────────
+  # Ent generates `character varying(n)` for every string field. These fire on
+  # essentially every column we will ever add, and the fix is a schema-design
+  # decision, not something to resolve in a migration review.
+  "ban-char-field",
+  "prefer-text-field",
+  "prefer-bigint-over-int",
+  "prefer-bigint-over-smallint",
+  "prefer-timestamptz",
+  "prefer-identity",
+
+  # ── Contradicts a deliberate choice ───────────────────────────────────────
+  # `prefer-robust-stmts` wants IF NOT EXISTS everywhere. For CREATE INDEX
+  # CONCURRENTLY that is actively wrong: it silently skips an INVALID index left
+  # by a failed build, and the next migrations then drop the index that was still
+  # enforcing. See 20260825000100_entitlements_uniq_exclude_parallel.sql.
+  #
+  # It is good advice for ADD COLUMN, so this is a real loss — but the rule
+  # cannot be scoped per statement type, and being wrong about indexes is the
+  # more dangerous half.
+  "prefer-robust-stmts",
+]
