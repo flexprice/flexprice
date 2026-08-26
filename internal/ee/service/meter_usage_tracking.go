@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/expression"
+	kafkaPkg "github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -55,17 +56,23 @@ type meterUsageTrackingService struct {
 	bulkPubSub          pubsub.PubSub
 	meterUsageRepo      events.MeterUsageRepository
 	expressionEvaluator expression.Evaluator
+	// lakePublisher is optional (nil unless kafka.lake_topic is configured). When set,
+	// meter_usage records are additively published to the analytics lake AFTER a
+	// successful ClickHouse insert. fx injects it from the graph; nil = no-op.
+	lakePublisher *kafkaPkg.MeterUsagePublisher
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
 func NewMeterUsageTrackingService(
 	params ServiceParams,
 	meterUsageRepo events.MeterUsageRepository,
+	lakePublisher *kafkaPkg.MeterUsagePublisher,
 ) MeterUsageTrackingService {
 	svc := &meterUsageTrackingService{
 		ServiceParams:       params,
 		meterUsageRepo:      meterUsageRepo,
 		expressionEvaluator: expression.NewCELEvaluator(),
+		lakePublisher:       lakePublisher,
 	}
 
 	ps, err := kafka.NewPubSubFromConfig(
@@ -347,6 +354,11 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return fmt.Errorf("bulk insert meter usage: %w", err)
 	}
 
+	// Additive, fire-and-forget lake publish AFTER the ClickHouse write commits. ClickHouse
+	// stays authoritative: PublishMeterUsage swallows its own errors and is a no-op when no
+	// lake publisher is configured, so this can never fail the insert or affect billing.
+	_ = s.lakePublisher.PublishMeterUsage(ctx, records)
+
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
 		"batch_size", len(batch.Events),
@@ -505,6 +517,11 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
 		return fmt.Errorf("failed to bulk insert meter usage: %w", err)
 	}
+
+	// Additive, fire-and-forget lake publish AFTER the ClickHouse write commits. ClickHouse
+	// stays authoritative: PublishMeterUsage swallows its own errors and is a no-op when no
+	// lake publisher is configured, so this can never fail the insert or affect billing.
+	_ = s.lakePublisher.PublishMeterUsage(ctx, records)
 
 	s.Logger.Debug(ctx, "meter usage records inserted",
 		"event_id", event.ID,

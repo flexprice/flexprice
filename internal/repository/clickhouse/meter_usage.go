@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -25,25 +24,15 @@ type MeterUsageRepository struct {
 	store  *clickhouse.ClickHouseStore
 	logger *logger.Logger
 	qb     *MeterUsageQueryBuilder
-	// lakePublisher is optional: when configured, meter_usage records are additively
-	// published to the analytics lake topic after a successful ClickHouse insert.
-	// Nil (the default) disables lake publishing. See BulkInsertMeterUsage.
-	lakePublisher *kafka.MeterUsagePublisher
 }
 
-// NewMeterUsageRepository builds the repository. An optional *kafka.MeterUsagePublisher may be
-// passed to enable additive, fire-and-forget lake publishing; omit it (or pass nil) to disable.
-// It is variadic so existing callers that construct without a publisher keep compiling.
-func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger, lakePublisher ...*kafka.MeterUsagePublisher) events.MeterUsageRepository {
-	var lp *kafka.MeterUsagePublisher
-	if len(lakePublisher) > 0 {
-		lp = lakePublisher[0]
-	}
+// NewMeterUsageRepository builds the repository. This is a strictly-DB layer: analytics-lake
+// publishing lives in the service layer (meterUsageTrackingService), not here.
+func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.MeterUsageRepository {
 	return &MeterUsageRepository{
-		store:         store,
-		logger:        logger,
-		qb:            NewMeterUsageQueryBuilder(),
-		lakePublisher: lp,
+		store:  store,
+		logger: logger,
+		qb:     NewMeterUsageQueryBuilder(),
 	}
 }
 
@@ -107,11 +96,6 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 				Mark(ierr.ErrDatabase)
 		}
 	}
-
-	// Additive, fire-and-forget lake publish AFTER the ClickHouse write commits. ClickHouse
-	// stays authoritative: PublishMeterUsage swallows its own errors, and it is a no-op when
-	// no lake publisher is configured, so this can never fail the insert or affect billing.
-	_ = r.lakePublisher.PublishMeterUsage(ctx, records)
 
 	SetSpanSuccess(span)
 	return nil
