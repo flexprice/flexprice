@@ -40,6 +40,7 @@ type ReprocessRawEventsResult struct {
 	TotalEventsFailed         int `json:"total_events_failed"`
 	TotalEventsDropped        int `json:"total_events_dropped"`        // Events that failed validation
 	TotalTransformationErrors int `json:"total_transformation_errors"` // Events that errored during transformation
+	TotalR1Violations         int `json:"total_r1_violations"`         // R1: reprocess changed event_timestamp for an existing event_id (skipped, not published)
 	ProcessedBatches          int `json:"processed_batches"`
 }
 
@@ -151,6 +152,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		batchTransformErrors := 0
 		batchPublished := 0
 		batchPublishFailed := 0
+		batchR1Violations := 0
 
 		// Transform each event individually to track which ones fail
 		for i, rawEvent := range rawEvents {
@@ -189,6 +191,27 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				continue
 			}
 
+			// R1 correctness guard: event_timestamp is immutable per event_id.
+			// A republish that changes the business timestamp for an existing
+			// event_id double-counts in the lake (dedup partitions on id+timestamp,
+			// so a changed timestamp is a NEW identity → both rows survive).
+			// Skip + count it; do NOT fail the batch (mirror the per-event skip idiom).
+			if transformedEvent.ID != "" && !transformedEvent.Timestamp.Equal(rawEvent.Timestamp) {
+				batchR1Violations++
+				result.TotalR1Violations++
+				s.Logger.Error(ctx, "R1 violation - event_timestamp changed for existing event_id, publish skipped",
+					"raw_event_id", rawEvent.ID,
+					"event_id", transformedEvent.ID,
+					"original_timestamp", rawEvent.Timestamp,
+					"transformed_timestamp", transformedEvent.Timestamp,
+					"event_name", transformedEvent.EventName,
+					"external_customer_id", transformedEvent.ExternalCustomerID,
+					"batch", result.ProcessedBatches,
+					"batch_position", i+1,
+				)
+				continue
+			}
+
 			// Publish the transformed event
 			if err := s.publishEvent(ctx, transformedEvent); err != nil {
 				batchPublishFailed++
@@ -218,6 +241,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 			"dropped", batchDropped,
 			"transform_errors", batchTransformErrors,
 			"publish_failed", batchPublishFailed,
+			"r1_violations", batchR1Violations,
 			"total_found", result.TotalEventsFound,
 			"total_published", result.TotalEventsPublished,
 		)
@@ -254,6 +278,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		"total_published", result.TotalEventsPublished,
 		"total_dropped", result.TotalEventsDropped,
 		"total_failed", result.TotalEventsFailed,
+		"total_r1_violations", result.TotalR1Violations,
 		"success_rate_pct", fmt.Sprintf("%.2f", successRate),
 	)
 

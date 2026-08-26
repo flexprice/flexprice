@@ -100,6 +100,7 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 		"total_events_dropped", result.TotalEventsDropped,
 		"total_transformation_errors", result.TotalTransformationErrors,
 		"total_events_failed", result.TotalEventsFailed,
+		"total_r1_violations", result.TotalR1Violations,
 		"processed_batches", result.ProcessedBatches)
 
 	// Map service result to workflow result
@@ -108,6 +109,7 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 	response.TotalEventsFailed = result.TotalEventsFailed
 	response.TotalEventsDropped = result.TotalEventsDropped
 	response.TotalTransformationErrors = result.TotalTransformationErrors
+	response.TotalR1Violations = result.TotalR1Violations
 	response.ProcessedBatches = result.ProcessedBatches
 
 	return response, nil

@@ -70,6 +70,7 @@ func ReprocessRawEventsWorkflow(ctx workflow.Context, input models.ReprocessRawE
 		"total_events_dropped", result.TotalEventsDropped,
 		"total_transformation_errors", result.TotalTransformationErrors,
 		"total_events_failed", result.TotalEventsFailed,
+		"total_r1_violations", result.TotalR1Violations,
 		"processed_batches", result.ProcessedBatches)
 
 	result.CompletedAt = workflow.Now(ctx)

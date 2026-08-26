@@ -61,6 +61,7 @@ type ReprocessRawEventsWorkflowResult struct {
 	TotalEventsFailed         int       `json:"total_events_failed"`
 	TotalEventsDropped        int       `json:"total_events_dropped"`        // Events that failed validation
 	TotalTransformationErrors int       `json:"total_transformation_errors"` // Events that errored during transformation
+	TotalR1Violations         int       `json:"total_r1_violations"`         // R1: reprocess changed event_timestamp for an existing event_id (skipped, not published)
 	ProcessedBatches          int       `json:"processed_batches"`
 	CompletedAt               time.Time `json:"completed_at"`
 }
