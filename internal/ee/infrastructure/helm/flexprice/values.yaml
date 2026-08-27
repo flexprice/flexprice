@@ -330,6 +330,70 @@ consumer:
 #         - {name: FLEXPRICE_KAFKA_TOPIC, value: "events"}
 consumers: {}
 
+# Bento collector — OPTIONAL stream collector (Kafka/MSK -> in-cluster Flexprice
+# API). Off by default. Not a Flexprice binary: it runs its own image and its
+# own config, so it does NOT share the app's flexprice.env / configmap. It is
+# config-agnostic — you supply the image, the baked config path, and the source
+# connection details via `env`. The container POSTs to the in-cluster api
+# Service (<release>-api on :80, http) so ingest never leaves the cluster.
+#
+# MSK SCRAM creds are reused from the same Secret the app uses
+# (secrets.existingSecret / <release>-secrets), keys `kafka-sasl-username` and
+# `kafka-sasl-password` — BYOC bootstraps those from AWS Secrets Manager. Point
+# bento at a different Secret with `envSecretName` (mounted via envFrom) if your
+# source creds live elsewhere.
+#
+# IRSA (MSK IAM auth instead of SCRAM): set serviceAccount.perComponent=true and
+# put the role ARN under serviceAccount.components.bento.annotations. SCRAM (the
+# default) needs no IAM role.
+bento:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flexprice/bento-collector
+    tag: ""            # defaults to the chart appVersion when empty
+    digest: ""         # pin by digest (wins over tag) where the registry allows
+    pullPolicy: IfNotPresent
+  # Config baked into the image, selected with `-c`. Pick the pipeline for your
+  # source, e.g. /app/internal/aws-kafka-to-flexprice.yaml (MSK -> Flexprice).
+  configPath: /app/internal/aws-kafka-to-flexprice.yaml
+  # In-cluster Flexprice API target. Defaults point at the api Service; override
+  # only to send events somewhere else.
+  apiHost: ""          # empty = <release>-api (in-cluster Service)
+  apiScheme: http      # http for the in-cluster Service (no TLS hop)
+  # Extra Secret mounted wholesale via envFrom (source creds that are NOT the
+  # reused kafka-sasl-* keys). Empty = not mounted.
+  envSecretName: ""
+  # Free-form plain env for the collector (brokers, topic, consumer group, TLS,
+  # mechanism, batching knobs). Non-secret values only — secrets belong in a
+  # Secret referenced above. See docs/BENTO-DEPLOY-SARVAM.md for the var names.
+  env: {}
+  labels: {}
+  podLabels: {}
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1024Mi"
+  # Bento's HTTP server (health + metrics). 4195 is the bento default.
+  httpPort: 4195
+  terminationGracePeriodSeconds: 60
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Per-component ServiceAccount overrides. The `bento` entry is only consumed
+# when serviceAccount.perComponent=true (MSK IAM / IRSA path); with the default
+# SCRAM auth bento uses the shared ServiceAccount and this is ignored.
+# serviceAccount:
+#   perComponent: true
+#   components:
+#     bento:
+#       annotations:
+#         eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/flexprice-bento
+
 # Temporal Worker deployment configuration
 worker:
   enabled: true
