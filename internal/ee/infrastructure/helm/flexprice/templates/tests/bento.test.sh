@@ -53,6 +53,10 @@ check "bento http port 4195"                      has 'containerPort: 4195'
 check "liveness on /ping"                          has '/ping'
 check "readiness on /ready"                        has '/ready'
 
+echo "== bento default image tag =="
+OUT="$(helm template t "$CHART_DIR" "${BASE[@]}" --set bento.enabled=true 2>/dev/null)"
+check "default image tag is the pinned v1.2.5" has 'ghcr.io/flexprice/bento-collector:v1.2.5'
+
 echo "== bento honors replicaCount + free-form env =="
 OUT="$(helm template t "$CHART_DIR" "${BASE[@]}" \
   --set bento.enabled=true \

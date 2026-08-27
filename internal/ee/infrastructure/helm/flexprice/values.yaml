@@ -351,7 +351,7 @@ bento:
   replicaCount: 1
   image:
     repository: ghcr.io/flexprice/bento-collector
-    tag: ""            # defaults to the chart appVersion when empty
+    tag: "v1.2.5"      # empty falls back to the chart appVersion
     digest: ""         # pin by digest (wins over tag) where the registry allows
     pullPolicy: IfNotPresent
   # Config baked into the image, selected with `-c`. Pick the pipeline for your
