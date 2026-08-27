@@ -28,10 +28,10 @@ jobs:
       # want CI to fail just because the operator isn't a hard dependency.
       SKIP_KINDS: ServiceMonitor,PrometheusRule,ClickHouseInstallation
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: '3.14.0'
 
@@ -88,10 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-template
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: '3.14.0'
 
