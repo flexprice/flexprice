@@ -127,4 +127,3 @@ func (p *samlProvider) GenerateDevToken(tenantID, environmentID, userID, email s
 func (p *samlProvider) GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error) {
 	return p.tokens.GenerateCheckoutToken(extraClaims)
 }
-

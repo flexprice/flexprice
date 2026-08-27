@@ -154,6 +154,10 @@ func (d *dryRunPrices) Create(ctx context.Context, req types.CreatePriceRequest)
 	dryLog(ctx, d.lg, "Prices.Create", "lookup_key", req.LookupKey)
 	return &dtos.CreatePriceResponse{}, nil
 }
+func (d *dryRunPrices) CreateBucketed(ctx context.Context, req types.CreatePriceRequest, bucketSize string) (string, error) {
+	dryLog(ctx, d.lg, "Prices.CreateBucketed", "lookup_key", req.LookupKey, "bucket_size", bucketSize)
+	return "", nil
+}
 func (d *dryRunPrices) Query(ctx context.Context, filter types.PriceFilter) (*dtos.QueryPriceResponse, error) {
 	return d.inner.Query(ctx, filter)
 }

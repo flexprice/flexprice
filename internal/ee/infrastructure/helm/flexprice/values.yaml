@@ -164,6 +164,23 @@ api:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
+  # KEDA ScaledObject combining ALB request-rate (aws-cloudwatch) with cpu/mem
+  # triggers for the api Deployment. Enable EITHER api.autoscaling (HPA) OR
+  # api.keda — never both (render fails). Off by default.
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    pollingInterval: 30
+    cooldownPeriod: 300
+    cpuValue: ""     # target CPU utilization % for the cpu trigger; empty = trigger omitted
+    memValue: ""     # target memory utilization % for the memory trigger; empty = trigger omitted
+    request:
+      enabled: false
+      targetGroup: ""    # ALB target group name/ARN suffix (CloudWatch TargetGroup dimension)
+      targetValue: 1000  # target RequestCountPerTarget
+      awsRegion: ""
+      authenticationRef: {}   # TriggerAuthentication for IRSA (podIdentity: aws) built in infra
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
@@ -222,10 +239,13 @@ consumer:
     enabled: false
     minReplicas: 1
     maxReplicas: 10
-    lagThreshold: 1000          # messages of consumer-group lag per replica
+    lagThreshold: 1000          # default messages of consumer-group lag per replica (used as fallback for topics without their own lagThreshold)
     pollingInterval: 15         # seconds between KEDA polls
     cooldownPeriod: 300         # seconds before scaling down to minReplicas
     offsetResetPolicy: "earliest"
+    topics: []                  # list of {topic, lagThreshold} objects, one kafka trigger each; empty = single trigger on kafkaConfig.topic using lagThreshold above (back-compat)
+    cpuValue: ""                # target CPU utilization % for the cpu trigger; empty = trigger omitted
+    memValue: ""                # target memory utilization % for the memory trigger; empty = trigger omitted
     fallback: {}                # KEDA fallback (e.g. failureThreshold + replicas)
     # Reference to a KEDA TriggerAuthentication when Kafka needs SASL/IAM.
     # Example:
@@ -278,6 +298,38 @@ consumer:
   tolerations: []
   affinity: {}
 
+# Extra consumer Deployments (plural MAP) — OPTIONAL, additive.
+# Each key becomes its own Deployment "<fullname>-<key>" running the SAME image
+# in deployment.mode=consumer, isolated purely by its own extraEnv. Mirrors prod,
+# where flexprice-prod-consumer and flexprice-prod-consumer-bulk are two task defs
+# off one image differing only in FLEXPRICE_*_ENABLED / _TOPIC / _CONSUMER_GROUP.
+#
+# The singular `consumer:` above is unaffected — leave `consumers` empty and
+# nothing extra renders. Per-entry keys: enabled (default true), replicaCount,
+# resources, strategy, nodeSelector, tolerations, affinity, extraEnv (list of
+# {name,value}), preStop {enabled,sleepSeconds}, and keda
+# {enabled,minReplicas,maxReplicas,lagThreshold,topics,authenticationRef,
+#  cpuValue,memValue,...} — same shape as consumer.keda above. resources,
+# strategy and terminationGracePeriodSeconds fall back to the singular consumer's
+# when omitted.
+#
+# Example:
+#   consumers:
+#     consumer-billing:
+#       replicaCount: 2
+#       extraEnv:
+#         - {name: FLEXPRICE_BULK_EVENT_CONSUMPTION_ENABLED, value: "true"}
+#         - {name: FLEXPRICE_BULK_EVENT_CONSUMPTION_TOPIC,   value: "events_billing"}
+#         - {name: FLEXPRICE_BULK_EVENT_CONSUMPTION_CONSUMER_GROUP, value: "billing_consumer"}
+#       keda:
+#         enabled: true
+#         topics:
+#           - {topic: events_billing, lagThreshold: 500}
+#     consumer-events:
+#       extraEnv:
+#         - {name: FLEXPRICE_KAFKA_TOPIC, value: "events"}
+consumers: {}
+
 # Temporal Worker deployment configuration
 worker:
   enabled: true
@@ -301,6 +353,22 @@ worker:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  keda:
+    # Temporal task-queue-depth autoscaling for the worker Deployment.
+    # Requires KEDA >= v2.17 (native temporal scaler) installed cluster-wide.
+    # Enable EITHER worker.autoscaling (HPA) OR worker.keda — never both (render fails). Off by default.
+    enabled: false
+    endpoint: "temporal-frontend.temporal.svc:7233"   # in-cluster Temporal frontend gRPC (host:port); override for Temporal Cloud
+    pollingInterval: 15
+    cooldownPeriod: 300
+    minReplicas: 1
+    maxReplicas: 3
+    targetQueueSize: 100    # pending tasks per replica (1->N scaling ratio)
+    queues: []               # task queues to watch, one temporal trigger each; empty = single trigger on temporalConfig.taskQueue (back-compat)
+    cpuValue: ""             # target CPU utilization % for the cpu trigger; empty = trigger omitted
+    memValue: ""             # target memory utilization % for the memory trigger; empty = trigger omitted
+    fallback: {}
+    authenticationRef: {}   # in-cluster plaintext temporal needs none; set for Temporal Cloud
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
@@ -1358,28 +1426,6 @@ billing:
 app:
   customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
   oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
-
-  # Observability (Sentry error tracking + Pyroscope continuous profiling)
-  observability:
-    # Sentry configuration
-    sentry:
-      enabled: false
-      dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
-      environment: "production"
-      sampleRate: 1.0
-
-    # Pyroscope configuration
-    pyroscope:
-      enabled: false
-      serverAddress: ""
-      applicationName: "flexprice"
-      basicAuthUser: ""
-      basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
-      sampleRate: 100
-      disableGCRuns: false
-      profileTypes:
-        - "cpu"
-        - "memory"
 
   # Email configuration
   email:

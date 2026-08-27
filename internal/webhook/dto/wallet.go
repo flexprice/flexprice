@@ -94,9 +94,13 @@ func NewWalletTransaction(resp *dto.WalletTransactionResponse) *WalletTransactio
 	}
 }
 
-// WalletWebhookPayload represents the detailed payload for wallet webhooks
+// WalletWebhookPayload represents the detailed payload for wallet webhooks.
+// Customer is a minimal top-level reference populated only for events where
+// downstream consumers require customer.external_id (e.g. ongoing_balance
+// alerts); it is omitted for other wallet events to keep the payload lean.
 type WalletWebhookPayload struct {
 	EventType types.WebhookEventName `json:"event_type"`
+	Customer  *Customer              `json:"customer,omitempty"`
 	Wallet    *Wallet                `json:"wallet"`
 	Alert     *WalletAlertInfo       `json:"alert,omitempty"`
 }
@@ -120,9 +124,10 @@ type TransactionUpdatedWebhookPayload struct {
 	UpdatedTransaction *WalletTransaction     `json:"updated_transaction"`
 }
 
-func NewWalletWebhookPayload(wallet *dto.WalletResponse, alert *WalletAlertInfo, eventType types.WebhookEventName) *WalletWebhookPayload {
+func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *Customer, alert *WalletAlertInfo, eventType types.WebhookEventName) *WalletWebhookPayload {
 	return &WalletWebhookPayload{
 		EventType: eventType,
+		Customer:  customer,
 		Wallet:    NewWallet(wallet),
 		Alert:     alert,
 	}

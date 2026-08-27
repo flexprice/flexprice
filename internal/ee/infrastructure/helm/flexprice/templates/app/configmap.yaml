@@ -89,25 +89,7 @@ data:
     
     logging:
       level: {{ .Values.logging.level | quote }}
-    
-    sentry:
-      enabled: {{ .Values.app.observability.sentry.enabled }}
-      environment: {{ .Values.app.observability.sentry.environment | quote }}
-      sample_rate: {{ .Values.app.observability.sentry.sampleRate }}
 
-    pyroscope:
-      enabled: {{ .Values.app.observability.pyroscope.enabled }}
-      server_address: {{ .Values.app.observability.pyroscope.serverAddress | quote }}
-      application_name: {{ .Values.app.observability.pyroscope.applicationName | quote }}
-      sample_rate: {{ .Values.app.observability.pyroscope.sampleRate }}
-      disable_gc_runs: {{ .Values.app.observability.pyroscope.disableGCRuns }}
-    {{- if .Values.app.observability.pyroscope.profileTypes }}
-      profile_types:
-        {{- range .Values.app.observability.pyroscope.profileTypes }}
-        - {{ . | quote }}
-        {{- end }}
-    {{- end }}
-    
     s3:
       enabled: {{ .Values.s3.enabled }}
       region: {{ .Values.s3.region | quote }}

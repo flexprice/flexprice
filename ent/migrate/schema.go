@@ -270,7 +270,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "idempotency_key IS NOT NULL AND checkout_status IN ('initiated', 'pending')",
+					Where: "((idempotency_key IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))",
 				},
 			},
 			{
@@ -283,7 +283,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CheckoutSessionsColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "checkout_status IN ('initiated', 'pending')",
+					Where: "((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text]))",
 				},
 			},
 		},
@@ -949,6 +949,7 @@ var (
 		{Name: "grant_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_computed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "quota_crossed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// EntitlementGrantsTable holds the schema information for the "entitlement_grants" table.
 	EntitlementGrantsTable = &schema.Table{
@@ -1649,6 +1650,7 @@ var (
 		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "filter_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "tier_mode", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "bucket_size", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "tiers", Type: field.TypeJSON, Nullable: true},
 		{Name: "price_unit_tiers", Type: field.TypeJSON, Nullable: true},
 		{Name: "transform_quantity", Type: field.TypeJSON, Nullable: true},
@@ -1672,7 +1674,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_price_units_price_unit_edge",
-				Columns:    []*schema.Column{PricesColumns[41]},
+				Columns:    []*schema.Column{PricesColumns[42]},
 				RefColumns: []*schema.Column{PriceUnitsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1681,7 +1683,7 @@ var (
 			{
 				Name:    "price_tenant_id_environment_id_lookup_key",
 				Unique:  true,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[31]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[32]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text) AND (end_date IS NULL))",
 				},
@@ -1694,17 +1696,17 @@ var (
 			{
 				Name:    "price_start_date_end_date",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[37], PricesColumns[38]},
+				Columns: []*schema.Column{PricesColumns[38], PricesColumns[39]},
 			},
 			{
 				Name:    "price_tenant_id_environment_id_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[39]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[40]},
 			},
 			{
 				Name:    "price_tenant_id_environment_id_entity_id_entity_type_sequence",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[34], PricesColumns[40]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[36], PricesColumns[35], PricesColumns[41]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
@@ -1712,7 +1714,7 @@ var (
 			{
 				Name:    "price_tenant_id_environment_id_entity_id_parent_price_id",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[36]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[36], PricesColumns[37]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((entity_type)::text = 'SUBSCRIPTION'::text))",
 				},
@@ -2540,7 +2542,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[10], UsageRecordsColumns[15], UsageRecordsColumns[16]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 		},

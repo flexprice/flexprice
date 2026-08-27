@@ -14,10 +14,10 @@ import (
 
 func TestJanitor(t *testing.T) {
 	tests := []struct {
-		name          string
-		setup         func(fc *fakeClient, reg e2eprobe.Registry)
-		wantErr       bool
-		wantRemaining int    // expected count of "customer" ephemerals after Run
+		name            string
+		setup           func(fc *fakeClient, reg e2eprobe.Registry)
+		wantErr         bool
+		wantRemaining   int    // expected count of "customer" ephemerals after Run
 		wantRemainingID string // if set, the remaining ephemeral must have this ID
 	}{
 		{
@@ -26,9 +26,9 @@ func TestJanitor(t *testing.T) {
 				reg.RegisterEphemeral("customer", "old", time.Now().Add(-5*time.Hour))
 				reg.RegisterEphemeral("customer", "fresh", time.Now().Add(-30*time.Minute))
 			},
-			wantErr:          false,
-			wantRemaining:    1,
-			wantRemainingID:  "fresh",
+			wantErr:         false,
+			wantRemaining:   1,
+			wantRemainingID: "fresh",
 		},
 		{
 			name: "no-op on empty registry",

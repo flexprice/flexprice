@@ -263,3 +263,95 @@ func TestRequirePermission_AllowsServiceAccountWithRole(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "service account with the right role must be allowed through")
 }
+
+// newPortalSessionTestRouter mirrors the real route shape of
+// GET /v1/customers/portal/:external_id, which is gated on customer:write
+// because minting a portal session is an impersonation-style action.
+func newPortalSessionTestRouter(t *testing.T, rbacSvc *rbac.RBACService, userType string, roles []string) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t))
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		ctx := c.Request.Context()
+		if userType != "" {
+			ctx = context.WithValue(ctx, types.CtxUserType, userType)
+		}
+		if roles != nil {
+			ctx = context.WithValue(ctx, types.CtxRoles, roles)
+		}
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+	r.GET("/customers/portal/:external_id",
+		pm.RequirePermission(types.EntityCustomer, types.ActionWrite),
+		func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"token": "portal-jwt"})
+		})
+
+	return r
+}
+
+// TestPortalSession_DeniesReadOnlyPrincipal pins the authorization-bypass fix:
+// GET /v1/customers/portal/:external_id previously carried no permission
+// middleware, so any authenticated principal in the tenant could mint a portal
+// session for another customer by supplying that customer's external_id. A
+// read-only principal must be refused before any token is signed.
+func TestPortalSession_DeniesReadOnlyPrincipal(t *testing.T) {
+	rbacSvc := realRBACService(t)
+	router := newPortalSessionTestRouter(t, rbacSvc, string(types.UserTypeUser),
+		[]string{types.RoleAllReader.String()})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/customers/portal/victim-ext", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code, "a read-only principal must not mint a portal session")
+
+	var body map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "insufficient permissions", body["message"])
+	assert.NotContains(t, w.Body.String(), "portal-jwt", "no session token may be signed on the denied path")
+}
+
+// TestPortalSession_DeniesServiceAccountWithoutRole covers the API-key caller:
+// an event-scoped key holds neither customer:write nor any wildcard grant.
+func TestPortalSession_DeniesServiceAccountWithoutRole(t *testing.T) {
+	rbacSvc := realRBACService(t)
+	router := newPortalSessionTestRouter(t, rbacSvc, string(types.UserTypeServiceAccount),
+		[]string{"event_ingestor", "event_reader"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/customers/portal/victim-ext", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code, "event-scoped service account must not mint a portal session")
+}
+
+// TestPortalSession_AllowsWriter confirms the legitimate path still works:
+// a principal holding customer write access can still create a portal session.
+func TestPortalSession_AllowsWriter(t *testing.T) {
+	rbacSvc := realRBACService(t)
+	router := newPortalSessionTestRouter(t, rbacSvc, string(types.UserTypeUser),
+		[]string{types.RoleAllWriter.String()})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/customers/portal/victim-ext", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code, "a writer principal must still be able to create a portal session")
+	assert.Contains(t, w.Body.String(), "portal-jwt", "the session token must be returned on the allowed path")
+}
+
+// TestPortalSession_AllowsSuperAdmin confirms a super_admin principal (wildcard
+// grant in the real roles.json) can also create a portal session.
+func TestPortalSession_AllowsSuperAdmin(t *testing.T) {
+	rbacSvc := realRBACService(t)
+	router := newPortalSessionTestRouter(t, rbacSvc, string(types.UserTypeUser),
+		[]string{types.RoleSuperAdmin.String()})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/customers/portal/victim-ext", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code, "a super_admin principal must be able to create a portal session")
+	assert.Contains(t, w.Body.String(), "portal-jwt", "the session token must be returned on the allowed path")
+}

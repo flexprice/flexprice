@@ -25809,6 +25809,7 @@ type EntitlementGrantMutation struct {
 	grant_status          *types.EntitlementGrantStatus
 	last_computed_at      *time.Time
 	quota_crossed_at      *time.Time
+	metadata              *types.Metadata
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*EntitlementGrant, error)
@@ -26704,6 +26705,55 @@ func (m *EntitlementGrantMutation) ResetQuotaCrossedAt() {
 	delete(m.clearedFields, entitlementgrant.FieldQuotaCrossedAt)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *EntitlementGrantMutation) SetMetadata(t types.Metadata) {
+	m.metadata = &t
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *EntitlementGrantMutation) Metadata() (r types.Metadata, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldMetadata(ctx context.Context) (v types.Metadata, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *EntitlementGrantMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[entitlementgrant.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *EntitlementGrantMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, entitlementgrant.FieldMetadata)
+}
+
 // Where appends a list predicates to the EntitlementGrantMutation builder.
 func (m *EntitlementGrantMutation) Where(ps ...predicate.EntitlementGrant) {
 	m.predicates = append(m.predicates, ps...)
@@ -26738,7 +26788,7 @@ func (m *EntitlementGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementGrantMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlementgrant.FieldTenantID)
 	}
@@ -26799,6 +26849,9 @@ func (m *EntitlementGrantMutation) Fields() []string {
 	if m.quota_crossed_at != nil {
 		fields = append(fields, entitlementgrant.FieldQuotaCrossedAt)
 	}
+	if m.metadata != nil {
+		fields = append(fields, entitlementgrant.FieldMetadata)
+	}
 	return fields
 }
 
@@ -26847,6 +26900,8 @@ func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.LastComputedAt()
 	case entitlementgrant.FieldQuotaCrossedAt:
 		return m.QuotaCrossedAt()
+	case entitlementgrant.FieldMetadata:
+		return m.Metadata()
 	}
 	return nil, false
 }
@@ -26896,6 +26951,8 @@ func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (e
 		return m.OldLastComputedAt(ctx)
 	case entitlementgrant.FieldQuotaCrossedAt:
 		return m.OldQuotaCrossedAt(ctx)
+	case entitlementgrant.FieldMetadata:
+		return m.OldMetadata(ctx)
 	}
 	return nil, fmt.Errorf("unknown EntitlementGrant field %s", name)
 }
@@ -27045,6 +27102,13 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetQuotaCrossedAt(v)
 		return nil
+	case entitlementgrant.FieldMetadata:
+		v, ok := value.(types.Metadata)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant field %s", name)
 }
@@ -27090,6 +27154,9 @@ func (m *EntitlementGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlementgrant.FieldQuotaCrossedAt) {
 		fields = append(fields, entitlementgrant.FieldQuotaCrossedAt)
 	}
+	if m.FieldCleared(entitlementgrant.FieldMetadata) {
+		fields = append(fields, entitlementgrant.FieldMetadata)
+	}
 	return fields
 }
 
@@ -27118,6 +27185,9 @@ func (m *EntitlementGrantMutation) ClearField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuotaCrossedAt:
 		m.ClearQuotaCrossedAt()
+		return nil
+	case entitlementgrant.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant nullable field %s", name)
@@ -27186,6 +27256,9 @@ func (m *EntitlementGrantMutation) ResetField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuotaCrossedAt:
 		m.ResetQuotaCrossedAt()
+		return nil
+	case entitlementgrant.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant field %s", name)
@@ -46081,6 +46154,7 @@ type PriceMutation struct {
 	meter_id                  *string
 	filter_values             *map[string][]string
 	tier_mode                 *types.BillingTier
+	bucket_size               *types.WindowSize
 	tiers                     *[]*types.PriceTier
 	appendtiers               []*types.PriceTier
 	price_unit_tiers          *[]*types.PriceTier
@@ -47455,6 +47529,55 @@ func (m *PriceMutation) ResetTierMode() {
 	delete(m.clearedFields, price.FieldTierMode)
 }
 
+// SetBucketSize sets the "bucket_size" field.
+func (m *PriceMutation) SetBucketSize(ts types.WindowSize) {
+	m.bucket_size = &ts
+}
+
+// BucketSize returns the value of the "bucket_size" field in the mutation.
+func (m *PriceMutation) BucketSize() (r types.WindowSize, exists bool) {
+	v := m.bucket_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBucketSize returns the old "bucket_size" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldBucketSize(ctx context.Context) (v types.WindowSize, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBucketSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBucketSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBucketSize: %w", err)
+	}
+	return oldValue.BucketSize, nil
+}
+
+// ClearBucketSize clears the value of the "bucket_size" field.
+func (m *PriceMutation) ClearBucketSize() {
+	m.bucket_size = nil
+	m.clearedFields[price.FieldBucketSize] = struct{}{}
+}
+
+// BucketSizeCleared returns if the "bucket_size" field was cleared in this mutation.
+func (m *PriceMutation) BucketSizeCleared() bool {
+	_, ok := m.clearedFields[price.FieldBucketSize]
+	return ok
+}
+
+// ResetBucketSize resets all changes to the "bucket_size" field.
+func (m *PriceMutation) ResetBucketSize() {
+	m.bucket_size = nil
+	delete(m.clearedFields, price.FieldBucketSize)
+}
+
 // SetTiers sets the "tiers" field.
 func (m *PriceMutation) SetTiers(tt []*types.PriceTier) {
 	m.tiers = &tt
@@ -48233,7 +48356,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -48317,6 +48440,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.tier_mode != nil {
 		fields = append(fields, price.FieldTierMode)
+	}
+	if m.bucket_size != nil {
+		fields = append(fields, price.FieldBucketSize)
 	}
 	if m.tiers != nil {
 		fields = append(fields, price.FieldTiers)
@@ -48421,6 +48547,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.FilterValues()
 	case price.FieldTierMode:
 		return m.TierMode()
+	case price.FieldBucketSize:
+		return m.BucketSize()
 	case price.FieldTiers:
 		return m.Tiers()
 	case price.FieldPriceUnitTiers:
@@ -48512,6 +48640,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFilterValues(ctx)
 	case price.FieldTierMode:
 		return m.OldTierMode(ctx)
+	case price.FieldBucketSize:
+		return m.OldBucketSize(ctx)
 	case price.FieldTiers:
 		return m.OldTiers(ctx)
 	case price.FieldPriceUnitTiers:
@@ -48743,6 +48873,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTierMode(v)
 		return nil
+	case price.FieldBucketSize:
+		v, ok := value.(types.WindowSize)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBucketSize(v)
+		return nil
 	case price.FieldTiers:
 		v, ok := value.([]*types.PriceTier)
 		if !ok {
@@ -48948,6 +49085,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldTierMode) {
 		fields = append(fields, price.FieldTierMode)
 	}
+	if m.FieldCleared(price.FieldBucketSize) {
+		fields = append(fields, price.FieldBucketSize)
+	}
 	if m.FieldCleared(price.FieldTiers) {
 		fields = append(fields, price.FieldTiers)
 	}
@@ -49036,6 +49176,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ClearTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ClearBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ClearTiers()
@@ -49158,6 +49301,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ResetTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ResetBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ResetTiers()

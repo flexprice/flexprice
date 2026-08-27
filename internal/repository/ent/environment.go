@@ -178,8 +178,14 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 	r.logger.Debug(ctx, "updating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
 
 	client := r.client.Writer(ctx)
-	_, err := client.Environment.
-		UpdateOneID(env.ID).
+	// Scoped by tenant so a row belonging to another tenant is not matched and
+	// the write affects nothing rather than succeeding on a foreign record.
+	count, err := client.Environment.
+		Update().
+		Where(
+			entEnvironment.ID(env.ID),
+			entEnvironment.TenantID(types.GetTenantID(ctx)),
+		).
 		SetName(env.Name).
 		SetType(string(env.Type)).
 		SetUpdatedBy(env.UpdatedBy).
@@ -187,15 +193,6 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 
 	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Environment not found").
-				WithReportableDetails(map[string]interface{}{
-					"environment_id": env.ID,
-					"tenant_id":      env.TenantID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
 		return ierr.WithError(err).
 			WithHint("Failed to update environment").
 			WithReportableDetails(map[string]interface{}{
@@ -203,6 +200,16 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 				"tenant_id":      env.TenantID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+
+	if count == 0 {
+		return ierr.NewError("Environment not found").
+			WithHint("Environment not found").
+			WithReportableDetails(map[string]interface{}{
+				"environment_id": env.ID,
+				"tenant_id":      env.TenantID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	r.DeleteCache(ctx, env.ID)

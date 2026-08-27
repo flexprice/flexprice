@@ -40,7 +40,7 @@ func NewTaskService(
 ) TaskService {
 	return &taskService{
 		ServiceParams: serviceParams,
-		fileProcessor: NewFileProcessor(serviceParams.Client, serviceParams.Logger),
+		fileProcessor: NewFileProcessor(serviceParams.Logger),
 	}
 }
 

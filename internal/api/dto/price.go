@@ -15,29 +15,34 @@ import (
 )
 
 type CreatePriceRequest struct {
-	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
-	Currency           string                   `json:"currency" validate:"required,len=3"`
-	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
-	EntityID           string                   `json:"entity_id" validate:"required"`
-	Type               types.PriceType          `json:"type" validate:"required"`
-	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
-	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
-	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
-	MeterID            string                   `json:"meter_id,omitempty"`
-	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
-	LookupKey          string                   `json:"lookup_key,omitempty"`
-	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
-	TrialPeriodDays    int                      `json:"trial_period_days"`
-	Description        string                   `json:"description,omitempty"`
-	Metadata           map[string]string        `json:"metadata,omitempty"`
-	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
-	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
-	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
-	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
-	StartDate          *time.Time               `json:"start_date,omitempty"`
-	EndDate            *time.Time               `json:"end_date,omitempty"`
-	DisplayName        string                   `json:"display_name,omitempty"`
+	Amount             *decimal.Decimal      `json:"amount,omitempty" swaggertype:"string"`
+	Currency           string                `json:"currency" validate:"required,len=3"`
+	EntityType         types.PriceEntityType `json:"entity_type" validate:"required"`
+	EntityID           string                `json:"entity_id" validate:"required"`
+	Type               types.PriceType       `json:"type" validate:"required"`
+	PriceUnitType      types.PriceUnitType   `json:"price_unit_type" validate:"required"`
+	BillingPeriod      types.BillingPeriod   `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                   `json:"billing_period_count" default:"1"`
+	BillingModel       types.BillingModel    `json:"billing_model" validate:"required"`
+	MeterID            string                `json:"meter_id,omitempty"`
+	FilterValues       map[string][]string   `json:"filter_values,omitempty"`
+	LookupKey          string                `json:"lookup_key,omitempty"`
+	InvoiceCadence     types.InvoiceCadence  `json:"invoice_cadence" validate:"required"`
+	TrialPeriodDays    int                   `json:"trial_period_days"`
+	Description        string                `json:"description,omitempty"`
+	Metadata           map[string]string     `json:"metadata,omitempty"`
+	TierMode           types.BillingTier     `json:"tier_mode,omitempty"`
+	// BucketSize windows the meter's aggregation for this price. The meter
+	// aggregates within each window and the window results are summed, so the
+	// billable unit becomes per-window (e.g. seats -> seat-hours). Valid only on
+	// USAGE prices whose meter aggregates MAX or SUM.
+	BucketSize        types.WindowSize         `json:"bucket_size,omitempty"`
+	Tiers             []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig   *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate         *time.Time               `json:"start_date,omitempty"`
+	EndDate           *time.Time               `json:"end_date,omitempty"`
+	DisplayName       string                   `json:"display_name,omitempty"`
 
 	// MinQuantity is the minimum quantity of the price
 	MinQuantity *int64 `json:"min_quantity,omitempty"`
@@ -91,6 +96,11 @@ type UpdatePriceRequest struct {
 
 	// TierMode determines how to calculate the price for a given quantity
 	TierMode types.BillingTier `json:"tier_mode,omitempty"`
+
+	// BucketSize windows the meter's aggregation for this price. Changing it
+	// changes the billable unit, so it versions the price rather than editing
+	// it in place. Send "none" to remove bucketing from the successor.
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
 
 	// Tiers determines the pricing tiers for this line item
 	Tiers []CreatePriceTier `json:"tiers,omitempty"`
@@ -359,6 +369,24 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
+	// 8a. Validate bucketing. Aggregation-type and meter-conflict checks need the
+	// meter and run in the price service; here we only enforce what the request
+	// can answer on its own.
+	if r.BucketSize != "" {
+		if r.Type != types.PRICE_TYPE_USAGE {
+			return ierr.NewError("bucket_size is only valid for USAGE prices").
+				WithHint("Bucketing windows a meter's aggregation, so it only applies to usage-based pricing").
+				WithReportableDetails(map[string]interface{}{
+					"type":        r.Type,
+					"bucket_size": r.BucketSize,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := r.BucketSize.Validate(); err != nil {
+			return err
+		}
+	}
+
 	// 9. Validate billing period requirements
 	// billing_cadence is always RECURRING; billing_period drives one-time vs recurring
 	if r.BillingPeriod == "" {
@@ -457,6 +485,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		Description:        r.Description,
 		Metadata:           metadata,
 		TierMode:           r.TierMode,
+		BucketSize:         lo.Ternary(r.Type == types.PRICE_TYPE_USAGE, r.BucketSize, types.WindowSize("")),
 		TransformQuantity:  transformQuantity,
 		EntityType:         r.EntityType,
 		DisplayName:        r.DisplayName,
@@ -568,11 +597,28 @@ func (r *UpdatePriceRequest) ShouldCreateNewPrice() bool {
 	return r.BillingModel != "" ||
 		r.Amount != nil ||
 		r.TierMode != "" ||
+		r.bucketSizeChanges() ||
 		len(r.Tiers) > 0 ||
 		r.TransformQuantity != nil ||
 		r.PriceUnitAmount != nil ||
 		len(r.PriceUnitTiers) > 0
 }
+
+// bucketSizeChanges reports whether the request actually alters bucketing.
+// Unset means "inherit"; the clear sentinel only changes anything when the
+// price is currently bucketed, so it must not mint a no-op successor (which
+// would bump prices.sequence and flip every subscription on the plan to
+// PlanPricesOutOfSync for a change that alters nothing). The existing value is
+// compared in UpdatePrice, which has the price loaded; here we only reject the
+// obviously-inert case of no field at all.
+func (r *UpdatePriceRequest) bucketSizeChanges() bool {
+	return r.BucketSize != ""
+}
+
+// BucketSizeNone is the sentinel that clears bucketing on the successor price.
+// An empty BucketSize means "inherit from the existing price", so removal needs
+// an explicit value.
+const BucketSizeNone types.WindowSize = "none"
 
 // ToCreatePriceRequest converts the update request to a create request for the new price
 func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) CreatePriceRequest {
@@ -594,6 +640,16 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.MeterID = lo.Ternary(existingPrice.Type == types.PRICE_TYPE_USAGE, existingPrice.MeterID, "")
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 	createReq.DisplayName = existingPrice.DisplayName
+
+	// Bucketing: unset inherits, the sentinel clears, anything else replaces.
+	switch r.BucketSize {
+	case "":
+		createReq.BucketSize = existingPrice.BucketSize
+	case BucketSizeNone:
+		createReq.BucketSize = ""
+	default:
+		createReq.BucketSize = r.BucketSize
+	}
 
 	if existingPrice.MinQuantity != nil {
 		createReq.MinQuantity = lo.ToPtr(existingPrice.MinQuantity.IntPart())

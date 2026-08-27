@@ -169,12 +169,22 @@ func addonAssociationFilterFn(ctx context.Context, aa *addonassociation.AddonAss
 		}
 	}
 
+	if len(f.AddonStatuses) > 0 {
+		if !lo.Contains(f.AddonStatuses, string(aa.AddonStatus)) {
+			return false
+		}
+	}
+
 	if f.StartDate != nil || f.EndDate != nil {
 		// Ensure association is published and active for the given time window
 		if aa.Status != types.StatusPublished {
 			return false
 		}
-		if aa.AddonStatus != types.AddonStatusActive {
+		allowedStatuses := f.AddonStatuses
+		if len(allowedStatuses) == 0 {
+			allowedStatuses = []string{string(types.AddonStatusActive)}
+		}
+		if !lo.Contains(allowedStatuses, string(aa.AddonStatus)) {
 			return false
 		}
 

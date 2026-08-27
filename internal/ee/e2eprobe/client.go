@@ -91,6 +91,10 @@ type PlanOps interface {
 
 type PriceOps interface {
 	Create(ctx context.Context, req types.CreatePriceRequest) (*dtos.CreatePriceResponse, error)
+	// CreateBucketed is Create plus bucket_size, which the published SDK's
+	// CreatePriceRequest does not carry yet. Falls back to the typed Create
+	// when bucketSize is empty.
+	CreateBucketed(ctx context.Context, req types.CreatePriceRequest, bucketSize string) (id string, err error)
 	Query(ctx context.Context, filter types.PriceFilter) (*dtos.QueryPriceResponse, error)
 }
 
@@ -192,7 +196,8 @@ func NewSDKClient(apiHost, apiKey string) Client {
 type sdkClient struct {
 	sdk *flexprice.Flexprice
 	// apiHost + apiKey are captured here so raw-HTTP methods
-	// (EntitlementOps.CreateWithGrant + GetRaw) can bypass the SDK's
+	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
+	// can bypass the SDK's
 	// generated typed request/response for endpoints where the SDK
 	// doesn't cover fields the server accepts. When SDK v2.0.24 is
 	// regenerated with those fields, delete the raw-HTTP methods and
@@ -203,7 +208,7 @@ type sdkClient struct {
 
 func (c *sdkClient) Customers() CustomerOps         { return customerOps{c.sdk.Customers} }
 func (c *sdkClient) Plans() PlanOps                 { return planOps{c.sdk.Plans} }
-func (c *sdkClient) Prices() PriceOps               { return priceOps{c.sdk.Prices} }
+func (c *sdkClient) Prices() PriceOps               { return priceOps{s: c.sdk.Prices, parent: c} }
 func (c *sdkClient) Features() FeatureOps           { return featureOps{c.sdk.Features} }
 func (c *sdkClient) Subscriptions() SubscriptionOps { return subscriptionOps{c.sdk.Subscriptions} }
 func (c *sdkClient) Wallets() WalletOps             { return walletOps{c.sdk.Wallets} }
@@ -215,10 +220,14 @@ func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
 func (c *sdkClient) Entitlements() EntitlementOps {
 	return entitlementOps{s: c.sdk.Entitlements, parent: c}
 }
-func (c *sdkClient) Coupons() CouponOps                       { return couponOps{c.sdk.Coupons} }
-func (c *sdkClient) CouponAssociations() CouponAssociationOps { return couponAssociationOps{c.sdk.CouponAssociations} }
-func (c *sdkClient) TaxRates() TaxRateOps                     { return taxRateOps{c.sdk.TaxRates} }
-func (c *sdkClient) TaxAssociations() TaxAssociationOps       { return taxAssociationOps{c.sdk.TaxAssociations} }
+func (c *sdkClient) Coupons() CouponOps { return couponOps{c.sdk.Coupons} }
+func (c *sdkClient) CouponAssociations() CouponAssociationOps {
+	return couponAssociationOps{c.sdk.CouponAssociations}
+}
+func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
+func (c *sdkClient) TaxAssociations() TaxAssociationOps {
+	return taxAssociationOps{c.sdk.TaxAssociations}
+}
 
 // --- adapters ---
 
@@ -265,11 +274,83 @@ func (o planOps) SyncPrices(ctx context.Context, planID string) (*dtos.SyncPlanP
 	return o.s.SyncPlanPrices(ctx, planID)
 }
 
-type priceOps struct{ s *flexprice.Prices }
+type priceOps struct {
+	s      *flexprice.Prices
+	parent *sdkClient
+}
 
 func (o priceOps) Create(ctx context.Context, req types.CreatePriceRequest) (*dtos.CreatePriceResponse, error) {
 	return o.s.CreatePrice(ctx, req)
 }
+
+// CreateBucketed posts the price with bucket_size attached. The published SDK's
+// CreatePriceRequest has no bucket_size field, so the typed request is marshalled
+// and the key spliced in — same escape hatch as EntitlementOps.CreateWithGrant.
+// Delete this once the SDK is regenerated and set the field on the typed request.
+func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceRequest, bucketSize string) (string, error) {
+	if bucketSize == "" {
+		resp, err := o.Create(ctx, req)
+		if err != nil {
+			return "", err
+		}
+		if resp == nil || resp.PriceResponse == nil || resp.PriceResponse.ID == nil {
+			return "", fmt.Errorf("create price: empty response")
+		}
+		return *resp.PriceResponse.ID, nil
+	}
+
+	// Round-trip the typed request so every field the SDK knows about is carried
+	// verbatim; only bucket_size is added on top.
+	typed, err := json.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("marshal price request: %w", err)
+	}
+	body := map[string]any{}
+	if err := json.Unmarshal(typed, &body); err != nil {
+		return "", fmt.Errorf("unmarshal price request: %w", err)
+	}
+	body["bucket_size"] = bucketSize
+
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal bucketed price request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST",
+		strings.TrimRight(o.parent.apiHost, "/")+"/prices",
+		bytes.NewReader(raw))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("x-api-key", o.parent.apiKey)
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var out struct {
+			ID         string `json:"id"`
+			BucketSize string `json:"bucket_size"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return "", fmt.Errorf("decode response: %w", err)
+		}
+		// Echo check: a server that silently drops bucket_size would otherwise
+		// leave the probe asserting bucketed behaviour against an unbucketed price.
+		if out.BucketSize != bucketSize {
+			return "", fmt.Errorf("create bucketed price: server echoed bucket_size %q, want %q", out.BucketSize, bucketSize)
+		}
+		return out.ID, nil
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+}
+
 func (o priceOps) Query(ctx context.Context, f types.PriceFilter) (*dtos.QueryPriceResponse, error) {
 	return o.s.QueryPrice(ctx, f)
 }

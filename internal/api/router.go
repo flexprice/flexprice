@@ -285,8 +285,11 @@ func NewRouter(
 			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
 			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
 
-			// Customer Dashboard - Session creation (requires tenant auth)
-			customer.GET("/portal/:external_id", handlers.CustomerPortal.CreateSession)
+			// Customer Dashboard - Session creation. Minting a session token is an
+			// impersonation-style action: the token places its bearer inside the
+			// target customer's portal context, so it is gated on customer write
+			// rather than read. A read-only principal must not be able to mint one.
+			customer.GET("/portal/:external_id", write(types.EntityCustomer, types.ActionWrite), handlers.CustomerPortal.CreateSession)
 		}
 
 		plan := v1Private.Group("/plans")

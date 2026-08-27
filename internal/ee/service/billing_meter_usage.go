@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -103,9 +104,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 	}
 	meterIDs = lo.Uniq(meterIDs)
 
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}
@@ -168,17 +167,17 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 			// 1. Bucketed meter cost — use pre-fetched result or fallback to direct query
 			var cachedBucketedUsageResult *events.AggregationResult
-			if (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) && matchingCharge.Price != nil {
+			if matchingCharge.Price != nil && (price.IsBucketedMax(matchingCharge.Price, m) || price.IsBucketedSum(matchingCharge.Price, m)) {
 				usageResult := matchingCharge.BucketedUsageResult
 				if usageResult == nil {
-					usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
+					usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, matchingCharge.Price, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
 					if err != nil {
 						return nil, decimal.Zero, err
 					}
 				}
 				cachedBucketedUsageResult = usageResult
 
-				hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
+				hasGroupBy := price.BucketedGroupBy(matchingCharge.Price, m) != ""
 				cost := calculateBucketedMeterCost(ctx, priceService, matchingCharge.Price, usageResult, hasGroupBy)
 				matchingCharge.SetAmountWithCurrencyPrecision(cost.Amount, matchingCharge.Price.Currency)
 				matchingCharge.SetQuantityDecimal(cost.Quantity)
@@ -221,7 +220,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 				}
 				adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
 				entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
-			case !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil:
+			case !matchingCharge.IsOverage && matchingCharge.Price != nil && !price.IsBucketedMax(matchingCharge.Price, m) && !price.IsBucketedSum(matchingCharge.Price, m):
 				// No grant, no entitlement — recalculate cost for non-bucketed meters.
 				adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
 				matchingCharge.SetAmountWithCurrencyPrecision(adjustedAmount, matchingCharge.Price.Currency)
@@ -398,7 +397,7 @@ func (s *billingService) adjustMeterUsageEntitlement(
 	quantity := matchingCharge.QuantityDecimal()
 
 	// Bucketed meters: simple limit subtraction
-	if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
+	if price.IsBucketedMax(matchingCharge.Price, m) || price.IsBucketedSum(matchingCharge.Price, m) {
 		if ent.UsageLimit != nil {
 			allowed := decimal.NewFromFloat(float64(*ent.UsageLimit))
 			adjusted := decimal.Max(quantity.Sub(allowed), decimal.Zero)
@@ -561,7 +560,7 @@ func (s *billingService) applyMeterUsageCommitment(
 	usageResult := cachedBucketedResult
 	if usageResult == nil {
 		var err error
-		usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
+		usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, matchingCharge.Price, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
@@ -569,7 +568,7 @@ func (s *billingService) applyMeterUsageCommitment(
 
 	bucketedValues, bucketStarts := s.fillBucketedValuesForWindowedCommitment(
 		item, usageResult, linePeriodStart, effectiveEnd,
-		m.Aggregation.BucketSize, &sub.BillingAnchor, m.Aggregation.Type,
+		price.ResolveBucketSize(matchingCharge.Price, m), &sub.BillingAnchor, m.Aggregation.Type,
 	)
 
 	adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, item, bucketedValues, bucketStarts, matchingCharge.Price)
@@ -586,6 +585,7 @@ func (s *billingService) applyMeterUsageCommitment(
 func (s *billingService) queryBucketedMeterUsageDirect(
 	ctx context.Context,
 	m *meter.Meter,
+	p *price.Price,
 	item *subscription.SubscriptionLineItem,
 	sub *subscription.Subscription,
 	extCustomerIDs []string,
@@ -593,8 +593,8 @@ func (s *billingService) queryBucketedMeterUsageDirect(
 	querySource types.UsageSource,
 ) (*events.AggregationResult, error) {
 	aggType := types.AggregationMax
-	groupBy := m.Aggregation.GroupBy
-	if m.IsBucketedSumMeter() {
+	groupBy := price.BucketedGroupBy(p, m)
+	if price.IsBucketedSum(p, m) {
 		aggType = types.AggregationSum
 		groupBy = ""
 	}
@@ -612,7 +612,7 @@ func (s *billingService) queryBucketedMeterUsageDirect(
 		StartTime:           item.GetPeriodStart(periodStart),
 		EndTime:             item.GetPeriodEnd(periodEnd),
 		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
+		WindowSize:          price.ResolveBucketSize(p, m),
 		BillingAnchor:       &sub.BillingAnchor,
 		GroupBy:             paramsGroupBy,
 		UseFinal:            querySource.UseFinal(),

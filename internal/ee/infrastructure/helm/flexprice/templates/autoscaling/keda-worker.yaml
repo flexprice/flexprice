@@ -1,0 +1,56 @@
+{{- if and .Values.worker.enabled .Values.worker.keda.enabled -}}
+{{- if .Values.worker.autoscaling.enabled }}
+{{- fail "worker: enable either worker.autoscaling (HPA) or worker.keda (KEDA), not both — they fight over the same Deployment" }}
+{{- end }}
+{{- /*
+  KEDA ScaledObject for the worker Deployment. Scales on Temporal task-queue
+  backlog via KEDA's native temporal scaler (v2.17+). No Prometheus needed —
+  the scaler queries the Temporal frontend gRPC directly. In-cluster Temporal
+  is plaintext (no apiKey/mTLS; those are Temporal-Cloud only).
+*/}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "flexprice.fullname" . }}-worker
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "worker") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "flexprice.fullname" . }}-worker
+  pollingInterval: {{ .Values.worker.keda.pollingInterval | default 15 }}
+  cooldownPeriod: {{ .Values.worker.keda.cooldownPeriod | default 300 }}
+  minReplicaCount: {{ .Values.worker.keda.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.worker.keda.maxReplicas | default 3 }}
+  {{- with .Values.worker.keda.fallback }}
+  fallback:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  triggers:
+    {{- $queues := .Values.worker.keda.queues | default (list (.Values.temporalConfig.taskQueue | default "billing-task-queue")) }}
+    {{- range $q := $queues }}
+    - type: temporal
+      metadata:
+        endpoint: {{ $.Values.worker.keda.endpoint | default "temporal-frontend.temporal.svc:7233" | quote }}
+        namespace: {{ $.Values.temporalConfig.namespace | quote }}
+        taskQueue: {{ $q | quote }}
+        targetQueueSize: {{ $.Values.worker.keda.targetQueueSize | default 100 | quote }}
+      {{- with $.Values.worker.keda.authenticationRef }}
+      authenticationRef:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- if $.Values.worker.keda.cpuValue }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ $.Values.worker.keda.cpuValue | quote }}
+    {{- end }}
+    {{- if $.Values.worker.keda.memValue }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: {{ $.Values.worker.keda.memValue | quote }}
+    {{- end }}
+{{- end }}

@@ -309,6 +309,7 @@ func main() {
 			startServer,
 		),
 	)
+	opts = append(opts, fx.StartTimeout(3*time.Minute))
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -507,17 +508,8 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
-	// Initialize the global Temporal service instance with tracing
 	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, tracingSvc, cfg)
-
-	// Get the global instance and start it
-	service := temporalservice.GetGlobalTemporalService()
-	if err := service.Start(context.Background()); err != nil {
-		log.Error(context.Background(), "Failed to start global Temporal service", "error", err)
-		return nil
-	}
-
-	return service
+	return temporalservice.GetGlobalTemporalService()
 }
 
 func provideWorkflowQuerier(temporalClient client.TemporalClient, log *logger.Logger) *queries.WorkflowQuerier {
@@ -595,7 +587,19 @@ func startTemporalWorker(
 	webhookService *webhook.WebhookService,
 ) {
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(ctx context.Context) (err error) {
+			if err = temporalService.Start(ctx); err != nil {
+				return fmt.Errorf("start temporal service: %w", err)
+			}
+			defer func() {
+				if err == nil {
+					return
+				}
+				if stopErr := temporalService.Stop(ctx); stopErr != nil {
+					log.Error(ctx, "Failed to stop Temporal service after startup failure", "error", stopErr)
+				}
+			}()
+
 			if err := temporalservice.EnsureSchedules(ctx, temporalClient, log); err != nil {
 				return fmt.Errorf("ensure temporal server schedules: %w", err)
 			}
@@ -615,7 +619,7 @@ func startTemporalWorker(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			return temporalService.StopAllWorkers()
+			return temporalService.Stop(ctx)
 		},
 	})
 }

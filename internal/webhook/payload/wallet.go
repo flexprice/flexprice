@@ -64,7 +64,20 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 		}
 	}
 
-	payload := webhookDto.NewWalletWebhookPayload(walletData, parsedPayload.Alert, eventType)
+	// Only ongoing_balance drop/recover alerts require a top-level customer.external_id
+	// so downstream consumers can route without walking into wallet fields.
+	var customerDto *webhookDto.Customer
+	if walletData != nil && walletData.CustomerID != "" {
+		customerResp, err := b.services.CustomerService.GetCustomer(ctx, walletData.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+		if customerResp != nil && customerResp.ExternalID != "" {
+			customerDto = &webhookDto.Customer{ExternalID: customerResp.ExternalID}
+		}
+	}
+
+	payload := webhookDto.NewWalletWebhookPayload(walletData, customerDto, parsedPayload.Alert, eventType)
 
 	return json.Marshal(payload)
 }

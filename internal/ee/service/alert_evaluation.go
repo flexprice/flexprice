@@ -293,6 +293,16 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
+		// A window dated ahead of the change that opened it — a future-dated addon
+		// attach — has nothing to measure yet. Snapshotting it would stamp
+		// last_computed_at before valid_from, which reads as "never evaluated" to a
+		// later close and would drop the segment instead of splitting it.
+		if g.ValidFrom.After(at) {
+			s.Logger.Debug(ctx, "entitlement grant evaluation: window has not started",
+				"grant_id", g.ID, "valid_from", g.ValidFrom)
+			continue
+		}
+
 		extIDs, err := meta.externalIDs(ctx, sub)
 		if err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",

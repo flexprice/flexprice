@@ -105,15 +105,22 @@ func NewSubscriptionFromV2(resp *dto.SubscriptionResponseV2) *Subscription {
 	}
 }
 
-// SubscriptionWebhookPayload represents the detailed payload for subscription payment webhooks
+// SubscriptionWebhookPayload represents the detailed payload for subscription payment webhooks.
+// Customer is a minimal top-level reference (external_id only) for downstream routing;
+// full customer detail remains under Subscription.Customer as a fallback.
 type SubscriptionWebhookPayload struct {
 	EventType    types.WebhookEventName `json:"event_type"`
+	Customer     *Customer              `json:"customer,omitempty"`
 	Subscription *Subscription          `json:"subscription"`
 }
 
 func NewSubscriptionWebhookPayload(subscription *dto.SubscriptionResponse, eventType types.WebhookEventName) *SubscriptionWebhookPayload {
-	return &SubscriptionWebhookPayload{
+	payload := &SubscriptionWebhookPayload{
 		EventType:    eventType,
 		Subscription: NewSubscription(subscription),
 	}
+	if subscription != nil && subscription.Customer != nil {
+		payload.Customer = &Customer{ExternalID: subscription.Customer.ExternalID}
+	}
+	return payload
 }

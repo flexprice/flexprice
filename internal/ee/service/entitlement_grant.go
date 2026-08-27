@@ -30,6 +30,9 @@ type EntitlementGrantService interface {
 	// The returned meta carries the lookups (features, meters, external ids)
 	// built during the pass so the evaluator can reuse them.
 	EnsureGrantsForSubscriptions(ctx context.Context, cust *customer.Customer, subs []*subscription.Subscription, at time.Time) ([]*entitlementgrant.EntitlementGrant, *grantEvalMeta, error)
+
+	CloseEntitlementGrants(ctx context.Context, grants []*entitlementgrant.EntitlementGrant, closeAt time.Time) (map[string]*entitlementgrant.EntitlementGrant, error)
+	OpenFeatureBasedEntitlementGrants(ctx context.Context, reqs []OpenFeatureBasedEntitlementGrantsRequest) ([]*entitlementgrant.EntitlementGrant, error)
 }
 
 type entitlementGrantService struct {
@@ -42,6 +45,172 @@ func NewEntitlementGrantService(params ServiceParams) EntitlementGrantService {
 
 func (s *entitlementGrantService) GetGrant(ctx context.Context, id string) (*entitlementgrant.EntitlementGrant, error) {
 	return s.EntitlementGrantRepo.Get(ctx, id)
+}
+
+type OpenFeatureBasedEntitlementGrantsRequest struct {
+	FeatureID   string
+	Closed      *entitlementgrant.EntitlementGrant // If any for the same feature
+	New         *entitlementgrant.EntitlementGrant
+	ExistingECs []*entitlement.Entitlement
+	IncomingECs []*entitlement.Entitlement
+}
+
+func (s *entitlementGrantService) CloseEntitlementGrants(
+	ctx context.Context,
+	grants []*entitlementgrant.EntitlementGrant,
+	closeAt time.Time,
+) (map[string]*entitlementgrant.EntitlementGrant, error) {
+	closed := make(map[string]*entitlementgrant.EntitlementGrant, len(grants))
+
+	for _, g := range grants {
+		if g == nil {
+			continue
+		}
+
+		lastComputed := lo.FromPtr(g.LastComputedAt)
+
+		// Never evaluated, so the window has no measurable life. Closing it would leave both
+		// windows permitting the same quota, because the usage it really saw was never
+		// measured into the successor's balance. Remove it instead and let the successor
+		// span the original window, where every event still counts against one pool.
+		// Keyed on last_computed_at rather than the close boundary: a window nothing has
+		// measured cannot be split at any instant, however the caller dates the change.
+		if !lastComputed.After(g.ValidFrom) {
+			if err := s.EntitlementGrantRepo.Delete(ctx, g.ID); err != nil {
+				return nil, err
+			}
+
+			s.Logger.Info(ctx, "removed un-evaluated entitlement grant window",
+				"grant_id", g.ID,
+				"valid_from", g.ValidFrom)
+
+			// Carries a zero-length window on purpose: valid_to is where the successor
+			// starts, and for a removed row that is its own valid_from. Never persisted.
+			closed[g.ID] = entitlementgrant.NewEntitlementGrantBuilder(g).
+				WithWindow(g.ValidFrom, g.ValidFrom).
+				Build()
+			continue
+		}
+
+		// The change owns the boundary, so a future-dated one hands the successor its quota
+		// when the change is actually live rather than now.
+		boundary := earliestOf(latestOf(closeAt, lastComputed), g.ValidTo)
+
+		// Leaves usage, grant_status and last_computed_at alone: last_computed_at < valid_to
+		// is what keeps a closed row in the evaluator's unfinalized set for its final
+		// refresh, so tail events still reach the billing reads.
+		if err := s.EntitlementGrantRepo.CloseWindow(ctx, g.ID, boundary); err != nil {
+			return nil, err
+		}
+
+		s.Logger.Info(ctx, "closed entitlement grant window",
+			"grant_id", g.ID,
+			"closed_at", boundary,
+			"quota", g.Quota.String(),
+			"usage", g.Usage.String())
+
+		closed[g.ID] = entitlementgrant.NewEntitlementGrantBuilder(g).
+			WithWindow(g.ValidFrom, boundary).
+			Build()
+	}
+
+	return closed, nil
+}
+
+func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
+	ctx context.Context,
+	reqs []OpenFeatureBasedEntitlementGrantsRequest,
+) ([]*entitlementgrant.EntitlementGrant, error) {
+	opened := make([]*entitlementgrant.EntitlementGrant, 0, len(reqs))
+
+	for _, req := range reqs {
+		featureECs := append(append([]*entitlement.Entitlement{}, req.ExistingECs...), req.IncomingECs...)
+		if req.New == nil || len(featureECs) == 0 || hasParallelECs(featureECs) {
+			s.Logger.Info(ctx, "skipping entitlement grant open",
+				"feature_id", req.FeatureID)
+			continue
+		}
+
+		if req.Closed == nil && !req.New.Quota.IsPositive() {
+			s.Logger.Info(ctx, "skipping entitlement grant open; resulting quota is not positive",
+				"feature_id", req.FeatureID,
+				"quota", req.New.Quota.String())
+			continue
+		}
+
+		// The predecessor holds the slot for the rest of the cycle; only a cycle with no row
+		// re-derives it, and then from the same lowest-id tie-break the tick would use.
+		slotECID := grantCandidatesForFeature(featureECs)[0].ec.ID
+		validFrom := req.New.ValidFrom
+		quota := req.New.Quota
+
+		if req.Closed != nil {
+			if !validFrom.IsZero() && !validFrom.Equal(req.Closed.ValidTo) {
+				return nil, ierr.NewError("successor window does not tile with the closed grant").
+					WithHint("A grant segment must start where the window it succeeds ended").
+					WithReportableDetails(map[string]interface{}{
+						"feature_id":       req.FeatureID,
+						"closed_grant_id":  req.Closed.ID,
+						"closed_valid_to":  req.Closed.ValidTo,
+						"opening_valid_at": validFrom,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			quota = req.Closed.Remaining().Add(req.New.Quota)
+		} else {
+			for _, ec := range req.ExistingECs {
+				quota = quota.Add(lo.FromPtr(ec.GrantQuota))
+			}
+		}
+
+		if !validFrom.Before(req.New.ValidTo) {
+			s.Logger.Info(ctx, "skipping entitlement grant open; no window left in the cycle",
+				"feature_id", req.FeatureID,
+				"valid_from", validFrom,
+				"valid_to", req.New.ValidTo)
+			continue
+		}
+
+		if !quota.IsPositive() {
+			s.Logger.Info(ctx, "skipping entitlement grant open; resulting quota is not positive",
+				"feature_id", req.FeatureID,
+				"quota", quota.String())
+			continue
+		}
+
+		grant := entitlementgrant.NewEntitlementGrantBuilder(req.New).
+			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT_GRANT)).
+			WithEntitlementConfigID(slotECID).
+			WithQuota(quota).
+			WithWindow(validFrom, req.New.ValidTo).
+			WithGrantStatus(types.EntitlementGrantStatusActive).
+			WithUsage(decimal.Zero).
+			WithLastComputedAt(nil).
+			WithQuotaCrossedAt(nil).
+			WithEnvironmentID(types.GetEnvironmentID(ctx)).
+			WithBaseModel(types.GetDefaultBaseModel(ctx)).
+			Build()
+		if err := grant.Validate(); err != nil {
+			return nil, err
+		}
+
+		created, err := s.EntitlementGrantRepo.Create(ctx, grant)
+		if err != nil {
+			return nil, err
+		}
+
+		s.Logger.Info(ctx, "opened entitlement grant segment",
+			"grant_id", created.ID,
+			"feature_id", req.FeatureID,
+			"valid_from", validFrom,
+			"quota", quota.String(),
+			"delta", req.New.Quota.String())
+
+		opened = append(opened, created)
+	}
+
+	return opened, nil
 }
 
 // grantEvalMeta is the per-pass lookup bundle shared by grant opening and the
@@ -217,9 +386,7 @@ func (s *entitlementGrantService) buildGrantEvalMeta(
 		return f.MeterID, f.MeterID != ""
 	}))
 	if len(meterIDs) > 0 {
-		meterFilter := types.NewNoLimitMeterFilter()
-		meterFilter.MeterIDs = meterIDs
-		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -251,6 +418,12 @@ func (s *entitlementGrantService) listActiveSubscriptions(
 type grantCandidate struct {
 	ec    *entitlement.Entitlement
 	quota decimal.Decimal
+
+	// startDate is the earliest instant any contributing EC was live from — an
+	// addon's association start, typically. Zero when every contributor runs for
+	// the whole cycle. The window cannot open before it, or a slot introduced
+	// mid-cycle would backdate to the cycle start and eat usage that predates it.
+	startDate time.Time
 }
 
 // openMissingGrants opens missing grants per feature: parallel = one grant per
@@ -316,24 +489,35 @@ func (s *entitlementGrantService) eligibleGrantConfigsByFeature(
 // grantCandidatesForFeature: parallel → one candidate per EC; additive → one
 // candidate on the primary (lowest-ID) EC with the summed quota.
 func grantCandidatesForFeature(featureECs []*entitlement.Entitlement) []grantCandidate {
-	parallel := lo.SomeBy(featureECs, func(ec *entitlement.Entitlement) bool {
-		return ec.AggregationMode == types.EntitlementAggregationModeParallel
-	})
-	if parallel {
+	if hasParallelECs(featureECs) {
 		return lo.Map(featureECs, func(ec *entitlement.Entitlement, _ int) grantCandidate {
-			return grantCandidate{ec: ec, quota: lo.FromPtr(ec.GrantQuota)}
+			return grantCandidate{
+				ec:        ec,
+				quota:     lo.FromPtr(ec.GrantQuota),
+				startDate: lo.FromPtr(ec.StartDate),
+			}
 		})
 	}
 
 	primary := featureECs[0]
 	total := decimal.Zero
+
+	// Earliest, not latest: the pool opens as soon as any contributor is live, so a
+	// mid-cycle addition never pushes back quota that was already running.
+	earliest := lo.FromPtr(featureECs[0].StartDate)
+
 	for _, ec := range featureECs {
 		if ec.ID < primary.ID {
 			primary = ec
 		}
 		total = total.Add(lo.FromPtr(ec.GrantQuota))
+
+		if start := lo.FromPtr(ec.StartDate); start.Before(earliest) {
+			earliest = start
+		}
 	}
-	return []grantCandidate{{ec: primary, quota: total}}
+
+	return []grantCandidate{{ec: primary, quota: total, startDate: earliest}}
 }
 
 // openIfSlotFree opens grants on the candidate's slot until it is caught up:
@@ -360,7 +544,7 @@ func (s *entitlementGrantService) openIfSlotFree(
 			return opened, nil
 		}
 
-		g, err := s.openOneGrant(ctx, sub, candidate.ec, lastEnd, meta, at, candidate.quota)
+		g, err := s.openOneGrant(ctx, sub, candidate, lastEnd, meta, at)
 		if err != nil {
 			return opened, err
 		}
@@ -378,18 +562,20 @@ func (s *entitlementGrantService) openIfSlotFree(
 func (s *entitlementGrantService) openOneGrant(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	ec *entitlement.Entitlement,
+	candidate grantCandidate,
 	lastWindowEnd time.Time,
 	meta *grantEvalMeta,
 	at time.Time,
-	quota decimal.Decimal,
 ) (*entitlementgrant.EntitlementGrant, error) {
+	ec := candidate.ec
+	quota := candidate.quota
+
 	dur, err := ec.GrantDuration()
 	if err != nil {
 		return nil, err
 	}
 
-	validFrom, validTo, ok, err := s.computeGrantWindow(ctx, ec, sub, meta, lastWindowEnd, at, dur)
+	validFrom, validTo, ok, err := s.computeGrantWindow(ctx, candidate, sub, meta, lastWindowEnd, at, dur)
 	if err != nil {
 		return nil, err
 	}
@@ -436,16 +622,20 @@ func (s *entitlementGrantService) openOneGrant(
 // coverage beats window-length aesthetics.
 func (s *entitlementGrantService) computeGrantWindow(
 	ctx context.Context,
-	ec *entitlement.Entitlement,
+	candidate grantCandidate,
 	sub *subscription.Subscription,
 	meta *grantEvalMeta,
 	lastWindowEnd time.Time,
 	at time.Time,
 	dur time.Duration,
 ) (time.Time, time.Time, bool, error) {
+	ec := candidate.ec
 	cycleStart := sub.CurrentPeriodStart
 	cycleEnd := sub.CurrentPeriodEnd
-	coveredUntil := latestOf(lastWindowEnd, cycleStart)
+
+	// A slot whose configs only became live mid-cycle starts there, not at the cycle
+	// start: backdating it would hand the window usage recorded before it existed.
+	coveredUntil := latestOf(latestOf(lastWindowEnd, cycleStart), candidate.startDate)
 	searchUntil := earliestOf(at, cycleEnd)
 
 	s.Logger.Debug(ctx, "computing grant window",
@@ -621,6 +811,11 @@ func (s *entitlementService) validateEntitlementGrantShape(
 			Mark(ierr.ErrValidation)
 	}
 
+	// Same rule for the price-level bucketing source.
+	if err := s.validateEntitlementAgainstBucketedPrices(ctx, m, true); err != nil {
+		return err
+	}
+
 	if err := s.validateGrantSiblingCoherence(ctx, e); err != nil {
 		return err
 	}
@@ -686,6 +881,7 @@ func (s *entitlementService) validateGrantSiblingCoherence(ctx context.Context, 
 		}
 		if sib.GrantMeasure != e.GrantMeasure {
 			return ierr.NewError("grant_measure must match the other entitlements on this feature").
+				WithHint("A feature's entitlements all meter the same thing: either quantity or amount").
 				WithReportableDetails(map[string]interface{}{
 					"feature_id":       e.FeatureID,
 					"entitlement_id":   sib.ID,
@@ -708,6 +904,12 @@ func (s *entitlementService) validateGrantSiblingCoherence(ctx context.Context, 
 		}
 	}
 	return nil
+}
+
+func hasParallelECs(featureECs []*entitlement.Entitlement) bool {
+	return lo.SomeBy(featureECs, func(ec *entitlement.Entitlement) bool {
+		return defaultedMode(ec.AggregationMode) == types.EntitlementAggregationModeParallel
+	})
 }
 
 func defaultedMode(m types.EntitlementAggregationMode) types.EntitlementAggregationMode {

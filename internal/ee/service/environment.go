@@ -170,6 +170,19 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 		return nil, err
 	}
 
+	// Authorise the environment named in the path, not the one the caller
+	// happens to have selected: the two differ whenever the request omits
+	// X-Environment-ID, and only this check covers the target being written.
+	userID := types.GetUserID(ctx)
+	tenantID := types.GetTenantID(ctx)
+	if userID != "" && tenantID != "" {
+		if !s.envAccessService.HasEnvironmentAccess(ctx, userID, tenantID, id) {
+			return nil, ierr.NewErrorf("access denied to environment %s", id).
+				WithHint("You don't have access to this environment").
+				Mark(ierr.ErrPermissionDenied)
+		}
+	}
+
 	if req.Name != "" {
 		env.Name = req.Name
 	}
@@ -179,6 +192,7 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 			Mark(ierr.ErrValidation)
 	}
 	env.UpdatedAt = time.Now()
+	env.UpdatedBy = userID
 
 	if err := s.repo.Update(ctx, env); err != nil {
 		return nil, err

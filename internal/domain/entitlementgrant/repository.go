@@ -45,4 +45,11 @@ type Repository interface {
 	// (config, customer, subscription) slot, any status, or (nil, nil) if none.
 	// Used only to re-read the winner after losing the INSERT race.
 	FindLastBySlot(ctx context.Context, entitlementConfigID, customerID, subscriptionID string) (*EntitlementGrant, error)
+
+	// CloseWindow shortens a live grant's window to validTo. Grants are immutable
+	// facts, so a mid-cycle entitlement change ends the current window here and
+	// opens a successor beside it rather than editing quota in place. Guarded so a
+	// window can only ever shrink, and it leaves usage, grant_status and
+	// last_computed_at untouched — the closed row still owes its final refresh.
+	CloseWindow(ctx context.Context, id string, validTo time.Time) error
 }

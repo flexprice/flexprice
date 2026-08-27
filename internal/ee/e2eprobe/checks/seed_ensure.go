@@ -168,16 +168,29 @@ type featureSpec struct {
 	displayName string
 	aggType     types.AggregationType
 	field       *string
-	bucketSize  *types.WindowSize
-	multiplier  *string
-	expression  *string
-	filters     []types.MeterFilter
-	aggLabel    string
+	// bucketSize puts the bucket on the METER — the deprecated, grandfathered
+	// path. Mutually exclusive with priceBucketSize: the server rejects a
+	// price-level bucket when the meter already defines one.
+	bucketSize *types.WindowSize
+	// priceBucketSize puts the bucket on the PRICE — the supported path. The
+	// meter is created unbucketed and windowing is resolved from the price.
+	priceBucketSize *types.WindowSize
+	multiplier      *string
+	expression      *string
+	filters         []types.MeterFilter
+	aggLabel        string
 	// noEntitlement keeps ensurePlanEntitlements from provisioning the
 	// standard 100-unit monthly entitlement on this feature. Probes that
 	// assert exact billed amounts need a meter whose usage is never
 	// partially absorbed by an entitlement allowance.
 	noEntitlement bool
+}
+
+// isBucketed reports whether the spec is windowed at all, from either source.
+// Everything gated on bucketing — entitlement skips, BucketedFeatureIDs — cares
+// about the resolved answer, not where it came from.
+func (f featureSpec) isBucketed() bool {
+	return f.bucketSize != nil || f.priceBucketSize != nil
 }
 
 var seedFeatureSpecs = func() []featureSpec {
@@ -243,6 +256,25 @@ var seedFeatureSpecs = func() []featureSpec {
 			field: strPtr("amount"), bucketSize: bucketSizePtr(types.WindowSizeDay), aggLabel: "max_day",
 		},
 		{
+			// Bucket lives on the PRICE, meter is unbucketed. Pairs with
+			// e2eprobe_max_feature (same MAX aggregation, bucket on the meter) so
+			// both branches of price.ResolveBucketSize are exercised against
+			// identical event shapes.
+			lookupKey: "e2eprobe_max_price_hour_feature", eventName: "e2eprobe_max_price_hour",
+			displayName: "E2EProbe Max (price bucket)", aggType: types.AggregationTypeMax,
+			field: strPtr("amount"), priceBucketSize: bucketSizePtr(types.WindowSizeHour),
+			aggLabel: "max_price_hour",
+		},
+		{
+			// SUM counterpart. Bucketing does not change a SUM total, so this is
+			// the spec that proves price-level bucketing leaves SUM quantities
+			// untouched while still driving per-window pricing.
+			lookupKey: "e2eprobe_sum_price_hour_feature", eventName: "e2eprobe_sum_price_hour",
+			displayName: "E2EProbe Sum (price bucket)", aggType: types.AggregationTypeSum,
+			field: strPtr("amount"), priceBucketSize: bucketSizePtr(types.WindowSizeHour),
+			aggLabel: "sum_price_hour",
+		},
+		{
 			// Reserved for CommitmentTrueUpProbe: entitlement-free so the
 			// billed amount equals units x price with nothing absorbed by an
 			// allowance. See CommitmentEventName.
@@ -281,7 +313,7 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 			// Already exists — record IDs.
 			if existing.ID != nil {
 				out.FeatureIDs = append(out.FeatureIDs, *existing.ID)
-				if spec.bucketSize != nil {
+				if spec.isBucketed() {
 					if out.BucketedFeatureIDs == nil {
 						out.BucketedFeatureIDs = map[string]string{}
 					}
@@ -306,6 +338,9 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		if spec.field != nil {
 			meterReq.Aggregation.Field = spec.field
 		}
+		// Deprecated but still honoured: meters that set bucket_size keep bucketing
+		// exactly as before. Kept in the seed on purpose — it is the grandfathered
+		// path price.ResolveBucketSize falls back to, so it needs coverage.
 		if spec.bucketSize != nil {
 			meterReq.Aggregation.BucketSize = spec.bucketSize
 		}
@@ -336,7 +371,7 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		feat := resp.FeatureResponse
 		if feat.ID != nil {
 			out.FeatureIDs = append(out.FeatureIDs, *feat.ID)
-			if spec.bucketSize != nil {
+			if spec.isBucketed() {
 				if out.BucketedFeatureIDs == nil {
 					out.BucketedFeatureIDs = map[string]string{}
 				}
@@ -494,7 +529,7 @@ func isAlreadyExists(err error) bool {
 var bucketedFeatureLookupKeys = func() map[string]bool {
 	m := map[string]bool{}
 	for _, spec := range seedFeatureSpecs {
-		if spec.bucketSize != nil {
+		if spec.isBucketed() {
 			m[spec.lookupKey] = true
 		}
 	}
@@ -807,8 +842,14 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 			DisplayName:        strPtr("E2EProbe " + spec.displayName + " Usage"),
 			LookupKey:          strPtr(usageKey),
 		}
-		if _, err := s.client.Prices().Create(ctx, usageReq); err != nil {
-			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "event_name": spec.eventName}, "create usage price for %s: %w", spec.eventName, err)
+		// CreateBucketed falls through to the typed Create when the spec has no
+		// price-level bucket, so unbucketed specs are unaffected.
+		var priceBucket string
+		if spec.priceBucketSize != nil {
+			priceBucket = string(*spec.priceBucketSize)
+		}
+		if _, err := s.client.Prices().CreateBucketed(ctx, usageReq, priceBucket); err != nil {
+			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "event_name": spec.eventName, "price_bucket_size": priceBucket}, "create usage price for %s: %w", spec.eventName, err)
 		}
 	}
 	return nil

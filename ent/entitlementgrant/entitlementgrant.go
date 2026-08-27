@@ -55,6 +55,8 @@ const (
 	FieldLastComputedAt = "last_computed_at"
 	// FieldQuotaCrossedAt holds the string denoting the quota_crossed_at field in the database.
 	FieldQuotaCrossedAt = "quota_crossed_at"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// Table holds the table name of the entitlementgrant in the database.
 	Table = "entitlement_grants"
 )
@@ -82,6 +84,7 @@ var Columns = []string{
 	FieldGrantStatus,
 	FieldLastComputedAt,
 	FieldQuotaCrossedAt,
+	FieldMetadata,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -123,6 +126,8 @@ var (
 	DefaultUsage decimal.Decimal
 	// DefaultGrantStatus holds the default value on creation for the "grant_status" field.
 	DefaultGrantStatus types.EntitlementGrantStatus
+	// DefaultMetadata holds the default value on creation for the "metadata" field.
+	DefaultMetadata types.Metadata
 )
 
 // OrderOption defines the ordering options for the EntitlementGrant queries.
@@ -231,4 +236,9 @@ func ByLastComputedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByQuotaCrossedAt orders the results by the quota_crossed_at field.
 func ByQuotaCrossedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuotaCrossedAt, opts...).ToFunc()
+}
+
+// ByMetadata orders the results by the metadata field.
+func ByMetadata(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMetadata, opts...).ToFunc()
 }

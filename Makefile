@@ -195,15 +195,15 @@ endef
 
 # Run all tests
 test: install-typst
-	$(call run-go-test,-v -race ./internal/...)
+	$(call run-go-test,-v -race ./internal/... ./cmd/server)
 
 # Run tests with verbose output
 test-verbose:
-	$(call run-go-test,-v ./internal/...)
+	$(call run-go-test,-v ./internal/... ./cmd/server)
 
 # Run tests with coverage report
 test-coverage:
-	go test -coverprofile=coverage.out ./internal/...
+	go test -coverprofile=coverage.out ./internal/... ./cmd/server
 	go tool cover -html=coverage.out -o coverage.html
 
 # Database related targets
@@ -229,6 +229,66 @@ migrate-ent-dry-run:
 	@echo "Generating SQL migration statements (dry run)..."
 	@go run ./cmd/migrate postgres --dry-run --timeout 300
 	@echo "SQL migration statements generated"
+
+# ── Versioned migrations (dbmate) ────────────────────────────────────────────
+# Local scratch Postgres used by the checks below:
+#   docker run -d --name mig-pg -e POSTGRES_USER=flexprice \
+#     -e POSTGRES_PASSWORD=flexprice123 -e POSTGRES_DB=postgres \
+#     -p 5440:5432 postgres:16
+MIGRATIONS_PG  ?= migrations/versioned/postgres
+MIGRATIONS_CH  ?= migrations/versioned/clickhouse
+
+.PHONY: migrate-up
+migrate-up:
+	@./scripts/migrations/apply.sh $(MIGRATIONS_PG)
+
+.PHONY: migrate-status
+migrate-status:
+	@dbmate --migrations-dir $(MIGRATIONS_PG) status
+
+.PHONY: migrate-new
+migrate-new:
+	@test -n "$(name)" || (echo "usage: make migrate-new name=add_currency"; exit 1)
+	@dbmate --migrations-dir $(MIGRATIONS_PG) new $(name)
+
+.PHONY: migrate-generate
+migrate-generate:
+	@test -n "$(name)" || (echo "usage: make migrate-generate name=add_currency"; exit 1)
+	@./scripts/migrations/generate.sh $(name)
+
+.PHONY: migrate-adopt
+migrate-adopt:
+	@test -n "$(url)" -a -n "$(version)" || \
+	  (echo "usage: make migrate-adopt url=postgres://... version=20260819000000"; exit 1)
+	@./scripts/migrations/adopt.sh "$(url)" $(MIGRATIONS_PG) $(version)
+
+.PHONY: migrate-fingerprint
+migrate-fingerprint:
+	@test -n "$(url)" || (echo "usage: make migrate-fingerprint url=postgres://..."; exit 1)
+	@./scripts/migrations/fingerprint.sh "$(url)"
+
+# ── CI gates ─────────────────────────────────────────────────────────────────
+.PHONY: migrate-check
+# migrate-check-clickhouse is deliberately NOT in this list — see the note in
+# .github/workflows/migrations.yml. Run it by hand if you need it.
+migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
+	@echo "all migration checks passed"
+
+.PHONY: migrate-check-sync
+migrate-check-sync:
+	@./scripts/migrations/synccheck.sh $(MIGRATIONS_PG)
+
+.PHONY: migrate-check-checksum
+migrate-check-checksum:
+	@./scripts/migrations/checksum-check.sh
+
+.PHONY: migrate-check-order
+migrate-check-order:
+	@./scripts/migrations/order-check.sh $(MIGRATIONS_PG)
+
+.PHONY: migrate-check-clickhouse
+migrate-check-clickhouse:
+	@./scripts/migrations/clickhouse-check.sh $(MIGRATIONS_CH)
 
 .PHONY: generate-migration
 generate-migration:

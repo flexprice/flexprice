@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/types"
@@ -119,9 +120,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 
 	// STEP4: Resolve meter metadata in bulk so we know how to interpret the
 	// usage value (regular vs bucketed) when calling PriceService.
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +185,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		// time-series points); standard meters use CalculateCost on the
 		// total usage.
 		var totalCost decimal.Decimal
-		if m != nil && (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) {
+		if m != nil && (priceDomain.IsBucketedMax(nil, m) || priceDomain.IsBucketedSum(nil, m)) {
 			if len(item.Points) > 0 {
 				bucketed := make([]decimal.Decimal, len(item.Points))
 				for i, pt := range item.Points {

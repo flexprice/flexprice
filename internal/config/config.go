@@ -502,7 +502,7 @@ type OtelTracesConfig struct {
 	// paths), so they get a per-type opt-in on top of StorageSpansEnabled.
 	// Both default false, and both require StorageSpansEnabled=true to emit —
 	// StorageSpansEnabled is the master kill switch for all storage spans.
-	RedisCacheSpansEnabled    bool `mapstructure:"redis_cache_spans_enabled" default:"false"`    // db.system=redis cache spans (also requires storage_spans_enabled)
+	RedisCacheSpansEnabled    bool `mapstructure:"redis_cache_spans_enabled" default:"false"`     // db.system=redis cache spans (also requires storage_spans_enabled)
 	InMemoryCacheSpansEnabled bool `mapstructure:"in_memory_cache_spans_enabled" default:"false"` // db.system=in_memory cache spans (also requires storage_spans_enabled)
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
@@ -936,7 +936,7 @@ func NewConfig() (*Configuration, error) {
 			return nil, err
 		}
 	} else {
-		fmt.Printf("Using config file: %s\n", v.ConfigFileUsed())
+		fmt.Fprintf(os.Stderr, "Using config file: %s\n", v.ConfigFileUsed())
 	}
 
 	var cfg Configuration

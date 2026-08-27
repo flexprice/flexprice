@@ -52,7 +52,7 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 		stmt, err := r.store.GetConn().PrepareBatch(ctx, `
 			INSERT INTO meter_usage (
 				id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
-				timestamp, qty_total, unique_hash, source, properties
+				timestamp, qty_total, unique_hash, source, properties, ingested_at
 			)
 		`)
 		if err != nil {
@@ -77,6 +77,7 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 				record.UniqueHash,
 				record.Source,
 				propsStr,
+				record.IngestedAt,
 			)
 			if err != nil {
 				SetSpanError(span, err)

@@ -44,7 +44,7 @@ func newClickHouseCmd() *cobra.Command {
 				l.Fatal(ctx, "ClickHouse migration failed", "error", err)
 			}
 			l.Info(ctx, "ClickHouse migrations completed successfully")
-			fmt.Println("Migration process completed")
+			fmt.Fprintln(os.Stderr, "Migration process completed")
 			return nil
 		},
 	}
@@ -185,7 +185,7 @@ func execWithRetry(ctx context.Context, conn driver.Conn, stmt string) error {
 // specially when they appear inside a quoted string literal. The current CH
 // migration set contains none, so this is safe today. To keep that assumption
 // honest for future authors, splitSQL fails loudly (returns an error) if it
-// detects any of those sequences inside a `'`- or `` ` ``-quoted literal rather
+// detects any of those sequences inside a `'`- or “ ` “-quoted literal rather
 // than silently mis-splitting or truncating a statement.
 func splitSQL(sql string) ([]string, error) {
 	if err := checkNoMarkersInLiterals(sql); err != nil {
@@ -227,7 +227,7 @@ func splitSQL(sql string) ([]string, error) {
 
 // checkNoMarkersInLiterals scans for `;`, `--`, and `/* */` occurring inside a
 // single-quoted or backtick-quoted literal, returning an error if found. This
-// guards the non-literal-aware splitSQL against silent mis-splitting. `''` and
+// guards the non-literal-aware splitSQL against silent mis-splitting. `”` and
 // backslash escapes inside single quotes are handled so escaped quotes don't
 // prematurely close a literal.
 func checkNoMarkersInLiterals(sql string) error {

@@ -50,7 +50,11 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			expectedError: false,
 		},
 		{
-			name: "successful_max_meter_with_bucket",
+			// Bucketing moved to the price, but the meter field is deprecated,
+			// not disabled: it still persists and still bills. Dropping it would
+			// silently change what an existing integration is charged for. The
+			// round-trip assertion below is what proves it survives.
+			name: "bucket_size_honoured_on_new_meter",
 			input: &dto.CreateMeterRequest{
 				Name:      "Peak Storage Usage",
 				EventName: "storage_usage",
@@ -90,7 +94,10 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 			expectedError: true,
 		},
 		{
-			name: "invalid_bucket_size_with_non_max_aggregation",
+			// Deprecated does not mean unvalidated: a honoured field still has to
+			// be coherent. Bucketing a COUNT is meaningless, so meter.Validate
+			// rejects it exactly as it did before the deprecation.
+			name: "bucket_size_rejected_on_count_aggregation",
 			input: &dto.CreateMeterRequest{
 				Name:      "Invalid Bucket Usage",
 				EventName: "usage",

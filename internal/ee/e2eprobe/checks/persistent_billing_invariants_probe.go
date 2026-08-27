@@ -29,7 +29,9 @@ func NewPersistentBillingInvariantsProbe(c e2eprobe.Client, r e2eprobe.Registry,
 	return &persistentBillingInvariantsProbe{client: c, reg: r, runID: runID, lg: lg}
 }
 
-func (p *persistentBillingInvariantsProbe) Name() string        { return "persistent-billing-invariants-probe" }
+func (p *persistentBillingInvariantsProbe) Name() string {
+	return "persistent-billing-invariants-probe"
+}
 func (p *persistentBillingInvariantsProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
 func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {

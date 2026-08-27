@@ -1,0 +1,52 @@
+name: PR Security Scan
+
+# Shift-left security gate. The image scan in publish-app-image.yml only runs on
+# tag push against the built image, so dependency CVEs surface at release and
+# Dockerfile misconfig is never scanned. This runs Trivy at PR time instead:
+#   - trivy fs   -> go.sum dependency CVEs (the shift-left dep-CVE gate)
+#   - trivy config -> Dockerfile / Dockerfile.e2eprobe misconfiguration
+#
+# Phase 1 is soft-fail (exit-code 0): like the Checkov rollout there is likely
+# legacy dep-CVE debt, and a hard gate on day one would block every PR. It
+# reports without failing while the baseline is triaged. Phase 2 flips the
+# `trivy fs` step to exit-code 1 on HIGH/CRITICAL fixable vulns once triage is
+# done; `trivy config` stays soft-fail until the Dockerfile findings are cleared.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: Trivy dependency & config scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Dependency CVEs from go.sum. Secret/license scanners are disabled
+      # (scanners: vuln) — GitGuardian already owns secret detection, so
+      # running Trivy's secret scanner here would only duplicate findings.
+      # Phase 2: flip exit-code to '1' after the CVE baseline is triaged.
+      - name: Trivy fs scan (Go dependency CVEs)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: '0'
+
+      # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe).
+      # Stays soft-fail through phase 2 until the findings are cleared.
+      - name: Trivy config scan (Dockerfile misconfig)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: '0'

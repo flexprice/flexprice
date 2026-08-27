@@ -391,6 +391,87 @@ func (s *EntitlementGrantSuite) windowArgs(fx windowFixture) (*grantEvalMeta, ti
 	return meta, lastEnd
 }
 
+// A slot whose configs only became live mid-cycle — an addon attached on the 10th —
+// must not open a window that reaches back to the cycle start, or the first tick
+// charges it for usage recorded before the customer had the entitlement.
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_HonoursCandidateStartDate() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("startdate", 5)
+	attachedAt := fx.cycleStart.Add(10 * 24 * time.Hour)
+
+	// Usage on day 2, long before the addon was attached.
+	s.seedMeterUsage(fx.extID, fx.meterID, fx.cycleStart.Add(48*time.Hour), 1)
+	// Usage after the attach, which is the one the window should anchor on.
+	eventAfter := attachedAt.Add(3 * time.Hour)
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAfter, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(),
+		grantCandidate{ec: fx.ec, startDate: attachedAt}, fx.sub, meta, last,
+		eventAfter.Add(time.Minute), 5*time.Hour)
+	s.NoError(err)
+	s.Require().True(ok)
+	s.True(from.Equal(eventAfter),
+		"window must anchor after the config went live, not on pre-attach usage: got %s want %s", from, eventAfter)
+}
+
+// subscription_period spans the cycle, so a mid-cycle start is the one thing that
+// can move its left edge.
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubscriptionPeriod_StartsAtCandidateStartDate() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("startdate-subper", 5)
+	attachedAt := fx.cycleStart.Add(10 * 24 * time.Hour)
+	ec := s.newTimeBoxedEC("ec-subper-start", fx.ec.FeatureID, 0,
+		types.EntitlementGrantDurationUnitSubscriptionPeriod, decimal.NewFromInt(400))
+
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(),
+		grantCandidate{ec: ec, startDate: attachedAt}, fx.sub, meta, last,
+		attachedAt.Add(time.Hour), 0)
+	s.NoError(err)
+	s.Require().True(ok)
+	s.True(from.Equal(attachedAt), "got %s want %s", from, attachedAt)
+	s.True(to.Equal(fx.cycleEnd))
+
+	// Without a start date the whole cycle is covered, as before.
+	from, _, ok, err = svc.computeGrantWindow(s.GetContext(),
+		grantCandidate{ec: ec}, fx.sub, meta, last, attachedAt.Add(time.Hour), 0)
+	s.NoError(err)
+	s.Require().True(ok)
+	s.True(from.Equal(fx.cycleStart), "got %s want %s", from, fx.cycleStart)
+}
+
+// The pooled window opens as soon as any contributor is live, so a mid-cycle
+// addition must not push back quota that was already running.
+func (s *EntitlementGrantSuite) TestGrantCandidatesForFeature_AdditiveStartDate() {
+	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	day10 := cycleStart.Add(10 * 24 * time.Hour)
+	day20 := cycleStart.Add(20 * 24 * time.Hour)
+
+	planEC := &entitlement.Entitlement{ID: "ent_a", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(1000))}
+	addonEC := &entitlement.Entitlement{ID: "ent_b", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(600)), StartDate: &day10}
+	lateEC := &entitlement.Entitlement{ID: "ent_c", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(300)), StartDate: &day20}
+
+	// One contributor runs the whole cycle → the pool is unconstrained.
+	got := grantCandidatesForFeature([]*entitlement.Entitlement{planEC, addonEC})
+	s.Require().Len(got, 1)
+	s.True(got[0].startDate.IsZero(), "a whole-cycle contributor leaves the pool unconstrained, got %s", got[0].startDate)
+	s.True(got[0].quota.Equal(decimal.NewFromInt(1600)))
+
+	// Every contributor starts late → the pool opens at the earliest of them.
+	got = grantCandidatesForFeature([]*entitlement.Entitlement{lateEC, addonEC})
+	s.Require().Len(got, 1)
+	s.True(got[0].startDate.Equal(day10), "expected the earliest start %s, got %s", day10, got[0].startDate)
+
+	// Parallel: each EC carries its own start.
+	parPlan := &entitlement.Entitlement{ID: "ent_p1", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(500)), AggregationMode: types.EntitlementAggregationModeParallel}
+	parAddon := &entitlement.Entitlement{ID: "ent_p2", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(400)), AggregationMode: types.EntitlementAggregationModeParallel, StartDate: &day10}
+	got = grantCandidatesForFeature([]*entitlement.Entitlement{parPlan, parAddon})
+	s.Require().Len(got, 2)
+	s.True(got[0].startDate.IsZero())
+	s.True(got[1].startDate.Equal(day10))
+}
+
 func (s *EntitlementGrantSuite) TestComputeGrantWindow_AnchorsAtExactEventTime() {
 	// The 2:00/2:07 case: event at T, evaluation at T+7m → window starts
 	// exactly at T, not at a delay-derived approximation.
@@ -401,7 +482,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_AnchorsAtExactEventTime()
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, at, 5*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, at, 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(eventAt), "window must anchor at the first uncovered event: got %s want %s", from, eventAt)
@@ -413,7 +494,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_NoUncoveredUsage_NoGrant(
 	fx := s.newWindowFixture("idle", 5)
 
 	meta, last := s.windowArgs(fx)
-	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(2*time.Hour), 5*time.Hour)
+	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleStart.Add(2*time.Hour), 5*time.Hour)
 	s.NoError(err)
 	s.False(ok, "no uncovered usage must open no grant")
 }
@@ -430,7 +511,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_IdleGapHop() {
 	s.seedMeterUsage(fx.extID, fx.meterID, resumeAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, resumeAt.Add(5*time.Minute), 5*time.Hour)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, resumeAt.Add(5*time.Minute), 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(resumeAt), "window must hop the idle gap to the first uncovered event: got %s want %s", from, resumeAt)
@@ -446,7 +527,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_CycleBoundaryCap() {
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(10*time.Minute), 24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(10*time.Minute), 24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(eventAt), "window must anchor at the event: got %s", from)
@@ -465,7 +546,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_TrailingStubAbsorbed() {
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(10*time.Minute), 5*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(10*time.Minute), 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(eventAt))
@@ -482,7 +563,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_ForcedTailShortWindow() {
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
 	s.NoError(err)
 	s.True(ok, "tail window must open even when shorter than the config minimum")
 	s.True(from.Equal(eventAt), "window must anchor at the event: got %s", from)
@@ -497,7 +578,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_FlushWithCycleEnd_Nothing
 	s.seedWindowPrevGrant(fx, "eg-flush-prev", fx.cycleEnd.Add(-5*time.Hour), fx.cycleEnd)
 
 	meta, last := s.windowArgs(fx)
-	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
+	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
 	s.NoError(err)
 	s.False(ok)
 }
@@ -514,7 +595,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_PrevCycleHistory_AnchorsA
 	s.seedMeterUsage(fx.extID, fx.meterID, firstNewCycleEvent, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(3*time.Hour), 5*time.Hour)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleStart.Add(3*time.Hour), 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(firstNewCycleEvent),
@@ -533,7 +614,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubscriptionPeriod_UsesCy
 
 	meta, last := s.windowArgs(fx)
 	// dur param is ignored for this unit; pass zero.
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(3*time.Hour), 0)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleStart.Add(3*time.Hour), 0)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(fx.cycleStart), "validFrom should equal cycleStart: got %s want %s", from, fx.cycleStart)
@@ -552,7 +633,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubscriptionPeriod_NoUsag
 	fx.ec.GrantDurationValue = nil
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(1*time.Hour), 0)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, fx.cycleStart.Add(1*time.Hour), 0)
 	s.NoError(err)
 	s.True(ok, "subscription_period should open even without usage")
 	s.True(from.Equal(fx.cycleStart), "validFrom should equal cycleStart: got %s want %s", from, fx.cycleStart)
@@ -573,7 +654,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_DayUnitStart_UTC_FloorsTo
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)), "expected 2026-07-13T00:00Z, got %s", from)
@@ -599,7 +680,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_DayUnitStart_ClampToCycle
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(fx.cycleStart), "validFrom should clamp to cycleStart: got %s want %s", from, fx.cycleStart)
@@ -624,7 +705,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_DayUnitStart_ClampToPrevV
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(prevValidTo), "validFrom should clamp to prevValidTo: got %s want %s", from, prevValidTo)
@@ -838,7 +919,7 @@ func (s *EntitlementGrantSuite) TestOpenOneGrant_LostRaceReReadsWinner() {
 		nil, NewSubscriptionService(svc.ServiceParams))
 	s.Require().NoError(err)
 
-	got, err := svc.openOneGrant(s.GetContext(), sub, ecs[0], time.Time{}, meta, at, decimal.NewFromInt(100))
+	got, err := svc.openOneGrant(s.GetContext(), sub, grantCandidate{ec: ecs[0], quota: decimal.NewFromInt(100)}, time.Time{}, meta, at)
 	s.Require().NoError(err)
 	s.Require().NotNil(got)
 	s.Equal(winners[0].ID, got.ID, "loser must re-read the winner, not insert a duplicate")
@@ -1555,7 +1636,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_HourUnitStart_UTC_FloorsT
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 1*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 1*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 7, 13, 14, 0, 0, 0, time.UTC)), "expected 14:00Z, got %s", from)
@@ -1581,7 +1662,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_UTC_FloorsT
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 7*24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 7*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)), "expected Mon 2026-07-13T00:00Z, got %s", from)
@@ -1609,7 +1690,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_Value2_Uses
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)), "expected Mon 2026-07-13T00:00Z, got %s", from)
@@ -1637,7 +1718,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_DayUnitStart_Value3_UsesT
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 3*24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 3*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 7, 7, 0, 0, 0, 0, time.UTC)), "expected 2026-07-07T00:00Z, got %s", from)
@@ -1666,7 +1747,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_Value2_Clam
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(fx.cycleStart), "expected clamp to cycleStart 2026-07-08, got %s", from)
@@ -1694,7 +1775,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_DayUnitStart_DSTSpringFor
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 3, 10, 4, 0, 0, 0, time.UTC)),
@@ -1756,7 +1837,7 @@ func (s *EntitlementGrantSuite) assertWeekValue2BucketAligned(eventAt, wantFrom 
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(wantFrom), "event=%s: expected validFrom=%s, got %s", eventAt, wantFrom, from)
@@ -1792,7 +1873,7 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_Value2_DSTF
 	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
 	meta, last := s.windowArgs(fx)
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), grantCandidate{ec: fx.ec}, fx.sub, meta, last, eventAt.Add(1*time.Minute), 2*7*24*time.Hour)
 	s.NoError(err)
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 11, 2, 5, 0, 0, 0, time.UTC)),

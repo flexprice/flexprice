@@ -74,6 +74,7 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetNillableQuotaCrossedAt(g.QuotaCrossedAt).
+		SetMetadata(defaultedMetadata(g.Metadata)).
 		SetTenantID(g.TenantID).
 		SetEnvironmentID(g.EnvironmentID).
 		SetStatus(string(g.Status)).
@@ -218,6 +219,46 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 			WithHint("Failed to update entitlement grant snapshot").
 			Mark(ierr.ErrDatabase)
 	}
+	return nil
+}
+
+// CloseWindow ends a live window early so a successor can open beside it.
+//
+// The valid_to predicate makes the write monotonic: a window can only shrink,
+// never extend, so a replayed or out-of-order close cannot hand back coverage
+// that was already given up. A rejected guard is a no-op, not an error.
+//
+// usage, grant_status and last_computed_at are left alone deliberately —
+// last_computed_at < valid_to is exactly what keeps the row in the evaluator's
+// unfinalized set for its final refresh, and stamping any of them here would drop
+// the tail events that land between the last tick and the close.
+func (r *entitlementGrantRepository) CloseWindow(ctx context.Context, id string, validTo time.Time) error {
+	span := StartRepositorySpan(ctx, "entitlement_grant", "close_window", map[string]interface{}{
+		"id":        id,
+		"valid_to":  validTo,
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if _, err := r.client.Writer(ctx).EntitlementGrant.Update().
+		Where(
+			entitlementgrant.ID(id),
+			entitlementgrant.TenantID(types.GetTenantID(ctx)),
+			entitlementgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entitlementgrant.ValidToGT(validTo),
+		).
+		SetValidTo(validTo.UTC()).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to close entitlement grant window").
+			WithReportableDetails(map[string]interface{}{"id": id, "valid_to": validTo}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
 	return nil
 }
 
@@ -457,6 +498,15 @@ func defaultedGrantStatus(s types.EntitlementGrantStatus) types.EntitlementGrant
 		return types.EntitlementGrantStatusActive
 	}
 	return s
+}
+
+// defaultedMetadata keeps a nil map out of the jsonb column so the merge
+// operator in TopUpQuota never has to reason about NULL.
+func defaultedMetadata(m types.Metadata) types.Metadata {
+	if m == nil {
+		return types.Metadata{}
+	}
+	return m
 }
 
 // defaultedScopeEntityType lands an unset scope on feature, which is the only

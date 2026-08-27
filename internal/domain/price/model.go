@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -89,6 +90,12 @@ type Price struct {
 	TrialPeriodDays int `db:"trial_period_days" json:"trial_period_days"`
 
 	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode,omitempty"`
+
+	// BucketSize windows the meter's aggregation for this price: the meter
+	// aggregates within each window and the window results are summed. Empty
+	// means unbucketed. Only valid on USAGE prices whose meter aggregates MAX
+	// or SUM. Resolved through ResolveBucketSize, never read directly.
+	BucketSize types.WindowSize `db:"bucket_size" json:"bucket_size,omitempty"`
 
 	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers,omitempty"`
 
@@ -499,6 +506,7 @@ func FromEnt(e *ent.Price) *Price {
 		InvoiceCadence:         e.InvoiceCadence,
 		TrialPeriodDays:        e.TrialPeriodDays,
 		TierMode:               lo.FromPtr(e.TierMode),
+		BucketSize:             e.BucketSize,
 		Tiers:                  tiers,
 		PriceUnitTiers:         priceUnitTiers,
 		MeterID:                lo.FromPtr(e.MeterID),
@@ -744,6 +752,57 @@ func (p *Price) IsActive(currentTime *time.Time) bool {
 	}
 
 	return true
+}
+
+// Bucketing lives in two places while legacy meters exist: on the meter
+// (original home, frozen — no new meter may set it) and on the price (new
+// home). These helpers are the only place that precedence is expressed; no
+// other code may read either field directly.
+//
+// Precedence is decided by who is asking. Callers holding a price get the
+// price's value with the meter as fallback, so a legacy meter keeps billing
+// exactly as before. Callers with no price in scope pass nil and see only the
+// meter's value — which keeps every meter-scoped surface (admin analytics, the
+// raw usage endpoint, entitlement checks, costsheet) behaving as it does today
+// for existing meters, and reporting raw measurement for price-level configs.
+
+// ResolveBucketSize returns the effective bucket size for a (price, meter)
+// pair. A nil price means the caller has no pricing context.
+func ResolveBucketSize(p *Price, m *meter.Meter) types.WindowSize {
+	if p != nil && p.BucketSize != "" {
+		return p.BucketSize
+	}
+	if m != nil {
+		return m.Aggregation.BucketSize
+	}
+	return ""
+}
+
+// IsBucketed reports whether usage for this pair is windowed.
+func IsBucketed(p *Price, m *meter.Meter) bool {
+	return ResolveBucketSize(p, m) != ""
+}
+
+// IsBucketedMax reports whether this pair is a windowed MAX aggregation.
+// Replaces meter.IsBucketedMaxMeter at call sites that have a price.
+func IsBucketedMax(p *Price, m *meter.Meter) bool {
+	return m != nil && m.Aggregation.Type == types.AggregationMax && IsBucketed(p, m)
+}
+
+// IsBucketedSum reports whether this pair is a windowed SUM aggregation.
+// Replaces meter.IsBucketedSumMeter at call sites that have a price.
+func IsBucketedSum(p *Price, m *meter.Meter) bool {
+	return m != nil && m.Aggregation.Type == types.AggregationSum && IsBucketed(p, m)
+}
+
+// BucketedGroupBy returns the meter's group_by property when it applies to this
+// pair. group_by stays on the meter — it defines what is measured — and is only
+// meaningful for a windowed MAX aggregation.
+func BucketedGroupBy(p *Price, m *meter.Meter) string {
+	if !IsBucketedMax(p, m) {
+		return ""
+	}
+	return m.Aggregation.GroupBy
 }
 
 func (p *Price) BillsIdenticallyTo(other *Price) bool {

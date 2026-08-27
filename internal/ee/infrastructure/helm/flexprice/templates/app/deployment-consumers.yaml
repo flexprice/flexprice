@@ -1,0 +1,141 @@
+{{- /*
+  N arbitrary consumer Deployments from the `.Values.consumers` MAP (plural).
+  One Deployment per key, named "<fullname>-<key>". Each runs the SAME image in
+  deployment.mode=consumer and is isolated purely by its own extraEnv — mirroring
+  prod, where flexprice-prod-consumer and flexprice-prod-consumer-bulk are two
+  task defs off one image, differing only in FLEXPRICE_*_ENABLED / _TOPIC /
+  _CONSUMER_GROUP env.
+
+  This is additive: the singular `.Values.consumer` in deployment-consumer.yaml is
+  untouched and keeps rendering when this map is absent/empty. Structure mirrors
+  deployment-consumer.yaml so the two stay consistent.
+
+  Each Deployment carries an extra `app.kubernetes.io/consumer: <key>` label in its
+  selector so it owns only its own pods — without it, every consumer Deployment
+  would share the `component: consumer` selector and fight over the same pods.
+*/ -}}
+{{- range $name, $cfg := .Values.consumers }}
+{{- if $cfg.enabled | default true }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flexprice.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" $ "component" "consumer") | nindent 4 }}
+    app.kubernetes.io/consumer: {{ $name }}
+spec:
+  replicas: {{ $cfg.replicaCount | default 1 }}
+  {{- with $cfg.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: consumer
+      app.kubernetes.io/consumer: {{ $name }}
+  template:
+    metadata:
+      annotations:
+        {{- if not $.Values.env }}
+        checksum/config: {{ include "flexprice/templates/app/configmap.yaml" $ | sha256sum }}
+        {{- end }}
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" $ | sha256sum }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "flexprice.componentPodLabels" (dict "ctx" $ "component" "consumer") | nindent 8 }}
+        app.kubernetes.io/consumer: {{ $name }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.componentServiceAccountName" (dict "ctx" $ "component" "consumer") }}
+      {{- with ($cfg.terminationGracePeriodSeconds | default $.Values.consumer.terminationGracePeriodSeconds) }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $.Chart.Name }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: "{{ include "flexprice.image" $ }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          workingDir: /app
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- include "flexprice.env" $ | nindent 12 }}
+            - name: FLEXPRICE_DEPLOYMENT_MODE
+              value: "consumer"
+            - name: TMPDIR
+              value: "/tmp"
+            {{- /* Per-consumer env overrides — rendered AFTER flexprice.env so these
+                   win over the global .Values.extraEnv for duplicate keys (k8s
+                   last-wins). This is what isolates one consumer from another:
+                   distinct FLEXPRICE_*_ENABLED / _TOPIC / _CONSUMER_GROUP. */}}
+            {{- with $cfg.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if and $cfg.preStop $cfg.preStop.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                # Give endpoints controller time to drop this pod before the
+                # Kafka consumer-group rebalance kicks off the new owner.
+                command: ["/bin/sh", "-c", "sleep {{ $cfg.preStop.sleepSeconds | default 15 }}"]
+          {{- end }}
+          # No HTTP probes: deployment.mode=consumer serves no HTTP server, so an
+          # httpGet /health probe always fails and crashloops the pod. No Service
+          # routes to it either, so readiness is moot. (Matches deployment-consumer.yaml.)
+          resources:
+            {{- toYaml ($cfg.resources | default $.Values.consumer.resources) | nindent 12 }}
+          volumeMounts:
+            {{- if not $.Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- include "flexprice.kafkaTLSVolumeMounts" $ | nindent 12 }}
+            {{- with $.Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if not $.Values.env }}
+        - name: config
+          configMap:
+            name: {{ include "flexprice.fullname" $ }}-config
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- include "flexprice.kafkaTLSVolume" $ | nindent 8 }}
+        {{- with $.Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default $.Values.nodeSelector $cfg.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $.Values.affinity $cfg.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $.Values.tolerations $cfg.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (include "flexprice.topologySpreadConstraints" (dict "ctx" $ "component" "consumer") | trim) }}
+      topologySpreadConstraints:
+        {{- . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

@@ -216,6 +216,13 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 	)
 }
 
+func stampIngestedAt(records []*events.MeterUsage) {
+	now := time.Now().UTC()
+	for _, record := range records {
+		record.IngestedAt = now
+	}
+}
+
 // processBulkMessage unmarshals a RawEventBatch, matches every event to its
 // meters, and issues a single BulkInsertMeterUsage. Malformed rows inside the
 // batch are skipped so healthy siblings still land in ClickHouse.
@@ -338,6 +345,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return nil
 	}
 
+	stampIngestedAt(records)
 	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
 		s.Logger.Error(ctx, "bulk meter usage insert failed",
 			"error", err,
@@ -502,6 +510,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	// Step 3: Bulk insert
+	stampIngestedAt(records)
 	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
 		return fmt.Errorf("failed to bulk insert meter usage: %w", err)
 	}

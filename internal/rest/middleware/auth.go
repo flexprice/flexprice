@@ -96,37 +96,75 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 	return env.ID, nil
 }
 
-// environmentDiscoveryGroups are the route groups a caller can reach before it
-// has selected an environment: identity, environment discovery, and tenant.
-// These are how an unbound caller -- a dashboard JWT, which carries no
-// environment claim -- learns an ID to send in X-Environment-ID on every later
-// request, so requiring a selection to reach them would be circular.
-var environmentDiscoveryGroups = []string{"/v1/users", "/v1/environments", "/v1/tenants"}
+// environmentDiscoveryRoutes are the routes a caller can reach before it has
+// selected an environment: identity, environment discovery, and tenant. These
+// are how an unbound caller -- a dashboard JWT, which carries no environment
+// claim -- learns an ID to send in X-Environment-ID on every later request, so
+// requiring a selection to reach them would be circular.
+//
+// The exemption is per route and method rather than per group. A handler
+// reached this way runs with no environment in context, so any route that
+// mutates a specific environment must not be listed: without a selection there
+// is nothing for the middleware to authorise the target against, and the
+// handler would act on a path parameter no one checked. Environment writes
+// (PUT /:id, POST /:id/clone) are therefore absent and must carry a header.
+var environmentDiscoveryRoutes = map[string]map[string]struct{}{
+	"/v1/users/me": {
+		http.MethodGet: {},
+		http.MethodPut: {},
+	},
+	"/v1/users": {
+		http.MethodPost: {},
+	},
+	// User admin is tenant-scoped, not environment-scoped: it acts on
+	// users/service-accounts/roles, never on an environment, so an unbound
+	// dashboard JWT must reach it during bootstrap like the other user routes.
+	"/v1/users/:id": {
+		http.MethodPut:    {},
+		http.MethodDelete: {},
+	},
+	"/v1/users/:id/roles": {
+		http.MethodPut: {},
+	},
+	"/v1/users/search": {
+		http.MethodPost: {},
+	},
+	"/v1/environments": {
+		http.MethodGet:  {},
+		http.MethodPost: {},
+	},
+	"/v1/environments/:id": {
+		http.MethodGet: {},
+	},
+	"/v1/tenants/update": {
+		http.MethodPut: {},
+	},
+	"/v1/tenants/:id": {
+		http.MethodGet: {},
+	},
+	"/v1/tenants/billing": {
+		http.MethodGet: {},
+	},
+}
 
 // isEnvironmentDiscoveryRoute reports whether a route can be served without an
 // environment selected.
-//
-// Matching is by group prefix, so every route under these groups is exempt
-// regardless of method. Handlers in these groups therefore run with no
-// environment in context: GetEnvironmentID returns "", and a repository call
-// that filters on environment_id matches nothing rather than failing loudly.
 func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
 	// FullPath is the matched route template, so this cannot be spoofed by a
 	// crafted URL the router did not match to one of these handlers. An
-	// unmatched request yields "", which no prefix below accepts.
+	// unmatched request yields "", which the map below does not contain.
 	path := c.FullPath()
 	if path == "" {
 		return false
 	}
 
-	for _, group := range environmentDiscoveryGroups {
-		// The trailing separator keeps the match on a path boundary, so a
-		// sibling group such as /v1/usersettings is not swept in by /v1/users.
-		if path == group || strings.HasPrefix(path, group+"/") {
-			return true
-		}
+	methods, ok := environmentDiscoveryRoutes[path]
+	if !ok {
+		return false
 	}
-	return false
+
+	_, ok = methods[c.Request.Method]
+	return ok
 }
 
 // setContextValues sets the tenant ID, user ID, environment ID, roles, and

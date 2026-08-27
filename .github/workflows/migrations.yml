@@ -1,0 +1,137 @@
+name: Migration Checks
+
+# Runs only when something that can invalidate the migration set changes.
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'ent/schema/**'
+      - 'ent/migrate/**'
+      - 'migrations/**'
+      - 'cmd/migrate/**'
+      - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
+      - '.github/workflows/migrations.yml'
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'ent/schema/**'
+      - 'ent/migrate/**'
+      - 'migrations/**'
+      - 'cmd/migrate/**'
+      - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
+      - '.github/workflows/migrations.yml'
+
+# The job runs commands defined by the pull request, so it gets read-only scope and
+# the checkout credential is not persisted into .git/config.
+permissions:
+  contents: read
+
+jobs:
+  migrations:
+    name: Migration Checks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Pinned to the production major (Aurora 16.6). Postgres normalises
+        # expressions differently between majors, so a mismatch here produces
+        # differences that do not exist in production.
+        image: postgres:16
+        env:
+          POSTGRES_USER: flexprice
+          POSTGRES_PASSWORD: flexprice123
+          POSTGRES_DB: postgres
+        ports: [ '5432:5432' ]
+        options: >-
+          --health-cmd "pg_isready -U flexprice"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # order-check compares new files against what is already on the base
+          # branch, so it needs history rather than a shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.25.12'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Install dbmate and psql
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/dbmate \
+            https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+          sudo chmod +x /usr/local/bin/dbmate
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Ent codegen is committed and current
+        # ent/ is generated from ent/schema/. If someone edits a schema file and
+        # does not run `make generate-ent`, every later check reads a stale
+        # Tables definition and silently passes.
+        run: |
+          make generate-ent
+          git diff --exit-code ent/ || {
+            echo "::error::ent/ is out of date — run 'make generate-ent' and commit"
+            exit 1
+          }
+
+      - name: Sync check — is any schema change missing a migration?
+        run: make migrate-check-sync
+
+      - name: Checksum — was a shipped migration edited?
+        run: make migrate-check-checksum
+
+      - name: Order — do new migrations sort after committed ones?
+        run: ./scripts/migrations/order-check.sh migrations/versioned/postgres origin/${{ github.base_ref || 'develop' }}
+
+      # Disabled 2026-08-25. migrations/versioned/clickhouse/ is the old
+      # incremental set and does not describe the real cluster: it creates 3 of
+      # the 8 tables the app queries, and disagrees with
+      # migrations/baseline/clickhouse_baseline_20260819.sql. Gating on it would
+      # assert something we know to be wrong. Re-enable once the ClickHouse set
+      # is re-derived from a live cluster.
+      # - name: ClickHouse — one statement per file
+      #   run: make migrate-check-clickhouse
+
+      - name: Replay from zero — does a fresh install work?
+        # Exactly what a new client gets: the baseline snapshot, then the timeline.
+        # The baseline lives outside migrations/versioned/ and dbmate never runs it,
+        # so applying only the migrations would leave an empty schema and every
+        # migration referencing a table would fail.
+        env:
+          PGPASSWORD: flexprice123
+        run: |
+          psql -h localhost -p 5432 -U flexprice -d postgres -q \
+            -c "DROP DATABASE IF EXISTS fresh_install;" -c "CREATE DATABASE fresh_install;"
+          BASELINE="$(ls -1 migrations/baseline/postgres_baseline_ent_*.sql | tail -1)"
+          psql -h localhost -p 5432 -U flexprice -d fresh_install -q -v ON_ERROR_STOP=1 -f "$BASELINE"
+          DATABASE_URL="postgres://flexprice:flexprice123@localhost:5432/fresh_install?sslmode=disable" \
+            dbmate --migrations-dir migrations/versioned/postgres --no-dump-schema up
+
+      - name: Show the DDL this PR will run
+        # Not a gate. Prints the statements so a reviewer sees them before they
+        # reach a customer database.
+        if: always()
+        run: |
+          echo "### Migrations added by this PR" >> "$GITHUB_STEP_SUMMARY"
+          for f in $(git diff --name-only --diff-filter=A origin/${{ github.base_ref || 'develop' }}...HEAD -- migrations/versioned/ || true); do
+            echo "<details><summary>$f</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo '```sql' >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          done

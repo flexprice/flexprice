@@ -689,6 +689,17 @@ func (s *subscriptionService) persistAddonDetach(ctx context.Context, params *ad
 			}
 		}
 
+		// End the entitlement grant windows this addon owns on its own slots. Pooled
+		// (additive) windows survive the detach — see closeGrantsForRemovedECs.
+		addonEnts, err := NewEntitlementService(s.ServiceParams).GetAddonEntitlements(ctx, association.AddonID)
+		if err != nil {
+			return err
+		}
+		addonECs := dto.ToEntitlements(addonEnts)
+		if err := s.handleGrantsForRemovedECs(ctx, params.getSubscription(), addonECs, params.getEffectiveDate(), grantProrationSourceAddonDetach); err != nil {
+			return err
+		}
+
 		// Cancel future applications of credit grants materialized from THIS addon only
 		// (scoped by addon_id provenance). Already-granted credits are not clawed back;
 		// plan-sourced and other-addon grants are left untouched.

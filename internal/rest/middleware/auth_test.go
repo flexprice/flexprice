@@ -449,9 +449,13 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		r.GET("/v1/users/me", handler)
 		r.PUT("/v1/users/me", handler)
 		r.POST("/v1/users", handler)
+		r.PUT("/v1/users/:id", handler)
+		r.PUT("/v1/users/:id/roles", handler)
+		r.DELETE("/v1/users/:id", handler)
 		r.GET("/v1/environments", handler)
 		r.GET("/v1/environments/:id", handler)
 		r.POST("/v1/environments", handler)
+		r.PUT("/v1/environments/:id", handler)
 		r.POST("/v1/environments/:id/clone", handler)
 		r.GET("/v1/tenants/:id", handler)
 		r.GET("/v1/tenants/billing", handler)
@@ -485,18 +489,18 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		}
 	})
 
-	// Prefix matching ignores the method, so these writes are served with no
-	// environment resolved. Asserted explicitly rather than left implicit: it is
-	// the cost of matching by group, and a future change that reinstates a method
-	// check should fail here and be read as intentional.
-	t.Run("writes under the same groups are served without a header", func(t *testing.T) {
+	// Bootstrap writes that do not target a specific environment stay exempt:
+	// they are how an unbound caller sets itself up before it has a selection.
+	t.Run("bootstrap writes that name no environment are served without a header", func(t *testing.T) {
 		for _, tc := range []struct {
 			method, path string
 		}{
 			{http.MethodPut, "/v1/users/me"},
 			{http.MethodPost, "/v1/users"},
+			{http.MethodPut, "/v1/users/some_id"},
+			{http.MethodDelete, "/v1/users/some_id"},
+			{http.MethodPut, "/v1/users/some_id/roles"},
 			{http.MethodPost, "/v1/environments"},
-			{http.MethodPost, "/v1/environments/env_dev/clone"},
 			{http.MethodPut, "/v1/tenants/update"},
 		} {
 			w := do(tc.method, tc.path)
@@ -505,8 +509,23 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		}
 	})
 
-	// The exemption stops at the three groups; everything else is still refused.
-	t.Run("routes outside the exempt groups still require a header", func(t *testing.T) {
+	// Regression: writes that name an environment in the path must not be
+	// reachable without a selection. Omitting the header used to skip
+	// resolution entirely, which left the target in the path unauthorised and
+	// let a caller mutate an environment it had no access to.
+	t.Run("writes targeting a specific environment require a header", func(t *testing.T) {
+		for _, tc := range []struct {
+			method, path string
+		}{
+			{http.MethodPut, "/v1/environments/env_prod"},
+			{http.MethodPost, "/v1/environments/env_prod/clone"},
+		} {
+			assert.Equal(t, http.StatusForbidden, do(tc.method, tc.path).Code, tc.method+" "+tc.path)
+		}
+	})
+
+	// The exemption is per route and method; everything else is still refused.
+	t.Run("routes outside the exempt set still require a header", func(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, do(http.MethodGet, "/v1/customers").Code)
 		// /v1/usersettings shares a prefix with /v1/users but is a different group.
 		assert.Equal(t, http.StatusForbidden, do(http.MethodGet, "/v1/usersettings").Code)

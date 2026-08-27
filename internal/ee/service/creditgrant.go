@@ -67,6 +67,8 @@ type creditGrantService struct {
 	ServiceParams
 }
 
+const creditGrantCreditsScale = 8
+
 func NewCreditGrantService(
 	serviceParams ServiceParams,
 ) CreditGrantService {
@@ -329,23 +331,27 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(
 	credits := cg.Credits
 	var prorationMetadata types.Metadata
 	if prorationCfg != nil {
-		result, err := proration.CalculateCreditGrantProration(proration.CreditGrantProrationParams{
-			PeriodStart:     prorationCfg.PeriodStart,
-			PeriodEnd:       prorationCfg.PeriodEnd,
-			ProrationDate:   prorationCfg.ProrationDate,
-			Strategy:        prorationCfg.Strategy,
-			OriginalCredits: cg.Credits,
-		})
+		coefficient, err := proration.Coefficient(
+			prorationCfg.PeriodStart, prorationCfg.PeriodEnd, prorationCfg.ProrationDate, prorationCfg.Strategy)
 		if err != nil {
 			return nil, err
 		}
-		credits = result.ProratedCredits
-		prorationMetadata = result.AuditMetadata(prorationCfg.Source)
+		credits = cg.Credits.Mul(coefficient).Round(creditGrantCreditsScale)
+		prorationMetadata = proration.AuditMetadata(proration.AuditParams{
+			Source:        prorationCfg.Source,
+			Coefficient:   coefficient,
+			OriginalKey:   "proration_original_credits",
+			OriginalValue: cg.Credits,
+			PeriodStart:   prorationCfg.PeriodStart,
+			PeriodEnd:     prorationCfg.PeriodEnd,
+			ProrationDate: prorationCfg.ProrationDate,
+			Strategy:      prorationCfg.Strategy,
+		})
 
 		s.Logger.Info(ctx, "prorating first credit grant application",
 			"grant_id", cg.ID,
 			"subscription_id", lo.FromPtr(cg.SubscriptionID),
-			"coefficient", result.Coefficient.String(),
+			"coefficient", coefficient.String(),
 			"original_credits", cg.Credits.String(),
 			"prorated_credits", credits.String())
 	}

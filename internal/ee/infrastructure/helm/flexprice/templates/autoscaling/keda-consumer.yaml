@@ -1,4 +1,7 @@
 {{- if and .Values.consumer.enabled .Values.consumer.keda.enabled -}}
+{{- if .Values.consumer.autoscaling.enabled }}
+{{- fail "consumer: enable either consumer.autoscaling (HPA) or consumer.keda (KEDA), not both — they fight over the same Deployment" }}
+{{- end }}
 {{- /*
   KEDA ScaledObject for the consumer Deployment. Scales on Kafka consumer-group
   lag rather than CPU — the right signal for a Kafka consumer where each
@@ -30,17 +33,22 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   triggers:
+    {{- $topics := .Values.consumer.keda.topics }}
+    {{- if not $topics }}
+    {{- $topics = list (dict "topic" .Values.kafkaConfig.topic "lagThreshold" .Values.consumer.keda.lagThreshold) }}
+    {{- end }}
+    {{- range $t := $topics }}
     - type: kafka
       metadata:
-        bootstrapServers: {{ include "flexprice.kafkaBrokers" . | quote }}
-        consumerGroup: {{ .Values.kafkaConfig.consumerGroup | quote }}
-        topic: {{ .Values.kafkaConfig.topic | quote }}
-        lagThreshold: {{ .Values.consumer.keda.lagThreshold | default 1000 | quote }}
-        offsetResetPolicy: {{ .Values.consumer.keda.offsetResetPolicy | default "earliest" | quote }}
-        {{- if or .Values.kafkaConfig.tls .Values.kafkaConfig.useSASL }}
+        bootstrapServers: {{ include "flexprice.kafkaBrokers" $ | quote }}
+        consumerGroup: {{ $.Values.kafkaConfig.consumerGroup | quote }}
+        topic: {{ $t.topic | quote }}
+        lagThreshold: {{ $t.lagThreshold | default $.Values.consumer.keda.lagThreshold | default 1000 | quote }}
+        offsetResetPolicy: {{ $.Values.consumer.keda.offsetResetPolicy | default "earliest" | quote }}
+        {{- if or $.Values.kafkaConfig.tls $.Values.kafkaConfig.useSASL }}
         tls: enable
         {{- end }}
-        {{- if .Values.kafkaConfig.useSASL }}
+        {{- if $.Values.kafkaConfig.useSASL }}
         {{- /*
           KEDA's Kafka scaler names mechanisms differently from sarama: it wants
           lowercase, underscore-separated values (scram_sha512), not the
@@ -54,7 +62,7 @@ spec:
           exists to prevent.
         */}}
         {{- $saslMap := dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer" }}
-        {{- $mechanism := .Values.kafkaConfig.saslMechanism | default "PLAIN" }}
+        {{- $mechanism := $.Values.kafkaConfig.saslMechanism | default "PLAIN" }}
         {{- if not (hasKey $saslMap $mechanism) }}
         {{- fail (printf "kafkaConfig.saslMechanism %q has no KEDA equivalent; the KEDA Kafka scaler supports only: %s. Set the sarama spelling (e.g. SCRAM-SHA-512), or disable consumer.keda.enabled." $mechanism (join ", " (keys $saslMap | sortAlpha))) }}
         {{- end }}
@@ -68,8 +76,21 @@ spec:
         single authenticationRef. See consumer.keda.authenticationRef in
         values.yaml for the resource shape, including the `ca` parameter.
       */}}
-      {{- with .Values.consumer.keda.authenticationRef }}
+      {{- with $.Values.consumer.keda.authenticationRef }}
       authenticationRef:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- end }}
+    {{- if .Values.consumer.keda.cpuValue }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.consumer.keda.cpuValue | quote }}
+    {{- end }}
+    {{- if .Values.consumer.keda.memValue }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.consumer.keda.memValue | quote }}
+    {{- end }}
 {{- end }}

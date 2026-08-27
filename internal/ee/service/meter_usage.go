@@ -532,12 +532,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		}
 	}
 
-	// 9. Split bucketed vs standard meters
-	bucketedMeterIDs := make(map[string]bool)
-	for meterID, m := range result.MeterMap {
-		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
-			bucketedMeterIDs[meterID] = true
-		}
+	// 9. Split bucketed vs standard work. The decision is per line item, not per
+	// meter: bucketing can come from the line item's price, so two line items on
+	// the same meter may disagree. Legacy meter-level bucketing still resolves
+	// through the same helper, so nothing changes for existing configurations.
+	isBucketedItem := func(item *subscription.SubscriptionLineItem, m *meter.Meter) bool {
+		return price.IsBucketedMax(result.PriceMap[item.PriceID], m) ||
+			price.IsBucketedSum(result.PriceMap[item.PriceID], m)
 	}
 
 	// 10. Query standard meters WITH per-line-item date ranges.
@@ -545,10 +546,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	//     share the same period are batched into one ClickHouse call.
 	standardGroups := make(map[dateRangeGroup][]*lineItemWithMeter)
 	for meterID, items := range meterToLineItems {
-		if bucketedMeterIDs[meterID] {
-			continue
-		}
+		m := result.MeterMap[meterID]
 		for _, item := range items {
+			if isBucketedItem(item, m) {
+				continue
+			}
 			start := item.GetPeriodStart(usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
 			key := dateRangeGroup{
@@ -670,13 +672,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 
 	useDetailed := hasUserBucketedGroupBy(req.GroupBy)
 
-	for meterID := range bucketedMeterIDs {
+	for meterID, items := range meterToLineItems {
 		m := result.MeterMap[meterID]
 		if m == nil {
 			continue
 		}
-		items := meterToLineItems[meterID]
 		for _, item := range items {
+			if !isBucketedItem(item, m) {
+				continue
+			}
+			p := result.PriceMap[item.PriceID]
 			itemStart := item.GetPeriodStart(usageStartTime)
 			itemEnd := item.GetPeriodEnd(usageEndTime)
 
@@ -685,7 +690,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				// combo. Repo does the per-combo aggregation in SQL; nothing to
 				// re-group in Go.
 				detailedResults, err := s.queryBucketedMeterAnalyticsDetailed(
-					ctx, m, externalCustomerIDs,
+					ctx, m, p, externalCustomerIDs,
 					itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
 					req.PropertyFilters, req.Sources, req.GroupBy,
 				)
@@ -722,7 +727,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 			}
 
 			bucketedResult, err := s.queryBucketedMeterUsage(
-				ctx, m, externalCustomerIDs,
+				ctx, m, p, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
 				req.PropertyFilters, req.Sources, req.CollectSources,
 			)
@@ -760,7 +765,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 						WindowStart: r.WindowSize,
 						EventCount:  r.EventCount,
 					}
-					if m.IsBucketedMaxMeter() {
+					if price.IsBucketedMax(result.PriceMap[item.PriceID], m) {
 						p.MaxUsage = r.Value
 						p.TotalUsage = r.Value
 					} else {
@@ -934,6 +939,7 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 func (s *meterUsageService) queryBucketedMeterUsage(
 	ctx context.Context,
 	m *meter.Meter,
+	p *price.Price,
 	externalCustomerIDs []string,
 	periodStart, periodEnd time.Time,
 	billingAnchor *time.Time,
@@ -943,8 +949,8 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	collectSources bool,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
-	meterGroupBy := m.Aggregation.GroupBy
-	if m.IsBucketedSumMeter() {
+	meterGroupBy := price.BucketedGroupBy(p, m)
+	if price.IsBucketedSum(p, m) {
 		aggType = types.AggregationSum
 		meterGroupBy = ""
 	}
@@ -963,7 +969,7 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		StartTime:           periodStart,
 		EndTime:             periodEnd,
 		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
+		WindowSize:          price.ResolveBucketSize(p, m),
 		BillingAnchor:       billingAnchor,
 		GroupBy:             paramsGroupBy,
 		UseFinal:            useFinal,
@@ -1051,6 +1057,7 @@ func validateAnalyticsGroupBy(groupBy []string) error {
 func (s *meterUsageService) queryBucketedMeterAnalyticsDetailed(
 	ctx context.Context,
 	m *meter.Meter,
+	p *price.Price,
 	externalCustomerIDs []string,
 	periodStart, periodEnd time.Time,
 	billingAnchor *time.Time,
@@ -1060,7 +1067,7 @@ func (s *meterUsageService) queryBucketedMeterAnalyticsDetailed(
 	groupBy []string,
 ) ([]*events.MeterUsageDetailedResult, error) {
 	aggType := m.Aggregation.Type
-	if m.IsBucketedSumMeter() {
+	if price.IsBucketedSum(p, m) {
 		aggType = types.AggregationSum
 	}
 	return s.repo.GetUsageForBucketedMetersDetailed(ctx, &events.MeterUsageQueryParams{
@@ -1071,7 +1078,7 @@ func (s *meterUsageService) queryBucketedMeterAnalyticsDetailed(
 		StartTime:           periodStart,
 		EndTime:             periodEnd,
 		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
+		WindowSize:          price.ResolveBucketSize(p, m),
 		BillingAnchor:       billingAnchor,
 		// Intentionally do NOT forward m.Aggregation.GroupBy — the analytics
 		// fan-out shape is owned by the request's GroupBy. The meter-level
@@ -1373,7 +1380,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 			// Set usage values from the line item usage
 			if lu.BucketedResult != nil && lu.Meter != nil {
 				// Bucketed meter: set both MaxUsage and TotalUsage
-				if lu.Meter.IsBucketedMaxMeter() {
+				if price.IsBucketedMax(lu.Price, lu.Meter) {
 					analytic.MaxUsage = lu.Usage
 					analytic.TotalUsage = lu.Usage
 				} else {
@@ -1571,11 +1578,13 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		params.AggregationTypes = lo.Uniq(aggTypes)
 	}
 
-	// Split meters
+	// Split meters. No subscription was named, so there is no price to resolve
+	// against — nil yields the meter's legacy bucket size, which is the
+	// grandfathered answer for this surface.
 	var bucketedMeterIDs, standardMeterIDs []string
 	for _, m := range meters {
 		switch {
-		case m.IsBucketedMaxMeter(), m.IsBucketedSumMeter():
+		case price.IsBucketedMax(nil, m), price.IsBucketedSum(nil, m):
 			bucketedMeterIDs = append(bucketedMeterIDs, m.ID)
 		default:
 			standardMeterIDs = append(standardMeterIDs, m.ID)
@@ -1605,7 +1614,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	} else if len(params.MeterIDs) == 0 {
 		// Catch-all: enumerate every standard meter we already fetched.
 		for _, m := range meters {
-			if !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() {
+			if !price.IsBucketedMax(nil, m) && !price.IsBucketedSum(nil, m) {
 				standardTargets = append(standardTargets, m.ID)
 			}
 		}
@@ -1879,8 +1888,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		// meters cannot be subdivided below their bucket size, so points are at
 		// max(request window, bucket size); non-bucketed meters use the request.
 		if m, ok := meterMap[analytic.MeterID]; ok {
-			if m.HasBucketSize() {
-				item.WindowSize = params.WindowSize.Max(m.Aggregation.BucketSize)
+			if bs := price.ResolveBucketSize(data.Prices[analytic.PriceID], m); bs != "" {
+				item.WindowSize = params.WindowSize.Max(bs)
 			} else {
 				item.WindowSize = params.WindowSize
 			}
@@ -1942,7 +1951,7 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 				// Per-point bucket identity: every bucket the rolled-up window
 				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
-					windowMin := effectivePointWindowMinutes(params.WindowSize, meterMap[analytic.MeterID])
+					windowMin := effectivePointWindowMinutes(params.WindowSize, data.Prices[analytic.PriceID], meterMap[analytic.MeterID])
 					ids, priceIDs := bucketIDsForPointWindow(
 						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, windowMin)
 					for i := range ids {
@@ -1985,26 +1994,29 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 // fetchMeters fetches meter configurations for the requested meter IDs.
 func (s *meterUsageService) fetchMeters(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*meter.Meter, error) {
-	filter := types.NewNoLimitMeterFilter()
+	// Known ID set → per-id cache path. Empty set → fall back to full tenant list.
 	if len(params.MeterIDs) > 0 {
-		filter.MeterIDs = params.MeterIDs
+		meters, err := s.MeterRepo.ListByIDs(ctx, params.MeterIDs)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to fetch meters for detailed analytics").
+				Mark(ierr.ErrDatabase)
+		}
+		return meters, nil
 	}
 
-	meters, err := s.MeterRepo.List(ctx, filter)
+	meters, err := s.MeterRepo.List(ctx, types.NewNoLimitMeterFilter())
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch meters for detailed analytics").
 			Mark(ierr.ErrDatabase)
 	}
 
-	if len(params.MeterIDs) == 0 {
-		meterIDs := make([]string, len(meters))
-		for i, m := range meters {
-			meterIDs[i] = m.ID
-		}
-		params.MeterIDs = meterIDs
+	meterIDs := make([]string, len(meters))
+	for i, m := range meters {
+		meterIDs[i] = m.ID
 	}
-
+	params.MeterIDs = meterIDs
 	return meters, nil
 }
 
@@ -2029,7 +2041,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 			StartTime:          params.StartTime,
 			EndTime:            params.EndTime,
 			AggregationType:    m.Aggregation.Type,
-			WindowSize:         m.Aggregation.BucketSize,
+			WindowSize:         price.ResolveBucketSize(nil, m),
 			// Intentionally use only params.GroupBy here. Meter-level
 			// Aggregation.GroupBy is a billing concept (per-KRN pricing); the
 			// analytics fan-out shape is owned by the request. Matches the
@@ -2060,7 +2072,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		StartTime:          params.StartTime,
 		EndTime:            params.EndTime,
 		AggregationType:    m.Aggregation.Type,
-		WindowSize:         m.Aggregation.BucketSize,
+		WindowSize:         price.ResolveBucketSize(nil, m),
 		GroupBy:            bucketParamsGroupBy,
 		UseFinal:           params.UseFinal,
 		BillingAnchor:      params.BillingAnchor,
@@ -2083,7 +2095,9 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		Properties: make(map[string]string),
 	}
 
-	if m.IsBucketedMaxMeter() {
+	// Admin analytics path — no price in scope (see getBucketedMeterAnalytics),
+	// so nil resolves to the meter's legacy bucket size.
+	if price.IsBucketedMax(nil, m) {
 		result.MaxUsage = aggResult.Value
 		result.TotalUsage = aggResult.Value
 	} else {
@@ -2095,7 +2109,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		points := make([]events.MeterUsageDetailedPoint, 0, len(aggResult.Results))
 		for _, r := range aggResult.Results {
 			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize, EventCount: r.EventCount}
-			if m.IsBucketedMaxMeter() {
+			if price.IsBucketedMax(nil, m) {
 				p.MaxUsage = r.Value
 				p.TotalUsage = r.Value
 			} else {
@@ -2191,7 +2205,7 @@ func (s *meterUsageService) ConvertToBillingCharges(
 
 		if lu.BucketedResult != nil && lu.Meter != nil {
 			// Bucketed meter: use calculateBucketedMeterCost
-			hasGroupBy := lu.Meter.IsBucketedMaxMeter() && lu.Meter.Aggregation.GroupBy != ""
+			hasGroupBy := price.BucketedGroupBy(lu.Price, lu.Meter) != ""
 			bucketedCost := calculateBucketedMeterCost(ctx, priceService, lu.Price, lu.BucketedResult, hasGroupBy)
 			cost = bucketedCost.Amount
 			quantity = bucketedCost.Quantity
@@ -2405,7 +2419,7 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 			continue
 		}
 
-		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
+		if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
 			s.calculateBucketedCost(ctx, priceService, item, p, m, data, skipCommitment)
 		} else {
 			s.calculateRegularCost(ctx, priceService, item, m, p, data, skipCommitment)
@@ -2450,7 +2464,7 @@ func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) 
 // with property/source filters where applying commitment over a filtered subset
 // of events would surface misleading commitment/overage/true-up amounts.
 func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price, m *meter.Meter, data *AnalyticsData, skipCommitment bool) {
-	params := &meterUsageBucketedCostParams{ctx, priceService, item, p, data, m.Aggregation.Type, m.Aggregation.BucketSize}
+	params := &meterUsageBucketedCostParams{ctx, priceService, item, p, data, m.Aggregation.Type, price.ResolveBucketSize(p, m)}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
@@ -2511,10 +2525,10 @@ func (s *meterUsageService) processPointsWithBuckets(
 // coarser. mergeBucketPointsByWindow cannot subdivide below the meter bucket, so a
 // request window finer than the bucket leaves points at meter-bucket grain — the
 // overlap check must use that coarser span, not the (smaller) request window.
-func effectivePointWindowMinutes(requestWindow types.WindowSize, m *meter.Meter) int {
+func effectivePointWindowMinutes(requestWindow types.WindowSize, p *price.Price, m *meter.Meter) int {
 	minutes := requestWindow.ToMinutes()
-	if m != nil && m.HasBucketSize() {
-		if bm := m.Aggregation.BucketSize.ToMinutes(); bm > minutes {
+	if bs := price.ResolveBucketSize(p, m); bs != "" {
+		if bm := bs.ToMinutes(); bm > minutes {
 			minutes = bm
 		}
 	}

@@ -60,13 +60,13 @@ func TestSeedEnsure(t *testing.T) {
 				// subs and wallets are empty — they'll be created
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     0, // all seed features found via Query
-			wantCustomersCreated:    1,  // 10 pre-populated; alert canary still needs creating
-			wantPlansCreated:        0,  // plan found via Query
+			wantFeaturesCreated:     0,                         // all seed features found via Query
+			wantCustomersCreated:    1,                         // 10 pre-populated; alert canary still needs creating
+			wantPlansCreated:        0,                         // plan found via Query
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         11, // 10 persistent + 1 alert canary
-			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
-			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
+			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary
+			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
+			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
 			wantMeterIDs:            len(seedFeatureSpecs),
 			wantFeatureIDs:          len(seedFeatureSpecs),
@@ -84,9 +84,9 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         11, // 10 persistent + 1 alert canary
-			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
-			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
+			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary
+			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
+			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
 			wantMeterIDs:            len(seedFeatureSpecs),
 			wantFeatureIDs:          len(seedFeatureSpecs),
@@ -115,7 +115,7 @@ func TestSeedEnsure(t *testing.T) {
 			},
 			wantErr:                 false,
 			wantFeaturesCreated:     0,
-			wantCustomersCreated:    1,  // alert canary still needs creating
+			wantCustomersCreated:    1, // alert canary still needs creating
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1,
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary

@@ -945,7 +945,10 @@ func (s *TaskServiceSuite) TestFeatureImportWithMeter() {
 	data := [][]string{
 		{"name", "type", "lookup_key", "meter_name", "event_name", "aggregation_type", "aggregation_field", "reset_usage", "aggregation_multiplier", "aggregation_bucket_size"},
 		{"API Calls", "metered", "api_calls", "API Calls Meter", "api_call", "COUNT", "", "BILLING_PERIOD", "1.0", ""},
+		// aggregation_bucket_size is deprecated on meters — the column is accepted
+		// but ignored, so the row still imports successfully.
 		{"Storage Usage", "metered", "storage_usage", "Storage Meter", "storage_event", "SUM", "bytes_used", "NEVER", "0.001", "DAY"},
+		{"Bandwidth", "metered", "bandwidth", "Bandwidth Meter", "bandwidth_event", "SUM", "bytes", "NEVER", "1.0", ""},
 	}
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
@@ -967,8 +970,9 @@ func (s *TaskServiceSuite) TestFeatureImportWithMeter() {
 	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
 	s.NoError(err)
 	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
+	s.Equal(3, updatedTask.ProcessedRecords)
+	s.Equal(3, updatedTask.SuccessfulRecords)
+	s.Equal(0, updatedTask.FailedRecords)
 }
 
 func (s *TaskServiceSuite) TestFeatureImportWithMetadata() {

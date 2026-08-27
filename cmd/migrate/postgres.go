@@ -18,6 +18,7 @@ import (
 func newPostgresCmd() *cobra.Command {
 	var dryRun bool
 	var timeout int
+	var allowIndexChanges bool
 	var file string
 
 	cmd := &cobra.Command{
@@ -27,12 +28,18 @@ func newPostgresCmd() *cobra.Command {
 			if file != "" {
 				return runPostgresSQLFile(file, dryRun, timeout)
 			}
-			return runPostgresMigration(dryRun, timeout)
+			return runPostgresMigration(dryRun, timeout, allowIndexChanges)
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print migration SQL without executing it")
 	cmd.Flags().IntVar(&timeout, "timeout", 300, "Timeout in seconds for the migration")
+	// CI only. Production keeps ModifyIndex in the skip set (RCA 2026-06-25), which
+	// means a changed index is silently never applied and never reported. The schema
+	// sync check needs to SEE those changes to fail a PR that forgot the migration,
+	// so it runs against a throwaway database with this flag set.
+	cmd.Flags().BoolVar(&allowIndexChanges, "allow-index-changes", false,
+		"Include index modifications in the diff (CI/draft only; requires FLEXPRICE_MIGRATE_UNSAFE=1)")
 	cmd.Flags().StringVar(&file, "file", "", "Apply a raw .sql file (e.g. a baseline) instead of Ent auto-migration")
 
 	return cmd
@@ -64,7 +71,7 @@ func runPostgresSQLFile(file string, dryRun bool, timeout int) error {
 	if dryRun {
 		l.Info(ctx, "Dry run mode - printing SQL file without executing", "file", file)
 		fmt.Print(string(raw))
-		fmt.Println("Migration process completed")
+		fmt.Fprintln(os.Stderr, "Migration process completed")
 		return nil
 	}
 
@@ -97,11 +104,11 @@ func runPostgresSQLFile(file string, dryRun bool, timeout int) error {
 	}
 
 	l.Info(ctx, "PostgreSQL SQL file applied successfully", "file", file)
-	fmt.Println("Migration process completed")
+	fmt.Fprintln(os.Stderr, "Migration process completed")
 	return nil
 }
 
-func runPostgresMigration(dryRun bool, timeout int) error {
+func runPostgresMigration(dryRun bool, timeout int, allowIndexChanges bool) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -138,9 +145,27 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 	// IMPORTANT: WithSkipChanges OVERWRITES Ent's default skip set, which is
 	// (DropIndex | DropColumn). We MUST re-include both here, or auto-migrate would
 	// start dropping columns (data loss). So the set is default + ModifyIndex.
-	migrateOpts := []schema.MigrateOption{
-		schema.WithSkipChanges(schema.DropIndex | schema.DropColumn | schema.ModifyIndex),
+	if allowIndexChanges && os.Getenv("FLEXPRICE_MIGRATE_UNSAFE") != "1" {
+		// A flag alone is too easy to reach in a deploy. Removing ModifyIndex from
+		// the skip set lets Ent drop and recreate predicate-sensitive indexes under
+		// exclusive locks — the 2026-06-25 incident. Requiring a second, deliberate
+		// signal means it cannot be turned on by editing a command line.
+		return fmt.Errorf("--allow-index-changes requires FLEXPRICE_MIGRATE_UNSAFE=1; " +
+			"it is for CI verification against throwaway databases, never a real deployment")
 	}
+	skip := schema.DropIndex | schema.DropColumn | schema.ModifyIndex
+	if allowIndexChanges {
+		// CI / draft path only: unskip ModifyIndex so a changed index predicate or
+		// column list is visible. Production keeps it skipped (RCA 2026-06-25).
+		//
+		// DropIndex stays skipped even here. Unskipping it makes Ent propose
+		// dropping every index the database has that the Ent schema does not
+		// declare — and production has many, some deliberate. That is a report for
+		// a human, not DDL to auto-draft. See ORPHANED INDEXES in
+		// migrations/versioned/README.md.
+		skip = schema.DropIndex | schema.DropColumn
+	}
+	migrateOpts := []schema.MigrateOption{schema.WithSkipChanges(skip)}
 
 	if dryRun {
 		l.Info(ctx, "Dry run mode - printing migration SQL without executing")
@@ -154,6 +179,6 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 		l.Info(ctx, "Migration completed successfully")
 	}
 
-	fmt.Println("Migration process completed")
+	fmt.Fprintln(os.Stderr, "Migration process completed")
 	return nil
 }

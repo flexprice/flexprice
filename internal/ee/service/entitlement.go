@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -149,6 +150,11 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 					"feature_type": req.FeatureType,
 				}).
 				Mark(ierr.ErrValidation)
+		}
+		// Same rule, price-level source: a live bucketed price on this meter
+		// blocks the entitlement just as a bucketed meter would.
+		if err := s.validateEntitlementAgainstBucketedPrices(ctx, m, req.ToEntitlement(ctx).HasGrantConfig()); err != nil {
+			return nil, err
 		}
 		meterForGrantCheck = m
 	}
@@ -335,6 +341,9 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 							"index":        i,
 						}).
 						Mark(ierr.ErrValidation)
+				}
+				if err := s.validateEntitlementAgainstBucketedPrices(txCtx, m, entReq.ToEntitlement(txCtx).HasGrantConfig()); err != nil {
+					return err
 				}
 				meterForGrantCheck = m
 			}
@@ -829,4 +838,59 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
+}
+
+// validateEntitlementAgainstBucketedPrices is the reverse direction: reject an
+// entitlement when a live price on the feature's meter is already bucketed.
+// grantBased distinguishes the two rules — grants are rejected for any bucketed
+// meter, plain entitlements only for MAX.
+func (s *entitlementService) validateEntitlementAgainstBucketedPrices(ctx context.Context, m *meter.Meter, grantBased bool) error {
+	if m == nil || m.ID == "" || s.PriceRepo == nil {
+		return nil
+	}
+	// A legacy meter-level bucket size is partly covered by the meter-level checks
+	// (entitlement.go rejects bucketed MAX), but those predate the non-linear rule.
+	// Do not early-return: a legacy bucketed SUM meter priced TIERED/PACKAGE must
+	// still be rejected, and the loop below evaluates each live price's model.
+
+	// Only currently-effective prices can block an entitlement. A superseded
+	// version that happened to be bucketed must not: the repo already excludes
+	// end-dated and non-published rows, but state it explicitly here so the
+	// guard cannot silently widen if that default ever changes.
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.MeterIDs = []string{m.ID}
+	priceFilter.AllowExpiredPrices = false
+	priceFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return err
+	}
+
+	isMax := m.Aggregation.Type == types.AggregationMax
+	for _, pr := range prices {
+		if pr == nil || !price.IsBucketed(pr, m) {
+			continue
+		}
+		if !grantBased && !isMax && pr.BillingModel == types.BILLING_MODEL_FLAT_FEE {
+			continue
+		}
+		hint := "This meter is priced per window on at least one price. Remove the bucket size from that price before adding an entitlement."
+		if grantBased {
+			hint = "This meter is priced per window on at least one price. Grant-based entitlements cannot be used with windowed pricing."
+		} else if pr.BillingModel != types.BILLING_MODEL_FLAT_FEE {
+			hint = "This meter is priced per window with tiered or packaged pricing. An entitlement would re-price on the period total and grant the allowance once instead of once per window."
+		}
+		return ierr.NewError("meter is priced per window").
+			WithHint(hint).
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":      m.ID,
+				"price_id":      pr.ID,
+				"bucket_size":   price.ResolveBucketSize(pr, m),
+				"billing_model": pr.BillingModel,
+				"grant_based":   grantBased,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

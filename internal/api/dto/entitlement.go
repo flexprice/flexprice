@@ -186,6 +186,21 @@ type EntitlementResponse struct {
 // ListEntitlementsResponse represents a paginated list of entitlements
 type ListEntitlementsResponse = types.ListResponse[*EntitlementResponse] // @name ListEntitlementsResponse
 
+func ToEntitlements(resp *ListEntitlementsResponse) []*entitlement.Entitlement {
+	if resp == nil {
+		return nil
+	}
+
+	entitlements := make([]*entitlement.Entitlement, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		if item == nil || item.Entitlement == nil {
+			continue
+		}
+		entitlements = append(entitlements, item.Entitlement)
+	}
+	return entitlements
+}
+
 // CreateBulkEntitlementRequest represents the request to create multiple entitlements in bulk
 type CreateBulkEntitlementRequest struct {
 	Items []CreateEntitlementRequest `json:"items" validate:"required,min=1,max=100"`

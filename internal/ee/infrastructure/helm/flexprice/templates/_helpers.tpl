@@ -597,41 +597,6 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_BILLING_ENVIRONMENT_ID
   value: {{ .Values.billing.environmentId | quote }}
 {{- end }}
-{{- /* ---- Observability ---- */}}
-- name: FLEXPRICE_SENTRY_ENABLED
-  value: {{ .Values.app.observability.sentry.enabled | quote }}
-{{- if .Values.app.observability.sentry.enabled }}
-- name: FLEXPRICE_SENTRY_DSN
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "flexprice.secretName" . }}
-      key: sentry-dsn
-- name: FLEXPRICE_SENTRY_ENVIRONMENT
-  value: {{ .Values.app.observability.sentry.environment | quote }}
-- name: FLEXPRICE_SENTRY_SAMPLE_RATE
-  value: {{ .Values.app.observability.sentry.sampleRate | quote }}
-{{- end }}
-- name: FLEXPRICE_PYROSCOPE_ENABLED
-  value: {{ .Values.app.observability.pyroscope.enabled | quote }}
-{{- if .Values.app.observability.pyroscope.enabled }}
-- name: FLEXPRICE_PYROSCOPE_SERVER_ADDRESS
-  value: {{ .Values.app.observability.pyroscope.serverAddress | quote }}
-- name: FLEXPRICE_PYROSCOPE_APPLICATION_NAME
-  value: {{ .Values.app.observability.pyroscope.applicationName | quote }}
-- name: FLEXPRICE_PYROSCOPE_SAMPLE_RATE
-  value: {{ .Values.app.observability.pyroscope.sampleRate | quote }}
-- name: FLEXPRICE_PYROSCOPE_DISABLE_GC_RUNS
-  value: {{ .Values.app.observability.pyroscope.disableGCRuns | quote }}
-{{- if .Values.app.observability.pyroscope.basicAuthUser }}
-- name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_USER
-  value: {{ .Values.app.observability.pyroscope.basicAuthUser | quote }}
-- name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "flexprice.secretName" . }}
-      key: pyroscope-basic-auth-password
-{{- end }}
-{{- end }}
 {{- /* ---- S3 ---- */}}
 {{- if .Values.s3.enabled }}
 - name: FLEXPRICE_S3_ENABLED

@@ -230,6 +230,12 @@ func (egc *EntitlementGrantCreate) SetNillableQuotaCrossedAt(t *time.Time) *Enti
 	return egc
 }
 
+// SetMetadata sets the "metadata" field.
+func (egc *EntitlementGrantCreate) SetMetadata(t types.Metadata) *EntitlementGrantCreate {
+	egc.mutation.SetMetadata(t)
+	return egc
+}
+
 // SetID sets the "id" field.
 func (egc *EntitlementGrantCreate) SetID(s string) *EntitlementGrantCreate {
 	egc.mutation.SetID(s)
@@ -298,6 +304,10 @@ func (egc *EntitlementGrantCreate) defaults() {
 	if _, ok := egc.mutation.GrantStatus(); !ok {
 		v := entitlementgrant.DefaultGrantStatus
 		egc.mutation.SetGrantStatus(v)
+	}
+	if _, ok := egc.mutation.Metadata(); !ok {
+		v := entitlementgrant.DefaultMetadata
+		egc.mutation.SetMetadata(v)
 	}
 }
 
@@ -502,6 +512,10 @@ func (egc *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.Cr
 	if value, ok := egc.mutation.QuotaCrossedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime, value)
 		_node.QuotaCrossedAt = &value
+	}
+	if value, ok := egc.mutation.Metadata(); ok {
+		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
+		_node.Metadata = value
 	}
 	return _node, _spec
 }

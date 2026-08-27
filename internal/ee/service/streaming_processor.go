@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,43 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// downloadTimeout bounds a single import download. Import files can be large and
+// are streamed, so this is well above a typical API call timeout.
+const downloadTimeout = 10 * time.Minute
+
+// retryClientMinBackoff is the shortest wait the download client sleeps before a
+// retry, so anything that fails faster than this did not retry at all.
+const retryClientMinBackoff = 1 * time.Second
+
+// newGuardedDownloadClient returns the retryable client used to fetch a
+// caller-supplied file_url.
+//
+// The URL is validated when the task is created but fetched much later, so the
+// destination is re-checked at dial time: a host that resolved to a public
+// address at validation time can resolve to an internal one by the time we dial
+// (DNS rebinding). The client also refuses redirects, which would otherwise
+// reach a host that was never validated (VAPT F16).
+func newGuardedDownloadClient(log *logger.Logger) *retryablehttp.Client {
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = 3
+	retryClient.RetryWaitMin = retryClientMinBackoff
+	retryClient.RetryWaitMax = 30 * time.Second
+	retryClient.Logger = log.GetRetryableHTTPLogger()
+	retryClient.HTTPClient = httpclient.NewPublicOnlyClient(downloadTimeout)
+
+	// A blocked address is a permanent verdict, not a transient failure, so it
+	// must not consume the retry budget.
+	defaultRetry := retryClient.CheckRetry
+	retryClient.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		if errors.Is(err, httpclient.ErrBlockedAddress) {
+			return false, err
+		}
+		return defaultRetry(ctx, resp, err)
+	}
+
+	return retryClient
+}
+
 // StreamingProcessor handles streaming processing of large files
 type StreamingProcessor struct {
 	Client           httpclient.Client
@@ -32,25 +70,18 @@ type StreamingProcessor struct {
 	RetryClient      *retryablehttp.Client
 }
 
-// NewStreamingProcessor creates a new streaming processor
-func NewStreamingProcessor(client httpclient.Client, logger *logger.Logger) *StreamingProcessor {
-	// Configure retryable HTTP client
-	retryClient := retryablehttp.NewClient()
-	retryClient.RetryMax = 3
-	retryClient.RetryWaitMin = 1 * time.Second
-	retryClient.RetryWaitMax = 30 * time.Second
-	retryClient.Logger = logger.GetRetryableHTTPLogger()
-	// Instrument outbound file downloads for SigNoz External API Monitoring.
-	retryClient.HTTPClient.Transport = httpclient.OtelTransport(retryClient.HTTPClient.Transport)
-	// Refuse redirects: this client streams the caller-supplied file_url and only
-	// the initial URL is validated (VAPT F16).
-	retryClient.HTTPClient.CheckRedirect = httpclient.RejectRedirects
-
+// NewStreamingProcessor creates a new streaming processor.
+//
+// It deliberately takes no client: every URL this processor fetches is the
+// caller-supplied file_url, so the destination must always be re-checked at
+// dial time. Accepting a client would let a caller substitute an unguarded one
+// and silently reopen the SSRF hole this guard closes (VAPT F16).
+func NewStreamingProcessor(logger *logger.Logger) *StreamingProcessor {
 	return &StreamingProcessor{
-		Client:           client,
+		Client:           httpclient.NewPublicOnlySendClient(downloadTimeout),
 		Logger:           logger,
 		ProviderRegistry: NewFileProviderRegistry(),
-		RetryClient:      retryClient,
+		RetryClient:      newGuardedDownloadClient(logger),
 	}
 }
 

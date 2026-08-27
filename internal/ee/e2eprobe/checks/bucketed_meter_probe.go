@@ -45,6 +45,11 @@ var bucketedProbeSpecs = []bucketedSpec{
 	{featureKey: "e2eprobe_max_15min_feature", eventName: "e2eprobe_max_15min", window: types.WindowSizeFifteenMin, duration: 15 * time.Minute},
 	{featureKey: "e2eprobe_sum_hour_feature", eventName: "e2eprobe_sum_hour", window: types.WindowSizeHour, duration: 1 * time.Hour},
 	{featureKey: "e2eprobe_max_day_feature", eventName: "e2eprobe_max_day", window: types.WindowSizeDay, duration: 24 * time.Hour},
+	// Bucket resolved from the PRICE, not the meter. Same assertions as the
+	// meter-bucketed specs above — a price-level bucket must produce identical
+	// windowing, which is the whole point of the migration.
+	{featureKey: "e2eprobe_max_price_hour_feature", eventName: "e2eprobe_max_price_hour", window: types.WindowSizeHour, duration: 1 * time.Hour},
+	{featureKey: "e2eprobe_sum_price_hour_feature", eventName: "e2eprobe_sum_price_hour", window: types.WindowSizeHour, duration: 1 * time.Hour},
 }
 
 func (p *BucketedMeterProbe) Run(ctx context.Context) error {
