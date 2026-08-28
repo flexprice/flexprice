@@ -126,6 +126,12 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 			Credentials: credentials.NewStaticCredentialsProvider(
 				cfg.AssumeRoleBaseAccessKeyID, cfg.AssumeRoleBaseSecretAccessKey, cfg.AssumeRoleBaseSessionToken,
 			),
+		}, func(o *sts.Options) {
+			// Redirect STS to the same override used for S3 (emulator/fake
+			// endpoint in tests); real deployments leave EndpointURL empty.
+			if cfg.EndpointURL != "" {
+				o.BaseEndpoint = aws.String(cfg.EndpointURL)
+			}
 		})
 		provider := stscreds.NewAssumeRoleProvider(stsClient, cfg.AssumeRoleARN, func(o *stscreds.AssumeRoleOptions) {
 			o.ExternalID = &cfg.AssumeRoleExternalID
@@ -134,6 +140,13 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 		opts = append(opts, awsConfig.WithCredentialsProvider(aws.NewCredentialsCache(
 			&redactingCredentialsProvider{inner: provider, roleARN: cfg.AssumeRoleARN, externalID: cfg.AssumeRoleExternalID},
 		)))
+	case cfg.AssumeRoleARN != "" && cfg.AssumeRoleExternalID == "":
+		// A role ARN with no external ID must not silently fall through to the
+		// ambient chain — that ignores the configured role and looks identical
+		// to a working setup until the ambient chain also fails to resolve.
+		return nil, ierr.NewError("assume_role_arn is set but assume_role_external_id is missing").
+			WithHint("set assume_role_external_id, or clear assume_role_arn to use another credential source").
+			Mark(ierr.ErrValidation)
 	case cfg.FederationRoleARN != "" && cfg.FederationTokenSource != nil:
 		log.Info(ctx, "s3backend: using OIDC federation credentials", "role_arn", cfg.FederationRoleARN)
 		baseCfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(cfg.Region))
@@ -209,12 +222,18 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		ContentType: aws.String(contentType),
 	}
 	switch c.cfg.ServerSideEncrypt {
+	case "": // no server-side encryption requested
 	case "AES256":
 		input.ServerSideEncryption = types.ServerSideEncryptionAes256
 	case "aws:kms":
 		input.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 	case "aws:kms:dsse":
 		input.ServerSideEncryption = types.ServerSideEncryptionAwsKmsDsse
+	default:
+		return nil, ierr.NewError("unsupported server-side encryption").
+			WithHint("server_side_encrypt must be empty, AES256, aws:kms, or aws:kms:dsse").
+			WithMessagef("value:%s", c.cfg.ServerSideEncrypt).
+			Mark(ierr.ErrValidation)
 	}
 
 	if _, err := c.s3.PutObject(ctx, input); err != nil {

@@ -238,6 +238,7 @@ func TestAssumeRole_ErrorIsRedacted(t *testing.T) {
 	cfg := &s3backend.Config{
 		Bucket:                        "test-bucket",
 		Region:                        "us-east-1",
+		EndpointURL:                   "http://127.0.0.1:1", // dead local endpoint: STS+S3 fail fast, no outbound network
 		AssumeRoleARN:                 roleARN,
 		AssumeRoleExternalID:          externalID,
 		AssumeRoleBaseAccessKeyID:     "AKIABASE",
