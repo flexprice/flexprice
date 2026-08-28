@@ -1,0 +1,7 @@
+services:
+  adot:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel/collector-debug.yaml"]
+    volumes:
+      - ./collector-debug.yaml:/etc/otel/collector-debug.yaml:ro
+    ports: ["4317:4317", "4318:4318", "13133:13133"]
