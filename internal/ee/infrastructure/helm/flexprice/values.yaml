@@ -1228,7 +1228,7 @@ adot:
     xray: true
     cloudwatchMetrics: true              # awsemf
     cloudwatchLogs: true                 # awscloudwatchlogs
-  memoryLimiterMiB: 400                  # tie to container limit in Task 4
+  memoryLimiterMiB: 400                  # keep below resources.limits.memory
 
 # S3 configuration
 s3:
