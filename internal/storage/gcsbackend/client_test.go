@@ -46,6 +46,7 @@ func TestNew_ReturnsStorage(t *testing.T) {
 	cfg := &gcsbackend.Config{
 		Bucket:      "test-bucket",
 		EndpointURL: srv.URL,
+		DisableAuth: true,
 	}
 
 	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
@@ -65,7 +66,7 @@ func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &gcsbackend.Config{Bucket: "test-bucket", EndpointURL: srv.URL}
+	cfg := &gcsbackend.Config{Bucket: "test-bucket", EndpointURL: srv.URL, DisableAuth: true}
 	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
@@ -87,6 +88,7 @@ func newFakeGCSServer(t *testing.T, handler http.HandlerFunc) (*gcsbackend.Confi
 	cfg := &gcsbackend.Config{
 		Bucket:      "test-bucket",
 		EndpointURL: srv.URL,
+		DisableAuth: true,
 	}
 	return cfg, srv
 }

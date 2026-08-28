@@ -38,6 +38,10 @@ type Config struct {
 	// EndpointURL, if set, overrides the default GCS API endpoint (used to
 	// point the client at a local fake/emulator in tests).
 	EndpointURL string
+	// DisableAuth skips authentication entirely (unauthenticated emulator).
+	// Keep it independent from EndpointURL so a custom endpoint can still be
+	// used with real credentials without triggering conflicting client options.
+	DisableAuth bool
 }
 
 type client struct {
@@ -51,11 +55,13 @@ type client struct {
 // 2. ambient Application Default Credentials (Workload Identity, etc.)
 func New(ctx context.Context, cfg *Config, log *logger.Logger) (fpstorage.Storage, error) {
 	var opts []gcsoption.ClientOption
-	if len(cfg.ServiceAccountJSON) > 0 {
+	if cfg.DisableAuth {
+		opts = append(opts, gcsoption.WithoutAuthentication())
+	} else if len(cfg.ServiceAccountJSON) > 0 {
 		opts = append(opts, gcsoption.WithCredentialsJSON(cfg.ServiceAccountJSON))
 	}
 	if cfg.EndpointURL != "" {
-		opts = append(opts, gcsoption.WithEndpoint(cfg.EndpointURL), gcsoption.WithoutAuthentication())
+		opts = append(opts, gcsoption.WithEndpoint(cfg.EndpointURL))
 	}
 
 	gcsClient, err := storage.NewClient(ctx, opts...)
