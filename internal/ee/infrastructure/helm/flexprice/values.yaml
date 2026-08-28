@@ -1187,11 +1187,21 @@ logging:
 otel:
   enabled: false
   serviceName: ""     # empty → app falls back to FLEXPRICE_DEPLOYMENT_MODE per component (api/consumer/temporal_worker)
+  protocol: ""        # grpc | http; empty = app default (grpc)
+  insecure: false     # SHARED across all signals; true for plaintext in-cluster collector
   traces:
     enabled: false
     endpoint: ""        # e.g. "ingest.in2.signoz.cloud:443"
     authHeader: ""      # e.g. "signoz-ingestion-key"
     sampleRate: ""      # empty → app default (1.0 = 100%); e.g. "0.2" to sample 20%
+  metrics:
+    enabled: false
+    endpoint: ""
+    protocol: ""
+  logs:
+    enabled: false
+    endpoint: ""
+    protocol: ""
 
 # S3 configuration
 s3:

@@ -741,6 +741,34 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.otel.traces.sampleRate | quote }}
 {{- end }}
 {{- end }}
+{{- if .Values.otel.protocol }}
+- name: FLEXPRICE_OTEL_PROTOCOL
+  value: {{ .Values.otel.protocol | quote }}
+{{- end }}
+{{- if .Values.otel.insecure }}
+- name: FLEXPRICE_OTEL_INSECURE
+  value: {{ .Values.otel.insecure | quote }}
+{{- end }}
+{{- if .Values.otel.metrics.enabled }}
+- name: FLEXPRICE_OTEL_METRICS_ENABLED
+  value: "true"
+- name: FLEXPRICE_OTEL_METRICS_ENDPOINT
+  value: {{ .Values.otel.metrics.endpoint | quote }}
+{{- with .Values.otel.metrics.protocol }}
+- name: FLEXPRICE_OTEL_METRICS_PROTOCOL
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.otel.logs.enabled }}
+- name: FLEXPRICE_OTEL_LOGS_ENABLED
+  value: "true"
+- name: FLEXPRICE_OTEL_LOGS_ENDPOINT
+  value: {{ .Values.otel.logs.endpoint | quote }}
+{{- with .Values.otel.logs.protocol }}
+- name: FLEXPRICE_OTEL_LOGS_PROTOCOL
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- /* ---- App URLs ---- */}}
 {{- if .Values.app.customerPortalUrl }}
