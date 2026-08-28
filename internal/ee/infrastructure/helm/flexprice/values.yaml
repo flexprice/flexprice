@@ -1198,6 +1198,7 @@ otel:
     enabled: false
     endpoint: ""
     protocol: ""
+    httpServerEnabled: false  # request/RED metrics (HTTP server instrumentation); off by default
   logs:
     enabled: false
     endpoint: ""

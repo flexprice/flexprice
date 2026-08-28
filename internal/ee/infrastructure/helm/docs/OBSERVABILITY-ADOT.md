@@ -10,7 +10,7 @@ The chart includes an optional ADOT collector sidecar and OTel instrumentation
 in the FlexPrice app. When enabled:
 
 1. **App → OTLP**: FlexPrice emits OpenTelemetry Protocol (OTLP) signals over
-   gRPC to `<release>-adot-collector.<ns>.svc:4317` (in-cluster endpoint).
+   gRPC to `<release>-flexprice-adot-collector.<ns>.svc:4317` (in-cluster endpoint).
 2. **Collector → X-Ray**: Traces are forwarded to AWS X-Ray for distributed tracing.
 3. **Collector → CloudWatch Logs**: Metrics (EMF format) and application logs
    are sent to CloudWatch Logs under `/flexprice/otel/metrics` and
@@ -49,20 +49,27 @@ otel:
   insecure: true                         # Plaintext OTLP within the cluster; TLS not needed
   traces:
     enabled: true
-    endpoint: flexprice-adot-collector.flexprice.svc:4317
+    endpoint: myrelease-flexprice-adot-collector.flexprice.svc:4317
   metrics:
     enabled: true
-    endpoint: flexprice-adot-collector.flexprice.svc:4317
+    endpoint: myrelease-flexprice-adot-collector.flexprice.svc:4317
   logs:
     enabled: true
-    endpoint: flexprice-adot-collector.flexprice.svc:4317
+    endpoint: myrelease-flexprice-adot-collector.flexprice.svc:4317
 ```
 
-Replace `<release>`, `<ns>` with your actual release name and namespace. In the
-example above, the namespace is `flexprice`. The endpoint format is:
+Replace `<release>`, `<ns>` with your actual Helm release name and namespace.
+In the example above, the release name is `myrelease` and the namespace is
+`flexprice`. The endpoint format is:
 ```
-<release>-adot-collector.<namespace>.svc:4317
+<release>-flexprice-adot-collector.<namespace>.svc:4317
 ```
+
+> **Note**: the Service name follows `<fullname>-adot-collector`, where
+> `fullname` is `<release>-flexprice` (the chart name is appended to the
+> release name), UNLESS the release name already contains "flexprice" (e.g.
+> a release named `flexprice` or `flexprice-prod`), in which case `fullname`
+> is just `<release>` and the Service is `<release>-adot-collector`.
 
 > **Note**: `otel.insecure: true` applies to all signals (traces, metrics,
 > logs). This is safe and expected — all traffic stays within the cluster.
@@ -82,7 +89,7 @@ These appear in CloudWatch under `/flexprice/otel/metrics`.
 otel:
   metrics:
     enabled: true
-    endpoint: flexprice-adot-collector.flexprice.svc:4317
+    endpoint: myrelease-flexprice-adot-collector.flexprice.svc:4317
     httpServerEnabled: true              # Enable HTTP server instrumentation
 ```
 
@@ -95,7 +102,7 @@ exposed to internal or external traffic.
 ### 1. Check the ADOT collector pod
 
 ```bash
-kubectl get pod -n flexprice -l app.kubernetes.io/name=flexprice-adot-collector
+kubectl get pod -n flexprice -l app.kubernetes.io/component=adot-collector
 kubectl logs -n flexprice <pod-name> | head -20
 ```
 
@@ -146,14 +153,14 @@ signoz:
 Check the logs:
 
 ```bash
-kubectl logs -n flexprice -l app.kubernetes.io/name=flexprice-adot-collector
+kubectl logs -n flexprice -l app.kubernetes.io/component=adot-collector
 ```
 
 Common issues:
 - **Authentication**: The IRSA role ARN annotation is missing or incorrect on the
   collector's ServiceAccount. Verify:
   ```bash
-  kubectl get sa -n flexprice <release>-adot-collector -o yaml | grep role-arn
+  kubectl get sa -n flexprice flexprice-adot-collector -o yaml | grep role-arn
   ```
 - **Image digest**: The ADOT image digest is invalid. Verify it exists in
   `public.ecr.aws/aws-observability/aws-for-fluent-bit:latest`.
@@ -177,8 +184,8 @@ If the app logs show connection errors to `<endpoint>:4317`:
 
 ```bash
 # From a FlexPrice pod, verify DNS resolves:
-kubectl exec -n flexprice <app-pod> -- nslookup flexprice-adot-collector.flexprice.svc
-kubectl exec -n flexprice <app-pod> -- nc -zv flexprice-adot-collector.flexprice.svc 4317
+kubectl exec -n flexprice <app-pod> -- nslookup myrelease-flexprice-adot-collector.flexprice.svc
+kubectl exec -n flexprice <app-pod> -- nc -zv myrelease-flexprice-adot-collector.flexprice.svc 4317
 ```
 
 The collector pod must be running and healthy.

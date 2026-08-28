@@ -1,4 +1,5 @@
 {{- if .Values.adot.enabled }}
+{{- $_ := required "adot.region is required when adot.enabled=true" .Values.adot.region }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,7 +24,7 @@ spec:
       serviceAccountName: {{ .Values.adot.serviceAccount.name }}
       containers:
         - name: adot-collector
-          image: "{{ .Values.adot.image.repository }}@{{ .Values.adot.image.digest }}"
+          image: "{{ .Values.adot.image.repository }}@{{ required "adot.image.digest is required when adot.enabled=true" .Values.adot.image.digest }}"
           args: ["--config=/etc/otel/collector.yaml"]
           ports:
             - { name: otlp-grpc, containerPort: 4317 }

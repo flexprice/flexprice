@@ -758,6 +758,10 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_OTEL_METRICS_PROTOCOL
   value: {{ . | quote }}
 {{- end }}
+{{- if .Values.otel.metrics.httpServerEnabled }}
+- name: FLEXPRICE_OTEL_METRICS_HTTP_SERVER_ENABLED
+  value: "true"
+{{- end }}
 {{- end }}
 {{- if .Values.otel.logs.enabled }}
 - name: FLEXPRICE_OTEL_LOGS_ENABLED
