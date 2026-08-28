@@ -1213,6 +1213,13 @@ adot:
     create: true
     name: flexprice-adot-collector
     annotations: {}               # eks.amazonaws.com/role-arn: <arn>
+  image:
+    repository: public.ecr.aws/aws-observability/aws-otel-collector
+    digest: ""                    # REQUIRED: manifest-list (multi-arch) digest, e.g. sha256:...
+  replicaCount: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   logGroups:
     metrics: "/flexprice/otel/metrics"   # EMF
     logs: "/flexprice/otel/logs"         # app logs
