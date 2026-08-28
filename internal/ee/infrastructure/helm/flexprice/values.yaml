@@ -1203,6 +1203,17 @@ otel:
     endpoint: ""
     protocol: ""
 
+# AWS OpenTelemetry (ADOT) Collector
+# Optional sidecar for collecting and exporting traces/metrics/logs to CloudWatch or other backends.
+# Off by default; enable and configure per-region.
+adot:
+  enabled: false
+  region: ""                      # required when enabled
+  serviceAccount:
+    create: true
+    name: flexprice-adot-collector
+    annotations: {}               # eks.amazonaws.com/role-arn: <arn>
+
 # S3 configuration
 s3:
   enabled: false
