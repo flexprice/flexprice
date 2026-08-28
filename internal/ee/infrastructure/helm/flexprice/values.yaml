@@ -1213,6 +1213,15 @@ adot:
     create: true
     name: flexprice-adot-collector
     annotations: {}               # eks.amazonaws.com/role-arn: <arn>
+  logGroups:
+    metrics: "/flexprice/otel/metrics"   # EMF
+    logs: "/flexprice/otel/logs"         # app logs
+  metricNamespace: "flexprice"
+  exporters:
+    xray: true
+    cloudwatchMetrics: true              # awsemf
+    cloudwatchLogs: true                 # awscloudwatchlogs
+  memoryLimiterMiB: 400                  # tie to container limit in Task 4
 
 # S3 configuration
 s3:
