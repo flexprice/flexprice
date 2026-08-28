@@ -92,7 +92,55 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 	// Check if this is a Flexprice-managed S3 connection
 	jobConfig := req.JobConfig
-	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
+	isManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
+
+	if conn.ProviderType == types.SecretProviderGCS && isManaged {
+		// Flexprice-managed GCS: the destination bucket is Flexprice's own and
+		// comes from config, so the caller never supplies it. Region and
+		// server-side encryption are S3 concepts with no GCS equivalent (a
+		// bucket's location is fixed at creation, and GCS encrypts at rest by
+		// default), so S3JobConfig.Validate — which requires both a bucket and a
+		// region — is deliberately not used on this path.
+		s.logger.Info(ctx, "handling flexprice-managed GCS connection for scheduled task",
+			"connection_id", req.ConnectionID,
+			"tenant_id", tenantID)
+
+		if req.JobConfig == nil {
+			return nil, ierr.NewError("job config is required for flexprice-managed GCS").
+				WithHint("Storage job configuration must be provided").
+				Mark(ierr.ErrValidation)
+		}
+
+		if err := req.JobConfig.Compression.Validate(); err != nil {
+			return nil, err
+		}
+
+		if err := s.config.FlexpriceGCSExports.Validate(); err != nil {
+			return nil, err
+		}
+
+		jobConfig = &types.S3JobConfig{
+			Provider:             types.SecretProviderGCS,
+			Bucket:               s.config.FlexpriceGCSExports.Bucket,
+			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
+			Compression:          req.JobConfig.Compression,
+			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
+		}
+		if jobConfig.Compression == "" {
+			jobConfig.Compression = types.S3CompressionTypeNone
+		}
+
+		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
+			return nil, err
+		}
+
+		s.logger.Info(ctx, "populated job config for flexprice-managed GCS",
+			"bucket", jobConfig.Bucket,
+			"key_prefix", jobConfig.KeyPrefix,
+			"tenant_id", tenantID,
+			"environment_id", envID,
+			"compression", jobConfig.Compression)
+	} else if conn.ProviderType == types.SecretProviderS3 && isManaged {
 		s.logger.Info(ctx, "handling flexprice-managed S3 connection for scheduled task",
 			"connection_id", req.ConnectionID,
 			"tenant_id", tenantID)
@@ -113,7 +161,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		jobConfig = &types.S3JobConfig{
 			Bucket:               s.config.FlexpriceS3Exports.Bucket,
 			Region:               s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:            conn.SyncConfig.S3.KeyPrefix, // Tenant + Environment isolation
+			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
 			Compression:          req.JobConfig.Compression,
 			Encryption:           req.JobConfig.Encryption,
 			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
@@ -145,7 +193,13 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 			return nil, err
 		}
 	} else {
-		// For non-managed connections: full validation required
+		// For non-managed (BYOB) connections: full validation required. Provider is
+		// derived from the connection, not the caller's JSON — otherwise a BYOB GCS
+		// request arrives with an empty provider, S3JobConfig.Validate treats it as
+		// S3, and rejects it for missing an irrelevant AWS region.
+		if req.JobConfig != nil {
+			req.JobConfig.Provider = conn.ProviderType
+		}
 		if err := req.JobConfig.Validate(); err != nil {
 			s.logger.Error(ctx, "invalid job config for custom S3 connection", "error", err)
 			return nil, err

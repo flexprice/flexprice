@@ -26,7 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pyroscope"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
-	s3 "github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -73,6 +73,22 @@ func init() {
 	time.Local = time.UTC
 }
 
+// provideStorageResolver constructs the Resolver that answers every storage
+// lookup in the application: platform buckets (invoice PDFs, Flexprice-managed
+// exports) and customer bring-your-own-bucket connections.
+//
+// The integration Factory supplies the connection half. fx resolves providers
+// by type rather than declaration order, so depending on it here is safe even
+// though integration.NewFactory is registered further down the graph.
+func provideStorageResolver(cfg *config.Configuration, factory *integration.Factory, log *logger.Logger) storage.Resolver {
+	// context.Background() is appropriate here: this runs once at fx DI-graph
+	// construction / application bootstrap time, not on a per-request path,
+	// so there is no caller-supplied context (cancellation/deadline/trace) to
+	// propagate — this call site is the root of the chain, not an
+	// intermediate hop dropping a context it was given.
+	return storage.NewResolver(context.Background(), cfg, factory, log)
+}
+
 func main() {
 	// Initialize Fx application
 	var opts []fx.Option
@@ -96,7 +112,7 @@ func main() {
 			rbac.NewRBACService,
 
 			// storage
-			s3.NewService,
+			provideStorageResolver,
 
 			// Monitoring
 			tracing.NewService,

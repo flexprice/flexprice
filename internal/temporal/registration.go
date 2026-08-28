@@ -128,6 +128,7 @@ func RegisterWorkflowsAndActivities(
 		params.CustomerRepo,
 		params.ConnectionRepo,
 		params.IntegrationFactory,
+		params.StorageResolver,
 		params.Config,
 		params.Logger,
 		meterUsageService,
