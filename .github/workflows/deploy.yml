@@ -251,6 +251,56 @@ jobs:
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Database migrations — one ECS task per target, before anything rolls.
+  #
+  # Runs ahead of the preprod canary and therefore ahead of the production
+  # approval gate. That is deliberate: the canary runs the NEW image, so the new
+  # schema has to be there before it starts. It is only safe because migrations
+  # are additive and backward-compatible by rule (migrations/versioned/README.md)
+  # — the running old code keeps working against the migrated schema, and a
+  # rejected approval leaves a schema the old image still runs on.
+  #
+  # A failure here blocks every deploy job below. The database is left at the
+  # last migration that reported Applied: dbmate commits one file at a time, so
+  # a partial run is a known prefix of the timeline, never a half-applied file.
+  # ──────────────────────────────────────────────────────────────────────────
+  migrate:
+    name: Migrate Database (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: >-
+      ${{ always() &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.targets != '[]' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      # One target's database failing must not leave the others half-deployed:
+      # let every migration report, then block the rollout on any failure.
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - uses: actions/checkout@v3
+
+      - name: Apply database migrations
+        uses: ./.github/actions/run-ecs-migration
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.api_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Job 3: Canary — deploy preprod service(s) for targets that define one.
   # Runs BEFORE the approval gate; production rollout only proceeds after a
   # human validates these preprod deployments and approves the gate.
@@ -258,7 +308,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-preprod:
     name: Deploy Preprod (${{ strategy.job-index }})
-    needs: [build, resolve-config]
+    needs: [build, resolve-config, migrate]
     # `always()` is required so a skipped approval-gate does not block staging, but it
     # also cancels the implicit "skip on failed needs" rule — so every dependency this
     # job actually relies on must be asserted explicitly. `needs.build.result` is the
@@ -268,6 +318,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          needs.migrate.result == 'success' &&
           needs.resolve-config.outputs.preprod_targets != '[]' }}
     runs-on: self-hosted
     strategy:
@@ -382,7 +433,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
+    needs: [build, resolve-config, migrate, approval-gate]
     # staging: deploys immediately (gate is skipped / irrelevant)
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
@@ -390,6 +441,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          needs.migrate.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -419,7 +471,7 @@ jobs:
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
+    needs: [build, resolve-config, migrate, approval-gate]
     # staging: deploys immediately (gate is skipped / irrelevant)
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
@@ -427,6 +479,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          needs.migrate.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -456,7 +509,7 @@ jobs:
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
+    needs: [build, resolve-config, migrate, approval-gate]
     # staging: deploys immediately (gate is skipped / irrelevant)
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
@@ -464,6 +517,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          needs.migrate.result == 'success' &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}

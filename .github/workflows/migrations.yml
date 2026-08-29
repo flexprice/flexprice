@@ -72,9 +72,14 @@ jobs:
         run: go mod download
 
       - name: Install dbmate and psql
+        # Pinned to the same version the deployment image builds (Dockerfile
+        # DBMATE_VERSION). `releases/latest` drifts, which would leave CI
+        # validating migrations with a different applier than production runs.
+        env:
+          DBMATE_VERSION: v2.35.0
         run: |
           sudo curl -fsSL -o /usr/local/bin/dbmate \
-            https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+            "https://github.com/amacneil/dbmate/releases/download/${DBMATE_VERSION}/dbmate-linux-amd64"
           sudo chmod +x /usr/local/bin/dbmate
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
@@ -108,19 +113,47 @@ jobs:
       #   run: make migrate-check-clickhouse
 
       - name: Replay from zero — does a fresh install work?
-        # Exactly what a new client gets: the baseline snapshot, then the timeline.
-        # The baseline lives outside migrations/versioned/ and dbmate never runs it,
-        # so applying only the migrations would leave an empty schema and every
-        # migration referencing a table would fail.
+        # Exactly what a new client gets: the timeline from empty, baseline included.
         env:
           PGPASSWORD: flexprice123
         run: |
           psql -h localhost -p 5432 -U flexprice -d postgres -q \
             -c "DROP DATABASE IF EXISTS fresh_install;" -c "CREATE DATABASE fresh_install;"
-          BASELINE="$(ls -1 migrations/baseline/postgres_baseline_ent_*.sql | tail -1)"
-          psql -h localhost -p 5432 -U flexprice -d fresh_install -q -v ON_ERROR_STOP=1 -f "$BASELINE"
           DATABASE_URL="postgres://flexprice:flexprice123@localhost:5432/fresh_install?sslmode=disable" \
             dbmate --migrations-dir migrations/versioned/postgres --no-dump-schema up
+
+      - name: Deploy command — does `migrate postgres up` behave?
+        # The replay above proves the FILES are consistent. This proves the
+        # COMMAND that CD actually runs behaves: it applies a fresh install, and
+        # it refuses a database that has tables but was never adopted rather
+        # than applying the baseline over a live schema.
+        env:
+          PGPASSWORD: flexprice123
+          FLEXPRICE_POSTGRES_HOST: localhost
+          FLEXPRICE_POSTGRES_PORT: "5432"
+          FLEXPRICE_POSTGRES_USER: flexprice
+          FLEXPRICE_POSTGRES_PASSWORD: flexprice123
+          FLEXPRICE_POSTGRES_SSLMODE: disable
+        run: |
+          set -euo pipefail
+          pg() { psql -h localhost -p 5432 -U flexprice -q -v ON_ERROR_STOP=1 "$@"; }
+
+          pg -d postgres -c "DROP DATABASE IF EXISTS deploy_fresh;" -c "CREATE DATABASE deploy_fresh;"
+          FLEXPRICE_POSTGRES_DBNAME=deploy_fresh go run ./cmd/migrate postgres up --status
+          FLEXPRICE_POSTGRES_DBNAME=deploy_fresh go run ./cmd/migrate postgres up
+
+          # A database that predates the timeline and was never adopted.
+          pg -d postgres -c "DROP DATABASE IF EXISTS deploy_legacy;" -c "CREATE DATABASE deploy_legacy;"
+          pg -d deploy_legacy -f migrations/baseline/postgres_baseline_20260819.sql >/dev/null
+
+          if FLEXPRICE_POSTGRES_DBNAME=deploy_legacy go run ./cmd/migrate postgres up 2>err.log; then
+            echo "FAIL: migrated a database that was never adopted" >&2
+            exit 1
+          fi
+          grep -q "never been adopted" err.log \
+            || { echo "FAIL: refused, but not with the adoption message:" >&2; cat err.log >&2; exit 1; }
+          test "$(pg -d deploy_legacy -tAc "SELECT count(*) FROM pg_tables WHERE tablename='schema_migrations'")" = "0" \
+            || { echo "FAIL: refusal still created the ledger" >&2; exit 1; }
 
       - name: Show the DDL this PR will run
         # Not a gate. Prints the statements so a reviewer sees them before they

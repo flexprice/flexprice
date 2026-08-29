@@ -259,8 +259,9 @@ migrate-generate:
 .PHONY: migrate-adopt
 migrate-adopt:
 	@test -n "$(url)" || \
-	  (echo "usage: make migrate-adopt url=postgres://... [version=head]"; exit 1)
-	@./scripts/migrations/adopt.sh "$(url)" $(MIGRATIONS_PG) $(or $(version),head)
+	  (echo "usage: make migrate-adopt url=postgres://... [version=head] [dry=1]"; exit 1)
+	@./scripts/migrations/adopt.sh "$(url)" $(MIGRATIONS_PG) $(or $(version),head) \
+	  $(if $(dry),--dry-run,)
 
 .PHONY: migrate-fingerprint
 migrate-fingerprint:

@@ -1,4 +1,7 @@
 {{- if .Values.migration.enabled }}
+{{- if and .Values.migration.steps.ent .Values.migration.steps.dbmate }}
+{{- fail "migration.steps.ent and migration.steps.dbmate are both true. They are two implementations of the same step: dbmate applies the reviewed .sql files in migrations/versioned/postgres, Ent auto-migration infers DDL from a live schema diff. Set exactly one. Upgrading from a chart older than 1.4.0: remove any explicit `migration.steps.ent: true` from your values." }}
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -82,7 +85,10 @@ metadata:
     "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
     {{- end }}
 spec:
-  backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
+  {{- /* NOT `| default 3`: Helm's default treats 0 as empty, so an explicit
+         backoffLimit: 0 -- the value that stops a killed migration from being
+         retried -- would silently render as 3. */}}
+  backoffLimit: {{ if kindIs "invalid" .Values.migration.backoffLimit }}3{{ else }}{{ .Values.migration.backoffLimit }}{{ end }}
   {{- if .Values.migration.activeDeadlineSeconds }}
   activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
   {{- end }}
@@ -328,8 +334,52 @@ spec:
               memory: "128Mi"
         {{- end }}
 
+        {{- if .Values.migration.steps.dbmate }}
+        # ── 7. Apply versioned PostgreSQL migrations (dbmate) ────────────────
+        #
+        # Applies the .sql files in migrations/versioned/postgres that this
+        # database has not recorded yet, and records them in schema_migrations.
+        # Replaces the Ent auto-migration step below.
+        #
+        # `--status` runs first so the log states what is pending BEFORE
+        # anything is applied. When a migration fails, that listing is the only
+        # record of what the Job intended to do.
+        #
+        # The command sets lock_timeout=3s and statement_timeout=0 on the
+        # connection itself (see cmd/migrate/postgres_up.go): a blocked ALTER
+        # must give up rather than queue every query in the database behind it
+        # (RCA: prod DDL-lock incident 2026-06-25), while a CREATE INDEX
+        # CONCURRENTLY must not be killed part-way, which would leave an
+        # INVALID index that nothing retries.
+        - name: run-postgres-migrations
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              /app/migrate postgres up --status
+              /app/migrate postgres up
+              echo "✅ PostgreSQL migrations complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          {{- if or (not .Values.env) .Values.kafkaConfig.tlsCASecret.name }}
+          volumeMounts:
+            {{- if not .Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        {{- end }}
+
         {{- if .Values.migration.steps.ent }}
-        # ── 7. Run Ent framework migrations ──────────────────────────────────
+        # ── 7b. Run Ent framework migrations (legacy) ────────────────────────
         - name: run-ent-migrations
           image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}

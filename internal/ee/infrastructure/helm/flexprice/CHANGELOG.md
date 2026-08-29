@@ -9,6 +9,66 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.4.0] - 2026-08-30
+
+### Changed
+- **PostgreSQL migrations now run from reviewed `.sql` files instead of Ent
+  auto-migration.** New `migration.steps.dbmate` (default `true`) adds an init
+  container that runs `./migrate postgres up`, applying the files in
+  `migrations/versioned/postgres` that the target database has not recorded and
+  writing each one to `schema_migrations`. `migration.steps.ent` now defaults to
+  `false`.
+  - Ent auto-migration inferred DDL by diffing the live schema against the Go
+    models at deploy time. Nothing reviewed what it would run and nothing
+    recorded what it did, so the same chart produced different DDL against
+    different databases and drift was invisible. It also silently skipped
+    `DropIndex`, `DropColumn` and `ModifyIndex`, which is how a wrong unique
+    index survived on India production from 2026-07-25 undetected.
+  - The two steps are mutually exclusive; enabling both fails template rendering
+    rather than running the schema through two mechanisms in one Job.
+  - Rolling back is `migration.steps.dbmate: false` +
+    `migration.steps.ent: true`. The Ent path stays in the image.
+
+### Fixed
+- `migration.backoffLimit` now defaults to `0`, and the template no longer passes
+  it through `| default 3` — Helm's `default` treats `0` as empty, so an explicit
+  `backoffLimit: 0` would have silently rendered as `3`.
+  - A retry only helps a transient failure. A migration killed part-way through
+    `CREATE INDEX CONCURRENTLY` leaves the index INVALID, and
+    `CREATE INDEX CONCURRENTLY IF NOT EXISTS` skips an invalid index — so the
+    retry reported success while the index stayed permanently broken.
+  - `migrate postgres up` now refuses to start while any index is INVALID,
+    naming each one and printing the `DROP INDEX CONCURRENTLY` to run.
+
+### ⚠️ `activeDeadlineSeconds` and long index builds
+`activeDeadlineSeconds: 900` is a hard SIGKILL of the Job. In Helm the migration
+and its watcher are the same pod, so the deadline aborts the migration itself —
+unlike the ECS path, where the workflow only watches a task that keeps running.
+Before deploying a migration that builds an index on a large table, set
+`migration.activeDeadlineSeconds: null`; the field is then omitted and Helm or
+ArgoCD giving up waiting no longer stops the index from finishing.
+
+### ⚠️ Upgrade note — existing databases must be adopted first
+An existing database has to be adopted once before this chart version deploys
+against it. Adoption records the migrations written so far as already applied
+and executes **zero DDL**, so only new migrations ever run there:
+
+```bash
+make migrate-adopt url="postgres://USER:PASS@HOST:PORT/DB?sslmode=require" dry=1
+make migrate-adopt url="postgres://USER:PASS@HOST:PORT/DB?sslmode=require"
+```
+
+The Job fails with these instructions if it finds tables but no
+`schema_migrations` ledger. It does not adopt on its own: that would silently
+declare a database nobody inspected to be current, and any migration it is
+actually missing would then never run.
+
+Values that set `migration.steps.ent: true` explicitly must drop it, or
+rendering fails on the mutual-exclusion guard.
+
+A fresh install needs nothing: the first migration in the timeline is the schema
+baseline, so the whole schema is built from the same files.
+
 ## [1.3.0] - 2026-08-12
 
 ### Added

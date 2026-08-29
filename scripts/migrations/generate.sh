@@ -30,13 +30,6 @@ fi
 
 psql "$BASE/postgres?sslmode=disable" -q -c "DROP DATABASE IF EXISTS mig_draft;" \
                                      -c "CREATE DATABASE mig_draft;" >/dev/null
-# Build the scratch database the way a FRESH INSTALL is built: baseline snapshot
-# first, then the versioned migrations. The baseline lives outside the timeline —
-# dbmate never runs it — so applying only the migrations leaves an empty schema and
-# Ent proposes creating everything.
-BASELINE="$(ls -1 migrations/baseline/postgres_baseline_ent_*.sql 2>/dev/null | tail -1)"
-[ -n "$BASELINE" ] || { echo "no Ent baseline in migrations/baseline/" >&2; exit 1; }
-psql -X -q -v ON_ERROR_STOP=1 "$BASE/mig_draft?sslmode=disable" -f "$BASELINE" >/dev/null
 DATABASE_URL="$BASE/mig_draft?sslmode=disable" dbmate --migrations-dir "$DIR" --no-dump-schema up >/dev/null
 
 # Keep stderr, but only show it if the command actually failed — the structured

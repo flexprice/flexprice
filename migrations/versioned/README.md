@@ -4,67 +4,84 @@ Every schema change ships as a reviewed SQL file. `dbmate` applies what a databa
 has not seen yet and records it in `schema_migrations`.
 
 This replaces Ent AutoMigrate as the deploy mechanism. Ent stays the *source of
-truth* for the schema and the CI oracle; it no longer runs against a production
-database.
+truth* for the schema and the CI oracle; it no longer runs against a real database.
 
 ```text
-migrations/baseline/     fresh databases only — dbmate NEVER runs these
-migrations/versioned/    the timeline: what every database applies from here on
-scripts/migrations/      adoption + the CI gates
+migrations/versioned/postgres/   the timeline, baseline first
+scripts/migrations/              adoption + the CI gates
 ```
 
-## The fleet is not homogeneous — read this first
+## Two kinds of database
 
-There is no single baseline that describes every deployment, and there never was.
-India prod grew under AutoMigrate. GCP staging was DMS-migrated from AWS into
-AlloyDB and then diverged. Each client is its own lineage. Measured on 2026-08-26,
-staging differed from a prod-derived baseline by **610 catalog lines**.
+**A new one** gets the whole timeline. `20260819000000_baseline.sql` builds the
+schema, then everything after it applies. Nothing special to run.
 
-So the timeline does not try to reconcile history. It starts with a **marker**
-(`20260819000000`) that executes nothing and claims only:
-
-> whatever this database contains, it does not need anything before here
-
-Every deployment adopts at that marker — prod, staging, each client — with zero
-DDL. Differences existing at that point stay, unreconciled. **The goal is not a
-uniform fleet; it is that divergence stops growing.**
-
-Two rules follow, and both are load-bearing:
-
-**Every migration after the marker should be safe on a database it has never seen.**
-Guard on `to_regclass(...)` before touching a table, prefer matching indexes on
-shape over Ent-derived names, and make re-running a no-op.
-
-The `20260825000100`–`000400` entitlements migrations are the exception: they
-assume India prod's index layout and are applied there by hand. `000400` in
-particular drops an index that is an orphan in prod and the **live** uniqueness
-index in GCP staging.
-
-**The baseline is frozen.** Once anything has adopted, regenerating it would put a
-schema change into fresh installs while every existing deployment silently misses
-it — nothing in the timeline carries the change. New schema goes in a migration.
-`make migrate-check-checksum` enforces this. It covers Postgres only —
-`migrations/versioned/postgres/` and the Ent baseline. Not the legacy
-`migrations/postgres/V*.sql`, not the superseded `pg_dump` baseline, and not
-ClickHouse: that set is inert, its gate is disabled, and freezing it would block
-the fix rather than protect anything.
-
-## Where the baseline comes from
-
-Generated from the **Ent schema**, not from a `pg_dump` of production:
+**An existing one is adopted** — its versions are recorded and nothing executes:
 
 ```bash
-go run ./cmd/migrate postgres --dry-run    # against an empty database
+make migrate-adopt url="postgres://..." dry=1   # print the plan, write nothing
+make migrate-adopt url="postgres://..."         # record everything written so far
 ```
 
-A prod dump carries prod's accumulated past into every new client — dead columns,
-orphaned indexes, ad-hoc tables like `connections_backup_20260805`. A new database
-should start from what the code declares.
+Run the dry pass first. This is done by hand, once per deployment and per client,
+against production.
 
-What Ent omits — functions, standalone sequences, extensions, views, triggers — was
-checked before choosing this: production's three sequence functions have zero Go
-references, `uuid_generate` is referenced nowhere, and `prices.sequence` is created
-by its `bigserial` column. Nothing omitted is used.
+Only migrations added *after* that point ever run there. That is deliberate: the
+existing files describe history each deployment already lived through by its own
+route. India prod grew under AutoMigrate, GCP staging was DMS-migrated from AWS into
+AlloyDB and then diverged — measured on 2026-08-26, by 610 catalog lines. Replaying
+that history would be wrong, and `20260825000400` would drop a live uniqueness index
+on staging.
+
+**Forgetting to adopt is safe.** The baseline is the first migration, so it hits
+`CREATE TABLE` on a table that already exists and stops with nothing recorded —
+rather than applying later migrations to a schema nobody checked.
+
+Once every current deployment is adopted, adoption is only needed for a database
+that predates all this. New ones take the normal path.
+
+## The rule for everything after the baseline
+
+Migrations run on deployments you cannot inspect, so **do not assume a starting
+state**. Guard on `to_regclass(...)` before touching a table, prefer matching
+indexes on shape over Ent-derived names, and make re-running a no-op.
+
+The `20260825000100`–`000400` entitlements migrations predate this rule and assume
+India prod's layout. They are applied there by hand.
+
+## How it runs on a deployment
+
+Nobody applies migrations by hand. Both deploy paths run the same command,
+`./migrate postgres up`, from the image being deployed — so the migrations that
+run are always the ones that shipped with the code.
+
+**Kubernetes / Helm** (GCP, and every client running the chart). The migration
+Job is a `pre-install,pre-upgrade` hook, so it completes before any pod rolls.
+Step 7 of that Job is `run-postgres-migrations`, gated on
+`migration.steps.dbmate`. A client who will not allow a migration Job sets
+`migration.enabled: false` and runs the same command themselves.
+
+**AWS / ECS.** The `migrate` job in `.github/workflows/deploy.yml` runs one
+task per target before the canary and before the production rollout, built from
+the API service's own task definition so it inherits the same secrets, role,
+subnets and security groups the application uses. A non-zero exit blocks every
+deploy job.
+
+Migrations therefore land **before** the new code, and on ECS before the
+production approval gate. That only works because migrations are additive by the
+rule above: the running old code keeps working against the migrated schema, and
+a rejected approval leaves a schema the old image still serves.
+
+The Job prints `--status` before applying, so the log says what was pending even
+when a migration then fails. dbmate commits one file at a time, so a failed run
+leaves the database at a known prefix of the timeline — never a half-applied
+file.
+
+To see what a database would receive without touching it:
+
+```bash
+./migrate postgres up --status
+```
 
 ## Everyday change
 

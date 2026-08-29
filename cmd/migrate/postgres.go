@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
+	"os/exec"
+	"strconv"
 	"time"
 
 	"entgo.io/ent/dialect/sql/schema"
@@ -41,6 +44,10 @@ func newPostgresCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&allowIndexChanges, "allow-index-changes", false,
 		"Include index modifications in the diff (CI/draft only; requires FLEXPRICE_MIGRATE_UNSAFE=1)")
 	cmd.Flags().StringVar(&file, "file", "", "Apply a raw .sql file (e.g. a baseline) instead of Ent auto-migration")
+
+	// `migrate postgres up` is the deploy path. Bare `migrate postgres` remains
+	// Ent auto-migration so a rollback is a values flip, not an image rebuild.
+	cmd.AddCommand(newPostgresUpCmd())
 
 	return cmd
 }
@@ -180,5 +187,234 @@ func runPostgresMigration(dryRun bool, timeout int, allowIndexChanges bool) erro
 	}
 
 	fmt.Fprintln(os.Stderr, "Migration process completed")
+	return nil
+}
+
+// Connection options the migration files rely on but cannot set themselves.
+//
+//	lock_timeout=3s      a blocked ALTER gives up rather than queueing every
+//	                     query behind it (RCA: prod DDL-lock incident 2026-06-25)
+//	statement_timeout=0  a CREATE INDEX CONCURRENTLY killed by a timeout leaves
+//	                     an INVALID index that nothing retries
+//
+// These cannot live in the SQL: a `transaction:false` migration may contain
+// exactly one statement, leaving no room for a SET. They have to come from the
+// connection, which is why applying by hand with a bare `dbmate up` is not
+// equivalent. Kept identical to scripts/migrations/apply.sh.
+const migrationConnOptions = "-c lock_timeout=3s -c statement_timeout=0"
+
+// dbmate ships as a binary in the image rather than as a Go dependency: its
+// module pulls in a driver set the application has no use for (gorm, BigQuery,
+// MySQL, SQLite) and would bloat go.mod for every build. The Dockerfile
+// installs a pinned version into /usr/local/bin.
+var dbmateSearchPath = []string{"dbmate", "/usr/local/bin/dbmate", "/app/dbmate"}
+
+func newPostgresUpCmd() *cobra.Command {
+	var dir string
+	var statusOnly bool
+
+	cmd := &cobra.Command{
+		Use:   "up",
+		Short: "Apply pending versioned SQL migrations (dbmate)",
+		Long: "Apply the migrations in migrations/versioned/postgres that this database\n" +
+			"has not recorded yet. Replaces Ent auto-migration as the deploy mechanism:\n" +
+			"every change is a reviewed .sql file, and what ran is recorded in\n" +
+			"schema_migrations rather than inferred from a live schema diff.",
+		// An unreachable database or an unadopted one is an operational failure,
+		// not a usage error; printing the flag list under it buries the message
+		// that says what to do. main() already reports the error.
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runVersionedMigrations(dir, statusOnly)
+		},
+	}
+
+	cmd.Flags().StringVar(&dir, "dir", "migrations/versioned/postgres",
+		"Directory holding the versioned migrations")
+	cmd.Flags().BoolVar(&statusOnly, "status", false,
+		"List applied and pending migrations, then exit without applying anything")
+
+	return cmd
+}
+
+// postgresMigrationURL renders the connection as a URL. GetDSN() returns
+// keyword/value form, which dbmate does not accept. url.UserPassword escapes the
+// password, so a secret containing @ / : / ? cannot truncate the URL.
+func postgresMigrationURL(c config.PostgresConfig) string {
+	q := url.Values{}
+	q.Set("sslmode", c.SSLMode)
+	q.Set("options", migrationConnOptions)
+
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.User, c.Password),
+		Host:     c.Host + ":" + strconv.Itoa(c.Port),
+		Path:     "/" + c.DBName,
+		RawQuery: q.Encode(),
+	}
+	return u.String()
+}
+
+// assertAdopted refuses to touch a database that has tables but no ledger.
+//
+// The first migration in the timeline is the baseline, which CREATEs every table
+// with no IF NOT EXISTS. Running it against a populated database fails on the
+// first collision anyway — but with a Postgres error naming an arbitrary table,
+// which reads like a bug in the migration rather than a missing setup step. An
+// existing deployment must be adopted once (`make migrate-adopt`) so its history
+// is recorded and only NEW migrations run against it.
+func assertAdopted(ctx context.Context, db *sql.DB) error {
+	var tables int
+	var hasLedger bool
+	err := db.QueryRowContext(ctx, `
+		SELECT
+		  (SELECT count(*) FROM information_schema.tables
+		     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'),
+		  (to_regclass('public.schema_migrations') IS NOT NULL)`,
+	).Scan(&tables, &hasLedger)
+	if err != nil {
+		return fmt.Errorf("inspect target database: %w", err)
+	}
+
+	if hasLedger || tables == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"database has %d tables but no schema_migrations ledger — it has never been adopted.\n"+
+			"Adopting records the migrations written so far as already applied and executes zero DDL,\n"+
+			"so only new migrations ever run here. From a checkout of this repo:\n\n"+
+			"    make migrate-adopt url=\"postgres://USER:PASS@HOST:PORT/DBNAME?sslmode=require\" dry=1\n"+
+			"    make migrate-adopt url=\"postgres://USER:PASS@HOST:PORT/DBNAME?sslmode=require\"\n\n"+
+			"Refusing to continue: applying the baseline over an existing schema would fail\n"+
+			"part-way and leave the ledger empty", tables)
+}
+
+// assertNoInvalidIndexes refuses to run while a half-built index exists.
+//
+// CREATE INDEX CONCURRENTLY that is interrupted -- a killed Job pod, a dropped
+// connection, a cancelled backend -- leaves the index in place and marked
+// invalid. Postgres will not use it for queries, and, critically,
+// `CREATE INDEX CONCURRENTLY IF NOT EXISTS` SKIPS it: a re-run reports success,
+// dbmate records the migration as applied, and the index stays invalid forever
+// with nothing reporting it.
+//
+// Failing here turns that silent outcome into a blocked deploy naming the index.
+// Rebuilding is a DROP followed by re-running the migration; both are online.
+func assertNoInvalidIndexes(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `
+		SELECT n.nspname, c.relname
+		FROM pg_index i
+		JOIN pg_class c ON c.oid = i.indexrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE (NOT i.indisvalid OR NOT i.indisready)
+		  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		ORDER BY 1, 2`)
+	if err != nil {
+		return fmt.Errorf("check for invalid indexes: %w", err)
+	}
+	defer rows.Close()
+
+	var broken []string
+	for rows.Next() {
+		var schemaName, indexName string
+		if err := rows.Scan(&schemaName, &indexName); err != nil {
+			return fmt.Errorf("check for invalid indexes: %w", err)
+		}
+		broken = append(broken, fmt.Sprintf("%s.%s", schemaName, indexName))
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("check for invalid indexes: %w", err)
+	}
+	if len(broken) == 0 {
+		return nil
+	}
+
+	msg := fmt.Sprintf("%d index(es) are INVALID -- a CREATE INDEX CONCURRENTLY was interrupted:\n", len(broken))
+	for _, b := range broken {
+		msg += fmt.Sprintf("    %s\n", b)
+	}
+	msg += "\nPostgres does not use an invalid index, and CREATE INDEX CONCURRENTLY IF NOT EXISTS\n" +
+		"skips it silently -- so continuing would record the migration as applied and leave\n" +
+		"the index broken. Drop each one, then re-run this deploy:\n\n"
+	for _, b := range broken {
+		msg += fmt.Sprintf("    DROP INDEX CONCURRENTLY IF EXISTS %s;\n", b)
+	}
+	msg += "\nDROP INDEX CONCURRENTLY takes no blocking lock and is safe on a live database."
+	return fmt.Errorf("%s", msg)
+}
+
+func resolveDbmate() (string, error) {
+	for _, candidate := range dbmateSearchPath {
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("dbmate not found (looked for %v); the deployment image installs it at /usr/local/bin/dbmate", dbmateSearchPath)
+}
+
+func runVersionedMigrations(dir string, statusOnly bool) error {
+	cfg, err := config.NewConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	bin, err := resolveDbmate()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		return fmt.Errorf("migrations directory %s: %w", dir, err)
+	}
+
+	dsn := postgresMigrationURL(cfg.Postgres)
+
+	// The pre-flight connection is separate from dbmate's and short-lived; a
+	// deployment that cannot reach the database should say so in seconds rather
+	// than sit until the Job's activeDeadlineSeconds expires.
+	checkCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return fmt.Errorf("failed to connect to postgres: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(checkCtx); err != nil {
+		return fmt.Errorf("connect to %s:%d/%s: %w", cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName, err)
+	}
+	if err := assertAdopted(checkCtx, db); err != nil {
+		return err
+	}
+	if err := assertNoInvalidIndexes(checkCtx, db); err != nil {
+		return err
+	}
+	db.Close()
+
+	action := "up"
+	if statusOnly {
+		action = "status"
+	}
+
+	fmt.Fprintf(os.Stderr, "dbmate %s against %s:%d/%s (dir %s)\n",
+		action, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName, dir)
+
+	// --no-dump-schema: dbmate writes schema.sql after a successful run by
+	// default, which needs pg_dump on PATH and a writable tree. Neither holds in
+	// the deployment image, and the dump is a local development convenience.
+	c := exec.Command(bin, "--migrations-dir", dir, "--no-dump-schema", action)
+	c.Env = append(os.Environ(), "DATABASE_URL="+dsn)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+
+	// No timeout on the migration itself. A CREATE INDEX CONCURRENTLY on a large
+	// table legitimately runs for a long time, and killing it mid-build leaves an
+	// INVALID index. The Job's activeDeadlineSeconds is the bound that matters.
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("dbmate %s: %w", action, err)
+	}
 	return nil
 }

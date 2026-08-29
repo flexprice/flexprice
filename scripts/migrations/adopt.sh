@@ -2,7 +2,11 @@
 # Adopt an EXISTING database: record migrations as applied without running them.
 # dbmate has no --baseline, so this is the equivalent. Executes zero DDL.
 #
-#   ./adopt.sh <database-url> <migrations-dir> <version|head> [--reference <url>]
+#   ./adopt.sh <database-url> <migrations-dir> <version|head> [--reference <url>] [--dry-run]
+#
+# --dry-run prints what WOULD be recorded and exits without writing anything, not
+# even the schema_migrations table. Use it first on every database — this is run
+# once per deployment and per client, by hand, against production.
 #
 # "head" adopts at the newest migration in the directory: everything already written
 # is recorded as applied and nothing runs, so only migrations added AFTER this point
@@ -18,6 +22,16 @@
 # it is the record of what this deployment carries that the migration set does not,
 # and it is the only time anyone will look.
 set -euo pipefail
+
+# --dry-run is accepted anywhere so it can be appended to a command already typed
+# out, rather than retyped into the middle of the positional arguments.
+DRY=""
+ARGS=()
+for a in "$@"; do
+  if [ "$a" = "--dry-run" ]; then DRY=1; else ARGS+=("$a"); fi
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
+
 URL="${1:?database url}"; DIR="${2:?migrations dir}"; UPTO="${3:?version or 'head'}"
 if [ "$UPTO" = "head" ]; then
   UPTO="$(ls -1 "$DIR"/*.sql 2>/dev/null | sed 's#.*/##' | cut -d_ -f1 | sort -n | tail -1)"
@@ -58,13 +72,42 @@ else
   echo "         actually contains what these migrations would have created." >&2
 fi
 
+# Versions at or below UPTO — the ones adoption claims this database already lived
+# through. Shared by the dry run and the real run so they cannot disagree.
+PLANNED=()
+for f in "$DIR"/*.sql; do
+  v="$(basename "$f" | cut -d_ -f1)"
+  [ "$v" -gt "$UPTO" ] 2>/dev/null && continue
+  PLANNED+=("$v")
+done
+
+if [ -n "$DRY" ]; then
+  # Errors here mean the table does not exist yet, which is the normal case.
+  RECORDED="$(psql -X -tAq "$URL" -c \
+    "SELECT version FROM schema_migrations" 2>/dev/null || true)"
+  if [ -z "$RECORDED" ]; then
+    echo "schema_migrations: absent or empty — would be created"
+  else
+    echo "schema_migrations: $(echo "$RECORDED" | grep -c .) version(s) already recorded"
+  fi
+  new=0
+  for v in ${PLANNED[@]+"${PLANNED[@]}"}; do
+    if echo "$RECORDED" | grep -qx "$v"; then
+      echo "  skip   $v  (already recorded)"
+    else
+      echo "  insert $v"
+      new=$((new+1))
+    fi
+  done
+  echo "DRY RUN: would record $new new version(s) up to $UPTO — nothing written, zero DDL"
+  exit 0
+fi
+
 psql "$URL" -v ON_ERROR_STOP=1 -q -c \
   "CREATE TABLE IF NOT EXISTS schema_migrations (version varchar(255) PRIMARY KEY);"
 
 n=0
-for f in "$DIR"/*.sql; do
-  v="$(basename "$f" | cut -d_ -f1)"
-  if [ "$v" -gt "$UPTO" ] 2>/dev/null; then continue; fi
+for v in ${PLANNED[@]+"${PLANNED[@]}"}; do
   psql "$URL" -v ON_ERROR_STOP=1 -q -c \
     "INSERT INTO schema_migrations (version) VALUES ('$v') ON CONFLICT DO NOTHING;"
   n=$((n+1))

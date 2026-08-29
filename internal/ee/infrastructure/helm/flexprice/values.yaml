@@ -990,8 +990,31 @@ migration:
   #         false and no external applier means migrations never run.
   asHook: true
   timeout: 300  # Timeout in seconds for migration
-  backoffLimit: 3  # Number of retries before marking job as failed
-  activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)
+
+  # 0 = do not retry a failed migration Job.
+  #
+  # A retry is only useful when the failure was transient. A migration that was
+  # KILLED part-way is the opposite: if it died during CREATE INDEX CONCURRENTLY
+  # the index is left INVALID, and `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
+  # skips an invalid index -- so the retry would report success, record the
+  # migration as applied, and leave the index permanently broken.
+  #
+  # `migrate postgres up` now refuses to start while any invalid index exists, so
+  # a retry fails loudly rather than silently. 0 keeps it from burning the
+  # deadline on an attempt that cannot succeed.
+  backoffLimit: 0
+
+  # Hard kill for the whole Job. Kubernetes SIGKILLs the pod at this deadline;
+  # for a running CREATE INDEX CONCURRENTLY that means an aborted build and an
+  # INVALID index, because the migration and the thing watching it are the same
+  # process here (unlike the ECS path, where the workflow only watches a task
+  # that keeps running).
+  #
+  # 900s is sized for the current migrations, which are small. Before deploying a
+  # migration that builds an index on a large table, set this to null: the field
+  # is then omitted, nothing kills the Job, and Helm or ArgoCD giving up waiting
+  # no longer stops the index from finishing.
+  activeDeadlineSeconds: 900
   ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
   command: ""  # Custom command to run (if empty, uses default migration steps)
   # Apply a SINGLE ClickHouse baseline .sql via `migrate clickhouse --file`
@@ -1002,12 +1025,28 @@ migration:
   # does not. Requires a migrate binary that supports --file (flexprice #2617).
   clickhouseFile: ""
 
-  # Migration steps to run (all enabled by default)
+  # Migration steps to run
+  #
+  # `dbmate` and `ent` are two implementations of the SAME step and are mutually
+  # exclusive — enabling both renders an error rather than running the schema
+  # through two mechanisms in one Job.
   steps:
     postgresSetup: true  # Create schema and extensions in PostgreSQL
     clickhouse: true     # Run ClickHouse migrations
     kafka: true          # Create Kafka topics (idempotent, safe to re-run)
-    ent: true            # Run Ent framework migrations
+    # Apply the reviewed .sql files in migrations/versioned/postgres and record
+    # them in schema_migrations. This is the supported path: what ran is a fact
+    # in a table, the same files run on every region and every client, and a
+    # change is reviewed as SQL before it reaches a database.
+    dbmate: true
+    # Ent auto-migration — the previous mechanism. It diffs the live schema
+    # against the Go models at deploy time and applies whatever it infers, so
+    # what runs is never reviewed and never recorded. Kept in the image so
+    # rolling back is flipping these two flags, not rebuilding.
+    #
+    # An EXISTING database must be adopted once before dbmate runs against it
+    # (`make migrate-adopt`); the Job fails with instructions if it was not.
+    ent: false
     seed: false          # Run seed data (optional, set to true to enable)
     verify: true         # Fatally assert CH tables + kafka topics exist post-migration
 

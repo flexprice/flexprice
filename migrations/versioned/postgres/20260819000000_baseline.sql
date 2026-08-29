@@ -1,26 +1,23 @@
+-- migrate:up
+-- Schema baseline, generated from the Ent schema.
 --
--- Postgres schema baseline — generated from the Ent schema.
+-- Applies only to a database that has none of this yet. An existing deployment
+-- is adopted instead — see below — which records this version and runs nothing.
+-- If it does run somewhere it should not, it fails on the first CREATE TABLE
+-- rather than applying later migrations to a schema nobody checked.
 --
--- FOR FRESH DATABASES ONLY. This file is not part of the versioned migration
--- timeline and dbmate never runs it. An existing deployment is adopted at the
--- marker in migrations/versioned/postgres/ instead, which records the line and
--- executes nothing.
+-- Generated from Ent rather than a pg_dump of production: a prod dump carries
+-- one deployment's accumulated past into every new client — dead columns,
+-- orphaned indexes, ad-hoc tables. Ent omits functions, sequences, extensions,
+-- views and triggers; checked before choosing this, and none of what it omits
+-- is used.
 --
--- Generated from Ent rather than pg_dump of production, deliberately. A prod dump
--- carries prod's accumulated history into every new client — dead columns, orphaned
--- indexes, ad-hoc tables such as connections_backup_20260805. A new database should
--- start from what the code declares, not from one deployment's past.
+-- Adopt an existing database:
+--   make migrate-adopt url=postgres://...
 --
--- What Ent does not model, and this therefore omits: functions, standalone
--- sequences, extensions, views, triggers. Verified before choosing this route —
--- production's three sequence functions have zero Go references, and uuid_generate
--- is referenced nowhere. The `prices.sequence` sequence is created implicitly by
--- its bigserial column. Nothing omitted here is used.
---
--- Regenerate with:
---   go run ./cmd/migrate postgres --dry-run   (against an empty database)
---
--- Generated 2026-08-26 from ent/schema at 670513036
+-- Regenerate (only before anything has adopted):
+--   go run ./cmd/migrate postgres --dry-run   # against an empty database
+
 
 CREATE TABLE "payment_methods" ("id" character varying(50) NOT NULL, "tenant_id" character varying(50) NOT NULL, "status" character varying(20) NOT NULL DEFAULT 'published', "created_at" timestamptz NOT NULL, "updated_at" timestamptz NOT NULL, "created_by" character varying NULL, "updated_by" character varying NULL, "environment_id" character varying(50) NULL DEFAULT '', "customer_id" character varying(50) NOT NULL, "type" character varying(50) NOT NULL, "gateway" character varying(50) NOT NULL, "gateway_method_id" character varying(255) NOT NULL, "payment_method_status" character varying(50) NOT NULL DEFAULT 'ACTIVE', "is_default" boolean NOT NULL DEFAULT false, "method_details" jsonb NULL, PRIMARY KEY ("id"));
 CREATE INDEX "paymentmethod_tenant_id_environment_id_customer_id_status" ON "payment_methods" ("tenant_id", "environment_id", "customer_id", "status") WHERE ((status)::text = 'published'::text);
@@ -248,3 +245,6 @@ CREATE INDEX "subscriptionschedule_status_schedule_type" ON "subscription_schedu
 CREATE INDEX "subscriptionschedule_scheduled_at_status" ON "subscription_schedules" ("scheduled_at", "status") WHERE ((status)::text = 'pending'::text);
 CREATE INDEX "subscriptionschedule_tenant_id_environment_id" ON "subscription_schedules" ("tenant_id", "environment_id");
 CREATE UNIQUE INDEX "subscriptionschedule_subscription_id_schedule_type" ON "subscription_schedules" ("subscription_id", "schedule_type") WHERE ((status)::text = 'pending'::text);
+
+-- migrate:down
+-- Not reversible. Restore from a snapshot.

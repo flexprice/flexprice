@@ -2,10 +2,9 @@
 # dbmate records only the version, never the file contents, so editing a migration
 # that already ran on a client database is silent. This adds the missing guarantee.
 #
-# It covers migrations/baseline/ as well as migrations/versioned/. The baseline is
-# FROZEN once any deployment has adopted: regenerating it would put a schema change
-# into fresh installs while every existing deployment silently misses it, since
-# nothing in the timeline carries the change. New schema goes in a migration.
+# The baseline is the first migration in the timeline, so it is covered like any
+# other. It is FROZEN once anything has adopted: regenerating it would put a schema
+# change into fresh installs while every existing deployment silently missed it.
 #
 # The manifest is authoritative and is NOT rewritten here: if it were, CI would
 # quietly accept whatever it found, and a migration added in one PR would never be
@@ -38,10 +37,7 @@ for a in "$@"; do
 done
 LOCK="${LOCK:-migrations/.hashes}"
 TARGETS=("$@")
-[ ${#TARGETS[@]} -gt 0 ] || TARGETS=(
-  "migrations/versioned/postgres"
-  "migrations/baseline/postgres_baseline_ent_*.sql"
-)
+[ ${#TARGETS[@]} -gt 0 ] || TARGETS=("migrations/versioned/postgres")
 
 NEW="$(mktemp)"
 for t in "${TARGETS[@]}"; do

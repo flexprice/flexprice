@@ -27,15 +27,7 @@ for db in sync_a sync_b; do
                                         -c "CREATE DATABASE $db;" >/dev/null
 done
 
-# Both databases are built the way a FRESH INSTALL is built: the baseline snapshot
-# first, then the versioned migrations. The baseline lives outside the timeline —
-# dbmate never runs it — so applying only the migrations would leave an empty
-# schema and every column would read as "missing".
-BASELINE="$(ls -1 migrations/baseline/postgres_baseline_ent_*.sql 2>/dev/null | tail -1)"
-[ -n "$BASELINE" ] || { echo "no Ent baseline found in migrations/baseline/" >&2; exit 1; }
-
 for db in sync_a sync_b; do
-  psql -X -q -v ON_ERROR_STOP=1 "$BASE/$db?sslmode=disable" -f "$BASELINE" >/dev/null
   DATABASE_URL="$BASE/$db?sslmode=disable" dbmate --migrations-dir "$DIR" --no-dump-schema up >/dev/null
 done
 

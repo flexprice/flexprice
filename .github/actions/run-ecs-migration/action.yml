@@ -1,0 +1,234 @@
+# Composite action: run database migrations as a one-off ECS task, BEFORE the
+# services that need the new schema are deployed.
+#
+# Why a task and not a step in the service deploy: migrations must run exactly
+# once per target, on the NEW image, and the rollout must not start if they fail.
+# A task registered from the API service's own task definition inherits its
+# execution role, secrets, subnets and security groups, so the migration reaches
+# the database by exactly the same path the application does — no second copy of
+# the connection configuration to drift.
+#
+# The task runs `./migrate postgres up`, which applies the reviewed .sql files in
+# migrations/versioned/postgres and records them in schema_migrations. It refuses
+# to touch a database that has tables but no ledger; adopt it first (see
+# migrations/versioned/README.md).
+name: 'Run ECS migration task'
+description: 'Apply versioned database migrations as a one-off ECS task and wait for it to succeed'
+
+inputs:
+  cluster:
+    description: 'ECS cluster name'
+    required: true
+  region:
+    description: 'AWS region'
+    required: true
+  service_name:
+    description: 'ECS service whose task definition supplies the image, role, secrets and network config'
+    required: true
+  image:
+    description: 'Docker image to run the migration with (must be the image being deployed)'
+    required: true
+  ecr_repo_prefix:
+    description: 'ECR repository prefix identifying the application container'
+    required: true
+  dry_run:
+    description: 'If true, print the plan and do not run anything'
+    required: true
+    default: 'false'
+  timeout_minutes:
+    description: 'How long to wait for the migration task to stop before failing'
+    required: false
+    default: '30'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run migration task
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        REGION: ${{ inputs.region }}
+        SERVICE: ${{ inputs.service_name }}
+        IMAGE: ${{ inputs.image }}
+        ECR_REPO_PREFIX: ${{ inputs.ecr_repo_prefix }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+      run: |
+        set -euo pipefail
+
+        echo ""
+        echo "==> Database migrations (cluster/region/service only; no credentials or image URIs logged)"
+
+        SERVICE_JSON=$(aws ecs describe-services \
+          --cluster "$CLUSTER" \
+          --services "$SERVICE" \
+          --region "$REGION" \
+          --query 'services[0]')
+
+        # describe-services returns `null` for a service that does not exist, so
+        # guard before indexing into it -- otherwise the first symptom of a wrong
+        # service name in the deploy-targets variable is a Python traceback.
+        TASK_ARN=$(echo "$SERVICE_JSON" | python3 -c '
+        import json, sys
+        s = json.load(sys.stdin)
+        print((s or {}).get("taskDefinition") or "")
+        ')
+        if [ -z "$TASK_ARN" ]; then
+          echo "  ERROR: service not found or has no task definition" >&2
+          echo "         (cluster/region/service names withheld from logs)" >&2
+          exit 1
+        fi
+
+        TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
+
+        TASK_DEF=$(aws ecs describe-task-definition \
+          --task-definition "$TASK_FAMILY" \
+          --region "$REGION" \
+          --query 'taskDefinition')
+
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "  [DRY RUN] Would register a -migrate task definition and run ./migrate postgres up"
+          exit 0
+        fi
+
+        # Build a migration task definition from the service's own. Everything the
+        # application container needs to reach the database -- secrets, env, task
+        # role, log configuration -- comes across unchanged. Sidecars are dropped:
+        # a log shipper or proxy has nothing to do here and would keep the task
+        # RUNNING after the migration container exits, so the task never stops.
+        NEW_TASK_DEF=$(echo "$TASK_DEF" | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" IMAGE="$IMAGE" python3 -c "
+        import json, sys, os
+        ecr_prefix = os.environ['ECR_REPO_PREFIX']
+        new_image  = os.environ['IMAGE']
+        td = json.load(sys.stdin)
+
+        app = [c for c in td.get('containerDefinitions', []) if c.get('image','').startswith(ecr_prefix)]
+        if len(app) != 1:
+            sys.exit('expected exactly one container matching the ECR prefix, found %d' % len(app))
+        c = app[0]
+        c['image'] = new_image
+        c['essential'] = True
+        # dependsOn would reference sidecars that no longer exist in this task.
+        c.pop('dependsOn', None)
+        # A migration task must not be restarted or health-checked as a service.
+        c.pop('healthCheck', None)
+        c['portMappings'] = []
+        td['containerDefinitions'] = [c]
+
+        # Separate family so migration revisions never appear in the service's
+        # revision history, and a rollback of the service cannot select one.
+        td['family'] = td['family'] + '-migrate'
+
+        for f in ['taskDefinitionArn','revision','status','requiresAttributes',
+                  'compatibilities','registeredAt','registeredBy','deregisteredAt']:
+            td.pop(f, None)
+        print(json.dumps(td))
+        ")
+
+        CONTAINER_NAME=$(echo "$NEW_TASK_DEF" | python3 -c 'import json,sys; print(json.load(sys.stdin)["containerDefinitions"][0]["name"])')
+
+        MIGRATE_TD_ARN=$(aws ecs register-task-definition \
+          --cli-input-json "$NEW_TASK_DEF" \
+          --region "$REGION" \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        # awsvpc tasks need the subnets and security groups explicitly; reuse the
+        # service's so the migration egresses from the same place the app does and
+        # no extra database firewall rule is required.
+        NETWORK=$(echo "$SERVICE_JSON" | python3 -c '
+        import json,sys
+        s = json.load(sys.stdin)
+        print(json.dumps(s.get("networkConfiguration") or {}))
+        ')
+
+        RUN_ARGS=(ecs run-task
+          --cluster "$CLUSTER"
+          --task-definition "$MIGRATE_TD_ARN"
+          --region "$REGION"
+          --started-by "github-actions-migrate"
+          --overrides "{\"containerOverrides\":[{\"name\":\"$CONTAINER_NAME\",\"command\":[\"./migrate\",\"postgres\",\"up\"]}]}")
+
+        if [ "$NETWORK" != "{}" ]; then
+          RUN_ARGS+=(--network-configuration "$NETWORK")
+        fi
+
+        LAUNCH_TYPE=$(echo "$SERVICE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("launchType") or "")')
+        if [ -n "$LAUNCH_TYPE" ]; then
+          RUN_ARGS+=(--launch-type "$LAUNCH_TYPE")
+        else
+          # A service on a capacity provider strategy has no launchType; reuse the
+          # strategy instead, or run-task lands on the cluster default and may find
+          # no capacity.
+          STRATEGY=$(echo "$SERVICE_JSON" | python3 -c '
+        import json,sys
+        print(json.dumps(json.load(sys.stdin).get("capacityProviderStrategy") or []))
+        ')
+          if [ "$STRATEGY" != "[]" ]; then
+            RUN_ARGS+=(--capacity-provider-strategy "$STRATEGY")
+          fi
+        fi
+
+        TASK=$(aws "${RUN_ARGS[@]}" --query 'tasks[0].taskArn' --output text)
+        if [ -z "$TASK" ] || [ "$TASK" = "None" ]; then
+          echo "  ERROR: run-task returned no task; check cluster capacity and failures above" >&2
+          exit 1
+        fi
+        echo "  migration task started"
+
+        # `aws ecs wait tasks-stopped` gives up after ~10 minutes. A CREATE INDEX
+        # CONCURRENTLY on a large table legitimately runs longer, and treating that
+        # as a failure would abort a migration that is progressing normally.
+        DEADLINE=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+        while true; do
+          STATUS=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" --region "$REGION" \
+            --query 'tasks[0].lastStatus' --output text)
+          [ "$STATUS" = "STOPPED" ] && break
+          if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+            echo "  ERROR: migration still $STATUS after ${TIMEOUT_MINUTES}m — NOT stopping it." >&2
+            echo "         Killing a CREATE INDEX CONCURRENTLY mid-build leaves an INVALID index." >&2
+            echo "         Inspect the task, then re-run this workflow once it has finished." >&2
+            exit 1
+          fi
+          sleep 10
+        done
+
+        # Print the migration's own output. Without this a failure shows only an
+        # exit code, and the message that says which migration broke -- or that the
+        # database was never adopted -- stays in CloudWatch where nobody looks.
+        LOG_CFG=$(echo "$TASK_DEF" | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" python3 -c "
+        import json, sys, os
+        td = json.load(sys.stdin)
+        for c in td['containerDefinitions']:
+            if c.get('image','').startswith(os.environ['ECR_REPO_PREFIX']):
+                o = (c.get('logConfiguration') or {}).get('options', {})
+                print(o.get('awslogs-group',''))
+                print(o.get('awslogs-stream-prefix',''))
+                break
+        ")
+        LOG_GROUP=$(echo "$LOG_CFG" | sed -n '1p')
+        LOG_PREFIX=$(echo "$LOG_CFG" | sed -n '2p')
+
+        if [ -n "$LOG_GROUP" ] && [ -n "$LOG_PREFIX" ]; then
+          echo "  ---- migration output ----"
+          aws logs get-log-events \
+            --log-group-name "$LOG_GROUP" \
+            --log-stream-name "$LOG_PREFIX/$CONTAINER_NAME/${TASK##*/}" \
+            --region "$REGION" --limit 200 \
+            --query 'events[].message' --output text 2>/dev/null | sed 's/^/  /' || \
+            echo "  (log stream not readable; check CloudWatch)"
+          echo "  --------------------------"
+        fi
+
+        EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" --region "$REGION" \
+          --query 'tasks[0].containers[0].exitCode' --output text)
+        if [ "$EXIT_CODE" != "0" ]; then
+          REASON=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" --region "$REGION" \
+            --query 'tasks[0].stoppedReason' --output text)
+          echo "  ERROR: migration failed (exit $EXIT_CODE): $REASON" >&2
+          echo "         The rollout is blocked. The database is unchanged past the last" >&2
+          echo "         migration that reported Applied -- dbmate commits each file separately." >&2
+          exit 1
+        fi
+
+        echo "    Migrations applied ✓"

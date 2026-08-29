@@ -27,6 +27,26 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate
 
+# dbmate stage
+#
+# dbmate applies the reviewed .sql files in migrations/versioned/ and records
+# them in schema_migrations. It ships as a BINARY rather than a Go dependency:
+# its module carries drivers the application has no use for (gorm, BigQuery,
+# MySQL, SQLite), and importing it would pull all of that into go.mod for every
+# build. Built in its own throwaway module so the app's go.mod/go.sum are
+# untouched, and pinned -- Go verifies the checksum against sum.golang.org.
+FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS dbmate
+ARG TARGETARCH
+ARG DBMATE_VERSION=v2.35.0
+RUN apk add --no-cache git
+WORKDIR /dbmate-build
+ENV CGO_ENABLED=0 \
+    GOOS=linux
+RUN go mod init flexprice.local/dbmate-build && \
+    go get github.com/amacneil/dbmate/v2@${DBMATE_VERSION} && \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath \
+      -o /out/dbmate github.com/amacneil/dbmate/v2
+
 # Typst stage
 FROM ghcr.io/typst/typst:v0.13.1 AS typst
 
@@ -43,6 +63,8 @@ COPY --from=builder /app/assets/fonts ./assets/fonts
 COPY --from=builder /app/assets/typst-templates ./assets/typst-templates
 COPY --from=builder /app/assets/email-templates ./assets/email-templates
 COPY --from=typst /bin/typst /usr/local/bin/
+# `./migrate postgres up` execs this; keep it on PATH.
+COPY --from=dbmate /out/dbmate /usr/local/bin/dbmate
 
 ENV TZ=UTC
 
