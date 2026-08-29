@@ -134,8 +134,17 @@ bodies outright. Enforced by `make migrate-check-clickhouse`.
 Records the baseline as applied and executes nothing.
 
 ```bash
-make migrate-adopt url="postgres://..." version=20260819000000
+make migrate-adopt url="postgres://..."          # adopts at head
 ```
+
+**Head is the normal choice for an existing deployment.** Everything already
+written is recorded as applied and nothing runs, so only migrations added *after*
+this point ever execute there. The existing files describe history each deployment
+already lived through by its own route — replaying them would be wrong, and on GCP
+staging `20260825000400` would drop a live uniqueness index.
+
+Pass `version=<timestamp>` only when a deployment genuinely needs some of the
+existing set applied.
 
 Adoption records a **claim** that the database already contains everything those
 migrations would have created. Nothing verifies it afterwards, and if the claim is

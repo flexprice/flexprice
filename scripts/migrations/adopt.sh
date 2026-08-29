@@ -2,7 +2,12 @@
 # Adopt an EXISTING database: record migrations as applied without running them.
 # dbmate has no --baseline, so this is the equivalent. Executes zero DDL.
 #
-#   ./adopt.sh <database-url> <migrations-dir> <up-to-version> [--reference <url>]
+#   ./adopt.sh <database-url> <migrations-dir> <version|head> [--reference <url>]
+#
+# "head" adopts at the newest migration in the directory: everything already written
+# is recorded as applied and nothing runs, so only migrations added AFTER this point
+# ever execute on that database. That is the normal choice for an existing
+# deployment — its schema already reflects the history, whatever route it took.
 #
 # Recording a version claims only: "this database does not need anything before that
 # point". It does NOT claim the schema matches any reference — it cannot. Deployments
@@ -13,7 +18,12 @@
 # it is the record of what this deployment carries that the migration set does not,
 # and it is the only time anyone will look.
 set -euo pipefail
-URL="${1:?database url}"; DIR="${2:?migrations dir}"; UPTO="${3:?version}"
+URL="${1:?database url}"; DIR="${2:?migrations dir}"; UPTO="${3:?version or 'head'}"
+if [ "$UPTO" = "head" ]; then
+  UPTO="$(ls -1 "$DIR"/*.sql 2>/dev/null | sed 's#.*/##' | cut -d_ -f1 | sort -n | tail -1)"
+  [ -n "$UPTO" ] || { echo "FAIL: no migrations in $DIR" >&2; exit 1; }
+  echo "head is $UPTO"
+fi
 REF=""; [ "${4:-}" = "--reference" ] && REF="${5:?reference url}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
