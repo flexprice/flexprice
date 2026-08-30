@@ -247,4 +247,12 @@ CREATE INDEX "subscriptionschedule_tenant_id_environment_id" ON "subscription_sc
 CREATE UNIQUE INDEX "subscriptionschedule_subscription_id_schedule_type" ON "subscription_schedules" ("subscription_id", "schedule_type") WHERE ((status)::text = 'pending'::text);
 
 -- migrate:down
--- Not reversible. Restore from a snapshot.
+-- Not reversible, and it must FAIL rather than appear to succeed.
+--
+-- An empty down section lets `dbmate down` delete this version from
+-- schema_migrations while every table stays in place. The next deploy would then
+-- replay the baseline and fail on CREATE TABLE, with a ledger that no longer
+-- explains why. Raising here leaves the row intact.
+DO $$ BEGIN
+  RAISE EXCEPTION 'the schema baseline cannot be rolled back: it created the entire schema. Restore from a snapshot instead.';
+END $$;

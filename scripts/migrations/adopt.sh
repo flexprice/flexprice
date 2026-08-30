@@ -82,9 +82,22 @@ for f in "$DIR"/*.sql; do
 done
 
 if [ -n "$DRY" ]; then
-  # Errors here mean the table does not exist yet, which is the normal case.
-  RECORDED="$(psql -X -tAq "$URL" -c \
-    "SELECT version FROM schema_migrations" 2>/dev/null || true)"
+  # A missing schema_migrations table is the normal case and means "nothing
+  # recorded". Every OTHER failure -- unreachable host, bad password, no such
+  # database -- must NOT be reported as an empty ledger: `|| true` would print a
+  # confident adoption plan and exit 0 against a database it never reached.
+  ERRF="$(mktemp)"
+  if RECORDED="$(psql -X -tAq -v ON_ERROR_STOP=1 "$URL" -c \
+       "SELECT version FROM schema_migrations" 2>"$ERRF")"; then
+    :
+  elif grep -q "schema_migrations" "$ERRF" && grep -q "does not exist" "$ERRF"; then
+    RECORDED=""
+  else
+    echo "FAIL: could not read schema_migrations:" >&2
+    sed 's/^/  /' "$ERRF" >&2
+    rm -f "$ERRF"; exit 1
+  fi
+  rm -f "$ERRF"
   if [ -z "$RECORDED" ]; then
     echo "schema_migrations: absent or empty — would be created"
   else

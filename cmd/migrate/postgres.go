@@ -314,7 +314,7 @@ func assertNoInvalidIndexes(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("check for invalid indexes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var broken []string
 	for rows.Next() {
@@ -381,7 +381,7 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.PingContext(checkCtx); err != nil {
 		return fmt.Errorf("connect to %s:%d/%s: %w", cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName, err)
@@ -392,7 +392,6 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 	if err := assertNoInvalidIndexes(checkCtx, db); err != nil {
 		return err
 	}
-	db.Close()
 
 	action := "up"
 	if statusOnly {
@@ -405,7 +404,16 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 	// --no-dump-schema: dbmate writes schema.sql after a successful run by
 	// default, which needs pg_dump on PATH and a writable tree. Neither holds in
 	// the deployment image, and the dump is a local development convenience.
-	c := exec.Command(bin, "--migrations-dir", dir, "--no-dump-schema", action)
+	// No timeout on the migration itself, so the context is never cancelled: a
+	// CREATE INDEX CONCURRENTLY on a large table legitimately runs for a long
+	// time, and killing it mid-build leaves an INVALID index. The Job's
+	// activeDeadlineSeconds (Helm) or the workflow's wait (ECS) is the bound.
+	//
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	// -- `bin` is resolved by resolveDbmate from the fixed dbmateSearchPath list,
+	// never from input. `dir` is an operator-supplied flag passed as its own argv
+	// element, not through a shell, so it cannot inject a command.
+	c := exec.CommandContext(context.Background(), bin, "--migrations-dir", dir, "--no-dump-schema", action)
 	c.Env = append(os.Environ(), "DATABASE_URL="+dsn)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

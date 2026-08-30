@@ -282,13 +282,20 @@ jobs:
       max-parallel: 3
 
     steps:
+      # Checkout runs BEFORE credentials are configured: configure-aws-credentials
+      # exports the migration role's temporary credentials into the environment of
+      # every subsequent step, and checkout has no need of them.
+      #
+      # Both actions are pinned to a commit SHA rather than a tag. A tag can be
+      # repointed by its owner (see the trivy-action and kics-github-action
+      # compromises); the rest of this workflow predates that rule.
+      - uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
-
-      - uses: actions/checkout@v3
 
       - name: Apply database migrations
         uses: ./.github/actions/run-ecs-migration
