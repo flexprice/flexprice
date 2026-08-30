@@ -671,11 +671,23 @@ func NewRouter(
 		customerPortalAPI.POST("/invoices", handlers.CustomerPortal.GetInvoices)
 		customerPortalAPI.GET("/invoices/:id", handlers.CustomerPortal.GetInvoice)
 		customerPortalAPI.GET("/invoices/:id/pdf", handlers.CustomerPortal.GetInvoicePDF)
+		// No RBAC middleware on the portal writes below: a session token carries a
+		// customer, not a user, so types.GetRoles is empty and RequirePermission
+		// would refuse every caller. Authorization here is the session token plus
+		// the per-entity ownership checks in customerPortalService.
+		customerPortalAPI.POST("/invoices/:id/payment/attempt", handlers.CustomerPortal.PayInvoice)
 
 		// Wallets
 		customerPortalAPI.POST("/wallets", handlers.CustomerPortal.GetWallets)
 		customerPortalAPI.GET("/wallets/:id", handlers.CustomerPortal.GetWallet)
 		customerPortalAPI.GET("/wallets/:id/transactions", handlers.CustomerPortal.GetWalletTransactions)
+		customerPortalAPI.POST("/wallets/:id/top-up", handlers.CustomerPortal.TopUpWallet)
+		customerPortalAPI.PUT("/wallets/:id/auto-topup", handlers.CustomerPortal.UpdateWalletAutoTopup)
+
+		// Payment methods
+		customerPortalAPI.GET("/payment-methods", handlers.CustomerPortal.ListPaymentMethods)
+		customerPortalAPI.POST("/payment-methods/setup", handlers.CustomerPortal.AddPaymentMethod)
+		customerPortalAPI.POST("/payment-methods/default", handlers.CustomerPortal.SetDefaultPaymentMethod)
 
 		// Portal config (theme, sections, tabs)
 		customerPortalAPI.GET("/config", handlers.CustomerPortal.GetPortalConfig)

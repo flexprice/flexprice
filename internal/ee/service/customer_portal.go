@@ -43,6 +43,18 @@ type CustomerPortalService interface {
 	GetUsageSummary(ctx context.Context, req dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
 	// GetPortalConfig returns the customer portal configuration for the current tenant/environment
 	GetPortalConfig(ctx context.Context) (*dto.SettingResponse, error)
+	// TopUpWallet adds credits to one of the portal customer's wallets
+	TopUpWallet(ctx context.Context, walletID string, req dto.PortalTopUpWalletRequest) (*dto.TopUpWalletResponse, error)
+	// UpdateWalletAutoTopup configures auto top-up on one of the portal customer's wallets
+	UpdateWalletAutoTopup(ctx context.Context, walletID string, req dto.PortalUpdateAutoTopupRequest) (*dto.WalletResponse, error)
+	// PayInvoice attempts payment for one of the portal customer's invoices
+	PayInvoice(ctx context.Context, invoiceID string) error
+	// ListPaymentMethods returns the portal customer's saved payment methods
+	ListPaymentMethods(ctx context.Context, req dto.PortalListPaymentMethodsRequest) (*dto.MultiProviderPaymentMethodsResponse, error)
+	// AddPaymentMethod starts a hosted card-capture session for the portal customer
+	AddPaymentMethod(ctx context.Context, req dto.PortalAddPaymentMethodRequest) (*dto.SetupIntentResponse, error)
+	// SetDefaultPaymentMethod marks one of the portal customer's saved methods as default
+	SetDefaultPaymentMethod(ctx context.Context, req dto.PortalSetDefaultPaymentMethodRequest) error
 }
 
 type customerPortalService struct {
@@ -416,4 +428,169 @@ func (s *customerPortalService) GetWalletTransactions(ctx context.Context, walle
 
 	// Get the transactions
 	return walletService.GetWalletTransactions(ctx, walletID, filter)
+}
+
+// requireCustomerID returns the customer bound to the portal session token.
+func (s *customerPortalService) requireCustomerID(ctx context.Context) (string, error) {
+	customerID := types.GetCustomerID(ctx)
+	if customerID == "" {
+		return "", ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
+	}
+	return customerID, nil
+}
+
+// requireOwnedWallet resolves a wallet and asserts it belongs to the portal
+// customer, so a session token cannot act on another customer's wallet.
+func (s *customerPortalService) requireOwnedWallet(ctx context.Context, walletID string) (string, error) {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+	w, err := walletService.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return "", err
+	}
+
+	if w.CustomerID != customerID {
+		return "", ierr.NewError("wallet not found").
+			WithHint("Wallet does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	return customerID, nil
+}
+
+// TopUpWallet adds credits to one of the portal customer's wallets.
+func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string, req dto.PortalTopUpWalletRequest) (*dto.TopUpWalletResponse, error) {
+	if _, err := s.requireOwnedWallet(ctx, walletID); err != nil {
+		return nil, err
+	}
+
+	topUpReq := req.ToTopUpWalletRequest()
+	if err := topUpReq.Validate(); err != nil {
+		return nil, err
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+	return walletService.TopUpWallet(ctx, walletID, topUpReq)
+}
+
+// UpdateWalletAutoTopup configures auto top-up on one of the portal customer's wallets.
+func (s *customerPortalService) UpdateWalletAutoTopup(ctx context.Context, walletID string, req dto.PortalUpdateAutoTopupRequest) (*dto.WalletResponse, error) {
+	if _, err := s.requireOwnedWallet(ctx, walletID); err != nil {
+		return nil, err
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+	updated, err := walletService.UpdateWallet(ctx, walletID, req.ToUpdateWalletRequest())
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.FromWallet(updated), nil
+}
+
+// PayInvoice attempts payment for one of the portal customer's invoices.
+func (s *customerPortalService) PayInvoice(ctx context.Context, invoiceID string) error {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return err
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	inv, err := invoiceService.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	if inv.CustomerID != customerID {
+		return ierr.NewError("invoice not found").
+			WithHint("Invoice does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	return invoiceService.AttemptPayment(ctx, invoiceID)
+}
+
+// ListPaymentMethods returns the portal customer's saved payment methods.
+func (s *customerPortalService) ListPaymentMethods(ctx context.Context, req dto.PortalListPaymentMethodsRequest) (*dto.MultiProviderPaymentMethodsResponse, error) {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	listReq := req.ToListPaymentMethodsRequest()
+	if err := listReq.Validate(); err != nil {
+		return nil, err
+	}
+
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(ctx, customerID, listReq, s.customerService)
+}
+
+// AddPaymentMethod starts a hosted card-capture session for the portal customer.
+//
+// Only Stripe is supported here: the Moyasar path builds its checkout URL in the
+// admin handler rather than in a service, so routing the portal through it would
+// mean duplicating that logic.
+func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req dto.PortalAddPaymentMethodRequest) (*dto.SetupIntentResponse, error) {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	setupReq := req.ToCreateSetupIntentRequest()
+	if err := setupReq.Validate(); err != nil {
+		return nil, err
+	}
+
+	if setupReq.Provider != types.SecretProviderStripe {
+		return nil, ierr.NewError("unsupported payment provider for the customer portal").
+			WithHint("Only stripe is supported for adding a payment method from the customer portal").
+			WithReportableDetails(map[string]interface{}{
+				"provider": setupReq.Provider,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return stripeIntegration.PaymentSvc.SetupIntent(ctx, customerID, setupReq, s.customerService)
+}
+
+// SetDefaultPaymentMethod marks one of the portal customer's saved methods as the
+// default for future charges.
+//
+// Stripe scopes the update to the customer resolved from the session token, so a
+// payment method belonging to anyone else cannot be promoted through this path.
+func (s *customerPortalService) SetDefaultPaymentMethod(ctx context.Context, req dto.PortalSetDefaultPaymentMethodRequest) error {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return err
+	}
+
+	return stripeIntegration.PaymentSvc.SetDefaultPaymentMethod(ctx, customerID, req.PaymentMethodID, s.customerService)
 }
