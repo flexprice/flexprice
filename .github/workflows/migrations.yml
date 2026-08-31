@@ -103,11 +103,15 @@ jobs:
       - name: Sync check — is any schema change missing a migration?
         run: make migrate-check-sync
 
-      # Advisory for now — reports findings without failing the build. Flip to a
-      # gate once a couple of weeks of real PRs show the rule set is tuned.
-      # Enforceable locally today with `make migrate-check-lint`.
+      # Mostly advisory: findings print and do not fail the build. Two rules DO
+      # fail it, because each maps to a failure that reached main here --
+      # adding-required-field and ban-concurrent-index-creation-in-transaction.
+      # See scripts/migrations/lint.sh for why those two and not the rest.
+      #
+      # No continue-on-error: the script decides what blocks, so a genuine
+      # scanner error (missing binary, bad config) also fails rather than
+      # passing silently.
       - name: Lint — is this migration safe to run?
-        continue-on-error: true
         run: ./scripts/migrations/lint.sh origin/${{ github.base_ref || 'develop' }}
 
       - name: Checksum — was a shipped migration edited?
