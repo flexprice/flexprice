@@ -318,6 +318,50 @@ func BillingPeriodToMonths(b BillingPeriod) int {
 	}
 }
 
+// EffectiveMonths returns the effective number of months a
+// (billing_period, billing_period_count) pair represents.
+// A count ≤ 0 is normalized to 1 (matches the service-layer default).
+// Returns 0 for ONETIME and sub-month periods (DAILY/WEEKLY) since they
+// cannot participate in month-based alignment checks — callers must
+// treat 0 as "not comparable" rather than a valid month count.
+func EffectiveMonths(period BillingPeriod, count int) int {
+	if count <= 0 {
+		count = 1
+	}
+	return BillingPeriodToMonths(period) * count
+}
+
+// IsCadenceCompatible reports whether a line-item cadence
+// (itemPeriod × itemCount) equals or strictly divides a subscription
+// cadence (subPeriod × subCount).
+//
+// Rules:
+//   - Same period AND same count is always compatible (covers DAILY×N and
+//     WEEKLY×N where month-math doesn't apply).
+//   - Otherwise both sides must reduce to positive months and sub % item == 0.
+//   - Returns false for ONETIME on either side and for sub-month periods
+//     that don't match by exact (period, count).
+func IsCadenceCompatible(subPeriod BillingPeriod, subCount int, itemPeriod BillingPeriod, itemCount int) bool {
+	if subCount <= 0 {
+		subCount = 1
+	}
+	if itemCount <= 0 {
+		itemCount = 1
+	}
+	if subPeriod == BILLING_PERIOD_ONETIME || itemPeriod == BILLING_PERIOD_ONETIME {
+		return false
+	}
+	if subPeriod == itemPeriod && subCount == itemCount {
+		return true
+	}
+	subMonths := EffectiveMonths(subPeriod, subCount)
+	itemMonths := EffectiveMonths(itemPeriod, itemCount)
+	if subMonths == 0 || itemMonths == 0 {
+		return false
+	}
+	return subMonths%itemMonths == 0
+}
+
 // IsBillingPeriodMultiple returns true when longer is an exact multiple of shorter
 // (e.g. QUARTERLY is 3× MONTHLY). Both periods must be month-based; sub-month
 // periods always return false when compared with month-based periods.
