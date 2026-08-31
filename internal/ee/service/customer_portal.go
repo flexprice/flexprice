@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CustomerPortalService provides customer portal functionality
@@ -55,6 +56,8 @@ type CustomerPortalService interface {
 	AddPaymentMethod(ctx context.Context, req dto.PortalAddPaymentMethodRequest) (*dto.SetupIntentResponse, error)
 	// SetDefaultPaymentMethod marks one of the portal customer's saved methods as default
 	SetDefaultPaymentMethod(ctx context.Context, req dto.PortalSetDefaultPaymentMethodRequest) error
+	// PayInvoiceWithCheckout starts a hosted payment for one of the customer's invoices
+	PayInvoiceWithCheckout(ctx context.Context, invoiceID string, req dto.PortalPayInvoiceRequest) (*dto.PortalPayInvoiceResponse, error)
 }
 
 type customerPortalService struct {
@@ -597,4 +600,82 @@ func (s *customerPortalService) SetDefaultPaymentMethod(ctx context.Context, req
 	}
 
 	return stripeIntegration.PaymentSvc.SetDefaultPaymentMethod(ctx, customerID, req.PaymentMethodID, s.customerService)
+}
+
+// PayInvoiceWithCheckout raises a payment-link payment against one of the portal
+// customer's invoices and returns the hosted URL to send them to.
+//
+// Reuses PaymentService.CreatePayment with ProcessPayment set, which is the same
+// path the admin API uses; the processor picks the gateway configured for the
+// tenant and stores the resulting URL on the payment.
+func (s *customerPortalService) PayInvoiceWithCheckout(ctx context.Context, invoiceID string, req dto.PortalPayInvoiceRequest) (*dto.PortalPayInvoiceResponse, error) {
+	customerID, err := s.requireCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	inv, err := invoiceService.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	if inv.CustomerID != customerID {
+		return nil, ierr.NewError("invoice not found").
+			WithHint("Invoice does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	if inv.PaymentStatus == types.PaymentStatusSucceeded {
+		return nil, ierr.NewError("invoice is already paid").
+			WithHint("This invoice has already been settled").
+			Mark(ierr.ErrValidation)
+	}
+
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return nil, ierr.NewError("invoice must be finalized").
+			WithHint("This invoice cannot be paid yet").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_status": inv.InvoiceStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Charge what is still outstanding, not the invoice total: a partially paid
+	// invoice must not be billed twice for the settled portion.
+	amount := inv.AmountRemaining
+	if amount.LessThanOrEqual(decimal.Zero) {
+		return nil, ierr.NewError("invoice has nothing left to pay").
+			WithHint("This invoice has no outstanding amount").
+			Mark(ierr.ErrValidation)
+	}
+
+	paymentService := NewPaymentService(s.ServiceParams)
+
+	payment, err := paymentService.CreatePayment(ctx, &dto.CreatePaymentRequest{
+		IdempotencyKey:         req.IdempotencyKey,
+		DestinationType:        types.PaymentDestinationTypeInvoice,
+		DestinationID:          invoiceID,
+		PaymentMethodType:      types.PaymentMethodTypePaymentLink,
+		Amount:                 amount,
+		Currency:               inv.Currency,
+		SuccessURL:             req.SuccessURL,
+		CancelURL:              req.CancelURL,
+		ProcessPayment:         true,
+		SaveCardAndMakeDefault: req.SavePaymentMethod,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PortalPayInvoiceResponse{
+		PaymentID:  payment.ID,
+		PaymentURL: payment.PaymentURL,
+		Status:     string(payment.PaymentStatus),
+	}, nil
 }

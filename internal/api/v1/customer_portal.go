@@ -375,3 +375,26 @@ func (h *CustomerPortalHandler) SetDefaultPaymentMethod(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "default payment method updated"})
 }
+
+func (h *CustomerPortalHandler) PayInvoiceWithCheckout(c *gin.Context) {
+	invoiceID := c.Param("id")
+	if invoiceID == "" {
+		c.Error(ierr.NewError("invoice_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.PortalPayInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.PayInvoiceWithCheckout(c.Request.Context(), invoiceID, req)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "failed to start invoice payment from portal", "error", err, "invoice_id", invoiceID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}

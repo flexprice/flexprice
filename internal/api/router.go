@@ -676,6 +676,7 @@ func NewRouter(
 		// would refuse every caller. Authorization here is the session token plus
 		// the per-entity ownership checks in customerPortalService.
 		customerPortalAPI.POST("/invoices/:id/payment/attempt", handlers.CustomerPortal.PayInvoice)
+		customerPortalAPI.POST("/invoices/:id/pay", handlers.CustomerPortal.PayInvoiceWithCheckout)
 
 		// Wallets
 		customerPortalAPI.POST("/wallets", handlers.CustomerPortal.GetWallets)

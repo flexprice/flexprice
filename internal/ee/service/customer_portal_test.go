@@ -346,3 +346,21 @@ func (s *CustomerPortalServiceSuite) TestTopUpRequestForwardsIdempotencyKey() {
 
 	s.Equal("idem_abc123", lo.FromPtr(mapped.IdempotencyKey))
 }
+
+func (s *CustomerPortalServiceSuite) TestPayInvoiceWithCheckoutRequiresSessionCustomer() {
+	_, err := s.service.PayInvoiceWithCheckout(s.GetContext(), "inv_1", dto.PortalPayInvoiceRequest{
+		IdempotencyKey: "idem_1",
+	})
+
+	s.Error(err)
+	s.True(ierr.IsPermissionDenied(err), "expected permission denied, got %v", err)
+}
+
+func (s *CustomerPortalServiceSuite) TestPayInvoiceWithCheckoutRequiresIdempotencyKey() {
+	ctx := s.portalContext(s.testData.customer.ID)
+
+	_, err := s.service.PayInvoiceWithCheckout(ctx, "inv_1", dto.PortalPayInvoiceRequest{})
+
+	s.Error(err)
+	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
+}

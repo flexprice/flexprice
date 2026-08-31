@@ -192,3 +192,34 @@ func (r *PortalSetDefaultPaymentMethodRequest) Validate() error {
 	}
 	return nil
 }
+
+// PortalPayInvoiceRequest starts a hosted payment for one of the portal
+// customer's invoices.
+type PortalPayInvoiceRequest struct {
+	// idempotency_key is required for the same reason as top-up: a retried
+	// submission must not raise a second payment against the same invoice.
+	IdempotencyKey string `json:"idempotency_key" binding:"required"`
+	// save_payment_method stores the card for future invoices when the gateway
+	// supports it.
+	SavePaymentMethod bool   `json:"save_payment_method,omitempty"`
+	SuccessURL        string `json:"success_url,omitempty"`
+	CancelURL         string `json:"cancel_url,omitempty"`
+}
+
+func (r *PortalPayInvoiceRequest) Validate() error {
+	if r.IdempotencyKey == "" {
+		return ierr.NewError("idempotency_key is required").
+			WithHint("Send a unique idempotency_key per payment attempt, and reuse it when retrying").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// PortalPayInvoiceResponse carries the hosted payment URL the portal redirects to.
+// The URL is also surfaced in the UI so a blocked redirect still leaves the
+// customer a link they can open by hand.
+type PortalPayInvoiceResponse struct {
+	PaymentID  string  `json:"payment_id"`
+	PaymentURL *string `json:"payment_url,omitempty"`
+	Status     string  `json:"status"`
+}
