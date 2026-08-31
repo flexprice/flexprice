@@ -77,12 +77,27 @@ metadata:
       northamerica-northeast2 bring-up — the migration had failed once, and
       every later sync silently declined to try again.
 
-      ttlSecondsAfterFinished still bounds the window, but only after an hour;
-      this makes the retry immediate. Logs are lost on failure, which is the
-      accepted trade — the Job is re-runnable and the pod logs are the place to
-      look while it is still running.
+      That reasoning still holds, but `hook-failed` is no longer how it is
+      satisfied. It deleted the Job -- and its logs -- the instant the migration
+      ended, so the one artefact explaining WHY a migration failed disappeared
+      before anyone could read it. During the 2026-08-31 staging bring-up the
+      only way to see a failure was to race the deletion with `kubectl logs`.
+      At 3am, against production, nobody wins that race.
+
+      The default is now `before-hook-creation`: the previous Job is removed
+      just before the next one is created, which prevents the same-name
+      collision described above WITHOUT destroying the evidence. A finished Job
+      and its pod survive until ttlSecondsAfterFinished (1h) or the next
+      migration, whichever comes first.
+
+      Set migration.hookDeletePolicy back to "hook-succeeded,hook-failed" to
+      restore the previous behaviour for a deployment that needs it.
+
+      Note this does NOT make a re-Sync re-run migrations. ArgoCD tracks hooks
+      per revision, so an unchanged revision skips the hook whether or not a Job
+      object is present. Migrations run when the image or config changes.
     */}}
-    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+    "helm.sh/hook-delete-policy": {{ .Values.migration.hookDeletePolicy | default "before-hook-creation" | quote }}
     {{- end }}
 spec:
   {{- /* NOT `| default 3`: Helm's default treats 0 as empty, so an explicit

@@ -61,6 +61,21 @@ FlexPrice app release.
   - `migrate postgres up` now refuses to start while any index is INVALID,
     naming each one and printing the `DROP INDEX CONCURRENTLY` to run.
 
+- **The migration Job no longer deletes its own logs.** `hook-delete-policy` was
+  `hook-succeeded,hook-failed`, which removed the Job — and its pod — the instant
+  the migration ended, so the one artefact explaining *why* a migration failed
+  disappeared before anyone could read it. During the 2026-08-31 staging bring-up
+  the only way to see a failure was to race the deletion with `kubectl logs`.
+  - New `migration.hookDeletePolicy`, default `before-hook-creation`: the previous
+    Job is removed just before the next one is created. That still prevents the
+    stale-Job collision that stalled the northamerica-northeast2 bring-up, but a
+    finished Job and its pod now survive until `ttlSecondsAfterFinished` (1h) or
+    the next migration.
+  - Set it back to `hook-succeeded,hook-failed` to restore the old behaviour.
+  - This does **not** make a re-Sync re-run migrations: ArgoCD tracks hooks per
+    revision, so an unchanged revision skips the hook whether or not a Job object
+    exists. Migrations run when the image or config changes.
+
 ### ⚠️ `activeDeadlineSeconds` and long index builds
 `activeDeadlineSeconds: 900` is a hard SIGKILL of the Job. In Helm the migration
 and its watcher are the same pod, so the deadline aborts the migration itself —

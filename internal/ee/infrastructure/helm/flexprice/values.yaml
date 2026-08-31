@@ -1022,6 +1022,24 @@ migration:
   # no longer stops the index from finishing.
   activeDeadlineSeconds: 900
   ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
+
+  # When the migration Job (and its pod, and therefore its LOGS) is deleted.
+  #
+  # before-hook-creation  the previous Job is removed just before the next one
+  #                       is created. A finished Job survives until
+  #                       ttlSecondsAfterFinished above, so the logs of a failed
+  #                       migration are still there when someone goes looking.
+  #                       This is the default and what you want on call.
+  #
+  # hook-succeeded,hook-failed
+  #                       the previous behaviour: delete the moment the Job ends,
+  #                       either way. Retries never collide with a stale Job, but
+  #                       a failed migration erases the only record of why.
+  #
+  # Either value prevents the stale-Job collision that stalled the
+  # northamerica-northeast2 bring-up; they differ only in when the deletion
+  # happens, and therefore in whether the logs outlive the failure.
+  hookDeletePolicy: before-hook-creation
   command: ""  # Custom command to run (if empty, uses default migration steps)
   # Apply a SINGLE ClickHouse baseline .sql via `migrate clickhouse --file`
   # instead of scanning migrations/clickhouse/. Empty = scan the directory (the
