@@ -357,7 +357,7 @@ func (h *CustomerPortalHandler) AddPaymentMethod(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *CustomerPortalHandler) SetDefaultPaymentMethod(c *gin.Context) {

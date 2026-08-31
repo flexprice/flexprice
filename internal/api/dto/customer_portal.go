@@ -75,13 +75,26 @@ type PortalTopUpWalletRequest struct {
 	CreditsToAdd decimal.Decimal `json:"credits_to_add" swaggertype:"string"`
 	// amount is the amount in the wallet currency to add. Ignored when credits_to_add is set.
 	Amount decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
-	// idempotency_key makes a retried top-up safe to submit twice
-	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	// idempotency_key is required. WalletService.TopUpWallet falls back to a key
+	// derived from an RFC3339 timestamp when none is supplied, so two identical
+	// requests a second apart produce different keys and the dedup on the wallet
+	// transaction and its invoice both miss — a double-submit from the portal
+	// would grant the credits twice and raise two payment obligations.
+	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
 	// description to add any specific details about the transaction
 	Description string `json:"description,omitempty"`
 	// checkout opts into pay-first hosted checkout: credits land only after the
 	// payment succeeds. Omit for the pay-later / invoiced behavior.
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
+}
+
+func (r *PortalTopUpWalletRequest) Validate() error {
+	if r.IdempotencyKey == nil || *r.IdempotencyKey == "" {
+		return ierr.NewError("idempotency_key is required").
+			WithHint("Send a unique idempotency_key per top-up attempt, and reuse it when retrying").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // ToTopUpWalletRequest maps the portal payload onto the shared wallet top-up

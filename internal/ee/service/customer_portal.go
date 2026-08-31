@@ -468,6 +468,10 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 		return nil, err
 	}
 
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	topUpReq := req.ToTopUpWalletRequest()
 	if err := topUpReq.Validate(); err != nil {
 		return nil, err

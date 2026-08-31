@@ -158,7 +158,8 @@ func (s *CustomerPortalServiceSuite) TestTopUpWalletRejectsAnotherCustomersWalle
 	ctx := s.portalContext(s.testData.customer.ID)
 
 	_, err := s.service.TopUpWallet(ctx, s.testData.otherWallet.ID, dto.PortalTopUpWalletRequest{
-		CreditsToAdd: decimal.NewFromInt(10),
+		CreditsToAdd:   decimal.NewFromInt(10),
+		IdempotencyKey: lo.ToPtr("idem_other_wallet"),
 	})
 
 	s.Error(err)
@@ -173,7 +174,8 @@ func (s *CustomerPortalServiceSuite) TestTopUpWalletRejectsAnotherCustomersWalle
 func (s *CustomerPortalServiceSuite) TestTopUpWalletRequiresSessionCustomer() {
 	// No customer on the context — i.e. no valid portal session.
 	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, dto.PortalTopUpWalletRequest{
-		CreditsToAdd: decimal.NewFromInt(10),
+		CreditsToAdd:   decimal.NewFromInt(10),
+		IdempotencyKey: lo.ToPtr("idem_no_session"),
 	})
 
 	s.Error(err)
@@ -303,4 +305,44 @@ func (s *CustomerPortalServiceSuite) TestSetDefaultPaymentMethodRequiresPaymentM
 
 	s.Error(err)
 	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
+}
+
+// TopUpWallet falls back to a key derived from an RFC3339 timestamp when none is
+// supplied, so two identical portal submissions a second apart would each grant
+// credits and raise an invoice. The portal therefore requires the caller to send
+// one and reuse it on retry.
+func (s *CustomerPortalServiceSuite) TestTopUpWalletRequiresIdempotencyKey() {
+	ctx := s.portalContext(s.testData.customer.ID)
+
+	_, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, dto.PortalTopUpWalletRequest{
+		CreditsToAdd: decimal.NewFromInt(10),
+	})
+
+	s.Error(err)
+	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
+}
+
+func (s *CustomerPortalServiceSuite) TestTopUpWalletRejectsEmptyIdempotencyKey() {
+	ctx := s.portalContext(s.testData.customer.ID)
+
+	_, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, dto.PortalTopUpWalletRequest{
+		CreditsToAdd:   decimal.NewFromInt(10),
+		IdempotencyKey: lo.ToPtr(""),
+	})
+
+	s.Error(err)
+	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
+}
+
+// The supplied key must reach the shared wallet request unchanged, or the dedup
+// it exists to drive would key off the timestamp fallback instead.
+func (s *CustomerPortalServiceSuite) TestTopUpRequestForwardsIdempotencyKey() {
+	req := dto.PortalTopUpWalletRequest{
+		CreditsToAdd:   decimal.NewFromInt(25),
+		IdempotencyKey: lo.ToPtr("idem_abc123"),
+	}
+
+	mapped := req.ToTopUpWalletRequest()
+
+	s.Equal("idem_abc123", lo.FromPtr(mapped.IdempotencyKey))
 }
