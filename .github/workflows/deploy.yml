@@ -16,6 +16,10 @@ on:
         description: "Dry run — validate config & print plan, skip register/deploy"
         type: boolean
         default: false
+      skip_migrations:
+        description: "Skip database migrations for this run (deploy code only)"
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -237,6 +241,32 @@ jobs:
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
+      # A skipped job cannot report why it was skipped -- it simply is not in the
+      # run. Without this, "this deploy shipped code without running migrations"
+      # is invisible to anyone reading the run afterwards.
+      - name: Record whether migrations will run
+        if: always()
+        env:
+          ENABLED: ${{ vars.DB_MIGRATIONS_ENABLED }}
+          SKIPPED: ${{ github.event.inputs.skip_migrations }}
+        run: |
+          if [ "$ENABLED" = "true" ] && [ "$SKIPPED" != "true" ]; then
+            echo "### Database migrations: ENABLED" >> "$GITHUB_STEP_SUMMARY"
+            echo "The migrate job runs before any rollout and blocks it on failure." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### :warning: Database migrations: NOT RUNNING" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$SKIPPED" = "true" ]; then
+              echo "Skipped for this run via the \`skip_migrations\` input." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "\`DB_MIGRATIONS_ENABLED\` is not \`true\` (currently: \`${ENABLED:-unset}\`)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This deployment ships code without applying schema changes. If this" >> "$GITHUB_STEP_SUMMARY"
+            echo "release contains a migration, apply it by hand or the new code runs" >> "$GITHUB_STEP_SUMMARY"
+            echo "against the old schema." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # ──────────────────────────────────────────────────────────────────────────
   # Job 3: Database migrations — one ECS task per target, before anything rolls.
   #
@@ -254,8 +284,20 @@ jobs:
   migrate:
     name: Migrate Database (${{ strategy.job-index }})
     needs: [build, resolve-config]
+    # OFF unless DB_MIGRATIONS_ENABLED is exactly "true". Default-off is
+    # deliberate while migrations are still applied by hand: turning this on is
+    # a decision someone makes per environment, after the target database has
+    # been adopted (`make migrate-adopt`). An unadopted database fails the Job
+    # on purpose, which would block deploys.
+    #
+    # Set at Settings > Secrets and variables > Actions > Variables, or
+    #   gh variable set DB_MIGRATIONS_ENABLED --body true
+    #
+    # `vars` and not `env`: the env context is not available in a job-level `if`.
     if: >-
       ${{ always() &&
+          vars.DB_MIGRATIONS_ENABLED == 'true' &&
+          github.event.inputs.skip_migrations != 'true' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.targets != '[]' }}
@@ -312,7 +354,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
-          needs.migrate.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           needs.resolve-config.outputs.preprod_targets != '[]' }}
     runs-on: self-hosted
     strategy:
@@ -434,7 +476,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
-          needs.migrate.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -471,7 +513,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
-          needs.migrate.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -508,7 +550,7 @@ jobs:
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
-          needs.migrate.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}

@@ -21,6 +21,7 @@ Configure these in the repo: **Settings → Secrets and variables → Actions**.
 | `ECR_REPOSITORY` | `my-app` | ECR repository name. Image tag is `${{ github.sha }}`. |
 | `STAGING_DEPLOY_TARGETS` | See JSON below | JSON array of ECS targets for **staging** (used on `develop` and when manual run chooses staging). |
 | `PROD_DEPLOY_TARGETS` | See JSON below | JSON array of ECS targets for **production** (used on `main` and when manual run chooses production). |
+| `DB_MIGRATIONS_ENABLED` | `true` / unset | Whether the `migrate` job runs database migrations before a rollout. **Off unless set to exactly `true`.** Turn it on for an environment only after that database has been adopted (`make migrate-adopt`) — an unadopted database fails the job on purpose and blocks the deploy. A single run can also be exempted with the `skip_migrations` input on a manual dispatch. When migrations do not run, the workflow summary says so. |
 
 ---
 
