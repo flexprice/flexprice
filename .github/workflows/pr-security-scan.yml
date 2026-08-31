@@ -23,14 +23,14 @@ jobs:
     name: Trivy dependency & config scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       # Dependency CVEs from go.sum. Secret/license scanners are disabled
       # (scanners: vuln) — GitGuardian already owns secret detection, so
       # running Trivy's secret scanner here would only duplicate findings.
       # Phase 2: flip exit-code to '1' after the CVE baseline is triaged.
       - name: Trivy fs scan (Go dependency CVEs)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -43,7 +43,7 @@ jobs:
       # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe).
       # Stays soft-fail through phase 2 until the findings are cleared.
       - name: Trivy config scan (Dockerfile misconfig)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
