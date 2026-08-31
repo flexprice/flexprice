@@ -733,7 +733,19 @@ spec:
               {{- if .Values.migration.steps.clickhouse }}
               echo "verify: ClickHouse tables"
               CH_HTTP_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ if .Values.clickhouse.namespace }}.{{ .Values.clickhouse.namespace }}.svc.cluster.local{{ end }}{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
-              CH_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 1 }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
+              {{- /*
+                External mode used to take this port from clickhouse.address by
+                splitting on ":". That address is the NATIVE protocol endpoint the
+                application connects with (9000), not the HTTP one, so this check
+                issued an HTTP GET against a native-protocol port. wget failed,
+                the `|| echo 0` below turned that into n=0, and every table was
+                reported MISSING against a ClickHouse that was perfectly healthy.
+                Cost half an investigation on GCP staging, 2026-08-31.
+
+                8123 matches what altinity mode already hardcodes. Override with
+                clickhouse.httpPort if a deployment moves it.
+              */}}
+              CH_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ .Values.clickhouse.httpPort | default 8123 }}{{ else if eq .Values.clickhouse.mode "altinity" }}{{ .Values.clickhouse.httpPort | default 8123 }}{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
               CH_SCHEME="{{ if .Values.clickhouse.tls }}https{{ else }}http{{ end }}"
               # Resolved into a variable instead of templated inline at the end of
               # the wget call. Inline, the left-chomp on the conditional eats the
@@ -751,12 +763,24 @@ spec:
               {{- if $.Values.clickhouse.tlsSkipVerify }}
               CH_INSECURE="--no-check-certificate"
               {{- end }}
+              # A failed query is NOT a missing table. `|| echo 0` used to collapse
+              # every failure -- unreachable host, wrong port, bad credentials --
+              # into "MISSING", which sends whoever is on call to look at a schema
+              # that was never the problem. Separate the two outcomes and say which.
               for t in events meter_usage; do
-                n=$(wget -qO- "${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}/?query=SELECT+count()+FROM+system.tables+WHERE+database='{{ .Values.clickhouse.database }}'+AND+name='${t}'" \
+                if ! n=$(wget -qO- "${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}/?query=SELECT+count()+FROM+system.tables+WHERE+database='{{ .Values.clickhouse.database }}'+AND+name='${t}'" \
                     --header="X-ClickHouse-User: ${FLEXPRICE_CLICKHOUSE_USERNAME}" \
                     --header="X-ClickHouse-Key: ${FLEXPRICE_CLICKHOUSE_PASSWORD}" \
-                    ${CH_INSECURE} 2>/dev/null || echo 0)
-                [ "$n" = "1" ] || { echo "❌ MISSING ClickHouse table: ${t}"; exit 1; }
+                    ${CH_INSECURE} 2>&1); then
+                  echo "❌ CANNOT QUERY ClickHouse at ${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}"
+                  echo "   This is a connectivity/auth failure, NOT a missing table."
+                  echo "   wget said: ${n}"
+                  echo "   Check clickhouse.address, clickhouse.httpPort (HTTP is 8123,"
+                  echo "   the native protocol is 9000) and the credentials."
+                  exit 1
+                fi
+                n="$(echo "$n" | tr -d '[:space:]')"
+                [ "$n" = "1" ] || { echo "❌ MISSING ClickHouse table: ${t} (database '{{ .Values.clickhouse.database }}' returned count=${n})"; exit 1; }
                 echo "  ✅ ${t}"
               done
               {{- end }}

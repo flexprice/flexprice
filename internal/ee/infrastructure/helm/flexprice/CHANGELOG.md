@@ -9,6 +9,27 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.4.1] - 2026-08-31
+
+### Fixed
+- **The migration Job's `verify` step queried ClickHouse over HTTP on the NATIVE
+  protocol port.** In `mode: external` the port came from splitting
+  `clickhouse.address`, which is the endpoint the application uses natively
+  (9000). The HTTP GET failed, `|| echo 0` turned that into `n=0`, and every
+  table was reported `MISSING` against a ClickHouse that was healthy.
+  - Surfaced on GCP staging the first time migrations were enabled there:
+    `❌ MISSING ClickHouse table: events`, while the table existed with 20
+    others. Proven directly — the same query returns `1` on 8123 and fails on
+    9000.
+  - `external` now uses `clickhouse.httpPort` (default `8123`), matching what
+    `altinity` mode already hardcoded. Set `clickhouse.httpPort` if a deployment
+    moves it.
+- **A failed query is no longer reported as a missing table.** `|| echo 0`
+  collapsed every failure — unreachable host, wrong port, bad credentials — into
+  `MISSING`, sending whoever is on call to inspect a schema that was never the
+  problem. Connectivity failures now say so, print what `wget` returned, and name
+  the likely causes; a genuine miss reports the count it actually saw.
+
 ## [1.4.0] - 2026-08-30
 
 ### Changed

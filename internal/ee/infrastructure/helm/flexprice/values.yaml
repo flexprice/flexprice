@@ -802,6 +802,11 @@ postgres:
 #                           Install: kubectl apply -f shared/clickhouse/operator/install-bundle.yaml
 #   external              — point to ClickHouse Cloud or any self-managed endpoint.
 clickhouse:
+  # HTTP port used ONLY by the migration Job's verify step, which queries over
+  # HTTP rather than the native protocol. `address` below is the NATIVE endpoint
+  # (9000) the application uses; the two are not interchangeable, and deriving
+  # one from the other is what made verify report healthy tables as MISSING.
+  httpPort: 8123
   mode: standalone   # standalone | altinity | external
 
   # Namespace for the in-cluster ClickHouse (standalone/altinity modes). Empty =
