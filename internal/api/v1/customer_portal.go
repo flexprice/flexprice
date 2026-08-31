@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -262,4 +262,116 @@ func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) TopUpWallet(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.PortalTopUpWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.TopUpWallet(c.Request.Context(), walletID, req)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "failed to top up wallet from portal", "error", err, "wallet_id", walletID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) UpdateWalletAutoTopup(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.PortalUpdateAutoTopupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.UpdateWalletAutoTopup(c.Request.Context(), walletID, req)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "failed to update wallet auto top-up from portal", "error", err, "wallet_id", walletID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) PayInvoice(c *gin.Context) {
+	invoiceID := c.Param("id")
+	if invoiceID == "" {
+		c.Error(ierr.NewError("invoice_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := h.portalService.PayInvoice(c.Request.Context(), invoiceID); err != nil {
+		h.log.Error(c.Request.Context(), "failed to pay invoice from portal", "error", err, "invoice_id", invoiceID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "payment processed successfully"})
+}
+
+func (h *CustomerPortalHandler) ListPaymentMethods(c *gin.Context) {
+	var req dto.PortalListPaymentMethodsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.ListPaymentMethods(c.Request.Context(), req)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "failed to list payment methods from portal", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) AddPaymentMethod(c *gin.Context) {
+	var req dto.PortalAddPaymentMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.portalService.AddPaymentMethod(c.Request.Context(), req)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "failed to add payment method from portal", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
+func (h *CustomerPortalHandler) SetDefaultPaymentMethod(c *gin.Context) {
+	var req dto.PortalSetDefaultPaymentMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := h.portalService.SetDefaultPaymentMethod(c.Request.Context(), req); err != nil {
+		h.log.Error(c.Request.Context(), "failed to set default payment method from portal", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "default payment method updated"})
 }
