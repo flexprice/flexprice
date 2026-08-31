@@ -38,9 +38,14 @@ type taskService struct {
 func NewTaskService(
 	serviceParams ServiceParams,
 ) TaskService {
+	fp := NewFileProcessor(serviceParams.Logger)
+	csvbox := NewCSVBoxProvider(serviceParams.Config.FlexpriceS3Imports, serviceParams.Logger)
+	fp.ProviderRegistry.RegisterCSVBoxProvider(csvbox)
+	fp.StreamingProcessor.ProviderRegistry.RegisterCSVBoxProvider(csvbox)
+
 	return &taskService{
 		ServiceParams: serviceParams,
-		fileProcessor: NewFileProcessor(serviceParams.Logger),
+		fileProcessor: fp,
 	}
 }
 
@@ -49,7 +54,19 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest)
 		return nil, err
 	}
 
-	t := req.ToTask(ctx)
+	// Imports must be explicitly enabled and configured before a task can be
+	// created — otherwise ToTask would build an s3:// URL against an empty
+	// bucket, and the CSVBox provider (which uses the same config) would fail
+	// to download it. Fail fast here so the caller sees a clear error instead
+	// of a downstream download failure.
+	imports := s.Config.FlexpriceS3Imports
+	if !imports.Enabled || imports.Bucket == "" {
+		return nil, ierr.NewError("csv imports are not configured on this deployment").
+			WithHint("Set flexprice_s3_imports.enabled=true and provide bucket/credentials").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	t := req.ToTask(ctx, imports.Bucket, imports.KeyPrefix)
 	if err := t.Validate(); err != nil {
 		return nil, err
 	}

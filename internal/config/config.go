@@ -49,6 +49,7 @@ type Configuration struct {
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
 	FlexpriceS3Exports     FlexpriceS3ExportsConfig     `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
 	FlexpriceGCSExports    FlexpriceGCSExportsConfig    `mapstructure:"flexprice_gcs_exports" validate:"omitempty"`
+	FlexpriceS3Imports     FlexpriceS3ImportsConfig     `mapstructure:"flexprice_s3_imports" validate:"omitempty"`
 	Marketplace            MarketplaceConfig            `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                  CacheConfig                  `validate:"required"`
 	EventProcessing        EventProcessingConfig        `mapstructure:"event_processing" validate:"required"`
@@ -260,6 +261,20 @@ func (c *FlexpriceGCSExportsConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// FlexpriceS3ImportsConfig points at the Flexprice-managed bucket that CSV Box
+// (and any other trusted upstream uploader) writes into. The import API resolves
+// an upload id to s3://<Bucket>/<KeyPrefix><upload_id>.csv and presigns a GET
+// against those credentials — the caller never supplies a URL.
+type FlexpriceS3ImportsConfig struct {
+	Enabled            bool   `mapstructure:"enabled"`
+	Bucket             string `mapstructure:"bucket" validate:"required_if=Enabled true"`
+	Region             string `mapstructure:"region" validate:"required_if=Enabled true"`
+	KeyPrefix          string `mapstructure:"key_prefix"`
+	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required_if=Enabled true"`
+	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required_if=Enabled true"`
+	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
 }
 
 // MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports

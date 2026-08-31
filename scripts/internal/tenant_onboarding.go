@@ -84,6 +84,7 @@ func (s *onboardingScript) createTenant(ctx context.Context, name string) (*tena
 	t := &tenant.Tenant{
 		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT),
 		Name:      name,
+		Status:    types.StatusPublished,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

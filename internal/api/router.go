@@ -493,6 +493,7 @@ func NewRouter(
 
 		tasks := v1Private.Group("/tasks")
 		{
+			tasks.POST("", write(types.EntityTask, types.ActionWrite), handlers.Task.CreateTask)
 			tasks.GET("", handlers.Task.ListTasks)
 			tasks.GET("/:id", handlers.Task.GetTask)
 			tasks.PUT("/:id/status", write(types.EntityTask, types.ActionWrite), handlers.Task.UpdateTaskStatus)

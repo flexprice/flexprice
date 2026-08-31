@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -236,79 +237,117 @@ func (s *TaskServiceSuite) setupTestData() {
 }
 
 func (s *TaskServiceSuite) TestCreateTask() {
+	// The service refuses to build tasks when the imports feature is off, so
+	// enable it against a fake bucket and re-init the service to pick it up.
+	s.GetConfig().FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{
+		Enabled:            true,
+		Bucket:             "flexprice-imports-test",
+		Region:             "us-east-1",
+		KeyPrefix:          "csvbox/",
+		AWSAccessKeyID:     "test-key",
+		AWSSecretAccessKey: "test-secret",
+	}
+	s.setupService()
+
 	tests := []struct {
-		name    string
-		req     dto.CreateTaskRequest
-		mockCSV bool
-		want    *dto.TaskResponse
-		wantErr bool
+		name        string
+		req         dto.CreateTaskRequest
+		wantErr     bool
+		wantFileURL string
 	}{
 		{
 			name: "successful_task_creation",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: true,
-			wantErr: false,
+			wantErr:     false,
+			wantFileURL: "s3://flexprice-imports-test/csvbox/abc123.csv",
 		},
 		{
 			name: "invalid_task_type",
 			req: dto.CreateTaskRequest{
-				TaskType:   "INVALID",
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     "INVALID",
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
 			wantErr: true,
 		},
 		{
-			name: "invalid_entity_type",
+			name: "export_task_type_rejected",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: "INVALID",
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeExport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
 			wantErr: true,
 		},
 		{
-			name: "empty_file_url",
+			name: "non_events_entity_type_rejected",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeCustomers,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
+			wantErr: true,
+		},
+		{
+			name: "non_csv_file_type_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeJSON,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown_file_provider_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: "dropbox",
+				UploadID:     "abc123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty_upload_id",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "path_traversal_upload_id_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "../../etc/passwd",
+			},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			if tt.mockCSV {
-				data := [][]string{
-					{"event_name", "external_customer_id", "timestamp", "properties.bytes_used", "properties.region"},
-					{"api_call", "cust_ext_123", s.testData.now.Add(-1 * time.Hour).Format(time.RFC3339), "100", "us-east-1"},
-				}
-				var buf bytes.Buffer
-				writer := csv.NewWriter(&buf)
-				s.NoError(writer.WriteAll(data))
-
-				s.client.RegisterResponse("events.csv", testutil.MockResponse{
-					StatusCode: http.StatusOK,
-					Body:       buf.Bytes(),
-					Headers: map[string]string{
-						"Content-Type": "text/csv",
-					},
-				})
-			}
-
 			resp, err := s.service.CreateTask(s.GetContext(), tt.req)
 			if tt.wantErr {
 				s.Error(err)
@@ -320,11 +359,29 @@ func (s *TaskServiceSuite) TestCreateTask() {
 			s.NotEmpty(resp.ID)
 			s.Equal(tt.req.TaskType, resp.TaskType)
 			s.Equal(tt.req.EntityType, resp.EntityType)
-			s.Equal(tt.req.FileURL, resp.FileURL)
 			s.Equal(tt.req.FileType, resp.FileType)
+			s.Equal(tt.wantFileURL, resp.FileURL)
 			s.Equal(types.TaskStatusPending, resp.TaskStatus)
+			s.Equal(tt.req.UploadID, resp.Metadata["upload_id"])
+			s.Equal(tt.req.FileProvider, resp.Metadata["file_provider"])
 		})
 	}
+}
+
+// The imports feature is off by default; CreateTask must reject rather than
+// build a task whose s3:// URL points at an empty bucket.
+func (s *TaskServiceSuite) TestCreateTask_RejectsWhenImportsDisabled() {
+	s.GetConfig().FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{Enabled: false}
+	s.setupService()
+
+	_, err := s.service.CreateTask(s.GetContext(), dto.CreateTaskRequest{
+		TaskType:     types.TaskTypeImport,
+		EntityType:   types.EntityTypeEvents,
+		FileType:     types.FileTypeCSV,
+		FileProvider: dto.FileProviderCSVBox,
+		UploadID:     "abc123",
+	})
+	s.Error(err)
 }
 
 func (s *TaskServiceSuite) TestGetTask() {

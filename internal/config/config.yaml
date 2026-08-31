@@ -425,6 +425,19 @@ flexprice_gcs_exports:
   # impersonate (roles/iam.serviceAccountTokenCreator). Empty disables presigning.
   signer_service_account_email: "" # Set via FLEXPRICE_FLEXPRICE_GCS_EXPORTS_SIGNER_SERVICE_ACCOUNT_EMAIL
 
+# Flexprice-managed bucket that trusted upstream uploaders (e.g. CSV Box) write
+# into. The /tasks import API accepts only an upload_id — the bucket, key prefix,
+# and credentials all come from here, so the caller can never point us at an
+# arbitrary URL.
+flexprice_s3_imports:
+  enabled: false # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_ENABLED
+  bucket: "" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_BUCKET
+  region: "ap-south-1" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_REGION
+  key_prefix: "csvbox/" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_KEY_PREFIX
+  aws_access_key_id: "" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_AWS_ACCESS_KEY_ID
+  aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_AWS_SECRET_ACCESS_KEY
+  aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_IMPORTS_AWS_SESSION_TOKEN
+
 # Flexprice's own AWS identity — the principal that assumes each tenant's marketplace IAM role.
 # This is the caller named in the tenant's trust policy, NOT the tenant's role (that lives per
 # connection). Required for the AWS Marketplace integration; leave unset to disable it.
