@@ -3946,9 +3946,10 @@ func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscription 
 			validPrices = append(validPrices, p)
 			continue
 		}
-		periodOK := p.Price.BillingPeriod == subscription.BillingPeriod ||
-			types.IsBillingPeriodMultiple(subscription.BillingPeriod, p.Price.BillingPeriod)
-		if periodOK {
+		// Count-aware cadence compatibility: mirrors the DTO validator and the
+		// invoice-time splitInvoicePeriodByLineItemCadence guard so anything
+		// accepted here cannot later fail at fan-out.
+		if types.IsCadenceCompatible(subscription.BillingPeriod, subscription.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
 			validPrices = append(validPrices, p)
 		}
 	}
@@ -3975,10 +3976,11 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 		pricesResponse, err = priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
 			PlanID:       entityID,
 			AllowExpired: false,
-			BillingPeriods: []types.BillingPeriod{
-				subscription.BillingPeriod,
-				types.BILLING_PERIOD_ONETIME,
-			},
+			// Prefetch every price whose cadence *could* be compatible with the sub
+			// (equal or strict divisor in months). The in-memory
+			// filterValidPricesForSubscription applies the exact count-aware check
+			// via IsCadenceCompatible after this fetch.
+			BillingPeriods: types.CompatibleBillingPeriodsFor(subscription.BillingPeriod, subscription.BillingPeriodCount),
 		})
 	case types.PRICE_ENTITY_TYPE_ADDON:
 		pricesResponse, err = priceService.GetPricesByAddonID(ctx, entityID)
