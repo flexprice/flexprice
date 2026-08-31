@@ -1165,10 +1165,21 @@ func (s *SeedEnsure) ensureMultiCadenceSubscription(
 			if sub.ID == nil || sub.Metadata == nil {
 				continue
 			}
-			if cohort, ok := sub.Metadata["e2eprobe_cohort"]; ok && cohort == multiCadenceCohort {
-				seeds.MultiCadenceSubID = *sub.ID
-				return nil
+			cohort, ok := sub.Metadata["e2eprobe_cohort"]
+			if !ok || cohort != multiCadenceCohort {
+				continue
 			}
+			// Found the seed sub. If it's still Draft (previous tick's activation
+			// failed or was skipped), retry activation now — otherwise the probe
+			// silently waits forever with no observable invoices. Only mark the
+			// seed complete once activation succeeds so a failure re-runs next tick.
+			if sub.SubscriptionStatus != nil && *sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+				if err := s.activateMultiCadenceSub(ctx, *sub.ID, extID, time.Now().UTC()); err != nil {
+					return err
+				}
+			}
+			seeds.MultiCadenceSubID = *sub.ID
+			return nil
 		}
 	}
 
@@ -1196,18 +1207,37 @@ func (s *SeedEnsure) ensureMultiCadenceSubscription(
 		return nil
 	}
 	subID := *createResp.SubscriptionResponse.ID
-	seeds.MultiCadenceSubID = subID
 
 	if createResp.SubscriptionResponse.SubscriptionStatus != nil &&
 		*createResp.SubscriptionResponse.SubscriptionStatus == types.SubscriptionStatusDraft {
-		if _, err := s.client.Subscriptions().ActivateSubscription(ctx, subID,
-			types.ActivateDraftSubscriptionRequest{StartDate: now}); err != nil && s.logger != nil {
+		if err := s.activateMultiCadenceSub(ctx, subID, extID, now); err != nil {
+			// Do NOT record MultiCadenceSubID — leaves the sub for retry on next
+			// tick (query-by-cohort will find it and activate again).
+			return err
+		}
+	}
+	seeds.MultiCadenceSubID = subID
+	return nil
+}
+
+// activateMultiCadenceSub attempts to activate a draft multi-cadence seed sub.
+// Returns a wrapped error if activation fails so the caller can propagate it
+// and the next tick can retry.
+func (s *SeedEnsure) activateMultiCadenceSub(ctx context.Context, subID, extID string, startDate time.Time) error {
+	if _, err := s.client.Subscriptions().ActivateSubscription(ctx, subID,
+		types.ActivateDraftSubscriptionRequest{StartDate: startDate}); err != nil {
+		if s.logger != nil {
 			s.logger.Info(ctx, "multi-cadence sub activation failed; will retry next tick",
 				"subscription_id", subID,
 				"external_customer_id", extID,
 				"error", err.Error(),
 			)
 		}
+		return e2eprobe.Errorf(map[string]string{
+			"step":                 "multi_cadence_activate",
+			"subscription_id":      subID,
+			"external_customer_id": extID,
+		}, "activate multi-cadence sub %s: %w", subID, err)
 	}
 	return nil
 }

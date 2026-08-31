@@ -246,7 +246,7 @@ func main() {
 	}
 
 	if cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Enabled {
-		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID)
+		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID, lg)
 		runner.Add(mci, e2eprobe.NewTickerScheduler(mci, cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Interval))
 	}
 

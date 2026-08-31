@@ -2,14 +2,12 @@ package checks
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	"github.com/flexprice/flexprice/internal/logger"
 	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
-	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -21,10 +19,11 @@ type multiCadenceInvoiceProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
 	runID  string
+	lg     *logger.Logger
 }
 
-func NewMultiCadenceInvoiceProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string) *multiCadenceInvoiceProbe {
-	return &multiCadenceInvoiceProbe{client: c, reg: r, runID: runID}
+func NewMultiCadenceInvoiceProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) *multiCadenceInvoiceProbe {
+	return &multiCadenceInvoiceProbe{client: c, reg: r, runID: runID, lg: lg}
 }
 
 func (p *multiCadenceInvoiceProbe) Name() string        { return "multi-cadence-invoice-probe" }
@@ -40,8 +39,7 @@ func (p *multiCadenceInvoiceProbe) Run(ctx context.Context) error {
 
 	subResp, err := p.client.Subscriptions().Get(ctx, subID)
 	if err != nil {
-		var apiErr *sdkerrors.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+		if isNotFound(err) {
 			return nil // sub not yet visible; soft-skip.
 		}
 		return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "get sub %s: %w", subID, err)
@@ -63,40 +61,52 @@ func (p *multiCadenceInvoiceProbe) Run(ctx context.Context) error {
 		return nil
 	}
 
-	// Expected line item count = subMonths / priceMonths. The seed plan uses
-	// monthly prices (seed_ensure.go:803, 836). Sub cadence is quarterly.
-	// Expect at least 3 line items whose per-line period spans ~1 month.
-	// (The plan has 2 monthly prices — one fixed, one usage — so realistic
-	// count is 6; requiring >= 3 keeps the probe robust to plan-price additions.)
-	if len(latest.LineItems) < 3 {
-		return e2eprobe.Errorf(map[string]string{
-			"subscription_id": subID,
-			"invoice_id":      derefStr(latest.ID),
-			"line_item_count": fmt.Sprintf("%d", len(latest.LineItems)),
-		}, "quarterly sub %s: latest invoice has %d line items, expected >=3 (fan-out regression?)",
-			subID, len(latest.LineItems))
-	}
-
-	// Assert at least one line item's [PeriodStart, PeriodEnd) is ~30 days,
-	// NOT ~90 days — confirms per-month fan-out rather than one quarter-wide line.
-	hasMonthlyLine := false
+	// Group line items by subscription_line_item_id and count those whose
+	// [PeriodStart, PeriodEnd) span is monthly (28-31d) rather than quarterly
+	// (89-92d). Requiring EACH source line item to have ≥3 monthly windows
+	// catches the case where one price's fan-out regresses while another
+	// price on the same invoice still produces enough total line items.
+	//
+	// Seed plan attaches one FIXED and one USAGE monthly price, so expect
+	// at least 2 distinct source line items × 3 monthly windows = 6 total.
+	const monthlySpanUpper = 45 * 24 * time.Hour
+	sourceIDs := map[string]struct{}{}
+	monthlyPerSource := map[string]int{}
 	for _, li := range latest.LineItems {
+		if li.SubscriptionLineItemID == nil {
+			continue
+		}
+		sourceIDs[*li.SubscriptionLineItemID] = struct{}{}
 		if li.PeriodStart == nil || li.PeriodEnd == nil {
 			continue
 		}
 		span := li.PeriodEnd.Sub(*li.PeriodStart)
-		// Monthly span: 28-31 days; quarterly span: 89-92 days. Use 45 days as
-		// the discriminator threshold.
-		if span > 24*time.Hour && span < 45*24*time.Hour {
-			hasMonthlyLine = true
-			break
+		if span > 24*time.Hour && span < monthlySpanUpper {
+			monthlyPerSource[*li.SubscriptionLineItemID]++
 		}
 	}
-	if !hasMonthlyLine {
+
+	if len(sourceIDs) == 0 {
 		return e2eprobe.Errorf(map[string]string{
 			"subscription_id": subID,
 			"invoice_id":      derefStr(latest.ID),
-		}, "quarterly sub %s: no line item has a monthly period span (fan-out regression)", subID)
+			"line_item_count": fmt.Sprintf("%d", len(latest.LineItems)),
+		}, "quarterly sub %s: no line items with subscription_line_item_id on latest invoice", subID)
+	}
+	// Every source must have ≥3 monthly windows. A source with 0 monthly items
+	// (only a single quarter-wide item, e.g.) is the exact regression this probe
+	// catches — do NOT skip it just because it doesn't appear in monthlyPerSource.
+	for srcID := range sourceIDs {
+		count := monthlyPerSource[srcID]
+		if count < 3 {
+			return e2eprobe.Errorf(map[string]string{
+				"subscription_id":           subID,
+				"invoice_id":                derefStr(latest.ID),
+				"subscription_line_item_id": srcID,
+				"monthly_window_count":      fmt.Sprintf("%d", count),
+			}, "quarterly sub %s: source line item %s produced only %d monthly windows (expected >=3, fan-out regression)",
+				subID, srcID, count)
+		}
 	}
 	return nil
 }
@@ -120,7 +130,10 @@ func extractLatestFullInvoiceForSub(resp interface{}, subID string) *sdktypes.In
 	var best *sdktypes.InvoiceResponse
 	for i := range items {
 		inv := &items[i]
-		if inv.SubscriptionID != nil && *inv.SubscriptionID != subID {
+		// Require an explicit subscription-id match. A nil SubscriptionID is
+		// treated as non-match: the customer-scoped query can return standalone
+		// invoices (no linked sub) that would otherwise be selected as "latest".
+		if inv.SubscriptionID == nil || *inv.SubscriptionID != subID {
 			continue
 		}
 		if inv.PeriodEnd == nil {

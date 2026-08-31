@@ -268,7 +268,7 @@ func (s *billingService) CalculateFixedCharges(
 					wStart, wEnd := w.Start, w.End
 					proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, wAmount, &wStart, &wEnd)
 					if err != nil {
-						s.Logger.Info(context.Background(), "failed to apply proration to line item window, using original amount",
+						s.Logger.Info(ctx, "failed to apply proration to line item window, using original amount",
 							"error", err,
 							"subscription_id", sub.ID,
 							"line_item_id", item.ID,
@@ -328,7 +328,7 @@ func (s *billingService) buildFixedInvoiceLineItem(
 	if item.PriceUnit != nil {
 		priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 		if err != nil {
-			s.Logger.Info(context.Background(), "failed to get price unit",
+			s.Logger.Info(ctx, "failed to get price unit",
 				"error", err,
 				"price_unit", lo.ToPtr(item.PriceUnit),
 				"subscription_id", sub.ID,
@@ -337,7 +337,7 @@ func (s *billingService) buildFixedInvoiceLineItem(
 		}
 		priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 		if err != nil {
-			s.Logger.Info(context.Background(), "failed to convert amount to price unit",
+			s.Logger.Info(ctx, "failed to convert amount to price unit",
 				"error", err,
 				"price_unit", lo.FromPtr(item.PriceUnit),
 				"subscription_id", sub.ID,
