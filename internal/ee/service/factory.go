@@ -55,6 +55,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -139,6 +140,11 @@ type ServiceParams struct {
 	// Integration Factory
 	IntegrationFactory *integration.Factory
 
+	// StorageResolver selects the Flexprice-owned Storage backend for a Purpose
+	// (invoice/export/import). Services must reach cloud object storage through
+	// this — no direct AWS/GCP SDK imports outside internal/storage.
+	StorageResolver storage.Resolver
+
 	// Security
 	EncryptionService security.EncryptionService
 
@@ -210,6 +216,7 @@ func NewServiceParams(
 	scheduledTaskRepo scheduledtask.Repository,
 	prorationCalculator proration.Calculator,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
@@ -281,6 +288,7 @@ func NewServiceParams(
 		ScheduledTaskRepo:            scheduledTaskRepo,
 		ProrationCalculator:          prorationCalculator,
 		IntegrationFactory:           integrationFactory,
+		StorageResolver:              storageResolver,
 		EncryptionService:            encryptionService,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,

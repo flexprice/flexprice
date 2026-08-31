@@ -58,6 +58,13 @@ func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider
 			s3Cfg.AWSSecretAccessKey = cfg.FlexpriceS3Exports.AWSSecretAccessKey
 			s3Cfg.AWSSessionToken = cfg.FlexpriceS3Exports.AWSSessionToken
 		}
+		// Import-scoped static keys: same scoping discipline as exports so a
+		// misconfigured section can't leak credentials into the invoice path.
+		if purpose == PurposeImport && cfg.FlexpriceS3Imports.AWSAccessKeyID != "" {
+			s3Cfg.AWSAccessKeyID = cfg.FlexpriceS3Imports.AWSAccessKeyID
+			s3Cfg.AWSSecretAccessKey = cfg.FlexpriceS3Imports.AWSSecretAccessKey
+			s3Cfg.AWSSessionToken = cfg.FlexpriceS3Imports.AWSSessionToken
+		}
 		if purpose == PurposeExport && cfg.FlexpriceS3Exports.ResolvedCredentialSource() == config.CredentialSourceFederation {
 			// Federation has no token source yet (Plan 2). Fail loudly at boot
 			// rather than let s3backend fall through to the ambient chain, which

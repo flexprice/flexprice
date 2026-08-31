@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -223,6 +224,10 @@ func main() {
 			// Services
 			// Integration factory must be provided before service params
 			integration.NewFactory,
+			// Storage resolver — cloud-agnostic Storage for platform-owned buckets
+			// (invoices/exports/imports). Provided before service params so any
+			// service can reach it via ServiceParams.StorageResolver.
+			provideStorageResolver,
 			syncExport.NewExportService,
 			service.NewServiceParams,
 			service.NewOAuthService,
@@ -464,6 +469,16 @@ func provideRouter(
 
 func initIntegrationFactory(factory *integration.Factory, paymentService interfaces.PaymentService, invoiceService service.InvoiceService) {
 	factory.SetServices(paymentService, invoiceService)
+}
+
+// provideStorageResolver constructs the platform storage resolver at boot.
+// The resolver runs CloudDetector once (which blocks on metadata probes), so
+// a background context is used deliberately — this must not be per-request.
+// ConnectionStorageProvider is left nil because customer BYOB connections are
+// not yet migrated to the new storage interface; ForConnection returns a
+// clear error until that wiring lands.
+func provideStorageResolver(cfg *config.Configuration, log *logger.Logger) storage.Resolver {
+	return storage.NewResolver(context.Background(), cfg, nil, log)
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {

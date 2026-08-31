@@ -31,13 +31,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/storage"
 )
 
 // FileProvider defines the interface for different file providers
@@ -222,44 +217,42 @@ func extractOneDriveFileID(url string) string {
 }
 
 // CSVBoxProvider resolves an s3://<imports-bucket>/<key> URL — produced by the
-// task DTO from a caller-supplied upload_id — to a short-lived presigned GET
-// URL. The credentials come from FlexpriceS3ImportsConfig, never from the
-// caller, so this provider is the trust boundary that replaces the removed
-// file_url path (see commit f05a1e65f).
+// task DTO from a caller-supplied upload_id — into a short-lived presigned GET
+// URL. All object-store work is delegated to storage.Resolver so this file
+// stays free of cloud-SDK imports; that invariant is what internal/storage
+// exists to enforce. The provider is the trust boundary: it only signs URLs
+// whose bucket matches the resolver's configured imports bucket, so a task
+// row with a stray FileURL can't get imports credentials pointed at somewhere
+// else. Replaces the caller-supplied file_url path removed in commit f05a1e65f.
 type CSVBoxProvider struct {
-	bucket    string
-	region    string
-	accessKey string
-	secretKey string
-	session   string
-	logger    *logger.Logger
+	resolver storage.Resolver
 }
 
-// NewCSVBoxProvider builds the provider from imports config. Returns nil when
-// the imports feature is disabled or credentials are missing — callers must
-// skip registration in that case.
-func NewCSVBoxProvider(cfg config.FlexpriceS3ImportsConfig, log *logger.Logger) *CSVBoxProvider {
-	if !cfg.Enabled || cfg.Bucket == "" || cfg.AWSAccessKeyID == "" || cfg.AWSSecretAccessKey == "" {
+// NewCSVBoxProvider builds the provider. A nil resolver returns nil — callers
+// pass the result unconditionally and the registry skips registration, so a
+// deployment without the storage stack wired up cannot accidentally match
+// s3:// URLs.
+func NewCSVBoxProvider(resolver storage.Resolver) *CSVBoxProvider {
+	if resolver == nil {
 		return nil
 	}
-	return &CSVBoxProvider{
-		bucket:    cfg.Bucket,
-		region:    cfg.Region,
-		accessKey: cfg.AWSAccessKeyID,
-		secretKey: cfg.AWSSecretAccessKey,
-		session:   cfg.AWSSessionToken,
-		logger:    log,
-	}
+	return &CSVBoxProvider{resolver: resolver}
 }
 
 func (p *CSVBoxProvider) GetProviderName() FileProviderType {
 	return FileProviderTypeCSVBox
 }
 
-// Bucket exposes the imports bucket so the registry can route only URLs that
-// point at it (and not at unrelated s3:// URLs like export FileURLs).
-func (p *CSVBoxProvider) Bucket() string {
-	return p.bucket
+// ImportsBucket returns the configured imports bucket, or empty when imports
+// are not enabled on this deployment. The registry uses it to route only s3://
+// URLs that point at the imports bucket (never an unrelated s3:// URL, like an
+// export FileURL, which lives in a different bucket).
+func (p *CSVBoxProvider) ImportsBucket() string {
+	bc, err := p.resolver.BucketConfigFor(storage.PurposeImport)
+	if err != nil {
+		return ""
+	}
+	return bc.Bucket
 }
 
 func (p *CSVBoxProvider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
@@ -267,29 +260,34 @@ func (p *CSVBoxProvider) GetDownloadURL(ctx context.Context, fileURL string) (st
 	if err != nil {
 		return "", err
 	}
-	if bucket != p.bucket {
+
+	store, err := p.resolver.ForPlatform(ctx, storage.PurposeImport)
+	if err != nil {
+		return "", err
+	}
+
+	// Reject URLs whose bucket does not match the resolver's imports bucket.
+	// Without this, the presigner would still sign against `bucket` using the
+	// imports credentials, which would let a caller who could plant an
+	// arbitrary FileURL point our creds at their own bucket.
+	bc, err := p.resolver.BucketConfigFor(storage.PurposeImport)
+	if err != nil {
+		return "", err
+	}
+	if bucket != bc.Bucket {
 		return "", ierr.NewErrorf("bucket %q is not the Flexprice imports bucket", bucket).
-			WithHint("The CSVBox provider only downloads from the configured imports bucket").
+			WithHint("Imports downloads are restricted to the configured imports bucket").
 			Mark(ierr.ErrValidation)
 	}
 
-	awsCfg, err := awsConfig.LoadDefaultConfig(ctx,
-		awsConfig.WithRegion(p.region),
-		awsConfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			p.accessKey, p.secretKey, p.session,
-		)),
-	)
-	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to load AWS config for imports").
-			Mark(ierr.ErrInternal)
+	expiry := csvboxPresignExpiry
+	if bc.PresignExpiryDuration != "" {
+		if d, perr := time.ParseDuration(bc.PresignExpiryDuration); perr == nil {
+			expiry = d
+		}
 	}
 
-	presigner := s3.NewPresignClient(s3.NewFromConfig(awsCfg))
-	res, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	}, s3.WithPresignExpires(csvboxPresignExpiry))
+	url, err := store.PresignGet(ctx, key, expiry)
 	if err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Failed to presign imports object").
@@ -299,7 +297,7 @@ func (p *CSVBoxProvider) GetDownloadURL(ctx context.Context, fileURL string) (st
 			}).
 			Mark(ierr.ErrInternal)
 	}
-	return res.URL, nil
+	return url, nil
 }
 
 // parseS3URL splits an s3://bucket/key URL. The key may contain slashes; the
@@ -348,13 +346,20 @@ func NewFileProviderRegistry() *FileProviderRegistry {
 // RegisterCSVBoxProvider registers the CSVBox provider and remembers its
 // bucket so GetProvider can route only matching s3:// URLs to it. A nil
 // provider is a no-op, letting callers pass NewCSVBoxProvider's result
-// unconditionally.
+// unconditionally. A provider whose resolver has imports disabled (empty
+// bucket) is treated as not registered: routing then falls through to the
+// default s3 provider so an unconfigured deployment fails at the download
+// step, not at import-URL matching.
 func (r *FileProviderRegistry) RegisterCSVBoxProvider(p *CSVBoxProvider) {
 	if p == nil {
 		return
 	}
+	bucket := p.ImportsBucket()
+	if bucket == "" {
+		return
+	}
 	r.providers[p.GetProviderName()] = p
-	r.csvboxBucket = p.Bucket()
+	r.csvboxBucket = bucket
 }
 
 // RegisterProvider registers a file provider

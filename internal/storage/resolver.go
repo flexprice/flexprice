@@ -16,6 +16,11 @@ type Purpose string
 const (
 	PurposeInvoice Purpose = "invoice"
 	PurposeExport  Purpose = "export"
+	// PurposeImport is the Flexprice-owned bucket that trusted upstream
+	// uploaders (e.g. CSV Box) write into. The /tasks import API accepts an
+	// upload_id and resolves it to a key under this bucket — the caller never
+	// supplies a URL.
+	PurposeImport Purpose = "import"
 )
 
 // Resolver selects the Storage for an operation. Platform storage (invoices,
@@ -134,6 +139,13 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 				Mark(ierr.ErrValidation)
 		}
 		return signer, nil
+	case PurposeImport:
+		// Imports on GCS need their own bucket + signer config, which does not
+		// exist yet. Fail loudly rather than let the export signer be reused
+		// (which would presign against the wrong bucket).
+		return "", ierr.NewError("GCS is not yet supported for imports").
+			WithHint("Run this deployment with storage.provider=s3, or add a flexprice_gcs_imports config block and a companion signer service account when GCS-side imports are wired up").
+			Mark(ierr.ErrValidation)
 	default:
 		return "", unsupportedPurpose(purpose)
 	}
@@ -142,7 +154,8 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 // checkProviderEnabled enforces the s3.enabled / gcs.enabled kill switch, which
 // has only ever gated invoice PDFs (exports have their own config). Preserves the
 // pre-refactor behavior where storage-off deployments failed fast instead of
-// issuing live bucket calls.
+// issuing live bucket calls. Import has its own enabled flag on
+// FlexpriceS3Imports, checked in platformBucket.
 func (r *resolver) checkProviderEnabled(purpose Purpose) error {
 	if purpose != PurposeInvoice {
 		return nil
@@ -176,9 +189,12 @@ func (r *resolver) platformBucket(purpose Purpose) (bucket, region string, err e
 
 	switch r.provider {
 	case ProviderS3:
-		if purpose == PurposeInvoice {
+		switch purpose {
+		case PurposeInvoice:
 			region = r.cfg.S3.Region
-		} else {
+		case PurposeImport:
+			region = r.cfg.FlexpriceS3Imports.Region
+		default:
 			region = r.cfg.FlexpriceS3Exports.Region
 		}
 	}
@@ -202,6 +218,11 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 				Bucket:                r.cfg.FlexpriceGCSExports.Bucket,
 				PresignExpiryDuration: "30m",
 			}
+		case PurposeImport:
+			// See signerFor: no GCS imports config today.
+			return config.BucketConfig{}, ierr.NewError("GCS is not yet supported for imports").
+				WithHint("Run this deployment with storage.provider=s3, or add a flexprice_gcs_imports config block when GCS-side imports are wired up").
+				Mark(ierr.ErrValidation)
 		default:
 			return config.BucketConfig{}, unsupportedPurpose(purpose)
 		}
@@ -213,6 +234,20 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 			bc = config.BucketConfig{
 				Bucket:                r.cfg.FlexpriceS3Exports.Bucket,
 				PresignExpiryDuration: "30m",
+			}
+		case PurposeImport:
+			// Imports are opt-in per deployment; refuse if disabled so the
+			// downstream download failure is caught here with a clear hint
+			// instead of surfacing as an S3 auth error later.
+			if !r.cfg.FlexpriceS3Imports.Enabled {
+				return config.BucketConfig{}, ierr.NewError("csv imports are not enabled on this deployment").
+					WithHint("Set flexprice_s3_imports.enabled=true (FLEXPRICE_FLEXPRICE_S3_IMPORTS_ENABLED) and configure bucket/credentials").
+					Mark(ierr.ErrInvalidOperation)
+			}
+			bc = config.BucketConfig{
+				Bucket:                r.cfg.FlexpriceS3Imports.Bucket,
+				KeyPrefix:             r.cfg.FlexpriceS3Imports.KeyPrefix,
+				PresignExpiryDuration: "5m",
 			}
 		default:
 			return config.BucketConfig{}, unsupportedPurpose(purpose)
@@ -248,6 +283,8 @@ func missingBucketHint(provider Provider, purpose Purpose) string {
 		return "Set flexprice_gcs_exports.bucket (FLEXPRICE_FLEXPRICE_GCS_EXPORTS_BUCKET)"
 	case provider == ProviderS3 && purpose == PurposeInvoice:
 		return "Set s3.invoice.bucket (FLEXPRICE_S3_INVOICE_BUCKET)"
+	case provider == ProviderS3 && purpose == PurposeImport:
+		return "Set flexprice_s3_imports.bucket (FLEXPRICE_FLEXPRICE_S3_IMPORTS_BUCKET)"
 	default:
 		return "Set flexprice_s3_exports.bucket (FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET)"
 	}

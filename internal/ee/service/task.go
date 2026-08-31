@@ -39,7 +39,14 @@ func NewTaskService(
 	serviceParams ServiceParams,
 ) TaskService {
 	fp := NewFileProcessor(serviceParams.Logger)
-	csvbox := NewCSVBoxProvider(serviceParams.Config.FlexpriceS3Imports, serviceParams.Logger)
+	// The CSVBox provider is the trust boundary that replaces the removed
+	// file_url path (commit f05a1e65f). Register on both registries because
+	// the FileProcessor keeps its own for DownloadFile and its embedded
+	// StreamingProcessor keeps another for ProcessFileStream — the same
+	// s3://<imports-bucket>/... URL must resolve identically on either
+	// entry point. All object-store work is delegated to StorageResolver so
+	// no cloud SDKs are imported here.
+	csvbox := NewCSVBoxProvider(serviceParams.StorageResolver)
 	fp.ProviderRegistry.RegisterCSVBoxProvider(csvbox)
 	fp.StreamingProcessor.ProviderRegistry.RegisterCSVBoxProvider(csvbox)
 
