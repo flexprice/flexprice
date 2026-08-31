@@ -64,11 +64,6 @@ type BillingService interface {
 	// CalculateCharges calculates charges for the given line items and period.
 	CalculateCharges(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error)
 
-	// CalculateChargesForLineItems computes fixed + usage charges for the given line items
-	// over [PeriodStart, PeriodEnd), applying per-cadence fan-out for USAGE items.
-	// This is the public entry point for calculateMeterUsageCharges.
-	CalculateChargesForLineItems(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error)
-
 	// CalculateMeterUsageCharges computes usage-based invoice line items from meter_usage.
 	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
@@ -2007,15 +2002,6 @@ func (s *billingService) CalculateCharges(
 		PeriodEnd:                      periodEnd,
 		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
-}
-
-// CalculateChargesForLineItems is the public entry point for calculateMeterUsageCharges,
-// computing fixed + usage charges for the given line items with per-cadence fan-out.
-func (s *billingService) CalculateChargesForLineItems(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error) {
-	if err := params.Validate(); err != nil {
-		return nil, err
-	}
-	return s.calculateMeterUsageCharges(ctx, params.Subscription, params.LineItems, params.PeriodStart, params.PeriodEnd, params.IncludeUsage)
 }
 
 // calculateMeterUsageCharges computes fixed + usage charges for the given
