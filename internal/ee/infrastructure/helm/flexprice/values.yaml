@@ -974,6 +974,7 @@ kafkaConfig:
 # Set enabled=true to run database migrations as a Kubernetes Job
 migration:
   enabled: true  # Set to true to enable migration job
+  seedKafkaACLs: false  # seed allow-all MSK ACLs (SCRAM/MSK only); opt-in, off by default
 
   # Install the migration Job as a Helm pre-install/pre-upgrade HOOK (default),
   # or as an ordinary chart resource.

@@ -420,6 +420,58 @@ spec:
             {{- toYaml .Values.migration.resources | nindent 12 }}
         {{- end }}
 
+        {{- if .Values.migration.steps.kafka }}
+        # ── Run Kafka migration: topic reconcile + allow-all ACL seed ─────────
+        # `migrate kafka` reconciles topics against the desired spec (partition
+        # growth, retention, FLEXPRICE_KAFKA_TOPICS) AND seeds the allow-all
+        # ACLs in one pass. Run it for EVERY kafka-enabled deploy so topic
+        # reconcile happens everywhere; the ACL seed is gated to SASL/SCRAM
+        # (MSK) internally, a no-op on plaintext and OAUTHBEARER clusters.
+        # SCRAM clusters (MSK) enforce ACLs once SASL is on; without an
+        # allow-all rule set, every client -- including the app itself -- is
+        # locked out the moment auth is enabled. OAUTHBEARER clusters use
+        # IAM-style authz, not Kafka ACLs, so the seed skips them.
+        - name: run-kafka-migrate
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running Kafka migration (topics + ACLs)..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
+              else
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
+                exit 1
+              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              {{- if .Values.migration.seedKafkaACLs }}
+              ${MIGRATE_BINARY} kafka --seed-acls || exit 1
+              {{- else }}
+              ${MIGRATE_BINARY} kafka || exit 1
+              {{- end }}
+              echo "✅ Kafka migration complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          {{- if or (not .Values.env) .Values.kafkaConfig.tlsCASecret.name }}
+          volumeMounts:
+            {{- if not .Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        {{- end }}
+
         {{- if .Values.migration.steps.seed }}
         # ── 8. Seed PostgreSQL with default tenant, user, environments ────────
         - name: seed-postgres
