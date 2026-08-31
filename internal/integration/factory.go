@@ -1342,10 +1342,8 @@ func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasTabsConnection(ctx)
 }
 
-// GetStorageProvider returns a cloud-agnostic Storage for the given connection,
-// dispatching to the S3 or GCS backend based on the connection's provider type.
-// This is the only entrypoint for customer BYO storage — callers never see a
-// concrete backend type.
+// GetStorageProvider returns a Storage for the connection, dispatching to the
+// S3 or GCS backend. Sole entrypoint for customer BYO storage.
 func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (storage.Storage, error) {
 	if connectionID == "" {
 		return nil, ierr.NewError("connection ID is required for storage").
@@ -1361,17 +1359,9 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
-// GetStorageProviderForConnection builds a Storage from an in-memory connection
-// rather than fetching one by ID.
-//
-// This exists so a connection's storage config can be verified BEFORE it is
-// persisted: connection create and update both need to know whether the bucket
-// is actually reachable with the supplied credentials, and validating the
-// already-stored row would only prove the previous config still works. Building
-// from the proposed connection means a bad config is rejected without ever
-// being written, so neither path needs a rollback.
-//
-// The connection is only read here — nothing is persisted.
+// GetStorageProviderForConnection builds a Storage from an in-memory connection,
+// so create/update can verify the config is reachable before persisting it (a
+// bad config is rejected without ever being written). Read-only.
 func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn == nil {
 		return nil, ierr.NewError("connection is required for storage").
@@ -1396,21 +1386,11 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	// Flexprice-managed connections write to a Flexprice-owned bucket using the
-	// deployment's own ambient/static/federated identity, resolved from PLATFORM
-	// config at runtime — not from any credential snapshot on the connection row.
-	// This mirrors buildGCSStorage's managed branch: rotating the platform
-	// credential source takes effect immediately for every managed connection,
-	// and legacy rows that still carry a credential snapshot in
-	// EncryptedSecretData.S3 (from before this fix) simply have it ignored, since
-	// this branch runs before the decrypt path below.
-	//
-	// The DESTINATION is a different matter from the credentials. A managed
-	// connection records the bucket it was created against, and existing objects
-	// live there; silently retargeting it at whatever the platform config
-	// currently says would strand every prior export the moment that config
-	// drifts. So the row wins, and platform config is only the fallback for rows
-	// created before the bucket was recorded.
+	// Managed connections take credentials from PLATFORM config at runtime (not
+	// the connection's credential snapshot), so rotating them applies at once. The
+	// DESTINATION bucket comes from the row — platform config is only a fallback
+	// for rows created before the bucket was recorded — so config drift can't
+	// strand prior exports.
 	if jobConfig.IsFlexpriceManaged {
 		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
 			return nil, err
@@ -1438,12 +1418,9 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 			s3Cfg.AWSSecretAccessKey = f.config.FlexpriceS3Exports.AWSSecretAccessKey
 			s3Cfg.AWSSessionToken = f.config.FlexpriceS3Exports.AWSSessionToken
 		case config.CredentialSourceAmbient:
-			// Deliberately leave credentials empty: s3backend.New falls through to
-			// the AWS default credential chain (EKS IRSA / EKS Pod Identity / ECS
-			// task role / EC2 instance profile).
+			// Empty credentials: s3backend.New uses the AWS default chain.
 		case config.CredentialSourceFederation:
-			// FederationTokenSource is wired once the GCP->AWS federation token
-			// source implementation lands; only the role ARN is set for now.
+			// Role ARN only; FederationTokenSource lands with GCP->AWS federation.
 			s3Cfg.FederationRoleARN = f.config.FlexpriceS3Exports.FederationRoleARN
 		}
 
@@ -1452,57 +1429,14 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 
 	switch jobConfig.ResolvedAccessMode() {
 	case types.StorageAccessModeAssumeRole:
-		// DISABLED pending a dedicated, per-environment AWS principal.
-		//
-		// The mechanism itself is implemented and was verified end to end
-		// against a real cross-account bucket (connection validation, export
-		// upload, ExternalId enforcement, and secret redaction all behaved
-		// correctly). What is missing is a safe customer-facing contract.
-		//
-		// Two problems, both about WHICH principal the customer is asked to
-		// trust in their own IAM trust policy:
-		//
-		//  1. It borrowed marketplace.aws.* — the identity used for AWS
-		//     Marketplace metering, an unrelated feature. Customers would be
-		//     told to trust a principal whose name and purpose say
-		//     "marketplace", and one compromised key would cover both metering
-		//     and every customer's storage bucket.
-		//
-		//  2. A single shared principal cannot separate environments. Staging
-		//     and production share one AWS account, and ExternalId does NOT
-		//     help here: it guards the customer's side against third parties,
-		//     not against which Flexprice environment is calling. External IDs
-		//     live in sync_config as plaintext and are derived from tenant_id,
-		//     so the same tenant has the SAME id in both environments — and a
-		//     staging database refreshed from a production snapshot would hold
-		//     every production external ID. Staging could then assume a
-		//     customer's production role and write to their production bucket.
-		//     Only a distinct principal per environment is a real boundary.
-		//
-		// To enable: create role/flexprice-storage-access-<env> in the
-		// Flexprice AWS account, trusted by that environment's compute only
-		// (EKS IRSA / ECS task role, or the GCP federated identity when
-		// federation lands), holding sts:AssumeRole and no bucket permissions
-		// of its own. Add a dedicated storage.aws.* config section pointing at
-		// it — never marketplace.aws.* — and document ONLY the production ARN
-		// to customers. Then restore the branch below.
+		// Disabled: needs a dedicated per-environment Flexprice IAM principal.
+		// A shared principal can't separate staging/prod (same AWS account,
+		// tenant-derived ExternalIDs match across envs) and would over-scope
+		// marketplace.aws.*. To enable, add a per-env storage.aws.* principal
+		// and restore the s3backend AssumeRole branch (git history).
 		return nil, ierr.NewError("assume_role storage connections are not enabled").
 			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled: it requires a dedicated per-environment Flexprice IAM principal that does not exist yet. Use access_mode 'static_key' with customer-supplied credentials for now.").
 			Mark(ierr.ErrValidation)
-
-		// Restore once the dedicated principal exists, reading base credentials
-		// from storage.aws.* (falling through to the ambient chain when no
-		// static keys are set, so AWS-hosted deployments need no key at all):
-		//
-		// return s3backend.New(ctx, &s3backend.Config{
-		// 	Bucket:               jobConfig.Bucket,
-		// 	Region:               jobConfig.Region,
-		// 	CompressionGzip:      jobConfig.Compression == types.S3CompressionTypeGzip,
-		// 	ServerSideEncrypt:    string(jobConfig.Encryption),
-		// 	AssumeRoleARN:        jobConfig.RoleARN,
-		// 	AssumeRoleExternalID: jobConfig.ExternalID,
-		// 	// ... base credentials from storage.aws.*
-		// }, f.logger)
 
 	default: // types.StorageAccessModeStaticKey and empty (legacy rows)
 		if conn.EncryptedSecretData.S3 == nil {
@@ -1548,15 +1482,10 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	// Flexprice-managed connections write to a Flexprice-owned bucket using the
-	// deployment's own ambient identity (Workload Identity on GKE). No service
-	// account key is involved: GCP projects commonly enforce
-	// constraints/iam.disableServiceAccountKeyCreation, so requiring an exported
-	// key here would make managed GCS exports impossible to operate.
-	//
-	// The strict no-ambient-fallback rule below still applies to customer BYO
-	// connections, where silently using Flexprice's identity after a customer
-	// supplied empty credentials would write to a customer bucket as Flexprice.
+	// Managed GCS uses the deployment's ambient Workload Identity, not a SA key
+	// (iam.disableServiceAccountKeyCreation commonly blocks exported keys). The
+	// no-ambient-fallback rule below still guards customer BYO connections, where
+	// falling back to Flexprice's identity would write to a customer bucket as us.
 	if jobConfig.IsFlexpriceManaged {
 		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
 			return nil, err

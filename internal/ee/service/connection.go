@@ -776,11 +776,9 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 	conn.EncryptedSecretData = encryptedMetadata
 
-	// Storage connections (S3/GCS): validate the bucket is actually reachable with the
-	// resolved credentials BEFORE the row is ever persisted. This must run after
-	// encryption above, since buildS3Storage/buildGCSStorage decrypt
-	// conn.EncryptedSecretData. A validation failure here means nothing was ever
-	// written, so there is nothing to roll back.
+	// Validate the bucket is reachable before persisting (after encryption, since
+	// the backend decrypts EncryptedSecretData). A failure means nothing was
+	// written — no rollback.
 	if err := s.validateStorageReachable(ctx, conn); err != nil {
 		return nil, err
 	}
@@ -820,15 +818,9 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	return dto.ToConnectionResponse(conn), nil
 }
 
-// validateStorageReachable checks that an S3/GCS connection's bucket is actually
-// reachable with the resolved credentials, building the storage backend from the
-// in-memory conn (via Factory.GetStorageProviderForConnection) rather than a
-// persisted row. This lets both CreateConnection and UpdateConnection validate
-// before writing: a failure here means the DB was never touched, so neither
-// caller needs a rollback.
-//
-// Returns nil for non-storage providers and when IntegrationFactory is nil
-// (some test/bootstrap paths construct the service without one).
+// validateStorageReachable probes an S3/GCS bucket from the in-memory conn so
+// create/update can validate before writing. No-op for non-storage providers or
+// when IntegrationFactory is nil (test/bootstrap paths).
 func (s *connectionService) validateStorageReachable(ctx context.Context, conn *connection.Connection) error {
 	if conn.ProviderType != types.SecretProviderS3 && conn.ProviderType != types.SecretProviderGCS {
 		return nil
@@ -853,19 +845,15 @@ func (s *connectionService) validateStorageReachable(ctx context.Context, conn *
 			Mark(ierr.ErrValidation)
 	}
 
-	// Bounded so a slow/unreachable bucket can't hang this request indefinitely —
-	// there's no other timeout anywhere in this path otherwise.
+	// Bounded so a slow/unreachable bucket can't hang the request.
 	verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	err = storageProvider.ValidateConnection(verifyCtx)
 	cancel()
 	if err != nil {
-		// Best-effort only: ValidateConnection probes at the bucket level (S3
-		// HeadBucket / GCS bucket Attrs), which needs s3:ListBucket /
-		// storage.buckets.get. An export credential can validly be scoped to
-		// object-level PutObject/GetObject alone, so a probe failure does NOT mean
-		// the connection is unusable — blocking here would reject least-privilege
-		// credentials that the export workflow would accept. Log and allow; a
-		// genuinely broken connection surfaces on the first export.
+		// Best-effort: the probe needs bucket-level permission (ListBucket /
+		// buckets.get), but an export credential may validly be object-scoped only.
+		// So allow on failure rather than reject least-privilege creds; a truly
+		// broken connection surfaces on the first export.
 		s.Logger.Info(ctx, "storage connection reachability probe failed; allowing connection (bucket-level probe may lack permission an object-scoped export credential does not need)",
 			"connection_id", conn.ID,
 			"provider_type", conn.ProviderType,
@@ -912,14 +900,10 @@ func (s *connectionService) GetConnections(ctx context.Context, filter *types.Co
 	}, nil
 }
 
-// applyManagedStorageConfig overrides caller-supplied destination fields for
-// Flexprice-managed connections. No credentials are stored on the row: the
-// export path resolves them from PLATFORM config at runtime (see
-// Factory.buildS3Storage / buildGCSStorage). Only the destination bucket/region
-// and the tenant-isolating key prefix are forced here so a caller cannot point a
-// managed connection at an arbitrary (or cross-tenant) bucket/prefix. Must run
-// on both create and update, or an update payload with is_flexprice_managed=true
-// and a caller-chosen key_prefix would poison tenant isolation.
+// applyManagedStorageConfig forces the destination bucket/region and the
+// tenant-isolating key prefix for managed connections, so a caller can't point
+// one at an arbitrary or cross-tenant bucket. Must run on create AND update
+// (a managed update with a caller-chosen key_prefix would break tenant isolation).
 func (s *connectionService) applyManagedStorageConfig(ctx context.Context, conn *connection.Connection) error {
 	if conn.SyncConfig == nil || conn.SyncConfig.Storage == nil || !conn.SyncConfig.Storage.IsFlexpriceManaged {
 		return nil
@@ -990,9 +974,8 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.SyncConfig = req.SyncConfig
 	}
 
-	// Re-apply managed destination overrides so an update payload with
-	// is_flexprice_managed=true cannot redirect exports to an arbitrary bucket
-	// or a cross-tenant key prefix.
+	// Re-apply on update too, or a managed payload could redirect exports to an
+	// arbitrary/cross-tenant bucket.
 	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
 		return nil, err
 	}
@@ -1102,11 +1085,8 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 	conn.UpdatedAt = time.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
-	// Storage connections (S3/GCS): validate the (possibly updated) bucket is actually
-	// reachable BEFORE the update is persisted, same as CreateConnection. Since this
-	// validates the in-memory conn before ConnectionRepo.Update runs, a failure here
-	// means the DB row is untouched — no snapshot of the pre-update state, no revert,
-	// no rollback needed.
+	// Validate reachability before the update persists, same as create — a failure
+	// leaves the row untouched, no rollback.
 	if err := s.validateStorageReachable(ctx, conn); err != nil {
 		return nil, err
 	}
