@@ -102,10 +102,7 @@ func (p *GoogleDriveProvider) GetProviderName() FileProviderType {
 	return FileProviderTypeGoogleDrive
 }
 
-// S3Provider handles user-supplied task import URLs (not Flexprice's own storage,
-// which presigns via storage.Storage). It has no credentials, so it only passes
-// through already-fetchable https URLs; a raw s3:// URI fails downstream — a
-// known, pre-existing gap deferred as a follow-up.
+// No credentials; passes through https only. s3:// unsupported.
 type S3Provider struct{}
 
 func (p *S3Provider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
@@ -124,8 +121,7 @@ func (p *S3Provider) GetProviderName() FileProviderType {
 	return FileProviderTypeS3
 }
 
-// GCSProvider mirrors S3Provider (no credentials, pass-through only, same gs://
-// gap). See S3Provider.
+// Mirrors S3Provider; gs:// unsupported.
 type GCSProvider struct{}
 
 func (p *GCSProvider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {

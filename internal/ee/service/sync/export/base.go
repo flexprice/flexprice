@@ -175,7 +175,6 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	}
 }
 
-// uploadToStorage handles cloud-agnostic upload logic for export data.
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	if request.JobConfig == nil {
 		return nil, ierr.NewError("job configuration is required").
@@ -196,9 +195,7 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
 	key := storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
 
-	// Log the resolved store's destination (store.FileURL encodes the bucket the
-	// upload actually targets) rather than request.JobConfig.Bucket, which is a
-	// separate field that can diverge from the connection row for managed rows.
+	// Use resolved destination, not JobConfig.Bucket.
 	s.logger.Info(ctx, "uploading export",
 		"connection_id", request.ConnectionID,
 		"provider", store.Provider(),

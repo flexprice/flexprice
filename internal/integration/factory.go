@@ -1342,8 +1342,6 @@ func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasTabsConnection(ctx)
 }
 
-// GetStorageProvider returns a Storage for the connection, dispatching to the
-// S3 or GCS backend. Sole entrypoint for customer BYO storage.
 func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (storage.Storage, error) {
 	if connectionID == "" {
 		return nil, ierr.NewError("connection ID is required for storage").
@@ -1359,9 +1357,7 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
-// GetStorageProviderForConnection builds a Storage from an in-memory connection,
-// so create/update can verify the config is reachable before persisting it (a
-// bad config is rejected without ever being written). Read-only.
+// Validates config before persisting.
 func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn == nil {
 		return nil, ierr.NewError("connection is required for storage").
@@ -1386,11 +1382,7 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	// Managed connections take credentials from PLATFORM config at runtime (not
-	// the connection's credential snapshot), so rotating them applies at once. The
-	// DESTINATION bucket comes from the row — platform config is only a fallback
-	// for rows created before the bucket was recorded — so config drift can't
-	// strand prior exports.
+	// Credentials from platform config; bucket from row.
 	if jobConfig.IsFlexpriceManaged {
 		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
 			return nil, err
@@ -1418,9 +1410,8 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 			s3Cfg.AWSSecretAccessKey = f.config.FlexpriceS3Exports.AWSSecretAccessKey
 			s3Cfg.AWSSessionToken = f.config.FlexpriceS3Exports.AWSSessionToken
 		case config.CredentialSourceAmbient:
-			// Empty credentials: s3backend.New uses the AWS default chain.
+			// Uses AWS default chain.
 		case config.CredentialSourceFederation:
-			// Role ARN only; FederationTokenSource lands with GCP->AWS federation.
 			s3Cfg.FederationRoleARN = f.config.FlexpriceS3Exports.FederationRoleARN
 		}
 
@@ -1429,11 +1420,7 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 
 	switch jobConfig.ResolvedAccessMode() {
 	case types.StorageAccessModeAssumeRole:
-		// Disabled: needs a dedicated per-environment Flexprice IAM principal.
-		// A shared principal can't separate staging/prod (same AWS account,
-		// tenant-derived ExternalIDs match across envs) and would over-scope
-		// marketplace.aws.*. To enable, add a per-env storage.aws.* principal
-		// and restore the s3backend AssumeRole branch (git history).
+		// Disabled: needs per-environment IAM principal.
 		return nil, ierr.NewError("assume_role storage connections are not enabled").
 			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled: it requires a dedicated per-environment Flexprice IAM principal that does not exist yet. Use access_mode 'static_key' with customer-supplied credentials for now.").
 			Mark(ierr.ErrValidation)
@@ -1482,16 +1469,11 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	// Managed GCS uses the deployment's ambient Workload Identity, not a SA key
-	// (iam.disableServiceAccountKeyCreation commonly blocks exported keys). The
-	// no-ambient-fallback rule below still guards customer BYO connections, where
-	// falling back to Flexprice's identity would write to a customer bucket as us.
+	// Managed GCS uses ambient Workload Identity.
 	if jobConfig.IsFlexpriceManaged {
 		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
 			return nil, err
 		}
-		// Row-recorded bucket wins over platform config; see buildS3Storage for
-		// why the destination is treated differently from the credentials.
 		bucket := jobConfig.Bucket
 		if bucket == "" {
 			bucket = f.config.FlexpriceGCSExports.Bucket

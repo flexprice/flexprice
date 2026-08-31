@@ -1169,7 +1169,6 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Parse storage URL (format: s3://bucket/key or gs://bucket/key)
 	provider, bucket, key, err := storage.ParseFileURL(t.FileURL)
 	if err != nil {
 		return "", err
@@ -1221,12 +1220,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Check if connection is Flexprice-managed
 	isFlexpriceManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
 
-	// For Flexprice-managed, verify bucket matches the connection's recorded
-	// destination. The recorded bucket (conn.SyncConfig.Storage.Bucket) is
-	// authoritative — buildS3Storage writes to it and only falls back to the
-	// current platform config for legacy rows with an empty bucket. Validating
-	// against the recorded bucket (not the live platform config) keeps previously
-	// generated URLs valid across a platform bucket rotation.
+	// Recorded bucket survives platform rotation.
 	if isFlexpriceManaged {
 		expectedBucket := conn.SyncConfig.Storage.Bucket
 		if expectedBucket == "" {
@@ -1263,10 +1257,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrInternal)
 	}
 
-	// Guard against a corrupted/stale FileURL whose scheme does not match the
-	// connection's actual configured storage backend (e.g. gs:// URL against
-	// an S3 connection) — presigning against the wrong backend would silently
-	// produce a URL for the wrong storage system.
+	// Reject URL scheme mismatched to backend.
 	if store.Provider() != provider {
 		return "", ierr.NewErrorf("file URL provider '%s' does not match connection's configured storage provider '%s'", provider, store.Provider()).
 			WithHint("File URL provider does not match connection's configured storage provider").

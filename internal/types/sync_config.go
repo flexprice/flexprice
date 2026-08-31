@@ -19,8 +19,7 @@ type SyncConfig struct {
 	// CRM sync (HubSpot, Salesforce, etc.)
 	Deal  *EntitySyncConfig `json:"deal,omitempty"`
 	Quote *EntitySyncConfig `json:"quote,omitempty"`
-	// Storage connection metadata (S3 or GCS). JSON tag stays "s3" for back-compat
-	// with existing rows; the field is cloud-agnostic.
+	// Tag stays "s3" for back-compat.
 	Storage *StorageExportConfig `json:"s3,omitempty"`
 	// AWSMarketplace connection metadata
 	AWSMarketplace *AWSMarketplaceSyncConfig `json:"aws_marketplace,omitempty"`
@@ -250,9 +249,7 @@ func DefaultSyncConfig() *SyncConfig {
 	}
 }
 
-// Validate checks provider-agnostic invariants. Ent's codegen calls this no-arg
-// Validate() with no provider context, so the S3-only Region rule isn't enforced
-// here — use ValidateForProvider where provider context exists.
+// Ent calls this without provider context; skips Region.
 func (s *SyncConfig) Validate() error {
 	if s == nil {
 		return nil
@@ -282,7 +279,6 @@ func (s *SyncConfig) Validate() error {
 		return ierr.NewError("price inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
-	// Validate storage export config if present
 	if s.Storage != nil {
 		if err := s.Storage.Validate(); err != nil {
 			return err
@@ -316,7 +312,7 @@ func (s *SyncConfig) Validate() error {
 	return nil
 }
 
-// ValidateForProvider adds the S3-only Region rule the plain Validate() can't.
+// Enforces S3-only Region rule.
 func (s *SyncConfig) ValidateForProvider(providerType SecretProvider) error {
 	if s == nil {
 		return nil

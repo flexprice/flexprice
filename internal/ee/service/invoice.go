@@ -2813,7 +2813,6 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 	}
 
 	if !forceGenerate {
-		// Check if the file already exists in storage and return a presigned URL without regenerating
 		exists, err := store.Exists(ctx, key)
 		if err != nil {
 			return "", err
@@ -2823,7 +2822,6 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 		}
 	}
 
-	// Generate the PDF and upload to storage
 	data, err := s.GetInvoicePDF(ctx, id)
 	if err != nil {
 		return "", err

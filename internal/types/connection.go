@@ -85,14 +85,11 @@ func (s *S3ConnectionMetadata) Validate() error {
 	return nil
 }
 
-// GCSConnectionMetadata represents GCS-specific connection metadata (encrypted secrets only)
-// This goes in the encrypted_secret_data column. v1 supports service-account JSON key only —
-// workload-identity-federation for customer-BYO GCS is a separate follow-up.
+// v1 supports service-account JSON only.
 type GCSConnectionMetadata struct {
-	ServiceAccountJSON string `json:"service_account_json"` // GCS service account key JSON (encrypted)
+	ServiceAccountJSON string `json:"service_account_json"`
 }
 
-// Validate validates the GCS connection metadata
 func (g *GCSConnectionMetadata) Validate() error {
 	if g.ServiceAccountJSON == "" {
 		return ierr.NewError("service_account_json is required").
