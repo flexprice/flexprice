@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCommitmentBucketRequest_Validate(t *testing.T) {
@@ -303,4 +304,44 @@ func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "commitment_overage_factor must be at least 1.0")
 	})
+}
+
+func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *testing.T) {
+	sub := &subscription.Subscription{
+		StartDate:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+	}
+
+	cases := []struct {
+		name       string
+		pricePer   types.BillingPeriod
+		priceCount int
+		wantErr    bool
+	}{
+		{"monthly-on-quarterly-ok", types.BILLING_PERIOD_MONTHLY, 1, false},
+		{"quarterly-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, false},
+		{"onetime-always-ok", types.BILLING_PERIOD_ONETIME, 1, false},
+		{"annual-on-quarterly-rejected", types.BILLING_PERIOD_ANNUAL, 1, true},
+		{"halfyear-on-quarterly-rejected", types.BILLING_PERIOD_HALF_YEAR, 1, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			linePrice := &price.Price{
+				BillingPeriod:      tc.pricePer,
+				BillingPeriodCount: tc.priceCount,
+			}
+			req := &CreateSubscriptionLineItemRequest{
+				PriceID:  "price_test",
+				Quantity: decimal.NewFromInt(1),
+			}
+			err := req.Validate(linePrice, sub)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

@@ -277,6 +277,23 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 		}
 	}
 
+	// Cadence relationship: price billing_period must equal or strictly divide
+	// subscription billing_period. Mirrors the plan-attachment filter at
+	// internal/ee/service/subscription.go:3949-3950 so direct line-item creates
+	// can't slip an invalid combination past validation.
+	if linePrice != nil && sub != nil &&
+		linePrice.BillingPeriod != types.BILLING_PERIOD_ONETIME &&
+		linePrice.BillingPeriod != sub.BillingPeriod &&
+		!types.IsBillingPeriodMultiple(sub.BillingPeriod, linePrice.BillingPeriod) {
+		return ierr.NewError("price billing period must equal or divide subscription billing period").
+			WithHint("For a quarterly subscription, prices may be monthly or quarterly; annual or half-year prices are not allowed.").
+			WithReportableDetails(map[string]interface{}{
+				"price_billing_period":        linePrice.BillingPeriod,
+				"subscription_billing_period": sub.BillingPeriod,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Reject negative quantity; zero defaults to min_quantity downstream.
 	if r.Quantity.IsNegative() {
 		return ierr.NewError("quantity must be non-negative").
