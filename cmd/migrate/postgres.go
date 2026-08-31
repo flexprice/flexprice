@@ -409,10 +409,12 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 	// time, and killing it mid-build leaves an INVALID index. The Job's
 	// activeDeadlineSeconds (Helm) or the workflow's wait (ECS) is the bound.
 	//
-	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	// -- `bin` is resolved by resolveDbmate from the fixed dbmateSearchPath list,
+	// `bin` is resolved by resolveDbmate from the fixed dbmateSearchPath list,
 	// never from input. `dir` is an operator-supplied flag passed as its own argv
-	// element, not through a shell, so it cannot inject a command.
+	// element, not through a shell, so neither can inject a command. The
+	// suppression must sit on the line DIRECTLY above the call to take effect.
+	//
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	c := exec.CommandContext(context.Background(), bin, "--migrations-dir", dir, "--no-dump-schema", action)
 	c.Env = append(os.Environ(), "DATABASE_URL="+dsn)
 	c.Stdout = os.Stdout
