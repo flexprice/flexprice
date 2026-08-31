@@ -64,6 +64,11 @@ type BillingService interface {
 	// CalculateCharges calculates charges for the given line items and period.
 	CalculateCharges(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error)
 
+	// CalculateChargesForLineItems computes fixed + usage charges for the given line items
+	// over [PeriodStart, PeriodEnd), applying per-cadence fan-out for USAGE items.
+	// This is the public entry point for calculateMeterUsageCharges.
+	CalculateChargesForLineItems(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error)
+
 	// CalculateMeterUsageCharges computes usage-based invoice line items from meter_usage.
 	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
@@ -2004,9 +2009,25 @@ func (s *billingService) CalculateCharges(
 	})
 }
 
-// calculateMeterUsageCharges fetches usage from the meter_usage table via
-// SubscriptionService.GetMeterUsageBySubscription and delegates to the
-// existing charge calculation pipeline.
+// CalculateChargesForLineItems is the public entry point for calculateMeterUsageCharges,
+// computing fixed + usage charges for the given line items with per-cadence fan-out.
+func (s *billingService) CalculateChargesForLineItems(ctx context.Context, params *dto.CalculateChargesParams) (*dto.BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	return s.calculateMeterUsageCharges(ctx, params.Subscription, params.LineItems, params.PeriodStart, params.PeriodEnd, params.IncludeUsage)
+}
+
+// calculateMeterUsageCharges computes fixed + usage charges for the given
+// line items over [periodStart, periodEnd).
+//
+// Fan-out contract: USAGE line items whose cadence strictly divides the
+// subscription cadence (e.g. monthly metered on quarterly sub) trigger one
+// GetMeterUsageBySubscription call per sub-window and emit one line item per
+// sub-window. Same-cadence USAGE line items keep today's single-call behavior.
+//
+// FIXED line items are handled entirely by CalculateFixedCharges, which does
+// its own per-window fan-out internally (see Task 2).
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -2018,23 +2039,77 @@ func (s *billingService) calculateMeterUsageCharges(
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
 
-	var usage *dto.GetUsageBySubscriptionResponse
-	var err error
+	// Fixed charges (all of them, one call — CalculateFixedCharges fans out per item).
+	fixedResult, err := s.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: &filteredSub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	allUsage := make([]dto.CreateInvoiceLineItemRequest, 0)
+	totalUsage := decimal.Zero
 
 	if includeUsage {
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-			SubscriptionID: sub.ID,
-			StartTime:      periodStart,
-			EndTime:        periodEnd,
-			Source:         string(types.UsageSourceInvoiceCreation),
-		})
-		if err != nil {
-			return nil, err
+
+		// Partition USAGE line items by cadence key (period + count). Items in
+		// the same cadence group share window boundaries, so one usage query
+		// per (group, window) covers them all.
+		type cadenceKey struct {
+			Period types.BillingPeriod
+			Count  int
+		}
+		groups := make(map[cadenceKey][]*subscription.SubscriptionLineItem)
+		for _, item := range lineItems {
+			if item.PriceType != types.PRICE_TYPE_USAGE {
+				continue
+			}
+			count := item.BillingPeriodCount
+			if count <= 0 {
+				count = 1
+			}
+			k := cadenceKey{Period: item.BillingPeriod, Count: count}
+			groups[k] = append(groups[k], item)
+		}
+
+		for _, groupItems := range groups {
+			windows, err := splitInvoicePeriodByLineItemCadence(periodStart, periodEnd, groupItems[0], sub)
+			if err != nil {
+				return nil, err
+			}
+			for _, w := range windows {
+				windowSub := *sub
+				windowSub.LineItems = groupItems
+
+				usage, err := subscriptionService.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+					SubscriptionID: sub.ID,
+					StartTime:      w.Start,
+					EndTime:        w.End,
+					Source:         string(types.UsageSourceInvoiceCreation),
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, types.UsageSourceInvoiceCreation)
+				if err != nil {
+					return nil, err
+				}
+				allUsage = append(allUsage, lines...)
+				totalUsage = totalUsage.Add(cost)
+			}
 		}
 	}
 
-	return s.calculateAllMeterUsageCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return &dto.BillingCalculationResult{
+		FixedCharges: fixedResult.LineItems,
+		UsageCharges: allUsage,
+		TotalAmount:  fixedResult.TotalAmount.Add(totalUsage),
+		Currency:     sub.Currency,
+	}, nil
 }
 
 // CreateInvoiceRequestForCharges creates an invoice for the given charges
