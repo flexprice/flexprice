@@ -160,6 +160,19 @@ jobs:
   #   PROD_DEPLOY_TARGETS / STAGING_DEPLOY_TARGETS
   #   (GitHub Actions → Settings → Variables)
   #
+  # STAGING_DEPLOY_TARGETS is deliberately `[]`. There is no AWS staging: the
+  # `fp-staging-backend` cluster was decommissioned and staging runs on GCP,
+  # deployed by ArgoCD from the Helm chart rather than by this workflow. Every
+  # develop merge failed for days against that dead cluster before it was
+  # cleared, so if you are tempted to repopulate it, confirm the cluster exists
+  # first.
+  #
+  # A develop push still runs the `build` job on purpose — it publishes
+  # ghcr.io/flexprice/flexprice:develop, which GCP staging's argocd-image-updater
+  # watches. Only the ECS jobs below skip, because their matrices expand to zero
+  # entries. `[]` and not blank: resolve-config leaves `targets` as an empty
+  # STRING when the variable is unset, and `fromJson('')` throws.
+  #
   #   Format (one object per region):
   #   [
   #     {
