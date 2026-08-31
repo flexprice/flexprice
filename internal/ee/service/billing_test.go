@@ -5084,3 +5084,191 @@ func (s *BillingServiceSuite) TestSplitInvoicePeriodByLineItemCadence_NonDivisib
 	)
 	s.Require().Error(err)
 }
+
+func (s *BillingServiceSuite) TestCalculateFixedCharges_MonthlyPriceOnQuarterlySub_FansOut() {
+	// Quarterly sub, monthly $10 fixed price → 3 line items of $10 each.
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+
+	quarterStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	quarterEnd := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	cust := &customer.Customer{
+		ID:         "cust_fanout",
+		ExternalID: "ext_fanout",
+		Name:       "Fan-Out Customer",
+		Email:      "fanout@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	pl := &plan.Plan{
+		ID:          "plan_fanout",
+		Name:        "Fan-Out Plan",
+		Description: "Monthly price on quarterly sub",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	monthlyPrice := &price.Price{
+		ID:                 "price_fanout_monthly",
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, monthlyPrice))
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_fanout",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          quarterStart,
+		BillingAnchor:      quarterStart,
+		CurrentPeriodStart: quarterStart,
+		CurrentPeriodEnd:   quarterEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		Timezone:           "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            monthlyPrice.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Monthly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          quarterStart,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{li}))
+	sub.LineItems = []*subscription.SubscriptionLineItem{li}
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  quarterStart,
+		PeriodEnd:    quarterEnd,
+	})
+	s.Require().NoError(err)
+	s.Require().Len(result.LineItems, 3)
+	s.True(decimal.NewFromInt(30).Equal(result.TotalAmount))
+
+	// Assert each line item covers the right month.
+	s.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[0].PeriodStart)
+	s.Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[0].PeriodEnd)
+	s.Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[1].PeriodStart)
+	s.Equal(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[1].PeriodEnd)
+	s.Equal(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[2].PeriodStart)
+	s.Equal(time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), *result.LineItems[2].PeriodEnd)
+
+	for _, lineItem := range result.LineItems {
+		s.True(decimal.NewFromInt(10).Equal(lineItem.Amount), "each monthly line item is full $10, not prorated")
+	}
+}
+
+func (s *BillingServiceSuite) TestCalculateFixedCharges_SameCadence_UnchangedRegression() {
+	// Quarterly sub + quarterly price → single line item (today's behavior).
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+
+	quarterStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	quarterEnd := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	cust := &customer.Customer{
+		ID:         "cust_samecd",
+		ExternalID: "ext_samecd",
+		Name:       "Same Cadence Customer",
+		Email:      "samecd@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	pl := &plan.Plan{
+		ID:          "plan_samecd",
+		Name:        "Same Cadence Plan",
+		Description: "Quarterly price on quarterly sub",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	quarterlyPrice := &price.Price{
+		ID:                 "price_samecd_quarterly",
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, quarterlyPrice))
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_samecd",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          quarterStart,
+		BillingAnchor:      quarterStart,
+		CurrentPeriodStart: quarterStart,
+		CurrentPeriodEnd:   quarterEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		Timezone:           "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            quarterlyPrice.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Quarterly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          quarterStart,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{li}))
+	sub.LineItems = []*subscription.SubscriptionLineItem{li}
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  quarterStart,
+		PeriodEnd:    quarterEnd,
+	})
+	s.Require().NoError(err)
+	s.Require().Len(result.LineItems, 1)
+	s.True(decimal.NewFromInt(30).Equal(result.TotalAmount))
+}

@@ -181,7 +181,9 @@ func (s *billingService) CalculateFixedCharges(
 			} else {
 				linePeriodEnd = item.EndDate
 			}
-			// fall through to shared rounding + line item build below
+			if err := s.appendFixedInvoiceLineItem(ctx, sub, item, amount, linePeriodStart, linePeriodEnd, &fixedCostLineItems, &fixedCost); err != nil {
+				return nil, err
+			}
 		} else if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
 			// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
 			// Advance: include when line-item period start falls in [periodStart, periodEnd).
@@ -209,89 +211,73 @@ func (s *billingService) CalculateFixedCharges(
 			// Full amount for the matched period
 			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
 			linePeriodStart, linePeriodEnd = res.LineItemPeriodStart, res.LineItemPeriodEnd
+			if err := s.appendFixedInvoiceLineItem(ctx, sub, item, amount, linePeriodStart, linePeriodEnd, &fixedCostLineItems, &fixedCost); err != nil {
+				return nil, err
+			}
 		} else {
-			// Same or shorter cadence: proration, invoice period as service period
-			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
-			effectiveStart, effectiveEnd := item.GetPeriod(periodStart, periodEnd)
-			if !effectiveEnd.After(effectiveStart) {
-				s.Logger.Debug(ctx, "skipping line item: not active in invoice period",
-					"line_item_id", item.ID,
-					"effective_start", effectiveStart,
-					"effective_end", effectiveEnd)
-				continue
+			// Same or shorter cadence than subscription. Fan out per sub-window so a
+			// monthly price on a quarterly sub emits 3 line items (one per month)
+			// instead of a single prorated line covering the whole quarter.
+			//
+			// When line-item cadence == subscription cadence, splitInvoicePeriodByLineItemCadence
+			// returns exactly one window == [periodStart, periodEnd) and this loop
+			// reduces to today's behavior byte-for-byte.
+			windows, err := splitInvoicePeriodByLineItemCadence(periodStart, periodEnd, item, sub)
+			if err != nil {
+				return nil, err
 			}
 
-			totalDuration := periodEnd.Sub(periodStart)
-			effectiveDuration := effectiveEnd.Sub(effectiveStart)
-			if effectiveDuration < totalDuration {
-				// Partial-period line item (versioned mid-cycle): scale by time ratio
-				ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-					Div(decimal.NewFromFloat(totalDuration.Seconds()))
-				amount = amount.Mul(ratio)
-				linePeriodStart, linePeriodEnd = effectiveStart, effectiveEnd
-			} else {
-				// Full-period line item: apply existing proration logic (first-period, cancellation, etc.)
-				proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
-				if err != nil {
-					s.Logger.Info(context.Background(), "failed to apply proration to line item, using original amount",
-						"error", err,
-						"subscription_id", sub.ID,
+			for _, w := range windows {
+				wAmount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
+				effectiveStart, effectiveEnd := item.GetPeriod(w.Start, w.End)
+				if !effectiveEnd.After(effectiveStart) {
+					s.Logger.Debug(ctx, "skipping line item window: not active in invoice sub-period",
 						"line_item_id", item.ID,
-						"price_id", item.PriceID)
-					proratedAmount = amount
+						"window_start", w.Start,
+						"window_end", w.End,
+						"effective_start", effectiveStart,
+						"effective_end", effectiveEnd)
+					continue
 				}
-				amount = proratedAmount
-				linePeriodStart, linePeriodEnd = effectiveStart, effectiveEnd
+
+				windowDuration := w.End.Sub(w.Start)
+				effectiveDuration := effectiveEnd.Sub(effectiveStart)
+				var wLinePeriodStart, wLinePeriodEnd time.Time
+				if effectiveDuration < windowDuration {
+					// Partial-period line item (versioned mid-cycle) inside this sub-window:
+					// scale by time ratio, same as today.
+					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
+						Div(decimal.NewFromFloat(windowDuration.Seconds()))
+					wAmount = wAmount.Mul(ratio)
+					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
+				} else {
+					// Full sub-window: apply existing proration logic (first-period,
+					// cancellation, etc.) scoped to this window.
+					wStart, wEnd := w.Start, w.End
+					proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, wAmount, &wStart, &wEnd)
+					if err != nil {
+						s.Logger.Info(context.Background(), "failed to apply proration to line item window, using original amount",
+							"error", err,
+							"subscription_id", sub.ID,
+							"line_item_id", item.ID,
+							"price_id", item.PriceID,
+							"window_start", w.Start,
+							"window_end", w.End)
+						proratedAmount = wAmount
+					}
+					wAmount = proratedAmount
+					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
+				}
+
+				// Shared: price unit + rounding + append. Emit one invoice line item per window.
+				if err := s.appendFixedInvoiceLineItem(
+					ctx, sub, item, wAmount, wLinePeriodStart, wLinePeriodEnd,
+					&fixedCostLineItems, &fixedCost,
+				); err != nil {
+					return nil, err
+				}
 			}
 		}
-
-		// Shared: price unit amount, round, build and append invoice line item
-		var priceUnitAmount decimal.Decimal
-		if item.PriceUnit != nil {
-			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
-			if err != nil {
-				s.Logger.Info(context.Background(), "failed to get price unit",
-					"error", err,
-					"price_unit", lo.ToPtr(item.PriceUnit),
-					"subscription_id", sub.ID,
-					"line_item_id", item.ID)
-				continue
-			}
-			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
-			if err != nil {
-				s.Logger.Info(context.Background(), "failed to convert amount to price unit",
-					"error", err,
-					"price_unit", lo.FromPtr(item.PriceUnit),
-					"subscription_id", sub.ID,
-					"line_item_id", item.ID)
-				continue
-			}
-		}
-
-		// Round fixed charge amount to currency precision before creating invoice line item
-		// This ensures all line items use proper currency precision from the start
-		// Example: $10.278798 → $10.28 for USD (2 decimals), ¥1023.45 → ¥1023 for JPY (0 decimals)
-		roundedAmount := types.RoundToCurrencyPrecision(amount, sub.Currency)
-
-		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
-			EntityID:               lo.ToPtr(item.EntityID),
-			EntityType:             lo.ToPtr(string(item.EntityType)),
-			PlanDisplayName:        lo.ToPtr(item.PlanDisplayName),
-			PriceID:                lo.ToPtr(item.PriceID),
-			PriceType:              lo.ToPtr(string(item.PriceType)),
-			PriceUnit:              item.PriceUnit,
-			PriceUnitAmount:        lo.ToPtr(priceUnitAmount),
-			DisplayName:            lo.ToPtr(item.DisplayName),
-			Amount:                 roundedAmount,
-			Quantity:               item.Quantity,
-			PeriodStart:            lo.ToPtr(linePeriodStart),
-			PeriodEnd:              lo.ToPtr(linePeriodEnd),
-			SubscriptionLineItemID: lo.ToPtr(item.ID),
-			Metadata: types.Metadata{
-				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
-			},
-		})
-		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
 	// Optional opening-invoice credit (e.g. plan-change netting): reduce fixed line amounts in order,
@@ -311,6 +297,65 @@ func (s *billingService) CalculateFixedCharges(
 	}
 
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
+}
+
+// appendFixedInvoiceLineItem does the shared price-unit conversion, currency
+// rounding, and invoice-line-item construction/append for a single fixed
+// charge. It updates fixedCost in place. Extracted from CalculateFixedCharges
+// so both single-window and fanned-out per-window paths reuse the same logic.
+func (s *billingService) appendFixedInvoiceLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	amount decimal.Decimal,
+	linePeriodStart, linePeriodEnd time.Time,
+	out *[]dto.CreateInvoiceLineItemRequest,
+	total *decimal.Decimal,
+) error {
+	var priceUnitAmount decimal.Decimal
+	if item.PriceUnit != nil {
+		priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
+		if err != nil {
+			s.Logger.Info(context.Background(), "failed to get price unit",
+				"error", err,
+				"price_unit", lo.ToPtr(item.PriceUnit),
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID)
+			return nil // skip like the pre-refactor path did
+		}
+		priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+		if err != nil {
+			s.Logger.Info(context.Background(), "failed to convert amount to price unit",
+				"error", err,
+				"price_unit", lo.FromPtr(item.PriceUnit),
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID)
+			return nil
+		}
+	}
+
+	roundedAmount := types.RoundToCurrencyPrecision(amount, sub.Currency)
+
+	*out = append(*out, dto.CreateInvoiceLineItemRequest{
+		EntityID:               lo.ToPtr(item.EntityID),
+		EntityType:             lo.ToPtr(string(item.EntityType)),
+		PlanDisplayName:        lo.ToPtr(item.PlanDisplayName),
+		PriceID:                lo.ToPtr(item.PriceID),
+		PriceType:              lo.ToPtr(string(item.PriceType)),
+		PriceUnit:              item.PriceUnit,
+		PriceUnitAmount:        lo.ToPtr(priceUnitAmount),
+		DisplayName:            lo.ToPtr(item.DisplayName),
+		Amount:                 roundedAmount,
+		Quantity:               item.Quantity,
+		PeriodStart:            lo.ToPtr(linePeriodStart),
+		PeriodEnd:              lo.ToPtr(linePeriodEnd),
+		SubscriptionLineItemID: lo.ToPtr(item.ID),
+		Metadata: types.Metadata{
+			"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
+		},
+	})
+	*total = total.Add(roundedAmount)
+	return nil
 }
 
 // applyOpeningInvoiceAdjustmentToLineItems reduces line Amounts in slice order: for each line, take min(remaining credit, line amount).
