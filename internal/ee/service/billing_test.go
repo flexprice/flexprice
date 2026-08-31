@@ -1300,11 +1300,6 @@ func (s *BillingServiceSuite) setupSubWithFixedLineItemsForPeriodTests(
 	return sub, prices
 }
 
-// periodWindow is a single billing period [Start, End).
-type periodWindow struct {
-	Start, End time.Time
-}
-
 // nextPeriodsForSub returns the first n billing periods for a subscription from refStart,
 // using the same logic as production (NextBillingDate).
 func nextPeriodsForSub(refStart time.Time, subBillingPeriod types.BillingPeriod, n int) []periodWindow {
@@ -5022,4 +5017,70 @@ func (s *BillingServiceSuite) TestUsageExternalCustomerIDsForSubscription_Parent
 	ext, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, &parentSub)
 	s.NoError(err)
 	s.ElementsMatch([]string{s.testData.customer.ExternalID, child.ExternalID}, ext)
+}
+
+func (s *BillingServiceSuite) TestSplitInvoicePeriodByLineItemCadence_SameCadence() {
+	quarterStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	quarterEnd := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	sub := &subscription.Subscription{
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+	}
+	item := &subscription.SubscriptionLineItem{
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+	}
+
+	windows, err := splitInvoicePeriodByLineItemCadence(quarterStart, quarterEnd, item, sub)
+	s.Require().NoError(err)
+	s.Require().Len(windows, 1)
+	s.Equal(quarterStart, windows[0].Start)
+	s.Equal(quarterEnd, windows[0].End)
+}
+
+func (s *BillingServiceSuite) TestSplitInvoicePeriodByLineItemCadence_MonthlyOnQuarterly() {
+	quarterStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	quarterEnd := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	sub := &subscription.Subscription{
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+	}
+	item := &subscription.SubscriptionLineItem{
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+	}
+
+	windows, err := splitInvoicePeriodByLineItemCadence(quarterStart, quarterEnd, item, sub)
+	s.Require().NoError(err)
+	s.Require().Len(windows, 3)
+	s.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), windows[0].Start)
+	s.Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), windows[0].End)
+	s.Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), windows[1].Start)
+	s.Equal(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), windows[1].End)
+	s.Equal(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), windows[2].Start)
+	s.Equal(time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), windows[2].End)
+}
+
+func (s *BillingServiceSuite) TestSplitInvoicePeriodByLineItemCadence_NonDivisibleRejected() {
+	// Half-yearly (6mo) on quarterly (3mo) — line item is LONGER, not a divisor.
+	// Fixed-charge code handles this via the "longer cadence" branch (line 185-211),
+	// NOT via this helper. If this helper is ever called with a non-divisor cadence
+	// it MUST return an error so the bug surfaces immediately.
+	sub := &subscription.Subscription{
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+	}
+	item := &subscription.SubscriptionLineItem{
+		BillingPeriod:      types.BILLING_PERIOD_HALF_YEAR,
+		BillingPeriodCount: 1,
+	}
+	_, err := splitInvoicePeriodByLineItemCadence(
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+		item, sub,
+	)
+	s.Require().Error(err)
 }

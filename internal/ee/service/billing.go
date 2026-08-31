@@ -361,6 +361,86 @@ func endDateBoundaryForMatching(periodEnd time.Time, billingPeriod types.Billing
 	}
 }
 
+// periodWindow is a half-open [Start, End) sub-range of an invoice period.
+type periodWindow struct {
+	Start time.Time
+	End   time.Time
+}
+
+// splitInvoicePeriodByLineItemCadence returns the sub-windows this line item
+// contributes to within [invoicePeriodStart, invoicePeriodEnd).
+//
+// Contract:
+//   - Line item cadence equal to sub cadence (both period and count): returns
+//     exactly one window = the full invoice period. This is today's behavior;
+//     the common path stays byte-identical.
+//   - Line item cadence strictly divides the sub cadence (e.g. MONTHLY on
+//     QUARTER): returns the N sub-windows walked via types.NextBillingDate
+//     with the line item's cadence, anchored at invoicePeriodStart, using
+//     sub.Timezone for local-boundary semantics.
+//   - Anything else: error. Line-item creation validates the divides-or-equal
+//     relationship (dto.CreateSubscriptionLineItemRequest.Validate), so an
+//     error here is a data-integrity signal, not a routine skip.
+func splitInvoicePeriodByLineItemCadence(
+	invoicePeriodStart, invoicePeriodEnd time.Time,
+	lineItem *subscription.SubscriptionLineItem,
+	sub *subscription.Subscription,
+) ([]periodWindow, error) {
+	itemCount := lineItem.BillingPeriodCount
+	if itemCount <= 0 {
+		itemCount = 1
+	}
+	subCount := sub.BillingPeriodCount
+	if subCount <= 0 {
+		subCount = 1
+	}
+
+	// Same cadence AND same count → single window (today's behavior).
+	if lineItem.BillingPeriod == sub.BillingPeriod && itemCount == subCount {
+		return []periodWindow{{Start: invoicePeriodStart, End: invoicePeriodEnd}}, nil
+	}
+
+	// Require: sub cadence is an integer multiple of line-item cadence in months.
+	subMonths := types.BillingPeriodToMonths(sub.BillingPeriod) * subCount
+	itemMonths := types.BillingPeriodToMonths(lineItem.BillingPeriod) * itemCount
+	if subMonths == 0 || itemMonths == 0 || subMonths%itemMonths != 0 {
+		return nil, ierr.NewError("line item cadence does not divide subscription cadence").
+			WithHint("line item billing_period must equal or strictly divide the subscription billing_period").
+			WithReportableDetails(map[string]interface{}{
+				"sub_billing_period":        sub.BillingPeriod,
+				"sub_billing_period_count":  subCount,
+				"line_billing_period":       lineItem.BillingPeriod,
+				"line_billing_period_count": itemCount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	windows := make([]periodWindow, 0, subMonths/itemMonths)
+	current := invoicePeriodStart
+	for current.Before(invoicePeriodEnd) {
+		next, err := types.NextBillingDate(&types.NextBillingDateParams{
+			CurrentPeriodStart: current,
+			BillingAnchor:      invoicePeriodStart,
+			Unit:               itemCount,
+			Period:             lineItem.BillingPeriod,
+			Timezone:           sub.Timezone,
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Defensive: never emit a window that overruns the invoice period; clamp to invoicePeriodEnd.
+		if next.After(invoicePeriodEnd) {
+			next = invoicePeriodEnd
+		}
+		windows = append(windows, periodWindow{Start: current, End: next})
+		if !next.After(current) {
+			break // safety against infinite loop on degenerate input
+		}
+		current = next
+	}
+	return windows, nil
+}
+
 // Used when the line item has a longer cadence than the subscription (e.g. quarterly on monthly).
 // Anchor and initial period start are the line item's StartDate.
 // Window bounds are symmetric: advance uses inclusive start / exclusive end, arrear the reverse.
