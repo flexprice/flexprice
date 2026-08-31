@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 )
 
 type Handlers struct {
@@ -648,7 +649,17 @@ func NewRouter(
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
-			webhookGroup.POST("/retry", write(types.EntityWebhook, types.ActionWrite), handlers.Webhook.RetryOutboundWebhook)
+			retryRateLimit := rate.Limit(5)
+			retryBurst := 10
+			if cfg.Webhook.RateLimit > 0 {
+				retryRateLimit = rate.Limit(cfg.Webhook.RateLimit)
+				retryBurst = int(cfg.Webhook.RateLimit * 2)
+			}
+			webhookGroup.POST("/retry",
+				middleware.RateLimitByTenant(retryRateLimit, retryBurst),
+				write(types.EntityWebhook, types.ActionWrite),
+				handlers.Webhook.RetryOutboundWebhook,
+			)
 		}
 	}
 

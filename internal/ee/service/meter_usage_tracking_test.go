@@ -157,8 +157,10 @@ func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_NonCountUnique() {
 
 func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_CountUnique() {
 	event := &events.Event{
-		ID:        "evt_123",
-		EventName: "api_call",
+		ID:            "evt_123",
+		TenantID:      types.DefaultTenantID,
+		EnvironmentID: "env_1",
+		EventName:     "api_call",
 		Properties: map[string]interface{}{
 			"user_id": "user_456",
 		},
@@ -167,23 +169,49 @@ func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_CountUnique() {
 
 	hash := s.svc.generateUniqueHash(event, m)
 
-	// Different event with same user_id should produce same hash (field-based)
+	// Different event with same user_id, tenant, env, event_name should produce same hash (field-based)
 	event2 := &events.Event{
-		ID:         "evt_789",
-		EventName:  "api_call",
-		Properties: map[string]interface{}{"user_id": "user_456"},
+		ID:            "evt_789",
+		TenantID:      types.DefaultTenantID,
+		EnvironmentID: "env_1",
+		EventName:     "api_call",
+		Properties:    map[string]interface{}{"user_id": "user_456"},
 	}
 	hash2 := s.svc.generateUniqueHash(event2, m)
 	assert.Equal(s.T(), hash, hash2)
 
 	// Different user_id should produce different hash
 	event3 := &events.Event{
-		ID:         "evt_789",
-		EventName:  "api_call",
-		Properties: map[string]interface{}{"user_id": "user_000"},
+		ID:            "evt_789",
+		TenantID:      types.DefaultTenantID,
+		EnvironmentID: "env_1",
+		EventName:     "api_call",
+		Properties:    map[string]interface{}{"user_id": "user_000"},
 	}
 	hash3 := s.svc.generateUniqueHash(event3, m)
 	assert.NotEqual(s.T(), hash, hash3)
+
+	// Different tenant should produce different hash (defense in depth)
+	event4 := &events.Event{
+		ID:            "evt_789",
+		TenantID:      "tenant_other",
+		EnvironmentID: "env_1",
+		EventName:     "api_call",
+		Properties:    map[string]interface{}{"user_id": "user_456"},
+	}
+	hash4 := s.svc.generateUniqueHash(event4, m)
+	assert.NotEqual(s.T(), hash, hash4)
+
+	// Different environment should produce different hash (defense in depth)
+	event5 := &events.Event{
+		ID:            "evt_789",
+		TenantID:      types.DefaultTenantID,
+		EnvironmentID: "env_other",
+		EventName:     "api_call",
+		Properties:    map[string]interface{}{"user_id": "user_456"},
+	}
+	hash5 := s.svc.generateUniqueHash(event5, m)
+	assert.NotEqual(s.T(), hash, hash5)
 }
 
 // --- extractQuantity tests ---
