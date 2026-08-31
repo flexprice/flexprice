@@ -67,6 +67,14 @@ type BillingService interface {
 	// CalculateMeterUsageCharges computes usage-based invoice line items from meter_usage.
 	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
+	// SumUsageAmountForSubscription returns the total usage cost for a subscription over
+	// [periodStart, periodEnd) using the same per-cadence-group fan-out as invoice
+	// generation. Callers comparing usage against a threshold (e.g. auto-invoice threshold
+	// checks) get the same amount they'd see on the resulting invoice — matters for subs
+	// with mixed cadences (e.g. monthly meter on quarterly sub with tiered pricing).
+	// Requires sub.LineItems to be populated by the caller.
+	SumUsageAmountForSubscription(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (decimal.Decimal, error)
+
 	// CreateInvoiceRequestForCharges creates an invoice creation request for the given charges.
 	CreateInvoiceRequestForCharges(ctx context.Context, params *dto.CreateInvoiceRequestForChargesParams) (*dto.CreateInvoiceRequest, error)
 
@@ -2010,6 +2018,26 @@ func (s *billingService) CalculateCharges(
 		PeriodEnd:                      periodEnd,
 		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
+}
+
+// SumUsageAmountForSubscription is a thin public wrapper over
+// calculateMeterUsageCharges that returns just the summed USAGE cost. Used by
+// callers (e.g. auto-invoice threshold checks) that need the priced-usage
+// number the resulting invoice would show, not raw meter aggregation.
+func (s *billingService) SumUsageAmountForSubscription(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	periodStart, periodEnd time.Time,
+) (decimal.Decimal, error) {
+	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, line := range result.UsageCharges {
+		total = total.Add(line.Amount)
+	}
+	return total, nil
 }
 
 // calculateMeterUsageCharges computes fixed + usage charges for the given

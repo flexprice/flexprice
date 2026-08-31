@@ -8101,18 +8101,25 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	item *dto.AutoInvoiceThresholdBillingResultItem,
 ) error {
 
-	// Calculate current-period usage amount from meter_usage.
-	usageResp, err := s.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-		SubscriptionID: sub.ID,
-		StartTime:      sub.CurrentPeriodStart,
-		EndTime:        effectiveTime,
-		Source:         string(types.UsageSourceInvoiceCreation),
-	})
+	// Calculate current-period usage amount using the same per-cadence-group
+	// fan-out that invoice generation uses (see billingService.calculateMeterUsageCharges).
+	// Matters for mixed-cadence subs (e.g. monthly meter on quarterly sub with tiered
+	// pricing): a single GetMeterUsageBySubscription over the whole period wouldn't
+	// reset tiers per sub-window, so the threshold check could drift from the
+	// amount the resulting invoice actually charges.
+	//
+	// The batched loader (GetSubscriptionsWithAutoInvoiceThreshold) doesn't populate
+	// LineItems, so reload the sub here.
+	subWithItems, lineItems, err := s.SubRepo.GetWithLineItems(ctx, sub.ID)
 	if err != nil {
 		return err
 	}
-
-	usageAmount := decimal.NewFromFloat(usageResp.Amount)
+	subWithItems.LineItems = lineItems
+	billingSvc := NewBillingService(s.ServiceParams)
+	usageAmount, err := billingSvc.SumUsageAmountForSubscription(ctx, subWithItems, sub.CurrentPeriodStart, effectiveTime)
+	if err != nil {
+		return err
+	}
 	if usageAmount.LessThan(lo.FromPtr(sub.AutoInvoiceThreshold)) {
 		return nil
 	}
