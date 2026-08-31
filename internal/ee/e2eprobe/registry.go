@@ -41,6 +41,10 @@ type Seeds struct {
 
 	// Entitlement-grants coverage (2026-08-13 plan)
 	GrantEntitlementIDs map[string]string // feature-lookup-key → entitlement id
+
+	// MultiCadenceSubID is a persistent quarterly subscription seeded to exercise
+	// the monthly-charge-on-quarterly-sub fan-out end-to-end. "" if not yet seeded.
+	MultiCadenceSubID string
 }
 
 type EphemeralEntity struct {
@@ -86,6 +90,7 @@ func (r *registry) LoadSeeds(s Seeds) {
 		BucketedFeatureIDs:            copyStringMap(s.BucketedFeatureIDs),
 		PlanEntitlementIDs:            append([]string(nil), s.PlanEntitlementIDs...),
 		GrantEntitlementIDs:           copyStringMap(s.GrantEntitlementIDs),
+		MultiCadenceSubID:             s.MultiCadenceSubID,
 	}
 }
 
@@ -108,6 +113,7 @@ func (r *registry) Seeds() Seeds {
 		BucketedFeatureIDs:            copyStringMap(r.seeds.BucketedFeatureIDs),
 		PlanEntitlementIDs:            append([]string(nil), r.seeds.PlanEntitlementIDs...),
 		GrantEntitlementIDs:           copyStringMap(r.seeds.GrantEntitlementIDs),
+		MultiCadenceSubID:             r.seeds.MultiCadenceSubID,
 	}
 }
 

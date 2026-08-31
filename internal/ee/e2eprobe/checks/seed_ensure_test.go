@@ -64,7 +64,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    1,                         // 10 pre-populated; alert canary still needs creating
 			wantPlansCreated:        0,                         // plan found via Query
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary
+			wantSubsCreated:         12,                        // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
 			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
@@ -84,7 +84,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary
+			wantSubsCreated:         12,                        // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
 			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
@@ -118,7 +118,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    1, // alert canary still needs creating
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1,
-			wantSubsCreated:         11, // 10 persistent + 1 alert canary
+			wantSubsCreated:         12, // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
@@ -362,7 +362,12 @@ func TestSeedEnsure_CommitmentAndCouponOnPersistentSubs(t *testing.T) {
 		t.Fatalf("no subs created")
 	}
 	// Every persistent sub must carry commitment fields.
+	// Skip the multi-cadence quarterly sub (tagged with multiCadenceCohort),
+	// which is intentionally created without commitment fields.
 	for i, req := range fc.subs.created {
+		if req.Metadata != nil && req.Metadata["e2eprobe_cohort"] == multiCadenceCohort {
+			continue
+		}
 		if req.CommitmentAmount == nil || *req.CommitmentAmount != "5.00" {
 			t.Errorf("sub[%d] CommitmentAmount = %v, want \"5.00\"", i, req.CommitmentAmount)
 		}

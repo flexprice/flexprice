@@ -1127,6 +1127,88 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 			}
 		}
 	}
+	// Multi-cadence coverage: one persistent quarterly sub for cust #0 so the
+	// fan-out (monthly prices on quarterly sub → N monthly line items) is
+	// exercised on every invoice cycle. Idempotent: query by metadata cohort
+	// and reuse if present.
+	if err := s.ensureMultiCadenceSubscription(ctx, seeds, planID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// multiCadenceCohort tags the quarterly-with-monthly-charges seed sub so
+// ensureMultiCadenceSubscription can find it without name collision against
+// the standard PersistentSub cohort.
+const multiCadenceCohort = "multi_cadence_quarterly"
+
+func (s *SeedEnsure) ensureMultiCadenceSubscription(
+	ctx context.Context, seeds *e2eprobe.Seeds, planID string,
+) error {
+	if len(seeds.PersistentCustomerIDs) == 0 {
+		return nil
+	}
+	// Use a dedicated customer to keep this sub isolated from other probes'
+	// assumptions (cycle-invoice-probe, entitlement-and-usage, etc. iterate
+	// PersistentSubIDs which we deliberately do NOT append this sub to).
+	extID := persistentExternalCustomerID(0)
+
+	existResp, err := s.client.Subscriptions().Query(ctx, types.SubscriptionFilter{
+		ExternalCustomerID: &extID,
+		PlanID:             &planID,
+	})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"step": "multi_cadence_query", "external_customer_id": extID, "plan_id": planID}, "query subs: %w", err)
+	}
+	if existResp.ListSubscriptionsResponse != nil {
+		for _, sub := range existResp.ListSubscriptionsResponse.Items {
+			if sub.ID == nil || sub.Metadata == nil {
+				continue
+			}
+			if cohort, ok := sub.Metadata["e2eprobe_cohort"]; ok && cohort == multiCadenceCohort {
+				seeds.MultiCadenceSubID = *sub.ID
+				return nil
+			}
+		}
+	}
+
+	billingCycle := types.BillingCycleAnniversary
+	now := time.Now().UTC()
+	req := types.CreateSubscriptionRequest{
+		ExternalCustomerID: &extID,
+		PlanID:             planID,
+		Currency:           "usd",
+		BillingPeriod:      types.BillingPeriodQuarterly,
+		BillingPeriodCount: int64Ptr(1),
+		BillingCycle:       &billingCycle,
+		StartDate:          &now,
+		Metadata: map[string]string{
+			"e2eprobe":        "true",
+			"e2eprobe_role":   "seed",
+			"e2eprobe_cohort": multiCadenceCohort,
+		},
+	}
+	createResp, err := s.client.Subscriptions().Create(ctx, req)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"step": "multi_cadence_create", "external_customer_id": extID, "plan_id": planID}, "create quarterly sub: %w", err)
+	}
+	if createResp.SubscriptionResponse == nil || createResp.SubscriptionResponse.ID == nil {
+		return nil
+	}
+	subID := *createResp.SubscriptionResponse.ID
+	seeds.MultiCadenceSubID = subID
+
+	if createResp.SubscriptionResponse.SubscriptionStatus != nil &&
+		*createResp.SubscriptionResponse.SubscriptionStatus == types.SubscriptionStatusDraft {
+		if _, err := s.client.Subscriptions().ActivateSubscription(ctx, subID,
+			types.ActivateDraftSubscriptionRequest{StartDate: now}); err != nil && s.logger != nil {
+			s.logger.Info(ctx, "multi-cadence sub activation failed; will retry next tick",
+				"subscription_id", subID,
+				"external_customer_id", extID,
+				"error", err.Error(),
+			)
+		}
+	}
 	return nil
 }
 

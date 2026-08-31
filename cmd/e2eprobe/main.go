@@ -245,6 +245,11 @@ func main() {
 		runner.Add(ci, e2eprobe.NewTickerScheduler(ci, cfg.Checks["CYCLE_INVOICE_PROBE"].Interval))
 	}
 
+	if cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Enabled {
+		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID)
+		runner.Add(mci, e2eprobe.NewTickerScheduler(mci, cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Interval))
+	}
+
 	if cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Enabled {
 		eu := checks_pkg.NewEntitlementAndUsageProbe(client, reg, runID)
 		runner.Add(eu, e2eprobe.NewTickerScheduler(eu, cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Interval))

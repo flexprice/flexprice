@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	flexprice "github.com/flexprice/go-sdk/v2"
@@ -889,3 +890,10 @@ func (f *fakeTaxAssociations) Delete(_ context.Context, id string) (*dtos.Delete
 }
 
 // --- helpers (strPtr is defined in seed_ensure.go) ---
+
+// dateP returns a pointer to a time.Time value constructed from year, month, day (UTC).
+// Used by multi_cadence_invoice_probe_test.go and any future test that needs a *time.Time.
+func dateP(y int, m time.Month, d int) *time.Time {
+	t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return &t
+}
