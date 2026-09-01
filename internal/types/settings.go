@@ -655,18 +655,13 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			},
 			{
 				ID: "overview", Label: "Overview", Enabled: true, Order: 4,
+				// No usage_graph here. Overview summarises the account; the usage
+				// section owns the trend chart, and duplicating it also gave overview
+				// a date filter, since the portal shows one for any section holding an
+				// analytics widget.
 				Tabs: []CustomerPortalTab{
 					{ID: "9", Type: "wallet_balance", Order: 1, Enabled: true},
 					{ID: "10", Type: "subscriptions", Order: 2, Enabled: true},
-					{
-						ID: "11", Type: "usage_graph", Order: 3, Enabled: true,
-						UsageGraph: &CustomerPortalUsageGraph{
-							DatePresets:          []string{"last_7_days", "last_30_days"},
-							DefaultPreset:        "last_7_days",
-							FeatureFilterMode:    "all",
-							AllowCustomDateRange: true,
-						},
-					},
 				},
 			},
 		},
