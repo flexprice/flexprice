@@ -71,6 +71,19 @@ func NewResolver(ctx context.Context, cfg *config.Configuration, connSvc Connect
 
 func (r *resolver) Provider() Provider { return r.provider }
 
+// providerFor picks the effective backend for a purpose. It is normally the
+// deployment-wide provider (r.provider, chosen at boot by CloudDetector), but
+// imports are a deliberate exception: CSV Box only writes to S3, so an import
+// running on a GCP-hosted worker still reads its source object from S3 using
+// static credentials from FlexpriceS3Imports. Without this override, GCP
+// deployments hit the GCS branch and can never resolve an S3-backed CSV.
+func (r *resolver) providerFor(purpose Purpose) Provider {
+	if purpose == PurposeImport {
+		return ProviderS3
+	}
+	return r.provider
+}
+
 func (r *resolver) ForPlatform(ctx context.Context, purpose Purpose) (Storage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -93,7 +106,7 @@ func (r *resolver) ForPlatform(ctx context.Context, purpose Purpose) (Storage, e
 		return nil, err
 	}
 
-	s, err := NewPlatformStorage(ctx, r.cfg, r.provider, purpose, bucket, region, signerEmail, r.logger)
+	s, err := NewPlatformStorage(ctx, r.cfg, r.providerFor(purpose), purpose, bucket, region, signerEmail, r.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +128,12 @@ func (r *resolver) ForConnection(ctx context.Context, connectionID string) (Stor
 // request credentials, so it returns empty). A missing signer is rejected here,
 // not at first presign: uploads would still succeed, but every presigned GET
 // would fail — surfacing only when a customer clicks a download link.
+//
+// Imports always go through the S3 branch (providerFor pins them), so this
+// method never has to produce a GCS import signer — the S3 short-circuit at
+// the top handles them.
 func (r *resolver) signerFor(purpose Purpose) (string, error) {
-	if r.provider != ProviderGCS {
+	if r.providerFor(purpose) != ProviderGCS {
 		return "", nil
 	}
 
@@ -139,13 +156,6 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 				Mark(ierr.ErrValidation)
 		}
 		return signer, nil
-	case PurposeImport:
-		// Imports on GCS need their own bucket + signer config, which does not
-		// exist yet. Fail loudly rather than let the export signer be reused
-		// (which would presign against the wrong bucket).
-		return "", ierr.NewError("GCS is not yet supported for imports").
-			WithHint("Run this deployment with storage.provider=s3, or add a flexprice_gcs_imports config block and a companion signer service account when GCS-side imports are wired up").
-			Mark(ierr.ErrValidation)
 	default:
 		return "", unsupportedPurpose(purpose)
 	}
@@ -187,7 +197,7 @@ func (r *resolver) platformBucket(purpose Purpose) (bucket, region string, err e
 		return "", "", err
 	}
 
-	switch r.provider {
+	switch r.providerFor(purpose) {
 	case ProviderS3:
 		switch purpose {
 		case PurposeInvoice:
@@ -205,10 +215,14 @@ func (r *resolver) platformBucket(purpose Purpose) (bucket, region string, err e
 // BucketConfigFor returns bucket settings for a purpose. Invoice buckets carry a
 // full config.BucketConfig; export config is flat (no prefix/expiry fields), so
 // export synthesizes one with expiry "30m" to match defaultPresignExpiry.
+//
+// Imports are pinned to S3 (see providerFor): CSV Box only writes to S3, so
+// even a GCP-hosted deployment reads its imports through the S3 branch below,
+// using FlexpriceS3Imports credentials.
 func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error) {
 	var bc config.BucketConfig
 
-	switch r.provider {
+	switch r.providerFor(purpose) {
 	case ProviderGCS:
 		switch purpose {
 		case PurposeInvoice:
@@ -218,11 +232,6 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 				Bucket:                r.cfg.FlexpriceGCSExports.Bucket,
 				PresignExpiryDuration: "30m",
 			}
-		case PurposeImport:
-			// See signerFor: no GCS imports config today.
-			return config.BucketConfig{}, ierr.NewError("GCS is not yet supported for imports").
-				WithHint("Run this deployment with storage.provider=s3, or add a flexprice_gcs_imports config block when GCS-side imports are wired up").
-				Mark(ierr.ErrValidation)
 		default:
 			return config.BucketConfig{}, unsupportedPurpose(purpose)
 		}
@@ -253,14 +262,14 @@ func (r *resolver) BucketConfigFor(purpose Purpose) (config.BucketConfig, error)
 			return config.BucketConfig{}, unsupportedPurpose(purpose)
 		}
 	default:
-		return config.BucketConfig{}, ierr.NewErrorf("unsupported storage provider: %s", r.provider).
+		return config.BucketConfig{}, ierr.NewErrorf("unsupported storage provider: %s", r.providerFor(purpose)).
 			WithHint("storage.provider must be 's3' or 'gcs'").
 			Mark(ierr.ErrValidation)
 	}
 
 	if bc.Bucket == "" {
-		return config.BucketConfig{}, ierr.NewErrorf("no %s bucket configured for storage provider %s", purpose, r.provider).
-			WithHint(missingBucketHint(r.provider, purpose)).
+		return config.BucketConfig{}, ierr.NewErrorf("no %s bucket configured for storage provider %s", purpose, r.providerFor(purpose)).
+			WithHint(missingBucketHint(r.providerFor(purpose), purpose)).
 			Mark(ierr.ErrValidation)
 	}
 
