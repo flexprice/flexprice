@@ -4121,11 +4121,77 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if err := validatePriceStartDateNotAfterSub(entityID, entityType, subscription, validPrices); err != nil {
+			return nil, err
+		}
 		return validPrices, nil
 	}
 
 	// For workflows that allow empty prices, filter and return (even if empty)
-	return filter(pricesResponse.Items), nil
+	validPrices := filter(pricesResponse.Items)
+	if err := validatePriceStartDateNotAfterSub(entityID, entityType, subscription, validPrices); err != nil {
+		return nil, err
+	}
+	return validPrices, nil
+}
+
+// validatePriceStartDateNotAfterSub rejects sub creation / addon attach when
+// any attached price's StartDate is AFTER the subscription's StartDate.
+//
+// Snapshot behavior: subscription_line_item.start_date is copied from the
+// price's start_date at attach time, and stays fixed for the life of the sub.
+// If a caller backdates a sub before some price's StartDate, every fan-out
+// window BEFORE that price's start gets clipped to (StartDate, PeriodEnd)
+// which produces PeriodEnd < PeriodStart -> the invoice-time guard added in
+// PR #2729 silently skips those windows -> the sub silently loses coverage
+// for those months. Symptom: cancel/preview invoices show a single ~1-day
+// line item instead of the expected N-month fan-out.
+//
+// Reject at create time so the misconfiguration is visible immediately.
+// The caller can either move the sub's StartDate forward, or move the
+// price's StartDate back, before creating the sub.
+func validatePriceStartDateNotAfterSub(
+	entityID string,
+	entityType types.PriceEntityType,
+	subscription *subscription.Subscription,
+	validPrices []*dto.PriceResponse,
+) error {
+	if subscription == nil || subscription.StartDate.IsZero() {
+		return nil
+	}
+	var offenders []map[string]interface{}
+	for _, p := range validPrices {
+		if p.Price.StartDate == nil {
+			continue
+		}
+		if p.Price.StartDate.After(subscription.StartDate) {
+			offenders = append(offenders, map[string]interface{}{
+				"price_id":         p.Price.ID,
+				"price_start_date": p.Price.StartDate.UTC().Format(time.RFC3339),
+				"display_name":     p.Price.DisplayName,
+				"lookup_key":       p.Price.LookupKey,
+			})
+		}
+	}
+	if len(offenders) == 0 {
+		return nil
+	}
+	offenderIDs := make([]string, 0, len(offenders))
+	for _, o := range offenders {
+		if id, ok := o["price_id"].(string); ok {
+			offenderIDs = append(offenderIDs, id)
+		}
+	}
+	return ierr.NewErrorf("prices have start_date after subscription start_date %s: %v",
+		subscription.StartDate.UTC().Format(time.RFC3339), offenderIDs).
+		WithHint("A subscription cannot be backdated before any of its attached prices' start_date, otherwise those price line items will silently lose coverage. Move the subscription's start_date forward, or update the price's start_date to be on or before the subscription's start_date.").
+		WithReportableDetails(map[string]interface{}{
+			"entity_id":               entityID,
+			"entity_type":             entityType,
+			"subscription_start_date": subscription.StartDate.UTC().Format(time.RFC3339),
+			"offending_prices":        offenders,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // validateIncludePriceIDs verifies every id in the caller-supplied include list

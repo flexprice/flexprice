@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -236,6 +237,52 @@ func TestValidateIncludePriceIDs_WrongCurrency(t *testing.T) {
 	}
 	if !containsAll(err.Error(), "m_eur", "wrong_currency") {
 		t.Fatalf("error should name the wrong-currency id and category; got: %v", err)
+	}
+}
+
+// Regression: reject sub-create when sub is backdated before any price's
+// start_date. Otherwise the sub's line items snapshot with
+// start_date = price.start_date > sub.start_date, and fan-out silently
+// clips all pre-price windows to garbage periods (Bug: cancel invoice
+// showed a single ~1-day line item instead of the expected fan-out).
+func TestValidatePriceStartDateNotAfterSub(t *testing.T) {
+	apr1 := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	aug31 := time.Date(2026, 8, 31, 20, 18, 14, 0, time.UTC)
+	sub := &subscription.Subscription{
+		Currency:  "usd",
+		StartDate: apr1, // backdated
+	}
+	// One price starts BEFORE sub (fine), one AFTER (must be rejected).
+	prices := []*dto.PriceResponse{
+		{Price: &price.Price{ID: "p_ok", Currency: "usd", StartDate: nil}},                                                       // nil = always effective
+		{Price: &price.Price{ID: "p_before", Currency: "usd", StartDate: &apr1}},                                                 // equal
+		{Price: &price.Price{ID: "p_after", Currency: "usd", StartDate: &aug31, DisplayName: "Monthly Flat Advance"}},            // AFTER
+		{Price: &price.Price{ID: "p_after2", Currency: "usd", StartDate: &aug31, DisplayName: "Shipment Overage"}},               // AFTER
+	}
+
+	err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, sub, prices)
+	if err == nil {
+		t.Fatal("expected validation error for prices whose start_date is after sub.start_date")
+	}
+	if !containsAll(err.Error(), "start_date") {
+		t.Fatalf("error should mention start_date; got: %v", err)
+	}
+	// Both offenders must be reported (all-or-nothing).
+	msg := err.Error()
+	if !containsAll(msg, "p_after") || !containsAll(msg, "p_after2") {
+		t.Fatalf("error should name both offending price ids; got: %v", err)
+	}
+
+	// Non-backdated sub (sub.start_date >= every price.start_date) → no error.
+	nonBackdated := &subscription.Subscription{Currency: "usd", StartDate: time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)}
+	if err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, nonBackdated, prices); err != nil {
+		t.Fatalf("non-backdated sub must not error; got: %v", err)
+	}
+
+	// Zero sub.StartDate → skip check (no reference point).
+	zeroStart := &subscription.Subscription{Currency: "usd"}
+	if err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, zeroStart, prices); err != nil {
+		t.Fatalf("zero sub.StartDate must skip the check; got: %v", err)
 	}
 }
 
