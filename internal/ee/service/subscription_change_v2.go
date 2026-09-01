@@ -582,6 +582,10 @@ func buildPlanChangeLineItem(
 		EntityType:   types.SubscriptionLineItemEntityTypePlan,
 	})
 
+	if err := validatePriceStartNotAfterLineItem(target.Price, item.StartDate); err != nil {
+		return nil, err
+	}
+
 	item.BillingPeriodCount = target.Price.BillingPeriodCount
 	return item, nil
 }

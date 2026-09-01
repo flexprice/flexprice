@@ -1338,7 +1338,7 @@ func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_CreatesSubscri
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, reqs, buckets, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, reqs, buckets, nil, s.testData.lineItem.StartDate)
 	s.NoError(err)
 	s.Require().Len(buckets, 1)
 
@@ -1371,10 +1371,10 @@ func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_EmptySlice() {
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
-	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{}, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{}, nil, time.Time{})
 	s.NoError(err)
 
-	err2 := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{}, nil)
+	err2 := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{}, nil, time.Time{})
 	s.NoError(err2)
 }
 
@@ -1418,7 +1418,7 @@ func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_MultipleBucket
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, reqs, buckets, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.lineItem.ID, s.testData.subscription.ID, reqs, buckets, nil, s.testData.lineItem.StartDate)
 	s.NoError(err)
 	s.Require().Len(buckets, 3)
 

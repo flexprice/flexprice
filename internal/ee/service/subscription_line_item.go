@@ -74,6 +74,11 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		if usedInlinePrice {
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
+		if price != nil {
+			if err := validatePriceStartNotAfterLineItem(price.Price, lineItem.StartDate); err != nil {
+				return err
+			}
+		}
 
 		// Materialize bucket prices: create a SUBSCRIPTION-scoped Price for each
 		// CommitmentTimeBuckets entry and assign the resulting slice (with PriceIDs
@@ -83,7 +88,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			// ToSubscriptionLineItem already built lineItem.CommitmentTimeBuckets
 			// (IDs + commitment fields, empty PriceID); create a SUBSCRIPTION-scoped
 			// price per bucket and fill in the PriceIDs.
-			if err := s.createBucketPrices(txCtx, lineItem.ID, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil); err != nil {
+			if err := s.createBucketPrices(txCtx, lineItem.ID, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil, lineItem.StartDate); err != nil {
 				return err
 			}
 			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -584,7 +589,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
 			// explicit empty slice clears them.
 			if req.CommitmentTimeBuckets != nil {
-				if err := s.createBucketPrices(ctx, newLineItem.ID, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
+				if err := s.createBucketPrices(ctx, newLineItem.ID, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets, newLineItem.StartDate); err != nil {
 					return err
 				}
 			}
@@ -907,7 +912,7 @@ func (s *subscriptionService) createBucketPricesForLineItems(
 		if cfg == nil || len(cfg.CommitmentTimeBuckets) == 0 {
 			continue
 		}
-		if err := s.createBucketPrices(ctx, li.ID, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil); err != nil {
+		if err := s.createBucketPrices(ctx, li.ID, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil, li.StartDate); err != nil {
 			return err
 		}
 		if err := s.validateBucketArray(ctx, li.MeterID, li.PriceID, li.CommitmentWindowed, hasCumulative, li.CommitmentTimeBuckets); err != nil {
@@ -1110,6 +1115,7 @@ func (s *subscriptionService) createBucketPrices(
 	reqs []dto.CommitmentBucketRequest,
 	buckets types.TimeOfDayBuckets,
 	existing types.TimeOfDayBuckets,
+	lineItemStart time.Time,
 ) error {
 	if len(reqs) != len(buckets) {
 		return ierr.NewError("bucket request/domain length mismatch").
@@ -1149,9 +1155,16 @@ func (s *subscriptionService) createBucketPrices(
 			"sub_line_item_id": lineItemID,
 			"bucket_id":        buckets[i].ID,
 		}
+		if priceReq.StartDate == nil && !lineItemStart.IsZero() {
+			start := lineItemStart.UTC()
+			priceReq.StartDate = &start
+		}
 
 		resp, err := priceService.CreatePrice(ctx, priceReq)
 		if err != nil {
+			return err
+		}
+		if err := validatePriceStartNotAfterLineItem(resp.Price, lineItemStart); err != nil {
 			return err
 		}
 		buckets[i].PriceID = resp.ID

@@ -235,13 +235,17 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		} else if sub.EndDate != nil {
 			item.EndDate = *sub.EndDate
 		}
-		// Determine start date: max of first phase start, subscription start, and price start
+		// Coverage start is max(sub, first phase) — not the catalog price start.
+		// A later price start is a misconfiguration and is rejected below.
 		startDate := sub.StartDate
 		if len(req.Phases) > 0 && req.Phases[0].StartDate.After(startDate) {
 			startDate = req.Phases[0].StartDate
 		}
+		item.StartDate = startDate
+		if err := validatePriceStartNotAfterLineItem(priceResponse.Price, item.StartDate); err != nil {
+			return nil, err
+		}
 
-		// Apply commitment configuration if provided for this price
 		cfg, err := s.applyLineItemCommitmentFromMap(ctx, sub, item, req.LineItemCommitments)
 		if err != nil {
 			return nil, err
@@ -250,10 +254,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			lineItemBucketCfgs[item.ID] = cfg
 		}
 
-		if priceResponse.Price.StartDate != nil && priceResponse.Price.StartDate.After(startDate) {
-			startDate = lo.FromPtr(priceResponse.Price.StartDate)
-		}
-		item.StartDate = startDate
 		lineItems = append(lineItems, item)
 	}
 
@@ -1075,16 +1075,14 @@ func (s *subscriptionService) handleSubscriptionPhases(
 		// Get corresponding phase request for additional data
 		phaseReq := phaseRequests[i]
 
-		// Validate all line item requests before creating them
 		for _, priceResp := range validPrices {
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
+			if err := validatePriceStartNotAfterLineItem(priceResp.Price, phaseReq.StartDate); err != nil {
+				return err
 			}
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
 				SubscriptionPhaseID: lo.ToPtr(phase.ID),
-				StartDate:           lo.ToPtr(startDate),
+				StartDate:           lo.ToPtr(phaseReq.StartDate),
 				EndDate:             phaseReq.EndDate,
 			}
 			if err := req.Validate(priceResp.Price, sub); err != nil {
@@ -1092,31 +1090,20 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 		}
 
-		// Create line items from plan prices - reusing DTO's ToSubscriptionLineItem logic (same as AddSubscriptionLineItem)
 		phaseLineItems := lo.Map(validPrices, func(priceResp *dto.PriceResponse, _ int) *subscription.SubscriptionLineItem {
-			// Build line item params
 			params := dto.LineItemParams{
 				Subscription: &dto.SubscriptionResponse{Subscription: sub},
 				Price:        priceResp,
 				Plan:         planResponse,
 				EntityType:   types.SubscriptionLineItemEntityTypePlan,
 			}
-
-			// Create request with phase dates
-			startDate := phaseReq.StartDate
-			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
-				startDate = lo.FromPtr(priceResp.Price.StartDate)
-			}
-
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
 				SubscriptionPhaseID: lo.ToPtr(phase.ID),
-				StartDate:           lo.ToPtr(startDate),
+				StartDate:           lo.ToPtr(phaseReq.StartDate),
 				EndDate:             phaseReq.EndDate,
 			}
-
-			lineItem := req.ToSubscriptionLineItem(ctx, params)
-			return lineItem
+			return req.ToSubscriptionLineItem(ctx, params)
 		})
 
 		// Create original price to line item mapping before processing overrides
@@ -1374,6 +1361,13 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			PriceUnitType:        originalPrice.PriceUnitType,    // Always copy from original (cannot be changed)
 			SkipEntityValidation: true,
 		}
+		// CreatePriceRequest.ToPrice defaults a nil StartDate to now, which would
+		// put the override price after a backdated line item. Stamp the line
+		// item's start so the override covers the same window.
+		if !lineItem.StartDate.IsZero() {
+			start := lineItem.StartDate.UTC()
+			createPriceReq.StartDate = &start
+		}
 
 		// Handle PriceUnitConfig construction for CUSTOM price unit type
 		var priceUnitConfig *dto.PriceUnitConfig
@@ -1458,6 +1452,9 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		// Create the subscription-scoped price using price service
 		overriddenPriceResp, err := priceService.CreatePrice(ctx, createPriceReq)
 		if err != nil {
+			return err
+		}
+		if err := validatePriceStartNotAfterLineItem(overriddenPriceResp.Price, lineItem.StartDate); err != nil {
 			return err
 		}
 
@@ -4121,75 +4118,33 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		if err := validatePriceStartDateNotAfterSub(entityID, entityType, subscription, validPrices); err != nil {
-			return nil, err
-		}
 		return validPrices, nil
 	}
 
 	// For workflows that allow empty prices, filter and return (even if empty)
-	validPrices := filter(pricesResponse.Items)
-	if err := validatePriceStartDateNotAfterSub(entityID, entityType, subscription, validPrices); err != nil {
-		return nil, err
-	}
-	return validPrices, nil
+	return filter(pricesResponse.Items), nil
 }
 
-// validatePriceStartDateNotAfterSub rejects sub creation / addon attach when
-// any attached price's StartDate is AFTER the subscription's StartDate.
-//
-// Snapshot behavior: subscription_line_item.start_date is copied from the
-// price's start_date at attach time, and stays fixed for the life of the sub.
-// If a caller backdates a sub before some price's StartDate, every fan-out
-// window BEFORE that price's start gets clipped to (StartDate, PeriodEnd)
-// which produces PeriodEnd < PeriodStart -> the invoice-time guard added in
-// PR #2729 silently skips those windows -> the sub silently loses coverage
-// for those months. Symptom: cancel/preview invoices show a single ~1-day
-// line item instead of the expected N-month fan-out.
-//
-// Reject at create time so the misconfiguration is visible immediately.
-// The caller can either move the sub's StartDate forward, or move the
-// price's StartDate back, before creating the sub.
-func validatePriceStartDateNotAfterSub(
-	entityID string,
-	entityType types.PriceEntityType,
-	subscription *subscription.Subscription,
-	validPrices []*dto.PriceResponse,
-) error {
-	if subscription == nil || subscription.StartDate.IsZero() {
+// validatePriceStartNotAfterLineItem rejects a line item whose backing price
+// becomes effective after the line item itself. Coverage start is the line
+// item's start (plan/addon/custom/phase/plan-change), not subscription.StartDate
+// — comparing to the sub falsely rejects mid-life attaches onto versioned prices.
+func validatePriceStartNotAfterLineItem(p *price.Price, lineItemStart time.Time) error {
+	if p == nil || p.StartDate == nil || lineItemStart.IsZero() {
 		return nil
 	}
-	var offenders []map[string]interface{}
-	for _, p := range validPrices {
-		if p.Price.StartDate == nil {
-			continue
-		}
-		if p.Price.StartDate.After(subscription.StartDate) {
-			offenders = append(offenders, map[string]interface{}{
-				"price_id":         p.Price.ID,
-				"price_start_date": p.Price.StartDate.UTC().Format(time.RFC3339),
-				"display_name":     p.Price.DisplayName,
-				"lookup_key":       p.Price.LookupKey,
-			})
-		}
-	}
-	if len(offenders) == 0 {
+	if !p.StartDate.After(lineItemStart) {
 		return nil
 	}
-	offenderIDs := make([]string, 0, len(offenders))
-	for _, o := range offenders {
-		if id, ok := o["price_id"].(string); ok {
-			offenderIDs = append(offenderIDs, id)
-		}
-	}
-	return ierr.NewErrorf("prices have start_date after subscription start_date %s: %v",
-		subscription.StartDate.UTC().Format(time.RFC3339), offenderIDs).
-		WithHint("A subscription cannot be backdated before any of its attached prices' start_date, otherwise those price line items will silently lose coverage. Move the subscription's start_date forward, or update the price's start_date to be on or before the subscription's start_date.").
+	return ierr.NewErrorf("price %s has start_date after line item start_date %s",
+		p.ID, lineItemStart.UTC().Format(time.RFC3339)).
+		WithHint("A line item cannot start before its price's start_date, otherwise billing windows before the price is effective are silently dropped. Move the line item start forward, or update the price start_date to be on or before the line item start.").
 		WithReportableDetails(map[string]interface{}{
-			"entity_id":               entityID,
-			"entity_type":             entityType,
-			"subscription_start_date": subscription.StartDate.UTC().Format(time.RFC3339),
-			"offending_prices":        offenders,
+			"price_id":         p.ID,
+			"price_start_date": p.StartDate.UTC().Format(time.RFC3339),
+			"line_item_start":  lineItemStart.UTC().Format(time.RFC3339),
+			"display_name":     p.DisplayName,
+			"lookup_key":       p.LookupKey,
 		}).
 		Mark(ierr.ErrValidation)
 }
@@ -5250,9 +5205,8 @@ func (s *subscriptionService) createAddonAttachParams(
 		return nil, err
 	}
 
-	// createLineItemFromPrice clamps every line item's start to
-	// max(requestedStart, sub.StartDate, price.StartDate), so anchoring the proration at
-	// requestedStart alone would price a window the addon is not live for.
+	// createLineItemFromPrice clamps each line item to max(requestedStart, sub.StartDate).
+	// Catalog prices that start later than that coverage are rejected before this point.
 	prorationEffectiveDate := lo.Reduce(lineItems, func(acc time.Time, li *subscription.SubscriptionLineItem, _ int) time.Time {
 		return lo.Ternary(li.StartDate.After(acc), li.StartDate, acc)
 	}, addonRequestedStart)
@@ -5733,6 +5687,9 @@ func (s *subscriptionService) buildAddonLineItems(
 
 	for _, priceResponse := range validPrices {
 		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, associationID, requestedStart)
+		if err := validatePriceStartNotAfterLineItem(priceResponse.Price, lineItem.StartDate); err != nil {
+			return nil, nil, err
+		}
 
 		// Onetime: end at the period boundary containing the start date.
 		// Recurring: no end date (renews each period).
@@ -5764,9 +5721,6 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 	lineItemStart := addonRequestedStart
 	if sub.StartDate.After(lineItemStart) {
 		lineItemStart = sub.StartDate
-	}
-	if price.StartDate != nil && price.StartDate.After(lineItemStart) {
-		lineItemStart = *price.StartDate
 	}
 
 	lineItem := &subscription.SubscriptionLineItem{

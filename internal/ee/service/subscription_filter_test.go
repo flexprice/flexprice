@@ -42,11 +42,11 @@ func TestFilterValidPricesForSubscription_IncludeIDsSemantics(t *testing.T) {
 	// Plan prices: one exact-cadence (quarterly), one divisor (monthly), one
 	// currency-mismatch, one ONETIME, one non-divisor (annual, on a quarterly sub).
 	prices := []*dto.PriceResponse{
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),      // exact match to sub
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),      // divisor (fan-out)
-		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1),      // divisor #2
-		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),      // always compatible
-		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),       // non-divisor for quarter
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1), // exact match to sub
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1), // divisor (fan-out)
+		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1), // divisor #2
+		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1), // always compatible
+		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),  // non-divisor for quarter
 	}
 	// Currency mismatch — should always be dropped regardless of includeIDs.
 	badCurrency := mkPrice("bc", types.BILLING_PERIOD_QUARTER, 1)
@@ -154,8 +154,8 @@ func TestFilterAddonPricesForSubscription_PreservesCompatSemantics(t *testing.T)
 	// Regression guard: addon path must keep divisor-compat acceptance so
 	// pre-existing addon tests (monthly-on-annual, etc.) still work.
 	prices := []*dto.PriceResponse{
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),  // divisor of annual
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),  // divisor of annual
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),   // divisor of annual
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),   // divisor of annual
 		mkPrice("h1", types.BILLING_PERIOD_HALF_YEAR, 1), // divisor of annual
 		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),
 	}
@@ -240,49 +240,39 @@ func TestValidateIncludePriceIDs_WrongCurrency(t *testing.T) {
 	}
 }
 
-// Regression: reject sub-create when sub is backdated before any price's
-// start_date. Otherwise the sub's line items snapshot with
-// start_date = price.start_date > sub.start_date, and fan-out silently
-// clips all pre-price windows to garbage periods (Bug: cancel invoice
-// showed a single ~1-day line item instead of the expected fan-out).
-func TestValidatePriceStartDateNotAfterSub(t *testing.T) {
+// Invariant: price.StartDate must be on or before the line item's start
+// (not the subscription's start). Comparing to sub.StartDate falsely
+// rejects mid-life addon attach / plan-change onto versioned prices.
+func TestValidatePriceStartNotAfterLineItem(t *testing.T) {
 	apr1 := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
 	aug31 := time.Date(2026, 8, 31, 20, 18, 14, 0, time.UTC)
-	sub := &subscription.Subscription{
-		Currency:  "usd",
-		StartDate: apr1, // backdated
-	}
-	// One price starts BEFORE sub (fine), one AFTER (must be rejected).
-	prices := []*dto.PriceResponse{
-		{Price: &price.Price{ID: "p_ok", Currency: "usd", StartDate: nil}},                                                       // nil = always effective
-		{Price: &price.Price{ID: "p_before", Currency: "usd", StartDate: &apr1}},                                                 // equal
-		{Price: &price.Price{ID: "p_after", Currency: "usd", StartDate: &aug31, DisplayName: "Monthly Flat Advance"}},            // AFTER
-		{Price: &price.Price{ID: "p_after2", Currency: "usd", StartDate: &aug31, DisplayName: "Shipment Overage"}},               // AFTER
+	dec1 := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+
+	late := &price.Price{ID: "p_after", StartDate: &aug31, DisplayName: "Monthly Flat Advance"}
+	if err := validatePriceStartNotAfterLineItem(late, apr1); err == nil {
+		t.Fatal("expected error when price starts after the line item")
+	} else if !containsAll(err.Error(), "p_after", "start_date") {
+		t.Fatalf("error should name the price and start_date; got: %v", err)
 	}
 
-	err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, sub, prices)
-	if err == nil {
-		t.Fatal("expected validation error for prices whose start_date is after sub.start_date")
-	}
-	if !containsAll(err.Error(), "start_date") {
-		t.Fatalf("error should mention start_date; got: %v", err)
-	}
-	// Both offenders must be reported (all-or-nothing).
-	msg := err.Error()
-	if !containsAll(msg, "p_after") || !containsAll(msg, "p_after2") {
-		t.Fatalf("error should name both offending price ids; got: %v", err)
+	// Coverage starts at the addon/plan-change instant, after the price.
+	if err := validatePriceStartNotAfterLineItem(late, dec1); err != nil {
+		t.Fatalf("price that started before the line item must pass; got: %v", err)
 	}
 
-	// Non-backdated sub (sub.start_date >= every price.start_date) → no error.
-	nonBackdated := &subscription.Subscription{Currency: "usd", StartDate: time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)}
-	if err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, nonBackdated, prices); err != nil {
-		t.Fatalf("non-backdated sub must not error; got: %v", err)
+	equal := &price.Price{ID: "p_eq", StartDate: &apr1}
+	if err := validatePriceStartNotAfterLineItem(equal, apr1); err != nil {
+		t.Fatalf("equal start dates must pass; got: %v", err)
 	}
 
-	// Zero sub.StartDate → skip check (no reference point).
-	zeroStart := &subscription.Subscription{Currency: "usd"}
-	if err := validatePriceStartDateNotAfterSub("plan_test", types.PRICE_ENTITY_TYPE_PLAN, zeroStart, prices); err != nil {
-		t.Fatalf("zero sub.StartDate must skip the check; got: %v", err)
+	if err := validatePriceStartNotAfterLineItem(&price.Price{ID: "p_nil"}, apr1); err != nil {
+		t.Fatalf("nil price start (always effective) must pass; got: %v", err)
+	}
+	if err := validatePriceStartNotAfterLineItem(late, time.Time{}); err != nil {
+		t.Fatalf("zero line-item start must skip the check; got: %v", err)
+	}
+	if err := validatePriceStartNotAfterLineItem(nil, apr1); err != nil {
+		t.Fatalf("nil price must skip the check; got: %v", err)
 	}
 }
 
