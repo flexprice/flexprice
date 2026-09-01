@@ -64,7 +64,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    1,                         // 10 pre-populated; alert canary still needs creating
 			wantPlansCreated:        0,                         // plan found via Query
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         12,                        // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
+			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary (multi-cadence quarterly currently skipped: awaits SDK regen with IncludePriceIDs)
 			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
@@ -84,7 +84,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1, // base + one usage price per feature
-			wantSubsCreated:         12,                        // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
+			wantSubsCreated:         11,                        // 10 persistent + 1 alert canary (multi-cadence quarterly currently skipped: awaits SDK regen with IncludePriceIDs)
 			wantWalletsCreated:      4,                         // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11,                        // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
@@ -118,7 +118,7 @@ func TestSeedEnsure(t *testing.T) {
 			wantCustomersCreated:    1, // alert canary still needs creating
 			wantPlansCreated:        1,
 			wantPricesCreated:       len(seedFeatureSpecs) + 1,
-			wantSubsCreated:         12, // 10 persistent + 1 alert canary + 1 multi-cadence quarterly
+			wantSubsCreated:         11, // 10 persistent + 1 alert canary (multi-cadence quarterly currently skipped: awaits SDK regen with IncludePriceIDs)
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
