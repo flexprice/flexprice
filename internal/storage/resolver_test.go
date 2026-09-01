@@ -267,6 +267,55 @@ func TestResolver_ForPlatform_InvoiceRespectsEnabledFlag(t *testing.T) {
 	})
 }
 
+// Imports are structurally S3-tied (CSV Box only writes to S3), so a
+// GCP-hosted deployment must still route PurposeImport through the S3
+// backend. Guards against a regression where the resolver's deployment-wide
+// provider (r.provider = GCS on GCP) leaks into the imports path.
+func TestResolver_Imports_AlwaysS3_EvenOnGCSDeployment(t *testing.T) {
+	cfg := testConfig()
+	cfg.FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{
+		Enabled:            true,
+		Bucket:             "imports-bucket",
+		Region:             "ap-south-1",
+		KeyPrefix:          "csv-box-uplods",
+		AWSAccessKeyID:     "id",
+		AWSSecretAccessKey: "secret",
+	}
+	// r.provider is GCS (mimicking a GCP-hosted worker), but imports must
+	// still resolve to the S3-backed imports bucket.
+	r := newTestResolver(t, ProviderGCS, cfg)
+
+	bc, err := r.BucketConfigFor(PurposeImport)
+	require.NoError(t, err)
+	assert.Equal(t, "imports-bucket", bc.Bucket)
+	assert.Equal(t, "csv-box-uplods", bc.KeyPrefix)
+
+	// signerFor must NOT try to resolve a GCS signer for imports (there is
+	// no FlexpriceGCSImports config today), even when r.provider is GCS.
+	signer, err := r.signerFor(PurposeImport)
+	require.NoError(t, err)
+	assert.Empty(t, signer, "imports use S3 signing; no GCS signer email expected")
+
+	s, err := r.ForPlatform(context.Background(), PurposeImport)
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	assert.Equal(t, ProviderS3, s.Provider(), "import storage must be S3-backed regardless of deployment cloud")
+}
+
+// Explicit guard: without FlexpriceS3Imports.Enabled, resolving imports must
+// fail with the clear "not enabled" hint — otherwise the download would fail
+// later with an unclear S3 auth error.
+func TestResolver_Imports_RejectsWhenDisabled(t *testing.T) {
+	cfg := testConfig()
+	cfg.FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{Enabled: false}
+	r := newTestResolver(t, ProviderGCS, cfg)
+
+	_, err := r.BucketConfigFor(PurposeImport)
+	require.Error(t, err)
+	hints := strings.Join(cockroachErrors.GetAllHints(err), " ")
+	assert.Contains(t, hints, "FLEXPRICE_FLEXPRICE_S3_IMPORTS_ENABLED")
+}
+
 func TestResolver_ForPlatform_Caches(t *testing.T) {
 	cfg := testConfig()
 	r := newTestResolver(t, ProviderS3, cfg)
