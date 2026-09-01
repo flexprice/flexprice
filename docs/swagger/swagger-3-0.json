@@ -10609,6 +10609,64 @@
             "ApiKeyAuth": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Import a CSV of usage events",
+        "description": "Use to submit a CSV of usage events for async ingestion. The CSV must already have been uploaded to the Flexprice-managed imports bucket (currently via CSV Box) \u2014 pass the upload_id and the backend fetches the file from S3 and streams rows into ClickHouse. Returns the task ID and Temporal workflow IDs for polling.",
+        "operationId": "createTask",
+        "requestBody": {
+          "description": "Import request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TemporalWorkflowResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "task"
       }
     },
     "/tasks/result": {
@@ -12718,6 +12776,68 @@
             "name": "id",
             "in": "path",
             "description": "Service Account ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content",
+            "content": {}
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/users/{id}/remove": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Remove user from tenant",
+        "description": "Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.",
+        "operationId": "removeUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -17795,6 +17915,9 @@
               "$ref": "#/components/schemas/TaxRateOverride"
             }
           },
+          "tax_treatment": {
+            "$ref": "#/components/schemas/types.TaxTreatment"
+          },
           "timezone": {
             "type": "string",
             "description": "timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")\nDefaults to \"UTC\" if not provided"
@@ -18183,13 +18306,6 @@
             "description": "period_start is the start date of the billing period",
             "format": "date-time"
           },
-          "prepared_tax_rates": {
-            "type": "array",
-            "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)",
-            "items": {
-              "$ref": "#/components/schemas/TaxRateResponse"
-            }
-          },
           "subscription_id": {
             "type": "string",
             "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice"
@@ -18356,6 +18472,9 @@
           },
           "billing_period_count": {
             "type": "integer"
+          },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
           },
           "currency": {
             "type": "string"
@@ -18635,6 +18754,7 @@
         "required": [
           "billing_period",
           "currency",
+          "include_price_ids",
           "plan_id"
         ],
         "type": "object",
@@ -18707,6 +18827,13 @@
           },
           "gateway_payment_method_id": {
             "type": "string"
+          },
+          "include_price_ids": {
+            "type": "array",
+            "description": "IncludePriceIDs selects which plan prices to attach. Nil/omitted attaches matching-cadence\nprices plus ONETIME; [] attaches none (LineItems extras still apply); a non-empty list\nattaches only those IDs. Each listed ID must belong to the plan, match the subscription\ncurrency, and have a cadence that equals or strictly divides the subscription cadence.\nPointer-slice distinguishes nil from [].",
+            "items": {
+              "type": "string"
+            }
           },
           "inheritance": {
             "$ref": "#/components/schemas/SubscriptionInheritanceConfig"
@@ -18807,6 +18934,40 @@
           }
         }
       },
+      "CreateTaskRequest": {
+        "required": [
+          "entity_type",
+          "file_provider",
+          "file_type",
+          "task_type",
+          "upload_id"
+        ],
+        "type": "object",
+        "properties": {
+          "entity_type": {
+            "$ref": "#/components/schemas/types.EntityType"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "file_provider": {
+            "type": "string"
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/types.FileType"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "task_type": {
+            "$ref": "#/components/schemas/types.TaskType"
+          },
+          "upload_id": {
+            "type": "string"
+          }
+        }
+      },
       "CreateTaxAssociationRequest": {
         "required": [
           "tax_rate_code"
@@ -18847,6 +19008,9 @@
             "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
             "format": "date-time"
           },
+          "tax_behavior": {
+            "$ref": "#/components/schemas/types.TaxBehavior"
+          },
           "tax_rate_code": {
             "type": "string"
           }
@@ -18867,10 +19031,6 @@
             "type": "string",
             "description": "description is an optional text description providing details about the tax rate"
           },
-          "fixed_value": {
-            "type": "string",
-            "description": "fixed_value is the fixed monetary amount when tax_rate_type is \"fixed\""
-          },
           "metadata": {
             "type": "object",
             "additionalProperties": {
@@ -18884,7 +19044,7 @@
           },
           "percentage_value": {
             "type": "string",
-            "description": "percentage_value is the percentage value (0-100) when tax_rate_type is \"percentage\""
+            "description": "percentage_value is the percentage value (0-100)"
           },
           "scope": {
             "$ref": "#/components/schemas/types.TaxRateScope"
@@ -19485,6 +19645,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
+          },
+          "tax_treatment": {
+            "$ref": "#/components/schemas/types.TaxTreatment"
           },
           "tenant_id": {
             "type": "string"
@@ -21336,6 +21499,12 @@
             "type": "string",
             "description": "subtotal is the sum of all line items before any taxes, discounts, or additional fees"
           },
+          "tax_exemption_reason_code": {
+            "$ref": "#/components/schemas/types.TaxExemptionReasonCode"
+          },
+          "tax_summary": {
+            "$ref": "#/components/schemas/TaxSummary"
+          },
           "taxes": {
             "type": "array",
             "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -21767,6 +21936,9 @@
           "billing_model": {
             "$ref": "#/components/schemas/types.BillingModel"
           },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          },
           "price_id": {
             "type": "string",
             "description": "PriceID references the plan price to override"
@@ -22111,6 +22283,9 @@
           "billing_period_count": {
             "type": "integer",
             "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12"
+          },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
           },
           "conversion_rate": {
             "type": "string",
@@ -23481,6 +23656,9 @@
           "billing_period_count": {
             "type": "integer"
           },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          },
           "description": {
             "type": "string"
           },
@@ -24304,6 +24482,9 @@
           "tax_association_id": {
             "type": "string"
           },
+          "tax_behavior": {
+            "$ref": "#/components/schemas/types.TaxBehavior"
+          },
           "tax_rate": {
             "$ref": "#/components/schemas/TaxRateResponse"
           },
@@ -24382,6 +24563,9 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
+          "tax_behavior": {
+            "$ref": "#/components/schemas/types.TaxBehavior"
+          },
           "tax_rate": {
             "$ref": "#/components/schemas/TaxRateResponse"
           },
@@ -24415,6 +24599,20 @@
           },
           "priority": {
             "type": "integer"
+          },
+          "tax_behavior": {
+            "$ref": "#/components/schemas/types.TaxBehavior"
+          }
+        }
+      },
+      "TaxExemptionSummary": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/types.TaxExemptionReasonCode"
           }
         }
       },
@@ -24441,6 +24639,9 @@
           "priority": {
             "type": "integer"
           },
+          "tax_behavior": {
+            "$ref": "#/components/schemas/types.TaxBehavior"
+          },
           "tax_rate_code": {
             "type": "string"
           }
@@ -24463,9 +24664,6 @@
             "type": "string"
           },
           "environment_id": {
-            "type": "string"
-          },
-          "fixed_value": {
             "type": "string"
           },
           "id": {
@@ -24503,6 +24701,23 @@
             "format": "date-time"
           },
           "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "TaxSummary": {
+        "type": "object",
+        "properties": {
+          "exclusive_tax": {
+            "type": "string"
+          },
+          "exemption": {
+            "$ref": "#/components/schemas/TaxExemptionSummary"
+          },
+          "inclusive_tax": {
+            "type": "string"
+          },
+          "total_tax": {
             "type": "string"
           }
         }
@@ -24833,6 +25048,9 @@
             "type": "string",
             "description": "name is the updated name or company name for the customer"
           },
+          "tax_treatment": {
+            "$ref": "#/components/schemas/types.TaxTreatment"
+          },
           "timezone": {
             "type": "string",
             "description": "timezone is the updated IANA timezone name for the customer (e.g. \"Asia/Kolkata\", \"America/New_York\")"
@@ -25026,6 +25244,9 @@
           "billing_model": {
             "$ref": "#/components/schemas/types.BillingModel"
           },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          },
           "description": {
             "type": "string"
           },
@@ -25150,6 +25371,9 @@
           },
           "billing_model": {
             "$ref": "#/components/schemas/types.BillingModel"
+          },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
           },
           "commitment_amount": {
             "type": "number",
@@ -26281,6 +26505,9 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
+          "tax_treatment": {
+            "$ref": "#/components/schemas/types.TaxTreatment"
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -26650,7 +26877,7 @@
           },
           "group_by": {
             "type": "string",
-            "description": "GroupBy is the property name in event.properties to group by before aggregating.\nCurrently only supported for MAX aggregation with bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
+            "description": "GroupBy is the property name in event.properties to group by before aggregating.\nRequires MAX aggregation. Windowing comes from the price, so this no longer\nimplies a meter-level bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
           },
           "multiplier": {
             "type": "string",
@@ -26791,6 +27018,9 @@
           "billing_period_count": {
             "type": "integer",
             "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12"
+          },
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
           },
           "conversion_rate": {
             "type": "string",
@@ -29104,6 +29334,10 @@
           },
           "service_period_custom_fields": {
             "$ref": "#/components/schemas/types.ServicePeriodCustomFields"
+          },
+          "submit_for_approval": {
+            "type": "boolean",
+            "description": "SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval\nflow before recording payment. Zoho rejects payments on draft invoices, and merchants\nconfigure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for\nthat rule to fire, then pay."
           }
         },
         "x-speakeasy-name-override": "InvoiceSyncSettings"
@@ -29850,6 +30084,9 @@
             "type": "string",
             "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")"
           },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          },
           "region": {
             "type": "string",
             "description": "AWS region (e.g., \"us-west-2\")"
@@ -29936,6 +30173,7 @@
           "flexprice",
           "stripe",
           "s3",
+          "gcs",
           "hubspot",
           "razorpay",
           "chargebee",
@@ -29951,12 +30189,14 @@
           "azure_marketplace"
         ],
         "x-enum-comments": {
+          "SecretProviderGCS": "supports multiple connections per environment, service-account JSON creds",
           "SecretProviderS3": "supports multiple connections per environment"
         },
         "x-enum-varnames": [
           "SecretProviderFlexPrice",
           "SecretProviderStripe",
           "SecretProviderS3",
+          "SecretProviderGCS",
           "SecretProviderHubSpot",
           "SecretProviderRazorpay",
           "SecretProviderChargebee",
@@ -30451,6 +30691,30 @@
         ],
         "x-speakeasy-name-override": "TaskType"
       },
+      "types.TaxBehavior": {
+        "type": "string",
+        "enum": [
+          "inclusive",
+          "exclusive"
+        ],
+        "x-enum-varnames": [
+          "TaxBehaviorInclusive",
+          "TaxBehaviorExclusive"
+        ],
+        "x-speakeasy-name-override": "TaxBehavior"
+      },
+      "types.TaxExemptionReasonCode": {
+        "type": "string",
+        "enum": [
+          "customer_exempt",
+          "no_tax_configured"
+        ],
+        "x-enum-varnames": [
+          "TaxExemptionReasonCustomerExempt",
+          "TaxExemptionReasonNoTaxConfigured"
+        ],
+        "x-speakeasy-name-override": "TaxExemptionReasonCode"
+      },
       "types.TaxRateEntityType": {
         "type": "string",
         "enum": [
@@ -30496,14 +30760,24 @@
       "types.TaxRateType": {
         "type": "string",
         "enum": [
-          "percentage",
-          "fixed"
+          "percentage"
         ],
         "x-enum-varnames": [
-          "TaxRateTypePercentage",
-          "TaxRateTypeFixed"
+          "TaxRateTypePercentage"
         ],
         "x-speakeasy-name-override": "TaxRateType"
+      },
+      "types.TaxTreatment": {
+        "type": "string",
+        "enum": [
+          "taxable",
+          "exempt"
+        ],
+        "x-enum-varnames": [
+          "TaxTreatmentTaxable",
+          "TaxTreatmentExempt"
+        ],
+        "x-speakeasy-name-override": "TaxTreatment"
       },
       "types.TimeOfDayBucket": {
         "type": "object",
@@ -31904,6 +32178,9 @@
       "webhookDto.SubscriptionWebhookPayload": {
         "type": "object",
         "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/webhookDto.Customer"
+          },
           "event_type": {
             "$ref": "#/components/schemas/types.WebhookEventName"
           },
@@ -32045,6 +32322,9 @@
         "properties": {
           "alert": {
             "$ref": "#/components/schemas/webhookDto.WalletAlertInfo"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/webhookDto.Customer"
           },
           "event_type": {
             "$ref": "#/components/schemas/types.WebhookEventName"
