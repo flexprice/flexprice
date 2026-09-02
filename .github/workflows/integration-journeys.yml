@@ -38,11 +38,11 @@ jobs:
     name: Validate journeys & engine
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: integration-testing-suite/runner/go.mod
           cache-dependency-path: integration-testing-suite/runner/go.sum
@@ -77,11 +77,11 @@ jobs:
         github.base_ref == 'main' && github.head_ref == 'develop')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: integration-testing-suite/runner/go.mod
           cache-dependency-path: integration-testing-suite/runner/go.sum
@@ -113,7 +113,7 @@ jobs:
 
       - name: Upload reports
         if: always() && steps.target.outputs.configured == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: journey-reports
           path: |

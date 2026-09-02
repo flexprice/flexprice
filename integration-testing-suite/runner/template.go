@@ -9,7 +9,10 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"text/template"
+	// Deliberate: templates render YAML journey values into API request
+	// bodies, never into HTML pages, so html/template's escaping would
+	// corrupt the payloads. No web output exists in this CLI.
+	"text/template" // nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 	"time"
 )
 
