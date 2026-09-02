@@ -14,27 +14,30 @@ import (
 )
 
 type SubscriptionPriceCreateRequest struct {
-	Type               types.PriceType          `json:"type" validate:"required"`
-	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
-	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                      `json:"billing_period_count"`
-	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
-	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
-	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
-	MeterID            string                   `json:"meter_id,omitempty"`
-	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
-	LookupKey          string                   `json:"lookup_key,omitempty"`
-	TrialPeriodDays    int                      `json:"trial_period_days"`
-	Description        string                   `json:"description,omitempty"`
-	Metadata           map[string]string        `json:"metadata,omitempty"`
-	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
-	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
-	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
-	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
-	StartDate          *time.Time               `json:"start_date,omitempty"`
-	EndDate            *time.Time               `json:"end_date,omitempty"`
-	DisplayName        string                   `json:"display_name,omitempty"`
-	MinQuantity        *int64                   `json:"min_quantity,omitempty"`
+	Type               types.PriceType      `json:"type" validate:"required"`
+	PriceUnitType      types.PriceUnitType  `json:"price_unit_type" validate:"required"`
+	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                  `json:"billing_period_count"`
+	BillingModel       types.BillingModel   `json:"billing_model" validate:"required"`
+	InvoiceCadence     types.InvoiceCadence `json:"invoice_cadence" validate:"required"`
+	Amount             *decimal.Decimal     `json:"amount,omitempty" swaggertype:"string"`
+	MeterID            string               `json:"meter_id,omitempty"`
+	// BucketSize windows the meter's aggregation for this price. See
+	// CreatePriceRequest.BucketSize.
+	BucketSize        types.WindowSize         `json:"bucket_size,omitempty"`
+	FilterValues      map[string][]string      `json:"filter_values,omitempty"`
+	LookupKey         string                   `json:"lookup_key,omitempty"`
+	TrialPeriodDays   int                      `json:"trial_period_days"`
+	Description       string                   `json:"description,omitempty"`
+	Metadata          map[string]string        `json:"metadata,omitempty"`
+	TierMode          types.BillingTier        `json:"tier_mode,omitempty"`
+	Tiers             []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig   *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate         *time.Time               `json:"start_date,omitempty"`
+	EndDate           *time.Time               `json:"end_date,omitempty"`
+	DisplayName       string                   `json:"display_name,omitempty"`
+	MinQuantity       *int64                   `json:"min_quantity,omitempty"`
 }
 
 // ToCreatePriceRequest builds a CreatePriceRequest for subscription-scoped price creation.
@@ -54,6 +57,7 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 		InvoiceCadence:       p.InvoiceCadence,
 		Amount:               p.Amount,
 		MeterID:              p.MeterID,
+		BucketSize:           p.BucketSize,
 		FilterValues:         p.FilterValues,
 		LookupKey:            p.LookupKey,
 		TrialPeriodDays:      p.TrialPeriodDays,
@@ -132,6 +136,10 @@ type UpdateSubscriptionLineItemRequest struct {
 
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+
+	// BucketSize overrides the windowing used to turn this meter's usage into
+	// billable units for this line item. See CreatePriceRequest.BucketSize.
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
 
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -267,6 +275,25 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 				WithHint("One-time charges are always billed in advance").
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	// Cadence relationship: price effective months (billing_period × billing_period_count)
+	// must equal or strictly divide subscription effective months. Uses the same
+	// types.IsCadenceCompatible check as splitInvoicePeriodByLineItemCadence at
+	// invoice time so anything accepted here cannot later error during fan-out.
+	// Mirrors the plan-attachment filter at internal/ee/service/subscription.go:3949-3950.
+	if linePrice != nil && sub != nil &&
+		linePrice.BillingPeriod != types.BILLING_PERIOD_ONETIME &&
+		!types.IsCadenceCompatible(sub.BillingPeriod, sub.BillingPeriodCount, linePrice.BillingPeriod, linePrice.BillingPeriodCount) {
+		return ierr.NewError("price billing period must equal or divide subscription billing period").
+			WithHint("Price effective duration (billing_period × billing_period_count) must equal or divide the subscription's effective duration. For a quarterly sub, monthly or quarterly prices are allowed; 2-month, annual, or half-year prices are not.").
+			WithReportableDetails(map[string]interface{}{
+				"price_billing_period":              linePrice.BillingPeriod,
+				"price_billing_period_count":        linePrice.BillingPeriodCount,
+				"subscription_billing_period":       sub.BillingPeriod,
+				"subscription_billing_period_count": sub.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Reject negative quantity; zero defaults to min_quantity downstream.
@@ -580,8 +607,17 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 	// If EffectiveFrom is provided, at least one critical field must be present
 	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
 		return ierr.NewError("effective_from requires at least one critical field").
-			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, or commitment fields").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, bucket_size, or commitment fields").
 			Mark(ierr.ErrValidation)
+	}
+
+	// BucketSizeNone is the explicit-clear sentinel, not a window, so it skips the
+	// enum check. Validating here stops a bad window reaching the price layer,
+	// where it surfaces only after the override has already been built.
+	if r.BucketSize != "" && r.BucketSize != BucketSizeNone {
+		if err := r.BucketSize.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Validate commitment fields if provided
@@ -775,6 +811,7 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.TierMode != "" ||
 		len(r.Tiers) > 0 ||
 		r.TransformQuantity != nil ||
+		r.BucketSize != "" ||
 		r.HasCommitment() ||
 		r.CommitmentOverageFactor != nil ||
 		r.CommitmentTrueUpEnabled != nil ||

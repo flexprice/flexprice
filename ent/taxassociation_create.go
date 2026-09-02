@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/taxassociation"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // TaxAssociationCreate is the builder for creating a TaxAssociation entity.
@@ -204,6 +205,20 @@ func (tac *TaxAssociationCreate) SetNillableEndDate(t *time.Time) *TaxAssociatio
 	return tac
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tac *TaxAssociationCreate) SetTaxBehavior(tb types.TaxBehavior) *TaxAssociationCreate {
+	tac.mutation.SetTaxBehavior(tb)
+	return tac
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tac *TaxAssociationCreate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAssociationCreate {
+	if tb != nil {
+		tac.SetTaxBehavior(*tb)
+	}
+	return tac
+}
+
 // SetID sets the "id" field.
 func (tac *TaxAssociationCreate) SetID(s string) *TaxAssociationCreate {
 	tac.mutation.SetID(s)
@@ -325,6 +340,11 @@ func (tac *TaxAssociationCreate) check() error {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.currency": %w`, err)}
 		}
 	}
+	if v, ok := tac.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tax_behavior": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -423,6 +443,10 @@ func (tac *TaxAssociationCreate) createSpec() (*TaxAssociation, *sqlgraph.Create
 	if value, ok := tac.mutation.EndDate(); ok {
 		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
+	}
+	if value, ok := tac.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxassociation.FieldTaxBehavior, field.TypeString, value)
+		_node.TaxBehavior = &value
 	}
 	return _node, _spec
 }

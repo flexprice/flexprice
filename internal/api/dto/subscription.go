@@ -321,6 +321,27 @@ type SubscriptionInheritanceConfig struct {
 	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
 }
 
+func (c *SubscriptionInheritanceConfig) checkoutUnsupportedFields() bool {
+	if c == nil {
+		return false
+	}
+
+	if len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return true
+	}
+	if c.ParentSubscriptionID != "" {
+		return true
+	}
+	if c.InvoicingCustomerExternalID != nil {
+		return true
+	}
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 {
+		return true
+	}
+
+	return false
+}
+
 func (c *SubscriptionInheritanceConfig) Validate() error {
 	if c == nil {
 		return nil
@@ -545,6 +566,17 @@ type CreateSubscriptionRequest struct {
 	// Standalone subscriptions only; all plan prices must be usage-based. Immutable after creation.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 
+	// IncludePriceIDs selects which plan prices to attach. Nil/omitted attaches matching-cadence
+	// prices plus ONETIME; [] attaches none (LineItems extras still apply); a non-empty list
+	// attaches only those IDs. Each listed ID must belong to the plan, match the subscription
+	// currency, and have a cadence that equals or strictly divides the subscription cadence.
+	// Pointer-slice distinguishes nil from [].
+	// NOTE: no `dive,required` on this tag — swaggo misinterprets `required`
+	// inside `dive` as marking the whole field required, which then shows up
+	// in the OpenAPI schema and breaks callers that omit the field. Per-element
+	// non-emptiness is enforced explicitly in Validate() below.
+	IncludePriceIDs *[]string `json:"include_price_ids,omitempty"`
+
 	// Inheritance groups customer-hierarchy fields; providing child IDs makes this a PARENT subscription.
 	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
 
@@ -553,6 +585,8 @@ type CreateSubscriptionRequest struct {
 
 	// OpeningInvoiceAdjustmentAmount nets the opening invoice against a proration/cancel credit (e.g. on plan change). Internal only.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
 	SubscriptionCreationConfig
 }
@@ -599,6 +633,10 @@ type RemoveAddonRequest struct {
 	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	// EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+
+	// PreviewOnly quotes the removal without writing anything. Server-set: callers reach it
+	// through the preview endpoint, never by sending it.
+	PreviewOnly bool `json:"-"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
@@ -785,6 +823,8 @@ type SubscriptionResponse struct {
 	// the search filter's expand string. Each entry is a feature with its
 	// aggregated entitlement info (same shape as CustomerEntitlementsResponse.Features).
 	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
+
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -823,10 +863,62 @@ type SubscriptionResponseV2 struct {
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
 }
 
-func (r *CreateSubscriptionRequest) Validate() error {
+func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
+	if err := r.Checkout.Validate(); err != nil {
+		return err
+	}
 
+	if r.Checkout == nil {
+		return nil
+	}
+
+	// A grouped_invoicing child is built by createGroupedInvoicingChildren, which
+	// sets parent_subscription_id and passes the parent's checkout down. That
+	// combination is rejected by checkoutUnsupportedFields below, so the
+	// inheritance check alone is skipped for this type. The status and phase
+	// checks still apply: the generated child sets neither, and a request that
+	// does set them is as unsupported here as anywhere else.
+	isGroupedInvoicingChild := r.SubscriptionType == types.SubscriptionTypeGroupedInvoicing
+
+	if r.SubscriptionStatus != "" {
+		return ierr.NewError("subscription_status is not supported with checkout").
+			WithHint("Remove subscription_status; a checkout-gated subscription is created as draft and activated once payment succeeds").
+			WithReportableDetails(map[string]any{"subscription_status": r.SubscriptionStatus}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.Phases) > 0 {
+		return ierr.NewError("phases is not supported with checkout").
+			WithHint("Remove checkout to use phases, or remove phases to gate this subscription behind payment").
+			Mark(ierr.ErrValidation)
+	}
+
+	if !isGroupedInvoicingChild && r.Inheritance.checkoutUnsupportedFields() {
+		return ierr.NewError("inheritance field is not supported with checkout").
+			WithHint("Only grouped_invoicing_children_to_create is supported with checkout; remove the other inheritance fields, or remove checkout").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Inheritance != nil {
+		for i, child := range r.Inheritance.GroupedInvoicingChildrenToCreate {
+			if len(child.Phases) > 0 {
+				return ierr.NewError("phases is not supported with checkout").
+					WithHintf("Remove phases from grouped_invoicing_children_to_create[%d], or remove checkout", i).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
+		return err
+	}
+
+	if err := r.validateCheckoutCompatibility(); err != nil {
 		return err
 	}
 
@@ -841,6 +933,24 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if r.IncludePriceIDs != nil {
+		seen := make(map[string]struct{}, len(*r.IncludePriceIDs))
+		for _, id := range *r.IncludePriceIDs {
+			if id == "" {
+				return ierr.NewError("include_price_ids contains empty id").
+					WithHint("Each price id in include_price_ids must be a non-empty string.").
+					Mark(ierr.ErrValidation)
+			}
+			if _, dup := seen[id]; dup {
+				return ierr.NewError("include_price_ids contains duplicate id").
+					WithHint("Each price id in include_price_ids must appear at most once.").
+					WithReportableDetails(map[string]any{"duplicate_id": id}).
+					Mark(ierr.ErrValidation)
+			}
+			seen[id] = struct{}{}
+		}
 	}
 
 	// Case- Both are absent
@@ -1393,6 +1503,10 @@ type OverrideLineItemRequest struct {
 	// TierMode determines how to calculate the price for a given quantity
 	TierMode types.BillingTier `json:"tier_mode,omitempty"`
 
+	// BucketSize overrides the windowing used to turn this meter's usage into
+	// billable units for this subscription. See CreatePriceRequest.BucketSize.
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
+
 	// Tiers determines the pricing tiers for this line item
 	Tiers []CreatePriceTier `json:"tiers,omitempty"`
 
@@ -1450,9 +1564,9 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// At least one override field must be provided
-	if r.Quantity == nil && r.Amount == nil && r.BillingModel == "" && r.TierMode == "" && len(r.Tiers) == 0 && r.TransformQuantity == nil && r.PriceUnitAmount == nil && len(r.PriceUnitTiers) == 0 {
+	if r.Quantity == nil && r.Amount == nil && r.BillingModel == "" && r.TierMode == "" && r.BucketSize == "" && len(r.Tiers) == 0 && r.TransformQuantity == nil && r.PriceUnitAmount == nil && len(r.PriceUnitTiers) == 0 {
 		return ierr.NewError("at least one override field must be provided").
-			WithHint("Specify at least one of: quantity, amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, or price_unit_tiers for price override").
+			WithHint("Specify at least one of: quantity, amount, billing_model, tier_mode, bucket_size, tiers, transform_quantity, price_unit_amount, or price_unit_tiers for price override").
 			Mark(ierr.ErrValidation)
 	}
 

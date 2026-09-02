@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -151,11 +152,12 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			}
 
 			encryptedMetadata.Chargebee = &types.ChargebeeConnectionMetadata{
-				Site:            encryptedSecretData.Chargebee.Site, // Site name is not sensitive
-				APIKey:          encryptedAPIKey,
-				WebhookSecret:   encryptedWebhookSecret,
-				WebhookUsername: encryptedWebhookUsername,
-				WebhookPassword: encryptedWebhookPassword,
+				Site:             encryptedSecretData.Chargebee.Site, // Site name is not sensitive
+				APIKey:           encryptedAPIKey,
+				WebhookSecret:    encryptedWebhookSecret,
+				WebhookUsername:  encryptedWebhookUsername,
+				WebhookPassword:  encryptedWebhookPassword,
+				GatewayAccountID: encryptedSecretData.Chargebee.GatewayAccountID, // Not a secret
 			}
 		}
 
@@ -547,7 +549,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	if err := req.SyncConfig.Validate(); err != nil {
+	if err := req.SyncConfig.ValidateForProvider(req.ProviderType); err != nil {
 		return nil, err
 	}
 
@@ -566,6 +568,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	for _, existingConn := range existingConnections {
 		if existingConn.ProviderType == req.ProviderType &&
 			existingConn.ProviderType != types.SecretProviderS3 &&
+			existingConn.ProviderType != types.SecretProviderGCS &&
 			existingConn.Status == types.StatusPublished {
 			return nil, ierr.NewError("connection already exists").
 				WithHintf("A published connection for provider '%s' already exists in this environment", req.ProviderType).
@@ -702,38 +705,51 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
-	// Check if this is a Flexprice-managed S3 connection
-	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
-		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",
-			"tenant_id", conn.TenantID,
-			"connection_id", conn.ID)
-
-		// Validate that Flexprice config has required credentials
-		if s.Config.FlexpriceS3Exports.AWSAccessKeyID == "" || s.Config.FlexpriceS3Exports.AWSSecretAccessKey == "" {
-			return nil, ierr.NewError("flexprice S3 exports not configured").
-				WithHint("FlexpriceS3Exports credentials are missing from configuration").
-				Mark(ierr.ErrSystem)
+	// Chargebee: require webhook Basic Auth credentials at creation time so new
+	// connections cannot be created in the fail-open state the handler used to
+	// accept. Legacy connections predating this check can add credentials via
+	// UpdateConnection (webhook_username + webhook_password must be supplied
+	// together).
+	if conn.ProviderType == types.SecretProviderChargebee {
+		if conn.EncryptedSecretData.Chargebee == nil {
+			return nil, ierr.NewError("chargebee connection requires site, api_key, webhook_username and webhook_password").
+				WithHint("encrypted_secret_data.chargebee with site, api_key, webhook_username and webhook_password is required").
+				Mark(ierr.ErrValidation)
 		}
-
-		// Inject Flexprice credentials from config
-		conn.EncryptedSecretData.S3 = &types.S3ConnectionMetadata{
-			AWSAccessKeyID:     s.Config.FlexpriceS3Exports.AWSAccessKeyID,
-			AWSSecretAccessKey: s.Config.FlexpriceS3Exports.AWSSecretAccessKey,
-			AWSSessionToken:    s.Config.FlexpriceS3Exports.AWSSessionToken,
+		if err := conn.EncryptedSecretData.Chargebee.Validate(); err != nil {
+			return nil, err
 		}
+	}
 
-		// Set bucket and region from config
-		conn.SyncConfig.S3.Bucket = s.Config.FlexpriceS3Exports.Bucket
-		conn.SyncConfig.S3.Region = s.Config.FlexpriceS3Exports.Region
-		// Tenant + Environment isolation: tenant_id/environment_id
-		conn.SyncConfig.S3.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
+	// Whop: require the webhook signing secret at creation time. The Whop webhook
+	// route is unauthenticated and takes tenant and environment from the URL, so a
+	// connection without a secret leaves no way to tell a real delivery from a
+	// forged one — and those deliveries mark invoices paid. Legacy connections
+	// predating this check can add the secret via UpdateConnection.
+	if conn.ProviderType == types.SecretProviderWhop {
+		if conn.EncryptedSecretData.Whop == nil {
+			return nil, ierr.NewError("whop connection requires api_key, company_id and webhook_secret").
+				WithHint("encrypted_secret_data.whop with api_key, company_id and webhook_secret is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.Whop.Validate(); err != nil {
+			return nil, err
+		}
+	}
 
-		s.Logger.Info(ctx, "injected flexprice S3 credentials",
-			"bucket", conn.SyncConfig.S3.Bucket,
-			"region", conn.SyncConfig.S3.Region,
-			"key_prefix", conn.SyncConfig.S3.KeyPrefix,
-			"tenant_id", conn.TenantID,
-			"environment_id", conn.EnvironmentID)
+	// Zoho Books: validate the metadata on direct creation too. The OAuth flow
+	// gates accounts_server and api_domain behind a CSRF state token, but those
+	// same fields can be supplied straight to this endpoint, and they become the
+	// host for every later token refresh and API call. Validating here means
+	// both routes converge on the same checks.
+	if conn.ProviderType == types.SecretProviderZohoBooks && conn.EncryptedSecretData.ZohoBooks != nil {
+		if err := conn.EncryptedSecretData.ZohoBooks.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	// Encrypt metadata
@@ -749,6 +765,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 	conn.EncryptedSecretData = encryptedMetadata
+
+	// Validate reachability before persisting.
+	if err := s.validateStorageReachable(ctx, conn); err != nil {
+		return nil, err
+	}
 
 	// Create the connection
 	if err := s.ConnectionRepo.Create(ctx, conn); err != nil {
@@ -783,6 +804,46 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 
 	return dto.ToConnectionResponse(conn), nil
+}
+
+func (s *connectionService) validateStorageReachable(ctx context.Context, conn *connection.Connection) error {
+	if conn.ProviderType != types.SecretProviderS3 && conn.ProviderType != types.SecretProviderGCS {
+		return nil
+	}
+	if s.IntegrationFactory == nil {
+		return nil
+	}
+
+	var bucket string
+	if conn.SyncConfig != nil && conn.SyncConfig.Storage != nil {
+		bucket = conn.SyncConfig.Storage.Bucket
+	}
+
+	storageProvider, err := s.IntegrationFactory.GetStorageProviderForConnection(ctx, conn)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to build storage provider for connection validation",
+			"connection_id", conn.ID,
+			"provider_type", conn.ProviderType,
+			"error", err)
+		return ierr.WithError(err).
+			WithHintf("Could not validate the %s connection for bucket %q.", conn.ProviderType, bucket).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Bound a slow bucket probe.
+	verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	err = storageProvider.ValidateConnection(verifyCtx)
+	cancel()
+	if err != nil {
+		// Allow: export creds may be object-scoped.
+		s.Logger.Info(ctx, "storage connection reachability probe failed; allowing connection (bucket-level probe may lack permission an object-scoped export credential does not need)",
+			"connection_id", conn.ID,
+			"provider_type", conn.ProviderType,
+			"bucket", bucket,
+			"error", err)
+	}
+
+	return nil
 }
 
 func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.ConnectionResponse, error) {
@@ -821,17 +882,60 @@ func (s *connectionService) GetConnections(ctx context.Context, filter *types.Co
 	}, nil
 }
 
+// Forces bucket/prefix to prevent cross-tenant access.
+func (s *connectionService) applyManagedStorageConfig(ctx context.Context, conn *connection.Connection) error {
+	if conn.SyncConfig == nil || conn.SyncConfig.Storage == nil || !conn.SyncConfig.Storage.IsFlexpriceManaged {
+		return nil
+	}
+
+	keyPrefix := fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
+
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		if err := s.Config.FlexpriceS3Exports.Validate(); err != nil {
+			return err
+		}
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceS3Exports.Bucket
+		conn.SyncConfig.Storage.Region = s.Config.FlexpriceS3Exports.Region
+		conn.SyncConfig.Storage.KeyPrefix = keyPrefix
+		s.Logger.Info(ctx, "configured flexprice-managed S3 destination",
+			"connection_id", conn.ID,
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"region", conn.SyncConfig.Storage.Region,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"credential_source", s.Config.FlexpriceS3Exports.ResolvedCredentialSource(),
+			"tenant_id", conn.TenantID,
+			"environment_id", conn.EnvironmentID)
+	case types.SecretProviderGCS:
+		if err := s.Config.FlexpriceGCSExports.Validate(); err != nil {
+			return err
+		}
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceGCSExports.Bucket
+		// GCS has no region.
+		conn.SyncConfig.Storage.Region = ""
+		conn.SyncConfig.Storage.KeyPrefix = keyPrefix
+		s.Logger.Info(ctx, "configured flexprice-managed GCS destination",
+			"connection_id", conn.ID,
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"tenant_id", conn.TenantID,
+			"environment_id", conn.EnvironmentID)
+	}
+
+	return nil
+}
+
 func (s *connectionService) UpdateConnection(ctx context.Context, id string, req dto.UpdateConnectionRequest) (*dto.ConnectionResponse, error) {
 	s.Logger.Debug(ctx, "updating connection", "connection_id", id)
-
-	if err := req.SyncConfig.Validate(); err != nil {
-		return nil, err
-	}
 
 	// Get existing connection
 	conn, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get connection for update", "error", err, "connection_id", id)
+		return nil, err
+	}
+
+	if err := req.SyncConfig.ValidateForProvider(conn.ProviderType); err != nil {
 		return nil, err
 	}
 
@@ -847,6 +951,11 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	if req.SyncConfig != nil {
 		conn.SyncConfig = req.SyncConfig
+	}
+
+	// Re-apply to block cross-tenant redirect.
+	if err := s.applyManagedStorageConfig(ctx, conn); err != nil {
+		return nil, err
 	}
 
 	// Update encrypted_secret_data if provided (e.g., webhook_verifier_token)
@@ -917,8 +1026,47 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
 	}
 
+	// Chargebee: merge webhook_username and webhook_password so legacy
+	// connections predating the mandatory-creds-at-create check can migrate
+	// without delete-and-recreate. Both fields must be provided together — a
+	// mismatched pair would leave the connection in a broken state that the
+	// webhook handler rejects with 401.
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Chargebee != nil &&
+		(req.EncryptedSecretData.Chargebee.WebhookUsername != "" || req.EncryptedSecretData.Chargebee.WebhookPassword != "") {
+		if conn.ProviderType != types.SecretProviderChargebee {
+			return nil, ierr.NewError("chargebee webhook credential update is only valid for chargebee connections").
+				Mark(ierr.ErrValidation)
+		}
+		if req.EncryptedSecretData.Chargebee.WebhookUsername == "" || req.EncryptedSecretData.Chargebee.WebhookPassword == "" {
+			return nil, ierr.NewError("webhook_username and webhook_password must be provided together").
+				WithHint("Update both webhook_username and webhook_password in the same request").
+				Mark(ierr.ErrValidation)
+		}
+		if conn.EncryptedSecretData.Chargebee == nil {
+			return nil, ierr.NewError("Chargebee connection metadata is missing").
+				Mark(ierr.ErrValidation)
+		}
+		encUser, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Chargebee.WebhookUsername)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt Chargebee webhook username", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		encPass, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Chargebee.WebhookPassword)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt Chargebee webhook password", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.Chargebee.WebhookUsername = encUser
+		conn.EncryptedSecretData.Chargebee.WebhookPassword = encPass
+	}
+
 	conn.UpdatedAt = time.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
+
+	// Validate reachability before persisting.
+	if err := s.validateStorageReachable(ctx, conn); err != nil {
+		return nil, err
+	}
 
 	// Update the connection
 	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {

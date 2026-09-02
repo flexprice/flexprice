@@ -10,7 +10,8 @@ import (
 
 // MeterUsage represents a meter-level usage record in the meter_usage ClickHouse table.
 // It embeds Event for shared fields and adds meter-specific columns:
-// meter_id, qty_total, unique_hash. ingested_at is handled by ClickHouse DEFAULT.
+// meter_id, qty_total, unique_hash. ingested_at (on the embedded Event) is
+// producer-stamped once in UTC by the service layer before insert.
 type MeterUsage struct {
 	Event
 
@@ -37,16 +38,16 @@ type MeterUsageQueryParams struct {
 	ExternalCustomerID string
 	// ExternalCustomerIDs supports multi-customer queries (e.g. inherited subscriptions)
 	ExternalCustomerIDs []string
-	MeterID  string
-	MeterIDs []string
-	StartTime time.Time
-	EndTime   time.Time
+	MeterID             string
+	MeterIDs            []string
+	StartTime           time.Time
+	EndTime             time.Time
 	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
 	// OR'd half-open [Start, End) windows — one query for disjoint ranges.
 	TimeRanges      []TimeRange
 	AggregationType types.AggregationType
-	WindowSize          types.WindowSize
-	BillingAnchor       *time.Time
+	WindowSize      types.WindowSize
+	BillingAnchor   *time.Time
 	// Timezone is the customer's IANA timezone name. See UsageParams.Timezone.
 	Timezone string
 	// GroupBy is the group_by dimension list. Allowed entries:

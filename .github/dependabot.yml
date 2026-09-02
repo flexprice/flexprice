@@ -1,16 +1,48 @@
-# Keeps the integration journey runner's dependencies fresh — most
-# importantly the published Go SDK: each weekly bump PR triggers the
-# integration-journeys validate job, whose coverage summary lists any new SDK
-# operations that have no journey yet — the signal to add steps for them
-# (see integration-testing-suite/CLAUDE.md). Other deps (yaml, testify) are
-# included so security updates flow too; Dependabot forbids a second entry
-# for the same ecosystem+directory, so one unrestricted entry covers both.
+# Dependabot config.
+# Note: security ALERTS and automatic security-updates are already enabled via
+# repo settings. This file only adds scheduled weekly *version* bumps, grouped
+# into one PR per ecosystem to avoid PR floods.
 version: 2
 updates:
-  - package-ecosystem: gomod
-    directory: /integration-testing-suite/runner
+  - package-ecosystem: "gomod"
+    directory: "/"
     schedule:
-      interval: weekly
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      gomod:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      docker:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Integration journey runner (separate Go module) — most importantly the
+  # published Go SDK: each weekly bump PR triggers the integration-journeys
+  # validate job, whose coverage summary lists any new SDK operations that
+  # have no journey yet — the signal to add steps for them (see
+  # integration-testing-suite/CLAUDE.md).
+  - package-ecosystem: "gomod"
+    directory: "/integration-testing-suite/runner"
+    schedule:
+      interval: "weekly"
     labels: [integration-suite]
     commit-message:
       prefix: "chore(integration-suite)"

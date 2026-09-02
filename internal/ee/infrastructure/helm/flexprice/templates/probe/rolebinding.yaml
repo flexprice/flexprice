@@ -1,0 +1,16 @@
+{{- if and .Values.e2eprobe.enabled .Values.e2eprobe.bootstrap.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe-bootstrap
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "flexprice.fullname" . }}-e2eprobe-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "flexprice.fullname" . }}-e2eprobe
+    namespace: {{ .Release.Namespace }}
+{{- end }}

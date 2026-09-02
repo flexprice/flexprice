@@ -5,6 +5,16 @@ metadata:
   name: {{ include "flexprice.fullname" . }}-api
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+  {{- if and .Values.ingress.enabled (eq .Values.ingress.provider "gce") }}
+  annotations:
+    # GCE-native ingress needs a Network Endpoint Group (not kube-proxy
+    # iptables/IPVS) to route directly to pod IPs, and the BackendConfig
+    # link to pick up the health check / timeout / Cloud Armor settings
+    # from templates/ingress-gcp/backendconfig.yaml. Only rendered for
+    # ingress.provider=gce — the nginx/default path is untouched.
+    cloud.google.com/neg: '{"ingress": true}'
+    beta.cloud.google.com/backend-config: '{"default": "{{ include "flexprice.fullname" . }}-api-backend"}'
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
   ports:

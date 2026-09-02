@@ -3,8 +3,10 @@ package whop
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
@@ -81,6 +83,10 @@ func (r *fakeConnectionRepo) List(_ context.Context, _ *types.ConnectionFilter) 
 	return out, nil
 }
 
+func (r *fakeConnectionRepo) ListAllPublished(ctx context.Context) ([]*connection.Connection, error) {
+	return r.List(ctx, nil)
+}
+
 func (r *fakeConnectionRepo) Count(_ context.Context, _ *types.ConnectionFilter) (int, error) {
 	return len(r.byProvider), nil
 }
@@ -105,10 +111,22 @@ func mustTestLogger(t *testing.T) *logger.Logger {
 	return log
 }
 
+// newTestEncryptionKey generates a random key rather than using a literal, so this
+// file carries no credential-shaped constant for secret scanners to flag. Defined
+// locally instead of using testutil.NewEncryptionKey for the import-cycle reason
+// described on fakeConnectionRepo above.
+func newTestEncryptionKey(t *testing.T) string {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	return hex.EncodeToString(key)
+}
+
 func mustTestEncryptionService(t *testing.T) security.EncryptionService {
 	t.Helper()
 	cfg := &config.Configuration{
-		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-32-bytes!!!"},
+		Secrets: config.SecretsConfig{EncryptionKey: newTestEncryptionKey(t)},
 	}
 	svc, err := security.NewEncryptionService(cfg, mustTestLogger(t))
 	require.NoError(t, err)

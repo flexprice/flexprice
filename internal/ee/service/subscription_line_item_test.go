@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -149,6 +150,7 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
+		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,
@@ -878,6 +880,23 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_WithCr
 	// billing period so that FindPeriodForDate can locate it by walking forward.
 	// CurrentPeriodStart + 1 hour satisfies both constraints.
 	effectiveFrom := s.testData.subscription.CurrentPeriodStart.Add(time.Hour)
+
+	// The credit is capped at what this line item was actually billed for the
+	// period, so the period's charge has to exist for a credit to be possible.
+	lineItemID := s.testData.lineItem.ID
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:             s.testData.subscription.CustomerID,
+		SubscriptionID:         &s.testData.subscription.ID,
+		SubscriptionLineItemID: &lineItemID,
+		Amount:                 s.testData.price.Amount.Mul(s.testData.lineItem.Quantity),
+		Quantity:               s.testData.lineItem.Quantity,
+		Currency:               s.testData.subscription.Currency,
+		PeriodStart:            &s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:              &s.testData.subscription.CurrentPeriodEnd,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}))
 
 	req := dto.DeleteSubscriptionLineItemRequest{
 		EffectiveFrom:     &effectiveFrom,
@@ -1852,7 +1871,7 @@ func (s *SubscriptionLineItemServiceSuite) bucketReqForTests(subID string, start
 
 // TestAddSubscriptionLineItem_BucketValidationErrors covers the array-level
 // bucket validation failures in one table: overlapping buckets, grid
-// misalignment, a non-windowed meter, and conflict with a cumulative
+// misalignment, a missing bucket size, and conflict with a cumulative
 // subscription commitment.
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketValidationErrors() {
 	ctx := s.GetContext()
@@ -1913,7 +1932,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketVal
 		},
 		{
 			// Meter without BucketSize — ValidateWindowAlignment rejects it.
-			name: "non-windowed meter",
+			name: "no bucket size",
 			setup: func() (string, dto.CreateSubscriptionLineItemRequest) {
 				subID := s.testData.subscription.ID
 				m := s.createMeterForBucketTests("non_windowed_event", types.AggregationSum, "")
@@ -1929,7 +1948,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketVal
 				withTopCommitment(&req)
 				return subID, req
 			},
-			wantErr: "windowed meter",
+			wantErr: "bucket size",
 		},
 		{
 			// Per-bucket commitment conflicts with a cumulative subscription

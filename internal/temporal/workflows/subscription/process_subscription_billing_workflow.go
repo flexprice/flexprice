@@ -249,7 +249,23 @@ func ProcessSubscriptionBillingWorkflow(
 			UserID:         input.UserID,
 		}
 
-		err = workflow.ExecuteActivity(ctx, ActivityProcessPlanChange, planChangeInput).Get(ctx, &planChangeOutput)
+		// The workflow-wide policy is MaximumAttempts: 1, but this is the last chance
+		// to swap the plan before STEP 7's compute prices the renewal: the period has
+		// already rolled, so a subscription that fails here is not rescanned until the
+		// next boundary, by which point the schedule is stale. Retry this step only.
+		// A terminal failure is returned non-retryable by the activity, so it stops
+		// immediately rather than burning attempts.
+		planChangeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 10 * time.Minute,
+			RetryPolicy: &temporal.RetryPolicy{
+				InitialInterval:    5 * time.Second,
+				BackoffCoefficient: 2.0,
+				MaximumInterval:    time.Minute,
+				MaximumAttempts:    3,
+			},
+		})
+
+		err = workflow.ExecuteActivity(planChangeCtx, ActivityProcessPlanChange, planChangeInput).Get(planChangeCtx, &planChangeOutput)
 		if err != nil {
 			// Log error but don't fail the workflow - plan changes can be retried
 			logger.Warn("Failed to process pending plan changes, but continuing",

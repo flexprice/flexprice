@@ -81,10 +81,6 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 	return nil, nil
 }
 
-// buildEntitlementGrantAlertPayload resolves a grant-exhaustion alert into its
-// webhook payload: subscription, customer, entitlement (the EC) and the grant,
-// each flat — nested expansions are stripped. entity_id is the grant;
-// parent_entity_id is the subscription.
 func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent) (json.RawMessage, error) {
 	if internalEvent.ParentEntityID == "" {
 		return nil, ierr.NewError("entitlement grant alert missing subscription id").
@@ -97,36 +93,19 @@ func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Cont
 		return nil, err
 	}
 
-	sub, err := b.services.SubscriptionService.GetSubscriptionV2(ctx, internalEvent.ParentEntityID, types.Expand{})
-	if err != nil {
-		return nil, err
-	}
-
-	customer, err := b.services.CustomerService.GetCustomer(ctx, grant.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	ec, err := b.services.EntitlementService.GetEntitlement(ctx, grant.EntitlementConfigID)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := &webhookDto.EntitlementGrantAlertEvent{
-		Subscription:     sub,
-		Customer:         customer,
-		Entitlement:      ec,
-		EntitlementGrant: grant,
-		AlertType:        internalEvent.AlertType,
-		AlertStatus:      internalEvent.AlertStatus,
-		UsageRatio:       internalEvent.AlertInfo.ValueAtTime.String(),
-		TriggeredAt:      internalEvent.AlertInfo.Timestamp,
-	}
+	payload := webhookDto.NewEntitlementGrantAlertEvent(
+		internalEvent.ParentEntityID,
+		grant.CustomerID,
+		grant.EntitlementConfigID,
+		grant.ID,
+		internalEvent.AlertType,
+		internalEvent.AlertStatus,
+		internalEvent.AlertInfo.ValueAtTime.String(),
+		internalEvent.AlertInfo.Timestamp,
+	)
 	return json.Marshal(payload)
 }
 
-// buildSpendAlertPayload resolves an InternalAlertEvent carrying a subscription/line-item/group
-// spend alert into its final webhook payload.
 func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent) (json.RawMessage, error) {
 	// A line-item or group alert's entity_id is the line item/group itself; the subscription it
 	// rolls up to is parent_entity_id. A subscription-level alert has no parent, so entity_id is
@@ -140,41 +119,20 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 	if err != nil {
 		return nil, err
 	}
-	// Same bloat workaround SubscriptionPayloadBuilder already applies to this same type.
-	sub.Plan = nil
 
-	payload := &webhookDto.SpendAlertEvent{
-		Subscription:  sub,
-		AlertType:     internalEvent.AlertType,
-		AlertStatus:   internalEvent.AlertStatus,
-		AlertSettings: internalEvent.AlertInfo.AlertSettings,
-		CurrentSpend:  internalEvent.AlertInfo.ValueAtTime.String(),
-		TriggeredAt:   internalEvent.AlertInfo.Timestamp,
-	}
-
+	var lineItemID, groupID string
 	switch internalEvent.EntityType {
 	case types.AlertEntityTypeSubscriptionLineItem:
-		lineItems, err := b.services.SubscriptionService.ListSubscriptionLineItems(ctx, &types.SubscriptionLineItemFilter{
-			QueryFilter:             types.NewNoLimitQueryFilter(),
-			SubscriptionLineItemIDs: []string{internalEvent.EntityID},
-		})
-		if err != nil {
-			return nil, err
-		}
-		if len(lineItems.Items) == 0 {
-			return nil, ierr.NewError("subscription line item not found").
-				WithHint("Please provide a valid subscription line item").
-				WithReportableDetails(map[string]any{"subscription_line_item_id": internalEvent.EntityID}).
-				Mark(ierr.ErrNotFound)
-		}
-		payload.SubscriptionLineItem = lineItems.Items[0].SubscriptionLineItem
+		lineItemID = internalEvent.EntityID
 	case types.AlertEntityTypeGroup:
-		grp, err := b.services.GroupService.GetGroup(ctx, internalEvent.EntityID)
-		if err != nil {
-			return nil, err
-		}
-		payload.Group = grp
+		groupID = internalEvent.EntityID
 	}
+
+	payload := webhookDto.NewSpendAlertEvent(
+		sub, lineItemID, groupID,
+		internalEvent.AlertType, internalEvent.AlertStatus,
+		internalEvent.AlertInfo.ValueAtTime.String(), internalEvent.AlertInfo.AlertSettings, internalEvent.AlertInfo.Timestamp,
+	)
 
 	return json.Marshal(payload)
 }

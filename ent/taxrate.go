@@ -47,8 +47,6 @@ type TaxRate struct {
 	Scope string `json:"scope,omitempty"`
 	// PercentageValue holds the value of the "percentage_value" field.
 	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty"`
-	// FixedValue holds the value of the "fixed_value" field.
-	FixedValue *decimal.Decimal `json:"fixed_value,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]string `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -59,7 +57,7 @@ func (*TaxRate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case taxrate.FieldPercentageValue, taxrate.FieldFixedValue:
+		case taxrate.FieldPercentageValue:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case taxrate.FieldMetadata:
 			values[i] = new([]byte)
@@ -173,13 +171,6 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 				tr.PercentageValue = new(decimal.Decimal)
 				*tr.PercentageValue = *value.S.(*decimal.Decimal)
 			}
-		case taxrate.FieldFixedValue:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field fixed_value", values[i])
-			} else if value.Valid {
-				tr.FixedValue = new(decimal.Decimal)
-				*tr.FixedValue = *value.S.(*decimal.Decimal)
-			}
 		case taxrate.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -265,11 +256,6 @@ func (tr *TaxRate) String() string {
 	builder.WriteString(", ")
 	if v := tr.PercentageValue; v != nil {
 		builder.WriteString("percentage_value=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := tr.FixedValue; v != nil {
-		builder.WriteString("fixed_value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

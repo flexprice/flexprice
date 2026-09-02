@@ -125,13 +125,13 @@ func (CheckoutSession) Indexes() []ent.Index {
 			Unique().
 			StorageKey(Idx_checkout_session_idempotency_key_active).
 			Annotations(entsql.IndexWhere(
-				"idempotency_key IS NOT NULL AND checkout_status IN ('initiated', 'pending')")),
+				"((idempotency_key IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))")),
 		// Customer history lookup
 		index.Fields("tenant_id", "environment_id", "customer_id").
 			StorageKey("idx_checkout_session_customer"),
 		// Expiry sweep (Temporal timer is primary; this is a backstop)
 		index.Fields("expires_at").
 			StorageKey("idx_checkout_session_expiry").
-			Annotations(entsql.IndexWhere("checkout_status IN ('initiated', 'pending')")),
+			Annotations(entsql.IndexWhere("((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text]))")),
 	}
 }

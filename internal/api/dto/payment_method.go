@@ -2,6 +2,7 @@ package dto
 
 import (
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -20,6 +21,7 @@ type CreateStripePaymentLinkRequest struct {
 	Metadata               types.Metadata  `json:"metadata,omitempty"`
 	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default" default:"false"`
 	PaymentID              string          `json:"payment_id" binding:"required"`
+	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled" default:"false"`
 }
 
 // StripePaymentLinkResponse represents a response from creating a Stripe payment link
@@ -329,4 +331,65 @@ func isValidURL(urlStr string) bool {
 	}
 
 	return true
+}
+
+type SetupActionType string
+
+const (
+	SetupActionRedirect SetupActionType = "redirect"
+	SetupActionNone     SetupActionType = "none"
+)
+
+type SetupAction struct {
+	Type      SetupActionType `json:"type"`
+	URL       string          `json:"url,omitempty"`
+	ExpiresAt *time.Time      `json:"expires_at,omitempty"`
+}
+
+// Returns an action, not a method: nothing is vaulted yet when this is written.
+// Carries no provider vocabulary (no hosted_page id, no page type) so a Stripe or
+// server-to-server flow can use the same shape.
+type AddPaymentMethodResponse struct {
+	Provider types.PaymentGatewayType `json:"provider"`
+	Action   SetupAction              `json:"action"`
+}
+
+type ListSavedPaymentMethodsRequest struct {
+	Providers []types.PaymentGatewayType `form:"providers" json:"providers,omitempty"`
+}
+
+type SavedPaymentMethod struct {
+	ID       string                    `json:"id"`
+	Provider types.PaymentGatewayType  `json:"provider"`
+	Type     types.PaymentMethodType   `json:"type"`
+	Status   types.PaymentMethodStatus `json:"status"`
+	Card     *SavedCardDetails         `json:"card,omitempty"`
+	// Which method to use when several are saved at this provider.
+	// Scoped to the provider: two providers means two defaults.
+	IsDefault bool `json:"is_default"`
+	// Capability, not permission: could this be charged with nobody present.
+	// True for any active Chargebee or Stripe card (both vault off-session by
+	// construction); false for a Razorpay token without a mandate.
+	CanAutoCharge bool `json:"can_auto_charge"`
+}
+
+type SavedCardDetails struct {
+	Brand    string `json:"brand,omitempty"`
+	Last4    string `json:"last4,omitempty"`
+	ExpMonth int    `json:"exp_month,omitempty"`
+	ExpYear  int    `json:"exp_year,omitempty"`
+}
+
+type ProviderSavedPaymentMethods struct {
+	Provider types.PaymentGatewayType `json:"provider"`
+	Items    []*SavedPaymentMethod    `json:"items"`
+	Error *ProviderError `json:"error,omitempty"`
+}
+
+type ProviderError struct {
+	Message string `json:"message"`
+}
+
+type SavedPaymentMethodsResponse struct {
+	Providers []*ProviderSavedPaymentMethods `json:"providers"`
 }

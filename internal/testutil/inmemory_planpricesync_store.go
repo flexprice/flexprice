@@ -127,6 +127,31 @@ func (r *InMemoryPlanPriceSyncStore) CurrentPlanSequence(
 	return maxSeq, nil
 }
 
+func (r *InMemoryPlanPriceSyncStore) ReanchorSubSyncedSequence(
+	ctx context.Context,
+	subscriptionID string,
+	seq int64,
+) error {
+	if r.subStore == nil {
+		return nil
+	}
+
+	r.subStore.mu.Lock()
+	defer r.subStore.mu.Unlock()
+
+	sub, ok := r.subStore.items[subscriptionID]
+	if !ok || sub == nil || !scopedByCtx(ctx, sub.TenantID, sub.EnvironmentID) {
+		return nil
+	}
+
+	sub.SyncedPriceSequence = seq
+	sub.UpdatedAt = time.Now().UTC()
+	if uid := types.GetUserID(ctx); uid != "" {
+		sub.UpdatedBy = uid
+	}
+	return nil
+}
+
 // StampSubsAsSynced sets synced_price_sequence on the given subs.
 // Forward-only: never lowers an existing higher value.
 func (r *InMemoryPlanPriceSyncStore) StampSubsAsSynced(
@@ -160,6 +185,19 @@ func (r *InMemoryPlanPriceSyncStore) StampSubsAsSynced(
 		updated++
 	}
 	return updated, nil
+}
+
+// CountUnsyncedSubscriptions returns how many of the plan's candidate subs are
+// stale relative to targetSeq. Mirrors staleSubsForPlan with no limit.
+func (r *InMemoryPlanPriceSyncStore) CountUnsyncedSubscriptions(
+	ctx context.Context,
+	planID string,
+	targetSeq int64,
+) (int64, error) {
+	if planID == "" {
+		return 0, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
+	}
+	return int64(len(r.staleSubsForPlan(ctx, planID, targetSeq, 0))), nil
 }
 
 // ListPlanLineItemsToCreateV2 returns missing (sub, price) pairs and the full

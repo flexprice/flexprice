@@ -102,6 +102,10 @@ type WalletService interface {
 	// CompletePurchasedCreditTransaction completes a pending wallet transaction when payment succeeds
 	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error
 
+	// FailPurchasedCreditTransaction marks a pending purchased-credit transaction failed
+	// when its payment never settles. Balance-neutral: the pending path never credited.
+	FailPurchasedCreditTransaction(ctx context.Context, walletTransactionID, reason string) error
+
 	// TODO: Cleanup this method, moved to `EvaluateAlertsForWallet`
 	CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error
 
@@ -503,7 +507,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 	}
 
 	// Fetch users in bulk
-	userService := NewUserService(s.UserRepo, s.TenantRepo, nil, nil, nil, nil, nil, nil, s.Logger)
+	userService := NewUserService(s.UserRepo, s.TenantRepo, s.AuthRepo, s.SecretRepo, s.EnvironmentRepo, s.DB, s.Config, nil, nil, s.Logger)
 	userFilter := &types.UserFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		UserIDs:     userIDs,
@@ -588,6 +592,27 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			Mark(ierr.ErrValidation)
 	}
 
+	if req.TransactionReason == types.TransactionReasonFreeCredit {
+		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+		topupCfg, err := GetSetting[types.WalletTopupConfig](settingsSvc, ctx, types.SettingKeyWalletTopupConfig)
+		if err != nil {
+			return nil, err
+		}
+		if topupCfg.FreeCreditLimitPerTransaction.IsPositive() {
+			// currency amount = credits * topup_conversion_rate
+			txAmountInCurrency := req.CreditsToAdd.Mul(w.TopupConversionRate)
+			if txAmountInCurrency.GreaterThan(topupCfg.FreeCreditLimitPerTransaction) {
+				return nil, ierr.NewError("free credit amount exceeds the per-transaction limit").
+					WithHint("Reduce the credit amount to stay within the configured limit").
+					WithReportableDetails(map[string]interface{}{
+						"requested_amount": txAmountInCurrency,
+						"limit":            topupCfg.FreeCreditLimitPerTransaction,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	// Resolve bonus credits from the tenant's slab config when the caller didn't pass an
 	// explicit override. Only "purchased" (paid) top-up reasons trigger slab resolution;
 	// req.BonusCreditsToAdd is mutated in place so every downstream step just reads it.
@@ -610,17 +635,9 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		}
 	}
 
-	// Generate idempotency key
-	var idempotencyKey string
-	if lo.FromPtr(req.IdempotencyKey) != "" {
-		idempotencyKey = lo.FromPtr(req.IdempotencyKey)
-	} else {
-		idempotencyKey = s.idempGen.GenerateKey(idempotency.ScopeWalletTopUp, map[string]interface{}{
-			"wallet_id":          walletID,
-			"credits_to_add":     req.CreditsToAdd,
-			"transaction_reason": req.TransactionReason,
-			"timestamp":          time.Now().UTC().Format(time.RFC3339),
-		})
+	idempotencyKey := lo.FromPtr(req.IdempotencyKey)
+	if idempotencyKey == "" {
+		idempotencyKey = s.derivedTopupIdempotencyKey(walletID, req, time.Now().UTC())
 	}
 
 	// Handle purchased credits with invoice (pay-later / auto-complete, or pay-first checkout).
@@ -756,6 +773,15 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	}, nil
 }
 
+func (s *walletService) derivedTopupIdempotencyKey(walletID string, req *dto.TopUpWalletRequest, now time.Time) string {
+	return s.idempGen.GenerateKey(idempotency.ScopeWalletTopUp, map[string]interface{}{
+		"wallet_id":          walletID,
+		"credits_to_add":     req.CreditsToAdd,
+		"transaction_reason": req.TransactionReason,
+		"timestamp":          now.Truncate(time.Minute).Format(time.RFC3339),
+	})
+}
+
 func (s *walletService) getAnyPendingCheckoutSession(ctx context.Context, customerID string, walletID string) ([]*checkout.CheckoutSession, error) {
 	pendingFilter := &types.CheckoutSessionFilter{
 		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
@@ -808,12 +834,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		ServiceParams: s.ServiceParams,
 	}
 
-	// Retrieve wallet and customer details
-	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
-	if err != nil {
-		return "", "", err
-	}
-
 	// Get invoice config setting to check auto_complete flag
 	invoiceConfig, err := GetSetting[types.InvoiceConfig](
 		settingsService,
@@ -825,8 +845,10 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	}
 
 	// Check if auto-complete is enabled. Pay-first checkout always forces pending
-	// so credits are not applied before payment succeeds.
-	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction && !isPayFirst
+	// so credits are not applied before payment succeeds, and so does a top-up an
+	// end customer drove themselves.
+	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction &&
+		!isPayFirst && !req.TriggeringActor.IsEndCustomer()
 
 	s.Logger.Debug(ctx, "processing purchased credit transaction",
 		"wallet_id", walletID,
@@ -838,6 +860,26 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	var walletTransactionID string
 	var invoiceID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Only take the wallet advisory lock when this tx actually mutates the wallet balance (auto-complete branch).
+		// In the pending path we only record a tx snapshot; the balance write is deferred to completePurchasedCreditTransaction
+		// which takes its own lock and overwrites CreditBalanceBefore/After at that
+		// point, so this record's initial snapshot need not be lock-consistent.
+		// Keeping the lock out of the pending path avoids holding it across tax
+		// lookup, invoice creation, and any inline external sync.
+		if autoCompleteEnabled {
+			if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: walletID}); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to acquire wallet lock").
+					Mark(ierr.ErrInternal)
+			}
+		}
+
+		// Retrieve wallet inside the tx (under the lock when auto-complete).
+		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+		if err != nil {
+			return err
+		}
+
 		// Step 1: Create wallet transaction (pending or completed based on setting)
 		txStatus := types.TransactionStatusPending
 		balanceAfter := w.CreditBalance
@@ -1152,7 +1194,8 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 
 // completePurchasedCreditTransaction performs the actual completion logic
 func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, walletTransactionID string) error {
-	// Get the pending transaction
+	// Fast-path pre-check to skip the lock for terminal / wrong-type txns; the
+	// authoritative status check runs again under the lock below.
 	tx, err := s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
 	if err != nil {
 		return ierr.WithError(err).
@@ -1160,19 +1203,17 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Validate transaction state
+	if tx.TxStatus == types.TransactionStatusCompleted {
+		s.Logger.Debug(ctx, "wallet transaction already completed",
+			"wallet_transaction_id", walletTransactionID,
+		)
+		return nil
+	}
 	if tx.TxStatus != types.TransactionStatusPending {
 		s.Logger.Debug(ctx, "wallet transaction is not pending",
 			"wallet_transaction_id", walletTransactionID,
 			"current_status", tx.TxStatus,
 		)
-		// If already completed (e.g., via auto-complete setting), this is idempotent - return success
-		if tx.TxStatus == types.TransactionStatusCompleted {
-			s.Logger.Debug(ctx, "wallet transaction already completed",
-				"wallet_transaction_id", walletTransactionID,
-			)
-			return nil
-		}
 		return ierr.NewError("wallet transaction is not in pending state").
 			WithHint("Only pending transactions can be completed").
 			WithReportableDetails(map[string]interface{}{
@@ -1192,16 +1233,54 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Get wallet to check current balance
-	w, err := s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get wallet").
-			Mark(ierr.ErrNotFound)
-	}
+	var w *wallet.Wallet
+	// alreadyCompleted flips true if a concurrent completer finished this tx while
+	// we were waiting for the advisory lock — suppresses the post-commit webhook
+	// publish and alert side effects to avoid double firing.
+	alreadyCompleted := false
 
 	// Execute completion in a transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Serialize with processWalletOperation and other completion paths so a
+		// concurrent debit/credit cannot overwrite the absolute-value balance write
+		// below with a stale-snapshot value. Released on tx commit/rollback.
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: tx.WalletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Re-read tx under the lock so a concurrent completer that raced us to the
+		// lock is observed as terminal instead of double-applying its credit.
+		var err error
+		tx, err = s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet transaction").
+				Mark(ierr.ErrNotFound)
+		}
+		if tx.TxStatus == types.TransactionStatusCompleted {
+			alreadyCompleted = true
+			return nil
+		}
+		if tx.TxStatus != types.TransactionStatusPending {
+			return ierr.NewError("wallet transaction is not in pending state").
+				WithHint("Only pending transactions can be completed").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_transaction_id": walletTransactionID,
+					"current_status":        tx.TxStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Re-read wallet under the lock — authoritative balance.
+		w, err = s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet").
+				Mark(ierr.ErrNotFound)
+		}
+
 		// Calculate new balances
 		finalBalance := w.Balance.Add(tx.Amount)
 		newCreditBalance := w.CreditBalance.Add(tx.CreditAmount)
@@ -1286,6 +1365,12 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 		return err
 	}
 
+	// A concurrent completer finished this tx first — the winner already published
+	// the webhook and alert events, so we return without repeating them.
+	if alreadyCompleted {
+		return nil
+	}
+
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionUpdated, tx.ID)
 
@@ -1304,6 +1389,108 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 	// This is async (Kafka) and non-fatal.
 	s.PublishWalletBalanceAlertEvent(ctx, tx.CustomerID, true, tx.WalletID)
 
+	return nil
+}
+
+// FailPurchasedCreditTransaction marks a pending purchased-credit transaction failed.
+//
+// Balance-neutral by construction: a pending purchased-credit transaction never
+// moved the balance, so there is nothing to reverse. Runs under the same wallet
+// lock as completion so a webhook settling the payment and a cleanup expiring the
+// session cannot both win.
+func (s *walletService) FailPurchasedCreditTransaction(ctx context.Context, walletTransactionID, reason string) error {
+	if walletTransactionID == "" {
+		return ierr.NewError("wallet transaction ID is required").
+			WithHint("Wallet transaction ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	var failed bool
+	var walletID string
+
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		tx, err := s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet transaction").
+				Mark(ierr.ErrNotFound)
+		}
+		walletID = tx.WalletID
+
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: tx.WalletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Re-read under the lock: a concurrent completer may have settled this
+		// transaction while we waited.
+		tx, err = s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet transaction").
+				Mark(ierr.ErrNotFound)
+		}
+
+		if tx.TxStatus == types.TransactionStatusFailed {
+			return nil
+		}
+		if tx.TxStatus != types.TransactionStatusPending {
+			return ierr.NewError("wallet transaction is not in pending state").
+				WithHint("Only pending transactions can be failed").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_transaction_id": walletTransactionID,
+					"current_status":        tx.TxStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		markFailed := func(t *wallet.Transaction) error {
+			t.TxStatus = types.TransactionStatusFailed
+			if reason != "" {
+				if t.Metadata == nil {
+					t.Metadata = types.Metadata{}
+				}
+				t.Metadata[types.WalletMetadataKeyFailureReason] = reason
+			}
+			t.UpdatedAt = time.Now().UTC()
+			return s.WalletRepo.UpdateTransaction(ctx, t)
+		}
+
+		if err := markFailed(tx); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to update wallet transaction").
+				Mark(ierr.ErrInternal)
+		}
+
+		// A bonus grant earned from this purchase is pending on the same payment;
+		// leaving it behind would strand a credit that is never granted or failed.
+		bonusTx, err := s.WalletRepo.GetPendingTransactionByParent(ctx, tx.ID)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		if bonusTx != nil {
+			if err := markFailed(bonusTx); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to update bonus wallet transaction").
+					Mark(ierr.ErrInternal)
+			}
+		}
+
+		failed = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if failed {
+		s.Logger.Info(ctx, "failed purchased credit transaction",
+			"wallet_transaction_id", walletTransactionID,
+			"wallet_id", walletID,
+			"reason", reason,
+		)
+	}
 	return nil
 }
 
@@ -3779,6 +3966,51 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	return len(invoices) > 0, nil
 }
 
+// An unpaid invoice is its own brake on repeat top-ups; a charge that settles in
+// seconds is not, so an unattended charge needs a floor between attempts when the
+// wallet configures no cooloff of its own.
+func withinDefaultAutoChargeCooldown(w *wallet.Wallet, last *wallet.Transaction, now time.Time) bool {
+	if w.AutoTopup == nil || w.AutoTopup.Cooldown.IsSet() || last == nil {
+		return false
+	}
+
+	return now.Before(last.CreatedAt.Add(defaultAutoChargeCooldown))
+}
+
+// autoTopupCheckout returns the params that charge a saved method off-session, or
+// nil to raise an invoice instead. Unattended by definition, so CustomerPresent is
+// false: it is what declares the charge merchant-initiated at the card network.
+func (s *walletService) autoTopupCheckout(ctx context.Context, w *wallet.Wallet, isInvoiced bool) *dto.CheckoutParams {
+	if !isInvoiced {
+		return nil
+	}
+
+	gateway, err := fetchGatewayWithAutoChargeSupport(ctx, s.ServiceParams, NewCustomerService(s.ServiceParams), w.CustomerID)
+	if err != nil {
+		s.Logger.Error(ctx, "could not resolve an auto-chargeable method, falling back to an invoice",
+			"error", err, "wallet_id", w.ID, "customer_id", w.CustomerID)
+		return nil
+	}
+	if gateway == "" {
+		return nil
+	}
+
+	provider, ok := types.CheckoutProviderFromGateway(gateway)
+	if !ok {
+		return nil
+	}
+
+	return &dto.CheckoutParams{
+		PaymentParams: dto.PaymentParams{
+			PaymentProvider: provider,
+			PaymentProviderConfig: &types.CheckoutPaymentProviderConfig{
+				CollectionMethod: types.CollectionMethodChargeAutomatically,
+				CustomerPresent:  false,
+			},
+		},
+	}
+}
+
 func (s *walletService) isWithinAutoTopupCooldown(w *wallet.Wallet, last *wallet.Transaction) (bool, error) {
 	if w.AutoTopup == nil || !w.AutoTopup.Cooldown.IsSet() || last == nil {
 		return false, nil
@@ -3881,7 +4113,8 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 		if idempotencyKey == "" {
 			idempotencyKey = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)
 		}
-		_, err = s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+
+		topupReq := &dto.TopUpWalletRequest{
 			CreditsToAdd:      *w.AutoTopup.Amount,
 			Amount:            *w.AutoTopup.Amount,
 			TransactionReason: transactionReason,
@@ -3889,7 +4122,30 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			IdempotencyKey:    lo.ToPtr(idempotencyKey),
 			Description:       "Auto top-up triggered for low ongoing balance",
 			Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
-		})
+		}
+
+		checkout := s.autoTopupCheckout(ctx, w, isInvoiced)
+		if checkout != nil && withinDefaultAutoChargeCooldown(w, lastAutoTopup, time.Now().UTC()) {
+			s.Logger.Info(ctx, "auto top-up charge within default cooloff, skipping",
+				"wallet_id", w.ID,
+				"last_auto_topup_at", lastAutoTopup.CreatedAt,
+			)
+			return nil
+		}
+		topupReq.Checkout = checkout
+
+		_, err = s.TopUpWallet(ctx, w.ID, topupReq)
+		if err != nil && checkout != nil {
+			s.Logger.Error(ctx, "auto top-up charge failed, falling back to an invoice",
+				"error", err,
+				"wallet_id", w.ID,
+				"payment_provider", checkout.PaymentProvider,
+			)
+
+			topupReq.Checkout = nil
+			topupReq.IdempotencyKey = lo.ToPtr(idempotencyKey + "-invoice")
+			_, err = s.TopUpWallet(ctx, w.ID, topupReq)
+		}
 		if err != nil {
 			s.Logger.Error(ctx, "failed to top up wallet for auto top-up",
 				"error", err,
@@ -3899,11 +4155,12 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			)
 			return err
 		}
-		s.Logger.Debug(ctx, "auto top-up triggered",
+		s.Logger.Info(ctx, "auto top-up triggered",
 			"wallet_id", w.ID,
 			"auto_topup_threshold", *w.AutoTopup.Threshold,
 			"auto_topup_amount", *w.AutoTopup.Amount,
 			"invoiced", isInvoiced,
+			"charged", checkout != nil,
 		)
 	}
 

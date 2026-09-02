@@ -33,11 +33,25 @@ func (a *InvoiceSyncActivities) SyncInvoiceToTabs(ctx context.Context, input mod
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError("Tabs connection not configured", "ConnectionNotFound", err)
 		}
+		a.logger.Error(ctx, "SyncInvoiceToTabs activity failed to get Tabs integration",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = tabsIntegration.InvoiceSvc.SyncInvoiceToTabs(ctx, tabs.TabsInvoiceSyncRequest{
+	if _, err := tabsIntegration.InvoiceSvc.SyncInvoiceToTabs(ctx, tabs.TabsInvoiceSyncRequest{
 		InvoiceID: input.InvoiceID,
-	})
-	return err
+	}); err != nil {
+		a.logger.Error(ctx, "SyncInvoiceToTabs activity failed",
+			"error", err,
+			"invoice_id", input.InvoiceID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

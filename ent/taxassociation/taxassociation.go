@@ -45,6 +45,8 @@ const (
 	FieldStartDate = "start_date"
 	// FieldEndDate holds the string denoting the end_date field in the database.
 	FieldEndDate = "end_date"
+	// FieldTaxBehavior holds the string denoting the tax_behavior field in the database.
+	FieldTaxBehavior = "tax_behavior"
 	// Table holds the table name of the taxassociation in the database.
 	Table = "tax_associations"
 )
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldMetadata,
 	FieldStartDate,
 	FieldEndDate,
+	FieldTaxBehavior,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -188,4 +191,9 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
+}
+
+// ByTaxBehavior orders the results by the tax_behavior field.
+func ByTaxBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxBehavior, opts...).ToFunc()
 }

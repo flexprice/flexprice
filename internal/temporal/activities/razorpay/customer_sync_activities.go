@@ -34,9 +34,23 @@ func (a *CustomerSyncActivities) SyncCustomerToRazorpay(ctx context.Context, inp
 
 	razorpayIntegration, err := a.integrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToRazorpay activity failed to get Razorpay integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = razorpayIntegration.CustomerSvc.EnsureCustomerSyncedToRazorpay(ctx, input.CustomerID, a.customerService)
-	return err
+	if _, err := razorpayIntegration.CustomerSvc.EnsureCustomerSyncedToRazorpay(ctx, input.CustomerID, a.customerService); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToRazorpay activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

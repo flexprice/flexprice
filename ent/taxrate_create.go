@@ -177,20 +177,6 @@ func (trc *TaxRateCreate) SetNillablePercentageValue(d *decimal.Decimal) *TaxRat
 	return trc
 }
 
-// SetFixedValue sets the "fixed_value" field.
-func (trc *TaxRateCreate) SetFixedValue(d decimal.Decimal) *TaxRateCreate {
-	trc.mutation.SetFixedValue(d)
-	return trc
-}
-
-// SetNillableFixedValue sets the "fixed_value" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateCreate {
-	if d != nil {
-		trc.SetFixedValue(*d)
-	}
-	return trc
-}
-
 // SetMetadata sets the "metadata" field.
 func (trc *TaxRateCreate) SetMetadata(m map[string]string) *TaxRateCreate {
 	trc.mutation.SetMetadata(m)
@@ -261,10 +247,6 @@ func (trc *TaxRateCreate) defaults() {
 	if _, ok := trc.mutation.PercentageValue(); !ok {
 		v := taxrate.DefaultPercentageValue
 		trc.mutation.SetPercentageValue(v)
-	}
-	if _, ok := trc.mutation.FixedValue(); !ok {
-		v := taxrate.DefaultFixedValue
-		trc.mutation.SetFixedValue(v)
 	}
 }
 
@@ -417,10 +399,6 @@ func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 	if value, ok := trc.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
 		_node.PercentageValue = &value
-	}
-	if value, ok := trc.mutation.FixedValue(); ok {
-		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
-		_node.FixedValue = &value
 	}
 	if value, ok := trc.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)

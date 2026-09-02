@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -152,6 +153,12 @@ func AddressCountry(v string) predicate.Customer {
 // Timezone applies equality check predicate on the "timezone" field. It's identical to TimezoneEQ.
 func Timezone(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldTimezone, v))
+}
+
+// TaxTreatment applies equality check predicate on the "tax_treatment" field. It's identical to TaxTreatmentEQ.
+func TaxTreatment(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldEQ(FieldTaxTreatment, vc))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1402,6 +1409,90 @@ func TimezoneEqualFold(v string) predicate.Customer {
 // TimezoneContainsFold applies the ContainsFold predicate on the "timezone" field.
 func TimezoneContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldTimezone, v))
+}
+
+// TaxTreatmentEQ applies the EQ predicate on the "tax_treatment" field.
+func TaxTreatmentEQ(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldEQ(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentNEQ applies the NEQ predicate on the "tax_treatment" field.
+func TaxTreatmentNEQ(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldNEQ(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentIn applies the In predicate on the "tax_treatment" field.
+func TaxTreatmentIn(vs ...types.TaxTreatment) predicate.Customer {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Customer(sql.FieldIn(FieldTaxTreatment, v...))
+}
+
+// TaxTreatmentNotIn applies the NotIn predicate on the "tax_treatment" field.
+func TaxTreatmentNotIn(vs ...types.TaxTreatment) predicate.Customer {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Customer(sql.FieldNotIn(FieldTaxTreatment, v...))
+}
+
+// TaxTreatmentGT applies the GT predicate on the "tax_treatment" field.
+func TaxTreatmentGT(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldGT(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentGTE applies the GTE predicate on the "tax_treatment" field.
+func TaxTreatmentGTE(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldGTE(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentLT applies the LT predicate on the "tax_treatment" field.
+func TaxTreatmentLT(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldLT(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentLTE applies the LTE predicate on the "tax_treatment" field.
+func TaxTreatmentLTE(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldLTE(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentContains applies the Contains predicate on the "tax_treatment" field.
+func TaxTreatmentContains(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldContains(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentHasPrefix applies the HasPrefix predicate on the "tax_treatment" field.
+func TaxTreatmentHasPrefix(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldHasPrefix(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentHasSuffix applies the HasSuffix predicate on the "tax_treatment" field.
+func TaxTreatmentHasSuffix(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldHasSuffix(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentEqualFold applies the EqualFold predicate on the "tax_treatment" field.
+func TaxTreatmentEqualFold(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldEqualFold(FieldTaxTreatment, vc))
+}
+
+// TaxTreatmentContainsFold applies the ContainsFold predicate on the "tax_treatment" field.
+func TaxTreatmentContainsFold(v types.TaxTreatment) predicate.Customer {
+	vc := string(v)
+	return predicate.Customer(sql.FieldContainsFold(FieldTaxTreatment, vc))
 }
 
 // And groups predicates with the AND operator between them.

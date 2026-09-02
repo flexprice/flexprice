@@ -1,20 +1,109 @@
 {{- if .Values.migration.enabled }}
+{{- if and .Values.migration.steps.ent .Values.migration.steps.dbmate }}
+{{- fail "migration.steps.ent and migration.steps.dbmate are both true. They are two implementations of the same step: dbmate applies the reviewed .sql files in migrations/versioned/postgres, Ent auto-migration infers DDL from a live schema diff. Set exactly one. Upgrading from a chart older than 1.4.0: remove any explicit `migration.steps.ent: true` from your values." }}
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "flexprice.fullname" . }}-migration-{{ include "flexprice/templates/app/configmap.yaml" . | sha256sum | trunc 8 }}
+  {{- /*
+    Name suffix hashes the RENDERED ENVIRONMENT, not templates/app/configmap.yaml.
+
+    That template renders nothing under the config-autobind shape (.Values.env
+    set) — and, as it turns out, nothing for the legacy shape either, since the
+    app config moved out of a ConfigMap. Hashing it therefore produced a
+    CONSTANT suffix for every release in every region.
+
+    A constant name is fatal under ArgoCD: it records the hook as completed for
+    the revision and never recreates it, so the migration silently never runs
+    while the app Deployments roll out normally. The pods come up Running
+    against an unmigrated database, and /health does not touch Postgres so
+    nothing surfaces the problem. Any Job created by hand with the same name is
+    pruned as a duplicate of that already-completed hook.
+
+    flexprice.env is the actual config surface (74 vars in a production region),
+    so hashing it gives a suffix that is stable when config is unchanged and
+    changes whenever it is — which is what the checksum was always meant to do.
+
+    The resolved image reference is hashed ALONGSIDE the environment, because
+    the environment alone is not enough. New migrations ship inside the app
+    image, not in the config: a deploy that only bumps image.tag (the normal
+    case — image-updater writes the tag back and nothing else changes) leaves
+    flexprice.env byte-identical, so the Job name is unchanged, so ArgoCD sees
+    a hook already completed for that name and skips it. The new image's
+    migrations never run and the pods roll out against a database one schema
+    version behind.
+
+    Including the image means every image change produces a new Job name and
+    therefore a run. Migrations are idempotent (Ent/Atlas no-op when the schema
+    already matches, the ClickHouse and seed steps are IF NOT EXISTS /
+    ON CONFLICT DO NOTHING), so an extra run on an unchanged schema is cheap.
+  */}}
+  name: {{ include "flexprice.fullname" . }}-migration-{{ printf "%s|%s:%s" (include "flexprice.env" .) .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) | sha256sum | trunc 8 }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
   annotations:
     checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
     checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
+    {{- if .Values.migration.asHook }}
     "helm.sh/hook": pre-upgrade,pre-install
     "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- /*
+      hook-succeeded and hook-failed only — deliberately NOT
+      before-hook-creation.
+
+      ArgoCD implements before-hook-creation by deleting the existing hook
+      resource and then immediately reconciling against it, which races itself:
+      the Job is removed and the very next read fails with
+        Resource batch/Job/<name> is missing, it might have been deleted
+      so the PreSync phase never advances past the ServiceAccount and the
+      migration never runs. The sync reports failure while the app Deployments
+      still roll out, leaving pods running against an unmigrated database.
+
+      Nothing is lost by dropping it: the Job name already embeds a checksum of
+      the rendered environment and the resolved image reference (see
+      metadata.name above), so a changed config or image produces a
+      differently-named Job and there is no same-named predecessor to clear.
+      hook-succeeded still removes the Job once it completes.
+    */}}
+    {{- /*
+      hook-failed is paired with hook-succeeded so the Job is removed whichever
+      way it ends. Without it a FAILED Job lingers under a name derived from the
+      environment and image checksum, and retrying with an unchanged config and
+      image collides with it:
+      ArgoCD reports the hook as already-completed and never re-runs it, or the
+      apply fails on an immutable Job spec. That is precisely what stalled the
+      northamerica-northeast2 bring-up — the migration had failed once, and
+      every later sync silently declined to try again.
+
+      That reasoning still holds, but `hook-failed` is no longer how it is
+      satisfied. It deleted the Job -- and its logs -- the instant the migration
+      ended, so the one artefact explaining WHY a migration failed disappeared
+      before anyone could read it. During the 2026-08-31 staging bring-up the
+      only way to see a failure was to race the deletion with `kubectl logs`.
+      At 3am, against production, nobody wins that race.
+
+      The default is now `before-hook-creation`: the previous Job is removed
+      just before the next one is created, which prevents the same-name
+      collision described above WITHOUT destroying the evidence. A finished Job
+      and its pod survive until ttlSecondsAfterFinished (1h) or the next
+      migration, whichever comes first.
+
+      Set migration.hookDeletePolicy back to "hook-succeeded,hook-failed" to
+      restore the previous behaviour for a deployment that needs it.
+
+      Note this does NOT make a re-Sync re-run migrations. ArgoCD tracks hooks
+      per revision, so an unchanged revision skips the hook whether or not a Job
+      object is present. Migrations run when the image or config changes.
+    */}}
+    "helm.sh/hook-delete-policy": {{ .Values.migration.hookDeletePolicy | default "before-hook-creation" | quote }}
+    {{- end }}
 spec:
-  backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
+  {{- /* NOT `| default 3`: Helm's default treats 0 as empty, so an explicit
+         backoffLimit: 0 -- the value that stops a killed migration from being
+         retried -- would silently render as 3. */}}
+  backoffLimit: {{ if kindIs "invalid" .Values.migration.backoffLimit }}3{{ else }}{{ .Values.migration.backoffLimit }}{{ end }}
   {{- if .Values.migration.activeDeadlineSeconds }}
   activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
   {{- end }}
@@ -87,7 +176,7 @@ spec:
             - sh
             - -c
             - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ if .Values.clickhouse.namespace }}.{{ .Values.clickhouse.namespace }}.svc.cluster.local{{ end }}{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
               CLICKHOUSE_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 1 }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
               echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}..."
               until nc -z "${CLICKHOUSE_HOST}" "${CLICKHOUSE_HTTP_PORT}"; do
@@ -161,6 +250,30 @@ spec:
               POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
               POSTGRES_USER="{{ .Values.postgres.user }}"
               POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              # Create the target database if it does not exist.
+              #
+              # CloudSQL regions get this from Terraform, but the AlloyDB module
+              # cannot: there is no google_alloydb_database resource in the
+              # provider and no gcloud equivalent, so its README says to create
+              # databases over SQL after apply. Nothing automated that, and every
+              # step below connects with -d ${POSTGRES_DB}, so a fresh AlloyDB
+              # region failed here with
+              #   FATAL: database "flexprice" does not exist
+              # after the operator had already assumed the region was built.
+              #
+              # Postgres has no CREATE DATABASE IF NOT EXISTS, so this checks
+              # pg_database first and connects to the always-present `postgres`
+              # database to issue the CREATE. Idempotent: a no-op everywhere the
+              # database already exists, including every current region.
+              if ! psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d postgres \
+                   -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'" | grep -q 1; then
+                echo "Database ${POSTGRES_DB} not found, creating..."
+                psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d postgres \
+                  -c "CREATE DATABASE \"${POSTGRES_DB}\"" || exit 1
+                echo "✅ Created database ${POSTGRES_DB}"
+              else
+                echo "Database ${POSTGRES_DB} already exists"
+              fi
               echo "Setting up PostgreSQL schema and extensions at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
               psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
                 -c "CREATE SCHEMA IF NOT EXISTS extensions;" || exit 1
@@ -184,114 +297,106 @@ spec:
 
         {{- if .Values.migration.steps.clickhouse }}
         # ── 5. Copy ClickHouse migrations from app image ──────────────────────
-        - name: copy-clickhouse-migrations
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        # ── 5. Run ClickHouse migrations ──────────────────────────────────────
+        # Uses the migrate binary from the flexprice image, the same way the Ent
+        # step below does, rather than copying *.sql out of the image and
+        # replaying them through clickhouse-client.
+        #
+        # The Go path is what the application actually tests: it globs the same
+        # migrations/clickhouse/*.sql, but it also CREATEs the database if it is
+        # missing (connecting to `default` first, then reconnecting scoped), and
+        # it handles statement splitting and errors in code rather than a shell
+        # loop. The shell path had no database creation at all, so a freshly
+        # provisioned ClickHouse failed on the first statement with
+        #   Code: 81. DB::Exception: Database flexprice does not exist.
+        #
+        # --clickhouse-dir defaults to migrations/clickhouse, relative to the
+        # image WORKDIR /app, so no flag is needed.
+        - name: run-clickhouse-migrations
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sh
+            - /bin/sh
             - -c
             - |
-              echo "Copying ClickHouse migrations to shared volume..."
-              if [ -d /app/migrations/clickhouse ]; then
-                mkdir -p /migrations/clickhouse
-                cp -r /app/migrations/clickhouse/* /migrations/clickhouse/ 2>/dev/null || true
-                echo "✅ ClickHouse migrations copied"
-                ls -la /migrations/clickhouse/
+              set -e
+              echo "Running ClickHouse migrations..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
               else
-                echo "⚠️  No ClickHouse migrations found at /app/migrations/clickhouse"
-              fi
-          volumeMounts:
-            - name: migrations
-              mountPath: /migrations
-          resources:
-            limits:
-              cpu: "100m"
-              memory: "64Mi"
-            requests:
-              cpu: "50m"
-              memory: "32Mi"
-
-        # ── 6. Run ClickHouse migrations ──────────────────────────────────────
-        - name: run-clickhouse-migrations
-          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "clickhouse") }}"
-          command:
-            - sh
-            - -c
-            - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
-              CLICKHOUSE_PORT="{{ if eq .Values.clickhouse.mode "external" }}9000{{ else }}{{ .Values.clickhouse.standalone.service.nativePort | default 9000 }}{{ end }}"
-              CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
-              CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"
-              echo "Running ClickHouse migrations at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}..."
-              RETRIES=60
-              i=1
-              while [ $i -le ${RETRIES} ]; do
-                if clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
-                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
-                    --query="SELECT 1" >/dev/null 2>&1; then
-                  echo "✅ ClickHouse ready!"
-                  break
-                fi
-                echo "[$i/${RETRIES}] Waiting..."
-                sleep 2
-                i=$((i + 1))
-              done
-              if [ $i -gt ${RETRIES} ]; then
-                echo "❌ ClickHouse failed to become ready"
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
                 exit 1
               fi
-              if [ -d /migrations/clickhouse ]; then
-                for file in /migrations/clickhouse/*.sql; do
-                  [ -f "$file" ] || continue
-                  # skip verification scripts — not migrations
-                  case "$(basename $file)" in verify_*) continue ;; esac
-                  echo "Running: $file"
-                  TEMP_OUTPUT="$(mktemp)"
-                  EXIT_CODE=0
-                  clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
-                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
-                    --database=${CLICKHOUSE_DB} --multiquery < "$file" > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
-                  OUTPUT="$(cat "$TEMP_OUTPUT")"; rm -f "$TEMP_OUTPUT"
-                  if [ $EXIT_CODE -eq 0 ]; then
-                    echo "✅ Done"
-                  else
-                    OUTPUT_NORMALIZED="$(echo "$OUTPUT" | tr '\n' ' ')"
-                    if echo "$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44|Code: 47|Missing columns"; then
-                      echo "⚠️  Skipped (already exists): $(echo "$OUTPUT" | head -2)"
-                    else
-                      echo "❌ Failed: $OUTPUT"
-                      exit 1
-                    fi
-                  fi
-                done
-                echo "✅ ClickHouse migrations complete"
-              else
-                echo "⚠️  No /migrations/clickhouse directory found"
-                exit 1
-              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              {{- if .Values.migration.clickhouseFile }}
+              echo "Applying baseline: {{ .Values.migration.clickhouseFile }}"
+              ${MIGRATE_BINARY} clickhouse --file {{ .Values.migration.clickhouseFile | quote }} || exit 1
+              {{- else }}
+              ${MIGRATE_BINARY} clickhouse || exit 1
+              {{- end }}
+              echo "✅ ClickHouse migrations complete"
           env:
-            - name: FLEXPRICE_CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "flexprice.secretName" . }}
-                  key: clickhouse-password
-          volumeMounts:
-            - name: migrations
-              mountPath: /migrations
-              readOnly: true
+            {{- include "flexprice.env" . | nindent 12 }}
           resources:
             limits:
-              cpu: "100m"
-              memory: "64Mi"
+              cpu: "500m"
+              memory: "512Mi"
             requests:
-              cpu: "50m"
-              memory: "32Mi"
+              cpu: "100m"
+              memory: "128Mi"
+        {{- end }}
+
+        {{- if .Values.migration.steps.dbmate }}
+        # ── 7. Apply versioned PostgreSQL migrations (dbmate) ────────────────
+        #
+        # Applies the .sql files in migrations/versioned/postgres that this
+        # database has not recorded yet, and records them in schema_migrations.
+        # Replaces the Ent auto-migration step below.
+        #
+        # `--status` runs first so the log states what is pending BEFORE
+        # anything is applied. When a migration fails, that listing is the only
+        # record of what the Job intended to do.
+        #
+        # The command sets lock_timeout=3s and statement_timeout=0 on the
+        # connection itself (see cmd/migrate/postgres_up.go): a blocked ALTER
+        # must give up rather than queue every query in the database behind it
+        # (RCA: prod DDL-lock incident 2026-06-25), while a CREATE INDEX
+        # CONCURRENTLY must not be killed part-way, which would leave an
+        # INVALID index that nothing retries.
+        - name: run-postgres-migrations
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              /app/migrate postgres up --status
+              /app/migrate postgres up
+              echo "✅ PostgreSQL migrations complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          {{- if or (not .Values.env) .Values.kafkaConfig.tlsCASecret.name }}
+          volumeMounts:
+            {{- if not .Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
         {{- end }}
 
         {{- if .Values.migration.steps.ent }}
-        # ── 7. Run Ent framework migrations ──────────────────────────────────
+        # ── 7b. Run Ent framework migrations (legacy) ────────────────────────
         - name: run-ent-migrations
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /bin/sh
@@ -324,6 +429,67 @@ spec:
             {{- /* This step receives FLEXPRICE_KAFKA_TLS_CA_CERT_FILE via
                    "flexprice.env"; mount the CA so the path it names always
                    resolves, rather than dangling. */}}
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        {{- end }}
+
+        {{- if .Values.migration.steps.kafka }}
+        # ── Run Kafka migration: topic reconcile + allow-all ACL seed ─────────
+        # `migrate kafka` is the SOLE topic-creation path (the old separate
+        # create-kafka-topics CLI init container was removed -- it duplicated
+        # this step's coverage, hardcoded 10 topic names, and could drift from
+        # the binary's config.yaml `kafka.topics` map). It reconciles topics
+        # against the desired spec (create, partition growth, retention,
+        # FLEXPRICE_KAFKA_TOPICS) AND seeds the allow-all ACLs in one pass. Run
+        # it for EVERY kafka-enabled deploy so topic reconcile happens
+        # everywhere; the ACL seed is gated to SASL/SCRAM (MSK) internally, a
+        # no-op on plaintext and OAUTHBEARER clusters. SCRAM clusters (MSK)
+        # enforce ACLs once SASL is on; without an allow-all rule set, every
+        # client -- including the app itself -- is locked out the moment auth
+        # is enabled. OAUTHBEARER clusters use IAM-style authz, not Kafka
+        # ACLs, so the seed skips them.
+        #
+        # Extra client-declared topics used to be supported via
+        # migration.kafkaTopics.topics (CLI step, now removed). That path is
+        # gone: any topic not in config.yaml's `kafka.topics` map must now be
+        # added via FLEXPRICE_KAFKA_TOPICS (JSON) instead.
+        - name: run-kafka-migrate
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running Kafka migration (topics + ACLs)..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
+              else
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
+                exit 1
+              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              {{- if .Values.migration.seedKafkaACLs }}
+              ${MIGRATE_BINARY} kafka --seed-acls || exit 1
+              {{- else }}
+              ${MIGRATE_BINARY} kafka || exit 1
+              {{- end }}
+              echo "✅ Kafka migration complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          {{- if or (not .Values.env) .Values.kafkaConfig.tlsCASecret.name }}
+          volumeMounts:
+            {{- if not .Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
             {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
           {{- end }}
           resources:
@@ -385,54 +551,158 @@ spec:
               memory: "32Mi"
         {{- end }}
 
-        {{- if .Values.migration.steps.kafka }}
-        # ── 9. Create Kafka topics ────────────────────────────────────────────
-        # Topics are NOT auto-created by the broker (autoCreateTopicsEnable: false).
-        # This init container creates all required topics idempotently.
-        - name: create-kafka-topics
-          image: "{{ if .Values.kafkaConfig.enabled }}bitnami/kafka:latest{{ else }}confluentinc/cp-kafka:{{ .Values.kafkaConfig.internal.image.tag | default "7.7.1" }}{{ end }}"
+        {{- if .Values.migration.steps.verify }}
+        # ── 10. Post-migration sanity check ───────────────────────────────────
+        # Fatal gate: asserts the ClickHouse tables and Kafka topics the prior
+        # steps were supposed to create actually exist, rather than trusting
+        # each step's own exit code. run-clickhouse-migrations (above) never
+        # queries ClickHouse directly -- it shells out to the same `migrate`
+        # binary as the Ent step and trusts its exit code, so a migration that
+        # silently no-ops (e.g. wrong database resolved) would report success
+        # here with nothing actually created.
+        #
+        # ClickHouse auth mirrors run-clickhouse-migrations exactly: same
+        # FLEXPRICE_CLICKHOUSE_USERNAME / FLEXPRICE_CLICKHOUSE_PASSWORD via
+        # flexprice.env, same clickhouse-password secret key. The query is
+        # issued over HTTP rather than the native protocol the migrate binary
+        # uses (FLEXPRICE_CLICKHOUSE_ADDRESS is the :9000 native port, not an
+        # HTTP endpoint), so host/port are derived the same way
+        # wait-for-clickhouse (above) derives them -- from the HTTP port, not
+        # the native one.
+        - name: verify-migrations
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sh
+            - /bin/sh
             - -c
             - |
-              KAFKA_BROKER="{{ include "flexprice.kafkaBrokers" . }}"
-              echo "Creating Kafka topics on ${KAFKA_BROKER}..."
+              set -e
+              {{- if .Values.migration.steps.clickhouse }}
+              echo "verify: ClickHouse tables"
+              CH_HTTP_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ if .Values.clickhouse.namespace }}.{{ .Values.clickhouse.namespace }}.svc.cluster.local{{ end }}{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
+              {{- /*
+                External mode used to take this port from clickhouse.address by
+                splitting on ":". That address is the NATIVE protocol endpoint the
+                application connects with (9000), not the HTTP one, so this check
+                issued an HTTP GET against a native-protocol port. wget failed,
+                the `|| echo 0` below turned that into n=0, and every table was
+                reported MISSING against a ClickHouse that was perfectly healthy.
+                Cost half an investigation on GCP staging, 2026-08-31.
 
-              # cp-kafka uses /usr/bin/kafka-topics; bitnami uses kafka-topics.sh
-              KAFKA_TOPICS_CMD="kafka-topics"
-              if command -v kafka-topics.sh >/dev/null 2>&1; then
+                8123 matches what altinity mode already hardcodes. Override with
+                clickhouse.httpPort if a deployment moves it.
+              */}}
+              CH_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ .Values.clickhouse.httpPort | default 8123 }}{{ else if eq .Values.clickhouse.mode "altinity" }}{{ .Values.clickhouse.httpPort | default 8123 }}{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
+              CH_SCHEME="{{ if .Values.clickhouse.tls }}https{{ else }}http{{ end }}"
+              # Resolved into a variable instead of templated inline at the end of
+              # the wget call. Inline, the left-chomp on the conditional eats the
+              # preceding newline, so the previous line's trailing backslash ends up
+              # mid-line rather than last on its line:
+              #
+              #   --header="X-ClickHouse-Key: ..." \ 2>/dev/null || echo 0)
+              #
+              # A backslash only continues a line when it is the final character.
+              # There it escapes the space instead, wget receives " 2" as a
+              # positional argument and exits with `bad address ' 2'`, the
+              # `|| echo 0` sets n=0, and every table is reported MISSING against a
+              # ClickHouse that migrated correctly.
+              CH_INSECURE=""
+              {{- if $.Values.clickhouse.tlsSkipVerify }}
+              CH_INSECURE="--no-check-certificate"
+              {{- end }}
+              # A failed query is NOT a missing table. `|| echo 0` used to collapse
+              # every failure -- unreachable host, wrong port, bad credentials --
+              # into "MISSING", which sends whoever is on call to look at a schema
+              # that was never the problem. Separate the two outcomes and say which.
+              for t in events meter_usage; do
+                if ! n=$(wget -qO- "${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}/?query=SELECT+count()+FROM+system.tables+WHERE+database='{{ .Values.clickhouse.database }}'+AND+name='${t}'" \
+                    --header="X-ClickHouse-User: ${FLEXPRICE_CLICKHOUSE_USERNAME}" \
+                    --header="X-ClickHouse-Key: ${FLEXPRICE_CLICKHOUSE_PASSWORD}" \
+                    ${CH_INSECURE} 2>&1); then
+                  echo "❌ CANNOT QUERY ClickHouse at ${CH_SCHEME}://${CH_HTTP_HOST}:${CH_HTTP_PORT}"
+                  echo "   This is a connectivity/auth failure, NOT a missing table."
+                  echo "   wget said: ${n}"
+                  echo "   Check clickhouse.address, clickhouse.httpPort (HTTP is 8123,"
+                  echo "   the native protocol is 9000) and the credentials."
+                  exit 1
+                fi
+                n="$(echo "$n" | tr -d '[:space:]')"
+                [ "$n" = "1" ] || { echo "❌ MISSING ClickHouse table: ${t} (database '{{ .Values.clickhouse.database }}' returned count=${n})"; exit 1; }
+                echo "  ✅ ${t}"
+              done
+              {{- end }}
+              {{- if .Values.migration.steps.kafka }}
+              echo "verify: Kafka topics"
+              KAFKA_BROKER="{{ include "flexprice.kafkaBrokers" . }}"
+              KAFKA_TOPICS_CMD=""
+              if command -v kafka-topics >/dev/null 2>&1; then
+                KAFKA_TOPICS_CMD="kafka-topics"
+              elif command -v kafka-topics.sh >/dev/null 2>&1; then
                 KAFKA_TOPICS_CMD="kafka-topics.sh"
               fi
-
-              # Helper: create topic if it does not exist
-              create_topic() {
-                TOPIC=$1
-                PARTITIONS=${2:-1}
-                REPLICATION=${3:-1}
-                echo "→ Creating topic: ${TOPIC} (partitions=${PARTITIONS}, replication=${REPLICATION})"
-                $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" \
-                  --create --if-not-exists \
-                  --topic "${TOPIC}" \
-                  --partitions "${PARTITIONS}" \
-                  --replication-factor "${REPLICATION}" || true
-              }
-
-              # All topics used by FlexPrice
-              create_topic "{{ .Values.kafkaConfig.topic }}"
-              create_topic "{{ .Values.kafkaConfig.topicLazy }}"
-              create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}"
-              create_topic "{{ .Values.eventPostProcessing.topic }}"
-              create_topic "{{ .Values.eventPostProcessing.topicBackfill }}"
-              create_topic "{{ .Values.webhook.topic }}"
-              create_topic "events_backfill"
-              create_topic "wallet_alert"
-              create_topic "onboarding_events"
-
-              echo "✅ Kafka topics ready"
-              $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
+              # This step runs in the APPLICATION image -- which ships no Kafka
+              # CLI. The previous default assumed `kafka-topics` was present.
+              # When it is not, the --list below fails, its stderr is
+              # swallowed by 2>/dev/null, EXISTING comes back empty, and every
+              # topic is reported MISSING against a broker that holds all of
+              # them.
+              #
+              # A verification that cannot run is worse than one that is skipped: it
+              # fails the deploy and blames the infrastructure. Skip and say so.
+              if [ -z "${KAFKA_TOPICS_CMD}" ]; then
+                echo "  (kafka CLI not present in this image -- skipping topic verification)"
+                echo "  topics are created and listed by the run-kafka-migrate step"
+              else
+              # NOTE: this branch is deliberately NOT indented. It contains a
+              # <<'PROPS' heredoc whose terminator must land at column 0 after YAML
+              # strips the block scalar's common indent; indenting the branch would
+              # leave "  PROPS", which never closes the heredoc.
+              CMD_CONFIG=""
+              {{- if or .Values.kafkaConfig.useSASL .Values.kafkaConfig.tls }}
+              CMD_CONFIG=/tmp/kafka-admin.properties
+              {{- if .Values.kafkaConfig.useSASL }}
+              cat > "${CMD_CONFIG}" <<'PROPS'
+              security.protocol={{ if .Values.kafkaConfig.tls }}SASL_SSL{{ else }}SASL_PLAINTEXT{{ end }}
+              sasl.mechanism={{ .Values.kafkaConfig.saslMechanism }}
+              PROPS
+              {{- $jaas := ternary "org.apache.kafka.common.security.scram.ScramLoginModule" "org.apache.kafka.common.security.plain.PlainLoginModule" (hasPrefix "SCRAM" .Values.kafkaConfig.saslMechanism) }}
+              printf 'sasl.jaas.config=%s required username="%s" password="%s";\n' \
+                '{{ $jaas }}' \
+                '{{ .Values.kafkaConfig.saslUser }}' \
+                "${KAFKA_SASL_PASSWORD}" >> "${CMD_CONFIG}"
+              {{- else }}
+              cat > "${CMD_CONFIG}" <<'PROPS'
+              security.protocol=SSL
+              PROPS
+              {{- end }}
+              sed -i 's/^[[:space:]]*//' "${CMD_CONFIG}"
+              CMD_CONFIG="--command-config ${CMD_CONFIG}"
+              {{- end }}
+              EXISTING=$($KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" ${CMD_CONFIG} --list 2>/dev/null || true)
+              MISSING=0
+              for t in "{{ .Values.kafkaConfig.topic }}" "{{ .Values.kafkaConfig.topicLazy }}" "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}" "{{ .Values.eventPostProcessing.topic }}" "{{ .Values.eventPostProcessing.topicBackfill }}" "{{ .Values.webhook.topic }}"; do
+                if ! echo "${EXISTING}" | grep -qx "${t}"; then
+                  echo "❌ MISSING Kafka topic: ${t}"
+                  MISSING=$((MISSING + 1))
+                fi
+              done
+              [ "${MISSING}" -eq 0 ] || { echo "❌ ${MISSING} required Kafka topic(s) missing"; exit 1; }
+              echo "  ✅ core topics present"
+              fi
+              {{- end }}
+              echo "✅ verify-migrations complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+            {{- if and .Values.migration.steps.kafka (and .Values.kafkaConfig.useSASL (ne .Values.kafkaConfig.saslMechanism "OAUTHBEARER")) }}
+            - name: KAFKA_SASL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: kafka-sasl-password
+            {{- end }}
           resources:
             limits:
-              cpu: "200m"
+              cpu: "500m"
               memory: "256Mi"
             requests:
               cpu: "100m"
@@ -446,7 +716,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "flexprice.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if .Values.migration.command }}
           command:
@@ -489,10 +759,10 @@ spec:
         - name: tools
           emptyDir: {}
         {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
-        {{- if .Values.migration.steps.clickhouse }}
-        - name: migrations
-          emptyDir: {}
-        {{- end }}
+        {{- /* The `migrations` emptyDir is gone: it existed only to hand *.sql
+               files from a copy container to a clickhouse-client container.
+               The ClickHouse step now runs the migrate binary from the
+               flexprice image, which reads them from /app directly. */}}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

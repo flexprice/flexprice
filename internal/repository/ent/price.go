@@ -78,6 +78,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetInvoiceCadence(p.InvoiceCadence).
 		SetTrialPeriodDays(p.TrialPeriodDays).
 		SetNillableTierMode(lo.ToPtr(p.TierMode)).
+		SetNillableBucketSize(lo.EmptyableToPtr(p.BucketSize)).
 		SetTiers(p.ToEntTiers()).
 		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers)).
 		SetNillableTransformQuantity(lo.ToPtr(types.TransformQuantity(p.TransformQuantity))).
@@ -468,6 +469,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetTrialPeriodDays(p.TrialPeriodDays).
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
 			SetNillableTierMode(lo.ToPtr(p.TierMode)).
+			SetNillableBucketSize(lo.EmptyableToPtr(p.BucketSize)).
 			SetTiers(p.ToEntTiers()).
 			SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 			SetLookupKey(p.LookupKey).
@@ -803,6 +805,14 @@ func (r *priceRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 		).
 		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Price with lookup key %s was not found", lookupKey).
+				WithReportableDetails(map[string]interface{}{
+					"lookup_key": lookupKey,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get price by lookup key").
 			WithReportableDetails(map[string]interface{}{

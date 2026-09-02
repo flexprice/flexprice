@@ -21,12 +21,12 @@ type InvoiceCoupon struct {
 }
 
 // InvoiceLineItemCoupon represents a coupon applied to a specific invoice line item.
-// LineItemID is the price_id used to match the coupon to the correct line item.
 // Only coupon ID is needed - the service will fetch and validate the coupon.
 type InvoiceLineItemCoupon struct {
-	LineItemID          string  `json:"line_item_id" validate:"required"` // price_id used to match the line item
-	CouponID            string  `json:"coupon_id" validate:"required"`
-	CouponAssociationID *string `json:"coupon_association_id,omitempty"`
+	LineItemID             string  `json:"line_item_id" validate:"required"` // price_id used to match the line item
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
+	CouponID               string  `json:"coupon_id" validate:"required"`
+	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
 // CreateInvoiceRequest represents the request payload for creating a new invoice
@@ -109,8 +109,11 @@ type CreateInvoiceRequest struct {
 	// tax_rate_overrides is the tax rate overrides to be applied to the invoice
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
-	// prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)
-	PreparedTaxRates []*TaxRateResponse `json:"prepared_tax_rates,omitempty"`
+	// PreparedTaxRates carries tax rates already resolved by the caller (e.g. CreateOneOffInvoice
+	// after calling PrepareTaxRatesForInvoice) through to whatever builds the invoice next.
+	// json:"-" — this request is bound directly from client JSON (POST /invoices), and a
+	// resolved rate set must never be settable over the wire; it is only ever set server-side.
+	PreparedTaxRates *InvoiceTaxRates `json:"-"`
 
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
@@ -289,15 +292,17 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 // No customer, subscription, or period info — those are already on the invoice. This is purely
 // the computed line items, amounts, coupons, and taxes to populate.
 type InvoiceComputeRequest struct {
-	LineItems        []CreateInvoiceLineItemRequest `json:"line_items"`
-	Subtotal         decimal.Decimal                `json:"subtotal" swaggertype:"string"`
-	Total            decimal.Decimal                `json:"total" swaggertype:"string"`
-	AmountDue        decimal.Decimal                `json:"amount_due" swaggertype:"string"`
-	Description      string                         `json:"description,omitempty"`
-	DueDate          *time.Time                     `json:"due_date,omitempty"`
-	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
-	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
-	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
+	LineItems       []CreateInvoiceLineItemRequest `json:"line_items"`
+	Subtotal        decimal.Decimal                `json:"subtotal" swaggertype:"string"`
+	Total           decimal.Decimal                `json:"total" swaggertype:"string"`
+	AmountDue       decimal.Decimal                `json:"amount_due" swaggertype:"string"`
+	Description     string                         `json:"description,omitempty"`
+	DueDate         *time.Time                     `json:"due_date,omitempty"`
+	InvoiceCoupons  []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
+	LineItemCoupons []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
+	// PreparedTaxRates is set server-side only — see CreateInvoiceRequest.PreparedTaxRates.
+	// json:"-" — this request is also bound directly from client JSON (POST /invoices/{id}/compute).
+	PreparedTaxRates *InvoiceTaxRates `json:"-"`
 
 	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
 	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
@@ -564,50 +569,11 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		}
 	}
 
-	// Apply preview-only discounts and taxes (no DB operations)
-	// Note: Coupon discount calculations are now handled by CouponService.ApplyDiscount()
-	// which requires service context for validation. Preview coupon calculations should
-	// be handled at the service layer. For now, we skip coupon preview calculations here.
-	totalDiscount := decimal.Zero
-
-	// 3) Taxes on (subtotal - totalDiscount) using prepared tax rates
-	totalTax := decimal.Zero
-	taxableAmount := inv.Subtotal.Sub(totalDiscount)
-	if taxableAmount.IsNegative() {
-		taxableAmount = decimal.Zero
-	}
-
-	if len(r.PreparedTaxRates) > 0 {
-		for _, tr := range r.PreparedTaxRates {
-			var taxAmount decimal.Decimal
-			switch tr.TaxRateType {
-			case types.TaxRateTypePercentage:
-				if tr.PercentageValue != nil {
-					taxAmount = taxableAmount.Mul(*tr.PercentageValue).Div(decimal.NewFromInt(100))
-				}
-			case types.TaxRateTypeFixed:
-				if tr.FixedValue != nil {
-					taxAmount = *tr.FixedValue
-				}
-			default:
-				continue
-			}
-			if taxAmount.IsNegative() {
-				taxAmount = decimal.Zero
-			}
-			totalTax = totalTax.Add(taxAmount)
-		}
-	}
-
-	// 4) Update invoice preview totals
-	inv.TotalDiscount = totalDiscount
-	inv.TotalTax = totalTax
-	inv.Total = inv.Subtotal.Sub(totalDiscount).Add(totalTax)
-	if inv.Total.IsNegative() {
-		inv.Total = decimal.Zero
-	}
-	inv.AmountDue = inv.Total
-	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+	// Discounts and taxes are business logic (coupon validation, tax rate resolution and
+	// calculation) and require service-layer context this package does not have — the
+	// service layer resolves them and sets TotalDiscount/TotalTax/Total itself once this
+	// bare invoice exists (see TaxService.CalculateTaxesOnInvoice).
+	inv.TotalDiscount = decimal.Zero
 
 	return inv, nil
 }
@@ -947,6 +913,8 @@ type UpdateInvoiceRequest struct {
 	DueDate       *time.Time `json:"due_date,omitempty"`
 	// Invoice metadata will be overridden with the request metadata
 	Metadata *types.Metadata `json:"metadata,omitempty"`
+	// When true, recalculates discount from existing coupon associations (draft invoices only).
+	ApplyDiscount bool `json:"apply_discount,omitempty"`
 }
 
 func (r *UpdateInvoiceRequest) Validate() error {
@@ -969,6 +937,143 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	return nil
 }
 
+type AddLineItemRequest struct {
+	DisplayName string          `json:"display_name" validate:"required"`
+	Amount      decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
+	Quantity    decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
+}
+
+func (r *AddLineItemRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// AddBulkLineItemRequest adds one or more line items to a draft invoice in a single call.
+type AddBulkLineItemRequest struct {
+	Items []AddLineItemRequest `json:"items" validate:"required,min=1,max=100"`
+}
+
+func (r *AddBulkLineItemRequest) Validate() error {
+	if len(r.Items) == 0 {
+		return ierr.NewError("at least one line item is required").
+			WithHint("please provide at least one line item to add").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.Items) > 100 {
+		return ierr.NewError("too many line items in bulk request").
+			WithHint("maximum 100 line items allowed per request").
+			Mark(ierr.ErrValidation)
+	}
+
+	for i, item := range r.Items {
+		if err := item.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHintf("line item at index %d is invalid", i).
+				WithReportableDetails(map[string]any{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+type UpdateLineItemRequest struct {
+	DisplayName *string          `json:"display_name,omitempty"`
+	Amount      *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+}
+
+func (r *UpdateLineItemRequest) Validate() error {
+	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil {
+		return ierr.NewError("at least one field must be provided").
+			WithHint("at least one of display_name, amount, or quantity must be provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Amount != nil && r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity != nil && r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// RemoveBulkLineItemRequest removes one or more line items from a draft invoice in a single call.
+type RemoveBulkLineItemRequest struct {
+	LineItemIDs []string `json:"line_item_ids" validate:"required,min=1,max=100"`
+}
+
+func (r *RemoveBulkLineItemRequest) Validate() error {
+	if len(r.LineItemIDs) == 0 {
+		return ierr.NewError("at least one line item id is required").
+			WithHint("please provide at least one line item id to remove").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.LineItemIDs) > 100 {
+		return ierr.NewError("too many line item ids in bulk request").
+			WithHint("maximum 100 line item ids allowed per request").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+type ApplyCouponRequest struct {
+	CouponID   string  `json:"coupon_id" validate:"required"`
+	LineItemID *string `json:"line_item_id,omitempty"`
+}
+
+func (r *ApplyCouponRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// ApplyTaxRequest represents the request payload for applying a tax rate to a draft invoice
+type ApplyTaxRequest struct {
+	TaxRateID string `json:"tax_rate_id" validate:"required"`
+}
+
+func (r *ApplyTaxRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	invoice.Invoice
@@ -984,6 +1089,10 @@ type InvoiceResponse struct {
 
 	// tax_applied_records contains the tax applied records associated with this invoice
 	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
+
+	// tax_summary breaks total_tax down by behavior and states why no tax was charged, when
+	// none was. Set by WithTaxes once Taxes and TaxExemptionReasonCode are both known.
+	TaxSummary *TaxSummary `json:"tax_summary,omitempty"`
 
 	// line_items contains the individual items that make up this invoice (overrides embedded field)
 	LineItems []*InvoiceLineItemResponse `json:"line_items,omitempty"`
@@ -1091,9 +1200,12 @@ func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceRespo
 	return r
 }
 
-// WithTaxes adds tax applied records to the invoice response
+// WithTaxes sets the tax rows and derives TaxSummary from them plus the already-set
+// TaxExemptionReasonCode. inclusive_tax/exclusive_tax are not columns — they only exist by
+// summing the rows by behavior.
 func (r *InvoiceResponse) WithTaxes(taxes []*TaxAppliedResponse) *InvoiceResponse {
 	r.Taxes = taxes
+	r.TaxSummary = buildTaxSummary(taxes, r.TaxExemptionReasonCode)
 	return r
 }
 
@@ -1412,4 +1524,61 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 
 	// total paid invoice amount
 	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
+}
+
+type ApplyExternalInvoiceDiscountRequest struct {
+	DiscountAmount decimal.Decimal `json:"discount_amount"`
+	MetadataKey    string          `json:"metadata_key,omitempty"`
+	MetadataJSON   string          `json:"metadata_json,omitempty"`
+}
+
+func (r *ApplyExternalInvoiceDiscountRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
+}
+
+// TaxSummary breaks an invoice's total_tax down by behavior and states why no tax was
+// charged, when none was.
+type TaxSummary struct {
+	TotalInclusiveTax decimal.Decimal      `json:"inclusive_tax" swaggertype:"string"`
+	TotalExclusiveTax decimal.Decimal      `json:"exclusive_tax" swaggertype:"string"`
+	TotalTax          decimal.Decimal      `json:"total_tax" swaggertype:"string"`
+	Exemption         *TaxExemptionSummary `json:"exemption"`
+}
+
+// TaxExemptionSummary is non-nil only when no tax was charged. Its Reason is
+// derived via TaxExemptionReasonCode.DisplayLabel(), never stored.
+type TaxExemptionSummary struct {
+	ReasonCode types.TaxExemptionReasonCode `json:"reason_code"`
+	Reason     string                       `json:"reason"`
+}
+
+func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemptionReasonCode) *TaxSummary {
+	// A reason code means nothing was charged, so the totals are zero by definition.
+	if reasonCode != nil {
+		return &TaxSummary{
+			Exemption: &TaxExemptionSummary{
+				ReasonCode: *reasonCode,
+				Reason:     reasonCode.DisplayLabel(),
+			},
+		}
+	}
+
+	var inclusiveTax, exclusiveTax decimal.Decimal
+	for _, t := range taxes {
+		switch t.TaxBehavior {
+		case types.TaxBehaviorInclusive:
+			inclusiveTax = inclusiveTax.Add(t.TaxAmount)
+		case types.TaxBehaviorExclusive:
+			exclusiveTax = exclusiveTax.Add(t.TaxAmount)
+		}
+	}
+
+	return &TaxSummary{
+		TotalInclusiveTax: inclusiveTax,
+		TotalExclusiveTax: exclusiveTax,
+		TotalTax:          inclusiveTax.Add(exclusiveTax),
+	}
 }

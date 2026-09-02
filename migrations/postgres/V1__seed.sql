@@ -32,12 +32,17 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'users'
   ) THEN
     INSERT INTO public.users (
-      id, email, tenant_id,
+      id, email, tenant_id, roles,
       created_at, updated_at, created_by, updated_by
     ) VALUES (
       '00000000-0000-0000-0000-000000000000',
       'admin@flexprice.dev',
       '00000000-0000-0000-0000-000000000000',
+      -- Without a role the seeded administrator holds no permissions, so a
+      -- fresh self-hosted deployment cannot write settings (SAML configuration
+      -- included) or invite anyone, and has to be bootstrapped through a
+      -- config-file API key instead.
+      '["super_admin"]',
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
       '00000000-0000-0000-0000-000000000000',
       '00000000-0000-0000-0000-000000000000'

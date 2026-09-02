@@ -34,7 +34,7 @@ func NewPubSub(
 			// Buffer size for output channel
 			OutputChannelBuffer: 100,
 		},
-		watermill.NewStdLogger(true, false),
+		watermill.NewStdLogger(cfg.Logging.Level == types.LogLevelDebug, false),
 	)
 
 	return &PubSub{

@@ -110,6 +110,13 @@ func (EntitlementGrant) Fields() []ent.Field {
 		field.Time("quota_crossed_at").
 			Optional().
 			Nillable(),
+
+		field.Other("metadata", types.Metadata{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional().
+			Default(types.Metadata{}),
 	}
 }
 

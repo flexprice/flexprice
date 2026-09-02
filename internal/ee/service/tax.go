@@ -6,6 +6,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -41,8 +43,9 @@ type TaxService interface {
 	DeleteTaxApplied(ctx context.Context, id string) error
 
 	// Invoice tax operations
-	PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error)
-	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) (*TaxCalculationResult, error)
+	PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceTaxRates, error)
+	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*TaxCalculationResult, error)
+	CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *TaxCalculationResult
 }
 
 type taxService struct {
@@ -585,6 +588,38 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// Convert request to domain model
 	tc := req.ToTaxAssociation(ctx, taxRate.ID)
 
+	// Only a subscription-level association needs anything looked up: the subscription for its
+	// currency, and its customer for the exemption check. The other three entity types need
+	// neither and must not pay for the fetches.
+	var sub *subscription.Subscription
+	if req.EntityType == types.TaxRateEntityTypeSubscription && req.EntityID != "" {
+		sub, err = s.SubRepo.Get(ctx, req.EntityID)
+		if err != nil {
+			return nil, err
+		}
+
+		cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		// An exempt customer is never taxed, so a subscription-level association would be
+		// dead configuration. Skip it rather than fail so subscription creation still
+		// succeeds, just with zero tax associations.
+		if cust.TaxTreatment == types.TaxTreatmentExempt {
+			s.Logger.Info(ctx, "skipping subscription tax association — exempt customer",
+				"subscription_id", sub.ID,
+				"customer_id", cust.ID,
+				"tax_rate_id", taxRate.ID)
+			return nil, nil
+		}
+	}
+
+	tc.TaxBehavior, err = s.resolveEffectiveTaxBehavior(ctx, req, taxRate, sub)
+	if err != nil {
+		return nil, err
+	}
+
 	s.Logger.Info(ctx, "creating tax association",
 		"tax_rate_id", tc.TaxRateID,
 		"entity_type", tc.EntityType,
@@ -670,6 +705,10 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 
 	if req.Metadata != nil {
 		existing.Metadata = lo.FromPtr(req.Metadata)
+	}
+
+	if req.TaxBehavior != nil {
+		existing.TaxBehavior = req.TaxBehavior
 	}
 
 	s.Logger.Info(ctx, "updating tax association",
@@ -847,6 +886,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 
 	entityType := req.EntityType
 	entityID := req.EntityID
+
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if len(req.TaxRateOverrides) > 0 {
 			// Validate all overrides first
@@ -899,6 +939,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 					AutoApply:   taxAssociation.AutoApply,
 					Currency:    taxAssociation.Currency,
 					Metadata:    taxAssociation.Metadata,
+					TaxBehavior: taxAssociation.TaxBehavior,
 				}
 
 				s.Logger.Info(ctx, "creating tax association",
@@ -923,16 +964,32 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 	})
 }
 
-// PrepareTaxRatesForInvoice prepares tax rates for an invoice based on the request
-// This method handles both tax rate overrides and subscription tax rates
-func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error) {
+// PrepareTaxRatesForInvoice resolves everything invoice tax computation needs about this
+// customer: which rates apply, what behavior each carries, and whether the customer is
+// exempt. Rate overrides win over raw tax_rate IDs, which win over the subscription's own
+// associations. Exemption is resolved here, alongside the rates, so no caller has to pair
+// the two up itself.
+func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceTaxRates, error) {
+	// Read once and reused by every branch below, so the rates and the exemption flag always
+	// come from the same moment.
+	cust, err := s.CustomerRepo.Get(ctx, req.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(req.TaxRateOverrides) > 0 {
 		s.Logger.Info(ctx, "processing tax rate overrides for invoice",
 			"overrides_count", len(req.TaxRateOverrides))
 
 		taxRateCodes := make([]string, len(req.TaxRateOverrides))
+		behaviorByCode := make(map[string]types.TaxBehavior, len(req.TaxRateOverrides))
 		for i, override := range req.TaxRateOverrides {
 			taxRateCodes[i] = override.TaxRateCode
+			if override.TaxBehavior != nil {
+				behaviorByCode[override.TaxRateCode] = *override.TaxBehavior
+			} else {
+				behaviorByCode[override.TaxRateCode] = types.DefaultTaxBehaviorForCurrency(override.Currency)
+			}
 		}
 
 		filter := types.NewNoLimitTaxRateFilter()
@@ -946,7 +1003,27 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 			return nil, err
 		}
 
-		return taxRatesResponse.Items, nil
+		resolved := make([]*dto.TaxRateWithBehavior, len(taxRatesResponse.Items))
+		for i, tr := range taxRatesResponse.Items {
+			resolved[i] = &dto.TaxRateWithBehavior{TaxRateResponse: tr, TaxBehavior: behaviorByCode[tr.Code]}
+		}
+		return dto.NewInvoiceTaxRates(resolved, cust), nil
+	}
+
+	if len(req.TaxRates) > 0 {
+		// Raw rate IDs carry no association and no behavior, so only the invoice currency is
+		// left to resolve against. Known gap: the tenant/customer hierarchy is not consulted
+		// here — pass tax_rate_overrides instead, which take an explicit behavior.
+		behavior := types.DefaultTaxBehaviorForCurrency(req.Currency)
+		resolved := make([]*dto.TaxRateWithBehavior, 0, len(req.TaxRates))
+		for _, taxRateID := range req.TaxRates {
+			taxRate, err := s.GetTaxRate(ctx, taxRateID)
+			if err != nil {
+				return nil, err
+			}
+			resolved = append(resolved, &dto.TaxRateWithBehavior{TaxRateResponse: taxRate, TaxBehavior: behavior})
+		}
+		return dto.NewInvoiceTaxRates(resolved, cust), nil
 	}
 
 	if req.SubscriptionID != nil {
@@ -971,13 +1048,28 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 		}
 
 		if len(taxAssociations.Items) == 0 {
-			return []*dto.TaxRateResponse{}, nil
+			return dto.NewInvoiceTaxRates(nil, cust), nil
 		}
 
-		// Get tax rates for the associations
+		// Keep each association's behavior paired with its rate: a bare rate ID list would
+		// lose it as soon as two associations share a rate.
 		taxRateIDs := make([]string, len(taxAssociations.Items))
+		behaviorByRateID := make(map[string]types.TaxBehavior, len(taxAssociations.Items))
 		for i, association := range taxAssociations.Items {
 			taxRateIDs[i] = association.TaxRateID
+			behavior := lo.FromPtr(association.TaxBehavior)
+			if behavior == "" {
+				// Creation always stamps one, so a null here should not happen. Fall back to
+				// the same currency default every other unstamped resolution uses.
+				behavior = types.DefaultTaxBehaviorForCurrency(req.Currency)
+				s.Logger.Error(ctx, "subscription tax association missing tax_behavior, defaulting from currency",
+					"error", "tax_behavior is null on a subscription-level association",
+					"tax_association_id", association.ID,
+					"tax_rate_id", association.TaxRateID,
+					"currency", req.Currency,
+					"resolved_behavior", behavior)
+			}
+			behaviorByRateID[association.TaxRateID] = behavior
 		}
 
 		taxRateFilter := types.NewNoLimitTaxRateFilter()
@@ -992,111 +1084,143 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 			return nil, err
 		}
 
-		return taxRatesResponse.Items, nil
+		resolved := make([]*dto.TaxRateWithBehavior, len(taxRatesResponse.Items))
+		for i, tr := range taxRatesResponse.Items {
+			resolved[i] = &dto.TaxRateWithBehavior{TaxRateResponse: tr, TaxBehavior: behaviorByRateID[tr.ID]}
+		}
+		return dto.NewInvoiceTaxRates(resolved, cust), nil
 	}
 
-	return []*dto.TaxRateResponse{}, nil
+	return dto.NewInvoiceTaxRates(nil, cust), nil
 }
 
 // TaxCalculationResult represents the result of tax calculations
 type TaxCalculationResult struct {
-	TotalTaxAmount    decimal.Decimal
+	// InclusiveTax is the tax already contained in the taxable amount, recovered by working
+	// backwards from it. Because it is already inside the subtotal it is never added to the
+	// invoice total; it exists to report how much of the listed price was tax. Computed the
+	// same way whether or not the customer is exempt.
+	InclusiveTax decimal.Decimal
+
+	// ExclusiveTax is added on top of the taxable amount — the only tax that moves the total.
+	// Computed the same way whether or not the customer is exempt.
+	ExclusiveTax decimal.Decimal
+
+	// TotalTaxAmount is what is actually charged: InclusiveTax + ExclusiveTax, or zero when
+	// the customer is exempt. This is what lands on invoice.total_tax.
+	TotalTaxAmount decimal.Decimal
+
+	Exempt bool
+
 	TaxAppliedRecords []*dto.TaxAppliedResponse
-	TaxRates          []*dto.TaxRateResponse
+}
+
+func taxableAmount(inv *invoice.Invoice) decimal.Decimal {
+	amount := inv.Subtotal.Sub(inv.TotalDiscount)
+	if amount.IsNegative() {
+		return decimal.Zero
+	}
+
+	return amount
+}
+
+// CalculateTaxesOnInvoice computes what the resolved rates would charge and writes nothing.
+// TaxAppliedRecords are built in memory, so it is safe for a preview of an invoice that will
+// never exist. ApplyTaxesOnInvoice calls this and then persists them.
+func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *TaxCalculationResult {
+	taxableAmt := taxableAmount(inv)
+	rateLines, rateByID := s.buildRateLines(ctx, inv, taxRates.GetRates())
+
+	breakdown := calculateTaxBreakdown(taxableAmt, rateLines, inv.Currency)
+
+	s.Logger.Info(ctx, "tax computed for invoice",
+		"invoice_id", inv.ID, "taxable_amount", taxableAmt,
+		"inclusive_tax", breakdown.inclusiveTax, "exclusive_tax", breakdown.exclusiveTax)
+
+	// Tax is computed the same way for everyone; exemption only zeroes what is charged. One
+	// override at the end, rather than a branch inside the maths.
+	exempt := taxRates.IsExempt()
+	totalTaxCharged := breakdown.inclusiveTax.Add(breakdown.exclusiveTax)
+	if exempt {
+		s.Logger.Info(ctx, "exemption applied at compute",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID,
+			"waived_inclusive_tax", breakdown.inclusiveTax, "waived_exclusive_tax", breakdown.exclusiveTax)
+		totalTaxCharged = decimal.Zero
+	}
+
+	taxAppliedRecords := make([]*dto.TaxAppliedResponse, 0, len(breakdown.lines))
+	for _, line := range breakdown.lines {
+		chargedAmount := line.taxAmount
+		if exempt {
+			chargedAmount = decimal.Zero
+		}
+		rate := rateByID[line.rateID]
+
+		taxAppliedRecords = append(taxAppliedRecords, &dto.TaxAppliedResponse{
+			TaxApplied: taxapplied.TaxApplied{
+				TaxRateID:     rate.ID,
+				EntityType:    types.TaxRateEntityTypeInvoice,
+				EntityID:      inv.ID,
+				TaxableAmount: line.taxableAmount,
+				TaxAmount:     chargedAmount,
+				TaxBehavior:   line.taxBehavior,
+				Currency:      inv.Currency,
+				AppliedAt:     time.Now().UTC(),
+			},
+			TaxRate: rate.TaxRateResponse,
+		})
+	}
+
+	return &TaxCalculationResult{
+		InclusiveTax:      breakdown.inclusiveTax,
+		ExclusiveTax:      breakdown.exclusiveTax,
+		TotalTaxAmount:    totalTaxCharged,
+		Exempt:            exempt,
+		TaxAppliedRecords: taxAppliedRecords,
+	}
 }
 
 // ApplyTaxesOnInvoice applies taxes to an invoice and creates/updates tax applied records
 // This method handles idempotency by checking for existing tax applied records
 // Returns calculated tax data instead of directly updating the invoice
-func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) (*TaxCalculationResult, error) {
-	if len(taxRates) == 0 {
+func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*TaxCalculationResult, error) {
+	if len(taxRates.GetRates()) == 0 {
 		s.Logger.Info(ctx, "no tax rates to apply to invoice", "invoice_id", inv.ID)
 		return &TaxCalculationResult{
 			TotalTaxAmount:    decimal.Zero,
 			TaxAppliedRecords: []*dto.TaxAppliedResponse{},
-			TaxRates:          taxRates,
 		}, nil
 	}
 
 	s.Logger.Info(ctx, "applying taxes to invoice",
 		"invoice_id", inv.ID,
-		"tax_rates_count", len(taxRates))
+		"tax_rates_count", len(taxRates.GetRates()))
 
-	// Discount-first policy: taxable amount is subtotal minus total discount (clamped at zero)
-	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount)
-	if taxableAmount.IsNegative() {
-		taxableAmount = decimal.Zero
-	}
-	totalTaxAmount := decimal.Zero
-	taxAppliedRecords := make([]*dto.TaxAppliedResponse, 0, len(taxRates))
+	result := s.CalculateTaxesOnInvoice(ctx, inv, taxRates)
 
-	// Process each tax rate
-	for _, taxRate := range taxRates {
-		taxAmount := s.calculateTaxAmount(taxRate, taxableAmount)
-		if taxAmount == nil {
-			continue // Skip invalid tax rate types
-		}
-
-		// Round each tax amount immediately at source to ensure currency precision
-		roundedTaxAmount := types.RoundToCurrencyPrecision(lo.FromPtr(taxAmount), inv.Currency)
-		totalTaxAmount = totalTaxAmount.Add(roundedTaxAmount)
-
-		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, taxRate, taxableAmount, roundedTaxAmount)
+	rateByID := lo.SliceToMap(taxRates.GetRates(), func(r *dto.TaxRateWithBehavior) (string, *dto.TaxRateWithBehavior) {
+		return r.ID, r
+	})
+	persisted := make([]*dto.TaxAppliedResponse, 0, len(result.TaxAppliedRecords))
+	for _, record := range result.TaxAppliedRecords {
+		applied, err := s.processTaxApplication(ctx, inv, rateByID[record.TaxRateID], record.TaxableAmount, record.TaxAmount)
 		if err != nil {
 			return nil, err
 		}
-
-		taxAppliedRecords = append(taxAppliedRecords, taxAppliedRecord)
+		persisted = append(persisted, applied)
 	}
+	result.TaxAppliedRecords = persisted
 
 	s.Logger.Info(ctx, "successfully calculated taxes for invoice",
 		"invoice_id", inv.ID,
-		"total_tax", totalTaxAmount,
-		"tax_rates_processed", len(taxRates))
+		"total_tax", result.TotalTaxAmount,
+		"tax_rates_processed", len(taxRates.GetRates()))
 
-	return &TaxCalculationResult{
-		TotalTaxAmount:    totalTaxAmount,
-		TaxAppliedRecords: taxAppliedRecords,
-		TaxRates:          taxRates,
-	}, nil
-}
-
-// calculateTaxAmount calculates the tax amount for a given tax rate and taxable amount
-func (s *taxService) calculateTaxAmount(taxRate *dto.TaxRateResponse, taxableAmount decimal.Decimal) *decimal.Decimal {
-	var taxAmount decimal.Decimal
-
-	switch taxRate.TaxRateType {
-	case types.TaxRateTypePercentage:
-		if taxRate.PercentageValue == nil {
-			s.Logger.Info(context.Background(), "percentage tax rate missing percentage_value, skipping",
-				"tax_rate_id", taxRate.ID,
-			)
-			return nil
-		}
-		// For percentage tax: taxable_amount * (percentage / 100)
-		taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
-	case types.TaxRateTypeFixed:
-		if taxRate.FixedValue == nil {
-			s.Logger.Info(context.Background(), "fixed tax rate missing fixed_value, skipping",
-				"tax_rate_id", taxRate.ID,
-			)
-			return nil
-		}
-		// For fixed tax: use the fixed value directly
-		taxAmount = *taxRate.FixedValue
-	default:
-		s.Logger.Info(context.Background(), "unknown tax rate type, skipping",
-			"tax_rate_id", taxRate.ID,
-			"tax_rate_type", taxRate.TaxRateType,
-		)
-		return nil
-	}
-
-	return &taxAmount
+	return result, nil
 }
 
 // processTaxApplication handles the creation or update of tax applied records
-func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateResponse, taxableAmount, taxAmount decimal.Decimal) (*dto.TaxAppliedResponse, error) {
+func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateWithBehavior, taxableAmount, taxAmount decimal.Decimal) (*dto.TaxAppliedResponse, error) {
 	idempGen := idempotency.NewGenerator()
 	idempotencyKey := idempGen.GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
 		"tax_rate_id": taxRate.ID,
@@ -1118,6 +1242,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 	if existingTaxApplied != nil {
 		existingTaxApplied.TaxableAmount = taxableAmount
 		existingTaxApplied.TaxAmount = taxAmount
+		existingTaxApplied.TaxBehavior = taxRate.TaxBehavior
 		existingTaxApplied.AppliedAt = time.Now().UTC()
 
 		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
@@ -1144,6 +1269,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		EntityID:      inv.ID,
 		TaxableAmount: taxableAmount,
 		TaxAmount:     taxAmount,
+		TaxBehavior:   taxRate.TaxBehavior,
 		Currency:      inv.Currency,
 	}
 
@@ -1170,4 +1296,204 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		"taxable_amount", taxableAmount)
 
 	return &dto.TaxAppliedResponse{TaxApplied: *taxApplied}, nil
+}
+
+// buildRateLines drops rates with no percentage_value and reshapes the rest for the calculation.
+func (s *taxService) buildRateLines(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateWithBehavior) ([]taxRateLine, map[string]*dto.TaxRateWithBehavior) {
+	lines := make([]taxRateLine, 0, len(taxRates))
+	byID := make(map[string]*dto.TaxRateWithBehavior, len(taxRates))
+
+	for _, rate := range taxRates {
+		if rate.PercentageValue == nil {
+			s.Logger.Info(ctx, "rate skipped — missing percentage_value",
+				"invoice_id", inv.ID, "tax_rate_id", rate.ID)
+			continue
+		}
+
+		byID[rate.ID] = rate
+		lines = append(lines, taxRateLine{
+			id:              rate.ID,
+			percentageValue: rate.PercentageValue,
+			taxBehavior:     rate.TaxBehavior,
+		})
+	}
+
+	return lines, byID
+}
+
+// resolveEffectiveTaxBehavior stamps the tax_behavior a new association will carry, and rejects
+// an inclusive rate above 100%. sub is the already-fetched subscription for a subscription-level
+// association, and nil for tenant/customer-level requests — the caller fetches it once, for
+// both this and its own exemption check, rather than this function fetching it again.
+func (s *taxService) resolveEffectiveTaxBehavior(ctx context.Context, req *dto.CreateTaxAssociationRequest, taxRate *taxrate.TaxRate, sub *subscription.Subscription) (*types.TaxBehavior, error) {
+	behavior := req.TaxBehavior
+
+	// sub is nil for tenant/customer-level associations: they span several currencies, so
+	// there is no single default to resolve from. They keep whatever the request gave —
+	// including nothing — and are resolved when copied down to a subscription.
+	if sub != nil {
+		resolvedBehavior := lo.FromPtr(req.TaxBehavior)
+		source := types.TaxBehaviorSourceExplicit
+		if req.TaxBehavior == nil {
+			resolvedBehavior = types.DefaultTaxBehaviorForCurrency(sub.Currency)
+			source = types.TaxBehaviorSourceCurrencyDefault
+		}
+
+		behavior = &resolvedBehavior
+		s.Logger.Info(ctx, "tax behavior resolved for subscription association",
+			"subscription_id", sub.ID,
+			"tax_rate_id", taxRate.ID,
+			"currency", sub.Currency,
+			"resolved_behavior", resolvedBehavior,
+			"source", source)
+	}
+
+	// Above 100% inclusive, the tax exceeds the tax-free price it is derived from. The maths
+	// still works, so this is rejected as a configuration mistake. Checked against the
+	// resolved value so a row that became inclusive via the currency default is caught too.
+	if behavior != nil && *behavior == types.TaxBehaviorInclusive &&
+		taxRate.PercentageValue != nil && taxRate.PercentageValue.GreaterThan(decimal.NewFromInt(100)) {
+		return nil, ierr.NewError("a percentage rate above 100% cannot be inclusive").
+			WithHint("An inclusive tax rate above 100% would mean the tax exceeds the tax-free price it is derived from").
+			WithReportableDetails(map[string]interface{}{
+				"tax_rate_id":      taxRate.ID,
+				"percentage_value": taxRate.PercentageValue.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return behavior, nil
+}
+
+// taxRateLine is what calculateTaxBreakdown needs from a rate. Callers must have already
+// dropped rates with no percentage_value.
+type taxRateLine struct {
+	id              string
+	percentageValue *decimal.Decimal
+	taxBehavior     types.TaxBehavior
+}
+
+// taxLineResult is what one rate line charges after calculateTaxBreakdown.
+type taxLineResult struct {
+	rateID      string
+	taxBehavior types.TaxBehavior
+	// taxableAmount is what this rate was computed against: the invoice's full taxable amount
+	// for an inclusive line, or that amount less the inclusive tax for an exclusive line. The
+	// two are not independent — see calculateTaxBreakdown.
+	taxableAmount decimal.Decimal
+	taxAmount     decimal.Decimal
+}
+
+// taxCalculationBreakdown is what calculateTaxBreakdown produces. Whether the customer is
+// exempt never changes these amounts; the caller applies exemption afterward as a single
+// override, never inside the calculation.
+type taxCalculationBreakdown struct {
+	inclusiveTax decimal.Decimal
+	exclusiveTax decimal.Decimal
+	lines        []*taxLineResult
+}
+
+// inclusiveShare is one rate's rounded slice of the combined inclusive tax, kept with its rate
+// so the largest share can absorb the rounding remainder.
+type inclusiveShare struct {
+	rate   taxRateLine
+	amount decimal.Decimal
+}
+
+// calculateTaxBreakdown splits rates by behavior and computes what each one charges. Both run
+// on the discounted amount, matching Stripe's tax-rate ordering:
+//
+//  1. Inclusive tax is recovered from taxableAmount (already post-discount). Discounting a
+//     tax-inclusive price reduces the tax inside it too.
+//  2. Exclusive tax runs on taxableAmount less that inclusive portion, never on taxableAmount
+//     directly, which would tax money the inclusive portion already accounts for.
+//  3. Total is taxableAmount plus the exclusive tax.
+//
+// Several simultaneous inclusive rates cannot each be extracted independently: each would claim
+// the whole gap between the amount and its tax-free price, giving as many contradictory
+// tax-free prices as there are rates. They are combined, extracted once, then split
+// proportionally.
+//
+// Inclusive tax can never reach taxableAmount, since rate/(100+rate) is below 1 for any rate at
+// or above zero, so netTaxableAmount is never negative.
+func calculateTaxBreakdown(taxableAmount decimal.Decimal, rates []taxRateLine, currency string) *taxCalculationBreakdown {
+	precision := types.GetCurrencyPrecision(currency)
+	hundred := decimal.NewFromInt(100)
+
+	var combinedInclusiveRate decimal.Decimal
+	var inclusiveLines, exclusiveLines []taxRateLine
+	for _, r := range rates {
+		if r.taxBehavior == types.TaxBehaviorInclusive {
+			inclusiveLines = append(inclusiveLines, r)
+			combinedInclusiveRate = combinedInclusiveRate.Add(*r.percentageValue)
+		} else {
+			exclusiveLines = append(exclusiveLines, r)
+		}
+	}
+
+	// combinedInclusiveRate can only be zero when every inclusive line's own rate is zero too
+	// (e.g. a single inclusive rate at 0%%) — guard the division rather than let a legitimate
+	// 0%% rate panic.
+	var unroundedInclusiveTax decimal.Decimal
+	if !combinedInclusiveRate.IsZero() {
+		// amount * rate / (100 + rate) — the tax already inside amount at this combined rate.
+		unroundedInclusiveTax = taxableAmount.Mul(combinedInclusiveRate).Div(hundred.Add(combinedInclusiveRate))
+	}
+	inclusiveTax := unroundedInclusiveTax.Round(precision)
+
+	lines := make([]*taxLineResult, 0, len(rates))
+
+	if len(inclusiveLines) > 0 {
+		shares := make([]inclusiveShare, len(inclusiveLines))
+		var sumRounded decimal.Decimal
+		largestIdx := 0
+		for i, r := range inclusiveLines {
+			var amount decimal.Decimal
+			if !combinedInclusiveRate.IsZero() {
+				// this rate's share of the combined tax, proportional to its own rate.
+				amount = unroundedInclusiveTax.Mul(*r.percentageValue).Div(combinedInclusiveRate).Round(precision)
+			}
+			shares[i] = inclusiveShare{rate: r, amount: amount}
+			sumRounded = sumRounded.Add(amount)
+			if amount.GreaterThan(shares[largestIdx].amount) {
+				largestIdx = i
+			}
+		}
+
+		// Independently-rounded shares can land a cent off the rounded whole; assign the
+		// stray remainder to the largest share so the lines still sum to inclusiveTax exactly.
+		if remainder := inclusiveTax.Sub(sumRounded); !remainder.IsZero() {
+			shares[largestIdx].amount = shares[largestIdx].amount.Add(remainder)
+		}
+
+		for _, sh := range shares {
+			lines = append(lines, &taxLineResult{
+				rateID:        sh.rate.id,
+				taxBehavior:   types.TaxBehaviorInclusive,
+				taxableAmount: taxableAmount,
+				taxAmount:     sh.amount,
+			})
+		}
+	}
+
+	// What is left to be taxed on top, once the inclusive portion is accounted for.
+	netTaxableAmount := taxableAmount.Sub(inclusiveTax)
+
+	var exclusiveTax decimal.Decimal
+	for _, r := range exclusiveLines {
+		amount := netTaxableAmount.Mul(*r.percentageValue).Div(hundred).Round(precision)
+		lines = append(lines, &taxLineResult{
+			rateID:        r.id,
+			taxBehavior:   types.TaxBehaviorExclusive,
+			taxableAmount: netTaxableAmount,
+			taxAmount:     amount,
+		})
+		exclusiveTax = exclusiveTax.Add(amount)
+	}
+
+	return &taxCalculationBreakdown{
+		inclusiveTax: inclusiveTax,
+		exclusiveTax: exclusiveTax,
+		lines:        lines,
+	}
 }

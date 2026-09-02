@@ -152,6 +152,18 @@ func (egu *EntitlementGrantUpdate) ClearQuotaCrossedAt() *EntitlementGrantUpdate
 	return egu
 }
 
+// SetMetadata sets the "metadata" field.
+func (egu *EntitlementGrantUpdate) SetMetadata(t types.Metadata) *EntitlementGrantUpdate {
+	egu.mutation.SetMetadata(t)
+	return egu
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (egu *EntitlementGrantUpdate) ClearMetadata() *EntitlementGrantUpdate {
+	egu.mutation.ClearMetadata()
+	return egu
+}
+
 // Mutation returns the EntitlementGrantMutation object of the builder.
 func (egu *EntitlementGrantUpdate) Mutation() *EntitlementGrantMutation {
 	return egu.mutation
@@ -240,6 +252,12 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if egu.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
+	}
+	if value, ok := egu.mutation.Metadata(); ok {
+		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
+	}
+	if egu.mutation.MetadataCleared() {
+		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, egu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -383,6 +401,18 @@ func (eguo *EntitlementGrantUpdateOne) ClearQuotaCrossedAt() *EntitlementGrantUp
 	return eguo
 }
 
+// SetMetadata sets the "metadata" field.
+func (eguo *EntitlementGrantUpdateOne) SetMetadata(t types.Metadata) *EntitlementGrantUpdateOne {
+	eguo.mutation.SetMetadata(t)
+	return eguo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (eguo *EntitlementGrantUpdateOne) ClearMetadata() *EntitlementGrantUpdateOne {
+	eguo.mutation.ClearMetadata()
+	return eguo
+}
+
 // Mutation returns the EntitlementGrantMutation object of the builder.
 func (eguo *EntitlementGrantUpdateOne) Mutation() *EntitlementGrantMutation {
 	return eguo.mutation
@@ -501,6 +531,12 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	}
 	if eguo.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
+	}
+	if value, ok := eguo.mutation.Metadata(); ok {
+		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
+	}
+	if eguo.mutation.MetadataCleared() {
+		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
 	_node = &EntitlementGrant{config: eguo.config}
 	_spec.Assign = _node.assignValues

@@ -62,7 +62,7 @@ type Service struct {
 	// App-level metrics (independent of span export; see initMeter).
 	meterProvider  *sdkmetric.MeterProvider
 	metricsEnabled bool
-	meterInitDone  bool // true after a successful enable or deliberate skip (idempotent)
+	meterInitDone  bool                    // true after a successful enable or deliberate skip (idempotent)
 	dbDuration     metric.Float64Histogram // db.client.duration (ms) — {operation, db_system, status}
 	cacheRequests  metric.Int64Counter     // cache.requests — {operation, result}
 }
@@ -96,9 +96,6 @@ func NewService(cfg *config.Configuration, log *logger.Logger) *Service {
 func RegisterHooks(lc fx.Lifecycle, s *Service) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if err := s.initSentry(); err != nil {
-				return err
-			}
 			if err := s.initTracer(ctx); err != nil {
 				return err
 			}
@@ -112,29 +109,6 @@ func RegisterHooks(lc fx.Lifecycle, s *Service) {
 			return nil
 		},
 	})
-}
-
-func (s *Service) initSentry() error {
-	if !s.cfg.Sentry.Enabled {
-		s.logger.Info(context.Background(), "Sentry is disabled")
-		return nil
-	}
-
-	err := sentry.Init(sentry.ClientOptions{
-		Dsn:           s.cfg.Sentry.DSN,
-		Environment:   s.cfg.Sentry.Environment,
-		EnableTracing: false, // Tracing is handled by OTel; Sentry is errors-only.
-	})
-	if err != nil {
-		s.logger.Error(context.Background(), "Failed to initialize Sentry", "error", err)
-		return err
-	}
-
-	s.sentryEnabled = true
-	s.logger.Info(context.Background(), "Sentry initialized (errors-only mode)",
-		"environment", s.cfg.Sentry.Environment,
-	)
-	return nil
 }
 
 func (s *Service) initTracer(ctx context.Context) error {
@@ -259,9 +233,6 @@ func (s *Service) baseResourceAttrs() []attribute.KeyValue {
 	// deployment.environment — emit both old and new semconv keys for broad
 	// backend compatibility (Sentry relay reads the legacy key).
 	env := s.cfg.Logging.Environment
-	if env == "" {
-		env = s.cfg.Sentry.Environment
-	}
 	if env != "" {
 		attrs = append(attrs,
 			semconv.DeploymentEnvironmentName(env),          // deployment.environment.name (OTel v1.22+)
@@ -277,6 +248,18 @@ func (s *Service) baseResourceAttrs() []attribute.KeyValue {
 	// temporal_worker). Visible in SigNoz as a filterable resource attribute.
 	if mode := string(s.cfg.Deployment.Mode); mode != "" {
 		attrs = append(attrs, attribute.String("app.component", mode))
+	}
+
+	// service.instance.id identifies which replica emitted this, on both signals.
+	// Metrics need it: without it every replica exports the same label set, so one
+	// series takes samples from N writers whose cumulative counters reset
+	// independently — duplicates get dropped and a rolling restart reads as a
+	// phantom spike. Aggregate it away at query time (sum by (job) (rate(x[5m])) —
+	// rate() per series first) or in a collector, not here.
+	// Hostname is the pod name on k8s and the container ID on ECS;
+	// OTEL_RESOURCE_ATTRIBUTES overrides it.
+	if host, err := os.Hostname(); err == nil && host != "" {
+		attrs = append(attrs, semconv.ServiceInstanceID(host))
 	}
 	return attrs
 }
@@ -296,10 +279,9 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 	)
 }
 
-// newMetricResource builds a SERVICE-LEVEL resource (no host.name/process attrs).
-// Metric series cardinality = label combinations × resource series; per-pod
-// host attributes would multiply every series by the running pod count, so they
-// are deliberately omitted to keep metric cost flat.
+// newMetricResource builds a SERVICE-LEVEL resource: no host.name/process attrs,
+// which would multiply every series without adding anything service.instance.id
+// does not already say.
 func (s *Service) newMetricResource(ctx context.Context) (*resource.Resource, error) {
 	return resource.New(ctx,
 		resource.WithAttributes(s.baseResourceAttrs()...),
@@ -341,24 +323,12 @@ func (s *Service) initMeter(ctx context.Context) error {
 	if interval <= 0 {
 		interval = 60 * time.Second
 	}
-	mp := sdkmetric.NewMeterProvider(
+	opts := []sdkmetric.Option{
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(interval))),
-		// Drop the framework's auto-emitted HTTP metrics (http.server.* / http.client.*).
-		// Turning on the MeterProvider auto-enabled these; they were ~31% of metric
-		// ingestion and are referenced by no dashboard or alert. Body-size histograms
-		// are unwanted, and request latency is already covered by APM (derived from
-		// traces). NOTE: if API traces are ever sampled below 100%, re-add a coarse
-		// http.server.request.duration here as the always-on latency source.
-		sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "http.server.*"},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
-		)),
-		sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "http.client.*"},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
-		)),
-	)
+	}
+	opts = append(opts, s.httpMetricViews()...)
+	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
 	s.meterProvider = mp
 
@@ -377,6 +347,35 @@ func (s *Service) initMeter(ctx context.Context) error {
 	s.meterInitDone = true
 	s.logger.Info(ctx, "OTel metrics initialized", "endpoint", mc.Endpoint, "interval", interval.String())
 	return nil
+}
+
+// httpMetricViews decides what happens to the HTTP metrics otelgin emits for free.
+// Everything is dropped by default (~31% of ingestion, and SigNoz derives the same
+// view from spans). http_server_enabled keeps request.duration for deployments with
+// no trace backend, trimmed to bounded attributes — the raw semconv set adds
+// server.address/port and protocol version, which cost series and say nothing here.
+func (s *Service) httpMetricViews() []sdkmetric.Option {
+	drop := func(pattern string) sdkmetric.Option {
+		return sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: pattern},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		))
+	}
+
+	var views []sdkmetric.Option
+	if s.cfg.Otel.Metrics.HTTPServerEnabled {
+		// First matching view wins, so this must precede the http.server.* drop.
+		views = append(views, sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "http.server.request.duration"},
+			sdkmetric.Stream{AttributeFilter: attribute.NewAllowKeysFilter(
+				"http.request.method",
+				"http.route",
+				"http.response.status_code",
+				"error.type",
+			)},
+		)))
+	}
+	return append(views, drop("http.server.*"), drop("http.client.*"))
 }
 
 // newMetricExporter builds the OTLP metric exporter (gRPC or HTTP), mirroring
@@ -485,15 +484,44 @@ func (s *Service) IsSentryEnabled() bool {
 	return s.sentryEnabled
 }
 
-// IsStorageSpansEnabled reports whether per-query storage spans (DB, cache,
-// ClickHouse) should be created. Controlled by
-// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (default: false) to avoid span
-// volume explosion before operators have a feel for the cost.
+// IsStorageSpansEnabled is the master switch for ALL per-query storage spans
+// (DB, ClickHouse, cache). When false, no storage span emits regardless of
+// per-type toggles. Controlled by FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED
+// (default: false) to avoid span volume explosion before operators have a
+// feel for the cost. When true, DB and ClickHouse spans emit; cache spans
+// additionally require their per-type flag — see IsRedisCacheSpansEnabled /
+// IsInMemoryCacheSpansEnabled.
 func (s *Service) IsStorageSpansEnabled() bool {
 	if s == nil {
 		return false
 	}
 	return s.tracingEnabled && s.cfg.Otel.Traces.StorageSpansEnabled
+}
+
+// IsRedisCacheSpansEnabled reports whether Redis cache spans (db.system=redis)
+// should be created. Requires the master IsStorageSpansEnabled to also be true
+// — this flag is an opt-in for the noisy cache fan-out on top of the storage
+// master switch, not a replacement for it. Controlled by
+// FLEXPRICE_OTEL_TRACES_REDIS_CACHE_SPANS_ENABLED (default: false).
+func (s *Service) IsRedisCacheSpansEnabled() bool {
+	if s == nil {
+		return false
+	}
+	return s.IsStorageSpansEnabled() && s.cfg.Otel.Traces.RedisCacheSpansEnabled
+}
+
+// IsInMemoryCacheSpansEnabled reports whether in-memory cache spans
+// (db.system=in_memory) should be created. Requires the master
+// IsStorageSpansEnabled to also be true — this flag is an opt-in on top of
+// the storage master switch. In-memory hits have a completely different
+// latency profile from Redis and are gated separately so operators can enable
+// only what they need. Controlled by
+// FLEXPRICE_OTEL_TRACES_IN_MEMORY_CACHE_SPANS_ENABLED (default: false).
+func (s *Service) IsInMemoryCacheSpansEnabled() bool {
+	if s == nil {
+		return false
+	}
+	return s.IsStorageSpansEnabled() && s.cfg.Otel.Traces.InMemoryCacheSpansEnabled
 }
 
 // storageSpanSampled applies otel.traces.storage_spans_sample_rate as a per-trace
@@ -757,10 +785,18 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 // storage_spans_sample_rate (per-trace), so every storage span — DB, ClickHouse,
 // repository — obeys both regardless of call path.
 func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
+	return s.startStorageSpanGated(ctx, name, op, dbSystem, s.IsStorageSpansEnabled(), params)
+}
+
+// startStorageSpanGated is the common implementation. The caller passes an
+// explicit spanEnabled gate so DB/CH callers can use the storage_spans_enabled
+// switch while cache callers use their per-type flag. The per-trace sample
+// rate throttle and the always-on metrics path are shared.
+func (s *Service) startStorageSpanGated(ctx context.Context, name, op, dbSystem string, spanEnabled bool, params map[string]interface{}) (*Span, context.Context) {
 	if s == nil { // a nil tracing service is a valid no-op (tracing not wired)
 		return nil, ctx
 	}
-	spanOn := s.IsStorageSpansEnabled() && s.storageSpanSampled(ctx)
+	spanOn := spanEnabled && s.storageSpanSampled(ctx)
 	if !spanOn && !s.metricsEnabled {
 		return nil, ctx
 	}
@@ -873,12 +909,29 @@ func (s *Service) StartRepositorySpan(ctx context.Context, dbSystem, repository,
 // the same code path and are tagged the same way (cache.entity distinguishes
 // what was accessed).
 //
-// Gated by otel.traces.storage_spans_enabled (via startStorageSpan) — cache
-// spans fire on every get/set/delete, so they share the same noise/volume
-// tradeoff as the other storage spans.
+// Gated per db.system on top of the storage master switch:
+//   - otel.traces.storage_spans_enabled must be true for ANY cache span to
+//     emit (master kill switch shared with DB/ClickHouse spans).
+//   - db.system=redis     additionally requires otel.traces.redis_cache_spans_enabled.
+//   - db.system=in_memory additionally requires otel.traces.in_memory_cache_spans_enabled.
+//
+// Both per-type flags default false because cache calls fire on every
+// get/set/delete and are the noisiest fan-out in a trace. Splitting the flag
+// lets operators enable DB/ClickHouse spans without dragging in cache noise,
+// while still using storage_spans_enabled as a single kill switch when they
+// want everything off.
 func (s *Service) StartCacheSpan(ctx context.Context, dbSystem, cacheEntity, operation string, params map[string]interface{}) (*Span, context.Context) {
+	var spanEnabled bool
+	switch dbSystem {
+	case "redis":
+		spanEnabled = s.IsRedisCacheSpansEnabled()
+	case "in_memory":
+		spanEnabled = s.IsInMemoryCacheSpansEnabled()
+	default:
+		spanEnabled = s.IsStorageSpansEnabled()
+	}
 	name := fmt.Sprintf("cache.%s.%s", cacheEntity, operation)
-	span, newCtx := s.startStorageSpan(ctx, name, "cache."+operation, dbSystem, params)
+	span, newCtx := s.startStorageSpanGated(ctx, name, "cache."+operation, dbSystem, spanEnabled, params)
 	if span != nil {
 		span.SetData("cache.entity", cacheEntity)
 		span.SetData("cache.operation", operation)

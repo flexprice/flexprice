@@ -1,0 +1,32 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.provider "gce") }}
+# FrontendConfig — HTTP to HTTPS redirect at the GCE load balancer.
+#
+# The GCE ingress serves both :80 and :443. Without the redirect the plaintext
+# listener stays open and serves the app. Referenced from the Ingress object via
+# the networking.gke.io/v1beta1.FrontendConfig annotation, set per-region in
+# ingress.annotations.
+#
+# The object is rendered whenever provider=gce, INCLUDING when the redirect is
+# disabled, and only spec.redirectToHttps.enabled reflects the toggle. Gating
+# the whole object on that flag would leave the Ingress annotation pointing at a
+# FrontendConfig that does not exist — the same dangling-reference class of bug
+# as a missing ManagedCertificate, which stops GKE provisioning the load
+# balancer at all rather than merely skipping the redirect.
+#
+# Turning the redirect off is a legitimate temporary state: Google validates a
+# managed certificate over plain HTTP on port 80, and a blanket 301 answers the
+# validation probe with a redirect to an HTTPS endpoint that has no usable
+# certificate yet — deadlocking issuance.
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api-frontend
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  redirectToHttps:
+    enabled: {{ .Values.ingress.gce.frontendConfig.redirectToHttps.enabled }}
+    {{- if .Values.ingress.gce.frontendConfig.redirectToHttps.enabled }}
+    responseCodeName: {{ .Values.ingress.gce.frontendConfig.redirectToHttps.responseCodeName }}
+    {{- end }}
+{{- end }}

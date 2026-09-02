@@ -97,8 +97,12 @@ func (w *workflowTrackingInboundInterceptor) ExecuteWorkflow(
 	}
 
 	// Execute local activity to update workflow status in database with timing
-	// TenantID and EnvironmentID are required so the activity can set context for repository lookup
+	// TenantID and EnvironmentID are required so the activity can set context for repository lookup.
+	// If start-tracking was skipped (no tenant in input), there's no row to update — skip end too.
 	tenantID, environmentID, _, _, _, _ := extractWorkflowContext(in.Args)
+	if tenantID == "" {
+		return result, err
+	}
 	tracking.ExecuteTrackWorkflowEnd(ctx, tracking.TrackWorkflowEndInput{
 		WorkflowStatus: status,
 		Error:          errorMsg,
@@ -130,6 +134,22 @@ func trackWorkflowStart(ctx workflow.Context, info workflow.Info, in *intercepto
 
 	// Extract tenant, environment, user, entity, entity_id, and metadata from workflow input
 	tenantID, environmentID, userID, entity, entityID, metadata := extractWorkflowContext(in.Args)
+
+	// If the input struct doesn't carry a TenantID (e.g. cron workflows with an
+	// empty struct{} input, or a workflow whose input shape hasn't adopted the
+	// {TenantID, EnvironmentID, ...} convention), the tracking activity would
+	// hard-fail on the required-field check and log an Error every run. Skip
+	// tracking silently at Info instead — the workflow itself still runs; the
+	// row just isn't persisted. Fix by adding TenantID to the workflow input,
+	// or by adding the workflow type to WorkflowTypesExcludedFromTracking.
+	if tenantID == "" {
+		logger.Info("Skipping workflow tracking — no tenant context in input",
+			"workflow_type", info.WorkflowType.Name,
+			"workflow_id", info.WorkflowExecution.ID,
+			"task_queue", info.TaskQueueName,
+		)
+		return
+	}
 
 	logger.Debug("Tracking workflow start",
 		"workflow_type", info.WorkflowType.Name,

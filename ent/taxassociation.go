@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/taxassociation"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // TaxAssociation is the model entity for the TaxAssociation schema.
@@ -49,7 +50,9 @@ type TaxAssociation struct {
 	// When this tax association becomes effective
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// When this tax association stops being effective
-	EndDate      *time.Time `json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// inclusive or exclusive; settable at any level, but only required to resolve at subscription level, where it falls back to the currency default if left null
+	TaxBehavior  *types.TaxBehavior `json:"tax_behavior,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -64,7 +67,7 @@ func (*TaxAssociation) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case taxassociation.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case taxassociation.FieldID, taxassociation.FieldTenantID, taxassociation.FieldStatus, taxassociation.FieldCreatedBy, taxassociation.FieldUpdatedBy, taxassociation.FieldEnvironmentID, taxassociation.FieldTaxRateID, taxassociation.FieldEntityType, taxassociation.FieldEntityID, taxassociation.FieldCurrency:
+		case taxassociation.FieldID, taxassociation.FieldTenantID, taxassociation.FieldStatus, taxassociation.FieldCreatedBy, taxassociation.FieldUpdatedBy, taxassociation.FieldEnvironmentID, taxassociation.FieldTaxRateID, taxassociation.FieldEntityType, taxassociation.FieldEntityID, taxassociation.FieldCurrency, taxassociation.FieldTaxBehavior:
 			values[i] = new(sql.NullString)
 		case taxassociation.FieldCreatedAt, taxassociation.FieldUpdatedAt, taxassociation.FieldStartDate, taxassociation.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -189,6 +192,13 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 				ta.EndDate = new(time.Time)
 				*ta.EndDate = value.Time
 			}
+		case taxassociation.FieldTaxBehavior:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_behavior", values[i])
+			} else if value.Valid {
+				ta.TaxBehavior = new(types.TaxBehavior)
+				*ta.TaxBehavior = types.TaxBehavior(value.String)
+			}
 		default:
 			ta.selectValues.Set(columns[i], values[i])
 		}
@@ -275,6 +285,11 @@ func (ta *TaxAssociation) String() string {
 	if v := ta.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := ta.TaxBehavior; v != nil {
+		builder.WriteString("tax_behavior=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteByte(')')
 	return builder.String()

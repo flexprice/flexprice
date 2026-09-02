@@ -1,0 +1,104 @@
+{{- if and .Values.frontend.enabled (eq .Values.frontend.mode "gcsproxy") }}
+{{- /*
+  Supporting objects for frontend.mode=gcsproxy: the nginx config the sidecar
+  mounts, and the ServiceAccount gcsproxy authenticates as.
+
+  Both are rendered only in gcsproxy mode, so the image-based frontend path is
+  byte-identical to previous chart versions.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flexprice.fullname" . }}-ui-nginx
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+data:
+  default.conf: |
+    # Stock nginx, config mounted from this ConfigMap.
+    # Upstream = the gcsproxy sidecar on loopback (plain HTTP, no SNI, no
+    # resolver: 127.0.0.1 is a literal address needing no runtime DNS).
+    #
+    # Caching model — this is why publishing a build is a bucket sync with no
+    # pod restart:
+    #   /assets/* are content-hashed and immutable, so they are cached hard; a
+    #   new build emits NEW filenames, so a cached old asset is never wrong.
+    #   The app shell (/, index.html, SPA deep links) is NEVER cached here, so a
+    #   fresh sync is visible immediately.
+    # gcsproxy already does SPA fallback; @spa_fallback repeats it on 403/404 as
+    # defence in depth.
+
+    proxy_cache_path /var/cache/nginx/gcs levels=1:2 keys_zone=gcscache:20m
+                     max_size=1g inactive=60m use_temp_path=off;
+
+    server {
+        listen 3000;
+        server_name _;
+
+        gzip on;
+        gzip_proxied any;
+        gzip_comp_level 5;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css application/javascript text/javascript
+                   application/json image/svg+xml application/xml;
+
+        set $gcs_backend "127.0.0.1:{{ .Values.frontend.gcs.port }}";
+
+        location = /healthz {
+            add_header Content-Type text/plain;
+            return 200 "ok\n";
+        }
+
+        # Hashed, immutable assets -> cache hard.
+        location /assets/ {
+            proxy_http_version    1.1;
+            proxy_set_header      Connection "";
+            proxy_pass            http://$gcs_backend;
+
+            proxy_cache           gcscache;
+            proxy_cache_valid     200 60m;
+            proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_background_update on;
+            proxy_cache_lock      on;
+            add_header            X-Cache-Status $upstream_cache_status;
+
+            proxy_intercept_errors on;
+            error_page 403 404    = @spa_fallback;
+        }
+
+        # App shell + all SPA routes -> NO nginx cache (always fresh).
+        location / {
+            proxy_http_version    1.1;
+            proxy_set_header      Connection "";
+            proxy_pass            http://$gcs_backend;
+
+            proxy_cache           off;
+            add_header            X-Cache-Status "BYPASS";
+
+            proxy_intercept_errors on;
+            error_page 403 404    = @spa_fallback;
+        }
+
+        location @spa_fallback {
+            proxy_http_version    1.1;
+            proxy_set_header      Connection "";
+            proxy_pass            http://$gcs_backend/{{ .Values.frontend.gcs.indexObject }};
+            proxy_cache           off;
+        }
+    }
+{{- if .Values.frontend.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.frontend.serviceAccount.name | default (printf "%s-ui" (include "flexprice.fullname" .)) }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+  {{- with .Values.frontend.serviceAccount.annotations }}
+  {{- /* iam.gke.io/gcp-service-account for Workload Identity — gcsproxy reads
+         the bucket as this identity, so without the annotation every object
+         fetch 403s and the UI serves nothing. */}}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

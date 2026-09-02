@@ -88,6 +88,10 @@ func (s *InMemoryConnectionStore) ListPublishedByProvider(ctx context.Context, p
 	}), nil
 }
 
+func (s *InMemoryConnectionStore) ListAllPublished(ctx context.Context) ([]*connection.Connection, error) {
+	return s.List(ctx, types.NewNoLimitConnectionFilter())
+}
+
 func (s *InMemoryConnectionStore) List(ctx context.Context, filter *types.ConnectionFilter) ([]*connection.Connection, error) {
 	items, err := s.store.List(ctx, filter, connectionFilterFn, connectionSortFn)
 	if err != nil {
@@ -237,9 +241,9 @@ func cloneSyncConfig(sc *types.SyncConfig) *types.SyncConfig {
 	clone.Deal = cloneEntitySyncConfig(sc.Deal)
 	clone.Quote = cloneEntitySyncConfig(sc.Quote)
 
-	if sc.S3 != nil {
-		s3Clone := *sc.S3
-		clone.S3 = &s3Clone
+	if sc.Storage != nil {
+		storageClone := *sc.Storage
+		clone.Storage = &storageClone
 	}
 	if sc.InvoiceSyncSettings != nil {
 		settingsClone := *sc.InvoiceSyncSettings

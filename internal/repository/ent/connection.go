@@ -90,6 +90,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 
 	SetSpanSuccess(span)
 	*c = *domainConnection.FromEnt(connection)
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
@@ -156,31 +157,23 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	r.log.Debug(ctx, "getting connection by provider",
 		"provider_type", provider)
 
-	// Create a filter to get connections by provider (tenant/environment inferred from ctx)
-	filter := &types.ConnectionFilter{
-		ProviderType: provider,
-	}
-
-	// Use the List function internally
-	connections, err := r.List(ctx, filter)
+	connections, err := r.ListAllPublished(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, err
 	}
 
-	if len(connections) == 0 {
-		SetSpanError(span, ierr.ErrNotFound)
-		return nil, ierr.NewError("connection not found").
-			WithHintf("Connection with provider %s was not found in this environment", provider).
-			Mark(ierr.ErrNotFound)
+	for _, c := range connections {
+		if c.ProviderType == provider {
+			SetSpanSuccess(span)
+			return c, nil
+		}
 	}
 
-	SetSpanSuccess(span)
-
-	// Cache the result
-	r.SetCache(ctx, connections[0])
-
-	return connections[0], nil
+	SetSpanError(span, ierr.ErrNotFound)
+	return nil, ierr.NewError("connection not found").
+		WithHintf("Connection with provider %s was not found in this environment", provider).
+		Mark(ierr.ErrNotFound)
 }
 
 // ListPublishedByProvider returns every published connection for a provider across all tenants and
@@ -213,6 +206,29 @@ func (r *connectionRepository) ListPublishedByProvider(ctx context.Context, prov
 		result = append(result, domainConnection.FromEnt(c))
 	}
 	return result, nil
+}
+
+// ListAllPublished returns every published connection for the tenant/environment in ctx, across
+// all providers. Read-through/write-through cached as a single list entry, since callers use this
+// to check "is provider X connected" before dispatching work rather than to read one connection.
+func (r *connectionRepository) ListAllPublished(ctx context.Context) ([]*domainConnection.Connection, error) {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "list_all_published", nil)
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
+	if value, found := r.redisCache.Get(ctx, cacheKey); found {
+		if connections, ok := cache.UnmarshalCacheValue[[]*domainConnection.Connection](value); ok {
+			return *connections, nil
+		}
+	}
+
+	connections, err := r.List(ctx, types.NewNoLimitConnectionFilter())
+	if err != nil {
+		return nil, err
+	}
+
+	r.redisCache.Set(ctx, cacheKey, connections, cache.ExpiryDefaultRedis)
+	return connections, nil
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
@@ -296,6 +312,9 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			// Add webhook_password if present
 			if encryptedSecretData.Chargebee.WebhookPassword != "" {
 				result["webhook_password"] = encryptedSecretData.Chargebee.WebhookPassword
+			}
+			if encryptedSecretData.Chargebee.GatewayAccountID != "" {
+				result["gateway_account_id"] = encryptedSecretData.Chargebee.GatewayAccountID
 			}
 			return result
 		}
@@ -550,6 +569,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	r.DeleteCache(ctx, c)
 	// Update cache with new data
 	r.SetCache(ctx, c)
+	r.deleteAllPublishedCache(ctx)
 
 	return nil
 }
@@ -597,6 +617,7 @@ func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.C
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, c)
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
@@ -740,5 +761,13 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixConnection, connection.ID)
+	r.redisCache.Delete(ctx, cacheKey)
+}
+
+// deleteAllPublishedCache invalidates the cached ListAllPublished result for the tenant/environment
+// in ctx. Called on any create/update/delete so a newly connected, updated, or disconnected
+// integration is reflected immediately instead of waiting out the cache TTL.
+func (r *connectionRepository) deleteAllPublishedCache(ctx context.Context) {
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
 	r.redisCache.Delete(ctx, cacheKey)
 }

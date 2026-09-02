@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	FieldAddressCountry = "address_country"
 	// FieldTimezone holds the string denoting the timezone field in the database.
 	FieldTimezone = "timezone"
+	// FieldTaxTreatment holds the string denoting the tax_treatment field in the database.
+	FieldTaxTreatment = "tax_treatment"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -77,6 +80,7 @@ var Columns = []string{
 	FieldAddressPostalCode,
 	FieldAddressCountry,
 	FieldTimezone,
+	FieldTaxTreatment,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -108,6 +112,10 @@ var (
 	NameValidator func(string) error
 	// DefaultTimezone holds the default value on creation for the "timezone" field.
 	DefaultTimezone string
+	// DefaultTaxTreatment holds the default value on creation for the "tax_treatment" field.
+	DefaultTaxTreatment types.TaxTreatment
+	// TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
+	TaxTreatmentValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Customer queries.
@@ -206,4 +214,9 @@ func ByAddressCountry(opts ...sql.OrderTermOption) OrderOption {
 // ByTimezone orders the results by the timezone field.
 func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
+}
+
+// ByTaxTreatment orders the results by the tax_treatment field.
+func ByTaxTreatment(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxTreatment, opts...).ToFunc()
 }

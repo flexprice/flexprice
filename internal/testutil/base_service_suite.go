@@ -215,6 +215,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	invoiceStore.SetLineItemStore(invLineItemStore)
 	priceStore := NewInMemoryPriceStore()
 	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
+	couponStore := NewInMemoryCouponStore()
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
 		SubscriptionLineItemRepo:     lineItemStore,
@@ -246,8 +247,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 		TaxRateRepo:                  NewInMemoryTaxRateStore(),
 		TaxAppliedRepo:               NewInMemoryTaxAppliedStore(),
 		TaxAssociationRepo:           NewInMemoryTaxAssociationStore(),
-		CouponRepo:                   NewInMemoryCouponStore(),
-		CouponAssociationRepo:        NewInMemoryCouponAssociationStore(),
+		CouponRepo:                   couponStore,
+		CouponAssociationRepo:        NewInMemoryCouponAssociationStore(couponStore),
 		CouponApplicationRepo:        NewInMemoryCouponApplicationStore(),
 		AddonRepo:                    NewInMemoryAddonStore(),
 		AddonAssociationRepo:         NewInMemoryAddonAssociationStore(),

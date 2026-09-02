@@ -39,7 +39,9 @@ jobs:
       skip: ${{ steps.version-check.outputs.skip }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set version from release tag and set outputs
         id: version-check
@@ -91,10 +93,12 @@ jobs:
 
       # Setup
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Cache Go build
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/.cache/go-build
@@ -103,19 +107,19 @@ jobs:
           restore-keys: go-${{ runner.os }}-
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.24.0"
 
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "20"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
 
@@ -158,25 +162,25 @@ jobs:
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: api-go
           path: api/go/
 
       - name: Upload api-typescript artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: api-typescript
           path: api/typescript/
 
       - name: Upload api-python artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: api-python
           path: api/python/
 
       - name: Upload api-mcp artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: api-mcp
           path: api/mcp/
@@ -215,10 +219,12 @@ jobs:
       VERSION: ${{ needs.version-check.outputs.version }}  # resolved version only
     steps:
       - name: Checkout (for LICENSE)
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -331,7 +337,7 @@ jobs:
             artifact: api-mcp
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ matrix.artifact }}
           path: sdk
@@ -348,7 +354,7 @@ jobs:
 
       - name: Set up Node (TypeScript)
         if: matrix.lang == 'typescript'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -386,7 +392,7 @@ jobs:
 
       - name: Set up Python
         if: matrix.lang == 'python'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
 

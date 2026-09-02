@@ -1,0 +1,135 @@
+{{- if .Values.bento.enabled }}
+{{- /*
+  Bento collector — optional stream collector (Kafka/MSK -> in-cluster Flexprice
+  API). Not a Flexprice binary: runs its own image + config, so it does NOT use
+  flexprice.env or the app configmap. It reuses the shared flexprice-secrets
+  Secret for MSK SCRAM creds (kafka-sasl-username / kafka-sasl-password) and
+  POSTs events to the in-cluster api Service so ingest never leaves the cluster.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flexprice.fullname" . }}-bento
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "bento") | nindent 4 }}
+spec:
+  replicas: {{ .Values.bento.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bento
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "bento") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.componentServiceAccountName" (dict "ctx" . "component" "bento") }}
+      {{- with .Values.bento.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: bento
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.bento.image.digest }}
+          image: "{{ .Values.bento.image.repository }}@{{ .Values.bento.image.digest }}"
+          {{- else }}
+          image: "{{ .Values.bento.image.repository }}:{{ .Values.bento.image.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          imagePullPolicy: {{ .Values.bento.image.pullPolicy }}
+          args:
+            - "-c"
+            - {{ .Values.bento.configPath | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.bento.httpPort }}
+              protocol: TCP
+          env:
+            # In-cluster Flexprice API target — no external egress hop.
+            - name: FLEXPRICE_API_HOST
+              value: {{ .Values.bento.apiHost | default (printf "%s-api" (include "flexprice.fullname" .)) | quote }}
+            - name: FLEXPRICE_SCHEME
+              value: {{ .Values.bento.apiScheme | quote }}
+            # MSK SCRAM creds, reused from the app's Secret (BYOC bootstraps
+            # these keys from AWS Secrets Manager).
+            - name: AWS_KAFKA_SASL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: kafka-sasl-username
+            - name: AWS_KAFKA_SASL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: kafka-sasl-password
+            - name: TMPDIR
+              value: "/tmp"
+            {{- with .Values.bento.env }}
+            {{- range $k, $v := . }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+          {{- with .Values.bento.envSecretName }}
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.bento.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default .Values.nodeSelector .Values.bento.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.affinity .Values.bento.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.tolerations .Values.bento.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (include "flexprice.topologySpreadConstraints" (dict "ctx" . "component" "bento") | trim) }}
+      topologySpreadConstraints:
+        {{- . | nindent 8 }}
+      {{- end }}
+{{- end }}

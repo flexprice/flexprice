@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -170,5 +171,71 @@ func TestBuilder_CopiesAndUpdates(t *testing.T) {
 
 	if NewEntitlementGrantBuilder(nil).WithID("eg_x").Build().ID != "eg_x" {
 		t.Fatalf("nil-seeded builder should construct from scratch")
+	}
+}
+
+func TestFromEnt_CarriesMetadata(t *testing.T) {
+	md := types.Metadata{"proration_coefficient": "0.5", "proration_addon_assoc_a1": "0.5"}
+	got := FromEnt(&ent.EntitlementGrant{
+		ID:                  "eg_1",
+		EntitlementConfigID: "ent_1",
+		CustomerID:          "cust_1",
+		SubscriptionID:      "sub_1",
+		ScopeEntityType:     types.EntitlementGrantScopeFeature,
+		ScopeEntityID:       "feat_1",
+		Measure:             types.EntitlementGrantMeasureQuantity,
+		Quota:               decimal.NewFromInt(100),
+		ValidFrom:           time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC),
+		ValidTo:             time.Date(2026, 7, 17, 5, 0, 0, 0, time.UTC),
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		Metadata:            md,
+	})
+	if got == nil {
+		t.Fatal("FromEnt returned nil")
+	}
+	if len(got.Metadata) != 2 {
+		t.Fatalf("expected 2 metadata keys, got %d", len(got.Metadata))
+	}
+	if got.Metadata["proration_addon_assoc_a1"] != "0.5" {
+		t.Fatalf("idempotency marker did not survive FromEnt: %v", got.Metadata)
+	}
+}
+
+func TestFromEnt_NilMetadataStaysNil(t *testing.T) {
+	got := FromEnt(&ent.EntitlementGrant{ID: "eg_1"})
+	if got.Metadata != nil {
+		t.Fatalf("expected nil metadata to stay nil, got %v", got.Metadata)
+	}
+}
+
+func TestBuilder_WithMetadataReplaces(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"old": "1"}
+
+	got := NewEntitlementGrantBuilder(g).
+		WithMetadata(types.Metadata{"new": "2"}).
+		Build()
+
+	if _, ok := got.Metadata["old"]; ok {
+		t.Fatalf("WithMetadata must replace wholesale, got %v", got.Metadata)
+	}
+	if got.Metadata["new"] != "2" {
+		t.Fatalf("expected new key, got %v", got.Metadata)
+	}
+}
+
+// The builder copies the source grant, so a merge must not mutate the original —
+// the attach path builds off a grant it also still reads.
+// The builder copies the source grant, so mutating what it produced must not
+// reach back into the original — the attach path builds off a grant it still reads.
+func TestBuilder_MetadataIsDeepCopied(t *testing.T) {
+	g := baseGrant()
+	g.Metadata = types.Metadata{"keep": "1"}
+
+	got := NewEntitlementGrantBuilder(g).Build()
+	got.Metadata["added"] = "2"
+
+	if _, leaked := g.Metadata["added"]; leaked {
+		t.Fatalf("builder shares the source grant's metadata map: %v", g.Metadata)
 	}
 }

@@ -144,6 +144,59 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 	return nil
 }
 
+// UpdateRoles updates a user's roles only. Deliberately separate from Update
+// so that a generic profile-update call can never touch privilege level.
+func (r *userRepository) UpdateRoles(ctx context.Context, id string, roles []string) error {
+	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
+	if !ok {
+		return ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "user", "update_roles", map[string]interface{}{
+		"user_id":   id,
+		"tenant_id": tenantID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	affected, err := client.User.Update().
+		Where(
+			entUser.ID(id),
+			entUser.TenantID(tenantID),
+		).
+		SetRoles(roles).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(time.Now().UTC()).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to update user roles").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   id,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		return ierr.NewError("user not found").
+			WithHint("User not found").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   id,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
+	return nil
+}
+
 // Delete soft-deletes a user by setting status to archived
 func (r *userRepository) Delete(ctx context.Context, id string) error {
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)

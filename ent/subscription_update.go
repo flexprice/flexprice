@@ -98,6 +98,20 @@ func (su *SubscriptionUpdate) ClearLookupKey() *SubscriptionUpdate {
 	return su
 }
 
+// SetPlanID sets the "plan_id" field.
+func (su *SubscriptionUpdate) SetPlanID(s string) *SubscriptionUpdate {
+	su.mutation.SetPlanID(s)
+	return su
+}
+
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePlanID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetPlanID(*s)
+	}
+	return su
+}
+
 // SetSubscriptionStatus sets the "subscription_status" field.
 func (su *SubscriptionUpdate) SetSubscriptionStatus(ts types.SubscriptionStatus) *SubscriptionUpdate {
 	su.mutation.SetSubscriptionStatus(ts)
@@ -904,7 +918,55 @@ func (su *SubscriptionUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (su *SubscriptionUpdate) check() error {
+	if v, ok := su.mutation.PlanID(); ok {
+		if err := subscription.PlanIDValidator(v); err != nil {
+			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Subscription.plan_id": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.SubscriptionStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_status": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.PauseStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.pause_status": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.PaymentBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.CollectionMethod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.PaymentTerms(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
+		}
+	}
+	if v, ok := su.mutation.SubscriptionType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_type": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := su.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	if ps := su.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -936,6 +998,9 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.LookupKeyCleared() {
 		_spec.ClearField(subscription.FieldLookupKey, field.TypeString)
+	}
+	if value, ok := su.mutation.PlanID(); ok {
+		_spec.SetField(subscription.FieldPlanID, field.TypeString, value)
 	}
 	if value, ok := su.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
@@ -1490,6 +1555,20 @@ func (suo *SubscriptionUpdateOne) SetNillableLookupKey(s *string) *SubscriptionU
 // ClearLookupKey clears the value of the "lookup_key" field.
 func (suo *SubscriptionUpdateOne) ClearLookupKey() *SubscriptionUpdateOne {
 	suo.mutation.ClearLookupKey()
+	return suo
+}
+
+// SetPlanID sets the "plan_id" field.
+func (suo *SubscriptionUpdateOne) SetPlanID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetPlanID(s)
+	return suo
+}
+
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePlanID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetPlanID(*s)
+	}
 	return suo
 }
 
@@ -2312,7 +2391,55 @@ func (suo *SubscriptionUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (suo *SubscriptionUpdateOne) check() error {
+	if v, ok := suo.mutation.PlanID(); ok {
+		if err := subscription.PlanIDValidator(v); err != nil {
+			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Subscription.plan_id": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.SubscriptionStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_status": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.PauseStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.pause_status": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.PaymentBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.CollectionMethod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.PaymentTerms(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
+		}
+	}
+	if v, ok := suo.mutation.SubscriptionType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_type": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
+	if err := suo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	id, ok := suo.mutation.ID()
 	if !ok {
@@ -2361,6 +2488,9 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.LookupKeyCleared() {
 		_spec.ClearField(subscription.FieldLookupKey, field.TypeString)
+	}
+	if value, ok := suo.mutation.PlanID(); ok {
+		_spec.SetField(subscription.FieldPlanID, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)

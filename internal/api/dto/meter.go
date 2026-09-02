@@ -75,6 +75,9 @@ func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
 	m := meter.NewMeter(r.Name, tenantID, createdBy)
 	m.EventName = strings.TrimSpace(r.EventName)
 	m.Aggregation = r.Aggregation
+	m.Aggregation.Field = strings.TrimSpace(m.Aggregation.Field)
+	m.Aggregation.Expression = strings.TrimSpace(m.Aggregation.Expression)
+	m.Aggregation.GroupBy = strings.TrimSpace(m.Aggregation.GroupBy)
 	m.Filters = r.Filters
 	m.ResetUsage = r.ResetUsage
 	m.Status = types.StatusPublished

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // CustomerCreate is the builder for creating a Customer entity.
@@ -254,6 +255,20 @@ func (cc *CustomerCreate) SetNillableTimezone(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetTaxTreatment sets the "tax_treatment" field.
+func (cc *CustomerCreate) SetTaxTreatment(tt types.TaxTreatment) *CustomerCreate {
+	cc.mutation.SetTaxTreatment(tt)
+	return cc
+}
+
+// SetNillableTaxTreatment sets the "tax_treatment" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableTaxTreatment(tt *types.TaxTreatment) *CustomerCreate {
+	if tt != nil {
+		cc.SetTaxTreatment(*tt)
+	}
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -315,6 +330,10 @@ func (cc *CustomerCreate) defaults() {
 		v := customer.DefaultTimezone
 		cc.mutation.SetTimezone(v)
 	}
+	if _, ok := cc.mutation.TaxTreatment(); !ok {
+		v := customer.DefaultTaxTreatment
+		cc.mutation.SetTaxTreatment(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -350,6 +369,14 @@ func (cc *CustomerCreate) check() error {
 	if v, ok := cc.mutation.Name(); ok {
 		if err := customer.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
+		}
+	}
+	if _, ok := cc.mutation.TaxTreatment(); !ok {
+		return &ValidationError{Name: "tax_treatment", err: errors.New(`ent: missing required field "Customer.tax_treatment"`)}
+	}
+	if v, ok := cc.mutation.TaxTreatment(); ok {
+		if err := customer.TaxTreatmentValidator(string(v)); err != nil {
+			return &ValidationError{Name: "tax_treatment", err: fmt.Errorf(`ent: validator failed for field "Customer.tax_treatment": %w`, err)}
 		}
 	}
 	return nil
@@ -462,6 +489,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Timezone(); ok {
 		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
 		_node.Timezone = value
+	}
+	if value, ok := cc.mutation.TaxTreatment(); ok {
+		_spec.SetField(customer.FieldTaxTreatment, field.TypeString, value)
+		_node.TaxTreatment = value
 	}
 	return _node, _spec
 }

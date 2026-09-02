@@ -307,7 +307,7 @@ func (s *InvoiceService) SyncInvoiceToChargebee(
 		"chargebee_invoice_id", chargebeeInvoiceID)
 
 	// Step 8: Create entity integration mapping
-	if err := s.createInvoiceMapping(ctx, req.InvoiceID, chargebeeInvoiceID, flexInvoice.EnvironmentID); err != nil {
+	if err := s.LinkInvoiceMapping(ctx, req.InvoiceID, chargebeeInvoiceID); err != nil {
 		s.Logger.Error(ctx, "failed to create invoice mapping",
 			"error", err,
 			"invoice_id", req.InvoiceID,
@@ -574,46 +574,66 @@ func (s *InvoiceService) getExistingChargebeeMapping(ctx context.Context, invoic
 	return mappings[0], nil
 }
 
-// createInvoiceMapping creates an entity integration mapping for the invoice
-func (s *InvoiceService) createInvoiceMapping(ctx context.Context, invoiceID, chargebeeInvoiceID, environmentID string) error {
+// LinkInvoiceMapping records which Chargebee invoice a Flexprice invoice corresponds
+// to. Idempotent: a second call for an already-mapped invoice is a no-op, so the
+// itemised sync and a hosted checkout completing can both call it safely.
+func (s *InvoiceService) LinkInvoiceMapping(ctx context.Context, invoiceID, chargebeeInvoiceID string) error {
+	if invoiceID == "" || chargebeeInvoiceID == "" {
+		return nil
+	}
+
+	existing, err := s.getExistingChargebeeMapping(ctx, invoiceID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return err
+	}
+	if existing != nil {
+		if existing.ProviderEntityID != chargebeeInvoiceID {
+			s.Logger.Info(ctx, "invoice already mapped to a different chargebee invoice, leaving it",
+				"invoice_id", invoiceID,
+				"mapped_chargebee_invoice_id", existing.ProviderEntityID,
+				"incoming_chargebee_invoice_id", chargebeeInvoiceID)
+		}
+		return nil
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get invoice for Chargebee mapping").
+			Mark(ierr.ErrDatabase)
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
 		EntityID:         invoiceID,
 		ProviderType:     string(types.SecretProviderChargebee),
 		ProviderEntityID: chargebeeInvoiceID,
-		EnvironmentID:    environmentID,
+		EnvironmentID:    inv.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
+	mapping.TenantID = inv.TenantID
 
-	// Get tenant_id from context or invoice
-	// We'll need to get it from the invoice entity
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err == nil {
-		mapping.TenantID = inv.TenantID
-	}
-
-	err = s.EntityIntegrationMappingRepo.Create(ctx, mapping)
-	if err != nil {
+	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to create invoice mapping").
 			Mark(ierr.ErrDatabase)
 	}
 
+	s.Logger.Info(ctx, "linked flexprice invoice to chargebee invoice",
+		"invoice_id", invoiceID,
+		"chargebee_invoice_id", chargebeeInvoiceID)
 	return nil
 }
 
 // customerHasPaymentMethod checks if a Chargebee customer has a payment method
 func (s *InvoiceService) customerHasPaymentMethod(ctx context.Context, chargebeeCustomerID string) (bool, error) {
-	// Retrieve customer from Chargebee using client wrapper
-	result, err := s.Client.RetrieveCustomer(ctx, chargebeeCustomerID)
+	customer, err := s.Client.RetrieveCustomer(ctx, chargebeeCustomerID)
 	if err != nil {
 		return false, ierr.WithError(err).
 			WithHint("Failed to retrieve customer from Chargebee").
 			Mark(ierr.ErrInternal)
 	}
-
-	customer := result.Customer
 
 	// Check if customer has a primary payment source or payment method
 	hasPaymentMethod := customer.PrimaryPaymentSourceId != "" || customer.PaymentMethod != nil

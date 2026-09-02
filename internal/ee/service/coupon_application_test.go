@@ -307,3 +307,180 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_RepeatedComput
 	s.Require().NoError(err)
 	s.Len(secondRows, 1, "recompute must not persist duplicate CouponApplication rows for the same (invoice, coupon)")
 }
+
+// createInvoiceWithTwoLineItemsSharingPrice builds an invoice whose two line items carry the
+// SAME price ID but distinct subscription line item IDs — the shape produced by attaching one
+// addon twice, or by grouped invoicing merging children that share a plan.
+func (s *CouponApplicationServiceSuite) createInvoiceWithTwoLineItemsSharingPrice(
+	priceID string,
+	amountA, amountB decimal.Decimal,
+) (*invoice_domain.Invoice, string, string) {
+	ctx := s.GetContext()
+	invID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE)
+	sliA := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	sliB := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+
+	newLI := func(sliID string, amount decimal.Decimal) *invoice_domain.InvoiceLineItem {
+		return &invoice_domain.InvoiceLineItem{
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			CustomerID:             s.testData.customer.ID,
+			InvoiceID:              invID,
+			PriceID:                lo.ToPtr(priceID),
+			SubscriptionLineItemID: lo.ToPtr(sliID),
+			Amount:                 amount,
+			Currency:               "usd",
+			Quantity:               decimal.NewFromInt(1),
+			LineItemDiscount:       decimal.Zero,
+			InvoiceLevelDiscount:   decimal.Zero,
+			PrepaidCreditsApplied:  decimal.Zero,
+			BaseModel:              types.GetDefaultBaseModel(ctx),
+		}
+	}
+
+	total := amountA.Add(amountB)
+	inv := &invoice_domain.Invoice{
+		ID:              invID,
+		CustomerID:      s.testData.customer.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		Subtotal:        total,
+		Total:           total,
+		AmountDue:       total,
+		AmountRemaining: total,
+		LineItems:       []*invoice_domain.InvoiceLineItem{newLI(sliA, amountA), newLI(sliB, amountB)},
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(ctx, inv))
+	return inv, sliA, sliB
+}
+
+// TestApplyCouponsToInvoice_SharedPriceAcrossLineItems_EachDiscountedIndependently pins the fix
+// for price-ID-keyed matching: two line items sharing one price must each receive their own
+// line-item coupon. Keying by price ID collapsed them (last-write-wins), so both coupons landed
+// on a single line item — double-discounting it while the other went untouched.
+func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_SharedPriceAcrossLineItems_EachDiscountedIndependently() {
+	ctx := s.GetContext()
+
+	c := s.createPublishedCoupon("shared price coupon", nil)
+
+	priceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	amountA, amountB := decimal.NewFromInt(200), decimal.NewFromInt(300)
+	inv, sliA, sliB := s.createInvoiceWithTwoLineItemsSharingPrice(priceID, amountA, amountB)
+
+	_, err := s.service.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice: inv,
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{
+			{LineItemID: priceID, SubscriptionLineItemID: lo.ToPtr(sliA), CouponID: c.ID},
+			{LineItemID: priceID, SubscriptionLineItemID: lo.ToPtr(sliB), CouponID: c.ID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// 10% coupon: distinct amounts prove each discount was computed against its own line item.
+	bySLI := map[string]decimal.Decimal{}
+	for _, li := range inv.LineItems {
+		bySLI[lo.FromPtr(li.SubscriptionLineItemID)] = li.LineItemDiscount
+	}
+	s.True(decimal.NewFromInt(20).Equal(bySLI[sliA]), "line item A must be discounted against its own amount, got %s", bySLI[sliA])
+	s.True(decimal.NewFromInt(30).Equal(bySLI[sliB]), "line item B must be discounted against its own amount, got %s", bySLI[sliB])
+}
+
+// TestApplyCouponsToInvoice_NoSubscriptionLineItemID_FallsBackToPriceID guards the one-off path:
+// coupons carrying no subscription line item must still match on price ID.
+func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_NoSubscriptionLineItemID_FallsBackToPriceID() {
+	ctx := s.GetContext()
+
+	c := s.createPublishedCoupon("fallback coupon", nil)
+
+	priceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	inv := s.createOneOffInvoiceWithLineItem(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), priceID, decimal.NewFromInt(400))
+
+	_, err := s.service.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice: inv,
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{
+			{LineItemID: priceID, CouponID: c.ID},
+		},
+	})
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(40).Equal(inv.LineItems[0].LineItemDiscount), "price-ID fallback must still discount one-off line items")
+}
+
+// TestApplyCouponsToInvoice_UnmatchedSubLineItemID_KeepsLegacyPriceBehaviour guards against a
+// regression on invoices predating subscription_line_item_id: when a coupon names a subscription
+// line item the invoice does not carry, resolution must fall through to price matching and keep
+// its historical last-wins result. Refusing to resolve here would strip a discount that used to
+// apply. Ambiguity is fixed by stamping subscription_line_item_id, not by dropping the discount.
+func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_UnmatchedSubLineItemID_KeepsLegacyPriceBehaviour() {
+	ctx := s.GetContext()
+
+	c := s.createPublishedCoupon("legacy fallback", nil)
+
+	priceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	inv, _, sliB := s.createInvoiceWithTwoLineItemsSharingPrice(priceID, decimal.NewFromInt(200), decimal.NewFromInt(300))
+
+	unknownSLI := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	res, err := s.service.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice: inv,
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{
+			{LineItemID: priceID, SubscriptionLineItemID: lo.ToPtr(unknownSLI), CouponID: c.ID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// 10% of the last line item sharing the price — exactly what price-only matching produced.
+	s.True(decimal.NewFromInt(30).Equal(res.TotalDiscountAmount),
+		"unmatched subscription line item must fall back to price matching, got %s", res.TotalDiscountAmount)
+	for _, li := range inv.LineItems {
+		if lo.FromPtr(li.SubscriptionLineItemID) == sliB {
+			s.True(decimal.NewFromInt(30).Equal(li.LineItemDiscount),
+				"last line item sharing the price takes the discount, got %s", li.LineItemDiscount)
+			continue
+		}
+		s.True(li.LineItemDiscount.IsZero(), "earlier line items sharing the price stay undiscounted")
+	}
+}
+
+// TestApplyCouponsToInvoice_SubscriptionAssociation_RepeatedCompute_NoDuplicateRows
+// covers a subscription-attached coupon (non-empty CouponAssociationID) recomputed
+// twice on the same invoice — e.g. an initial ComputeInvoice followed by a
+// finalization recompute. The row-existence idempotency check previously only ran
+// for one-off applications (nil CouponAssociationID), so association-based coupons
+// skipped it entirely and every recompute inserted another CouponApplication row,
+// which surfaced as the same discount listed twice on the invoice PDF.
+func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_SubscriptionAssociation_RepeatedCompute_NoDuplicateRows() {
+	ctx := s.GetContext()
+
+	c := s.createPublishedCoupon("sub-attached repeated", nil)
+
+	priceID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+	inv := s.createOneOffInvoiceWithLineItem(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), priceID, decimal.NewFromInt(100))
+	assocID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION)
+
+	req := dto.ApplyCouponsToInvoiceRequest{
+		Invoice: inv,
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{
+			{LineItemID: priceID, CouponID: c.ID, CouponAssociationID: &assocID},
+		},
+	}
+
+	// First compute pass (e.g. invoice creation).
+	_, err := s.service.ApplyCouponsToInvoice(ctx, req)
+	s.Require().NoError(err)
+
+	appFilter := types.NewNoLimitCouponApplicationFilter()
+	appFilter.InvoiceIDs = []string{inv.ID}
+	appFilter.CouponIDs = []string{c.ID}
+	firstRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(firstRows, 1, "first apply should persist exactly one CouponApplication")
+
+	// Second compute pass on the same invoice (e.g. finalization recompute).
+	inv.LineItems[0].LineItemDiscount = decimal.Zero
+	_, err = s.service.ApplyCouponsToInvoice(ctx, req)
+	s.Require().NoError(err)
+
+	secondRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(secondRows, 1, "recompute of a subscription-attached coupon must not persist duplicate CouponApplication rows")
+}

@@ -9,8 +9,10 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	cronWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/cron"
+	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -120,6 +122,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Workflow:  cronWorkflows.DailyDraftAndComputeWorkflow,
 			Input:     models.DailyDraftAndComputeWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			// Fans out FinalizeDraftInvoiceWorkflow for each draft whose finalization delay has elapsed.
+			// Runs on the invoice queue (where ScheduleDraftFinalizationWorkflow is registered), not the cron queue.
+			ID:        types.ScheduleIDDraftInvoiceFinalization,
+			Interval:  30 * time.Minute,
+			Workflow:  invoiceWorkflows.ScheduleDraftFinalizationWorkflow,
+			Input:     invoiceModels.ScheduleDraftFinalizationWorkflowInput{BatchSize: types.DEFAULT_BATCH_SIZE},
+			TaskQueue: types.TemporalTaskQueueInvoice,
 		},
 	}
 }

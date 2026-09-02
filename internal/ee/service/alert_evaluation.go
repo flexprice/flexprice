@@ -9,7 +9,6 @@ import (
 	domainAlert "github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
@@ -170,13 +169,6 @@ func (s *alertService) EvaluateWalletAlertsForCustomer(ctx context.Context, cust
 	return nil
 }
 
-// EvaluateSpendBreachForEvent is the sync per-event entry used when the debouncer is off.
-func (s *alertService) EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer) {
-	if err := s.EvaluateSpendAlertsForCustomer(ctx, cust); err != nil {
-		s.Logger.Error(ctx, "failed to evaluate spend alerts for event", "error", err, "event_id", event.ID, "customer_id", cust.ID)
-	}
-}
-
 // EvaluateSpendAndEntitlementAlertsForCustomer runs spend alerts and grant
 // evaluation in one activity, sharing a single active-subscriptions fetch.
 // The two halves are independent — one failing must not block the other — so
@@ -298,6 +290,16 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		sub, ok := meta.subsByID[g.SubscriptionID]
 		if !ok {
 			s.Logger.Debug(ctx, "entitlement grant evaluation: subscription missing", "grant_id", g.ID)
+			continue
+		}
+
+		// A window dated ahead of the change that opened it — a future-dated addon
+		// attach — has nothing to measure yet. Snapshotting it would stamp
+		// last_computed_at before valid_from, which reads as "never evaluated" to a
+		// later close and would drop the segment instead of splitting it.
+		if g.ValidFrom.After(at) {
+			s.Logger.Debug(ctx, "entitlement grant evaluation: window has not started",
+				"grant_id", g.ID, "valid_from", g.ValidFrom)
 			continue
 		}
 

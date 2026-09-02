@@ -42,8 +42,6 @@ const (
 	FieldScope = "scope"
 	// FieldPercentageValue holds the string denoting the percentage_value field in the database.
 	FieldPercentageValue = "percentage_value"
-	// FieldFixedValue holds the string denoting the fixed_value field in the database.
-	FieldFixedValue = "fixed_value"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the taxrate in the database.
@@ -67,7 +65,6 @@ var Columns = []string{
 	FieldTaxRateType,
 	FieldScope,
 	FieldPercentageValue,
-	FieldFixedValue,
 	FieldMetadata,
 }
 
@@ -108,8 +105,6 @@ var (
 	ScopeValidator func(string) error
 	// DefaultPercentageValue holds the default value on creation for the "percentage_value" field.
 	DefaultPercentageValue decimal.Decimal
-	// DefaultFixedValue holds the default value on creation for the "fixed_value" field.
-	DefaultFixedValue decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the TaxRate queries.
@@ -188,9 +183,4 @@ func ByScope(opts ...sql.OrderTermOption) OrderOption {
 // ByPercentageValue orders the results by the percentage_value field.
 func ByPercentageValue(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPercentageValue, opts...).ToFunc()
-}
-
-// ByFixedValue orders the results by the fixed_value field.
-func ByFixedValue(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFixedValue, opts...).ToFunc()
 }

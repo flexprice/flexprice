@@ -203,6 +203,18 @@ func (Price) Fields() []ent.Field {
 			Nillable().
 			GoType(types.BillingTier("")),
 
+		// bucket_size windows the meter's aggregation for this price: the meter
+		// aggregates within each window and the window results are summed.
+		// Immutable so a change versions the price instead of silently
+		// redefining the billable unit on every historical invoice.
+		field.String("bucket_size").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Immutable().
+			Optional().
+			GoType(types.WindowSize("")),
+
 		field.JSON("tiers", []*types.PriceTier{}).
 			Immutable().
 			Optional(),

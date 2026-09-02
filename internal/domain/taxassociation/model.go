@@ -31,6 +31,10 @@ type TaxAssociation struct {
 	// EndDate is the optional date until which this association is active
 	EndDate *time.Time `json:"end_date,omitempty"`
 
+	// TaxBehavior is inclusive or exclusive; null on tenant/customer-level rows,
+	// resolved when copied down to a subscription
+	TaxBehavior *types.TaxBehavior `json:"tax_behavior,omitempty"`
+
 	// EnvironmentID is the ID of the environment this tax rate config belongs to
 	EnvironmentID string `json:"environment_id,omitempty"`
 
@@ -50,6 +54,7 @@ func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
 		Metadata:      ent.Metadata,
 		StartDate:     lo.FromPtrOr(ent.StartDate, time.Now().UTC()),
 		EndDate:       ent.EndDate,
+		TaxBehavior:   ent.TaxBehavior,
 		BaseModel: types.BaseModel{
 			TenantID:  ent.TenantID,
 			Status:    types.Status(ent.Status),

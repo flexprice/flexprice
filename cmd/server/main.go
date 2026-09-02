@@ -11,6 +11,8 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/analytics"
+	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -24,7 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pyroscope"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
-	s3 "github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -40,8 +42,10 @@ import (
 	"go.uber.org/fx"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/domain/user"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -91,9 +95,6 @@ func main() {
 			// RBAC
 			rbac.NewRBACService,
 
-			// storage
-			s3.NewService,
-
 			// Monitoring
 			tracing.NewService,
 			pyroscope.NewPyroscopeService,
@@ -122,6 +123,7 @@ func main() {
 			// Producers and Consumers
 			kafka.NewProducer,
 			kafka.NewSecondaryProducer,
+			analytics.NewMeterUsageSinkPublisher,
 			kafka.NewConsumer,
 
 			// Event Publisher
@@ -218,6 +220,10 @@ func main() {
 			// Services
 			// Integration factory must be provided before service params
 			integration.NewFactory,
+			// Storage resolver — cloud-agnostic Storage for platform-owned buckets
+			// (invoices/exports/imports). Provided before service params so any
+			// service can reach it via ServiceParams.StorageResolver.
+			provideStorageResolver,
 			syncExport.NewExportService,
 			service.NewServiceParams,
 			service.NewOAuthService,
@@ -241,6 +247,7 @@ func main() {
 			service.NewCustomerService,
 			service.NewPlanService,
 			service.NewSubscriptionService,
+			service.NewSubscriptionPhaseService,
 			service.NewWalletService,
 			service.NewInvoiceService,
 			service.NewFeatureService,
@@ -259,6 +266,7 @@ func main() {
 			service.NewCreditNoteService,
 			service.NewConnectionService,
 			service.NewMarketplaceService,
+			service.NewUsageRecordService,
 			service.NewEntityIntegrationMappingService,
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
@@ -304,6 +312,7 @@ func main() {
 			startServer,
 		),
 	)
+	opts = append(opts, fx.StartTimeout(3*time.Minute))
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -311,6 +320,7 @@ func main() {
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	serviceParams service.ServiceParams,
 	redisCache cache.RedisCache,
 	locker cache.Locker,
 	meterService service.MeterService,
@@ -341,6 +351,7 @@ func provideHandlers(
 	creditNoteService service.CreditNoteService,
 	connectionService service.ConnectionService,
 	marketplaceService service.MarketplaceService,
+	usageRecordService service.UsageRecordService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	integrationSyncService service.IntegrationSyncService,
 	svixClient *svix.Client,
@@ -403,6 +414,7 @@ func provideHandlers(
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		Marketplace:              v1.NewMarketplaceHandler(marketplaceService, logger),
+		UsageRecord:              v1.NewUsageRecordHandler(usageRecordService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, db, webhookService),
@@ -420,6 +432,7 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
+		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }
@@ -433,6 +446,8 @@ func provideRouter(
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
 	webhookRequestRepo incomingwebhookevent.Repository,
+	environmentRepo environment.Repository,
+	userRepo user.Repository,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -443,11 +458,23 @@ func provideRouter(
 		rbacService,
 		tenantService,
 		webhookRequestRepo,
+		environmentRepo,
+		userRepo,
 	)
 }
 
 func initIntegrationFactory(factory *integration.Factory, paymentService interfaces.PaymentService, invoiceService service.InvoiceService) {
 	factory.SetServices(paymentService, invoiceService)
+}
+
+// provideStorageResolver constructs the platform storage resolver at boot.
+// The resolver runs CloudDetector once (which blocks on metadata probes), so
+// a background context is used deliberately — this must not be per-request.
+// ConnectionStorageProvider is left nil because customer BYOB connections are
+// not yet migrated to the new storage interface; ForConnection returns a
+// clear error until that wiring lands.
+func provideStorageResolver(cfg *config.Configuration, log *logger.Logger) storage.Resolver {
+	return storage.NewResolver(context.Background(), cfg, nil, log)
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {
@@ -494,17 +521,8 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
-	// Initialize the global Temporal service instance with tracing
 	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, tracingSvc, cfg)
-
-	// Get the global instance and start it
-	service := temporalservice.GetGlobalTemporalService()
-	if err := service.Start(context.Background()); err != nil {
-		log.Error(context.Background(), "Failed to start global Temporal service", "error", err)
-		return nil
-	}
-
-	return service
+	return temporalservice.GetGlobalTemporalService()
 }
 
 func provideWorkflowQuerier(temporalClient client.TemporalClient, log *logger.Logger) *queries.WorkflowQuerier {
@@ -582,7 +600,19 @@ func startTemporalWorker(
 	webhookService *webhook.WebhookService,
 ) {
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(ctx context.Context) (err error) {
+			if err = temporalService.Start(ctx); err != nil {
+				return fmt.Errorf("start temporal service: %w", err)
+			}
+			defer func() {
+				if err == nil {
+					return
+				}
+				if stopErr := temporalService.Stop(ctx); stopErr != nil {
+					log.Error(ctx, "Failed to stop Temporal service after startup failure", "error", stopErr)
+				}
+			}()
+
 			if err := temporalservice.EnsureSchedules(ctx, temporalClient, log); err != nil {
 				return fmt.Errorf("ensure temporal server schedules: %w", err)
 			}
@@ -602,7 +632,7 @@ func startTemporalWorker(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			return temporalService.StopAllWorkers()
+			return temporalService.Stop(ctx)
 		},
 	})
 }
@@ -653,8 +683,6 @@ func registerRouterHandlers(
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
 		eventConsumptionSvc.RegisterBulkHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
 		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 		rawEventConsumptionSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)

@@ -2,6 +2,7 @@ package types
 
 import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 // ScheduledTaskInterval represents the interval for scheduled tasks
@@ -130,25 +131,23 @@ func (e S3EncryptionType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
-// S3ExportConfig represents S3 export configuration (non-sensitive settings)
-// This goes in the sync_config column
-type S3ExportConfig struct {
-	Bucket             string            `json:"bucket"`                         // S3 bucket name
-	Region             string            `json:"region"`                         // AWS region (e.g., "us-west-2")
-	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for S3 keys (e.g., "flexprice-exports/")
+type StorageExportConfig struct {
+	Bucket             string            `json:"bucket"`                         // Storage bucket name
+	Region             string            `json:"region"`                         // Cloud region (e.g., "us-west-2"); unused for GCS
+	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for object keys (e.g., "flexprice-exports/")
 	Compression        S3CompressionType `json:"compression,omitempty"`          // Compression type: "gzip", "none" (default: "none")
 	Encryption         S3EncryptionType  `json:"encryption,omitempty"`           // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed S3 credentials instead of user-provided
+	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed storage credentials instead of user-provided
 }
 
-// Validate validates the S3 export configuration
-func (s *S3ExportConfig) Validate() error {
+// Ent calls this without provider context; skips Region.
+func (s *StorageExportConfig) Validate() error {
 	if s == nil {
 		return nil
 	}
 
 	if s.IsFlexpriceManaged {
-		return nil // No validation needed for Flexprice-managed connections
+		return nil
 	}
 
 	if s.Bucket == "" {
@@ -156,20 +155,31 @@ func (s *S3ExportConfig) Validate() error {
 			WithHint("S3 bucket name is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.Region == "" {
-		return ierr.NewError("region is required").
-			WithHint("AWS region is required").
-			Mark(ierr.ErrValidation)
-	}
 
-	// Validate compression type if provided
 	if err := s.Compression.Validate(); err != nil {
 		return err
 	}
 
-	// Validate encryption type if provided
 	if err := s.Encryption.Validate(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Enforces S3-only Region rule.
+func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	if s == nil || s.IsFlexpriceManaged {
+		return nil
+	}
+
+	if providerType != SecretProviderGCS && s.Region == "" {
+		return ierr.NewError("region is required").
+			WithHint("AWS region is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -183,15 +193,14 @@ type S3JobConfig struct {
 	KeyPrefix            string               `json:"key_prefix,omitempty"`             // Optional prefix for S3 keys (e.g., "flexprice-exports/")
 	Compression          S3CompressionType    `json:"compression,omitempty"`            // Compression type: "gzip", "none" (default: "none")
 	Encryption           S3EncryptionType     `json:"encryption,omitempty"`             // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	EndpointURL          string               `json:"endpoint_url,omitempty"`           // Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
+	EndpointURL          string               `json:"endpoint_url,omitempty"`           // Custom S3-compatible endpoint URL; must be https on a publicly routable host
 	UsePathStyle         bool                 `json:"use_path_style,omitempty"`         // Use path-style addressing (required for MinIO)
 	ExportMetadataFields ExportMetadataFields `json:"export_metadata_fields,omitempty"` // Optional user-selected metadata columns
+	// Empty means S3 for back-compat.
+	Provider SecretProvider `json:"provider,omitempty"`
 }
 
-// Validate validates the S3 job configuration
-// This should only be called AFTER determining if the connection is Flexprice-managed
-// For Flexprice-managed: bucket/region/key_prefix should already be populated by service layer
-// For custom S3: user must provide all required fields
+// Ent calls this without provider context; skips Region.
 func (s *S3JobConfig) Validate() error {
 	if s == nil {
 		return ierr.NewError("S3 job config is required").
@@ -199,16 +208,20 @@ func (s *S3JobConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Bucket and region are required (should be populated by now)
 	if s.Bucket == "" {
 		return ierr.NewError("bucket is required").
-			WithHint("S3 bucket name is required").
+			WithHint("Storage bucket name is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.Region == "" {
+
+	if s.Region == "" && s.Provider != SecretProviderGCS {
 		return ierr.NewError("region is required").
 			WithHint("AWS region is required").
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.validateEndpointURL(); err != nil {
+		return err
 	}
 
 	// Validate compression type if provided
@@ -242,6 +255,10 @@ func (s *S3JobConfig) ValidateForFlexpriceManaged() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := s.validateEndpointURL(); err != nil {
+		return err
+	}
+
 	// Only validate compression and encryption (bucket/region will be populated from config)
 	if err := s.Compression.Validate(); err != nil {
 		return err
@@ -249,6 +266,36 @@ func (s *S3JobConfig) ValidateForFlexpriceManaged() error {
 
 	if err := s.Encryption.Validate(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateEndpointURL rejects a custom S3 endpoint that is not a public https
+// host. The endpoint receives SigV4-signed requests carrying our credentials,
+// so a tenant-supplied value naming an internal address (the cloud metadata
+// service, or any host inside the VPC) must not be accepted. Applied on both
+// validation paths because a Flexprice-managed connection can still carry a
+// tenant-supplied endpoint.
+//
+// This intentionally precludes S3-compatible endpoints on private addresses,
+// such as a self-hosted MinIO reachable only inside the network. There is no
+// way to distinguish a tenant's own MinIO from an internal address chosen to
+// make us sign a request against it, because both are simply private hosts
+// supplied through the API. Supporting that case needs an operator-controlled
+// allowlist in configuration rather than a per-tenant field.
+func (s *S3JobConfig) validateEndpointURL() error {
+	if s.EndpointURL == "" {
+		return nil
+	}
+
+	if err := validator.ValidateOutboundURL(s.EndpointURL); err != nil {
+		return ierr.WithError(err).
+			WithHint("S3 endpoint_url must be an https URL pointing to a publicly routable host").
+			WithReportableDetails(map[string]any{
+				"endpoint_url": s.EndpointURL,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

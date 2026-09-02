@@ -35,6 +35,10 @@ const (
 
 	// Mid-cycle proration charge invoices (subscription quantity-change modify)
 	ScopeProrationCharge Scope = "proration_charge"
+
+	// ScopePlanChange scopes the single settlement invoice a swap-in-place plan
+	// change raises.
+	ScopePlanChange Scope = "plan_change"
 )
 
 // Generator generates idempotency keys

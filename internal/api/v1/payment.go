@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -116,7 +116,6 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
-
 	resp, err := h.service.UpdatePayment(c.Request.Context(), id, req)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to update payment", "error", err)

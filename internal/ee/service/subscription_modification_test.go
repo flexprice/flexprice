@@ -2520,11 +2520,19 @@ func (s *SubscriptionModificationServiceSuite) TestSettlePayFirst_ArchivesDraftW
 	s.Require().Error(err)
 	s.True(ierr.IsAlreadyExists(err), "expected session create AlreadyExists, got %v", err)
 
+	// Asserted on the row's status rather than its absence: the repository soft deletes, so an
+	// "is it gone" check would pass whether or not the cleanup ran.
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = sub.ID
 	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.Require().NoError(listErr)
-	s.Empty(invoices, "draft invoice must be archived when session create fails")
+	// Required non-empty first: a bare loop over an empty list asserts nothing and would pass
+	// whether or not the draft was ever created.
+	s.Require().NotEmpty(invoices, "the draft invoice is created before the session, so it must exist")
+	for _, inv := range invoices {
+		s.Equal(types.StatusDeleted, inv.Status,
+			"draft invoice must be archived when session create fails")
+	}
 
 	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(getErr)

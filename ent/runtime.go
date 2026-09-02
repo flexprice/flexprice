@@ -797,6 +797,12 @@ func init() {
 	customerDescTimezone := customerFields[11].Descriptor()
 	// customer.DefaultTimezone holds the default value on creation for the timezone field.
 	customer.DefaultTimezone = customerDescTimezone.Default.(string)
+	// customerDescTaxTreatment is the schema descriptor for tax_treatment field.
+	customerDescTaxTreatment := customerFields[12].Descriptor()
+	// customer.DefaultTaxTreatment holds the default value on creation for the tax_treatment field.
+	customer.DefaultTaxTreatment = types.TaxTreatment(customerDescTaxTreatment.Default.(string))
+	// customer.TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
+	customer.TaxTreatmentValidator = customerDescTaxTreatment.Validators[0].(func(string) error)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0
@@ -850,8 +856,12 @@ func init() {
 	entitlementDescDisplayOrder := entitlementFields[10].Descriptor()
 	// entitlement.DefaultDisplayOrder holds the default value on creation for the display_order field.
 	entitlement.DefaultDisplayOrder = entitlementDescDisplayOrder.Default.(int)
+	// entitlementDescGrantAllocationBehavior is the schema descriptor for grant_allocation_behavior field.
+	entitlementDescGrantAllocationBehavior := entitlementFields[18].Descriptor()
+	// entitlement.DefaultGrantAllocationBehavior holds the default value on creation for the grant_allocation_behavior field.
+	entitlement.DefaultGrantAllocationBehavior = types.EntitlementGrantAllocationBehavior(entitlementDescGrantAllocationBehavior.Default.(string))
 	// entitlementDescAggregationMode is the schema descriptor for aggregation_mode field.
-	entitlementDescAggregationMode := entitlementFields[19].Descriptor()
+	entitlementDescAggregationMode := entitlementFields[20].Descriptor()
 	// entitlement.DefaultAggregationMode holds the default value on creation for the aggregation_mode field.
 	entitlement.DefaultAggregationMode = types.EntitlementAggregationMode(entitlementDescAggregationMode.Default.(string))
 	// entitlementDescID is the schema descriptor for id field.
@@ -919,6 +929,10 @@ func init() {
 	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
 	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
 	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
+	// entitlementgrantDescMetadata is the schema descriptor for metadata field.
+	entitlementgrantDescMetadata := entitlementgrantFields[14].Descriptor()
+	// entitlementgrant.DefaultMetadata holds the default value on creation for the metadata field.
+	entitlementgrant.DefaultMetadata = entitlementgrantDescMetadata.Default.(types.Metadata)
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()
 	entityintegrationmappingMixinFields0 := entityintegrationmappingMixin[0].Fields()
 	_ = entityintegrationmappingMixinFields0
@@ -1203,6 +1217,10 @@ func init() {
 	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[33].Descriptor()
 	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
 	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
+	// invoiceDescIsManuallyEdited is the schema descriptor for is_manually_edited field.
+	invoiceDescIsManuallyEdited := invoiceFields[36].Descriptor()
+	// invoice.DefaultIsManuallyEdited holds the default value on creation for the is_manually_edited field.
+	invoice.DefaultIsManuallyEdited = invoiceDescIsManuallyEdited.Default.(bool)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
 	invoicelineitemMixinFields0 := invoicelineitemMixin[0].Fields()
 	_ = invoicelineitemMixinFields0
@@ -1611,17 +1629,17 @@ func init() {
 	// price.TrialPeriodDaysValidator is a validator for the "trial_period_days" field. It is called by the builders before save.
 	price.TrialPeriodDaysValidator = priceDescTrialPeriodDays.Validators[0].(func(int) error)
 	// priceDescEntityType is the schema descriptor for entity_type field.
-	priceDescEntityType := priceFields[28].Descriptor()
+	priceDescEntityType := priceFields[29].Descriptor()
 	// price.DefaultEntityType holds the default value on creation for the entity_type field.
 	price.DefaultEntityType = types.PriceEntityType(priceDescEntityType.Default.(string))
 	// price.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
 	price.EntityTypeValidator = priceDescEntityType.Validators[0].(func(string) error)
 	// priceDescEntityID is the schema descriptor for entity_id field.
-	priceDescEntityID := priceFields[29].Descriptor()
+	priceDescEntityID := priceFields[30].Descriptor()
 	// price.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
 	price.EntityIDValidator = priceDescEntityID.Validators[0].(func(string) error)
 	// priceDescStartDate is the schema descriptor for start_date field.
-	priceDescStartDate := priceFields[31].Descriptor()
+	priceDescStartDate := priceFields[32].Descriptor()
 	// price.DefaultStartDate holds the default value on creation for the start_date field.
 	price.DefaultStartDate = priceDescStartDate.Default.(func() time.Time)
 	priceunitMixin := schema.PriceUnit{}.Mixin()
@@ -2451,10 +2469,6 @@ func init() {
 	taxrateDescPercentageValue := taxrateFields[7].Descriptor()
 	// taxrate.DefaultPercentageValue holds the default value on creation for the percentage_value field.
 	taxrate.DefaultPercentageValue = taxrateDescPercentageValue.Default.(decimal.Decimal)
-	// taxrateDescFixedValue is the schema descriptor for fixed_value field.
-	taxrateDescFixedValue := taxrateFields[8].Descriptor()
-	// taxrate.DefaultFixedValue holds the default value on creation for the fixed_value field.
-	taxrate.DefaultFixedValue = taxrateDescFixedValue.Default.(decimal.Decimal)
 	tenantFields := schema.Tenant{}.Fields()
 	_ = tenantFields
 	// tenantDescName is the schema descriptor for name field.

@@ -355,6 +355,9 @@ func (f *WalletFilter) Validate() error {
 // WalletMetadataKeyAutoTopup marks wallet transactions / invoices created by auto top-up.
 const WalletMetadataKeyAutoTopup = "auto_topup"
 
+// WalletMetadataKeyFailureReason records why a pending transaction was failed.
+const WalletMetadataKeyFailureReason = "failure_reason"
+
 // AutoTopup represents the auto top-up configuration for a wallet
 type AutoTopup struct {
 	Enabled   *bool            `json:"enabled"`

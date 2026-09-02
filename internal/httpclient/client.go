@@ -35,6 +35,22 @@ type ClientConfig struct {
 	Timeout time.Duration
 }
 
+// RejectRedirects refuses to follow any HTTP redirect. Assign it to an
+// http.Client's CheckRedirect field.
+//
+// Go's default http.Client silently follows up to 10 redirects. Callers that
+// validate a user-supplied URL (for example the file-import providers) only
+// ever check the *initial* URL, so a redirect to an internal address —
+// 169.254.169.254, localhost, or any RFC1918 host — would be followed without
+// a second validation and would not be visible in the stored task metadata.
+// Refusing redirects keeps the validated URL the only URL we ever fetch.
+//
+// Exported so callers that build their own client (retryablehttp, third-party
+// SDKs) can apply the same policy.
+func RejectRedirects(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
 // NewClientWithConfig creates a new DefaultClient with custom configuration
 func NewClientWithConfig(config ClientConfig) Client {
 	timeout := config.Timeout
@@ -44,8 +60,9 @@ func NewClientWithConfig(config ClientConfig) Client {
 
 	return &DefaultClient{
 		client: &http.Client{
-			Timeout:   timeout,
-			Transport: OtelTransport(nil),
+			Timeout:       timeout,
+			Transport:     OtelTransport(nil),
+			CheckRedirect: RejectRedirects,
 		},
 	}
 }
@@ -59,8 +76,9 @@ type DefaultClient struct {
 func NewDefaultClient() Client {
 	return &DefaultClient{
 		client: &http.Client{
-			Timeout:   30 * time.Second,
-			Transport: OtelTransport(nil),
+			Timeout:       30 * time.Second,
+			Transport:     OtelTransport(nil),
+			CheckRedirect: RejectRedirects,
 		},
 	}
 }
@@ -105,6 +123,15 @@ func (c *DefaultClient) Send(ctx context.Context, req *Request) (*Response, erro
 		return nil, ierr.WithError(err).
 			WithHint("Please check the request payload").
 			Mark(ierr.ErrHTTPClient)
+	}
+
+	// CheckRedirect returns ErrUseLastResponse, so a redirect arrives here as a
+	// 3xx rather than being followed. Reject it explicitly: the redirect target
+	// has not been through whatever validation the caller applied to req.URL.
+	// Returned as the package's typed *Error so IsHTTPError and status-based
+	// retry/mapping keep working for this case like any other HTTP failure.
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return nil, NewError(resp.StatusCode, respBody)
 	}
 
 	// Copy response headers

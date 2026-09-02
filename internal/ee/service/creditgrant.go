@@ -67,6 +67,8 @@ type creditGrantService struct {
 	ServiceParams
 }
 
+const creditGrantCreditsScale = 8
+
 func NewCreditGrantService(
 	serviceParams ServiceParams,
 ) CreditGrantService {
@@ -329,23 +331,27 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(
 	credits := cg.Credits
 	var prorationMetadata types.Metadata
 	if prorationCfg != nil {
-		result, err := proration.CalculateCreditGrantProration(proration.CreditGrantProrationParams{
-			PeriodStart:     prorationCfg.PeriodStart,
-			PeriodEnd:       prorationCfg.PeriodEnd,
-			ProrationDate:   prorationCfg.ProrationDate,
-			Strategy:        prorationCfg.Strategy,
-			OriginalCredits: cg.Credits,
-		})
+		coefficient, err := proration.Coefficient(
+			prorationCfg.PeriodStart, prorationCfg.PeriodEnd, prorationCfg.ProrationDate, prorationCfg.Strategy)
 		if err != nil {
 			return nil, err
 		}
-		credits = result.ProratedCredits
-		prorationMetadata = result.AuditMetadata(prorationCfg.Source)
+		credits = cg.Credits.Mul(coefficient).Round(creditGrantCreditsScale)
+		prorationMetadata = proration.AuditMetadata(proration.AuditParams{
+			Source:        prorationCfg.Source,
+			Coefficient:   coefficient,
+			OriginalKey:   "proration_original_credits",
+			OriginalValue: cg.Credits,
+			PeriodStart:   prorationCfg.PeriodStart,
+			PeriodEnd:     prorationCfg.PeriodEnd,
+			ProrationDate: prorationCfg.ProrationDate,
+			Strategy:      prorationCfg.Strategy,
+		})
 
 		s.Logger.Info(ctx, "prorating first credit grant application",
 			"grant_id", cg.ID,
 			"subscription_id", lo.FromPtr(cg.SubscriptionID),
-			"coefficient", result.Coefficient.String(),
+			"coefficient", coefficient.String(),
 			"original_credits", cg.Credits.String(),
 			"prorated_credits", credits.String())
 	}
@@ -658,7 +664,9 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		if grant.TopupConversionRate != nil {
 			walletReq.TopupConversionRate = grant.TopupConversionRate
 		}
-		s.Logger.Info(ctx, "wallet conversion rate: %s, wallet topup conversion rate: %s", walletReq.ConversionRate, walletReq.TopupConversionRate)
+		s.Logger.Info(ctx, "wallet conversion rates resolved",
+			"conversion_rate", walletReq.ConversionRate,
+			"topup_conversion_rate", walletReq.TopupConversionRate)
 
 		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
 		if err != nil {
@@ -682,25 +690,12 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 
 			duration := lo.FromPtr(grant.ExpirationDuration)
 
-			switch lo.FromPtr(grant.ExpirationDurationUnit) {
-
-			case types.CreditGrantExpiryDurationUnitDays:
-				expiry := effectiveDate.Add(time.Duration(duration) * 24 * time.Hour)
-				expiryDate = lo.ToPtr(expiry)
-
-			case types.CreditGrantExpiryDurationUnitWeeks:
-				expiry := effectiveDate.Add(time.Duration(duration) * 7 * 24 * time.Hour)
-				expiryDate = lo.ToPtr(expiry)
-
-			case types.CreditGrantExpiryDurationUnitMonths:
-				expiry := effectiveDate.AddDate(0, duration, 0)
-				expiryDate = lo.ToPtr(expiry)
-
-			case types.CreditGrantExpiryDurationUnitYears:
-				expiry := effectiveDate.AddDate(duration, 0, 0)
-				expiryDate = lo.ToPtr(expiry)
-
-			default:
+			// The boundary is computed in the subscription's timezone, matching how the grant's
+			// own period end is derived. Without this an IST customer whose period rolls on the
+			// 1st local would see a one-month expiry land three days early, because the stored
+			// UTC instant falls on the 28th.
+			expiry, ok := types.AddExpiryDuration(effectiveDate, duration, lo.FromPtr(grant.ExpirationDurationUnit), subscription.Timezone)
+			if !ok {
 				return nil, ierr.NewError("invalid expiration duration unit").
 					WithHint("Please provide a valid expiration duration unit").
 					WithReportableDetails(map[string]interface{}{
@@ -708,6 +703,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 					}).
 					Mark(ierr.ErrValidation)
 			}
+			expiryDate = lo.ToPtr(expiry)
 		}
 	}
 
@@ -1332,14 +1328,18 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 		return err
 	}
 
-	// Get credit grants for this subscription. When AddonID is set, scope the
-	// cancellation to grants materialized from that addon (addon_id provenance),
-	// leaving plan-sourced and other-addon grants untouched.
+	// Get credit grants for this subscription. AddonID and PlanID scope the
+	// cancellation by provenance: an addon detach must leave plan-sourced grants
+	// alone, and a plan swap must leave addon-sourced grants alone. With neither
+	// set, every grant on the subscription is cancelled.
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
 	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
 		filter.AddonIDs = []string{lo.FromPtr(req.AddonID)}
+	}
+	if req.PlanID != nil && lo.FromPtr(req.PlanID) != "" {
+		filter.PlanIDs = []string{lo.FromPtr(req.PlanID)}
 	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
@@ -1350,6 +1350,10 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		for _, grant := range creditGrants {
+			if req.EffectiveDate != nil && grant.EndDate != nil && !grant.EndDate.After(lo.FromPtr(req.EffectiveDate)) {
+				continue
+			}
+
 			if err := s.DeleteCreditGrant(ctx, dto.DeleteCreditGrantRequest{CreditGrantID: grant.ID, EffectiveDate: req.EffectiveDate}); err != nil {
 				return err
 			}

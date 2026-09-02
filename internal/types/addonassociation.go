@@ -36,14 +36,21 @@ type AddonAssociationFilter struct {
 	*TimeRangeFilter
 
 	// filters allows complex filtering based on multiple fields
-	Filters     []*FilterCondition          `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort        []*SortCondition            `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	AddonIDs    []string                    `json:"addon_ids,omitempty" form:"addon_ids" validate:"omitempty"`
-	EntityType  *AddonAssociationEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
-	EntityIDs   []string                    `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
-	AddonStatus *string                     `json:"addon_status,omitempty" form:"addon_status" validate:"omitempty"`
-	StartDate   *time.Time                  `json:"start_date,omitempty" form:"start_date" validate:"omitempty"`
-	EndDate     *time.Time                  `json:"end_date,omitempty" form:"end_date" validate:"omitempty"`
+	Filters       []*FilterCondition          `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort          []*SortCondition            `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	AddonIDs      []string                    `json:"addon_ids,omitempty" form:"addon_ids" validate:"omitempty"`
+	EntityType    *AddonAssociationEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
+	EntityIDs     []string                    `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	AddonStatus   *string                     `json:"addon_status,omitempty" form:"addon_status" validate:"omitempty"`
+	AddonStatuses []string                    `json:"addon_statuses,omitempty" form:"addon_statuses" validate:"omitempty"`
+	StartDate     *time.Time                  `json:"start_date,omitempty" form:"start_date" validate:"omitempty"`
+	EndDate       *time.Time                  `json:"end_date,omitempty" form:"end_date" validate:"omitempty"`
+
+	// ActiveAt narrows to associations live at that instant: started, not yet ended.
+	// StartDate/EndDate ask whether an association touched a period at all, which is
+	// what billing needs; entitlement reads need the stricter question, since a
+	// cancellation dated mid-period still overlaps the period it was cancelled in.
+	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at" validate:"omitempty"`
 }
 
 // NewAddonAssociationFilter creates a new addon association filter with default options

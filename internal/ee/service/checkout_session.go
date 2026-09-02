@@ -136,6 +136,18 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	session, err := s.CheckoutSessionRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Archiving alone leaves checkout_status pending, so the row keeps holding its
+	// idempotency key and keeps blocking the per-wallet pending guard while being
+	// invisible to every service query. Reach a terminal state first.
+	if err := s.cleanupCheckoutSession(ctx, session, nil); err != nil {
+		return err
+	}
+
 	return s.CheckoutSessionRepo.Delete(ctx, id)
 }
 
@@ -180,7 +192,14 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 		}
 	}
 
-	if cfg := session.Configuration.ToCheckoutConfiguration(); cfg.AddAddonParams != nil {
+	cfg := session.Configuration.ToCheckoutConfiguration()
+
+	if cfg.CreateSubscriptionParams != nil && cfg.CreateSubscriptionParams.SubscriptionID != "" {
+		subSvc := &subscriptionService{ServiceParams: s.ServiceParams}
+		subSvc.archiveDraftCheckoutSubscription(ctx, cfg.CreateSubscriptionParams.SubscriptionID)
+	}
+
+	if cfg.AddAddonParams != nil {
 		for _, ref := range cfg.AddAddonParams.Addons {
 			association, err := s.AddonAssociationRepo.GetByID(ctx, ref.AssociationID)
 			if err != nil {
@@ -195,6 +214,23 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 				s.Logger.Error(ctx, "failed to archive pending addon association",
 					"association_id", ref.AssociationID, "error", err)
 			}
+		}
+	}
+
+	// The pending wallet transaction is not reachable from any archived row, so
+	// without this it stays PENDING forever and wedges the auto-top-up guard.
+	if cfg.WalletTopupParams != nil && cfg.WalletTopupParams.WalletTransactionID != "" {
+		failureReason := "checkout session expired before payment"
+		if reason != nil {
+			failureReason = reason.Error()
+		}
+
+		walletSvc := NewWalletService(s.ServiceParams)
+		if err := walletSvc.FailPurchasedCreditTransaction(ctx, cfg.WalletTopupParams.WalletTransactionID, failureReason); err != nil {
+			s.Logger.Error(ctx, "failed to fail wallet top-up transaction during checkout cleanup",
+				"error", err,
+				"session_id", session.ID,
+				"wallet_transaction_id", cfg.WalletTopupParams.WalletTransactionID)
 		}
 	}
 
@@ -377,21 +413,7 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		return nil, nil, err
 	}
 
-	// Create a DRAFT invoice (no finalization yet — that happens in completeSubscriptionCheckout
-	// after payment is confirmed). This gives us computed amounts for the payment step.
-	invSvc := NewInvoiceService(s.ServiceParams)
-	invResp, err := invSvc.CreateDraftInvoiceForSubscription(
-		ctx,
-		subResp.ID,
-		subResp.CurrentPeriodStart,
-		subResp.CurrentPeriodEnd,
-		types.ReferencePointPeriodStart,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	inv, skipped, err := invSvc.ComputeInvoice(ctx, invResp.ID, nil)
+	invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, subResp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -400,28 +422,49 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
-	// Apply subscription taxes so AmountDue includes tax before payment link creation.
-	// FinalizeInvoice will recalculate taxes idempotently (safe if credits adjust the base).
-	if _, err := invSvc.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
-		return nil, nil, err
-	}
-
-	// Full GetInvoice so the returned response matches the normal invoice API shape
-	// (line items, customer, tax applied, etc.) for downstream checkout fulfillment.
-	invResp, err = invSvc.GetInvoice(ctx, inv.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	return subResp, invResp, nil
 }
 
+func buildCheckoutDraftInvoice(
+	ctx context.Context,
+	params ServiceParams,
+	subResp *dto.SubscriptionResponse,
+) (*dto.InvoiceResponse, bool, error) {
+	invSvc := NewInvoiceService(params)
+	invResp, err := invSvc.CreateDraftInvoiceForSubscription(
+		ctx,
+		subResp.ID,
+		subResp.CurrentPeriodStart,
+		subResp.CurrentPeriodEnd,
+		types.ReferencePointPeriodStart,
+	)
+	if err != nil {
+		return nil, false, err
+	}
+
+	inv, skipped, err := invSvc.ComputeInvoice(ctx, invResp.ID, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if skipped {
+		return invResp, true, nil
+	}
+
+	if _, err := invSvc.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
+		return nil, false, err
+	}
+
+	invResp, err = invSvc.GetInvoice(ctx, inv.ID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return invResp, false, nil
+}
+
 func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv *invoice.Invoice, provider types.CheckoutPaymentProvider) (*dto.PaymentResponse, error) {
-	var gateway types.PaymentGatewayType
-	switch provider {
-	case types.CheckoutPaymentProviderRazorpay:
-		gateway = types.PaymentGatewayTypeRazorpay
-	default:
+	gateway, ok := provider.ToPaymentGateway()
+	if !ok {
 		return nil, ierr.NewError("unsupported payment provider for checkout").
 			WithHint("No gateway mapping exists for this provider").
 			WithReportableDetails(map[string]any{"provider": provider}).

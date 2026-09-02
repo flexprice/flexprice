@@ -69,6 +69,7 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 		SetNillableTaxAssociationID(ta.TaxAssociationID).
 		SetTaxableAmount(ta.TaxableAmount).
 		SetTaxAmount(ta.TaxAmount).
+		SetTaxBehavior(ta.TaxBehavior).
 		SetCurrency(ta.Currency).
 		SetAppliedAt(ta.AppliedAt).
 		SetEnvironmentID(ta.EnvironmentID).
@@ -190,6 +191,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 		).
 		SetTaxableAmount(ta.TaxableAmount).
 		SetTaxAmount(ta.TaxAmount).
+		SetTaxBehavior(ta.TaxBehavior).
 		SetMetadata(ta.Metadata).
 		SetStatus(string(ta.Status)).
 		SetUpdatedAt(time.Now().UTC()).

@@ -68,7 +68,8 @@ func (a CheckoutAction) Validate() error {
 type CheckoutPaymentProvider string
 
 const (
-	CheckoutPaymentProviderRazorpay CheckoutPaymentProvider = "razorpay"
+	CheckoutPaymentProviderRazorpay  CheckoutPaymentProvider = "razorpay"
+	CheckoutPaymentProviderChargebee CheckoutPaymentProvider = "chargebee"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
@@ -76,14 +77,40 @@ func (p CheckoutPaymentProvider) String() string { return string(p) }
 func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
 		CheckoutPaymentProviderRazorpay,
+		CheckoutPaymentProviderChargebee,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: razorpay").
+			WithHint("Allowed values: razorpay, chargebee").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// ToPaymentGateway maps a checkout provider onto the gateway that settles it.
+func (p CheckoutPaymentProvider) ToPaymentGateway() (PaymentGatewayType, bool) {
+	switch p {
+	case CheckoutPaymentProviderRazorpay:
+		return PaymentGatewayTypeRazorpay, true
+	case CheckoutPaymentProviderChargebee:
+		return PaymentGatewayTypeChargebee, true
+	default:
+		return "", false
+	}
+}
+
+// CheckoutProviderFromGateway is the reverse. ok=false means the gateway has no
+// hosted-checkout adapter, so it cannot back a checkout session.
+func CheckoutProviderFromGateway(g PaymentGatewayType) (CheckoutPaymentProvider, bool) {
+	switch g {
+	case PaymentGatewayTypeRazorpay:
+		return CheckoutPaymentProviderRazorpay, true
+	case PaymentGatewayTypeChargebee:
+		return CheckoutPaymentProviderChargebee, true
+	default:
+		return "", false
+	}
 }
 
 // SessionExpiry returns the default lifetime for a checkout session with this provider.
@@ -91,6 +118,10 @@ func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
 	switch p {
 	case CheckoutPaymentProviderRazorpay:
 		return 15 * time.Minute
+	case CheckoutPaymentProviderChargebee:
+		// Chargebee hosted pages live 5 days and payment_intents 30 min. We pin the
+		// shorter of the two so an abandoned session dies before the intent's fund hold does.
+		return 30 * time.Minute
 	default:
 		return 30 * time.Minute // Default to 30 minutes
 	}
@@ -127,14 +158,14 @@ type PaymentAction struct {
 
 type CheckoutSessionFilter struct {
 	*QueryFilter
-	CustomerIDs        []string                      `json:"customer_ids,omitempty"`
-	Actions            []CheckoutAction              `json:"actions,omitempty"`
-	PaymentProviders   []CheckoutPaymentProvider     `json:"payment_providers,omitempty"`
-	CheckoutStatuses   []CheckoutStatus              `json:"checkout_statuses,omitempty"`
-	ExpiresAtLT        *time.Time                    `json:"expires_at_lt,omitempty"`
-	CheckoutInvoiceIDs []string                      `json:"checkout_invoice_ids,omitempty"`
-	CheckoutPaymentIDs []string                      `json:"checkout_payment_ids,omitempty"`
-	Configuration      *CheckoutConfigurationFilter  `json:"configuration,omitempty"`
+	CustomerIDs        []string                     `json:"customer_ids,omitempty"`
+	Actions            []CheckoutAction             `json:"actions,omitempty"`
+	PaymentProviders   []CheckoutPaymentProvider    `json:"payment_providers,omitempty"`
+	CheckoutStatuses   []CheckoutStatus             `json:"checkout_statuses,omitempty"`
+	ExpiresAtLT        *time.Time                   `json:"expires_at_lt,omitempty"`
+	CheckoutInvoiceIDs []string                     `json:"checkout_invoice_ids,omitempty"`
+	CheckoutPaymentIDs []string                     `json:"checkout_payment_ids,omitempty"`
+	Configuration      *CheckoutConfigurationFilter `json:"configuration,omitempty"`
 }
 
 // CheckoutConfigurationFilter matches fields inside checkout_sessions.configuration

@@ -304,3 +304,53 @@ func TestCreateSubscriptionRequestValidate_GroupedInvoicingChildrenToCreate_Requ
 		}
 	})
 }
+
+func TestCreateSubscriptionRequestValidate_IncludePriceIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		ids     *[]string // nil / empty / non-empty distinguished by pointer
+		wantErr bool
+		errSub  string
+	}{
+		{
+			name:    "nil is valid (default behavior)",
+			ids:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "empty slice is valid (attach no plan prices)",
+			ids:     &[]string{},
+			wantErr: false,
+		},
+		{
+			name:    "unique ids valid",
+			ids:     &[]string{"price_a", "price_b", "price_c"},
+			wantErr: false,
+		},
+		{
+			name:    "duplicate ids rejected",
+			ids:     &[]string{"price_a", "price_b", "price_a"},
+			wantErr: true,
+			errSub:  "duplicate",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.IncludePriceIDs = tc.ids
+			err := req.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected validation error mentioning %q, got nil", tc.errSub)
+				}
+				if !strings.Contains(err.Error(), tc.errSub) {
+					t.Fatalf("expected error to mention %q, got: %v", tc.errSub, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+		})
+	}
+}

@@ -165,26 +165,6 @@ func (tru *TaxRateUpdate) ClearPercentageValue() *TaxRateUpdate {
 	return tru
 }
 
-// SetFixedValue sets the "fixed_value" field.
-func (tru *TaxRateUpdate) SetFixedValue(d decimal.Decimal) *TaxRateUpdate {
-	tru.mutation.SetFixedValue(d)
-	return tru
-}
-
-// SetNillableFixedValue sets the "fixed_value" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableFixedValue(d *decimal.Decimal) *TaxRateUpdate {
-	if d != nil {
-		tru.SetFixedValue(*d)
-	}
-	return tru
-}
-
-// ClearFixedValue clears the value of the "fixed_value" field.
-func (tru *TaxRateUpdate) ClearFixedValue() *TaxRateUpdate {
-	tru.mutation.ClearFixedValue()
-	return tru
-}
-
 // SetMetadata sets the "metadata" field.
 func (tru *TaxRateUpdate) SetMetadata(m map[string]string) *TaxRateUpdate {
 	tru.mutation.SetMetadata(m)
@@ -316,12 +296,6 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tru.mutation.PercentageValueCleared() {
 		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
-	}
-	if value, ok := tru.mutation.FixedValue(); ok {
-		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
-	}
-	if tru.mutation.FixedValueCleared() {
-		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
 	}
 	if value, ok := tru.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
@@ -482,26 +456,6 @@ func (truo *TaxRateUpdateOne) SetNillablePercentageValue(d *decimal.Decimal) *Ta
 // ClearPercentageValue clears the value of the "percentage_value" field.
 func (truo *TaxRateUpdateOne) ClearPercentageValue() *TaxRateUpdateOne {
 	truo.mutation.ClearPercentageValue()
-	return truo
-}
-
-// SetFixedValue sets the "fixed_value" field.
-func (truo *TaxRateUpdateOne) SetFixedValue(d decimal.Decimal) *TaxRateUpdateOne {
-	truo.mutation.SetFixedValue(d)
-	return truo
-}
-
-// SetNillableFixedValue sets the "fixed_value" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableFixedValue(d *decimal.Decimal) *TaxRateUpdateOne {
-	if d != nil {
-		truo.SetFixedValue(*d)
-	}
-	return truo
-}
-
-// ClearFixedValue clears the value of the "fixed_value" field.
-func (truo *TaxRateUpdateOne) ClearFixedValue() *TaxRateUpdateOne {
-	truo.mutation.ClearFixedValue()
 	return truo
 }
 
@@ -666,12 +620,6 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 	}
 	if truo.mutation.PercentageValueCleared() {
 		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
-	}
-	if value, ok := truo.mutation.FixedValue(); ok {
-		_spec.SetField(taxrate.FieldFixedValue, field.TypeOther, value)
-	}
-	if truo.mutation.FixedValueCleared() {
-		_spec.ClearField(taxrate.FieldFixedValue, field.TypeOther)
 	}
 	if value, ok := truo.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)

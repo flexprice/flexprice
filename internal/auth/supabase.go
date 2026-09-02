@@ -2,7 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -61,7 +67,11 @@ func (s *supabaseAuth) SignUp(ctx context.Context, req AuthRequest) (*AuthRespon
 			Mark(ierr.ErrPermissionDenied)
 	}
 
-	if claims.Email != req.Email {
+	// Compared case-insensitively so this agrees with the signup guard, which
+	// normalizes both sides. An exact comparison here would let a case-variant
+	// address clear the guard and then fail this check, surfacing a permission
+	// problem as an opaque system error.
+	if !strings.EqualFold(strings.TrimSpace(claims.Email), strings.TrimSpace(req.Email)) {
 		return nil, ierr.NewError("email mismatch").
 			Mark(ierr.ErrPermissionDenied)
 	}
@@ -152,6 +162,36 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 	}, nil
 }
 
+// EmailConfirmed reports whether Supabase itself has recorded a confirmed
+// email for userID, read from the Admin API rather than from the access token.
+//
+// The token is not usable for this. GoTrue on this project puts email_verified
+// only inside user_metadata, which is writable by the user through the ordinary
+// client SDK (auth.updateUser with a data field, which this codebase already
+// calls from the browser during password reset). A caller could therefore mark
+// their own unconfirmed address verified and walk through the signup guard.
+// app_metadata would be server-controlled, but GoTrue does not put the flag
+// there, and a top-level claim is absent on this project's tokens.
+//
+// auth.users.email_confirmed_at is set by GoTrue when the confirmation link is
+// followed or when an OAuth identity supplies a confirmed address, and no
+// client-side call can write it. That makes it the only trustworthy source.
+func (s *supabaseAuth) EmailConfirmed(ctx context.Context, userID string) (bool, error) {
+	user, err := s.client.Admin.GetUser(ctx, userID)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Failed to read the user's email confirmation status").
+			Mark(ierr.ErrSystem)
+	}
+	if user == nil {
+		return false, ierr.NewError("user not found in auth provider").
+			WithHint("Failed to read the user's email confirmation status").
+			Mark(ierr.ErrSystem)
+	}
+
+	return user.EmailConfirmedAt != nil, nil
+}
+
 func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {
 	// Use Supabase Admin API to update user's app_metadata
 	params := supabase.AdminUserParams{
@@ -174,6 +214,62 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 	)
 
 	return nil
+}
+
+// RemoveUser permanently deletes the user's identity from Supabase.
+func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
+	_, err := s.client.Admin.GetUser(ctx, userID)
+	if err != nil {
+		var errRes *supabase.ErrorResponse
+		if errors.As(err, &errRes) && errRes.Code == http.StatusNotFound {
+			s.logger.Info(ctx, "user already removed from Supabase", "target_user_id", userID)
+			return nil
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to check user in Supabase").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrSystem)
+	}
+
+	delResp, err := s.deleteUser(ctx, userID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to delete user from Supabase").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrSystem)
+	}
+	defer delResp.Body.Close()
+
+	if delResp.StatusCode < http.StatusOK || delResp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(delResp.Body)
+		s.logger.Error(ctx, "supabase admin delete user request failed",
+			"error", fmt.Sprintf("status %d", delResp.StatusCode),
+			"target_user_id", userID,
+			"body", string(body),
+		)
+		return ierr.NewError("failed to delete user from Supabase").
+			WithHint("Supabase admin delete user request failed").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":     userID,
+				"status_code": delResp.StatusCode,
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	s.logger.Info(ctx, "deleted user from Supabase", "target_user_id", userID)
+	return nil
+}
+
+// deleteUser issues a DELETE against the Supabase admin users/{id} endpoint.
+func (s *supabaseAuth) deleteUser(ctx context.Context, userID string) (*http.Response, error) {
+	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, url.PathEscape(userID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.AuthConfig.Supabase.ServiceKey)
+	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
+	return s.client.HTTPClient.Do(req)
 }
 
 // GenerateDevToken creates a short-lived JWT that matches the Supabase claim schema so it
@@ -259,7 +355,34 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 		},
 	})
 	if err != nil {
-		return nil, err
+		// supabase-go returns a raw *supabase.ErrorResponse with no ierr classification,
+		// which would otherwise surface as an opaque HTTP 500 with an empty body. Wrap it
+		// so the caller gets a meaningful status/message, and detect the common
+		// "email already registered" conflict. Supabase auth users are global (not
+		// tenant-scoped), so an email absent from the Flexprice DB can still exist here.
+		if supaErr, ok := err.(*supabase.ErrorResponse); ok {
+			details := map[string]interface{}{
+				"email":          req.Email,
+				"supabase_code":  supaErr.Code,
+				"supabase_error": supaErr.Message,
+			}
+			if supaErr.Code == http.StatusConflict ||
+				supaErr.Code == http.StatusUnprocessableEntity ||
+				strings.Contains(strings.ToLower(supaErr.Message), "already") {
+				return nil, ierr.WithError(supaErr).
+					WithHint("A user with this email already exists in the authentication provider").
+					WithReportableDetails(details).
+					Mark(ierr.ErrAlreadyExists)
+			}
+			return nil, ierr.WithError(supaErr).
+				WithHintf("Authentication provider rejected user creation (code %d)", supaErr.Code).
+				WithReportableDetails(details).
+				Mark(ierr.ErrSystem)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create user in the authentication provider").
+			WithReportableDetails(map[string]interface{}{"email": req.Email}).
+			Mark(ierr.ErrSystem)
 	}
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil

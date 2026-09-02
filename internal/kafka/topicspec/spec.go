@@ -40,12 +40,24 @@ func ParseJSON(data []byte) (*Spec, error) {
 	return &s, nil
 }
 
+// defaultPartitions is used when a topic spec omits partitions (0) — most
+// often a bare "analytics" entry from an older/partial FLEXPRICE_KAFKA_TOPICS
+// JSON that predates the dotted analytics.meter_usage.sink.realtime rename.
+// Rather than reject the whole desired set, fall back to a sane partition
+// count so `migrate kafka` still succeeds; matches the other small topics
+// (events_dlq, system_events, wallet_alert, onboarding_events).
+const defaultPartitions = 3
+
 func (s *Spec) Resolve() ([]ResolvedTopic, error) {
 	out := make([]ResolvedTopic, 0, len(s.Topics))
 	for name, t := range s.Topics {
+		partitions := t.Partitions
+		if partitions == 0 {
+			partitions = defaultPartitions
+		}
 		r := ResolvedTopic{
 			Name:              name,
-			Partitions:        t.Partitions,
+			Partitions:        partitions,
 			ReplicationFactor: s.Defaults.ReplicationFactor,
 			RetentionMs:       s.Defaults.RetentionMs,
 		}

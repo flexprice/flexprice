@@ -1018,10 +1018,12 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupArchivesPendingAs
 	s.Require().NoError(err)
 	s.Equal(types.StatusArchived, archived.Status, "cleanup must archive the pending association")
 
-	// The generic cleanup block archives the draft; the in-memory store scopes Get to live
-	// rows, so an archived invoice is simply no longer retrievable.
-	_, err = s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
-	s.Error(err, "the draft proration invoice must be archived by cleanup")
+	// The generic cleanup block archives the draft. Asserted on status, not retrievability: the
+	// repository soft deletes, so the row stays readable.
+	archivedDraft, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusDeleted, archivedDraft.Status,
+		"the draft proration invoice must be archived by cleanup")
 
 	cleaned, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)

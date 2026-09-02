@@ -2,6 +2,8 @@ name: Build, Push & Deploy to AWS ECS
 
 on:
   push:
+    # develop builds + publishes the GHCR :develop image only; no ECS deploy
+    # (staging ECS is deprovisioned). main runs the full production pipeline.
     branches: [develop, main]
     tags: ['v*']
   # Manual trigger: lets you validate config or force-deploy without a push
@@ -10,10 +12,14 @@ on:
       environment:
         description: "Target environment"
         type: choice
-        default: staging
-        options: [staging, production]
+        default: production
+        options: [production]
       dry_run:
         description: "Dry run — validate config & print plan, skip register/deploy"
+        type: boolean
+        default: false
+      skip_migrations:
+        description: "Skip database migrations for this run (deploy code only)"
         type: boolean
         default: false
 
@@ -33,7 +39,7 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 1: Build the Docker image and push it to ECR
+  # Job 1: Build the Docker image and push it to GHCR
   # Skipped on dry-run dispatches (no code change, no reason to rebuild)
   # ──────────────────────────────────────────────────────────────────────────
   build:
@@ -44,29 +50,22 @@ jobs:
       image: ${{ steps.set-image.outputs.image }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       - name: Login to GitHub Container Registry
         # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
         # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
         # failure on main must fail the build, not slip through silently.
         continue-on-error: ${{ github.ref_name != 'main' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -75,19 +74,14 @@ jobs:
       - name: Prepare image tags
         id: image-tag
         env:
-          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
           GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          echo "ecr_tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-          # legacy output used by deploy jobs
-          echo "tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-
           IS_DEVELOP="${{ github.ref_name == 'develop' }}"
           IS_MAIN="${{ github.ref_name == 'main' }}"
+          IS_DEVELOP="${{ github.ref_name == 'develop' }}"
 
           {
             echo "ghcr_tags<<TAGS_EOF"
@@ -106,33 +100,14 @@ jobs:
             echo "TAGS_EOF"
           } >> $GITHUB_OUTPUT
 
-          if [ "$IS_RELEASE" = "true" ] || [ "$IS_DEVELOP" = "true" ] || [ "$IS_MAIN" = "true" ]; then
+          if [ "$IS_RELEASE" = "true" ] || [ "$IS_MAIN" = "true" ] || [ "$IS_DEVELOP" = "true" ]; then
             echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
           else
             echo "platforms=linux/arm64" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build & push image to ECR
-        id: build-ecr
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: ${{ steps.image-tag.outputs.platforms }}
-          push: true
-          tags: ${{ steps.image-tag.outputs.ecr_tag }}
-          provenance: false
-          # Shared layer cache in GHCR (both AWS + GCP self-hosted runners reach it).
-          # First build of a commit populates it; rebuilds and the GHCR step below hit it.
-          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
-
-      - name: Push image to GHCR
-        uses: docker/build-push-action@v7
-        # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
-        # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
-        # failure on main must fail the build, not slip through silently.
-        continue-on-error: ${{ github.ref_name != 'main' }}
+      - name: Build & push image to GHCR
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: Dockerfile
@@ -140,24 +115,24 @@ jobs:
           push: true
           tags: ${{ steps.image-tag.outputs.ghcr_tags }}
           provenance: false
-          # Reuses the cache the ECR build just populated -> all layers hit, no rebuild.
+          # Shared layer cache in GHCR (both AWS + GCP self-hosted runners reach it).
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
 
       - name: Set image output
         id: set-image
         env:
-          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
           GITHUB_SHA: ${{ github.sha }}
-        run: echo "image=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+        run: echo "image=${GHCR_IMAGE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 2: Resolve deployment targets from branch or manual input
+  # Job 2: Resolve deployment targets (production only)
   #
   # Targets are stored as a single JSON variable per environment so that
   # each region can have its own cluster and service names:
   #
-  #   PROD_DEPLOY_TARGETS / STAGING_DEPLOY_TARGETS
+  #   PROD_DEPLOY_TARGETS
   #   (GitHub Actions → Settings → Variables)
   #
   #   Format (one object per region):
@@ -183,13 +158,15 @@ jobs:
   #   Targets that define it are deployed to preprod first; production rollout
   #   then waits for manual approval (GitHub Environment: prod-approval).
   #
-  #   Trigger mapping:
-  #     push to main    → production targets
-  #     push to develop → staging targets
-  #     workflow_dispatch → chosen via "environment" input
+  #   Trigger mapping (staging ECS deprovisioned — production only):
+  #     push to main      → production targets
+  #     workflow_dispatch → production targets
   # ──────────────────────────────────────────────────────────────────────────
   resolve-config:
     name: Resolve deployment targets
+    # develop only builds/publishes the GHCR image (staging ECS deprovisioned).
+    # Skipping here cascades: every deploy job needs this one, so none run.
+    if: ${{ github.ref_name != 'develop' }}
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
@@ -198,33 +175,24 @@ jobs:
       dry_run: ${{ steps.config.outputs.dry_run }}
 
     steps:
-      - name: Select targets based on branch / input
+      - name: Select targets based on input
         id: config
         env:
           PROD_TARGETS: ${{ vars.PROD_DEPLOY_TARGETS }}
-          STAGING_TARGETS: ${{ vars.STAGING_DEPLOY_TARGETS }}
         run: |
-          # Determine environment
+          # Only production targets exist (staging ECS deprovisioned).
+          ENV="production"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
             # Default dry_run to false when not explicitly set
             DRY_RUN="${{ github.event.inputs.dry_run }}"
             if [ -z "$DRY_RUN" ]; then DRY_RUN="false"; fi
-          elif [ "${{ github.ref_name }}" = "main" ]; then
-            ENV="production"
-            DRY_RUN="false"
           else
-            ENV="staging"
             DRY_RUN="false"
           fi
 
           echo "Environment and dry_run configured (values redacted for public logs)"
 
-          if [ "$ENV" = "production" ]; then
-            TARGETS_JSON="$PROD_TARGETS"
-          else
-            TARGETS_JSON="$STAGING_TARGETS"
-          fi
+          TARGETS_JSON="$PROD_TARGETS"
 
           # Targets that also define a preprod_service get a canary deploy +
           # manual approval gate before the full production rollout.
@@ -250,16 +218,125 @@ jobs:
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
+      # A skipped job cannot report why it was skipped -- it simply is not in the
+      # run. Without this, "this deploy shipped code without running migrations"
+      # is invisible to anyone reading the run afterwards.
+      - name: Record whether migrations will run
+        if: always()
+        env:
+          ENABLED: ${{ vars.DB_MIGRATIONS_ENABLED }}
+          SKIPPED: ${{ github.event.inputs.skip_migrations }}
+        run: |
+          if [ "$ENABLED" = "true" ] && [ "$SKIPPED" != "true" ]; then
+            echo "### Database migrations: ENABLED" >> "$GITHUB_STEP_SUMMARY"
+            echo "The migrate job runs before any rollout and blocks it on failure." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### :warning: Database migrations: NOT RUNNING" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$SKIPPED" = "true" ]; then
+              echo "Skipped for this run via the \`skip_migrations\` input." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "\`DB_MIGRATIONS_ENABLED\` is not \`true\` (currently: \`${ENABLED:-unset}\`)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "This deployment ships code without applying schema changes. If this" >> "$GITHUB_STEP_SUMMARY"
+            echo "release contains a migration, apply it by hand or the new code runs" >> "$GITHUB_STEP_SUMMARY"
+            echo "against the old schema." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Database migrations — one ECS task per target, before anything rolls.
+  #
+  # Runs ahead of the preprod canary and therefore ahead of the production
+  # approval gate. That is deliberate: the canary runs the NEW image, so the new
+  # schema has to be there before it starts. It is only safe because migrations
+  # are additive and backward-compatible by rule (migrations/versioned/README.md)
+  # — the running old code keeps working against the migrated schema, and a
+  # rejected approval leaves a schema the old image still runs on.
+  #
+  # A failure here blocks every deploy job below. The database is left at the
+  # last migration that reported Applied: dbmate commits one file at a time, so
+  # a partial run is a known prefix of the timeline, never a half-applied file.
+  # ──────────────────────────────────────────────────────────────────────────
+  migrate:
+    name: Migrate Database (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    # OFF unless DB_MIGRATIONS_ENABLED is exactly "true". Default-off is
+    # deliberate while migrations are still applied by hand: turning this on is
+    # a decision someone makes per environment, after the target database has
+    # been adopted (`make migrate-adopt`). An unadopted database fails the Job
+    # on purpose, which would block deploys.
+    #
+    # Set at Settings > Secrets and variables > Actions > Variables, or
+    #   gh variable set DB_MIGRATIONS_ENABLED --body true
+    #
+    # `vars` and not `env`: the env context is not available in a job-level `if`.
+    if: >-
+      ${{ always() &&
+          vars.DB_MIGRATIONS_ENABLED == 'true' &&
+          github.event.inputs.skip_migrations != 'true' &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.targets != '[]' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      # One target's database failing must not leave the others half-deployed:
+      # let every migration report, then block the rollout on any failure.
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      # Checkout runs BEFORE credentials are configured: configure-aws-credentials
+      # exports the migration role's temporary credentials into the environment of
+      # every subsequent step, and checkout has no need of them.
+      #
+      # Both actions are pinned to a commit SHA rather than a tag. A tag can be
+      # repointed by its owner (see the trivy-action and kics-github-action
+      # compromises); the rest of this workflow predates that rule.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Apply database migrations
+        uses: ./.github/actions/run-ecs-migration
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.api_service }}
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
   # ──────────────────────────────────────────────────────────────────────────
   # Job 3: Canary — deploy preprod service(s) for targets that define one.
   # Runs BEFORE the approval gate; production rollout only proceeds after a
   # human validates these preprod deployments and approves the gate.
-  # Skipped entirely when no target defines preprod_service (e.g. staging).
+  # Skipped entirely when no target defines preprod_service.
   # ──────────────────────────────────────────────────────────────────────────
   deploy-preprod:
     name: Deploy Preprod (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' && needs.resolve-config.outputs.preprod_targets != '[]' }}
+    needs: [build, resolve-config, migrate]
+    # `always()` is required so a skipped approval-gate does not block the run, but it
+    # also cancels the implicit "skip on failed needs" rule — so every dependency this
+    # job actually relies on must be asserted explicitly. `needs.build.result` is the
+    # one that matters: without it a failed image build still reaches the deploy step,
+    # which registers a task definition referencing an image that was never pushed.
+    if: >-
+      ${{ always() &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+          needs.resolve-config.outputs.preprod_targets != '[]' }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -269,7 +346,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
@@ -280,8 +357,10 @@ jobs:
           cluster: ${{ matrix.target.cluster }}
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.preprod_service }}
-          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -320,7 +399,7 @@ jobs:
   # published only the immutable :<sha>; after a reviewer approves the GCP gate we
   # retag :<sha> -> :main (manifest-only, no rebuild), so GCP deploys only
   # post-approval. Runs after the preprod canary (like the AWS gate); production +
-  # non-dry-run only. Staging (develop) is unaffected.
+  # non-dry-run only.
   #
   # SETUP (required): create the `gcp-prod-approval` Environment in repo Settings →
   # Environments with required reviewers (mirror `prod-approval`) — otherwise the
@@ -340,14 +419,14 @@ jobs:
     environment: gcp-prod-approval
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
           password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       - name: Retag :<sha> -> :main (manifest copy, no rebuild)
         env:
@@ -373,13 +452,14 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
-    # staging: deploys immediately (gate is skipped / irrelevant)
+    needs: [build, resolve-config, migrate, approval-gate]
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -392,7 +472,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
@@ -403,19 +483,22 @@ jobs:
           cluster: ${{ matrix.target.cluster }}
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.api_service }}
-          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
-    # staging: deploys immediately (gate is skipped / irrelevant)
+    needs: [build, resolve-config, migrate, approval-gate]
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -428,7 +511,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
@@ -439,19 +522,22 @@ jobs:
           cluster: ${{ matrix.target.cluster }}
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.consumer_service }}
-          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config, approval-gate]
-    # staging: deploys immediately (gate is skipped / irrelevant)
+    needs: [build, resolve-config, migrate, approval-gate]
     # production: requires the approval-gate to have been approved
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
           (needs.resolve-config.outputs.environment != 'production' ||
            needs.resolve-config.outputs.dry_run == 'true' ||
            needs.approval-gate.result == 'success') }}
@@ -464,7 +550,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
@@ -475,6 +561,8 @@ jobs:
           cluster: ${{ matrix.target.cluster }}
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.worker_service }}
-          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}

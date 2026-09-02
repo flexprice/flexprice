@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -143,6 +144,12 @@ func AppliedAt(v time.Time) predicate.TaxApplied {
 // IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
 func IdempotencyKey(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldIdempotencyKey, v))
+}
+
+// TaxBehavior applies equality check predicate on the "tax_behavior" field. It's identical to TaxBehaviorEQ.
+func TaxBehavior(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxBehavior, vc))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1118,6 +1125,100 @@ func IdempotencyKeyEqualFold(v string) predicate.TaxApplied {
 // IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
 func IdempotencyKeyContainsFold(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldContainsFold(FieldIdempotencyKey, v))
+}
+
+// TaxBehaviorEQ applies the EQ predicate on the "tax_behavior" field.
+func TaxBehaviorEQ(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorNEQ applies the NEQ predicate on the "tax_behavior" field.
+func TaxBehaviorNEQ(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldNEQ(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorIn applies the In predicate on the "tax_behavior" field.
+func TaxBehaviorIn(vs ...types.TaxBehavior) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldIn(FieldTaxBehavior, v...))
+}
+
+// TaxBehaviorNotIn applies the NotIn predicate on the "tax_behavior" field.
+func TaxBehaviorNotIn(vs ...types.TaxBehavior) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldNotIn(FieldTaxBehavior, v...))
+}
+
+// TaxBehaviorGT applies the GT predicate on the "tax_behavior" field.
+func TaxBehaviorGT(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGT(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorGTE applies the GTE predicate on the "tax_behavior" field.
+func TaxBehaviorGTE(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGTE(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorLT applies the LT predicate on the "tax_behavior" field.
+func TaxBehaviorLT(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLT(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorLTE applies the LTE predicate on the "tax_behavior" field.
+func TaxBehaviorLTE(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLTE(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorContains applies the Contains predicate on the "tax_behavior" field.
+func TaxBehaviorContains(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContains(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorHasPrefix applies the HasPrefix predicate on the "tax_behavior" field.
+func TaxBehaviorHasPrefix(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasPrefix(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorHasSuffix applies the HasSuffix predicate on the "tax_behavior" field.
+func TaxBehaviorHasSuffix(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasSuffix(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorIsNil applies the IsNil predicate on the "tax_behavior" field.
+func TaxBehaviorIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldTaxBehavior))
+}
+
+// TaxBehaviorNotNil applies the NotNil predicate on the "tax_behavior" field.
+func TaxBehaviorNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldTaxBehavior))
+}
+
+// TaxBehaviorEqualFold applies the EqualFold predicate on the "tax_behavior" field.
+func TaxBehaviorEqualFold(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEqualFold(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorContainsFold applies the ContainsFold predicate on the "tax_behavior" field.
+func TaxBehaviorContainsFold(v types.TaxBehavior) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContainsFold(FieldTaxBehavior, vc))
 }
 
 // And groups predicates with the AND operator between them.

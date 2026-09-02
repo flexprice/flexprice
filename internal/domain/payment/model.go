@@ -150,6 +150,16 @@ func (pa *PaymentAttempt) Validate() error {
 			WithHint("Attempt number is invalid").
 			Mark(ierr.ErrValidation)
 	}
+
+	switch pa.PaymentStatus {
+	case types.PaymentStatusSucceeded, types.PaymentStatusFailed:
+	default:
+		return ierr.NewError("invalid payment attempt status").
+			WithHintf("A payment attempt may only be %s or %s",
+				types.PaymentStatusSucceeded, types.PaymentStatusFailed).
+			WithReportableDetails(map[string]any{"payment_status": pa.PaymentStatus}).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 

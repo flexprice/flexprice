@@ -31,6 +31,105 @@ func (s PaymentStatus) IsTerminal() bool {
 	return s == PaymentStatusVoided || s == PaymentStatusRefunded || s == PaymentStatusFailed
 }
 
+// IsDeletable reports whether a payment in this status may be deleted.
+// Statuses that record settled or in-flight money movement are not deletable:
+// removing one hides it from reconciliation while the money it records still
+// moved. Such payments should be voided or refunded instead, which preserves
+// the record.
+//
+// PENDING is excluded because it means the gateway has accepted the payment and
+// the outcome is still to come; deleting one discards the record of a live
+// gateway transaction. Only INITIATED (never sent to a gateway) and FAILED
+// (sent, and definitively did not charge) can be deleted.
+func (s PaymentStatus) IsDeletable() bool {
+	switch s {
+	case PaymentStatusInitiated, PaymentStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// paymentStatusTransitions lists the statuses each status may move to via the
+// public update API. Self-transitions are allowed so that an update which
+// resends the current status is a no-op rather than an error. Terminal statuses
+// (see IsTerminal) have no outgoing transitions except SUCCEEDED, which is not
+// terminal because AUTH payments can still be voided or refunded.
+var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
+	// INITIATED reaches SUCCEEDED and OVERPAID directly because payments created
+	// with ProcessPayment=false (external gateways, backfills, checkout
+	// finalisation) stay INITIATED until the integration records the gateway's
+	// outcome in a single update.
+	PaymentStatusInitiated: {
+		PaymentStatusInitiated,
+		PaymentStatusPending,
+		PaymentStatusProcessing,
+		PaymentStatusSucceeded,
+		PaymentStatusOverpaid,
+		PaymentStatusFailed,
+	},
+	PaymentStatusPending: {
+		PaymentStatusPending,
+		PaymentStatusProcessing,
+		PaymentStatusSucceeded,
+		PaymentStatusOverpaid,
+		PaymentStatusFailed,
+	},
+	PaymentStatusProcessing: {
+		PaymentStatusProcessing,
+		PaymentStatusSucceeded,
+		PaymentStatusOverpaid,
+		PaymentStatusFailed,
+	},
+	PaymentStatusSucceeded: {
+		PaymentStatusSucceeded,
+		PaymentStatusOverpaid,
+		PaymentStatusRefunded,
+		PaymentStatusPartiallyRefunded,
+		PaymentStatusVoided,
+	},
+	PaymentStatusOverpaid: {
+		PaymentStatusOverpaid,
+		PaymentStatusRefunded,
+		PaymentStatusPartiallyRefunded,
+	},
+	PaymentStatusPartiallyRefunded: {
+		PaymentStatusPartiallyRefunded,
+		PaymentStatusRefunded,
+	},
+	PaymentStatusFailed:   {PaymentStatusFailed},
+	PaymentStatusRefunded: {PaymentStatusRefunded},
+	PaymentStatusVoided:   {PaymentStatusVoided},
+}
+
+// ValidateTransitionTo reports whether a payment may move from s to target.
+// Without this, the update API accepts any status for any payment, which lets a
+// caller drive a payment to SUCCEEDED with no gateway involvement.
+func (s PaymentStatus) ValidateTransitionTo(target PaymentStatus) error {
+	if err := target.Validate(); err != nil {
+		return err
+	}
+
+	allowed, ok := paymentStatusTransitions[s]
+	if !ok {
+		return ierr.NewError("invalid current payment status").
+			WithHintf("Payment is in an unrecognised status: %s", s).
+			Mark(ierr.ErrValidation)
+	}
+
+	if lo.Contains(allowed, target) {
+		return nil
+	}
+
+	return ierr.NewError("invalid payment status transition").
+		WithHintf("Payment status cannot change from %s to %s", s, target).
+		WithReportableDetails(map[string]any{
+			"current_status":   s,
+			"allowed_statuses": allowed,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
 func (s PaymentStatus) Validate() error {
 	allowed := []PaymentStatus{
 		PaymentStatusInitiated,

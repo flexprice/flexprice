@@ -39,6 +39,7 @@ const (
 	ExpandCreditsAvailableBreakdown ExpandableField = "credits_available_breakdown"
 	ExpandSubscriptionLineItems     ExpandableField = "subscription_line_items"
 	ExpandIntegrations              ExpandableField = "integrations"
+	ExpandPriceSyncStatus           ExpandableField = "price_sync_status"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -53,24 +54,26 @@ type ExpandConfig struct {
 var (
 	// PlanExpandConfig defines what can be expanded on a plan
 	PlanExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements, ExpandCreditGrant, ExpandPriceUnit},
+		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements, ExpandCreditGrant, ExpandPriceUnit, ExpandPriceSyncStatus},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandPrices:       {ExpandMeters, ExpandPriceUnit},
-			ExpandEntitlements: {ExpandFeatures},
-			ExpandCreditGrant:  {ExpandFeatures},
-			ExpandPriceUnit:    {},
+			ExpandPrices:          {ExpandMeters, ExpandPriceUnit, ExpandFeatures},
+			ExpandEntitlements:    {ExpandFeatures},
+			ExpandCreditGrant:     {ExpandFeatures},
+			ExpandPriceUnit:       {},
+			ExpandPriceSyncStatus: {},
 		},
 	}
 
 	// PriceExpandConfig defines what can be expanded on a price
 	PriceExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandMeters, ExpandPriceUnit, ExpandPlan, ExpandAddons, ExpandGroups},
+		AllowedFields: []ExpandableField{ExpandMeters, ExpandPriceUnit, ExpandPlan, ExpandAddons, ExpandGroups, ExpandFeatures},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandMeters:    {},
 			ExpandPriceUnit: {},
 			ExpandGroups:    {},
 			ExpandPlan:      {},
 			ExpandAddons:    {},
+			ExpandFeatures:  {},
 		},
 	}
 

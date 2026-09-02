@@ -393,6 +393,26 @@ func (eu *EntitlementUpdate) ClearGrantDurationUnit() *EntitlementUpdate {
 	return eu
 }
 
+// SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
+func (eu *EntitlementUpdate) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
+	eu.mutation.SetGrantAllocationBehavior(tgab)
+	return eu
+}
+
+// SetNillableGrantAllocationBehavior sets the "grant_allocation_behavior" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableGrantAllocationBehavior(tgab *types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
+	if tgab != nil {
+		eu.SetGrantAllocationBehavior(*tgab)
+	}
+	return eu
+}
+
+// ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
+func (eu *EntitlementUpdate) ClearGrantAllocationBehavior() *EntitlementUpdate {
+	eu.mutation.ClearGrantAllocationBehavior()
+	return eu
+}
+
 // SetGrantQuota sets the "grant_quota" field.
 func (eu *EntitlementUpdate) SetGrantQuota(d decimal.Decimal) *EntitlementUpdate {
 	eu.mutation.SetGrantQuota(d)
@@ -498,6 +518,11 @@ func (eu *EntitlementUpdate) check() error {
 	if v, ok := eu.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := eu.mutation.GrantAllocationBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_allocation_behavior", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_allocation_behavior": %w`, err)}
 		}
 	}
 	if v, ok := eu.mutation.AggregationMode(); ok {
@@ -633,6 +658,12 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.GrantDurationUnitCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
+	}
+	if value, ok := eu.mutation.GrantAllocationBehavior(); ok {
+		_spec.SetField(entitlement.FieldGrantAllocationBehavior, field.TypeString, value)
+	}
+	if eu.mutation.GrantAllocationBehaviorCleared() {
+		_spec.ClearField(entitlement.FieldGrantAllocationBehavior, field.TypeString)
 	}
 	if value, ok := eu.mutation.GrantQuota(); ok {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
@@ -1026,6 +1057,26 @@ func (euo *EntitlementUpdateOne) ClearGrantDurationUnit() *EntitlementUpdateOne 
 	return euo
 }
 
+// SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
+func (euo *EntitlementUpdateOne) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
+	euo.mutation.SetGrantAllocationBehavior(tgab)
+	return euo
+}
+
+// SetNillableGrantAllocationBehavior sets the "grant_allocation_behavior" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableGrantAllocationBehavior(tgab *types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
+	if tgab != nil {
+		euo.SetGrantAllocationBehavior(*tgab)
+	}
+	return euo
+}
+
+// ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
+func (euo *EntitlementUpdateOne) ClearGrantAllocationBehavior() *EntitlementUpdateOne {
+	euo.mutation.ClearGrantAllocationBehavior()
+	return euo
+}
+
 // SetGrantQuota sets the "grant_quota" field.
 func (euo *EntitlementUpdateOne) SetGrantQuota(d decimal.Decimal) *EntitlementUpdateOne {
 	euo.mutation.SetGrantQuota(d)
@@ -1144,6 +1195,11 @@ func (euo *EntitlementUpdateOne) check() error {
 	if v, ok := euo.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := euo.mutation.GrantAllocationBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_allocation_behavior", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_allocation_behavior": %w`, err)}
 		}
 	}
 	if v, ok := euo.mutation.AggregationMode(); ok {
@@ -1296,6 +1352,12 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.GrantDurationUnitCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
+	}
+	if value, ok := euo.mutation.GrantAllocationBehavior(); ok {
+		_spec.SetField(entitlement.FieldGrantAllocationBehavior, field.TypeString, value)
+	}
+	if euo.mutation.GrantAllocationBehaviorCleared() {
+		_spec.ClearField(entitlement.FieldGrantAllocationBehavior, field.TypeString)
 	}
 	if value, ok := euo.mutation.GrantQuota(); ok {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)

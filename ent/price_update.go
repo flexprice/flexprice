@@ -377,6 +377,9 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.TierModeCleared() {
 		_spec.ClearField(price.FieldTierMode, field.TypeString)
 	}
+	if pu.mutation.BucketSizeCleared() {
+		_spec.ClearField(price.FieldBucketSize, field.TypeString)
+	}
 	if pu.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)
 	}
@@ -873,6 +876,9 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.TierModeCleared() {
 		_spec.ClearField(price.FieldTierMode, field.TypeString)
+	}
+	if puo.mutation.BucketSizeCleared() {
+		_spec.ClearField(price.FieldBucketSize, field.TypeString)
 	}
 	if puo.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)

@@ -217,6 +217,33 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 	return s.InMemoryStore.Update(ctx, g.ID, existing)
 }
 
+// CloseWindow mirrors the ent repo: valid_to only ever shrinks, and usage,
+// grant_status and last_computed_at are left untouched so the closed row stays in
+// the unfinalized set for its final refresh.
+func (s *InMemoryEntitlementGrantStore) CloseWindow(ctx context.Context, id string, validTo time.Time) error {
+	existing, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return errors.WithError(err).
+			WithHint("Entitlement grant not found").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(errors.ErrNotFound)
+	}
+
+	// Matches the repo's `valid_to > $1` guard: a close can never extend a window.
+	if !existing.ValidTo.After(validTo) {
+		return nil
+	}
+
+	// Write to a copy: the Ent repo maps a fresh struct on every read, so a caller
+	// that still holds a grant it listed earlier must not see its valid_to move
+	// under it. Aliasing here made close-then-open paths read a window that had
+	// already collapsed to the close boundary.
+	updated := *existing
+	updated.ValidTo = validTo.UTC()
+	updated.UpdatedAt = time.Now().UTC()
+	return s.InMemoryStore.Update(ctx, id, &updated)
+}
+
 func (s *InMemoryEntitlementGrantStore) LatestWindowEndBySlot(
 	ctx context.Context,
 	customerID string,

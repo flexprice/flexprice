@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 var Idx_tenant_environment_external_id_unique = "idx_tenant_environment_external_id_unique"
@@ -93,6 +94,13 @@ func (Customer) Fields() []ent.Field {
 			}).
 			Default("UTC").
 			Optional(),
+		field.String("tax_treatment").
+			GoType(types.TaxTreatment("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.TaxTreatmentTaxable)).
+			NotEmpty(),
 	}
 }
 

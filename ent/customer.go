@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Customer is the model entity for the Customer schema.
@@ -55,7 +56,9 @@ type Customer struct {
 	// AddressCountry holds the value of the "address_country" field.
 	AddressCountry string `json:"address_country,omitempty"`
 	// Timezone holds the value of the "timezone" field.
-	Timezone     string `json:"timezone,omitempty"`
+	Timezone string `json:"timezone,omitempty"`
+	// TaxTreatment holds the value of the "tax_treatment" field.
+	TaxTreatment types.TaxTreatment `json:"tax_treatment,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -66,7 +69,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata:
 			values[i] = new([]byte)
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone:
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -208,6 +211,12 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.Timezone = value.String
 			}
+		case customer.FieldTaxTreatment:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_treatment", values[i])
+			} else if value.Valid {
+				c.TaxTreatment = types.TaxTreatment(value.String)
+			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
 		}
@@ -302,6 +311,9 @@ func (c *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timezone=")
 	builder.WriteString(c.Timezone)
+	builder.WriteString(", ")
+	builder.WriteString("tax_treatment=")
+	builder.WriteString(fmt.Sprintf("%v", c.TaxTreatment))
 	builder.WriteByte(')')
 	return builder.String()
 }

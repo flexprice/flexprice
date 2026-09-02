@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -85,6 +88,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	if err := s.validateBucketSizeAgainstMeter(ctx, &req); err != nil {
+		return nil, err
 	}
 
 	// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
@@ -356,6 +363,12 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		prices := make([]*price.Price, 0, len(req.Items))
 
 		for _, priceReq := range req.Items {
+			// Same bucketing guards as the single-create path — otherwise bulk is a
+			// hole through which a second live bucket source can be introduced.
+			if err := s.validateBucketSizeAgainstMeter(txCtx, &priceReq); err != nil {
+				return err
+			}
+
 			// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
 			p, err := s.preparePriceForCreation(txCtx, &priceReq)
 			if err != nil {
@@ -449,6 +462,14 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 			return nil, err
 		}
 		response.Meter = dto.ToMeterResponse(meter)
+
+		// A meter has at most one published feature, so features[0] is unambiguous.
+		features, err := s.FeatureRepo.GetFeaturesByMeterIDs(ctx, []string{price.MeterID})
+		if err != nil {
+			s.Logger.Info(ctx, "failed to fetch feature for reporting unit", "meter_id", price.MeterID, "error", err)
+		} else if len(features) > 0 && features[0].ReportingUnit != nil {
+			response.Feature = &dto.PriceFeatureResponse{ReportingUnit: features[0].ReportingUnit}
+		}
 	}
 
 	if price.GroupID != "" {
@@ -619,6 +640,22 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		s.Logger.Debug(ctx, "fetched meters for prices", "count", len(metersResponse.Items))
 	}
 
+	// If features are requested to be expanded, fetch the metered feature (for reporting unit) per meter in one query.
+	// A meter has at most one published feature, so keying by MeterID is unambiguous.
+	featuresByMeterID := make(map[string]*feature.Feature)
+	if filter.GetExpand().Has(types.ExpandFeatures) && len(prices) > 0 {
+		meterIDs := lo.Uniq(lo.FilterMap(prices, func(p *price.Price, _ int) (string, bool) {
+			return p.MeterID, p.MeterID != ""
+		}))
+
+		features, err := s.FeatureRepo.GetFeaturesByMeterIDs(ctx, meterIDs)
+		if err != nil {
+			s.Logger.Info(ctx, "failed to fetch features in bulk", "error", err)
+		} else {
+			featuresByMeterID = lo.KeyBy(features, func(f *feature.Feature) string { return f.MeterID })
+		}
+	}
+
 	// Collect entity IDs based on entity type for efficient bulk fetching
 	var planIDs []string
 	var addonIDs []string
@@ -744,6 +781,13 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		if filter.GetExpand().Has(types.ExpandMeters) && p.MeterID != "" {
 			if m, ok := metersByID[p.MeterID]; ok {
 				response.Items[i].Meter = m
+			}
+		}
+
+		// Add feature (reporting unit) if requested and available
+		if filter.GetExpand().Has(types.ExpandFeatures) && p.MeterID != "" {
+			if f, ok := featuresByMeterID[p.MeterID]; ok && f != nil && f.ReportingUnit != nil {
+				response.Items[i].Feature = &dto.PriceFeatureResponse{ReportingUnit: f.ReportingUnit}
 			}
 		}
 
@@ -1371,6 +1415,46 @@ func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price
 	return s.CalculateCost(ctx, price, quantity)
 }
 
+// validateBucketSizeAgainstMeter enforces the two bucketing rules that need the
+// meter: the aggregation must be windowable, and the meter must not already
+// carry a bucket size. The second is what keeps precedence from becoming a
+// silent behaviour change — legacy meters are migrated by clearing the meter's
+// value, never by shadowing it from a price.
+func (s *priceService) validateBucketSizeAgainstMeter(ctx context.Context, req *dto.CreatePriceRequest) error {
+	if req.BucketSize == "" || req.MeterID == "" {
+		return nil
+	}
+
+	m, err := s.MeterRepo.GetMeter(ctx, req.MeterID)
+	if err != nil {
+		return err
+	}
+
+	if m.Aggregation.BucketSize != "" {
+		return ierr.NewError("meter already defines a bucket size").
+			WithHint("This meter is bucketed at the meter level. Clear the meter's bucket size before setting one on the price.").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":          m.ID,
+				"meter_bucket_size": m.Aggregation.BucketSize,
+				"price_bucket_size": req.BucketSize,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if m.Aggregation.Type != types.AggregationMax && m.Aggregation.Type != types.AggregationSum {
+		return ierr.NewError("bucket_size can only be used with MAX or SUM aggregation").
+			WithHint("Bucketing windows a meter's aggregation, which is only meaningful for MAX or SUM meters").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":         m.ID,
+				"aggregation_type": m.Aggregation.Type,
+				"bucket_size":      req.BucketSize,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.validateBucketedPriceAgainstEntitlements(ctx, m, req.BucketSize, req.BillingModel)
+}
+
 // validateGroup validates that a group exists and is of type "price"
 func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price) error {
 	// 1. Get all group IDs from prices
@@ -1642,4 +1726,89 @@ func (s *priceService) GetByLookupKey(ctx context.Context, lookupKey string) (*d
 	}
 
 	return &dto.PriceResponse{Price: price}, nil
+}
+
+// entitlementsForMeter returns the entitlements attached to the features backed
+// by the given meter. Empty meter ID, no features, or no entitlements all yield
+// an empty slice rather than an error.
+func (s *priceService) entitlementsForMeter(ctx context.Context, meterID string) ([]*entitlement.Entitlement, error) {
+	// Partially-wired ServiceParams (unit tests, narrow constructors) leave these
+	// repositories nil. The guard is a cross-entity check, so it can only run
+	// when both sides are reachable.
+	if meterID == "" || s.FeatureRepo == nil || s.EntitlementRepo == nil {
+		return nil, nil
+	}
+
+	featureFilter := types.NewNoLimitFeatureFilter()
+	featureFilter.MeterIDs = []string{meterID}
+	features, err := s.FeatureRepo.List(ctx, featureFilter)
+	if err != nil {
+		return nil, err
+	}
+	if len(features) == 0 {
+		return nil, nil
+	}
+
+	featureIDs := lo.Map(features, func(f *feature.Feature, _ int) string { return f.ID })
+
+	entFilter := types.NewNoLimitEntitlementFilter()
+	entFilter.FeatureIDs = featureIDs
+	return s.EntitlementRepo.List(ctx, entFilter)
+}
+
+// validateBucketedPriceAgainstEntitlements rejects a bucketed price when the
+// meter's feature already carries an entitlement that cannot coexist with
+// windowed pricing. Called on price create.
+func (s *priceService) validateBucketedPriceAgainstEntitlements(ctx context.Context, m *meter.Meter, bucketSize types.WindowSize, billingModel types.BillingModel) error {
+	if bucketSize == "" || m == nil {
+		return nil
+	}
+
+	ents, err := s.entitlementsForMeter(ctx, m.ID)
+	if err != nil {
+		return err
+	}
+
+	isMax := m.Aggregation.Type == types.AggregationMax
+	for _, e := range ents {
+		if e == nil {
+			continue
+		}
+		if e.HasGrantConfig() {
+			return ierr.NewError("grant-based entitlements are not supported for bucketed meters").
+				WithHint("Remove the grant-based entitlement on this feature before pricing it per window").
+				WithReportableDetails(map[string]interface{}{
+					"meter_id":       m.ID,
+					"entitlement_id": e.ID,
+					"bucket_size":    bucketSize,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		// Only FLAT_FEE is linear: cost(a+b) == cost(a)+cost(b). Under TIERED or
+		// PACKAGE the entitlement path re-prices on the period total and grants the
+		// allowance once instead of once per window (design doc section 9).
+		if billingModel != types.BILLING_MODEL_FLAT_FEE {
+			return ierr.NewError("entitlements are not supported for bucketed non-linear pricing").
+				WithHint("Applying an entitlement re-prices on the period total, which grants a tiered or packaged allowance once instead of once per window. Remove the entitlement, or use a flat-fee price.").
+				WithReportableDetails(map[string]interface{}{
+					"meter_id":       m.ID,
+					"entitlement_id": e.ID,
+					"bucket_size":    bucketSize,
+					"billing_model":  billingModel,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if isMax {
+			return ierr.NewError("entitlements are not supported for bucketed max meters").
+				WithHint("Bucketed max pricing charges each window independently, so a feature entitlement has no single window to draw down. Remove the entitlement before pricing this meter per window.").
+				WithReportableDetails(map[string]interface{}{
+					"meter_id":       m.ID,
+					"entitlement_id": e.ID,
+					"bucket_size":    bucketSize,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }

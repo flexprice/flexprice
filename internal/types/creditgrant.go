@@ -129,23 +129,47 @@ func (u CreditGrantExpiryDurationUnit) Validate() error {
 	return nil
 }
 
+// AddExpiryDuration advances start by duration units of unit, computing the boundary in the
+// customer's local timezone and returning a UTC instant — the same convention NextBillingDate
+// follows, so a grant's expiry and its period end agree for non-UTC customers.
+//
+// Calendar arithmetic (AddDate) is used for every unit, including DAY and WEEK: adding a fixed
+// 24h*n drifts by an hour across a DST transition, while AddDate keeps the local wall clock.
+//
+// timezone is an IANA name (e.g. "Asia/Kolkata"); empty or "UTC" computes in UTC.
+// Returns false when the unit is unknown.
+func AddExpiryDuration(start time.Time, duration int, unit CreditGrantExpiryDurationUnit, timezone string) (time.Time, bool) {
+	local := start.In(loadTimezone(timezone))
+
+	var expiry time.Time
+	switch unit {
+	case CreditGrantExpiryDurationUnitDays:
+		expiry = local.AddDate(0, 0, duration)
+	case CreditGrantExpiryDurationUnitWeeks:
+		expiry = local.AddDate(0, 0, duration*7)
+	case CreditGrantExpiryDurationUnitMonths:
+		expiry = local.AddDate(0, duration, 0)
+	case CreditGrantExpiryDurationUnitYears:
+		expiry = local.AddDate(duration, 0, 0)
+	default:
+		return time.Time{}, false
+	}
+
+	return expiry.UTC(), true
+}
+
 // ResolveCreditsExpiry computes expiry as now + duration for DAY/WEEK/MONTH/YEAR units.
 // Returns nil when duration or unit is omitted (credits never expire), or when the unit is unknown.
+//
+// Its callers (wallet initial and bonus credits) top up from a plain wallet request with no
+// customer timezone in hand, so the boundary is computed in UTC. Credit grants, which do know
+// the subscription's timezone, call AddExpiryDuration directly.
 func ResolveCreditsExpiry(duration *int, unit *CreditGrantExpiryDurationUnit, now time.Time) *time.Time {
 	if duration == nil || unit == nil {
 		return nil
 	}
-	var expiry time.Time
-	switch *unit {
-	case CreditGrantExpiryDurationUnitDays:
-		expiry = now.Add(time.Duration(*duration) * 24 * time.Hour)
-	case CreditGrantExpiryDurationUnitWeeks:
-		expiry = now.Add(time.Duration(*duration) * 7 * 24 * time.Hour)
-	case CreditGrantExpiryDurationUnitMonths:
-		expiry = now.AddDate(0, *duration, 0)
-	case CreditGrantExpiryDurationUnitYears:
-		expiry = now.AddDate(*duration, 0, 0)
-	default:
+	expiry, ok := AddExpiryDuration(now, *duration, *unit, DefaultTimezone)
+	if !ok {
 		return nil
 	}
 	return &expiry

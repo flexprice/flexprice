@@ -45,6 +45,9 @@ type Customer struct {
 	// Defaults to "UTC". Inherited by subscriptions at creation time.
 	Timezone string `db:"timezone" json:"timezone"`
 
+	// TaxTreatment is the customer's tax treatment — taxable (default) or exempt.
+	TaxTreatment types.TaxTreatment `db:"tax_treatment" json:"tax_treatment"`
+
 	// Metadata
 	Metadata map[string]string `db:"metadata" json:"metadata"`
 
@@ -72,6 +75,7 @@ func FromEnt(c *ent.Customer) *Customer {
 		AddressPostalCode: c.AddressPostalCode,
 		AddressCountry:    c.AddressCountry,
 		Timezone:          c.Timezone,
+		TaxTreatment:      c.TaxTreatment,
 		Metadata:          c.Metadata,
 		EnvironmentID:     c.EnvironmentID,
 		BaseModel: types.BaseModel{

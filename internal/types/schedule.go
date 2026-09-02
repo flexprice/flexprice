@@ -27,6 +27,7 @@ const (
 	ScheduleIDMarketplaceUsageSnapshot                ScheduleID = "marketplace-usage-snapshot"
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
 	ScheduleIDDailyDraftAndCompute                    ScheduleID = "daily-draft-and-compute"
+	ScheduleIDDraftInvoiceFinalization                ScheduleID = "draft-invoice-finalization"
 )
 
 // String returns the raw schedule id.
@@ -50,6 +51,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDMarketplaceUsageSnapshot,
 		ScheduleIDMarketplaceUsageReport,
 		ScheduleIDDailyDraftAndCompute,
+		ScheduleIDDraftInvoiceFinalization,
 	}
 }
 

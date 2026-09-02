@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -83,7 +83,7 @@ func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.TaxRateFilter true "Filter"
-// @Success 200 {object} []dto.TaxRateResponse
+// @Success 200 {object} dto.ListTaxRatesResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates [get]

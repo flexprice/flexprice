@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/taxassociation"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // TaxAssociationUpdate is the builder for updating TaxAssociation entities.
@@ -169,6 +170,26 @@ func (tau *TaxAssociationUpdate) ClearEndDate() *TaxAssociationUpdate {
 	return tau
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tau *TaxAssociationUpdate) SetTaxBehavior(tb types.TaxBehavior) *TaxAssociationUpdate {
+	tau.mutation.SetTaxBehavior(tb)
+	return tau
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tau *TaxAssociationUpdate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAssociationUpdate {
+	if tb != nil {
+		tau.SetTaxBehavior(*tb)
+	}
+	return tau
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (tau *TaxAssociationUpdate) ClearTaxBehavior() *TaxAssociationUpdate {
+	tau.mutation.ClearTaxBehavior()
+	return tau
+}
+
 // Mutation returns the TaxAssociationMutation object of the builder.
 func (tau *TaxAssociationUpdate) Mutation() *TaxAssociationMutation {
 	return tau.mutation
@@ -215,6 +236,11 @@ func (tau *TaxAssociationUpdate) check() error {
 	if v, ok := tau.mutation.EntityID(); ok {
 		if err := taxassociation.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.entity_id": %w`, err)}
+		}
+	}
+	if v, ok := tau.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tax_behavior": %w`, err)}
 		}
 	}
 	return nil
@@ -282,6 +308,12 @@ func (tau *TaxAssociationUpdate) sqlSave(ctx context.Context) (n int, err error)
 	}
 	if tau.mutation.EndDateCleared() {
 		_spec.ClearField(taxassociation.FieldEndDate, field.TypeTime)
+	}
+	if value, ok := tau.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxassociation.FieldTaxBehavior, field.TypeString, value)
+	}
+	if tau.mutation.TaxBehaviorCleared() {
+		_spec.ClearField(taxassociation.FieldTaxBehavior, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -444,6 +476,26 @@ func (tauo *TaxAssociationUpdateOne) ClearEndDate() *TaxAssociationUpdateOne {
 	return tauo
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tauo *TaxAssociationUpdateOne) SetTaxBehavior(tb types.TaxBehavior) *TaxAssociationUpdateOne {
+	tauo.mutation.SetTaxBehavior(tb)
+	return tauo
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tauo *TaxAssociationUpdateOne) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAssociationUpdateOne {
+	if tb != nil {
+		tauo.SetTaxBehavior(*tb)
+	}
+	return tauo
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (tauo *TaxAssociationUpdateOne) ClearTaxBehavior() *TaxAssociationUpdateOne {
+	tauo.mutation.ClearTaxBehavior()
+	return tauo
+}
+
 // Mutation returns the TaxAssociationMutation object of the builder.
 func (tauo *TaxAssociationUpdateOne) Mutation() *TaxAssociationMutation {
 	return tauo.mutation
@@ -503,6 +555,11 @@ func (tauo *TaxAssociationUpdateOne) check() error {
 	if v, ok := tauo.mutation.EntityID(); ok {
 		if err := taxassociation.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.entity_id": %w`, err)}
+		}
+	}
+	if v, ok := tauo.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tax_behavior": %w`, err)}
 		}
 	}
 	return nil
@@ -587,6 +644,12 @@ func (tauo *TaxAssociationUpdateOne) sqlSave(ctx context.Context) (_node *TaxAss
 	}
 	if tauo.mutation.EndDateCleared() {
 		_spec.ClearField(taxassociation.FieldEndDate, field.TypeTime)
+	}
+	if value, ok := tauo.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxassociation.FieldTaxBehavior, field.TypeString, value)
+	}
+	if tauo.mutation.TaxBehaviorCleared() {
+		_spec.ClearField(taxassociation.FieldTaxBehavior, field.TypeString)
 	}
 	_node = &TaxAssociation{config: tauo.config}
 	_spec.Assign = _node.assignValues

@@ -1,0 +1,67 @@
+{{- if and .Values.api.enabled .Values.api.keda.enabled -}}
+{{- if .Values.api.autoscaling.enabled }}
+{{- fail "api: enable either api.autoscaling (HPA) or api.keda (KEDA), not both — they fight over the same Deployment" }}
+{{- end }}
+{{- /*
+  api's three triggers (request/cpu/memory) are each individually gated below,
+  so with all three off the triggers list renders empty. The KEDA CRD enforces
+  MinItems=1 on spec.triggers, so an empty list is rejected server-side with an
+  opaque admission error. Fail here instead, naming the fix.
+*/}}
+{{- if not (or .Values.api.keda.request.enabled .Values.api.keda.cpuValue .Values.api.keda.memValue) }}
+{{- fail "api.keda is enabled but no trigger is: set at least one of api.keda.request.enabled, api.keda.cpuValue, or api.keda.memValue" }}
+{{- end }}
+{{- /*
+  KEDA ScaledObject for the api Deployment. Combines ALB request-rate
+  (aws-cloudwatch scaler on RequestCountPerTarget) with native cpu/memory
+  triggers — KEDA scales to the max demand across all configured triggers.
+
+  Requires KEDA (https://keda.sh) installed cluster-wide, with IRSA wired for
+  cloudwatch:GetMetricData via api.keda.request.authenticationRef when the
+  request trigger is enabled. Off by default.
+*/}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "flexprice.fullname" . }}-api
+  pollingInterval: {{ .Values.api.keda.pollingInterval | default 30 }}
+  cooldownPeriod: {{ .Values.api.keda.cooldownPeriod | default 300 }}
+  minReplicaCount: {{ .Values.api.keda.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.api.keda.maxReplicas | default 3 }}
+  triggers:
+    {{- if .Values.api.keda.request.enabled }}
+    - type: aws-cloudwatch
+      metadata:
+        namespace: AWS/ApplicationELB
+        metricName: RequestCountPerTarget
+        dimensionName: TargetGroup
+        dimensionValue: {{ .Values.api.keda.request.targetGroup | quote }}
+        statistic: Sum
+        targetMetricValue: {{ .Values.api.keda.request.targetValue | default 1000 | quote }}
+        minMetricValue: "0"
+        awsRegion: {{ .Values.api.keda.request.awsRegion | quote }}
+      {{- with .Values.api.keda.request.authenticationRef }}
+      authenticationRef:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.api.keda.cpuValue }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.api.keda.cpuValue | quote }}
+    {{- end }}
+    {{- if .Values.api.keda.memValue }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.api.keda.memValue | quote }}
+    {{- end }}
+{{- end }}

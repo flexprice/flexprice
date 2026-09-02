@@ -62,6 +62,8 @@ const (
 	FieldGrantDurationValue = "grant_duration_value"
 	// FieldGrantDurationUnit holds the string denoting the grant_duration_unit field in the database.
 	FieldGrantDurationUnit = "grant_duration_unit"
+	// FieldGrantAllocationBehavior holds the string denoting the grant_allocation_behavior field in the database.
+	FieldGrantAllocationBehavior = "grant_allocation_behavior"
 	// FieldGrantQuota holds the string denoting the grant_quota field in the database.
 	FieldGrantQuota = "grant_quota"
 	// FieldAggregationMode holds the string denoting the aggregation_mode field in the database.
@@ -97,6 +99,7 @@ var Columns = []string{
 	FieldGrantMeasure,
 	FieldGrantDurationValue,
 	FieldGrantDurationUnit,
+	FieldGrantAllocationBehavior,
 	FieldGrantQuota,
 	FieldAggregationMode,
 }
@@ -147,6 +150,8 @@ var (
 	DefaultIsSoftLimit bool
 	// DefaultDisplayOrder holds the default value on creation for the "display_order" field.
 	DefaultDisplayOrder int
+	// DefaultGrantAllocationBehavior holds the default value on creation for the "grant_allocation_behavior" field.
+	DefaultGrantAllocationBehavior types.EntitlementGrantAllocationBehavior
 	// DefaultAggregationMode holds the default value on creation for the "aggregation_mode" field.
 	DefaultAggregationMode types.EntitlementAggregationMode
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -274,6 +279,11 @@ func ByGrantDurationValue(opts ...sql.OrderTermOption) OrderOption {
 // ByGrantDurationUnit orders the results by the grant_duration_unit field.
 func ByGrantDurationUnit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGrantDurationUnit, opts...).ToFunc()
+}
+
+// ByGrantAllocationBehavior orders the results by the grant_allocation_behavior field.
+func ByGrantAllocationBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantAllocationBehavior, opts...).ToFunc()
 }
 
 // ByGrantQuota orders the results by the grant_quota field.

@@ -6,11 +6,11 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
+// TaxRateType is a percentage rate. Fixed-amount tax rates are not supported.
 type TaxRateType string
 
 const (
 	TaxRateTypePercentage TaxRateType = "percentage"
-	TaxRateTypeFixed      TaxRateType = "fixed"
 )
 
 func (t TaxRateType) String() string {
@@ -18,10 +18,10 @@ func (t TaxRateType) String() string {
 }
 
 func (t TaxRateType) Validate() error {
-	allowedValues := []string{string(TaxRateTypePercentage), string(TaxRateTypeFixed)}
+	allowedValues := []string{string(TaxRateTypePercentage)}
 	if !slices.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid tax rate type").
-			WithHint("Tax rate type must be either percentage or fixed").
+			WithHint("Tax rate type must be percentage").
 			Mark(ierr.ErrValidation)
 	}
 

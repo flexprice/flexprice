@@ -1,0 +1,170 @@
+name: Migration Checks
+
+# Runs only when something that can invalidate the migration set changes.
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'ent/schema/**'
+      - 'ent/migrate/**'
+      - 'migrations/**'
+      - 'cmd/migrate/**'
+      - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
+      - '.github/workflows/migrations.yml'
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'ent/schema/**'
+      - 'ent/migrate/**'
+      - 'migrations/**'
+      - 'cmd/migrate/**'
+      - 'scripts/migrations/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/config/**'
+      - '.github/workflows/migrations.yml'
+
+# The job runs commands defined by the pull request, so it gets read-only scope and
+# the checkout credential is not persisted into .git/config.
+permissions:
+  contents: read
+
+jobs:
+  migrations:
+    name: Migration Checks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Pinned to the production major (Aurora 16.6). Postgres normalises
+        # expressions differently between majors, so a mismatch here produces
+        # differences that do not exist in production.
+        image: postgres:16
+        env:
+          POSTGRES_USER: flexprice
+          POSTGRES_PASSWORD: flexprice123
+          POSTGRES_DB: postgres
+        ports: [ '5432:5432' ]
+        options: >-
+          --health-cmd "pg_isready -U flexprice"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # order-check compares new files against what is already on the base
+          # branch, so it needs history rather than a shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.25.12'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Install dbmate and psql
+        # Pinned to the same version the deployment image builds (Dockerfile
+        # DBMATE_VERSION). `releases/latest` drifts, which would leave CI
+        # validating migrations with a different applier than production runs.
+        env:
+          DBMATE_VERSION: v2.35.0
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/dbmate \
+            "https://github.com/amacneil/dbmate/releases/download/${DBMATE_VERSION}/dbmate-linux-amd64"
+          sudo chmod +x /usr/local/bin/dbmate
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Ent codegen is committed and current
+        # ent/ is generated from ent/schema/. If someone edits a schema file and
+        # does not run `make generate-ent`, every later check reads a stale
+        # Tables definition and silently passes.
+        run: |
+          make generate-ent
+          git diff --exit-code ent/ || {
+            echo "::error::ent/ is out of date — run 'make generate-ent' and commit"
+            exit 1
+          }
+
+      - name: Sync check — is any schema change missing a migration?
+        run: make migrate-check-sync
+
+      - name: Checksum — was a shipped migration edited?
+        run: make migrate-check-checksum
+
+      - name: Order — do new migrations sort after committed ones?
+        run: ./scripts/migrations/order-check.sh migrations/versioned/postgres origin/${{ github.base_ref || 'develop' }}
+
+      # Disabled 2026-08-25. migrations/versioned/clickhouse/ is the old
+      # incremental set and does not describe the real cluster: it creates 3 of
+      # the 8 tables the app queries, and disagrees with
+      # migrations/baseline/clickhouse_baseline_20260819.sql. Gating on it would
+      # assert something we know to be wrong. Re-enable once the ClickHouse set
+      # is re-derived from a live cluster.
+      # - name: ClickHouse — one statement per file
+      #   run: make migrate-check-clickhouse
+
+      - name: Replay from zero — does a fresh install work?
+        # Exactly what a new client gets: the timeline from empty, baseline included.
+        env:
+          PGPASSWORD: flexprice123
+        run: |
+          psql -h localhost -p 5432 -U flexprice -d postgres -q \
+            -c "DROP DATABASE IF EXISTS fresh_install;" -c "CREATE DATABASE fresh_install;"
+          DATABASE_URL="postgres://flexprice:flexprice123@localhost:5432/fresh_install?sslmode=disable" \
+            dbmate --migrations-dir migrations/versioned/postgres --no-dump-schema up
+
+      - name: Deploy command — does `migrate postgres up` behave?
+        # The replay above proves the FILES are consistent. This proves the
+        # COMMAND that CD actually runs behaves: it applies a fresh install, and
+        # it refuses a database that has tables but was never adopted rather
+        # than applying the baseline over a live schema.
+        env:
+          PGPASSWORD: flexprice123
+          FLEXPRICE_POSTGRES_HOST: localhost
+          FLEXPRICE_POSTGRES_PORT: "5432"
+          FLEXPRICE_POSTGRES_USER: flexprice
+          FLEXPRICE_POSTGRES_PASSWORD: flexprice123
+          FLEXPRICE_POSTGRES_SSLMODE: disable
+        run: |
+          set -euo pipefail
+          pg() { psql -h localhost -p 5432 -U flexprice -q -v ON_ERROR_STOP=1 "$@"; }
+
+          pg -d postgres -c "DROP DATABASE IF EXISTS deploy_fresh;" -c "CREATE DATABASE deploy_fresh;"
+          FLEXPRICE_POSTGRES_DBNAME=deploy_fresh go run ./cmd/migrate postgres up --status
+          FLEXPRICE_POSTGRES_DBNAME=deploy_fresh go run ./cmd/migrate postgres up
+
+          # A database that predates the timeline and was never adopted.
+          pg -d postgres -c "DROP DATABASE IF EXISTS deploy_legacy;" -c "CREATE DATABASE deploy_legacy;"
+          pg -d deploy_legacy -f migrations/baseline/postgres_baseline_20260819.sql >/dev/null
+
+          if FLEXPRICE_POSTGRES_DBNAME=deploy_legacy go run ./cmd/migrate postgres up 2>err.log; then
+            echo "FAIL: migrated a database that was never adopted" >&2
+            exit 1
+          fi
+          grep -q "never been adopted" err.log \
+            || { echo "FAIL: refused, but not with the adoption message:" >&2; cat err.log >&2; exit 1; }
+          test "$(pg -d deploy_legacy -tAc "SELECT count(*) FROM pg_tables WHERE tablename='schema_migrations'")" = "0" \
+            || { echo "FAIL: refusal still created the ledger" >&2; exit 1; }
+
+      - name: Show the DDL this PR will run
+        # Not a gate. Prints the statements so a reviewer sees them before they
+        # reach a customer database.
+        if: always()
+        run: |
+          echo "### Migrations added by this PR" >> "$GITHUB_STEP_SUMMARY"
+          for f in $(git diff --name-only --diff-filter=A origin/${{ github.base_ref || 'develop' }}...HEAD -- migrations/versioned/ || true); do
+            echo "<details><summary>$f</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo '```sql' >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          done

@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -235,6 +235,16 @@ func (h *CustomerPortalHandler) GetPortalConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func (h *CustomerPortalHandler) GetIntegrations(c *gin.Context) {
+	resp, err := h.portalService.GetIntegrations(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {
@@ -262,4 +272,154 @@ func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerPortalHandler) TopUpWallet(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.PortalTopUpWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("credits_to_add and idempotency_key are required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.portalService.TopUpWallet(c.Request.Context(), walletID, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) UpdateAutoTopup(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+	var req dto.PortalUpdateAutoTopupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("enabled is required; threshold and amount are required when enabling, and cooldown is an object like {\"value\":1,\"unit\":\"hour\"}").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.UpdateAutoTopup(c.Request.Context(), walletID, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) PayInvoice(c *gin.Context) {
+	invoiceID := c.Param("id")
+	if invoiceID == "" {
+		c.Error(ierr.NewError("invoice_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+	var req dto.PortalPayInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Check the request body; payment_provider must name a connected gateway when more than one can create payment links").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.PayInvoice(c.Request.Context(), invoiceID, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) ListPaymentMethods(c *gin.Context) {
+	var req dto.ListSavedPaymentMethodsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("providers must be one or more supported payment gateways").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.ListPaymentMethods(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) AddPaymentMethod(c *gin.Context) {
+	var req dto.PortalAddPaymentMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("payment_provider is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.AddPaymentMethod(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) DeletePaymentMethod(c *gin.Context) {
+	var req dto.PortalDeletePaymentMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("payment_provider and payment_method_id are required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.DeletePaymentMethod(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) GetCheckoutSession(c *gin.Context) {
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.Error(ierr.NewError("session_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.GetCheckoutSession(c.Request.Context(), sessionID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) CancelCheckoutSession(c *gin.Context) {
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.Error(ierr.NewError("session_id is required").Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.CancelCheckoutSession(c.Request.Context(), sessionID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerPortalHandler) SetDefaultPaymentMethod(c *gin.Context) {
+	var req dto.PortalSetDefaultPaymentMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("payment_provider and payment_method_id are required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.portalService.SetDefaultPaymentMethod(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
 }

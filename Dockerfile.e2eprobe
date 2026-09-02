@@ -3,7 +3,11 @@
 # Pin the builder to the runner's native arch ($BUILDPLATFORM) and
 # cross-compile to the requested $TARGETARCH. Avoids QEMU emulation of
 # the Go toolchain, which is 10-20x slower on multi-arch builds.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS builder
+#
+# Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
+# Go version must be >= the `go` directive in go.mod or `go mod download`
+# hard-fails. Bump this whenever that directive moves.
+FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
@@ -29,7 +33,7 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /app/e2eprobe .
 
-# All e2eprobe defaults now live in internal/e2eprobe/config.go and match
+# All e2eprobe defaults now live in internal/ee/e2eprobe/config.go and match
 # cmd/e2eprobe/.env.example, so nothing needs baking here. Override any knob
 # at runtime with -e VAR=val.
 ENV TZ=UTC

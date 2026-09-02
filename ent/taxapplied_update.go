@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/taxapplied"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -149,6 +150,26 @@ func (tau *TaxAppliedUpdate) ClearIdempotencyKey() *TaxAppliedUpdate {
 	return tau
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tau *TaxAppliedUpdate) SetTaxBehavior(tb types.TaxBehavior) *TaxAppliedUpdate {
+	tau.mutation.SetTaxBehavior(tb)
+	return tau
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAppliedUpdate {
+	if tb != nil {
+		tau.SetTaxBehavior(*tb)
+	}
+	return tau
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (tau *TaxAppliedUpdate) ClearTaxBehavior() *TaxAppliedUpdate {
+	tau.mutation.ClearTaxBehavior()
+	return tau
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tau *TaxAppliedUpdate) Mutation() *TaxAppliedMutation {
 	return tau.mutation
@@ -240,6 +261,12 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tau.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := tau.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
+	}
+	if tau.mutation.TaxBehaviorCleared() {
+		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -381,6 +408,26 @@ func (tauo *TaxAppliedUpdateOne) ClearIdempotencyKey() *TaxAppliedUpdateOne {
 	return tauo
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tauo *TaxAppliedUpdateOne) SetTaxBehavior(tb types.TaxBehavior) *TaxAppliedUpdateOne {
+	tauo.mutation.SetTaxBehavior(tb)
+	return tauo
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAppliedUpdateOne {
+	if tb != nil {
+		tauo.SetTaxBehavior(*tb)
+	}
+	return tauo
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (tauo *TaxAppliedUpdateOne) ClearTaxBehavior() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearTaxBehavior()
+	return tauo
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tauo *TaxAppliedUpdateOne) Mutation() *TaxAppliedMutation {
 	return tauo.mutation
@@ -502,6 +549,12 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	}
 	if tauo.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := tauo.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
+	}
+	if tauo.mutation.TaxBehaviorCleared() {
+		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
 	}
 	_node = &TaxApplied{config: tauo.config}
 	_spec.Assign = _node.assignValues

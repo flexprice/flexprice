@@ -1841,3 +1841,93 @@ func (s *CreditNoteServiceSuite) TestCreditNoteTypeDetection() {
 		})
 	}
 }
+
+// CreateCreditNote must take the invoice row lock BEFORE any read of mutable
+// invoice state. ValidateCreditNoteCreation -> validateCreditNoteAmounts ->
+// calculateMaxCreditableAmount computes AmountPaid - RefundedAmount; if the
+// lock is taken after that guard, two concurrent creations both evaluate it
+// against unlocked state, both pass, and both succeed — an over-refund from
+// creation-time concurrency alone (VAPT SFX-2026-0203-F02-EXT).
+//
+// The in-memory store cannot provide real mutual exclusion (SELECT ... FOR
+// UPDATE does that in Postgres), so this asserts the ORDERING: the first
+// recorded access to the invoice must be the lock, not a plain read.
+func (s *CreditNoteServiceSuite) TestCreateCreditNoteLocksInvoiceBeforeReading() {
+	invStore, ok := s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore)
+	s.Require().True(ok, "expected the in-memory invoice store")
+
+	inv := s.testData.invoices.pending
+	invStore.ResetInvoiceAccessLog(inv.ID)
+
+	_, err := s.service.CreateCreditNote(s.GetContext(), &dto.CreateCreditNoteRequest{
+		InvoiceID:         inv.ID,
+		Reason:            types.CreditNoteReasonBillingError,
+		Memo:              "row lock ordering regression",
+		ProcessCreditNote: false,
+		LineItems: []dto.CreateCreditNoteLineItemRequest{
+			{
+				InvoiceLineItemID: "line_3",
+				DisplayName:       "Partial refund for Product C",
+				Amount:            decimal.NewFromFloat(5.00),
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	access := invStore.InvoiceAccessLog(inv.ID)
+	s.Require().NotEmpty(access, "expected the invoice to be read during creation")
+	s.Equal("get_for_update", access[0],
+		"CreateCreditNote must lock the invoice row before any read of RefundedAmount; got access order %v", access)
+}
+
+// VoidCreditNote must re-read the credit note under the invoice lock and
+// re-run its guards. The status checks run before the transaction, so a
+// concurrent FinalizeCreditNote can commit while this call waits on the lock.
+// Voiding the stale draft snapshot would overwrite the finalized status,
+// bypass the completed-refund rejection, and skip RecalculateInvoiceAmounts
+// (originalStatus would still read Draft).
+//
+// The finalize is injected between the pre-transaction read and the lock via
+// the store's BeforeGetForUpdate hook, which is the only way to hit the window
+// deterministically in a single-threaded test.
+func (s *CreditNoteServiceSuite) TestVoidCreditNoteRefetchesUnderLock() {
+	resp, err := s.service.CreateCreditNote(s.GetContext(), &dto.CreateCreditNoteRequest{
+		InvoiceID:         s.testData.invoices.partialRefunded.ID,
+		Reason:            types.CreditNoteReasonBillingError,
+		Memo:              "void refetch regression",
+		ProcessCreditNote: false,
+		LineItems: []dto.CreateCreditNoteLineItemRequest{
+			{
+				InvoiceLineItemID: "line_6",
+				DisplayName:       "Refund for Product F",
+				Amount:            decimal.NewFromFloat(10.00),
+			},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(types.CreditNoteStatusDraft, resp.CreditNoteStatus)
+	s.Require().Equal(types.CreditNoteTypeRefund, resp.CreditNoteType)
+
+	invStore, ok := s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore)
+	s.Require().True(ok, "expected the in-memory invoice store")
+
+	// Simulate a concurrent finalize landing after VoidCreditNote has read the
+	// draft but before it acquires the invoice lock.
+	var once bool
+	invStore.BeforeGetForUpdate = func(string) {
+		if once {
+			return
+		}
+		once = true
+		s.Require().NoError(s.service.FinalizeCreditNote(s.GetContext(), resp.ID))
+	}
+	defer func() { invStore.BeforeGetForUpdate = nil }()
+
+	err = s.service.VoidCreditNote(s.GetContext(), resp.ID)
+	s.Require().Error(err, "voiding a concurrently-finalized refund must be rejected under the lock")
+
+	after, err := s.GetStores().CreditNoteRepo.Get(s.GetContext(), resp.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CreditNoteStatusFinalized, after.CreditNoteStatus,
+		"a concurrently-finalized credit note must not be overwritten as voided")
+}

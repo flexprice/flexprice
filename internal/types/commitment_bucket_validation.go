@@ -65,26 +65,30 @@ func (bs TimeOfDayBuckets) ValidateNoOverlap() error {
 // ValidateWindowAlignment enforces the meter-window constraints required for
 // per-bucket pricing:
 //   - meter must be windowed (windowMin > 0)
-//   - meter window size must be <= 1 day (time-of-day buckets live within a day)
+//   - bucket size must be <= 1 day (time-of-day buckets live within a day)
 //   - each bucket's (End-Start) must be an integer multiple of windowMin
 //   - each bucket's Start must be aligned to the window grid
 //
 // The bucket-duration-multiple check is what actually constrains usable window
-// sizes: a meter window of, say, 12h only admits buckets whose duration is a
-// multiple of 12h. Pass 0 for windowMin only when the line item has NO buckets —
-// if buckets exist and windowMin == 0 we reject.
+// sizes: a window of, say, 12h only admits buckets whose duration is a multiple
+// of 12h. Pass 0 for windowMin only when the line item has NO buckets — if
+// buckets exist and windowMin == 0 we reject.
+//
+// windowMin comes from the effective bucket size for the (price, meter) pair,
+// so the wording stays source-agnostic: it may originate on the price or, for
+// legacy meters, on the meter itself.
 func (bs TimeOfDayBuckets) ValidateWindowAlignment(windowMin int) error {
 	if len(bs) == 0 {
 		return nil
 	}
 	if windowMin <= 0 {
-		return ierr.NewError("buckets require a windowed meter").
-			WithHint("Configure the meter with a window size before using time-of-day buckets").
+		return ierr.NewError("buckets require a bucket size").
+			WithHint("Set bucket_size on the price before using time-of-day buckets").
 			Mark(ierr.ErrValidation)
 	}
 	if windowMin > 1440 {
-		return ierr.NewError("meter window must be <= 1 day when using buckets").
-			WithHint("Time-of-day buckets live within a day; use a meter window of a day or less").
+		return ierr.NewError("bucket size must be <= 1 day when using buckets").
+			WithHint("Time-of-day buckets live within a day; use a bucket size of a day or less").
 			WithReportableDetails(map[string]interface{}{"window_minutes": windowMin}).
 			Mark(ierr.ErrValidation)
 	}
@@ -96,8 +100,8 @@ func (bs TimeOfDayBuckets) ValidateWindowAlignment(windowMin int) error {
 			duration = (1440 - startMin) + endMin
 		}
 		if duration%windowMin != 0 {
-			return ierr.NewError("bucket duration must be a multiple of the meter window").
-				WithHint("Adjust the bucket so End-Start is an integer multiple of the meter window size").
+			return ierr.NewError("bucket duration must be a multiple of the bucket size").
+				WithHint("Adjust the bucket so End-Start is an integer multiple of the bucket size").
 				WithReportableDetails(map[string]interface{}{
 					"bucket_index": i,
 					"duration_min": duration,
@@ -106,8 +110,8 @@ func (bs TimeOfDayBuckets) ValidateWindowAlignment(windowMin int) error {
 				Mark(ierr.ErrValidation)
 		}
 		if startMin%windowMin != 0 {
-			return ierr.NewError("bucket start alignment error: start must be on the meter window grid").
-				WithHint("Adjust the bucket Start so its minute-of-day is divisible by the meter window size").
+			return ierr.NewError("bucket start alignment error: start must be on the bucket-size grid").
+				WithHint("Adjust the bucket Start so its minute-of-day is divisible by the bucket size").
 				WithReportableDetails(map[string]interface{}{
 					"bucket_index": i,
 					"start_min":    startMin,

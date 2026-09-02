@@ -97,6 +97,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		}
 
 		authReq := interfaces.AuthorizationLinkRequest{
+			CustomerPresent: cfg.CustomerPresent,
 			InvoiceID:       req.InvoiceID,
 			CustomerID:      req.CustomerID,
 			PaymentID:       req.PaymentID,
@@ -116,6 +117,19 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		} else if charged {
 			resp = chargedResp
 			break
+		}
+
+		// A link is only worth issuing to someone who can click it. Unattended, it
+		// would leave a session pending until expiry with nobody to act on it, so the
+		// caller is told the charge did not happen and can fall back its own way.
+		if !cfg.CustomerPresent {
+			return nil, ierr.NewError("no saved payment method could be charged").
+				WithHint("The customer has no payment method that can be charged automatically").
+				WithReportableDetails(map[string]any{
+					"customer_id": req.CustomerID,
+					"invoice_id":  req.InvoiceID,
+				}).
+				Mark(ierr.ErrInvalidOperation)
 		}
 
 		resp, err = provider.CreateAuthorizationLink(ctx, authReq)
@@ -251,6 +265,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	}
 
 	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
 	return nil
 }
 
@@ -280,6 +295,7 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 	}
 
 	subSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
 	return nil
 }
 
@@ -322,27 +338,56 @@ func (s *checkoutSessionService) completeWalletTopupCheckout(
 }
 
 func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
-	if session.Result == nil || session.Result.CreateSubscriptionResult == nil {
-		return ierr.NewError("session has no fulfillment result").
-			WithHint("checkout session must have been fulfilled before it can be completed").
-			Mark(ierr.ErrValidation)
-	}
-	res := session.Result.CreateSubscriptionResult
+	var subscriptionId string
+	var invoiceId string
+	var paymentId string
 
-	// 1. Activate subscription: only update if still in draft.
-	sub, err := s.SubRepo.Get(ctx, res.SubscriptionID)
-	if err != nil {
-		return err
+	if cfg := session.Configuration.ToCheckoutConfiguration(); cfg.CreateSubscriptionParams != nil {
+		subscriptionId = cfg.CreateSubscriptionParams.SubscriptionID
 	}
-	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		if err := s.SubRepo.Update(ctx, sub); err != nil {
-			return err
+	invoiceId = lo.FromPtr(session.CheckoutInvoiceID)
+	paymentId = lo.FromPtr(session.CheckoutPaymentID)
+
+	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
+		legacy := session.Result.CreateSubscriptionResult
+		if subscriptionId == "" {
+			subscriptionId = legacy.SubscriptionID
+		}
+		if invoiceId == "" {
+			invoiceId = legacy.InvoiceID
+		}
+		if paymentId == "" {
+			paymentId = legacy.PaymentID
 		}
 	}
 
-	// 2. Finalize draft + mark payment succeeded + reconcile (credits wallet for top-up invoices).
-	return s.finalizeCheckoutInvoiceAndPayment(ctx, res.InvoiceID, res.PaymentID, providerResult)
+	if subscriptionId == "" || invoiceId == "" || paymentId == "" {
+		return ierr.NewError("session has no fulfillment result").
+			WithHint("checkout session must have been fulfilled before it can be completed").
+			WithReportableDetails(map[string]any{
+				"session_id":      session.ID,
+				"subscription_id": subscriptionId,
+				"invoice_id":      invoiceId,
+				"payment_id":      paymentId,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceId, paymentId, providerResult); err != nil {
+		return err
+	}
+
+	sub, err := s.SubRepo.Get(ctx, subscriptionId)
+	if err != nil {
+		return err
+	}
+
+	subSvc := &subscriptionService{ServiceParams: s.ServiceParams}
+	if err := subSvc.activateDraftSubscription(ctx, sub); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // finalizeCheckoutInvoiceAndPayment finalizes a DRAFT checkout invoice (idempotent),
@@ -370,13 +415,22 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,
 	}
+	attemptReq := dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded}
 	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
 		id := providerResult.ProviderPaymentIntentID
 		updateReq.GatewayPaymentID = &id
+		attemptReq.GatewayAttemptID = id
 	}
+
 	paySvc := NewPaymentService(s.ServiceParams)
 	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
 		return err
+	}
+
+	// After the settle, so a payment that never succeeded leaves no succeeded attempt.
+	if err := paySvc.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
+		s.Logger.Error(ctx, "failed to record succeeded attempt",
+			"payment_id", paymentID, "error", err)
 	}
 
 	return invSvc.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, nil)

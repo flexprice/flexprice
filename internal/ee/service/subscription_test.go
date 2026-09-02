@@ -139,6 +139,7 @@ func (s *SubscriptionServiceSuite) TestValidateAndFilterPricesForSubscriptionRej
 				tc.entityType,
 				nil,
 				nil,
+				nil,
 			)
 
 			s.Error(err)
@@ -397,21 +398,17 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 
 	// The fixture's period is [now-24h, now+6d) and the addon attaches at `now`,
 	// leaving 6 of 7 days.
-	expected, err := proration.CalculateCreditGrantProration(proration.CreditGrantProrationParams{
-		PeriodStart:     sub.CurrentPeriodStart,
-		PeriodEnd:       sub.CurrentPeriodEnd,
-		ProrationDate:   now,
-		Strategy:        types.StrategySecondBased,
-		OriginalCredits: decimal.NewFromInt(100),
-	})
+	coefficient, err := proration.Coefficient(
+		sub.CurrentPeriodStart, sub.CurrentPeriodEnd, now, types.StrategySecondBased)
 	s.NoError(err)
-	s.True(expected.ProratedCredits.LessThan(decimal.NewFromInt(100)),
+	expectedCredits := decimal.NewFromInt(100).Mul(coefficient).Round(creditGrantCreditsScale)
+	s.True(expectedCredits.LessThan(decimal.NewFromInt(100)),
 		"sanity: a mid-period attach must yield less than the full grant")
 
 	app := s.firstApplicationFor(grant.ID)
 	s.Require().NotNil(app)
-	s.Equal(expected.ProratedCredits.String(), app.Credits.String())
-	s.Equal("true", app.Metadata["proration_applied"])
+	s.Equal(expectedCredits.String(), app.Credits.String())
+	s.Equal(coefficient.String(), app.Metadata["proration_coefficient"])
 	s.Equal("100", app.Metadata["proration_original_credits"])
 
 	// Computing the right amount is worthless if the credits never reach the wallet.
@@ -419,7 +416,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 	// the application's schedule rather than the anchor.
 	s.Equal(types.ApplicationStatusApplied, app.ApplicationStatus,
 		"credits must land at attach time, not wait for the 15-minute cron")
-	s.assertWalletToppedUpBy(grant.ID, expected.ProratedCredits.String())
+	s.assertWalletToppedUpBy(grant.ID, expectedCredits.String())
 }
 
 // assertWalletToppedUpBy checks a wallet transaction carrying the grant's provenance
@@ -1099,6 +1096,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
+		EntitlementGrantRepo:       s.GetStores().EntitlementGrantRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
@@ -2963,6 +2961,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		PriceRepo:                  s.GetStores().PriceRepo,
 		EventRepo:                  s.GetStores().EventRepo,
@@ -2971,6 +2970,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
+		EntitlementGrantRepo:       s.GetStores().EntitlementGrantRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
@@ -2983,10 +2983,17 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
+		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
+		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
+		ProrationCalculator:        s.GetCalculator(),
+		IntegrationFactory:         s.GetIntegrationFactory(),
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})

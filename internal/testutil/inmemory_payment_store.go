@@ -19,14 +19,19 @@ type InMemoryPaymentStore struct {
 	mu             sync.RWMutex
 	attempts       map[string]*payment.PaymentAttempt
 	createdInOrder []*payment.Payment
+	// statusSnapshots records the status as last written, so a compare-and-set
+	// is not defeated by callers mutating the payment pointer this store handed
+	// them. See UpdateWithExpectedStatus.
+	statusSnapshots map[string]types.PaymentStatus
 }
 
 // NewInMemoryPaymentStore creates a new in-memory payment repository
 func NewInMemoryPaymentStore() *InMemoryPaymentStore {
 	return &InMemoryPaymentStore{
-		InMemoryStore:  NewInMemoryStore[*payment.Payment](),
-		attempts:       make(map[string]*payment.PaymentAttempt),
-		createdInOrder: make([]*payment.Payment, 0),
+		InMemoryStore:   NewInMemoryStore[*payment.Payment](),
+		attempts:        make(map[string]*payment.PaymentAttempt),
+		createdInOrder:  make([]*payment.Payment, 0),
+		statusSnapshots: make(map[string]types.PaymentStatus),
 	}
 }
 
@@ -37,6 +42,7 @@ func (m *InMemoryPaymentStore) Clear() {
 	m.InMemoryStore.Clear()
 	m.attempts = make(map[string]*payment.PaymentAttempt)
 	m.createdInOrder = make([]*payment.Payment, 0)
+	m.statusSnapshots = make(map[string]types.PaymentStatus)
 }
 
 // Create stores a new payment
@@ -58,8 +64,35 @@ func (m *InMemoryPaymentStore) Create(ctx context.Context, p *payment.Payment) e
 		p.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	// Same for tenant. This must be persisted onto p, not just resolved into a
+	// local: the duplicate check below compares against stored payments, so a row
+	// kept with an empty TenantID would never match a later retry carrying the
+	// context tenant, silently defeating the uniqueness check.
+	if p.TenantID == "" {
+		p.TenantID = types.GetTenantID(ctx)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Mirror the (tenant_id, environment_id, idempotency_key) unique index from
+	// ent/schema/payment.go. Without this, the store keys only on p.ID and any
+	// test of the idempotent-create path would pass vacuously — the duplicate
+	// insert would silently succeed instead of surfacing ErrAlreadyExists.
+	if p.IdempotencyKey != "" {
+		for _, existing := range m.createdInOrder {
+			if existing.IdempotencyKey == p.IdempotencyKey &&
+				existing.TenantID == p.TenantID &&
+				existing.EnvironmentID == p.EnvironmentID {
+				return ierr.WithError(payment.ErrIdempotencyKeyConflict).
+					WithHint("A payment with this idempotency key already exists").
+					WithReportableDetails(map[string]interface{}{
+						"idempotency_key": p.IdempotencyKey,
+					}).
+					Mark(ierr.ErrAlreadyExists)
+			}
+		}
+	}
 
 	err := m.InMemoryStore.Create(ctx, p.ID, p)
 	if err != nil {
@@ -67,6 +100,7 @@ func (m *InMemoryPaymentStore) Create(ctx context.Context, p *payment.Payment) e
 	}
 
 	m.createdInOrder = append(m.createdInOrder, p)
+	m.statusSnapshots[p.ID] = p.PaymentStatus
 	return nil
 }
 
@@ -86,48 +120,108 @@ func (m *InMemoryPaymentStore) Update(ctx context.Context, p *payment.Payment) e
 	// Update timestamp
 	p.UpdatedAt = time.Now().UTC()
 
+	m.mu.Lock()
+	m.statusSnapshots[p.ID] = p.PaymentStatus
+	m.mu.Unlock()
+
+	return m.InMemoryStore.Update(ctx, p.ID, p)
+}
+
+// UpdateWithExpectedStatus updates the payment only while its stored status
+// still matches expectedStatus, mirroring the compare-and-set the real
+// repository performs in a single statement.
+//
+// The comparison uses a stored snapshot rather than the live entry: this store
+// hands out pointers to its own values, so a caller that mutates the payment it
+// read would otherwise also mutate what we compare against, and the check would
+// always appear to match. The real repository re-reads from the database and
+// does not have that aliasing.
+func (m *InMemoryPaymentStore) UpdateWithExpectedStatus(ctx context.Context, p *payment.Payment, expectedStatus types.PaymentStatus) error {
+	if p == nil {
+		return ierr.NewError("payment cannot be nil").
+			WithHint("Payment cannot be nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	storedStatus, ok := m.statusSnapshots[p.ID]
+	if !ok {
+		existing, err := m.InMemoryStore.Get(ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		storedStatus = existing.PaymentStatus
+	}
+	if storedStatus != expectedStatus {
+		return ierr.NewError("payment status changed during update").
+			WithHint("The payment was modified concurrently. Retry with the current payment state.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      p.ID,
+				"expected_status": expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	p.UpdatedAt = time.Now().UTC()
+	m.statusSnapshots[p.ID] = p.PaymentStatus
 	return m.InMemoryStore.Update(ctx, p.ID, p)
 }
 
 // Delete removes a payment
+// DeleteWithExpectedStatus deletes only while the stored status still matches
+// expectedStatus, mirroring the predicate the real repository applies.
+func (m *InMemoryPaymentStore) DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error {
+	m.mu.Lock()
+	storedStatus, ok := m.statusSnapshots[id]
+	m.mu.Unlock()
+
+	if ok && storedStatus != expectedStatus {
+		return ierr.NewError("payment status changed during delete").
+			WithHint("The payment was modified concurrently. Re-read it before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      id,
+				"expected_status": expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	return m.Delete(ctx, id)
+}
+
+// Delete archives the payment, mirroring the real repository: the row survives with
+// status=archived and its payment_status intact, so callers can still read why the
+// payment ended.
 func (m *InMemoryPaymentStore) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// First check if the payment exists
-	_, err := m.InMemoryStore.Get(ctx, id)
+	p, err := m.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	// Remove from InMemoryStore
-	err = m.InMemoryStore.Delete(ctx, id)
-	if err != nil {
-		return err
-	}
+	p.Status = types.StatusArchived
 
-	// Remove from createdInOrder
-	for i, payment := range m.createdInOrder {
-		if payment.ID == id {
-			m.createdInOrder = append(m.createdInOrder[:i], m.createdInOrder[i+1:]...)
-			break
-		}
-	}
-
-	return nil
+	return m.InMemoryStore.Update(ctx, id, p)
 }
 
-// GetByIdempotencyKey retrieves a payment by idempotency key
+// GetByIdempotencyKey retrieves a payment by idempotency key.
+//
+// This scans directly rather than going through List: the real repository matches
+// only on (idempotency_key, tenant_id, environment_id) with no status predicate, so
+// it still finds an archived payment. List applies the published-only default, which
+// would hide one and turn an idempotency conflict into a spurious not-found.
 func (m *InMemoryPaymentStore) GetByIdempotencyKey(ctx context.Context, key string) (*payment.Payment, error) {
-	payments, err := m.List(ctx, &types.PaymentFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-	})
-	if err != nil {
-		return nil, err
-	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	for _, p := range payments {
-		if p.IdempotencyKey == key {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	for _, p := range m.createdInOrder {
+		if p.IdempotencyKey == key && p.TenantID == tenantID && p.EnvironmentID == environmentID {
 			return p, nil
 		}
 	}
@@ -240,11 +334,9 @@ func (m *InMemoryPaymentStore) ListAttempts(ctx context.Context, paymentID strin
 		}
 	}
 
-	if len(result) == 0 {
-		return nil, ierr.NewError("no attempts found").
-			WithHint(fmt.Sprintf("No attempts found for payment: %s", paymentID)).
-			Mark(ierr.ErrNotFound)
-	}
+	// No not-found here: the real repository runs a plain query and returns an empty
+	// slice for a payment with no attempts. Inventing an error would let code that
+	// mishandles "no attempts yet" pass against this store and fail against Postgres.
 
 	// Sort by attempt number (ascending)
 	sort.Slice(result, func(i, j int) bool {
@@ -310,6 +402,16 @@ func paymentFilterFn(ctx context.Context, p *payment.Payment, filter interface{}
 
 	// Apply environment filter
 	if !CheckEnvironmentFilter(ctx, p.EnvironmentID) {
+		return false
+	}
+
+	// Mirror PaymentQueryOptions.ApplyStatusFilter: an unset status means published only,
+	// so archived payments drop out of listings here exactly as they do in the repository.
+	if f.GetStatus() == "" {
+		if p.Status != types.StatusPublished {
+			return false
+		}
+	} else if string(p.Status) != f.GetStatus() {
 		return false
 	}
 

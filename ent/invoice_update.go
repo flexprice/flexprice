@@ -602,6 +602,40 @@ func (iu *InvoiceUpdate) ClearRecalculatedInvoiceID() *InvoiceUpdate {
 	return iu
 }
 
+// SetIsManuallyEdited sets the "is_manually_edited" field.
+func (iu *InvoiceUpdate) SetIsManuallyEdited(b bool) *InvoiceUpdate {
+	iu.mutation.SetIsManuallyEdited(b)
+	return iu
+}
+
+// SetNillableIsManuallyEdited sets the "is_manually_edited" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableIsManuallyEdited(b *bool) *InvoiceUpdate {
+	if b != nil {
+		iu.SetIsManuallyEdited(*b)
+	}
+	return iu
+}
+
+// SetTaxExemptionReasonCode sets the "tax_exemption_reason_code" field.
+func (iu *InvoiceUpdate) SetTaxExemptionReasonCode(terc types.TaxExemptionReasonCode) *InvoiceUpdate {
+	iu.mutation.SetTaxExemptionReasonCode(terc)
+	return iu
+}
+
+// SetNillableTaxExemptionReasonCode sets the "tax_exemption_reason_code" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTaxExemptionReasonCode(terc *types.TaxExemptionReasonCode) *InvoiceUpdate {
+	if terc != nil {
+		iu.SetTaxExemptionReasonCode(*terc)
+	}
+	return iu
+}
+
+// ClearTaxExemptionReasonCode clears the value of the "tax_exemption_reason_code" field.
+func (iu *InvoiceUpdate) ClearTaxExemptionReasonCode() *InvoiceUpdate {
+	iu.mutation.ClearTaxExemptionReasonCode()
+	return iu
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iu *InvoiceUpdate) AddLineItemIDs(ids ...string) *InvoiceUpdate {
 	iu.mutation.AddLineItemIDs(ids...)
@@ -909,6 +943,15 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
+	}
+	if value, ok := iu.mutation.IsManuallyEdited(); ok {
+		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)
+	}
+	if value, ok := iu.mutation.TaxExemptionReasonCode(); ok {
+		_spec.SetField(invoice.FieldTaxExemptionReasonCode, field.TypeString, value)
+	}
+	if iu.mutation.TaxExemptionReasonCodeCleared() {
+		_spec.ClearField(invoice.FieldTaxExemptionReasonCode, field.TypeString)
 	}
 	if iu.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1590,6 +1633,40 @@ func (iuo *InvoiceUpdateOne) ClearRecalculatedInvoiceID() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetIsManuallyEdited sets the "is_manually_edited" field.
+func (iuo *InvoiceUpdateOne) SetIsManuallyEdited(b bool) *InvoiceUpdateOne {
+	iuo.mutation.SetIsManuallyEdited(b)
+	return iuo
+}
+
+// SetNillableIsManuallyEdited sets the "is_manually_edited" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableIsManuallyEdited(b *bool) *InvoiceUpdateOne {
+	if b != nil {
+		iuo.SetIsManuallyEdited(*b)
+	}
+	return iuo
+}
+
+// SetTaxExemptionReasonCode sets the "tax_exemption_reason_code" field.
+func (iuo *InvoiceUpdateOne) SetTaxExemptionReasonCode(terc types.TaxExemptionReasonCode) *InvoiceUpdateOne {
+	iuo.mutation.SetTaxExemptionReasonCode(terc)
+	return iuo
+}
+
+// SetNillableTaxExemptionReasonCode sets the "tax_exemption_reason_code" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTaxExemptionReasonCode(terc *types.TaxExemptionReasonCode) *InvoiceUpdateOne {
+	if terc != nil {
+		iuo.SetTaxExemptionReasonCode(*terc)
+	}
+	return iuo
+}
+
+// ClearTaxExemptionReasonCode clears the value of the "tax_exemption_reason_code" field.
+func (iuo *InvoiceUpdateOne) ClearTaxExemptionReasonCode() *InvoiceUpdateOne {
+	iuo.mutation.ClearTaxExemptionReasonCode()
+	return iuo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iuo *InvoiceUpdateOne) AddLineItemIDs(ids ...string) *InvoiceUpdateOne {
 	iuo.mutation.AddLineItemIDs(ids...)
@@ -1927,6 +2004,15 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
+	}
+	if value, ok := iuo.mutation.IsManuallyEdited(); ok {
+		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)
+	}
+	if value, ok := iuo.mutation.TaxExemptionReasonCode(); ok {
+		_spec.SetField(invoice.FieldTaxExemptionReasonCode, field.TypeString, value)
+	}
+	if iuo.mutation.TaxExemptionReasonCodeCleared() {
+		_spec.ClearField(invoice.FieldTaxExemptionReasonCode, field.TypeString)
 	}
 	if iuo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

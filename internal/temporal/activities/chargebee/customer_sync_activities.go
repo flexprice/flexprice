@@ -30,9 +30,23 @@ func (a *CustomerSyncActivities) SyncCustomerToChargebee(ctx context.Context, in
 
 	chargebeeIntegration, err := a.integrationFactory.GetChargebeeIntegration(ctx)
 	if err != nil {
+		a.logger.Error(ctx, "SyncCustomerToChargebee activity failed: get integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = chargebeeIntegration.CustomerSvc.EnsureCustomerSyncedToChargebee(ctx, input.CustomerID)
-	return err
+	if _, err = chargebeeIntegration.CustomerSvc.EnsureCustomerSyncedToChargebee(ctx, input.CustomerID); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToChargebee activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }

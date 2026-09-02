@@ -77,6 +77,8 @@ type Price struct {
 	FilterValues map[string][]string `json:"filter_values,omitempty"`
 	// TierMode holds the value of the "tier_mode" field.
 	TierMode *types.BillingTier `json:"tier_mode,omitempty"`
+	// BucketSize holds the value of the "bucket_size" field.
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
 	// Tiers holds the value of the "tiers" field.
 	Tiers []*types.PriceTier `json:"tiers,omitempty"`
 	// PriceUnitTiers holds the value of the "price_unit_tiers" field.
@@ -153,7 +155,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriodDays, price.FieldSequence:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldBucketSize, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -354,6 +356,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.TierMode = new(types.BillingTier)
 				*pr.TierMode = types.BillingTier(value.String)
+			}
+		case price.FieldBucketSize:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field bucket_size", values[i])
+			} else if value.Valid {
+				pr.BucketSize = types.WindowSize(value.String)
 			}
 		case price.FieldTiers:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -588,6 +596,9 @@ func (pr *Price) String() string {
 		builder.WriteString("tier_mode=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("bucket_size=")
+	builder.WriteString(fmt.Sprintf("%v", pr.BucketSize))
 	builder.WriteString(", ")
 	builder.WriteString("tiers=")
 	builder.WriteString(fmt.Sprintf("%v", pr.Tiers))

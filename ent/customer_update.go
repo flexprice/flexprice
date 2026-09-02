@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // CustomerUpdate is the builder for updating Customer entities.
@@ -288,6 +289,20 @@ func (cu *CustomerUpdate) ClearTimezone() *CustomerUpdate {
 	return cu
 }
 
+// SetTaxTreatment sets the "tax_treatment" field.
+func (cu *CustomerUpdate) SetTaxTreatment(tt types.TaxTreatment) *CustomerUpdate {
+	cu.mutation.SetTaxTreatment(tt)
+	return cu
+}
+
+// SetNillableTaxTreatment sets the "tax_treatment" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableTaxTreatment(tt *types.TaxTreatment) *CustomerUpdate {
+	if tt != nil {
+		cu.SetTaxTreatment(*tt)
+	}
+	return cu
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cu *CustomerUpdate) Mutation() *CustomerMutation {
 	return cu.mutation
@@ -339,6 +354,11 @@ func (cu *CustomerUpdate) check() error {
 	if v, ok := cu.mutation.Name(); ok {
 		if err := customer.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
+		}
+	}
+	if v, ok := cu.mutation.TaxTreatment(); ok {
+		if err := customer.TaxTreatmentValidator(string(v)); err != nil {
+			return &ValidationError{Name: "tax_treatment", err: fmt.Errorf(`ent: validator failed for field "Customer.tax_treatment": %w`, err)}
 		}
 	}
 	return nil
@@ -439,6 +459,9 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.TimezoneCleared() {
 		_spec.ClearField(customer.FieldTimezone, field.TypeString)
+	}
+	if value, ok := cu.mutation.TaxTreatment(); ok {
+		_spec.SetField(customer.FieldTaxTreatment, field.TypeString, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -720,6 +743,20 @@ func (cuo *CustomerUpdateOne) ClearTimezone() *CustomerUpdateOne {
 	return cuo
 }
 
+// SetTaxTreatment sets the "tax_treatment" field.
+func (cuo *CustomerUpdateOne) SetTaxTreatment(tt types.TaxTreatment) *CustomerUpdateOne {
+	cuo.mutation.SetTaxTreatment(tt)
+	return cuo
+}
+
+// SetNillableTaxTreatment sets the "tax_treatment" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableTaxTreatment(tt *types.TaxTreatment) *CustomerUpdateOne {
+	if tt != nil {
+		cuo.SetTaxTreatment(*tt)
+	}
+	return cuo
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cuo *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return cuo.mutation
@@ -784,6 +821,11 @@ func (cuo *CustomerUpdateOne) check() error {
 	if v, ok := cuo.mutation.Name(); ok {
 		if err := customer.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Customer.name": %w`, err)}
+		}
+	}
+	if v, ok := cuo.mutation.TaxTreatment(); ok {
+		if err := customer.TaxTreatmentValidator(string(v)); err != nil {
+			return &ValidationError{Name: "tax_treatment", err: fmt.Errorf(`ent: validator failed for field "Customer.tax_treatment": %w`, err)}
 		}
 	}
 	return nil
@@ -901,6 +943,9 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.TimezoneCleared() {
 		_spec.ClearField(customer.FieldTimezone, field.TypeString)
+	}
+	if value, ok := cuo.mutation.TaxTreatment(); ok {
+		_spec.SetField(customer.FieldTaxTreatment, field.TypeString, value)
 	}
 	_node = &Customer{config: cuo.config}
 	_spec.Assign = _node.assignValues

@@ -53,6 +53,8 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 }
 
 type CreateSubscriptionParams struct {
+	SubscriptionID string `json:"subscription_id,omitempty"`
+
 	PlanID        string            `json:"plan_id"`
 	Currency      string            `json:"currency"`
 	LookupKey     string            `json:"lookup_key,omitempty"`
@@ -65,6 +67,15 @@ type CreateSubscriptionParams struct {
 // Validate checks that all required fields for subscription creation are present
 // and internally consistent, mirroring CreateSubscriptionRequest validation rules.
 func (p *CreateSubscriptionParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("create_subscription_params is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.SubscriptionID != "" {
+		return nil
+	}
+
 	if p.PlanID == "" {
 		return ierr.NewError("plan_id is required").
 			WithHint("Provide a valid plan_id in create_subscription_params").
@@ -281,6 +292,13 @@ type CheckoutPaymentProviderConfig struct {
 	CollectionMethod CollectionMethod  `json:"collection_method,omitempty"`
 	PaymentMethod    PaymentMethodType `json:"payment_method,omitempty"`
 	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
+
+	// CustomerPresent declares the charge as customer-initiated (CIT) rather than
+	// merchant-initiated (MIT). It changes which SCA/3DS exemptions the gateway may
+	// claim and who carries chargeback liability, so it must describe reality: true
+	// only when the customer is actually at the keyboard, as in a portal one-click
+	// top-up. Unattended charges (auto top-up, dunning) leave it false.
+	CustomerPresent bool `json:"customer_present,omitempty"`
 }
 
 func (c *CheckoutPaymentProviderConfig) Validate() error {

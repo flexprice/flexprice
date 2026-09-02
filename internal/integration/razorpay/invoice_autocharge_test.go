@@ -78,7 +78,21 @@ func (s *inlinePaymentStore) Update(_ context.Context, p *payment.Payment) error
 	s.mu.Unlock()
 	return nil
 }
+func (s *inlinePaymentStore) UpdateWithExpectedStatus(_ context.Context, p *payment.Payment, expectedStatus types.PaymentStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.byID[p.ID]; ok && existing.PaymentStatus != expectedStatus {
+		return ierr.NewError("payment status changed during update").
+			Mark(ierr.ErrVersionConflict)
+	}
+	s.byID[p.ID] = p
+	s.byIdemp[p.IdempotencyKey] = p
+	return nil
+}
 func (s *inlinePaymentStore) Delete(_ context.Context, _ string) error { return nil }
+func (s *inlinePaymentStore) DeleteWithExpectedStatus(_ context.Context, _ string, _ types.PaymentStatus) error {
+	return nil
+}
 func (s *inlinePaymentStore) List(_ context.Context, _ *types.PaymentFilter) ([]*payment.Payment, error) {
 	return nil, nil
 }

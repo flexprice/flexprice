@@ -47,6 +47,17 @@ type UserInviteResponse struct {
 	AuthRecord *auth.Auth
 }
 
+// EmailConfirmChecker is implemented by providers that can report, from their
+// own records rather than from a token, whether a user's email is confirmed.
+//
+// Kept separate from Provider because only Supabase has this notion: the
+// flexprice and SSO providers have no equivalent server-side state, and adding
+// it to Provider would force them to implement a method that could only ever
+// return a meaningless value.
+type EmailConfirmChecker interface {
+	EmailConfirmed(ctx context.Context, userID string) (bool, error)
+}
+
 type Provider interface {
 
 	// User Management
@@ -56,6 +67,9 @@ type Provider interface {
 	Login(ctx context.Context, req AuthRequest, userAuthInfo *auth.Auth) (*AuthResponse, error)
 	ValidateToken(ctx context.Context, token string) (*auth.Claims, error)
 	AssignUserToTenant(ctx context.Context, userID string, tenantID string) error
+
+	// RemoveUser permanently deletes the user's identity from the auth provider.
+	RemoveUser(ctx context.Context, userID string) error
 
 	// Customer Dashboard Token Management
 	GenerateSessionToken(customerID, externalCustomerID, tenantID, environmentID string, timeoutHours int) (string, time.Time, error)
@@ -77,6 +91,13 @@ func NewProvider(cfg *config.Configuration) Provider {
 	switch cfg.Auth.Provider {
 	case types.AuthProviderSupabase:
 		return NewSupabaseAuth(cfg)
+	case types.AuthProviderSAML:
+		// Nil when the enterprise SAML package is not linked in; an
+		// unconfigured deployment then behaves as it did before.
+		if samlProviderFactory != nil {
+			return samlProviderFactory(cfg)
+		}
+		return NewFlexpriceAuth(cfg)
 	default:
 		return NewFlexpriceAuth(cfg)
 	}

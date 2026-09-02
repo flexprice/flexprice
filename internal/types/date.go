@@ -22,6 +22,59 @@ func loadTimezone(tz string) *time.Location {
 	return time.UTC
 }
 
+// FloorToStartOfDay returns the start of the calendar day (00:00:00.000)
+// containing t, evaluated in the given IANA timezone. Empty or unknown tz
+// falls back to UTC (matching loadTimezone). The returned instant is UTC.
+func FloorToStartOfDay(t time.Time, tz string) time.Time {
+	loc := loadTimezone(tz)
+	local := t.In(loc)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).UTC()
+}
+
+// FloorToStartOfHour returns the start of the hour containing t, evaluated
+// in the given IANA timezone (empty → UTC). The returned instant is UTC.
+// Note: half-hour and quarter-hour offset zones (IST +5:30, NPT +5:45) shift
+// the top-of-hour instant relative to UTC — this is the desired behaviour when
+// callers reason about "the hour the user sees in their timezone".
+//
+// On DST fall-back days a local hour repeats (e.g. 01:00 EDT and 01:00 EST both
+// exist in New York on the fall-back Sunday). We floor by subtracting sub-hour
+// parts from the ORIGINAL instant so the caller keeps the ambiguous-hour
+// instance they passed in — reconstructing via time.Date always picks the first
+// occurrence (EDT), which would silently rewind the second (EST) occurrence.
+func FloorToStartOfHour(t time.Time, tz string) time.Time {
+	loc := loadTimezone(tz)
+	local := t.In(loc)
+	return t.Add(
+		-time.Duration(local.Minute())*time.Minute -
+			time.Duration(local.Second())*time.Second -
+			time.Duration(local.Nanosecond())*time.Nanosecond,
+	).UTC()
+}
+
+// FloorToStartOfWeek returns Monday 00:00:00 of the ISO 8601 week containing t,
+// evaluated in the given IANA timezone (empty → UTC). Monday-first is hardcoded;
+// per-tenant/customer week-start configuration is a documented follow-up.
+func FloorToStartOfWeek(t time.Time, tz string) time.Time {
+	loc := loadTimezone(tz)
+	local := t.In(loc)
+	// Go's Weekday: Sunday=0, Monday=1, ..., Saturday=6.
+	// Days since ISO Monday: Mon=0, Tue=1, ..., Sun=6.
+	daysSinceMonday := (int(local.Weekday()) + 6) % 7
+	startOfDay := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+	return startOfDay.AddDate(0, 0, -daysSinceMonday).UTC()
+}
+
+// AdvanceDays returns t plus n calendar days in the given timezone. Uses
+// calendar arithmetic (time.Time.AddDate in the local zone) so DST transitions
+// are handled correctly: adding "1 day" to a local midnight returns the next
+// local midnight, even if the intervening calendar day is 23 or 25 hours long.
+// Callers that add "24 * time.Hour" instead will drift by ±1h across DST.
+func AdvanceDays(t time.Time, n int, tz string) time.Time {
+	loc := loadTimezone(tz)
+	return t.In(loc).AddDate(0, 0, n).UTC()
+}
+
 // NextBillingDateParams holds the inputs for NextBillingDate.
 //
 // The BillingAnchor determines the reference point for billing cycles:

@@ -224,6 +224,11 @@ func AdjustedEntitlementQuantity(v decimal.Decimal) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedEntitlementQuantity, v))
 }
 
+// ParentLineItemID applies equality check predicate on the "parent_line_item_id" field. It's identical to ParentLineItemIDEQ.
+func ParentLineItemID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldParentLineItemID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -2240,6 +2245,81 @@ func AdjustedEntitlementQuantityIsNil() predicate.InvoiceLineItem {
 // AdjustedEntitlementQuantityNotNil applies the NotNil predicate on the "adjusted_entitlement_quantity" field.
 func AdjustedEntitlementQuantityNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldAdjustedEntitlementQuantity))
+}
+
+// ParentLineItemIDEQ applies the EQ predicate on the "parent_line_item_id" field.
+func ParentLineItemIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDNEQ applies the NEQ predicate on the "parent_line_item_id" field.
+func ParentLineItemIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDIn applies the In predicate on the "parent_line_item_id" field.
+func ParentLineItemIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldParentLineItemID, vs...))
+}
+
+// ParentLineItemIDNotIn applies the NotIn predicate on the "parent_line_item_id" field.
+func ParentLineItemIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldParentLineItemID, vs...))
+}
+
+// ParentLineItemIDGT applies the GT predicate on the "parent_line_item_id" field.
+func ParentLineItemIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDGTE applies the GTE predicate on the "parent_line_item_id" field.
+func ParentLineItemIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDLT applies the LT predicate on the "parent_line_item_id" field.
+func ParentLineItemIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDLTE applies the LTE predicate on the "parent_line_item_id" field.
+func ParentLineItemIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDContains applies the Contains predicate on the "parent_line_item_id" field.
+func ParentLineItemIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDHasPrefix applies the HasPrefix predicate on the "parent_line_item_id" field.
+func ParentLineItemIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDHasSuffix applies the HasSuffix predicate on the "parent_line_item_id" field.
+func ParentLineItemIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDIsNil applies the IsNil predicate on the "parent_line_item_id" field.
+func ParentLineItemIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldParentLineItemID))
+}
+
+// ParentLineItemIDNotNil applies the NotNil predicate on the "parent_line_item_id" field.
+func ParentLineItemIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldParentLineItemID))
+}
+
+// ParentLineItemIDEqualFold applies the EqualFold predicate on the "parent_line_item_id" field.
+func ParentLineItemIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldParentLineItemID, v))
+}
+
+// ParentLineItemIDContainsFold applies the ContainsFold predicate on the "parent_line_item_id" field.
+func ParentLineItemIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldParentLineItemID, v))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

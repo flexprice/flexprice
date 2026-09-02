@@ -361,6 +361,20 @@ func (pc *PriceCreate) SetNillableTierMode(tt *types.BillingTier) *PriceCreate {
 	return pc
 }
 
+// SetBucketSize sets the "bucket_size" field.
+func (pc *PriceCreate) SetBucketSize(ts types.WindowSize) *PriceCreate {
+	pc.mutation.SetBucketSize(ts)
+	return pc
+}
+
+// SetNillableBucketSize sets the "bucket_size" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableBucketSize(ts *types.WindowSize) *PriceCreate {
+	if ts != nil {
+		pc.SetBucketSize(*ts)
+	}
+	return pc
+}
+
 // SetTiers sets the "tiers" field.
 func (pc *PriceCreate) SetTiers(tt []*types.PriceTier) *PriceCreate {
 	pc.mutation.SetTiers(tt)
@@ -729,6 +743,11 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
+	if v, ok := pc.mutation.BucketSize(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "bucket_size", err: fmt.Errorf(`ent: validator failed for field "Price.bucket_size": %w`, err)}
+		}
+	}
 	if v, ok := pc.mutation.TransformQuantity(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "transform_quantity", err: fmt.Errorf(`ent: validator failed for field "Price.transform_quantity": %w`, err)}
@@ -898,6 +917,10 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.TierMode(); ok {
 		_spec.SetField(price.FieldTierMode, field.TypeString, value)
 		_node.TierMode = &value
+	}
+	if value, ok := pc.mutation.BucketSize(); ok {
+		_spec.SetField(price.FieldBucketSize, field.TypeString, value)
+		_node.BucketSize = value
 	}
 	if value, ok := pc.mutation.Tiers(); ok {
 		_spec.SetField(price.FieldTiers, field.TypeJSON, value)

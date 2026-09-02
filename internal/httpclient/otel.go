@@ -37,9 +37,15 @@ func OtelTransport(base http.RoundTripper) http.RoundTripper {
 
 // NewOtelHTTPClient returns an *http.Client whose Transport is wrapped with
 // OpenTelemetry client-side instrumentation. The provided timeout is preserved.
+//
+// Redirects are refused (see rejectRedirects): callers that validate a
+// user-supplied URL only check the initial location, so following a redirect
+// would reach an unvalidated target. Callers that legitimately need redirects
+// must opt in by overriding CheckRedirect on the returned client.
 func NewOtelHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout:   timeout,
-		Transport: OtelTransport(nil),
+		Timeout:       timeout,
+		Transport:     OtelTransport(nil),
+		CheckRedirect: RejectRedirects,
 	}
 }

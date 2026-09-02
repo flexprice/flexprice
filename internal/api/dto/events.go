@@ -137,8 +137,11 @@ type GetUsageRequest struct {
 }
 
 type GetUsageByMeterRequest struct {
-	MeterID             string              `form:"meter_id" json:"meter_id" binding:"required" example:"123"`
-	PriceID             string              `form:"-" json:"-"` // this is just for internal use to store the price id
+	MeterID string `form:"meter_id" json:"meter_id" binding:"required" example:"123"`
+	PriceID string `form:"-" json:"-"` // this is just for internal use to store the price id
+	// Price lets the caller supply the resolved price so bucketing can be read
+	// from it. Internal only; when nil the meter's legacy bucket size applies.
+	Price               *price.Price        `form:"-" json:"-"`
 	Meter               *meter.Meter        `form:"-" json:"-"` // caller can set this in case already fetched from db to avoid extra db call
 	ExternalCustomerID  string              `form:"external_customer_id" json:"external_customer_id" example:"user_5"`
 	ExternalCustomerIDs []string            `form:"-" json:"-" example:"user_5,user_6"`

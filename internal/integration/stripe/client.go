@@ -42,16 +42,22 @@ type StripeConfig struct {
 	WebhookSecret  string
 }
 
+// GetConnection returns the Stripe connection for the current environment. Errors
+// are returned as-is — the repository already classifies them (e.g. ErrNotFound).
+func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, error) {
+	return c.connectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+}
+
 // GetStripeClient returns a configured Stripe client for the current environment
 func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeConfig, error) {
-	// Get Stripe connection for this environment
-	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	conn, err := c.GetConnection(ctx)
 	if err != nil {
-		return nil, nil, ierr.NewError("failed to get Stripe connection").
-			WithHint("Stripe connection not configured for this environment").
-			Mark(ierr.ErrNotFound)
+		return nil, nil, err
 	}
+	return c.buildStripeClient(conn)
+}
 
+func (c *Client) buildStripeClient(conn *connection.Connection) (*stripe.Client, *StripeConfig, error) {
 	stripeConfig, err := c.GetDecryptedStripeConfig(conn)
 	if err != nil {
 		return nil, nil, ierr.NewError("failed to get Stripe configuration").
@@ -59,9 +65,8 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 			Mark(ierr.ErrValidation)
 	}
 
-	// Initialize Stripe client with an OTel-instrumented HTTP backend so that
-	// outbound Stripe API calls surface in SigNoz External API Monitoring.
-	// 80s mirrors the Stripe SDK's default HTTP timeout.
+	// OTel-instrumented backend so outbound Stripe calls surface in SigNoz; 80s
+	// mirrors the Stripe SDK's default HTTP timeout.
 	backends := stripe.NewBackends(httpclient.NewOtelHTTPClient(80 * time.Second))
 	stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
 

@@ -156,23 +156,43 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
-	// Generate idempotency key
+	// Auto-generated key includes payment_method_type, payment_method_id, and
+	// payment_gateway so distinct intents don't collapse into one row: switching
+	// method (card → link), swapping the underlying card (pm_1 → pm_2), or
+	// changing gateway all produce distinct keys. payment_method_id also
+	// captures gateway implicitly, since each method belongs to a single gateway
+	// — this matters for subscription card charges where the caller doesn't set
+	// payment_gateway (gets resolved later in ProcessPayment). Callers can pass
+	// their own IdempotencyKey to opt out (installments, etc).
 	if p.IdempotencyKey == "" {
 		p.IdempotencyKey = s.idempGen.GenerateKey(idempotency.ScopePayment, map[string]interface{}{
-			"invoice_id": p.DestinationID,
-			"amount":     p.Amount,
-			"currency":   p.Currency,
-			// TODO: think of a better way to generate this key rather than using the current timestamp
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"invoice_id":          p.DestinationID,
+			"amount":              p.Amount,
+			"currency":            p.Currency,
+			"payment_method_type": p.PaymentMethodType,
+			"payment_method_id":   p.PaymentMethodID,
+			"payment_gateway":     lo.FromPtr(p.PaymentGateway),
 		})
 	}
 
-	// validate the payment object before creating it
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
+		// Concurrent request already inserted with this key — return theirs.
+		// Gated on the idempotency-key conflict specifically: any other
+		// constraint violation is also ErrAlreadyExists, and re-fetching by a
+		// key that was never inserted would turn it into a misleading 404.
+		if payment.IsIdempotencyKeyConflict(err) {
+			existing, fetchErr := s.PaymentRepo.GetByIdempotencyKey(ctx, p.IdempotencyKey)
+			if fetchErr != nil {
+				// The row is gone or unreadable — report the original conflict
+				// rather than the lookup miss, which would misdescribe the cause.
+				return nil, err
+			}
+			return dto.NewPaymentResponse(existing), nil
+		}
 		return nil, err
 	}
 
@@ -378,8 +398,19 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		return nil, err // Repository already using ierr
 	}
 
+	// Status observed before any mutation. The write below is conditioned on it
+	// so the lifecycle check and the update apply as one atomic step.
+	observedStatus := p.PaymentStatus
+
 	if req.PaymentStatus != nil {
-		p.PaymentStatus = types.PaymentStatus(*req.PaymentStatus)
+		// Payment status must follow the lifecycle: without this check the update
+		// API would accept any status for any payment, including settling one
+		// without the gateway ever being involved.
+		target := types.PaymentStatus(*req.PaymentStatus)
+		if err := p.PaymentStatus.ValidateTransitionTo(target); err != nil {
+			return nil, err
+		}
+		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {
 		p.PaymentGateway = req.PaymentGateway
@@ -393,6 +424,20 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 	if req.PaymentMethodID != nil {
 		p.PaymentMethodID = *req.PaymentMethodID
+	}
+	if req.Amount != nil {
+		// Once settled, an amount correction must go through a refund/credit note, not this.
+		if observedStatus != types.PaymentStatusInitiated && observedStatus != types.PaymentStatusPending &&
+			observedStatus != types.PaymentStatusProcessing {
+			return nil, ierr.NewError("cannot correct amount on a payment that has already settled").
+				WithHint("Amount corrections are only allowed while a payment is initiated, pending, or processing").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":     id,
+					"current_status": observedStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		p.Amount = *req.Amount
 	}
 	if req.SucceededAt != nil {
 		p.SucceededAt = req.SucceededAt
@@ -413,13 +458,80 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		p.Metadata = *req.Metadata
 	}
 
-	if err := s.PaymentRepo.Update(ctx, p); err != nil {
+	// Conditioned on the status observed before any mutation, whether or not
+	// this request changed it. The write persists the whole payment including
+	// PaymentStatus, so an update that only touches other fields would still
+	// write back the status it read and could revert a concurrent transition.
+	if err := s.PaymentRepo.UpdateWithExpectedStatus(ctx, p, observedStatus); err != nil {
 		return nil, err // Repository already using ierr
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
 
 	return dto.NewPaymentResponse(p), nil
+}
+
+// RecordAttempt appends a PaymentAttempt carrying the gateway's outcome for one charge
+// attempt, without touching the parent payment's status. A per-attempt outcome is the
+// gateway's verdict on one try, not our decision about the payment as a whole.
+func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error {
+	if paymentID == "" {
+		return ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	p, err := s.PaymentRepo.Get(ctx, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if !p.TrackAttempts {
+		return nil
+	}
+
+	latestAttempt, err := s.PaymentRepo.GetLatestAttempt(ctx, paymentID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return err
+	}
+
+	attemptNumber := 1
+	if latestAttempt != nil {
+		attemptNumber = latestAttempt.AttemptNumber + 1
+	}
+
+	attempt := &payment.PaymentAttempt{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
+		PaymentID:     paymentID,
+		AttemptNumber: attemptNumber,
+		PaymentStatus: req.PaymentStatus,
+		Metadata:      types.Metadata{},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if req.ErrorMessage != "" {
+		attempt.ErrorMessage = lo.ToPtr(req.ErrorMessage)
+	}
+	if req.GatewayAttemptID != "" {
+		attempt.GatewayAttemptID = lo.ToPtr(req.GatewayAttemptID)
+	}
+
+	if err := attempt.Validate(); err != nil {
+		return err
+	}
+
+	if err := s.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "recorded payment attempt",
+		"payment_id", paymentID,
+		"attempt_number", attemptNumber,
+		"attempt_status", req.PaymentStatus,
+		"gateway_attempt_id", req.GatewayAttemptID,
+	)
+
+	return nil
 }
 
 // ListPayments lists payments based on filter
@@ -495,7 +607,29 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
+	p, err := s.PaymentRepo.Get(ctx, id)
+	if err != nil {
+		return err // Repository already using ierr
+	}
+
+	// Payments that represent settled money movement must not be deletable:
+	// deleting one removes it from reconciliation views while the money it
+	// records still moved. Void or refund such a payment instead, which keeps
+	// the record and its audit trail intact.
+	if !p.PaymentStatus.IsDeletable() {
+		return ierr.NewError("payment cannot be deleted in its current status").
+			WithHintf("A payment in status %s cannot be deleted. Void or refund it instead.", p.PaymentStatus).
+			WithReportableDetails(map[string]any{
+				"payment_id":     id,
+				"payment_status": p.PaymentStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Conditioned on the status the deletability check was made against, so a
+	// payment that becomes non-deletable between the read and the write is not
+	// deleted on the strength of a stale check.
+	return s.PaymentRepo.DeleteWithExpectedStatus(ctx, id, p.PaymentStatus) // Repository already using ierr
 }
 
 func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
@@ -758,7 +892,7 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 		Amount:            req.Invoice.AmountDue,
 		Currency:          req.Invoice.Currency,
 		PaymentStatus:     types.PaymentStatusInitiated,
-		TrackAttempts:     false, // checkout payments are promoted via webhook callback, not attempt tracking
+		TrackAttempts:     true, // gateway declines are recorded as attempts, leaving the payment open for a retry
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}

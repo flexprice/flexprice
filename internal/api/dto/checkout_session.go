@@ -97,6 +97,12 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if cfg := r.Configuration.CreateSubscriptionParams; cfg != nil && cfg.SubscriptionID != "" {
+		return ierr.NewError("subscription_id is not supported via create checkout session").
+			WithHint("Use POST /subscriptions with a checkout object to gate an existing draft subscription").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := r.CheckoutParams.Validate(); err != nil {
 		return err
 	}
@@ -219,6 +225,13 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 
 	cfg := session.Configuration.ToCheckoutConfiguration()
 	switch session.Action {
+	case types.CheckoutActionCreateSubscription:
+		if cfg.CreateSubscriptionParams == nil {
+			return ierr.NewError("session has no create_subscription_params").
+				WithHint("checkout session must have create_subscription_params before it can be completed").
+				Mark(ierr.ErrValidation)
+		}
+		return cfg.CreateSubscriptionParams.Validate()
 	case types.CheckoutActionModifySubscription:
 		if cfg.ModifySubscriptionParams == nil {
 			return ierr.NewError("session has no modify_subscription_params").

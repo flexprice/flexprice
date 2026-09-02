@@ -37,11 +37,14 @@ func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, 
 // applyActiveAddonAssociationFilter applies a time-window filter to return associations active during the window
 // Active means: published AND addon_status = active AND starts on/before window end AND (no end or end after window start)
 // If both bounds are nil, it simply enforces published + active status.
-func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, windowStart, windowEnd *time.Time) *ent.AddonAssociationQuery {
-	// Always require published + active status when using the active window filter
+func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, windowStart, windowEnd *time.Time, addonStatuses []string) *ent.AddonAssociationQuery {
+	if len(addonStatuses) == 0 {
+		addonStatuses = []string{string(types.AddonStatusActive)}
+	}
+
 	query = query.Where(
 		addonassociation.Status(string(types.StatusPublished)),
-		addonassociation.AddonStatus(string(types.AddonStatusActive)),
+		addonassociation.AddonStatusIn(addonStatuses...),
 	)
 
 	// If no bounds provided, return status-qualified associations
@@ -441,13 +444,26 @@ func (o AddonAssociationQueryOptions) applyEntityQueryOptions(ctx context.Contex
 	}
 
 	// Apply addon status filter if specified
+	if len(f.AddonStatuses) > 0 {
+		query = query.Where(addonassociation.AddonStatusIn(f.AddonStatuses...))
+	}
 	if f.AddonStatus != nil {
 		query = query.Where(addonassociation.AddonStatus(*f.AddonStatus))
 	}
 
 	// Apply active window filter if specified
 	if f.StartDate != nil || f.EndDate != nil {
-		query = o.applyActiveAddonAssociationFilter(query, f.StartDate, f.EndDate)
+		query = o.applyActiveAddonAssociationFilter(query, f.StartDate, f.EndDate, f.AddonStatuses)
+	}
+
+	if f.ActiveAt != nil {
+		query = query.Where(
+			addonassociation.StartDateLTE(*f.ActiveAt),
+			addonassociation.Or(
+				addonassociation.EndDateIsNil(),
+				addonassociation.EndDateGT(*f.ActiveAt),
+			),
+		)
 	}
 
 	// Apply time range filters if specified

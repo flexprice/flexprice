@@ -19,6 +19,35 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// maxQueryLiteralLen bounds a value interpolated into a QuickBooks query. The
+// QuickBooks fields these match (email, DisplayName, item Name) are documented
+// at 100 characters; bounding here also limits the size of any injection payload.
+const maxQueryLiteralLen = 100
+
+// escapeQueryLiteral makes a caller-supplied value safe to interpolate inside a
+// single-quoted QuickBooks Query Language string literal. Customer email/name and
+// item name reach these queries from tenant-controlled entity fields, so without
+// escaping a single quote breaks out of the literal (SOQL-like injection).
+//
+// QuickBooks escapes a single quote by doubling it (''), not with a backslash
+// (backslash is not special). Control characters have no place in these fields
+// and could smuggle clauses or corrupt the request URL, so they are removed. The
+// result is length-bounded to the field maximum.
+func escapeQueryLiteral(s string) string {
+	// Strip control characters first, then bound by runes (not bytes) so a
+	// multi-byte character is never cut in half, and finally double single quotes.
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+	if runes := []rune(s); len(runes) > maxQueryLiteralLen {
+		s = string(runes[:maxQueryLiteralLen])
+	}
+	return strings.ReplaceAll(s, "'", "''")
+}
+
 // QuickBooksClient defines the interface for QuickBooks API operations
 type QuickBooksClient interface {
 	// Configuration and initialization
@@ -514,15 +543,13 @@ func (c *Client) CreateCustomer(ctx context.Context, req *CustomerCreateRequest)
 }
 
 // QueryCustomerByEmail queries a customer by email
-// Note: QuickBooks Query API requires backslash escaping for single quotes (e.g., \' )
 func (c *Client) QueryCustomerByEmail(ctx context.Context, email string) (*CustomerResponse, error) {
 	// Ensure valid access token before making API call
 	if err := c.EnsureValidAccessToken(ctx); err != nil {
 		return nil, err
 	}
 
-	// Escape single quotes with backslash as required by QuickBooks Query API
-	query := fmt.Sprintf("SELECT * FROM Customer WHERE PrimaryEmailAddr = '%s'", email)
+	query := fmt.Sprintf("SELECT * FROM Customer WHERE PrimaryEmailAddr = '%s'", escapeQueryLiteral(email))
 
 	body, err := c.queryEntitiesWithRetry(ctx, "Customer", query, 0)
 	if err != nil {
@@ -542,14 +569,13 @@ func (c *Client) QueryCustomerByEmail(ctx context.Context, email string) (*Custo
 }
 
 // QueryCustomerByName queries a customer by display name
-// Note: QuickBooks Query API requires backslash escaping for single quotes (e.g., \' )
 func (c *Client) QueryCustomerByName(ctx context.Context, name string) (*CustomerResponse, error) {
 	// Ensure valid access token before making API call
 	if err := c.EnsureValidAccessToken(ctx); err != nil {
 		return nil, err
 	}
 
-	query := fmt.Sprintf("SELECT * FROM Customer WHERE DisplayName = '%s'", name)
+	query := fmt.Sprintf("SELECT * FROM Customer WHERE DisplayName = '%s'", escapeQueryLiteral(name))
 
 	body, err := c.queryEntitiesWithRetry(ctx, "Customer", query, 0)
 	if err != nil {
@@ -674,14 +700,13 @@ func (c *Client) GetItem(ctx context.Context, itemID string) (*ItemResponse, err
 }
 
 // QueryItemByName queries an item by name
-// Note: QuickBooks Query API requires backslash escaping for single quotes (e.g., \' )
 func (c *Client) QueryItemByName(ctx context.Context, name string) (*ItemResponse, error) {
 	// Ensure valid access token before making API call
 	if err := c.EnsureValidAccessToken(ctx); err != nil {
 		return nil, err
 	}
 
-	query := fmt.Sprintf("SELECT * FROM Item WHERE Name = '%s' AND Type = 'Service' AND Active = true", name)
+	query := fmt.Sprintf("SELECT * FROM Item WHERE Name = '%s' AND Type = 'Service' AND Active = true", escapeQueryLiteral(name))
 
 	body, err := c.queryEntitiesWithRetry(ctx, "Item", query, 0)
 	if err != nil {

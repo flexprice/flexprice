@@ -10,7 +10,10 @@ import (
 type Repository interface {
 	Create(ctx context.Context, subscription *Subscription) error
 	Get(ctx context.Context, id string) (*Subscription, error)
+
+	GetForUpdate(ctx context.Context, id string) (*Subscription, error)
 	Update(ctx context.Context, subscription *Subscription) error
+	UpdatePlan(ctx context.Context, id string, planID string) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.SubscriptionFilter) ([]*Subscription, error)
 	Count(ctx context.Context, filter *types.SubscriptionFilter) (int, error)

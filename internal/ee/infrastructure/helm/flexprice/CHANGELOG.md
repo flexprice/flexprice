@@ -9,6 +9,140 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.4.1] - 2026-08-31
+
+### Fixed
+- **The migration Job's `verify` step queried ClickHouse over HTTP on the NATIVE
+  protocol port.** In `mode: external` the port came from splitting
+  `clickhouse.address`, which is the endpoint the application uses natively
+  (9000). The HTTP GET failed, `|| echo 0` turned that into `n=0`, and every
+  table was reported `MISSING` against a ClickHouse that was healthy.
+  - Surfaced on GCP staging the first time migrations were enabled there:
+    `❌ MISSING ClickHouse table: events`, while the table existed with 20
+    others. Proven directly — the same query returns `1` on 8123 and fails on
+    9000.
+  - `external` now uses `clickhouse.httpPort` (default `8123`), matching what
+    `altinity` mode already hardcoded. Set `clickhouse.httpPort` if a deployment
+    moves it.
+- **A failed query is no longer reported as a missing table.** `|| echo 0`
+  collapsed every failure — unreachable host, wrong port, bad credentials — into
+  `MISSING`, sending whoever is on call to inspect a schema that was never the
+  problem. Connectivity failures now say so, print what `wget` returned, and name
+  the likely causes; a genuine miss reports the count it actually saw.
+
+## [1.4.0] - 2026-08-30
+
+### Changed
+- **PostgreSQL migrations now run from reviewed `.sql` files instead of Ent
+  auto-migration.** New `migration.steps.dbmate` (default `true`) adds an init
+  container that runs `./migrate postgres up`, applying the files in
+  `migrations/versioned/postgres` that the target database has not recorded and
+  writing each one to `schema_migrations`. `migration.steps.ent` now defaults to
+  `false`.
+  - Ent auto-migration inferred DDL by diffing the live schema against the Go
+    models at deploy time. Nothing reviewed what it would run and nothing
+    recorded what it did, so the same chart produced different DDL against
+    different databases and drift was invisible. It also silently skipped
+    `DropIndex`, `DropColumn` and `ModifyIndex`, which is how a wrong unique
+    index survived on India production from 2026-07-25 undetected.
+  - The two steps are mutually exclusive; enabling both fails template rendering
+    rather than running the schema through two mechanisms in one Job.
+  - Rolling back is `migration.steps.dbmate: false` +
+    `migration.steps.ent: true`. The Ent path stays in the image.
+
+### Fixed
+- `migration.backoffLimit` now defaults to `0`, and the template no longer passes
+  it through `| default 3` — Helm's `default` treats `0` as empty, so an explicit
+  `backoffLimit: 0` would have silently rendered as `3`.
+  - A retry only helps a transient failure. A migration killed part-way through
+    `CREATE INDEX CONCURRENTLY` leaves the index INVALID, and
+    `CREATE INDEX CONCURRENTLY IF NOT EXISTS` skips an invalid index — so the
+    retry reported success while the index stayed permanently broken.
+  - `migrate postgres up` now refuses to start while any index is INVALID,
+    naming each one and printing the `DROP INDEX CONCURRENTLY` to run.
+
+- **The migration Job no longer deletes its own logs.** `hook-delete-policy` was
+  `hook-succeeded,hook-failed`, which removed the Job — and its pod — the instant
+  the migration ended, so the one artefact explaining *why* a migration failed
+  disappeared before anyone could read it. During the 2026-08-31 staging bring-up
+  the only way to see a failure was to race the deletion with `kubectl logs`.
+  - New `migration.hookDeletePolicy`, default `before-hook-creation`: the previous
+    Job is removed just before the next one is created. That still prevents the
+    stale-Job collision that stalled the northamerica-northeast2 bring-up, but a
+    finished Job and its pod now survive until `ttlSecondsAfterFinished` (1h) or
+    the next migration.
+  - Set it back to `hook-succeeded,hook-failed` to restore the old behaviour.
+  - This does **not** make a re-Sync re-run migrations: ArgoCD tracks hooks per
+    revision, so an unchanged revision skips the hook whether or not a Job object
+    exists. Migrations run when the image or config changes.
+
+### ⚠️ `activeDeadlineSeconds` and long index builds
+`activeDeadlineSeconds: 900` is a hard SIGKILL of the Job. In Helm the migration
+and its watcher are the same pod, so the deadline aborts the migration itself —
+unlike the ECS path, where the workflow only watches a task that keeps running.
+Before deploying a migration that builds an index on a large table, set
+`migration.activeDeadlineSeconds: null`; the field is then omitted and Helm or
+ArgoCD giving up waiting no longer stops the index from finishing.
+
+### ⚠️ Upgrade note — existing databases must be adopted first
+An existing database has to be adopted once before this chart version deploys
+against it. Adoption records the migrations written so far as already applied
+and executes **zero DDL**, so only new migrations ever run there:
+
+```bash
+make migrate-adopt url="postgres://USER:PASS@HOST:PORT/DB?sslmode=require" dry=1
+make migrate-adopt url="postgres://USER:PASS@HOST:PORT/DB?sslmode=require"
+```
+
+The Job fails with these instructions if it finds tables but no
+`schema_migrations` ledger. It does not adopt on its own: that would silently
+declare a database nobody inspected to be current, and any migration it is
+actually missing would then never run.
+
+Values that set `migration.steps.ent: true` explicitly must drop it, or
+rendering fails on the mutual-exclusion guard.
+
+A fresh install needs nothing: the first migration in the timeline is the schema
+baseline, so the whole schema is built from the same files.
+
+## [1.3.0] - 2026-08-12
+
+### Added
+- **e2eprobe as chart templates** (`templates/probe/deployment.yaml`,
+  `templates/probe/service.yaml`), gated on `e2eprobe.enabled` (default
+  `false`). Ports the synthetic end-to-end probe previously deployed as
+  hand-written manifests into the chart.
+  - `replicaCount: 1` with `strategy.rollingUpdate.maxSurge: 0` is a
+    correctness constraint, not a tunable default: the probe's checks
+    mutate shared seeded fixtures under one tenant, and a second replica
+    races the first into false failures.
+  - The webhook Service (`e2eprobe.service.port`, default `8765`) is
+    ClusterIP only and is never wired into ingress — its endpoint accepts
+    unauthenticated POSTs.
+  - Consumes a pre-created Secret via `e2eprobe.existingSecret` (same
+    convention as `secrets.existingSecret` for the main app) — the chart
+    renders no ExternalSecret for it, matching the rest of the chart.
+  - Image defaults to the separate `ghcr.io/flexprice/e2eprobe` artifact
+    (not the main app image).
+- **GCE managed-ingress support** via `ingress.provider` (`nginx` default,
+  `gce` opt-in). When `ingress.provider: gce` and `ingress.enabled: true`:
+  - New templates under `templates/ingress-gcp/`: `managedcertificate.yaml`
+    (`networking.gke.io/v1` ManagedCertificate), `backendconfig.yaml`
+    (`cloud.google.com/v1` BackendConfig — health check path `/health`,
+    timeouts, optional Cloud Armor via
+    `ingress.gce.backendConfig.cloudArmor.securityPolicyName`), and
+    `frontendconfig.yaml` (`networking.gke.io/v1beta1` FrontendConfig —
+    HTTP→HTTPS redirect).
+  - The api Service (`templates/app/service.yaml`) gains
+    `cloud.google.com/neg` and `beta.cloud.google.com/backend-config`
+    annotations, needed so GCE's native load balancer routes directly to
+    pod IPs via NEG instead of through kube-proxy.
+  - `templates/app/ingress.yaml` needed no changes — it was already
+    class-agnostic (driven by `ingress.className`, no nginx-specific
+    annotations).
+  - Rendering with `ingress.provider: nginx` (the default) is
+    byte-identical to 1.2.0.
+
 ## [1.2.0] - 2026-08-05
 
 ### Added

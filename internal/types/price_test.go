@@ -125,3 +125,79 @@ func TestIsBillingPeriodMultiple(t *testing.T) {
 		})
 	}
 }
+
+func TestCompatibleBillingPeriodsFor(t *testing.T) {
+	contains := func(list []BillingPeriod, p BillingPeriod) bool {
+		for _, x := range list {
+			if x == p {
+				return true
+			}
+		}
+		return false
+	}
+
+	tests := []struct {
+		name      string
+		subPeriod BillingPeriod
+		subCount  int
+		mustHave  []BillingPeriod
+		mustNot   []BillingPeriod
+	}{
+		{
+			name:      "quarterly_sub_includes_monthly_and_quarterly",
+			subPeriod: BILLING_PERIOD_QUARTER, subCount: 1,
+			mustHave: []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_QUARTER, BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_HALF_YEAR, BILLING_PERIOD_ANNUAL},
+		},
+		{
+			name:      "annual_sub_includes_all_smaller_month_based",
+			subPeriod: BILLING_PERIOD_ANNUAL, subCount: 1,
+			mustHave: []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_QUARTER, BILLING_PERIOD_HALF_YEAR, BILLING_PERIOD_ANNUAL, BILLING_PERIOD_ONETIME},
+		},
+		{
+			name:      "monthly_sub_only_monthly",
+			subPeriod: BILLING_PERIOD_MONTHLY, subCount: 1,
+			mustHave: []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_QUARTER, BILLING_PERIOD_HALF_YEAR, BILLING_PERIOD_ANNUAL},
+		},
+		{
+			name:      "daily_sub_only_daily",
+			subPeriod: BILLING_PERIOD_DAILY, subCount: 1,
+			mustHave: []BillingPeriod{BILLING_PERIOD_DAILY, BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_WEEKLY},
+		},
+		{
+			name:      "half_year_sub_via_count",
+			subPeriod: BILLING_PERIOD_QUARTER, subCount: 2, // 6 months
+			mustHave: []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_QUARTER, BILLING_PERIOD_HALF_YEAR, BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_ANNUAL},
+		},
+		{
+			name:      "onetime_sub_only_onetime",
+			subPeriod: BILLING_PERIOD_ONETIME, subCount: 1,
+			mustHave: []BillingPeriod{BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_QUARTER},
+		},
+		{
+			name:      "zero_count_defaults_to_one",
+			subPeriod: BILLING_PERIOD_QUARTER, subCount: 0,
+			mustHave: []BillingPeriod{BILLING_PERIOD_MONTHLY, BILLING_PERIOD_QUARTER, BILLING_PERIOD_ONETIME},
+			mustNot:  []BillingPeriod{BILLING_PERIOD_HALF_YEAR},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CompatibleBillingPeriodsFor(tt.subPeriod, tt.subCount)
+			for _, p := range tt.mustHave {
+				if !contains(got, p) {
+					t.Errorf("CompatibleBillingPeriodsFor(%q, %d) missing expected %q; got %v", tt.subPeriod, tt.subCount, p, got)
+				}
+			}
+			for _, p := range tt.mustNot {
+				if contains(got, p) {
+					t.Errorf("CompatibleBillingPeriodsFor(%q, %d) unexpectedly includes %q; got %v", tt.subPeriod, tt.subCount, p, got)
+				}
+			}
+		})
+	}
+}

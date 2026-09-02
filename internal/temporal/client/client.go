@@ -60,8 +60,9 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 		}
 	}
 
-	// Create the temporal client
-	c, err := client.Dial(sdkOptions)
+	// NewLazyClient does not connect during dependency injection. The service
+	// lifecycle performs readiness checks before any workers are started.
+	c, err := client.NewLazyClient(sdkOptions)
 	if err != nil {
 		logger.Error(context.Background(), "Failed to create temporal client", "error", err)
 		return nil, err

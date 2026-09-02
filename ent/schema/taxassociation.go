@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -95,6 +96,15 @@ func (TaxAssociation) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("When this tax association stops being effective"),
+
+		field.String("tax_behavior").
+			GoType(types.TaxBehavior("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("inclusive or exclusive; settable at any level, but only required to resolve at subscription level, where it falls back to the currency default if left null"),
 	}
 }
 

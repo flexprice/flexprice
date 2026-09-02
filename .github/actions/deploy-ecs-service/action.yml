@@ -14,11 +14,18 @@ inputs:
     description: 'ECS service name to deploy'
     required: true
   image:
-    description: 'Docker image to deploy (e.g. ECR URI:tag)'
+    description: 'Docker image to deploy (GHCR or ECR URI:tag)'
     required: true
   ecr_repo_prefix:
-    description: 'ECR repository prefix for matching container images to update'
+    description: 'ECR repository prefix — matches the app container to update, and also matches taskdefs still on the old ECR image so the cutover is idempotent'
     required: true
+  ghcr_repo_prefix:
+    description: 'GHCR repository prefix (e.g. ghcr.io/owner/flexprice) — matches taskdefs already migrated to GHCR so redeploys stay idempotent'
+    required: true
+  ghcr_credentials_arn:
+    description: 'Secrets Manager ARN of the GHCR pull credentials. Injected as repositoryCredentials when the deployed image is a private GHCR image; required for Fargate to pull it.'
+    required: false
+    default: ''
   dry_run:
     description: 'If true, only print plan and do not register/update'
     required: true
@@ -35,6 +42,8 @@ runs:
         SERVICE: ${{ inputs.service_name }}
         IMAGE: ${{ inputs.image }}
         ECR_REPO_PREFIX: ${{ inputs.ecr_repo_prefix }}
+        GHCR_REPO_PREFIX: ${{ inputs.ghcr_repo_prefix }}
+        GHCR_CREDENTIALS_ARN: ${{ inputs.ghcr_credentials_arn }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -euo pipefail
@@ -66,15 +75,33 @@ runs:
           exit 0
         fi
 
-        # Pass image and ecr_repo_prefix via env so they never appear in script/logs
-        NEW_TASK_DEF=$(echo "$TASK_DEF" | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" IMAGE="$IMAGE" python3 -c "
+        # Pass values via env so they never appear in the script text or logs
+        NEW_TASK_DEF=$(echo "$TASK_DEF" \
+          | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" \
+            GHCR_REPO_PREFIX="$GHCR_REPO_PREFIX" \
+            GHCR_CREDENTIALS_ARN="$GHCR_CREDENTIALS_ARN" \
+            IMAGE="$IMAGE" python3 -c "
         import json, sys, os
         ecr_prefix = os.environ['ECR_REPO_PREFIX']
+        ghcr_prefix = os.environ['GHCR_REPO_PREFIX']
+        ghcr_creds = os.environ.get('GHCR_CREDENTIALS_ARN', '')
         new_image = os.environ['IMAGE']
+        new_is_ghcr = new_image.startswith(ghcr_prefix)
         td = json.load(sys.stdin)
         for c in td.get('containerDefinitions', []):
-            if c.get('image', '').startswith(ecr_prefix):
+            cur = c.get('image', '')
+            # Match the app container whether it is still on ECR or already on GHCR,
+            # so this rewrite is idempotent in both directions during/after cutover.
+            if cur.startswith(ecr_prefix) or cur.startswith(ghcr_prefix):
                 c['image'] = new_image
+                if new_is_ghcr:
+                    # Private GHCR package -> Fargate needs pull credentials.
+                    if not ghcr_creds:
+                        sys.exit('GHCR image requires ghcr_credentials_arn but none was provided')
+                    c['repositoryCredentials'] = {'credentialsParameter': ghcr_creds}
+                else:
+                    # Deploying an ECR image (e.g. rollback) -> drop any GHCR creds.
+                    c.pop('repositoryCredentials', None)
         for f in [
             'taskDefinitionArn', 'revision', 'status',
             'requiresAttributes', 'compatibilities',

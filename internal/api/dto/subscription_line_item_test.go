@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCommitmentBucketRequest_Validate(t *testing.T) {
@@ -303,4 +304,70 @@ func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "commitment_overage_factor must be at least 1.0")
 	})
+}
+
+func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *testing.T) {
+	sub := &subscription.Subscription{
+		StartDate:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+	}
+
+	cases := []struct {
+		name       string
+		subPer     types.BillingPeriod
+		subCount   int
+		pricePer   types.BillingPeriod
+		priceCount int
+		wantErr    bool
+	}{
+		{"monthly-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_MONTHLY, 1, false},
+		{"quarterly-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_QUARTER, 1, false},
+		{"onetime-always-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_ONETIME, 1, false},
+		{"annual-on-quarterly-rejected", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_ANNUAL, 1, true},
+		{"halfyear-on-quarterly-rejected", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_HALF_YEAR, 1, true},
+		// Count-aware cases: 2-monthly (2mo) on quarterly (3mo) — periods look
+		// compatible (both MONTHLY-family), but effective months 3 % 2 = 1, so
+		// splitInvoicePeriodByLineItemCadence would fail at invoice time.
+		// Validation must reject this so runtime never sees it.
+		{"two-monthly-on-quarterly-rejected", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_MONTHLY, 2, true},
+		// 2-monthly on 6-month sub: 6 % 2 = 0 → allowed.
+		{"two-monthly-on-halfyear-ok", types.BILLING_PERIOD_HALF_YEAR, 1, types.BILLING_PERIOD_MONTHLY, 2, false},
+		// Sub count > 1: monthly on 2-monthly sub → 2 % 1 = 0 → allowed.
+		{"monthly-on-two-monthly-sub-ok", types.BILLING_PERIOD_MONTHLY, 2, types.BILLING_PERIOD_MONTHLY, 1, false},
+		// Zero counts default to 1: quarterly (period=QUARTER, count=0→1) with
+		// monthly price (period=MONTHLY, count=0→1) → 3 % 1 = 0 → allowed.
+		{"zero-counts-default-to-one", types.BILLING_PERIOD_QUARTER, 0, types.BILLING_PERIOD_MONTHLY, 0, false},
+		// Same BillingPeriod, incompatible counts: MONTHLY×3 (3mo) sub vs
+		// MONTHLY×2 (2mo) price. 3 % 2 = 1 → not a divisor. Must be rejected —
+		// the same-BillingPeriod fast path only accepts identical counts.
+		{"same-period-incompatible-counts-rejected", types.BILLING_PERIOD_MONTHLY, 3, types.BILLING_PERIOD_MONTHLY, 2, true},
+		// Same BillingPeriod, price divides sub: MONTHLY×6 (6mo) sub vs
+		// MONTHLY×2 (2mo) price. 6 % 2 = 0 → allowed (fan-out into 3 sub-windows).
+		{"same-period-price-divides-sub-ok", types.BILLING_PERIOD_MONTHLY, 6, types.BILLING_PERIOD_MONTHLY, 2, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &subscription.Subscription{
+				StartDate:          sub.StartDate,
+				BillingPeriod:      tc.subPer,
+				BillingPeriodCount: tc.subCount,
+			}
+			linePrice := &price.Price{
+				BillingPeriod:      tc.pricePer,
+				BillingPeriodCount: tc.priceCount,
+			}
+			req := &CreateSubscriptionLineItemRequest{
+				PriceID:  "price_test",
+				Quantity: decimal.NewFromInt(1),
+			}
+			err := req.Validate(linePrice, s)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

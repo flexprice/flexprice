@@ -127,12 +127,19 @@ type Invoice struct {
 	// total_tax is the sum of all taxes combined at the invoice level.
 	TotalTax decimal.Decimal `json:"total_tax" swaggertype:"string"`
 
+	// tax_exemption_reason_code is why no tax was charged; null only when tax was actually charged.
+	TaxExemptionReasonCode *types.TaxExemptionReasonCode `json:"tax_exemption_reason_code,omitempty"`
+
 	// total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.
 	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied" swaggertype:"string"`
 
 	// recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.
 	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+
+	// is_manually_edited is true once a user has manually added, edited, or removed a line item on this draft invoice.
+	// Once set, automated recomputation of this invoice's line items must no-op rather than overwrite the manual edit.
+	IsManuallyEdited bool `json:"is_manually_edited"`
 
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
@@ -179,6 +186,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
 		TotalTax:               lo.FromPtrOr(e.TotalTax, decimal.Zero),
+		TaxExemptionReasonCode: e.TaxExemptionReasonCode,
 		AmountRemaining:        e.AmountRemaining,
 		AdjustmentAmount:       e.AdjustmentAmount,
 		RefundedAmount:         e.RefundedAmount,
@@ -205,6 +213,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Version:                    e.Version,
 		EnvironmentID:              e.EnvironmentID,
 		RecalculatedInvoiceID:      e.RecalculatedInvoiceID,
+		IsManuallyEdited:           e.IsManuallyEdited,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

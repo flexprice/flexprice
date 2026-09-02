@@ -1,0 +1,28 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.provider "gce") }}
+# Google-managed TLS certificate for the GCE ingress.
+#
+# Replaces cert-manager on this path: Google issues and auto-renews. Validation
+# is performed over HTTP against the load balancer, which inverts the usual
+# order of operations — the DNS A record must already point at the ingress's
+# static IP BEFORE the certificate can go Active, and the record must be
+# DNS-only (not proxied) or the HTTP validation fails.
+#
+# Provisioning typically takes 15-60 minutes. Wildcards are NOT supported;
+# every host needs an explicit entry.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api-cert
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  domains:
+    {{- $domains := .Values.ingress.gce.managedCertificate.domains }}
+    {{- if $domains }}
+    {{- toYaml $domains | nindent 4 }}
+    {{- else }}
+    {{- range .Values.ingress.hosts }}
+    - {{ .host | quote }}
+    {{- end }}
+    {{- end }}
+{{- end }}

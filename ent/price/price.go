@@ -72,6 +72,8 @@ const (
 	FieldFilterValues = "filter_values"
 	// FieldTierMode holds the string denoting the tier_mode field in the database.
 	FieldTierMode = "tier_mode"
+	// FieldBucketSize holds the string denoting the bucket_size field in the database.
+	FieldBucketSize = "bucket_size"
 	// FieldTiers holds the string denoting the tiers field in the database.
 	FieldTiers = "tiers"
 	// FieldPriceUnitTiers holds the string denoting the price_unit_tiers field in the database.
@@ -151,6 +153,7 @@ var Columns = []string{
 	FieldMeterID,
 	FieldFilterValues,
 	FieldTierMode,
+	FieldBucketSize,
 	FieldTiers,
 	FieldPriceUnitTiers,
 	FieldTransformQuantity,
@@ -370,6 +373,11 @@ func ByMeterID(opts ...sql.OrderTermOption) OrderOption {
 // ByTierMode orders the results by the tier_mode field.
 func ByTierMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTierMode, opts...).ToFunc()
+}
+
+// ByBucketSize orders the results by the bucket_size field.
+func ByBucketSize(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBucketSize, opts...).ToFunc()
 }
 
 // ByLookupKey orders the results by the lookup_key field.

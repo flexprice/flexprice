@@ -37,7 +37,6 @@ import (
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
-	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/tabs"
@@ -47,6 +46,9 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/gcsbackend"
+	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -70,9 +72,6 @@ type Factory struct {
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
 	locker                       cache.Locker
-
-	// Storage clients (cached for reuse)
-	s3Client *s3.Client
 
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
@@ -147,12 +146,15 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.logger,
 	)
 
+	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.logger)
+
 	// Create invoice sync service first
 	invoiceSyncSvc := stripe.NewInvoiceSyncService(
 		stripeClient,
 		customerSvc,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
+		priceSyncSvc,
 		f.logger,
 	)
 
@@ -161,6 +163,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		stripeClient,
 		customerSvc,
 		invoiceSyncSvc,
+		priceSyncSvc,
 		f.invoiceRepo,
 		f.paymentRepo,
 		f.logger,
@@ -230,6 +233,7 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		f.customerRepo,
 		f.subscriptionRepo,
 		f.priceRepo,
+		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
 
@@ -301,6 +305,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		razorpayClient,
 		paymentSvc,
 		f.entityIntegrationMappingRepo,
+		f.lifecycle,
 		f.logger,
 	)
 
@@ -310,6 +315,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		PaymentSvc:     paymentSvc,
 		InvoiceSyncSvc: invoiceSyncSvc,
 		WebhookHandler: webhookHandler,
+		Lifecycle:      f.lifecycle,
 	}, nil
 }
 
@@ -369,15 +375,19 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		Logger:                       f.logger,
 	})
 
+	paymentSvc := chargebee.NewPaymentService(chargebeeClient, f.locker, f.logger)
+
 	// Create webhook handler
 	webhookHandler := chargebeewebhook.NewHandler(
 		chargebeeClient,
 		invoiceSvc.(*chargebee.InvoiceService),
+		paymentSvc,
 		f.logger,
 	)
 
 	return &ChargebeeIntegration{
 		Client:         chargebeeClient,
+		PaymentSvc:     paymentSvc,
 		ItemFamilySvc:  itemFamilySvc,
 		ItemSvc:        itemSvc,
 		ItemPriceSvc:   itemPriceSvc,
@@ -675,6 +685,7 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		taxSvc,
 		f.customerRepo,
 		f.invoiceRepo,
+		f.priceRepo,
 		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
@@ -843,6 +854,7 @@ type RazorpayIntegration struct {
 	PaymentSvc     *razorpay.PaymentService
 	InvoiceSyncSvc *razorpay.InvoiceSyncService
 	WebhookHandler *razorpaywebhook.Handler
+	Lifecycle      *payments.PaymentLifecycle
 }
 
 func (r *RazorpayIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
@@ -857,6 +869,7 @@ type ChargebeeIntegration struct {
 	ItemPriceSvc   chargebee.ChargebeeItemPriceService
 	CustomerSvc    chargebee.ChargebeeCustomerService
 	InvoiceSvc     chargebee.ChargebeeInvoiceService
+	PaymentSvc     *chargebee.PaymentService
 	PlanSyncSvc    chargebee.ChargebeePlanSyncService
 	WebhookHandler *chargebeewebhook.Handler
 }
@@ -1334,32 +1347,169 @@ func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasTabsConnection(ctx)
 }
 
-// GetStorageProvider returns an S3 storage client for the given connection
-// Currently only S3 is supported. In the future, Azure Blob Storage, Google Cloud Storage,
-// and other providers can be added by checking the connection's provider type.
-func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (storage.Storage, error) {
+	if connectionID == "" {
+		return nil, ierr.NewError("connection ID is required for storage").
+			WithHint("Provide a connection_id; multiple storage connections are supported per environment").
+			Mark(ierr.ErrValidation)
 	}
 
-	return f.s3Client, nil
+	conn, err := f.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
-// GetS3Client returns the S3 client directly (for backward compatibility)
-// Deprecated: Use GetStorageProvider instead for future-proof code
-func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+// Validates config before persisting.
+func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	if conn == nil {
+		return nil, ierr.NewError("connection is required for storage").
+			Mark(ierr.ErrValidation)
 	}
-	return f.s3Client, nil
+
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		return f.buildS3Storage(ctx, conn)
+	case types.SecretProviderGCS:
+		return f.buildGCSStorage(ctx, conn)
+	default:
+		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
+			WithHint("Supported storage provider types: s3, gcs").
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Credentials from platform config; bucket from row.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
+			return nil, err
+		}
+
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceS3Exports.Bucket
+		}
+		region := jobConfig.Region
+		if region == "" {
+			region = f.config.FlexpriceS3Exports.Region
+		}
+
+		s3Cfg := &s3backend.Config{
+			Bucket:            bucket,
+			Region:            region,
+			CompressionGzip:   jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt: string(jobConfig.Encryption),
+		}
+
+		switch f.config.FlexpriceS3Exports.ResolvedCredentialSource() {
+		case config.CredentialSourceStatic:
+			s3Cfg.AWSAccessKeyID = f.config.FlexpriceS3Exports.AWSAccessKeyID
+			s3Cfg.AWSSecretAccessKey = f.config.FlexpriceS3Exports.AWSSecretAccessKey
+			s3Cfg.AWSSessionToken = f.config.FlexpriceS3Exports.AWSSessionToken
+		case config.CredentialSourceAmbient:
+			// Uses AWS default chain.
+		default:
+			// Reject rather than silently fall through to the ambient chain.
+			return nil, ierr.NewError("unsupported managed S3 credential source").
+				WithHint("flexprice_s3_exports.credential_source must be 'static' or 'ambient'; federation is not wired").
+				Mark(ierr.ErrValidation)
+		}
+
+		return s3backend.New(ctx, s3Cfg, f.logger)
+	}
+
+	if conn.EncryptedSecretData.S3 == nil {
+		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
+	}
+
+	accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
+	}
+	secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
+	}
+	if accessKey == "" || secretKey == "" {
+		return nil, ierr.NewError("empty S3 credentials on connection").
+			WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
+			Mark(ierr.ErrValidation)
+	}
+	var sessionToken string
+	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
+		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+		}
+	}
+
+	return s3backend.New(ctx, &s3backend.Config{
+		Bucket:             jobConfig.Bucket,
+		Region:             jobConfig.Region,
+		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
+		ServerSideEncrypt:  string(jobConfig.Encryption),
+		AWSAccessKeyID:     accessKey,
+		AWSSecretAccessKey: secretKey,
+		AWSSessionToken:    sessionToken,
+	}, f.logger)
+}
+
+func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Managed GCS uses ambient Workload Identity.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
+			return nil, err
+		}
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceGCSExports.Bucket
+		}
+		return gcsbackend.New(ctx, &gcsbackend.Config{
+			Bucket:                    bucket,
+			CompressionGzip:           jobConfig.Compression == types.S3CompressionTypeGzip,
+			SignerServiceAccountEmail: f.config.FlexpriceGCSExports.SignerServiceAccountEmail,
+		}, f.logger)
+	}
+
+	return nil, ierr.NewError("GCS BYOB connections are not supported").
+		WithHint("Customer-provided GCS credentials are not supported; use Flexprice-managed GCS exports instead").
+		Mark(ierr.ErrValidation)
+}
+
+// GetPaymentMethodProvider returns the PaymentMethodProvider adapter for the given
+// gateway. ErrNotImplemented means the provider cannot manage saved methods at all
+// — the permanent answer for Razorpay, whose tokens need a mandate — and callers
+// must treat it as a capability answer rather than a failure.
+func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.PaymentGatewayType, customerSvc interfaces.CustomerService) (interfaces.PaymentMethodProvider, error) {
+	switch gateway {
+	case types.PaymentGatewayTypeChargebee:
+		i, err := f.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &chargebee.PaymentMethodAdapter{
+			Client:      i.Client,
+			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
+			Logger:      f.logger,
+		}, nil
+	default:
+		return nil, ierr.NewError("saved payment methods are not supported for this provider").
+			WithHintf("%s cannot manage saved payment methods", gateway).
+			Mark(ierr.ErrNotImplemented)
+	}
 }
 
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
@@ -1372,6 +1522,17 @@ func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.Checko
 			return nil, err
 		}
 		return &razorpay.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
+	case types.CheckoutPaymentProviderChargebee:
+		i, err := f.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &chargebee.CheckoutAdapter{
+			Client:      i.Client,
+			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
+			InvoiceSvc:  i.InvoiceSvc.(*chargebee.InvoiceService),
+			Logger:      f.logger,
+		}, nil
 	default:
 		return nil, ierr.NewError("payment provider not supported for checkout").
 			WithHintf("%s does not support hosted checkout sessions", provider).

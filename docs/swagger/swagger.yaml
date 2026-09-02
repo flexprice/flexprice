@@ -154,6 +154,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListUsageRecordsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/UsageRecordResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListUsersResponse:
     properties:
       items:
@@ -183,6 +192,8 @@ definitions:
     type: object
   checkout.JSONBCheckoutConfiguration:
     properties:
+      add_addon_params:
+        $ref: '#/definitions/types.AddAddonParams'
       create_subscription_params:
         $ref: '#/definitions/types.CreateSubscriptionParams'
       modify_subscription_params:
@@ -437,6 +448,8 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.AddonCadence'
+      checkout:
+        $ref: '#/definitions/CheckoutParams'
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
@@ -489,6 +502,48 @@ definitions:
         type: string
     required:
     - addon_id
+    type: object
+  AddAddonToSubscriptionResponse:
+    properties:
+      addon_id:
+        type: string
+      addon_status:
+        $ref: '#/definitions/types.AddonStatus'
+      cancellation_reason:
+        type: string
+      cancelled_at:
+        type: string
+      checkout_session:
+        $ref: '#/definitions/CheckoutSessionResponse'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      end_date:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AddonAssociationEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice:
+        $ref: '#/definitions/InvoiceResponse'
+      metadata:
+        additionalProperties: true
+        type: object
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   AddonAssociationResponse:
     properties:
@@ -774,6 +829,17 @@ definitions:
       period_start:
         description: period_start is the start of the new billing period
         type: string
+    type: object
+  BillingPeriodConfig:
+    properties:
+      billing_anchor:
+        type: string
+      billing_cycle:
+        $ref: '#/definitions/types.BillingCycle'
+      billing_period_count:
+        type: integer
+      billing_period_unit:
+        $ref: '#/definitions/types.BillingPeriod'
     type: object
   BillingPeriodInfo:
     properties:
@@ -1891,6 +1957,11 @@ definitions:
         items:
           $ref: '#/definitions/TaxRateOverride'
         type: array
+      tax_treatment:
+        allOf:
+        - $ref: '#/definitions/types.TaxTreatment'
+        description: tax_treatment is the customer's tax treatment. Defaults to "taxable"
+          if not provided.
       timezone:
         description: |-
           timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata", "America/New_York")
@@ -1917,6 +1988,8 @@ definitions:
         type: string
       feature_type:
         $ref: '#/definitions/types.FeatureType'
+      grant_allocation_behavior:
+        $ref: '#/definitions/types.EntitlementGrantAllocationBehavior'
       grant_duration_unit:
         $ref: '#/definitions/types.EntitlementGrantDurationUnit'
       grant_duration_value:
@@ -2215,12 +2288,6 @@ definitions:
       period_start:
         description: period_start is the start date of the billing period
         type: string
-      prepared_tax_rates:
-        description: prepared_tax_rates contains the tax rates pre-resolved by the
-          caller (e.g., billing service)
-        items:
-          $ref: '#/definitions/TaxRateResponse'
-        type: array
       subscription_id:
         description: subscription_id is the optional unique identifier of the subscription
           associated with this invoice
@@ -2288,6 +2355,8 @@ definitions:
         type: string
       destination_type:
         $ref: '#/definitions/types.PaymentDestinationType'
+      gateway_options:
+        $ref: '#/definitions/PaymentGatewayOptions'
       idempotency_key:
         type: string
       metadata:
@@ -2339,6 +2408,14 @@ definitions:
       billing_period_count:
         default: 1
         type: integer
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the meter's aggregation for this price. The meter
+          aggregates within each window and the window results are summed, so the
+          billable unit becomes per-window (e.g. seats -> seat-hours). Valid only on
+          USAGE prices whose meter aggregates MAX or SUM.
       currency:
         type: string
       description:
@@ -2563,98 +2640,84 @@ definitions:
   CreateSubscriptionRequest:
     properties:
       addons:
-        description: Addons represents addons to be added to the subscription during
-          creation
         items:
           $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
       auto_invoice_threshold:
         description: |-
-          AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
-          an intermediate invoice mid-period. Set once at creation; cannot be changed later.
-          Allowed only when the subscription resolves to type standalone (no parent hierarchy rows).
-          Plan line items must be usage-based only (no fixed or other non-usage plan prices).
-          Nil means auto invoice threshold billing is disabled for this subscription.
+          AutoInvoiceThreshold triggers a mid-period invoice when usage (in subscription currency) exceeds this amount.
+          Standalone subscriptions only; all plan prices must be usage-based. Immutable after creation.
         type: string
       billing_anchor:
         description: |-
-          BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
-          For monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date
-          is before that day in the month, the first billing period ends on the next occurrence of that
-          day in the same month (a shorter first period); subsequent periods follow the usual interval.
+          BillingAnchor overrides the derived anchor for anniversary billing. For monthly billing,
+          the day-of-month defines cycle boundaries (shorter first period if start is before that day).
         type: string
       billing_cycle:
         allOf:
         - $ref: '#/definitions/types.BillingCycle'
         description: |-
-          BillingCycle is the cycle of the billing anchor.
-          This is used to determine the billing date for the subscription (i.e set the billing anchor)
-          If not set, the default value is anniversary. Possible values are anniversary and calendar.
-          Anniversary billing means the billing anchor will be the start date of the subscription.
-          Calendar billing means the billing anchor will be the appropriate date based on the billing period.
-          For example, if the billing period is month and the start date is 2025-04-15 then in case of
-          calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
+          BillingCycle controls the billing anchor. anniversary = start_date; calendar = period boundary
+          (e.g. monthly with start 2025-04-15 → calendar anchor is 2025-05-01).
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
         default: 1
         type: integer
+      checkout:
+        $ref: '#/definitions/CheckoutParams'
       collection_method:
-        allOf:
-        - $ref: '#/definitions/types.CollectionMethod'
-        description: |-
-          collection_method determines how invoices are collected
-          "default_incomplete" - subscription waits for payment confirmation before activation
-          "send_invoice" - subscription activates immediately, invoice is sent for payment
+        $ref: '#/definitions/types.CollectionMethod'
       commitment_amount:
-        description: CommitmentAmount is the minimum amount a customer commits to
-          paying for a billing period
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration is the time frame of the commitment (e.g.,
-          ANNUAL commitment on MONTHLY billing)
+        description: CommitmentDuration allows a different commitment period than
+          billing (e.g. ANNUAL on MONTHLY).
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
           type: string
         type: array
       credit_grants:
-        description: Credit grants to be applied when subscription is created
         items:
           $ref: '#/definitions/CreateCreditGrantRequest'
         type: array
       currency:
         type: string
       customer_id:
-        description: |-
-          customer_id is the flexprice customer id
-          and it is prioritized over external_customer_id in case both are provided.
+        description: CustomerID takes priority over ExternalCustomerID when both are
+          provided.
         type: string
       enable_true_up:
-        description: Enable Commitment True Up Fee
         type: boolean
       end_date:
         type: string
       external_customer_id:
-        description: |-
-          external_customer_id is the customer id in your DB
-          and must be same as what you provided as external_id while creating the customer in flexprice.
         type: string
       gateway_payment_method_id:
         type: string
+      include_price_ids:
+        description: |-
+          IncludePriceIDs selects which plan prices to attach. Nil/omitted attaches matching-cadence
+          prices plus ONETIME; [] attaches none (LineItems extras still apply); a non-empty list
+          attaches only those IDs. Each listed ID must belong to the plan, match the subscription
+          currency, and have a cadence that equals or strictly divides the subscription cadence.
+          Pointer-slice distinguishes nil from [].
+        items:
+          type: string
+        type: array
       inheritance:
         allOf:
         - $ref: '#/definitions/SubscriptionInheritanceConfig'
-        description: |-
-          Inheritance groups all customer-hierarchy fields.
-          When provided with at least one child ID, the subscription becomes a PARENT type.
+        description: Inheritance groups customer-hierarchy fields; providing child
+          IDs makes this a PARENT subscription.
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments allows setting commitment configuration per
-          line item (keyed by price_id)
+        description: LineItemCommitments sets per-line-item commitment config, keyed
+          by price_id.
         type: object
       line_item_coupons:
         additionalProperties:
@@ -2664,8 +2727,7 @@ definitions:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
-        description: LineItems are extra line items to add at creation (each with
-          price_id or price), in addition to plan prices
+        description: LineItems are extra (non-plan) line items added at creation.
         items:
           $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
@@ -2676,33 +2738,21 @@ definitions:
           type: string
         type: object
       overage_factor:
-        description: OverageFactor is a multiplier applied to usage beyond the commitment
-          amount
         type: string
       override_entitlements:
-        description: OverrideEntitlements allows customizing specific entitlements
-          for this subscription
         items:
           $ref: '#/definitions/OverrideEntitlementRequest'
         type: array
       override_line_items:
-        description: OverrideLineItems allows customizing specific prices for this
-          subscription
+        description: OverrideLineItems overrides specific plan prices for this subscription.
         items:
           $ref: '#/definitions/OverrideLineItemRequest'
         type: array
       payment_behavior:
-        allOf:
-        - $ref: '#/definitions/types.PaymentBehavior'
-        description: Payment behavior configuration
+        $ref: '#/definitions/types.PaymentBehavior'
       payment_terms:
-        allOf:
-        - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        $ref: '#/definitions/types.PaymentTerms'
       phases:
-        description: Phases represents subscription phases to be created with the
-          subscription
         items:
           $ref: '#/definitions/SubscriptionPhaseCreateRequest'
         type: array
@@ -2711,12 +2761,8 @@ definitions:
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
-        description: |-
-          ProrationBehavior controls how proration is handled.
-          If not set, the default value is none. Possible values are create_prorations and none.
-          create_prorations means the proration will be calculated and applied.
-          none means the proration will not be calculated.
-          This is IGNORED when the billing cycle is anniversary.
+        description: 'ProrationBehavior: create_prorations or none (default). Ignored
+          for anniversary billing.'
       start_date:
         type: string
       subscription_coupons:
@@ -2729,24 +2775,17 @@ definitions:
       subscription_status:
         allOf:
         - $ref: '#/definitions/types.SubscriptionStatus'
-        description: |-
-          SubscriptionStatus determines the initial status of the subscription
-          If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
+        description: 'SubscriptionStatus: set to "draft" to skip invoice creation
+          and payment on create.'
       tax_rate_overrides:
-        description: "tax_rate_overrides is the tax rate overrides\tto be applied
-          to the subscription"
         items:
           $ref: '#/definitions/TaxRateOverride'
         type: array
       timezone:
-        description: |-
-          Timezone of the customer.
-          If not set, the default value is UTC.
         type: string
       trial_period_days:
-        description: |-
-          TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
-          0 = explicitly no trial (overrides catalog). >0 = override duration in days.
+        description: 'TrialPeriodDays: nil = inherit from plan prices, 0 = no trial,
+          >0 = override in days.'
         type: integer
     required:
     - billing_period
@@ -2759,20 +2798,23 @@ definitions:
         $ref: '#/definitions/types.EntityType'
       file_name:
         type: string
+      file_provider:
+        type: string
       file_type:
         $ref: '#/definitions/types.FileType'
-      file_url:
-        type: string
       metadata:
         additionalProperties: true
         type: object
       task_type:
         $ref: '#/definitions/types.TaskType'
+      upload_id:
+        type: string
     required:
     - entity_type
+    - file_provider
     - file_type
-    - file_url
     - task_type
+    - upload_id
     type: object
   CreateTaxAssociationRequest:
     properties:
@@ -2800,6 +2842,15 @@ definitions:
         description: StartDate sets when this association becomes active. Defaults
           to now if omitted.
         type: string
+      tax_behavior:
+        allOf:
+        - $ref: '#/definitions/types.TaxBehavior'
+        description: |-
+          TaxBehavior is inclusive or exclusive. Settable at any level. If left empty on a
+          subscription-level association, it resolves from the currency default at creation
+          time (internal/types.DefaultTaxBehaviorForCurrency) — tenant/customer-level templates
+          only need this set explicitly if the tenant wants one; otherwise it stays null and is
+          resolved when the template is copied down to a subscription.
       tax_rate_code:
         type: string
     required:
@@ -2815,10 +2866,6 @@ definitions:
         description: description is an optional text description providing details
           about the tax rate
         type: string
-      fixed_value:
-        description: fixed_value is the fixed monetary amount when tax_rate_type is
-          "fixed"
-        type: string
       metadata:
         additionalProperties:
           type: string
@@ -2829,8 +2876,7 @@ definitions:
         description: name is the human-readable name for the tax rate (required)
         type: string
       percentage_value:
-        description: percentage_value is the percentage value (0-100) when tax_rate_type
-          is "percentage"
+        description: percentage_value is the percentage value (0-100)
         type: string
       scope:
         allOf:
@@ -2839,8 +2885,8 @@ definitions:
       tax_rate_type:
         allOf:
         - $ref: '#/definitions/types.TaxRateType'
-        description: tax_rate_type determines how the tax is calculated ("percentage"
-          or "fixed")
+        description: tax_rate_type is always "percentage" — fixed-amount tax rates
+          are not supported
     required:
     - code
     - name
@@ -2972,7 +3018,7 @@ definitions:
       credit_grant_id:
         type: string
       credits:
-        type: number
+        type: string
       environment_id:
         type: string
       failure_reason:
@@ -3322,6 +3368,11 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+      tax_treatment:
+        allOf:
+        - $ref: '#/definitions/types.TaxTreatment'
+        description: TaxTreatment is the customer's tax treatment — taxable (default)
+          or exempt.
       tenant_id:
         type: string
       timezone:
@@ -3433,6 +3484,8 @@ definitions:
         type: string
       feature_type:
         $ref: '#/definitions/types.FeatureType'
+      grant_allocation_behavior:
+        $ref: '#/definitions/types.EntitlementGrantAllocationBehavior'
       grant_duration_unit:
         $ref: '#/definitions/types.EntitlementGrantDurationUnit'
       grant_duration_value:
@@ -3444,7 +3497,7 @@ definitions:
           Grant config; all-or-nothing set (see validateGrantConfig). Presence of a
           grant config turns the entitlement into a time-boxed bucket source.
       grant_quota:
-        type: number
+        type: string
       id:
         type: string
       is_enabled:
@@ -3511,6 +3564,29 @@ definitions:
     - EntitlementSourceEntityTypePlan
     - EntitlementSourceEntityTypeAddon
     - EntitlementSourceEntityTypeSubscription
+  EntityChangePolicy:
+    properties:
+      default_behaviour:
+        $ref: '#/definitions/types.EntityChangeBehaviour'
+      overrides:
+        additionalProperties:
+          $ref: '#/definitions/types.EntityChangeBehaviour'
+        description: |-
+          Overrides is keyed by addon_associations.id (instance), not catalogue addon_id.
+          That is the id an EntityChangeResult reports as EntityID.
+        type: object
+    type: object
+  EntityChangeResult:
+    properties:
+      behaviour:
+        $ref: '#/definitions/types.EntityChangeBehaviour'
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.SubscriptionChangeEntityType'
+      reference_id:
+        type: string
+    type: object
   EntityIntegrationMappingResponse:
     properties:
       created_at:
@@ -3570,6 +3646,8 @@ definitions:
     type: object
   ExecuteSubscriptionModifyRequest:
     properties:
+      addon_params:
+        $ref: '#/definitions/SubModifyAddonParams'
       checkout:
         $ref: '#/definitions/CheckoutParams'
       coupon_params:
@@ -4216,10 +4294,80 @@ definitions:
     - GroupedInvoicingActionRemove
   GroupedInvoicingChildRequest:
     properties:
+      addons:
+        items:
+          $ref: '#/definitions/AddAddonToSubscriptionRequest'
+        type: array
+      commitment_amount:
+        type: string
+      commitment_duration:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: CommitmentDuration allows a different commitment period than
+          billing (e.g. ANNUAL on MONTHLY).
+      coupons:
+        description: 'Deprecated: use SubscriptionCoupons instead.'
+        items:
+          type: string
+        type: array
+      credit_grants:
+        items:
+          $ref: '#/definitions/CreateCreditGrantRequest'
+        type: array
+      enable_true_up:
+        type: boolean
       external_customer_id:
         type: string
+      line_item_commitments:
+        additionalProperties:
+          $ref: '#/definitions/LineItemCommitmentConfig'
+        description: LineItemCommitments sets per-line-item commitment config, keyed
+          by price_id.
+        type: object
+      line_item_coupons:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        description: 'Deprecated: use SubscriptionCoupons instead.'
+        type: object
+      line_items:
+        description: LineItems are extra (non-plan) line items added at creation.
+        items:
+          $ref: '#/definitions/CreateSubscriptionLineItemRequest'
+        type: array
+      overage_factor:
+        type: string
+      override_entitlements:
+        items:
+          $ref: '#/definitions/OverrideEntitlementRequest'
+        type: array
+      override_line_items:
+        description: OverrideLineItems overrides specific plan prices for this subscription.
+        items:
+          $ref: '#/definitions/OverrideLineItemRequest'
+        type: array
+      phases:
+        items:
+          $ref: '#/definitions/SubscriptionPhaseCreateRequest'
+        type: array
       plan_id:
         type: string
+      subscription_coupons:
+        description: |-
+          SubscriptionCoupons is the preferred way to attach coupons at creation.
+          Accepts coupon_code; optionally targets a line item via price_id.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
+      tax_rate_overrides:
+        items:
+          $ref: '#/definitions/TaxRateOverride'
+        type: array
+      trial_period_days:
+        description: 'TrialPeriodDays: nil = inherit from plan prices, 0 = no trial,
+          >0 = override in days.'
+        type: integer
     required:
     - external_customer_id
     - plan_id
@@ -4299,6 +4447,8 @@ definitions:
       line_item_id:
         description: price_id used to match the line item
         type: string
+      subscription_line_item_id:
+        type: string
     required:
     - coupon_id
     - line_item_id
@@ -4371,6 +4521,11 @@ definitions:
       meter_display_name:
         type: string
       meter_id:
+        type: string
+      parent_line_item_id:
+        description: |-
+          parent_line_item_id links this line item to the line item it replaced, if it was created by editing
+          an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
         type: string
       period_end:
         type: string
@@ -4536,6 +4691,11 @@ definitions:
         - $ref: '#/definitions/types.InvoiceType'
         description: invoice_type indicates the type of invoice - whether this is
           a subscription invoice, one-time charge, or other billing type
+      is_manually_edited:
+        description: |-
+          is_manually_edited is true once a user has manually added, edited, or removed a line item on this draft invoice.
+          Once set, automated recomputation of this invoice's line items must no-op rather than overwrite the manual edit.
+        type: boolean
       issue_date:
         description: issue_date is the user-facing date of the invoice. Defaults to
           created_at if not set.
@@ -4605,6 +4765,17 @@ definitions:
         description: subtotal is the sum of all line items before any taxes, discounts,
           or additional fees
         type: string
+      tax_exemption_reason_code:
+        allOf:
+        - $ref: '#/definitions/types.TaxExemptionReasonCode'
+        description: tax_exemption_reason_code is why no tax was charged; null only
+          when tax was actually charged.
+      tax_summary:
+        allOf:
+        - $ref: '#/definitions/TaxSummary'
+        description: |-
+          tax_summary breaks total_tax down by behavior and states why no tax was charged, when
+          none was. Set by WithTaxes once Taxes and TaxExemptionReasonCode are both known.
       taxes:
         description: tax_applied_records contains the tax applied records associated
           with this invoice
@@ -4641,42 +4812,32 @@ definitions:
   LineItemCommitmentConfig:
     properties:
       commitment_amount:
-        description: CommitmentAmount is the minimum amount committed for this line
-          item
         type: number
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration is the time frame of the commitment (e.g.,
-          ANNUAL commitment on MONTHLY billing)
+        description: CommitmentDuration allows a different period than billing (e.g.
+          ANNUAL commitment on MONTHLY billing).
       commitment_quantity:
-        description: CommitmentQuantity is the minimum quantity committed for this
-          line item
         type: number
       commitment_time_buckets:
-        description: |-
-          CommitmentTimeBuckets defines per-bucket commitment + inline price for
-          windows whose start UTC hour falls within each configured bucket. Each
-          bucket carries its own price (materialized by the service). Requires
-          IsWindowCommitment=true.
+        description: CommitmentTimeBuckets scopes commitment to specific UTC-hour
+          windows; requires IsWindowCommitment=true.
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_type:
-        allOf:
-        - $ref: '#/definitions/types.CommitmentType'
-        description: CommitmentType specifies whether commitment is based on amount
-          or quantity
+        $ref: '#/definitions/types.CommitmentType'
       enable_true_up:
-        description: EnableTrueUp determines if true-up fee should be applied when
-          usage is below commitment
+        description: EnableTrueUp charges the shortfall when usage is below commitment.
         type: boolean
       is_window_commitment:
-        description: IsWindowCommitment determines if commitment is applied per window
-          (e.g., per day) rather than per billing period
+        description: IsWindowCommitment applies commitment per window (e.g. per day)
+          rather than per billing period.
         type: boolean
       overage_factor:
-        description: OverageFactor is a multiplier applied to usage beyond the commitment
+        description: OverageFactor is a multiplier on usage beyond commitment; 1.0
+          = base rate.
         type: number
     type: object
   LineItemQuantityChange:
@@ -4779,6 +4940,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/TaskResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListTaxRatesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/TaxRateResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -4905,6 +5075,12 @@ definitions:
         type: string
       billing_model:
         $ref: '#/definitions/types.BillingModel'
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize overrides the windowing used to turn this meter's usage into
+          billable units for this subscription. See CreatePriceRequest.BucketSize.
       price_id:
         description: PriceID references the plan price to override
         type: string
@@ -4960,6 +5136,11 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  PaymentGatewayOptions:
+    properties:
+      stripe:
+        $ref: '#/definitions/StripePaymentGatewayOptions'
     type: object
   PaymentResponse:
     properties:
@@ -5026,6 +5207,15 @@ definitions:
       voided_at:
         type: string
     type: object
+  PlanPriceSyncStatusResponse:
+    properties:
+      current_sequence:
+        type: integer
+      synced:
+        type: boolean
+      unsynced_subscription_count:
+        type: integer
+    type: object
   PlanResponse:
     properties:
       created_at:
@@ -5054,6 +5244,14 @@ definitions:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
+      price_sync_status:
+        allOf:
+        - $ref: '#/definitions/PlanPriceSyncStatusResponse'
+        description: |-
+          PriceSyncStatus reports how many subscriptions are still behind this
+          plan's current price sequence. Only populated on the list/search
+          endpoint (GetPlans) when `expand=price_sync_status` is requested,
+          since computing it is extra per-plan work most callers don't need.
       prices:
         description: 'TODO: Add inline addons'
         items:
@@ -5090,6 +5288,11 @@ definitions:
       price_id:
         type: string
     type: object
+  PriceFeatureResponse:
+    properties:
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
+    type: object
   PriceLookupResult:
     properties:
       error:
@@ -5121,6 +5324,14 @@ definitions:
         description: BillingPeriodCount is the count of the billing period ex 1, 3,
           6, 12
         type: integer
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the meter's aggregation for this price: the meter
+          aggregates within each window and the window results are summed. Empty
+          means unbucketed. Only valid on USAGE prices whose meter aggregates MAX
+          or SUM. Resolved through ResolveBucketSize, never read directly.
       conversion_rate:
         description: ConversionRate is the conversion rate of the price unit to the
           fiat currency
@@ -5160,6 +5371,8 @@ definitions:
       environment_id:
         description: EnvironmentID is the environment identifier for the price
         type: string
+      feature:
+        $ref: '#/definitions/PriceFeatureResponse'
       group:
         $ref: '#/definitions/GroupResponse'
       group_id:
@@ -5391,11 +5604,8 @@ definitions:
       addon_association_id:
         type: string
       effective_date:
-        description: |-
-          EffectiveDate is the date the cancellation takes effect.
-          When nil the addon is cancelled at the end of the current period.
-          When provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period
-          values combined with create_prorations will issue a wallet credit for unused time.
+        description: EffectiveDate defaults to period end when nil; mid-period with
+          create_prorations issues a wallet credit.
         type: string
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
@@ -5491,6 +5701,24 @@ definitions:
         description: usage is the total usage amount from this source (optional, for
           additional context)
         type: string
+    type: object
+  StripePaymentGatewayOptions:
+    properties:
+      tax_id_collection_enabled:
+        description: TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout
+          Sessions.
+        type: boolean
+    type: object
+  SubModifyAddonParams:
+    properties:
+      action:
+        $ref: '#/definitions/SubscriptionModificationAction'
+      add:
+        $ref: '#/definitions/AddAddonToSubscriptionRequest'
+      remove:
+        $ref: '#/definitions/RemoveAddonRequest'
+    required:
+    - action
     type: object
   SubModifyCouponAction:
     enum:
@@ -5615,6 +5843,32 @@ definitions:
         type: string
     required:
     - action
+    type: object
+  SubscriptionChangeBillingPeriodResult:
+    properties:
+      behaviour:
+        $ref: '#/definitions/types.BillingPeriodBehaviour'
+      billing_anchor:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+    type: object
+  SubscriptionChangeConflictPolicies:
+    properties:
+      on_pending_schedule:
+        allOf:
+        - $ref: '#/definitions/types.OnPendingSchedulePolicy'
+        description: |-
+          OnPendingSchedule applies to a queued plan change only. A pending cancellation
+          or pause is still rejected outright: clearing those would mean un-cancelling or
+          auto-resuming the subscription.
+    type: object
+  SubscriptionChangeEntityPolicies:
+    properties:
+      addons:
+        $ref: '#/definitions/EntityChangePolicy'
     type: object
   SubscriptionChangeExecuteResponse:
     description: Response after successfully executing a subscription plan change
@@ -5765,23 +6019,94 @@ definitions:
     - proration_behavior
     - target_plan_id
     type: object
+  SubscriptionChangeV2Request:
+    properties:
+      billing_period_behaviour:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriodBehaviour'
+        description: |-
+          BillingPeriodBehaviour controls the billing anchor. Omitted means "unchanged":
+          the swap is priced as a prorated delta inside the running period.
+      billing_period_config:
+        $ref: '#/definitions/BillingPeriodConfig'
+      change_at:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleType'
+        description: |-
+          ChangeAt controls when the change takes effect. nil or "immediate" applies
+          it now; "end_of_period" schedules it at the subscription's current period end.
+      entity_policies:
+        $ref: '#/definitions/SubscriptionChangeEntityPolicies'
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      on_conflict_policies:
+        $ref: '#/definitions/SubscriptionChangeConflictPolicies'
+      proration_behavior:
+        $ref: '#/definitions/types.ProrationBehavior'
+      target_plan_id:
+        type: string
+    required:
+    - proration_behavior
+    - target_plan_id
+    type: object
+  SubscriptionChangeV2Response:
+    properties:
+      billing_period:
+        $ref: '#/definitions/SubscriptionChangeBillingPeriodResult'
+      change_type:
+        $ref: '#/definitions/types.SubscriptionChangeType'
+      changed_resources:
+        $ref: '#/definitions/ChangedResources'
+      effective_at:
+        type: string
+      entity_changes:
+        items:
+          $ref: '#/definitions/EntityChangeResult'
+        type: array
+      from_plan:
+        $ref: '#/definitions/PlanSummary'
+      is_scheduled:
+        description: |-
+          IsScheduled is true when the change was deferred to the period end instead
+          of being applied immediately.
+        type: boolean
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      schedule_id:
+        type: string
+      scheduled_at:
+        type: string
+      subscription:
+        $ref: '#/definitions/SubscriptionResponse'
+      superseded_schedules:
+        description: |-
+          SupersededSchedules lists the plan-change schedules this request cancelled under
+          on_conflict_policies.on_pending_schedule. Preview reports what execute would cancel.
+        items:
+          type: string
+        type: array
+      to_plan:
+        $ref: '#/definitions/PlanSummary'
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
   SubscriptionCouponInput:
     properties:
       coupon_code:
-        description: CouponCode is the coupon's human-readable code (case-insensitive).
-          Required.
         type: string
       end_date:
-        description: EndDate is when the coupon ends; overrides duration_in_periods
-          calculation.
         type: string
       price_id:
-        description: PriceID is the price ID of the line item to target; omit for
-          subscription-level.
         type: string
       start_date:
-        description: StartDate is when the coupon starts; defaults to subscription/phase
-          StartDate.
         type: string
     required:
     - coupon_code
@@ -5800,32 +6125,26 @@ definitions:
   SubscriptionInheritanceConfig:
     properties:
       external_customer_ids_to_inherit_subscription:
-        description: |-
-          ExternalCustomerIDsToInheritSubscription: child customer external IDs for which
-          inherited skeleton subscriptions will be created. Only valid for parent behavior.
+        description: ExternalCustomerIDsToInheritSubscription creates inherited skeleton
+          subscriptions for child customers. Parent only.
         items:
           type: string
         type: array
       grouped_invoicing_children_to_create:
-        description: grouped_invoicing_children_to_create creates new grouped_invoicing
-          children under this parent
         items:
           $ref: '#/definitions/GroupedInvoicingChildRequest'
         type: array
       invoicing_customer_external_id:
-        description: |-
-          InvoicingCustomerExternalID sets a different billing recipient (external ID).
-          Required for delegated; rejected for inherited; optional for others.
+        description: InvoicingCustomerExternalID routes invoices to a different customer.
+          Required for delegated; rejected for inherited.
         type: string
       parent_subscription_id:
-        description: |-
-          ParentSubscriptionID links this subscription to an existing parent.
-          Required for inherited and grouped_invoicing; rejected for standalone, delegated, parent.
+        description: ParentSubscriptionID links to an existing parent. Required for
+          inherited/grouped_invoicing; rejected for standalone/delegated/parent.
         type: string
       subscriptions_ids_for_grouped_invoicing:
-        description: |-
-          SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
-          grouped_invoicing under this parent at creation time. Only valid for parent behavior.
+        description: SubscriptionsIDsForGroupedInvoicing converts existing standalone
+          subscriptions to grouped_invoicing under this parent. Parent only.
         items:
           type: string
         type: array
@@ -5935,6 +6254,14 @@ definitions:
       updated_by:
         type: string
     type: object
+  SubscriptionModificationAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - SubscriptionModificationActionAdd
+    - SubscriptionModificationActionRemove
   SubscriptionModifyResponse:
     properties:
       changed_resources:
@@ -5961,6 +6288,7 @@ definitions:
     - trial_end
     - coupon
     - tax
+    - addon
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
@@ -5969,6 +6297,7 @@ definitions:
     - SubscriptionModifyTypeTrialEnd
     - SubscriptionModifyTypeCoupon
     - SubscriptionModifyTypeTax
+    - SubscriptionModifyTypeAddon
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -5986,9 +6315,8 @@ definitions:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
-        description: |-
-          LineItems are extra line items to add during this phase, primarily one-time charges.
-          Each item's start_date defaults to the phase's start_date when not provided.
+        description: LineItems are extra (non-plan) line items for this phase; start_date
+          defaults to phase start.
         items:
           $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
@@ -5997,9 +6325,7 @@ definitions:
           type: string
         type: object
       override_line_items:
-        description: |-
-          OverrideLineItems allows customizing specific prices for this phase
-          If not provided, phase will use the same line items as the subscription (plan prices)
+        description: OverrideLineItems overrides specific plan prices for this phase.
         items:
           $ref: '#/definitions/OverrideLineItemRequest'
         type: array
@@ -6059,6 +6385,12 @@ definitions:
         $ref: '#/definitions/types.BillingPeriod'
       billing_period_count:
         type: integer
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the meter's aggregation for this price. See
+          CreatePriceRequest.BucketSize.
       description:
         type: string
       display_name:
@@ -6156,6 +6488,8 @@ definitions:
       cancelled_at:
         description: CanceledAt is the date the subscription was canceled
         type: string
+      checkout_session:
+        $ref: '#/definitions/CheckoutSessionResponse'
       collection_method:
         description: CollectionMethod determines how invoices are collected
         type: string
@@ -6717,6 +7051,8 @@ definitions:
         type: string
       tax_association_id:
         type: string
+      tax_behavior:
+        $ref: '#/definitions/types.TaxBehavior'
       tax_rate:
         $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
@@ -6773,6 +7109,12 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+      tax_behavior:
+        allOf:
+        - $ref: '#/definitions/types.TaxBehavior'
+        description: |-
+          TaxBehavior is inclusive or exclusive; null on tenant/customer-level rows,
+          resolved when copied down to a subscription
       tax_rate:
         $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
@@ -6795,6 +7137,15 @@ definitions:
         type: object
       priority:
         type: integer
+      tax_behavior:
+        $ref: '#/definitions/types.TaxBehavior'
+    type: object
+  TaxExemptionSummary:
+    properties:
+      reason:
+        type: string
+      reason_code:
+        $ref: '#/definitions/types.TaxExemptionReasonCode'
     type: object
   TaxRateOverride:
     properties:
@@ -6809,6 +7160,8 @@ definitions:
         type: object
       priority:
         type: integer
+      tax_behavior:
+        $ref: '#/definitions/types.TaxBehavior'
       tax_rate_code:
         type: string
     required:
@@ -6826,8 +7179,6 @@ definitions:
       description:
         type: string
       environment_id:
-        type: string
-      fixed_value:
         type: string
       id:
         type: string
@@ -6852,6 +7203,17 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+    type: object
+  TaxSummary:
+    properties:
+      exclusive_tax:
+        type: string
+      exemption:
+        $ref: '#/definitions/TaxExemptionSummary'
+      inclusive_tax:
+        type: string
+      total_tax:
         type: string
     type: object
   TenantBillingDetails:
@@ -7118,6 +7480,10 @@ definitions:
       name:
         description: name is the updated name or company name for the customer
         type: string
+      tax_treatment:
+        allOf:
+        - $ref: '#/definitions/types.TaxTreatment'
+        description: tax_treatment is the updated tax treatment for the customer
       timezone:
         description: timezone is the updated IANA timezone name for the customer (e.g.
           "Asia/Kolkata", "America/New_York")
@@ -7135,6 +7501,8 @@ definitions:
       config_value:
         additionalProperties: true
         type: object
+      grant_allocation_behavior:
+        $ref: '#/definitions/types.EntitlementGrantAllocationBehavior'
       grant_duration_unit:
         $ref: '#/definitions/types.EntitlementGrantDurationUnit'
       grant_duration_value:
@@ -7181,6 +7549,10 @@ definitions:
     type: object
   UpdateInvoiceRequest:
     properties:
+      apply_discount:
+        description: When true, recalculates discount from existing coupon associations
+          (draft invoices only).
+        type: boolean
       due_date:
         type: string
       invoice_pdf_url:
@@ -7249,6 +7621,13 @@ definitions:
         type: string
       billing_model:
         $ref: '#/definitions/types.BillingModel'
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the meter's aggregation for this price. Changing it
+          changes the billable unit, so it versions the price rather than editing
+          it in place. Send "none" to remove bucketing from the successor.
       description:
         type: string
       display_name:
@@ -7346,6 +7725,12 @@ definitions:
         type: string
       billing_model:
         $ref: '#/definitions/types.BillingModel'
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize overrides the windowing used to turn this meter's usage into
+          billable units for this line item. See CreatePriceRequest.BucketSize.
       commitment_amount:
         description: Commitment fields
         type: number
@@ -7432,8 +7817,7 @@ definitions:
       tax_rate_status:
         allOf:
         - $ref: '#/definitions/types.TaxRateStatus'
-        description: tax_rate_type determines how the tax is calculated ("percentage"
-          or "fixed")
+        description: tax_rate_status is the updated status of the tax rate
     type: object
   UpdateTenantRequest:
     properties:
@@ -7454,6 +7838,35 @@ definitions:
         type: string
     type: object
   UpdateUserResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
+    type: object
+  UpdateUserRolesRequest:
+    properties:
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  UpdateUserRolesResponse:
     properties:
       email:
         description: Empty for service accounts
@@ -7660,6 +8073,49 @@ definitions:
       usage:
         description: usage is the total usage amount from this group (optional, for
           additional context)
+        type: string
+    type: object
+  UsageRecordResponse:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_external_id:
+        type: string
+      customer_id:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      plan_id:
+        type: string
+      quantity:
+        type: number
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      synced:
+        type: boolean
+      syncs:
+        additionalProperties:
+          $ref: '#/definitions/types.UsageRecordSyncEntry'
+        type: object
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
         type: string
     type: object
   UsageResult:
@@ -7967,6 +8423,15 @@ definitions:
     - ErrCodeServiceUnavailable
     - ErrCodeTooManyRequests
     - ErrCodeNotImplemented
+  errors.ErrorResponse:
+    properties:
+      code:
+        $ref: '#/definitions/errors.ErrorCode'
+      http_status_code:
+        type: integer
+      message:
+        type: string
+    type: object
   Addon:
     properties:
       created_at:
@@ -8096,6 +8561,11 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+      tax_treatment:
+        allOf:
+        - $ref: '#/definitions/types.TaxTreatment'
+        description: TaxTreatment is the customer's tax treatment — taxable (default)
+          or exempt.
       tenant_id:
         type: string
       timezone:
@@ -8183,13 +8653,675 @@ definitions:
       updated_by:
         type: string
     type: object
-  errors.ErrorResponse:
+  types.Bucket:
     properties:
-      code:
-        $ref: '#/definitions/errors.ErrorCode'
-      http_status_code:
+      hour:
+        maximum: 24
+        minimum: 0
         type: integer
+      minute:
+        maximum: 59
+        minimum: 0
+        type: integer
+    type: object
+  types.Duration:
+    enum:
+    - 3600000000000
+    properties:
+      unit:
+        $ref: '#/definitions/types.DurationUnit'
+      value:
+        type: integer
+    type: object
+    x-enum-varnames:
+    - EntitlementGrantMinDuration
+  types.Value:
+    properties:
+      array:
+        items:
+          type: string
+        type: array
+      boolean:
+        type: boolean
+      date:
+        type: string
+      number:
+        type: number
+      string:
+        type: string
+    type: object
+  group.Group:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.GroupEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  invoice.InvoiceLineItem:
+    properties:
+      adjusted_entitlement_quantity:
+        description: |-
+          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
+        type: string
+      amount:
+        type: string
+      commitment_info:
+        $ref: '#/definitions/types.CommitmentInfo'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      display_name:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice_id:
+        type: string
+      invoice_level_discount:
+        description: invoice_level_discount is the discount amount in invoice currency
+          applied to all line items on the invoice.
+        type: string
+      line_item_discount:
+        description: line_item_discount is the discount amount in invoice currency
+          applied directly to this line item.
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      meter_display_name:
+        type: string
+      meter_id:
+        type: string
+      parent_line_item_id:
+        description: |-
+          parent_line_item_id links this line item to the line item it replaced, if it was created by editing
+          an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      plan_display_name:
+        type: string
+      prepaid_credits_applied:
+        description: prepaid_credits_applied is the amount in invoice currency reduced
+          from this line item due to prepaid credits application.
+        type: string
+      price_id:
+        type: string
+      price_type:
+        type: string
+      price_unit:
+        type: string
+      price_unit_amount:
+        type: string
+      price_unit_id:
+        type: string
+      quantity:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this invoice line item to the subscription_line_item
+          that generated it.
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  meter.Aggregation:
+    properties:
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the aggregation: the meter aggregates within each window
+          and the window results are summed.
+
+          Deprecated: configure bucket_size on the price instead. Still read and
+          honoured — meters that carry it keep billing exactly as before, and new
+          meters may still set it — but a price-level bucket_size takes precedence
+          and is the only place new configuration should go. See
+          price.ResolveBucketSize.
+        x-speakeasy-deprecation-message: 'Deprecated: set bucket_size on the price
+          instead. Still honoured for existing meters.'
+      expression:
+        description: |-
+          Expression is an optional CEL expression to compute per-event quantity from event.properties.
+          When set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel).
+        type: string
+      field:
+        description: |-
+          Field is the key in $event.properties on which the aggregation is to be applied
+          For ex if the aggregation type is sum for API usage, the field could be "duration_ms"
+          Ignored when Expression is set.
+        type: string
+      group_by:
+        description: |-
+          GroupBy is the property name in event.properties to group by before aggregating.
+          Requires MAX aggregation. Windowing comes from the price, so this no longer
+          implies a meter-level bucket_size.
+          When set, aggregation is applied per unique value of this property within each bucket,
+          then the per-group results are summed to produce the bucket total.
+        type: string
+      multiplier:
+        description: |-
+          Multiplier is the multiplier for the aggregation
+          For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
+          to scale up by a factor of 1000. If not provided, it will be null.
+        type: string
+      type:
+        $ref: '#/definitions/types.AggregationType'
+    type: object
+  meter.Filter:
+    properties:
+      key:
+        description: |-
+          Key is the key for the filter from $event.properties
+          Currently we support only first level keys in the properties and not nested keys
+        type: string
+      values:
+        description: |-
+          Values are the possible values for the filter to be considered for the meter
+          For ex "model_name" could have values "o1-mini", "gpt-4o" etc
+        items:
+          type: string
+        type: array
+    type: object
+  meter.Meter:
+    properties:
+      aggregation:
+        allOf:
+        - $ref: '#/definitions/meter.Aggregation'
+        description: |-
+          Aggregation defines the aggregation type and field for the meter
+          It is used to aggregate the events into a single value for calculating the usage
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the meter
+        type: string
+      event_name:
+        description: |-
+          EventName is the unique identifier for the event that this meter is tracking
+          It is a mandatory field in the events table and hence being used as the primary matching field
+          We can have multiple meters tracking the same event but with different filters and aggregation
+        type: string
+      filters:
+        description: |-
+          Filters define the criteria for the meter to be applied on the events before aggregation
+          It also defines the possible values on which later the charges will be applied
+        items:
+          $ref: '#/definitions/meter.Filter'
+        type: array
+      id:
+        description: ID is the unique identifier for the meter
+        type: string
+      name:
+        description: Name is the display name of the meter
+        type: string
+      reset_usage:
+        allOf:
+        - $ref: '#/definitions/types.ResetUsage'
+        description: |-
+          ResetUsage defines whether the usage should be reset periodically or not
+          For ex meters tracking total storage used do not get reset but meters tracking
+          total API requests do.
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  models.TemporalWorkflowResult:
+    properties:
       message:
+        type: string
+      run_id:
+        type: string
+      workflow_id:
+        type: string
+    type: object
+  price.JSONBFilters:
+    additionalProperties:
+      items:
+        type: string
+      type: array
+    type: object
+  price.JSONBMetadata:
+    additionalProperties:
+      type: string
+    type: object
+  price.JSONBTransformQuantity:
+    properties:
+      divide_by:
+        description: Divide quantity by this number
+        type: integer
+      round:
+        allOf:
+        - $ref: '#/definitions/types.RoundType'
+        description: up or down
+    type: object
+  price.Price:
+    properties:
+      amount:
+        description: |-
+          Amount stored in main currency units (e.g., dollars, not cents)
+          For USD: 12.50 means $12.50
+        type: string
+      billing_cadence:
+        $ref: '#/definitions/types.BillingCadence'
+      billing_model:
+        $ref: '#/definitions/types.BillingModel'
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        default: 1
+        description: BillingPeriodCount is the count of the billing period ex 1, 3,
+          6, 12
+        type: integer
+      bucket_size:
+        allOf:
+        - $ref: '#/definitions/types.WindowSize'
+        description: |-
+          BucketSize windows the meter's aggregation for this price: the meter
+          aggregates within each window and the window results are summed. Empty
+          means unbucketed. Only valid on USAGE prices whose meter aggregates MAX
+          or SUM. Resolved through ResolveBucketSize, never read directly.
+      conversion_rate:
+        description: ConversionRate is the conversion rate of the price unit to the
+          fiat currency
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        description: Currency 3 digit ISO currency code in lowercase ex usd, eur,
+          gbp
+        type: string
+      description:
+        description: Description of the price
+        type: string
+      display_amount:
+        description: |-
+          DisplayAmount is the formatted amount with currency symbol
+          For USD: $12.50
+        type: string
+      display_name:
+        description: DisplayName is the name of the price
+        type: string
+      display_price_unit_amount:
+        description: DisplayPriceUnitAmount is the formatted amount of the price unit
+        type: string
+      end_date:
+        description: EndDate is the end date of the price
+        type: string
+      entity_id:
+        description: EntityID holds the value of the "entity_id" field.
+        type: string
+      entity_type:
+        allOf:
+        - $ref: '#/definitions/types.PriceEntityType'
+        description: EntityType holds the value of the "entity_type" field.
+      environment_id:
+        description: EnvironmentID is the environment identifier for the price
+        type: string
+      group_id:
+        description: GroupID references the group this price belongs to
+        type: string
+      id:
+        description: ID uuid identifier for the price
+        type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
+      lookup_key:
+        description: LookupKey used for looking up the price in the database
+        type: string
+      metadata:
+        $ref: '#/definitions/price.JSONBMetadata'
+      meter_id:
+        description: MeterID is the id of the meter for usage based pricing
+        type: string
+      min_quantity:
+        description: MinQuantity is the minimum quantity of the price
+        type: string
+        x-nullable: true
+      parent_price_id:
+        description: ParentPriceID references the root price (always set for price
+          lineage tracking)
+        type: string
+      price_unit:
+        description: PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
+        type: string
+      price_unit_amount:
+        description: PriceUnitAmount is the amount of the price unit
+        type: string
+      price_unit_id:
+        description: PriceUnitID is the id of the price unit (for CUSTOM type)
+        type: string
+      price_unit_tiers:
+        description: PriceUnitTiers are the tiers for the price unit when BillingModel
+          is TIERED
+        items:
+          $ref: '#/definitions/price.PriceTier'
+        type: array
+      price_unit_type:
+        allOf:
+        - $ref: '#/definitions/types.PriceUnitType'
+        description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+      sequence:
+        description: |-
+          Sequence is the monotonic stamp bumped on every state change that
+          subscription line items need to react to. Read by the plan-price sync;
+          set by the database (DEFAULT nextval) on create and by the price
+          repository on termination / compatibility-affecting edits.
+        type: integer
+      start_date:
+        description: StartDate is the start date of the price
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      tier_mode:
+        $ref: '#/definitions/types.BillingTier'
+      tiers:
+        items:
+          $ref: '#/definitions/price.PriceTier'
+        type: array
+      transform_quantity:
+        $ref: '#/definitions/price.JSONBTransformQuantity'
+      trial_period_days:
+        description: |-
+          TrialPeriodDays is the number of days for the trial period
+          Note: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)
+        type: integer
+      type:
+        $ref: '#/definitions/types.PriceType'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  price.PriceTier:
+    properties:
+      flat_amount:
+        description: |-
+          flat_amount is the flat amount for the given tier (optional)
+          Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
+        type: string
+      unit_amount:
+        description: unit_amount is the amount per unit for the given tier
+        type: string
+      up_to:
+        description: |-
+          up_to is the quantity up to which this tier applies. It is null for the last tier.
+          IMPORTANT: Tier boundaries are INCLUSIVE.
+          - If up_to is 1000, then quantity less than or equal to 1000 belongs to this tier
+          - This behavior is consistent across both VOLUME and SLAB tier modes
+        type: integer
+    type: object
+  price.TransformQuantity:
+    properties:
+      divide_by:
+        description: Divide quantity by this number
+        type: integer
+      round:
+        allOf:
+        - $ref: '#/definitions/types.RoundType'
+        description: up or down
+    type: object
+  subscription.SubscriptionLineItem:
+    properties:
+      addon_association_id:
+        type: string
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        description: from price at create; default 1
+        type: integer
+      commitment_amount:
+        description: Commitment fields
+        type: string
+      commitment_duration:
+        $ref: '#/definitions/types.BillingPeriod'
+      commitment_overage_factor:
+        type: string
+      commitment_quantity:
+        type: string
+      commitment_time_buckets:
+        items:
+          $ref: '#/definitions/types.TimeOfDayBucket'
+        type: array
+      commitment_true_up_enabled:
+        type: boolean
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_windowed:
+        type: boolean
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      display_name:
+        type: string
+      end_date:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      meter:
+        allOf:
+        - $ref: '#/definitions/meter.Meter'
+        description: |-
+          Meter is populated when the caller adds "meters" to a subscription-scoped
+          expand string alongside "subscription_line_items". Only usage line items
+          (PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.
+      meter_display_name:
+        type: string
+      meter_id:
+        type: string
+      plan_display_name:
+        type: string
+      price:
+        $ref: '#/definitions/price.Price'
+      price_id:
+        type: string
+      price_type:
+        $ref: '#/definitions/types.PriceType'
+      price_unit:
+        type: string
+      price_unit_id:
+        type: string
+      quantity:
+        type: string
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      subscription_phase_id:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  subscription.SubscriptionPause:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the pause
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription pause
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      original_period_end:
+        description: OriginalPeriodEnd is the end of the billing period when the pause
+          was created
+        type: string
+      original_period_start:
+        description: OriginalPeriodStart is the start of the billing period when the
+          pause was created
+        type: string
+      pause_end:
+        description: PauseEnd is when the pause will end (null for indefinite)
+        type: string
+      pause_mode:
+        $ref: '#/definitions/types.PauseMode'
+      pause_start:
+        description: PauseStart is when the pause actually started
+        type: string
+      pause_status:
+        $ref: '#/definitions/types.PauseStatus'
+      reason:
+        description: Reason is the reason for pausing
+        type: string
+      resume_mode:
+        $ref: '#/definitions/types.ResumeMode'
+      resumed_at:
+        description: ResumedAt is when the pause was actually ended (if manually resumed)
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        description: SubscriptionID is the identifier for the subscription
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  subscription.SubscriptionPhase:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      end_date:
+        description: EndDate is when the phase ends (nil if phase is still active
+          or indefinite)
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the phase
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription phase
+        type: string
+      metadata:
+        allOf:
+        - $ref: '#/definitions/types.Metadata'
+        description: Metadata contains additional key-value pairs
+      start_date:
+        description: StartDate is when the phase starts
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        description: SubscriptionID is the identifier for the subscription
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  types.AWSMarketplaceSyncConfig:
+    properties:
+      region:
+        type: string
+    type: object
+  types.AddAddonParams:
+    properties:
+      addons:
+        items:
+          $ref: '#/definitions/types.AddAddonRef'
+        type: array
+      subscription_id:
+        type: string
+    type: object
+  types.AddAddonRef:
+    properties:
+      addon_id:
+        type: string
+      association_id:
+        type: string
+      cadence:
+        $ref: '#/definitions/types.AddonCadence'
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: Needed to prorate the addon's first credit grant.
+      start_date:
         type: string
     type: object
   types.AddonAssociationEntityType:
@@ -8368,6 +9500,56 @@ definitions:
       warning:
         $ref: '#/definitions/types.AlertThreshold'
     type: object
+  types.AlertSettingsFilter:
+    properties:
+      enabled:
+        type: boolean
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      parent_entity_id:
+        type: string
+      parent_entity_ids:
+        items:
+          type: string
+        type: array
+      parent_entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.AlertState:
     enum:
     - ok
@@ -8479,6 +9661,16 @@ definitions:
     - BILLING_PERIOD_QUARTER
     - BILLING_PERIOD_HALF_YEAR
     - BILLING_PERIOD_ONETIME
+  types.BillingPeriodBehaviour:
+    enum:
+    - unchanged
+    - anchor_at_effect
+    - anchor_at_config
+    type: string
+    x-enum-varnames:
+    - BillingPeriodBehaviourUnchanged
+    - BillingPeriodBehaviourAnchorAtEffect
+    - BillingPeriodBehaviourAnchorAtConfig
   types.BillingTier:
     enum:
     - VOLUME
@@ -8487,17 +9679,6 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
-  types.Bucket:
-    properties:
-      hour:
-        maximum: 24
-        minimum: 0
-        type: integer
-      minute:
-        maximum: 59
-        minimum: 0
-        type: integer
-    type: object
   types.CancelImmediatelyInvoicePolicy:
     enum:
     - generate_invoice
@@ -8521,13 +9702,17 @@ definitions:
     - create_subscription
     - modify_subscription
     - wallet_topup
+    - add_addon
     type: string
     x-enum-varnames:
     - CheckoutActionCreateSubscription
     - CheckoutActionModifySubscription
     - CheckoutActionWalletTopup
+    - CheckoutActionAddAddon
   types.CheckoutConfiguration:
     properties:
+      add_addon_params:
+        $ref: '#/definitions/types.AddAddonParams'
       create_subscription_params:
         $ref: '#/definitions/types.CreateSubscriptionParams'
       modify_subscription_params:
@@ -8541,6 +9726,15 @@ definitions:
     type: string
     x-enum-varnames:
     - CheckoutPaymentProviderRazorpay
+  types.CheckoutPaymentProviderConfig:
+    properties:
+      collection_method:
+        $ref: '#/definitions/types.CollectionMethod'
+      max_mandate_limit:
+        type: string
+      payment_method:
+        $ref: '#/definitions/types.PaymentMethodType'
+    type: object
   types.CheckoutStatus:
     enum:
     - initiated
@@ -8667,6 +9861,8 @@ definitions:
       plan_id:
         type: string
       start_date:
+        type: string
+      subscription_id:
         type: string
     type: object
   types.CreateSubscriptionResult:
@@ -8862,17 +10058,26 @@ definitions:
     - DebugTrackerStatusError
     - DebugTrackerStatusProcessing
     - DebugTrackerStatusAttributed
-  types.Duration:
+  types.DurationUnit:
     enum:
-    - 3600000000000
-    properties:
-      unit:
-        $ref: '#/definitions/types.DurationUnit'
-      value:
-        type: integer
-    type: object
+    - second
+    - minute
+    - hour
+    - day
+    type: string
     x-enum-varnames:
-    - EntitlementGrantMinDuration
+    - DurationUnitSecond
+    - DurationUnitMinute
+    - DurationUnitHour
+    - DurationUnitDay
+  types.EntitlementAggregationMode:
+    enum:
+    - additive
+    - parallel
+    type: string
+    x-enum-varnames:
+    - EntitlementAggregationModeAdditive
+    - EntitlementAggregationModeParallel
   types.EntitlementEntityType:
     enum:
     - PLAN
@@ -8937,6 +10142,34 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.EntitlementGrantAllocationBehavior:
+    enum:
+    - first_usage
+    - unit_start
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantAllocationBehaviorFirstUsage
+    - EntitlementGrantAllocationBehaviorUnitStart
+  types.EntitlementGrantDurationUnit:
+    enum:
+    - hour
+    - day
+    - week
+    - subscription_period
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantDurationUnitHour
+    - EntitlementGrantDurationUnitDay
+    - EntitlementGrantDurationUnitWeek
+    - EntitlementGrantDurationUnitSubscriptionPeriod
+  types.EntitlementGrantMeasure:
+    enum:
+    - quantity
+    - amount
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantMeasureQuantity
+    - EntitlementGrantMeasureAmount
   types.EntitlementUsageResetPeriod:
     enum:
     - MONTHLY
@@ -8955,6 +10188,16 @@ definitions:
     - ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER
     - ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR
     - ENTITLEMENT_USAGE_RESET_PERIOD_NEVER
+  types.EntityChangeBehaviour:
+    enum:
+    - carry
+    - drop
+    - add
+    type: string
+    x-enum-varnames:
+    - EntityChangeBehaviourCarry
+    - EntityChangeBehaviourDrop
+    - EntityChangeBehaviourAdd
   types.EntitySyncConfig:
     properties:
       inbound:
@@ -9207,6 +10450,7 @@ definitions:
     - item_price
     - price
     - invoice_line_item
+    - subscription_line_item
     type: string
     x-enum-varnames:
     - IntegrationEntityTypeCustomer
@@ -9220,6 +10464,7 @@ definitions:
     - IntegrationEntityTypeItemPrice
     - IntegrationEntityTypePrice
     - IntegrationEntityTypeInvoiceLineItem
+    - IntegrationEntityTypeSubscriptionLineItem
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -9377,6 +10622,13 @@ definitions:
     - InvoiceStatusSkipped
   types.InvoiceSyncSettings:
     properties:
+      metadata_custom_fields:
+        description: |-
+          MetadataCustomFields copies metadata values onto Zoho invoice custom fields
+          verbatim.
+        items:
+          $ref: '#/definitions/types.MetadataCustomField'
+        type: array
       normalize_fixed_to:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
@@ -9384,6 +10636,19 @@ definitions:
           NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
           For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
           qty=3, rate=$100. Empty string means no normalization (keep original).
+      service_period_custom_fields:
+        allOf:
+        - $ref: '#/definitions/types.ServicePeriodCustomFields'
+        description: |-
+          ServicePeriodCustomFields names the Zoho custom fields that receive the
+          invoice's service start and end dates.
+      submit_for_approval:
+        description: |-
+          SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval
+          flow before recording payment. Zoho rejects payments on draft invoices, and merchants
+          configure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for
+          that rule to fire, then pay.
+        type: boolean
     type: object
   types.InvoiceType:
     enum:
@@ -9395,6 +10660,62 @@ definitions:
     - InvoiceTypeSubscription
     - InvoiceTypeOneOff
     - InvoiceTypeCredit
+  types.ListResponse-dto_WalletResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/WalletResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  types.Metadata:
+    additionalProperties:
+      type: string
+    type: object
+  types.MetadataCustomField:
+    properties:
+      field:
+        type: string
+      metadata_key:
+        type: string
+      source:
+        $ref: '#/definitions/types.MetadataCustomFieldSource'
+    type: object
+  types.MetadataCustomFieldSource:
+    enum:
+    - customer
+    - invoice
+    type: string
+    x-enum-varnames:
+    - MetadataCustomFieldSourceCustomer
+    - MetadataCustomFieldSourceInvoice
+  types.ModifySubscriptionLineItem:
+    properties:
+      effective_date:
+        type: string
+      line_item_id:
+        type: string
+      quantity:
+        type: string
+    type: object
+  types.ModifySubscriptionParams:
+    properties:
+      line_item_modifications:
+        items:
+          $ref: '#/definitions/types.ModifySubscriptionLineItem'
+        type: array
+      subscription_id:
+        type: string
+    type: object
+  types.OnPendingSchedulePolicy:
+    enum:
+    - reject
+    - supersede
+    type: string
+    x-enum-varnames:
+    - OnPendingSchedulePolicyReject
+    - OnPendingSchedulePolicySupersede
   types.PaginationResponse:
     properties:
       limit:
@@ -9735,6 +11056,14 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.RejectedEventReason:
+    enum:
+    - no_meter_for_event_name
+    - no_matching_meter
+    type: string
+    x-enum-varnames:
+    - RejectedEventReasonNoMeterForName
+    - RejectedEventReasonNoMatchingMeter
   types.ReportingUnit:
     properties:
       conversion_rate:
@@ -9831,7 +11160,8 @@ definitions:
         description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
           "AES256")'
       endpoint_url:
-        description: Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
+        description: Custom S3-compatible endpoint URL; must be https on a publicly
+          routable host
         type: string
       export_metadata_fields:
         description: Optional user-selected metadata columns
@@ -9841,6 +11171,10 @@ definitions:
       key_prefix:
         description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
         type: string
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.SecretProvider'
+        description: Empty means S3 for back-compat.
       region:
         description: AWS region (e.g., "us-west-2")
         type: string
@@ -9905,6 +11239,7 @@ definitions:
     - flexprice
     - stripe
     - s3
+    - gcs
     - hubspot
     - razorpay
     - chargebee
@@ -9920,11 +11255,14 @@ definitions:
     - azure_marketplace
     type: string
     x-enum-comments:
+      SecretProviderGCS: supports multiple connections per environment, service-account
+        JSON creds
       SecretProviderS3: supports multiple connections per environment
     x-enum-varnames:
     - SecretProviderFlexPrice
     - SecretProviderStripe
     - SecretProviderS3
+    - SecretProviderGCS
     - SecretProviderHubSpot
     - SecretProviderRazorpay
     - SecretProviderChargebee
@@ -9948,6 +11286,13 @@ definitions:
     - SecretTypePrivateKey
     - SecretTypePublishableKey
     - SecretTypeIntegration
+  types.ServicePeriodCustomFields:
+    properties:
+      end_field_id:
+        type: string
+      start_field_id:
+        type: string
+    type: object
   types.SortCondition:
     properties:
       direction:
@@ -9973,6 +11318,20 @@ definitions:
     - StatusPublished
     - StatusDeleted
     - StatusArchived
+  types.SubscriptionChangeEntityType:
+    enum:
+    - plan
+    - addon
+    - credit_grant
+    - entitlement
+    - entitlement_grant
+    type: string
+    x-enum-varnames:
+    - SubscriptionChangeEntityTypePlan
+    - SubscriptionChangeEntityTypeAddon
+    - SubscriptionChangeEntityTypeCreditGrant
+    - SubscriptionChangeEntityTypeEntitlement
+    - SubscriptionChangeEntityTypeEntitlementGrant
   types.SubscriptionChangeType:
     enum:
     - upgrade
@@ -10244,6 +11603,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.EntitySyncConfig'
         description: Integration sync (Stripe, Razorpay, QuickBooks, etc.)
+      price:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Price sync (Stripe only) — outbound only, see Validate()
       quote:
         $ref: '#/definitions/types.EntitySyncConfig'
       s3:
@@ -10273,6 +11636,22 @@ definitions:
     x-enum-varnames:
     - TaskTypeImport
     - TaskTypeExport
+  types.TaxBehavior:
+    enum:
+    - inclusive
+    - exclusive
+    type: string
+    x-enum-varnames:
+    - TaxBehaviorInclusive
+    - TaxBehaviorExclusive
+  types.TaxExemptionReasonCode:
+    enum:
+    - customer_exempt
+    - no_tax_configured
+    type: string
+    x-enum-varnames:
+    - TaxExemptionReasonCustomerExempt
+    - TaxExemptionReasonNoTaxConfigured
   types.TaxRateEntityType:
     enum:
     - customer
@@ -10306,11 +11685,17 @@ definitions:
   types.TaxRateType:
     enum:
     - percentage
-    - fixed
     type: string
     x-enum-varnames:
     - TaxRateTypePercentage
-    - TaxRateTypeFixed
+  types.TaxTreatment:
+    enum:
+    - taxable
+    - exempt
+    type: string
+    x-enum-varnames:
+    - TaxTreatmentTaxable
+    - TaxTreatmentExempt
   types.TimeOfDayBucket:
     properties:
       commitment_type:
@@ -10389,6 +11774,84 @@ definitions:
     x-enum-varnames:
     - TransactionTypeCredit
     - TransactionTypeDebit
+  types.UsageRecordFilter:
+    properties:
+      currency:
+        type: string
+      customer_external_id:
+        type: string
+      customer_id:
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: |-
+          Generic predicate and ordering escape hatch, for comparisons that have no dedicated field
+          below — a range such as period_end at or after a cutoff goes here.
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      period_end:
+        type: string
+      period_start:
+        description: |-
+          Exact-match on the window boundaries. Together with SubscriptionID these identify a single row:
+          they are the columns the table's unique index is built on.
+        type: string
+      plan_id:
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      synced:
+        type: boolean
+    type: object
+  types.UsageRecordSyncEntry:
+    properties:
+      agreement_id:
+        description: |-
+          AgreementID is the subscription's identifier on this marketplace: license_arn on AWS,
+          usage_reporting_id on GCP, resource_id on Azure. It records which agreement the usage was
+          billed against, which stays meaningful after the connection that reported it is replaced.
+        type: string
+      connection_id:
+        description: |-
+          ConnectionID is the connection that reported this entry, kept for tracing which credentials
+          were used. It is deliberately not part of the map key: a replaced connection must not make an
+          already reported record look unreported.
+        type: string
+      reporting_id:
+        type: string
+      skip_reason:
+        type: string
+      skipped:
+        type: boolean
+      synced_at:
+        description: SyncedAt is when the marketplace accepted the record. Zero on
+          a skip, since nothing was sent.
+        type: string
+    type: object
   types.UserFilter:
     properties:
       end_time:
@@ -10444,21 +11907,6 @@ definitions:
     x-enum-varnames:
     - UserTypeUser
     - UserTypeServiceAccount
-  types.Value:
-    properties:
-      array:
-        items:
-          type: string
-        type: array
-      boolean:
-        type: boolean
-      date:
-        type: string
-      number:
-        type: number
-      string:
-        type: string
-    type: object
   types.WalletConfig:
     properties:
       allowed_price_types:
@@ -10516,6 +11964,15 @@ definitions:
     - WalletStatusActive
     - WalletStatusFrozen
     - WalletStatusClosed
+  types.WalletTopupParams:
+    properties:
+      wallet_id:
+        type: string
+      wallet_transaction_id:
+        type: string
+    required:
+    - wallet_id
+    type: object
   types.WalletTransactionFilter:
     properties:
       created_by:
@@ -10599,6 +12056,7 @@ definitions:
     - subscription.paused
     - subscription.cancelled
     - subscription.resumed
+    - subscription.plan_changed
     - subscription.phase.created
     - subscription.phase.updated
     - subscription.phase.deleted
@@ -10657,6 +12115,7 @@ definitions:
     - WebhookEventSubscriptionPaused
     - WebhookEventSubscriptionCancelled
     - WebhookEventSubscriptionResumed
+    - WebhookEventSubscriptionPlanChanged
     - WebhookEventSubscriptionPhaseCreated
     - WebhookEventSubscriptionPhaseUpdated
     - WebhookEventSubscriptionPhaseDeleted
@@ -10779,758 +12238,56 @@ definitions:
       workflow_type:
         type: string
     type: object
-  group.Group:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.GroupEntityType'
-      environment_id:
-        type: string
-      id:
-        type: string
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      name:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  invoice.InvoiceLineItem:
-    properties:
-      adjusted_entitlement_quantity:
-        description: |-
-          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
-          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
-        type: string
-      amount:
-        type: string
-      commitment_info:
-        $ref: '#/definitions/types.CommitmentInfo'
-      created_at:
-        type: string
-      created_by:
-        type: string
-      currency:
-        type: string
-      customer_id:
-        type: string
-      display_name:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        type: string
-      environment_id:
-        type: string
-      id:
-        type: string
-      invoice_id:
-        type: string
-      invoice_level_discount:
-        description: invoice_level_discount is the discount amount in invoice currency
-          applied to all line items on the invoice.
-        type: string
-      line_item_discount:
-        description: line_item_discount is the discount amount in invoice currency
-          applied directly to this line item.
-        type: string
-      metadata:
-        $ref: '#/definitions/types.Metadata'
-      meter_display_name:
-        type: string
-      meter_id:
-        type: string
-      period_end:
-        type: string
-      period_start:
-        type: string
-      plan_display_name:
-        type: string
-      prepaid_credits_applied:
-        description: prepaid_credits_applied is the amount in invoice currency reduced
-          from this line item due to prepaid credits application.
-        type: string
-      price_id:
-        type: string
-      price_type:
-        type: string
-      price_unit:
-        type: string
-      price_unit_amount:
-        type: string
-      price_unit_id:
-        type: string
-      quantity:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_id:
-        type: string
-      subscription_line_item_id:
-        description: sub_line_item_id links this invoice line item to the subscription_line_item
-          that generated it.
-        type: string
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  meter.Aggregation:
-    properties:
-      bucket_size:
-        allOf:
-        - $ref: '#/definitions/types.WindowSize'
-        description: |-
-          BucketSize is used only for MAX aggregation when windowed aggregation is needed
-          It defines the size of time windows to calculate max values within
-      expression:
-        description: |-
-          Expression is an optional CEL expression to compute per-event quantity from event.properties.
-          When set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel).
-        type: string
-      field:
-        description: |-
-          Field is the key in $event.properties on which the aggregation is to be applied
-          For ex if the aggregation type is sum for API usage, the field could be "duration_ms"
-          Ignored when Expression is set.
-        type: string
-      group_by:
-        description: |-
-          GroupBy is the property name in event.properties to group by before aggregating.
-          Currently only supported for MAX aggregation with bucket_size.
-          When set, aggregation is applied per unique value of this property within each bucket,
-          then the per-group results are summed to produce the bucket total.
-        type: string
-      multiplier:
-        description: |-
-          Multiplier is the multiplier for the aggregation
-          For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
-          to scale up by a factor of 1000. If not provided, it will be null.
-        type: string
-      type:
-        $ref: '#/definitions/types.AggregationType'
-    type: object
-  meter.Filter:
-    properties:
-      key:
-        description: |-
-          Key is the key for the filter from $event.properties
-          Currently we support only first level keys in the properties and not nested keys
-        type: string
-      values:
-        description: |-
-          Values are the possible values for the filter to be considered for the meter
-          For ex "model_name" could have values "o1-mini", "gpt-4o" etc
-        items:
-          type: string
-        type: array
-    type: object
-  meter.Meter:
-    properties:
-      aggregation:
-        allOf:
-        - $ref: '#/definitions/meter.Aggregation'
-        description: |-
-          Aggregation defines the aggregation type and field for the meter
-          It is used to aggregate the events into a single value for calculating the usage
-      created_at:
-        type: string
-      created_by:
-        type: string
-      environment_id:
-        description: EnvironmentID is the environment identifier for the meter
-        type: string
-      event_name:
-        description: |-
-          EventName is the unique identifier for the event that this meter is tracking
-          It is a mandatory field in the events table and hence being used as the primary matching field
-          We can have multiple meters tracking the same event but with different filters and aggregation
-        type: string
-      filters:
-        description: |-
-          Filters define the criteria for the meter to be applied on the events before aggregation
-          It also defines the possible values on which later the charges will be applied
-        items:
-          $ref: '#/definitions/meter.Filter'
-        type: array
-      id:
-        description: ID is the unique identifier for the meter
-        type: string
-      name:
-        description: Name is the display name of the meter
-        type: string
-      reset_usage:
-        allOf:
-        - $ref: '#/definitions/types.ResetUsage'
-        description: |-
-          ResetUsage defines whether the usage should be reset periodically or not
-          For ex meters tracking total storage used do not get reset but meters tracking
-          total API requests do.
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  models.TemporalWorkflowResult:
-    properties:
-      message:
-        type: string
-      run_id:
-        type: string
-      workflow_id:
-        type: string
-    type: object
-  price.JSONBFilters:
-    additionalProperties:
-      items:
-        type: string
-      type: array
-    type: object
-  price.JSONBMetadata:
-    additionalProperties:
-      type: string
-    type: object
-  price.JSONBTransformQuantity:
-    properties:
-      divide_by:
-        description: Divide quantity by this number
-        type: integer
-      round:
-        allOf:
-        - $ref: '#/definitions/types.RoundType'
-        description: up or down
-    type: object
-  price.Price:
-    properties:
-      amount:
-        description: |-
-          Amount stored in main currency units (e.g., dollars, not cents)
-          For USD: 12.50 means $12.50
-        type: string
-      billing_cadence:
-        $ref: '#/definitions/types.BillingCadence'
-      billing_model:
-        $ref: '#/definitions/types.BillingModel'
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      billing_period_count:
-        default: 1
-        description: BillingPeriodCount is the count of the billing period ex 1, 3,
-          6, 12
-        type: integer
-      conversion_rate:
-        description: ConversionRate is the conversion rate of the price unit to the
-          fiat currency
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: string
-      currency:
-        description: Currency 3 digit ISO currency code in lowercase ex usd, eur,
-          gbp
-        type: string
-      description:
-        description: Description of the price
-        type: string
-      display_amount:
-        description: |-
-          DisplayAmount is the formatted amount with currency symbol
-          For USD: $12.50
-        type: string
-      display_name:
-        description: DisplayName is the name of the price
-        type: string
-      display_price_unit_amount:
-        description: DisplayPriceUnitAmount is the formatted amount of the price unit
-        type: string
-      end_date:
-        description: EndDate is the end date of the price
-        type: string
-      entity_id:
-        description: EntityID holds the value of the "entity_id" field.
-        type: string
-      entity_type:
-        allOf:
-        - $ref: '#/definitions/types.PriceEntityType'
-        description: EntityType holds the value of the "entity_type" field.
-      environment_id:
-        description: EnvironmentID is the environment identifier for the price
-        type: string
-      group_id:
-        description: GroupID references the group this price belongs to
-        type: string
-      id:
-        description: ID uuid identifier for the price
-        type: string
-      invoice_cadence:
-        $ref: '#/definitions/types.InvoiceCadence'
-      lookup_key:
-        description: LookupKey used for looking up the price in the database
-        type: string
-      metadata:
-        $ref: '#/definitions/price.JSONBMetadata'
-      meter_id:
-        description: MeterID is the id of the meter for usage based pricing
-        type: string
-      min_quantity:
-        description: MinQuantity is the minimum quantity of the price
-        type: string
-        x-nullable: true
-      parent_price_id:
-        description: ParentPriceID references the root price (always set for price
-          lineage tracking)
-        type: string
-      price_unit:
-        description: PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
-        type: string
-      price_unit_amount:
-        description: PriceUnitAmount is the amount of the price unit
-        type: string
-      price_unit_id:
-        description: PriceUnitID is the id of the price unit (for CUSTOM type)
-        type: string
-      price_unit_tiers:
-        description: PriceUnitTiers are the tiers for the price unit when BillingModel
-          is TIERED
-        items:
-          $ref: '#/definitions/price.PriceTier'
-        type: array
-      price_unit_type:
-        allOf:
-        - $ref: '#/definitions/types.PriceUnitType'
-        description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
-      sequence:
-        description: |-
-          Sequence is the monotonic stamp bumped on every state change that
-          subscription line items need to react to. Read by the plan-price sync;
-          set by the database (DEFAULT nextval) on create and by the price
-          repository on termination / compatibility-affecting edits.
-        type: integer
-      start_date:
-        description: StartDate is the start date of the price
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      tier_mode:
-        $ref: '#/definitions/types.BillingTier'
-      tiers:
-        items:
-          $ref: '#/definitions/price.PriceTier'
-        type: array
-      transform_quantity:
-        $ref: '#/definitions/price.JSONBTransformQuantity'
-      trial_period_days:
-        description: |-
-          TrialPeriodDays is the number of days for the trial period
-          Note: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)
-        type: integer
-      type:
-        $ref: '#/definitions/types.PriceType'
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  price.PriceTier:
-    properties:
-      flat_amount:
-        description: |-
-          flat_amount is the flat amount for the given tier (optional)
-          Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
-        type: string
-      unit_amount:
-        description: unit_amount is the amount per unit for the given tier
-        type: string
-      up_to:
-        description: |-
-          up_to is the quantity up to which this tier applies. It is null for the last tier.
-          IMPORTANT: Tier boundaries are INCLUSIVE.
-          - If up_to is 1000, then quantity less than or equal to 1000 belongs to this tier
-          - This behavior is consistent across both VOLUME and SLAB tier modes
-        type: integer
-    type: object
-  price.TransformQuantity:
-    properties:
-      divide_by:
-        description: Divide quantity by this number
-        type: integer
-      round:
-        allOf:
-        - $ref: '#/definitions/types.RoundType'
-        description: up or down
-    type: object
-  subscription.SubscriptionLineItem:
-    properties:
-      addon_association_id:
-        type: string
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      billing_period_count:
-        description: from price at create; default 1
-        type: integer
-      commitment_amount:
-        description: Commitment fields
-        type: string
-      commitment_duration:
-        $ref: '#/definitions/types.BillingPeriod'
-      commitment_overage_factor:
-        type: string
-      commitment_quantity:
-        type: string
-      commitment_time_buckets:
-        items:
-          $ref: '#/definitions/types.TimeOfDayBucket'
-        type: array
-      commitment_true_up_enabled:
-        type: boolean
-      commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
-      commitment_windowed:
-        type: boolean
-      created_at:
-        type: string
-      created_by:
-        type: string
-      currency:
-        type: string
-      customer_id:
-        type: string
-      display_name:
-        type: string
-      end_date:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
-      environment_id:
-        type: string
-      id:
-        type: string
-      invoice_cadence:
-        $ref: '#/definitions/types.InvoiceCadence'
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      meter:
-        allOf:
-        - $ref: '#/definitions/meter.Meter'
-        description: |-
-          Meter is populated when the caller adds "meters" to a subscription-scoped
-          expand string alongside "subscription_line_items". Only usage line items
-          (PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.
-      meter_display_name:
-        type: string
-      meter_id:
-        type: string
-      plan_display_name:
-        type: string
-      price:
-        $ref: '#/definitions/price.Price'
-      price_id:
-        type: string
-      price_type:
-        $ref: '#/definitions/types.PriceType'
-      price_unit:
-        type: string
-      price_unit_id:
-        type: string
-      quantity:
-        type: string
-      start_date:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_id:
-        type: string
-      subscription_phase_id:
-        type: string
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  subscription.SubscriptionPause:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: string
-      environment_id:
-        description: EnvironmentID is the environment identifier for the pause
-        type: string
-      id:
-        description: ID is the unique identifier for the subscription pause
-        type: string
-      metadata:
-        $ref: '#/definitions/types.Metadata'
-      original_period_end:
-        description: OriginalPeriodEnd is the end of the billing period when the pause
-          was created
-        type: string
-      original_period_start:
-        description: OriginalPeriodStart is the start of the billing period when the
-          pause was created
-        type: string
-      pause_end:
-        description: PauseEnd is when the pause will end (null for indefinite)
-        type: string
-      pause_mode:
-        $ref: '#/definitions/types.PauseMode'
-      pause_start:
-        description: PauseStart is when the pause actually started
-        type: string
-      pause_status:
-        $ref: '#/definitions/types.PauseStatus'
-      reason:
-        description: Reason is the reason for pausing
-        type: string
-      resume_mode:
-        $ref: '#/definitions/types.ResumeMode'
-      resumed_at:
-        description: ResumedAt is when the pause was actually ended (if manually resumed)
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_id:
-        description: SubscriptionID is the identifier for the subscription
-        type: string
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  subscription.SubscriptionPhase:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: string
-      end_date:
-        description: EndDate is when the phase ends (nil if phase is still active
-          or indefinite)
-        type: string
-      environment_id:
-        description: EnvironmentID is the environment identifier for the phase
-        type: string
-      id:
-        description: ID is the unique identifier for the subscription phase
-        type: string
-      metadata:
-        allOf:
-        - $ref: '#/definitions/types.Metadata'
-        description: Metadata contains additional key-value pairs
-      start_date:
-        description: StartDate is when the phase starts
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_id:
-        description: SubscriptionID is the identifier for the subscription
-        type: string
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
-    type: object
-  types.AWSMarketplaceSyncConfig:
-    properties:
-      region:
-        type: string
-    type: object
-  types.AlertSettingsFilter:
-    properties:
-      enabled:
-        type: boolean
-      end_time:
-        type: string
-      entity_id:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.AlertEntityType'
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      parent_entity_id:
-        type: string
-      parent_entity_ids:
-        items:
-          type: string
-        type: array
-      parent_entity_type:
-        $ref: '#/definitions/types.AlertEntityType'
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.CheckoutPaymentProviderConfig:
-    properties:
-      collection_method:
-        $ref: '#/definitions/types.CollectionMethod'
-      max_mandate_limit:
-        type: string
-      payment_method:
-        $ref: '#/definitions/types.PaymentMethodType'
-    type: object
-  types.DurationUnit:
-    enum:
-    - second
-    - minute
-    - hour
-    - day
-    type: string
-    x-enum-varnames:
-    - DurationUnitSecond
-    - DurationUnitMinute
-    - DurationUnitHour
-    - DurationUnitDay
-  types.EntitlementAggregationMode:
-    enum:
-    - additive
-    - parallel
-    type: string
-    x-enum-varnames:
-    - EntitlementAggregationModeAdditive
-    - EntitlementAggregationModeParallel
-  types.EntitlementGrantDurationUnit:
-    enum:
-    - hour
-    - day
-    - week
-    type: string
-    x-enum-varnames:
-    - EntitlementGrantDurationUnitHour
-    - EntitlementGrantDurationUnitDay
-    - EntitlementGrantDurationUnitWeek
-  types.EntitlementGrantMeasure:
-    enum:
-    - quantity
-    - amount
-    type: string
-    x-enum-varnames:
-    - EntitlementGrantMeasureQuantity
-    - EntitlementGrantMeasureAmount
-  types.ListResponse-dto_WalletResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/WalletResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  types.Metadata:
-    additionalProperties:
-      type: string
-    type: object
-  types.ModifySubscriptionLineItem:
-    properties:
-      effective_date:
-        type: string
-      line_item_id:
-        type: string
-      quantity:
-        type: string
-    type: object
-  types.ModifySubscriptionParams:
-    properties:
-      line_item_modifications:
-        items:
-          $ref: '#/definitions/types.ModifySubscriptionLineItem'
-        type: array
-      subscription_id:
-        type: string
-    type: object
-  types.RejectedEventReason:
-    enum:
-    - no_meter_for_event_name
-    - no_matching_meter
-    type: string
-    x-enum-varnames:
-    - RejectedEventReasonNoMeterForName
-    - RejectedEventReasonNoMatchingMeter
-  types.WalletTopupParams:
-    properties:
-      wallet_id:
-        type: string
-      wallet_transaction_id:
-        type: string
-    required:
-    - wallet_id
-    type: object
   webhookDto.AlertWebhookPayload:
     properties:
       alert_status:
         $ref: '#/definitions/types.AlertState'
       alert_type:
         $ref: '#/definitions/types.AlertType'
-      customer:
-        $ref: '#/definitions/CustomerResponse'
+      credit_balance:
+        type: string
+      current_balance:
+        type: string
+      customer_id:
+        type: string
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
-      feature:
-        $ref: '#/definitions/FeatureResponse'
-      wallet:
-        $ref: '#/definitions/WalletResponse'
+      feature_id:
+        type: string
+      wallet_id:
+        type: string
+    type: object
+  webhookDto.CheckoutSession:
+    properties:
+      action:
+        $ref: '#/definitions/types.CheckoutAction'
+      cancelled_at:
+        type: string
+      checkout_invoice_id:
+        type: string
+      checkout_payment_id:
+        type: string
+      checkout_status:
+        $ref: '#/definitions/types.CheckoutStatus'
+      completed_at:
+        type: string
+      customer_id:
+        type: string
+      expires_at:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      payment_action:
+        $ref: '#/definitions/types.PaymentAction'
+      payment_provider:
+        $ref: '#/definitions/types.CheckoutPaymentProvider'
     type: object
   webhookDto.CheckoutSessionWebhookPayload:
     properties:
       checkout_session:
-        $ref: '#/definitions/CheckoutSessionResponse'
+        $ref: '#/definitions/webhookDto.CheckoutSession'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
     type: object
@@ -11539,35 +12296,219 @@ definitions:
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       invoice:
-        $ref: '#/definitions/InvoiceResponse'
+        $ref: '#/definitions/webhookDto.Invoice'
+    type: object
+  webhookDto.CreditNote:
+    properties:
+      credit_note_number:
+        type: string
+      credit_note_status:
+        $ref: '#/definitions/types.CreditNoteStatus'
+      credit_note_type:
+        $ref: '#/definitions/types.CreditNoteType'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      finalized_at:
+        type: string
+      id:
+        type: string
+      invoice_id:
+        type: string
+      memo:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      reason:
+        $ref: '#/definitions/types.CreditNoteReason'
+      subscription_id:
+        type: string
+      total_amount:
+        type: string
+      voided_at:
+        type: string
     type: object
   webhookDto.CreditNoteWebhookPayload:
     properties:
       credit_note:
-        $ref: '#/definitions/CreditNoteResponse'
+        $ref: '#/definitions/webhookDto.CreditNote'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
+    type: object
+  webhookDto.Customer:
+    properties:
+      address_city:
+        type: string
+      address_country:
+        type: string
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      address_postal_code:
+        type: string
+      address_state:
+        type: string
+      email:
+        type: string
+      environment_id:
+        type: string
+      external_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      timezone:
+        type: string
     type: object
   webhookDto.CustomerWebhookPayload:
     properties:
       customer:
-        $ref: '#/definitions/CustomerResponse'
+        $ref: '#/definitions/webhookDto.Customer'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
+    type: object
+  webhookDto.Entitlement:
+    properties:
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.EntitlementEntityType'
+      feature_id:
+        type: string
+      feature_type:
+        $ref: '#/definitions/types.FeatureType'
+      id:
+        type: string
+      is_enabled:
+        type: boolean
+      is_soft_limit:
+        type: boolean
+      static_value:
+        type: string
+      usage_limit:
+        type: integer
+      usage_reset_period:
+        $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
   webhookDto.EntitlementWebhookPayload:
     properties:
       entitlement:
-        $ref: '#/definitions/EntitlementResponse'
+        $ref: '#/definitions/webhookDto.Entitlement'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
+    type: object
+  webhookDto.Feature:
+    properties:
+      description:
+        type: string
+      group_id:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      meter_id:
+        type: string
+      name:
+        type: string
+      type:
+        $ref: '#/definitions/types.FeatureType'
+      unit_plural:
+        type: string
+      unit_singular:
+        type: string
     type: object
   webhookDto.FeatureWebhookPayload:
     properties:
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       feature:
-        $ref: '#/definitions/FeatureResponse'
+        $ref: '#/definitions/webhookDto.Feature'
+    type: object
+  webhookDto.Invoice:
+    properties:
+      amount_due:
+        type: string
+      amount_paid:
+        type: string
+      amount_remaining:
+        type: string
+      billing_reason:
+        type: string
+      currency:
+        type: string
+      customer:
+        $ref: '#/definitions/webhookDto.Customer'
+      customer_id:
+        type: string
+      due_date:
+        type: string
+      environment_id:
+        type: string
+      finalized_at:
+        type: string
+      id:
+        type: string
+      invoice_number:
+        type: string
+      invoice_pdf_url:
+        type: string
+      invoice_status:
+        $ref: '#/definitions/types.InvoiceStatus'
+      invoice_type:
+        $ref: '#/definitions/types.InvoiceType'
+      line_items:
+        items:
+          $ref: '#/definitions/webhookDto.InvoiceLineItem'
+        type: array
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      paid_at:
+        type: string
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+      period_end:
+        type: string
+      period_start:
+        type: string
+      subscription:
+        $ref: '#/definitions/webhookDto.Subscription'
+      subscription_id:
+        type: string
+      subtotal:
+        type: string
+      total:
+        type: string
+      voided_at:
+        type: string
+    type: object
+  webhookDto.InvoiceLineItem:
+    properties:
+      amount:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      plan_display_name:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: string
     type: object
   webhookDto.InvoiceWebhookPayload:
     properties:
@@ -11576,12 +12517,43 @@ definitions:
       invoice:
         $ref: '#/definitions/InvoiceResponse'
     type: object
+  webhookDto.Payment:
+    properties:
+      amount:
+        type: string
+      currency:
+        type: string
+      destination_id:
+        type: string
+      destination_type:
+        $ref: '#/definitions/types.PaymentDestinationType'
+      error_message:
+        type: string
+      failed_at:
+        type: string
+      id:
+        type: string
+      invoice_number:
+        type: string
+      payment_gateway:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
+      refunded_at:
+        type: string
+      succeeded_at:
+        type: string
+      voided_at:
+        type: string
+    type: object
   webhookDto.PaymentWebhookPayload:
     properties:
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       payment:
-        $ref: '#/definitions/PaymentResponse'
+        $ref: '#/definitions/webhookDto.Payment'
     type: object
   webhookDto.RejectedEventData:
     properties:
@@ -11612,21 +12584,81 @@ definitions:
     type: object
   webhookDto.SpendAlertEvent:
     properties:
-      alert_settings:
-        $ref: '#/definitions/types.AlertSettings'
       alert_status:
         $ref: '#/definitions/types.AlertState'
       alert_type:
         $ref: '#/definitions/types.AlertType'
       current_spend:
         type: string
-      group:
-        $ref: '#/definitions/GroupResponse'
+      group_id:
+        type: string
       subscription:
-        $ref: '#/definitions/SubscriptionResponse'
-      subscription_line_item:
-        $ref: '#/definitions/subscription.SubscriptionLineItem'
+        $ref: '#/definitions/webhookDto.Subscription'
+      subscription_line_item_id:
+        type: string
+      threshold:
+        type: string
       triggered_at:
+        type: string
+    type: object
+  webhookDto.Subscription:
+    properties:
+      billing_cadence:
+        $ref: '#/definitions/types.BillingCadence'
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        type: integer
+      cancel_at:
+        type: string
+      cancel_at_period_end:
+        type: boolean
+      cancelled_at:
+        type: string
+      currency:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+      customer:
+        $ref: '#/definitions/webhookDto.Customer'
+      customer_id:
+        type: string
+      end_date:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      parent_subscription_id:
+        type: string
+      pause_status:
+        $ref: '#/definitions/types.PauseStatus'
+      plan_id:
+        type: string
+      start_date:
+        type: string
+      subscription_status:
+        $ref: '#/definitions/types.SubscriptionStatus'
+      subscription_type:
+        $ref: '#/definitions/types.SubscriptionType'
+      trial_end:
+        type: string
+      trial_start:
+        type: string
+    type: object
+  webhookDto.SubscriptionPhase:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: string
+      start_date:
+        type: string
+      subscription_id:
         type: string
     type: object
   webhookDto.SubscriptionPhaseWebhookPayload:
@@ -11634,36 +12666,51 @@ definitions:
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       phase:
-        $ref: '#/definitions/SubscriptionPhaseResponse'
+        $ref: '#/definitions/webhookDto.SubscriptionPhase'
     type: object
   webhookDto.SubscriptionWebhookPayload:
     properties:
+      customer:
+        $ref: '#/definitions/webhookDto.Customer'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       subscription:
-        $ref: '#/definitions/SubscriptionResponse'
+        $ref: '#/definitions/webhookDto.Subscription'
     type: object
   webhookDto.TransactionUpdatedWebhookPayload:
     properties:
-      customer:
-        $ref: '#/definitions/CustomerResponse'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       updated_transaction:
-        $ref: '#/definitions/WalletTransactionResponse'
-      wallet:
-        $ref: '#/definitions/WalletResponse'
+        $ref: '#/definitions/webhookDto.WalletTransaction'
     type: object
   webhookDto.TransactionWebhookPayload:
     properties:
-      customer:
-        $ref: '#/definitions/CustomerResponse'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       transaction:
-        $ref: '#/definitions/WalletTransactionResponse'
-      wallet:
-        $ref: '#/definitions/WalletResponse'
+        $ref: '#/definitions/webhookDto.WalletTransaction'
+    type: object
+  webhookDto.Wallet:
+    properties:
+      balance:
+        type: string
+      conversion_rate:
+        type: string
+      credit_balance:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      wallet_status:
+        $ref: '#/definitions/types.WalletStatus'
+      wallet_type:
+        $ref: '#/definitions/types.WalletType'
     type: object
   webhookDto.WalletAlertInfo:
     properties:
@@ -11678,16 +12725,51 @@ definitions:
       state:
         type: string
     type: object
+  webhookDto.WalletTransaction:
+    properties:
+      amount:
+        type: string
+      credit_amount:
+        type: string
+      credit_balance_after:
+        type: string
+      credit_balance_before:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      description:
+        type: string
+      expiry_date:
+        type: string
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      reference_id:
+        type: string
+      reference_type:
+        $ref: '#/definitions/types.WalletTxReferenceType'
+      transaction_reason:
+        $ref: '#/definitions/types.TransactionReason'
+      transaction_status:
+        $ref: '#/definitions/types.TransactionStatus'
+      type:
+        $ref: '#/definitions/types.TransactionType'
+      wallet_id:
+        type: string
+    type: object
   webhookDto.WalletWebhookPayload:
     properties:
       alert:
         $ref: '#/definitions/webhookDto.WalletAlertInfo'
       customer:
-        $ref: '#/definitions/CustomerResponse'
+        $ref: '#/definitions/webhookDto.Customer'
       event_type:
         $ref: '#/definitions/types.WebhookEventName'
       wallet:
-        $ref: '#/definitions/WalletResponse'
+        $ref: '#/definitions/webhookDto.Wallet'
     type: object
 info:
   contact:
@@ -12486,42 +13568,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get combined revenue and cost analytics
-      tags:
-      - Costs
-  /costs/analytics-v2:
-    post:
-      consumes:
-      - application/json
-      description: Use when you need the same revenue/cost/ROI analytics but computed
-        from the costsheet usage-tracking pipeline (e.g. for consistency with usage-based
-        cost data).
-      operationId: getDetailedCostAnalyticsV2
-      parameters:
-      - description: Combined analytics request (start_time/end_time optional - defaults
-          to last 7 days)
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/GetCostAnalyticsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/GetDetailedCostAnalyticsResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get combined revenue and cost analytics (V2)
       tags:
       - Costs
   /costs/search:
@@ -14814,7 +15860,9 @@ paths:
       consumes:
       - application/json
       description: Use when updating invoice metadata or due date (e.g. PDF URL, net
-        terms). For paid invoices only safe fields can be updated.
+        terms), or when recalculating this draft invoice's discount from its current
+        standing coupon associations via apply_discount:true (idempotent, does not
+        attach a new coupon). Allowed for invoices in draft or finalized status.
       operationId: updateInvoice
       parameters:
       - description: Invoice ID
@@ -15235,7 +16283,7 @@ paths:
       consumes:
       - application/json
       description: Registers an AWS Marketplace buyer agreement against an existing
-        FlexPrice subscription, upserting plan/subscription/customer integration mappings
+        Flexprice subscription, upserting plan/subscription/customer integration mappings
         in one call.
       parameters:
       - description: Agreement registration request
@@ -16074,6 +17122,10 @@ paths:
           description: Invalid request
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Price not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Server error
           schema:
@@ -16387,6 +17439,14 @@ paths:
       description: Use when building role pickers or permission UIs. Returns all roles
         with permissions and descriptions.
       operationId: listRbacRoles
+      parameters:
+      - description: Filter by user type
+        enum:
+        - user
+        - service_account
+        in: query
+        name: user_type
+        type: string
       produces:
       - application/json
       responses:
@@ -16395,12 +17455,14 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "500":
-          description: Internal server error
+        "400":
+          description: Invalid request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: List all RBAC roles
@@ -16847,6 +17909,105 @@ paths:
       summary: Preview subscription plan change
       tags:
       - Subscriptions
+  /subscriptions/{id}/change/v2/execute:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Change a subscription's plan in place. Subscription id, billing anchor and period bounds are preserved; line items are sliced and settled in one transaction.
+
+        change_at controls timing. Omitted or 'immediate' applies the change now. 'end_of_period' records a pending schedule that executes at the subscription's current period end: the response returns is_scheduled, schedule_id and scheduled_at instead of a completed change, and nothing is swapped or billed until the boundary.
+
+        scheduled_at is resolved from the subscription's current period end at request time. If that period end is already in the past (a backdated start date, a resumed pause, or worker downtime can all leave a subscription behind), the change is due immediately and fires on the next billing scan rather than a period away — inspect scheduled_at to see this.
+
+        Only one plan change may be pending per subscription. By default (on_conflict_policies.on_pending_schedule = 'reject') a second request returns 400; cancel the existing schedule via POST /subscriptions/schedules/{schedule_id}/cancel first. Pending schedules are listable via GET /subscriptions/{id}/schedules.
+
+        Set on_conflict_policies.on_pending_schedule to 'supersede' to replace the queued change instead: the pending schedule is cancelled and this request applied in the same transaction, so both land or neither does. The cancelled schedule ids are returned in superseded_schedules, and preview reports the same list without writing.
+      operationId: executeSubscriptionPlanChangeV2
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Plan change request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/SubscriptionChangeV2Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SubscriptionChangeV2Response'
+        "400":
+          description: Invalid request, a change this endpoint cannot make (interval,
+            currency, hierarchy, phases, paused), a deferred change with proration,
+            or a plan change already scheduled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Subscription or plan not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Execute a plan change (v2, swap in place)
+      tags:
+      - Subscriptions
+      x-scope: write
+  /subscriptions/{id}/change/v2/preview:
+    post:
+      consumes:
+      - application/json
+      description: 'Preview a subscription plan change without writing. Swap-in-place:
+        subscription id, billing anchor and period bounds are preserved.'
+      operationId: previewSubscriptionPlanChangeV2
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Plan change request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/SubscriptionChangeV2Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SubscriptionChangeV2Response'
+        "400":
+          description: Invalid request, or a change this endpoint cannot make (interval,
+            currency, hierarchy, phases, paused)
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Subscription or plan not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Preview a plan change (v2, swap in place)
+      tags:
+      - Subscriptions
+      x-scope: read
   /subscriptions/{id}/entitlements:
     get:
       consumes:
@@ -16974,7 +18135,7 @@ paths:
       consumes:
       - application/json
       description: Execute a mid-cycle subscription modification (inheritance, quantity
-        change, grouped invoicing, trial end, coupon, or tax).
+        change, grouped invoicing, trial end, coupon, tax, or addon add/remove).
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -17018,8 +18179,8 @@ paths:
       consumes:
       - application/json
       description: Preview the impact of a mid-cycle subscription modification (inheritance,
-        quantity change, grouped invoicing, trial end, coupon, or tax) without committing
-        changes.
+        quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove)
+        without committing changes.
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -17097,8 +18258,10 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Use when removing an add-on from a subscription (e.g. downgrade
-        or opt-out).
+      deprecated: true
+      description: |-
+        Deprecated: use POST /subscriptions/{id}/modify/execute with type "addon" and action "remove", which also supports previewing the proration credit first.
+        Use when removing an add-on from a subscription (e.g. downgrade or opt-out).
       operationId: removeSubscriptionAddon
       parameters:
       - description: Remove Addon Request
@@ -17130,8 +18293,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when adding an optional product or add-on to an existing subscription
-        (e.g. extra storage or support tier).
+      deprecated: true
+      description: |-
+        Deprecated: use POST /subscriptions/{id}/modify/execute with type "addon" and action "add", which also supports previewing the proration charge first.
+        Use when adding an optional product or add-on to an existing subscription (e.g. extra storage or support tier).
       operationId: addSubscriptionAddon
       parameters:
       - description: Add Addon Request
@@ -17146,7 +18311,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/AddonAssociationResponse'
+            $ref: '#/definitions/AddAddonToSubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -17451,11 +18616,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when submitting a file or job for async processing (e.g. export
-        or import). Returns task ID to poll for status and result.
+      description: Use to submit a CSV of usage events for async ingestion. The CSV
+        must already have been uploaded to the Flexprice-managed imports bucket (currently
+        via CSV Box) — pass the upload_id and the backend fetches the file from S3
+        and streams rows into ClickHouse. Returns the task ID and Temporal workflow
+        IDs for polling.
       operationId: createTask
       parameters:
-      - description: Task configuration
+      - description: Import request
         in: body
         name: task
         required: true
@@ -17464,10 +18632,10 @@ paths:
       produces:
       - application/json
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/TaskResponse'
+            $ref: '#/definitions/models.TemporalWorkflowResult'
         "400":
           description: Invalid request
           schema:
@@ -17478,9 +18646,10 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create a new task
+      summary: Import a CSV of usage events
       tags:
       - Tasks
+      x-scope: write
   /tasks/{id}:
     get:
       consumes:
@@ -18192,9 +19361,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/TaxRateResponse'
-            type: array
+            $ref: '#/definitions/ListTaxRatesResponse'
         "400":
           description: Invalid request
           schema:
@@ -18443,6 +19610,38 @@ paths:
       summary: Update a tenant
       tags:
       - Tenants
+  /usage-records/search:
+    post:
+      consumes:
+      - application/json
+      description: Lists usage records. Also accepts filters/sort for a filtered query.
+      parameters:
+      - description: Usage record filter
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/types.UsageRecordFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListUsageRecordsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List usage records
+      tags:
+      - Usage Records
   /users:
     post:
       consumes:
@@ -18550,6 +19749,92 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update service account
+      tags:
+      - Users
+  /users/{id}/remove:
+    post:
+      description: Remove a human user (type=user) from the current tenant. Not supported
+        for service accounts; use DELETE /users/{id} for those.
+      operationId: removeUser
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Remove user from tenant
+      tags:
+      - Users
+  /users/{id}/roles:
+    put:
+      consumes:
+      - application/json
+      description: Update the roles of a user account (not service accounts — their
+        roles are fixed at creation). Restricted to super_admin; a caller cannot update
+        their own roles. Blocked with a 400 if the user has any active (published,
+        unexpired) API key in any environment, since a key's permissions are snapshotted
+        at creation time and would otherwise silently keep running on the old roles;
+        the error lists the active keys grouped by environment ID so the caller can
+        prompt to expire them first, then retry.
+      operationId: updateUserRoles
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update user roles request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateUserRolesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/UpdateUserRolesResponse'
+        "400":
+          description: Invalid request, or user has active API keys that must be expired
+            first
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update user roles
       tags:
       - Users
   /users/me:
@@ -19836,6 +21121,22 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.updated
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.plan_changed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription plan changes in place (id/anchor preserved;
+        not cancelled+created). Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.plan_changed
       tags:
       - Webhook Events
   /webhook-events/subscription.renewal.due:

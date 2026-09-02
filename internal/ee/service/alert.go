@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -57,10 +56,6 @@ type AlertService interface {
 	// so retries do not create duplicate top-ups. Empty seed preserves the legacy
 	// fresh-UUID-per-call behavior.
 	EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer, autoTopupIdempotencySeed string) error
-
-	// EvaluateSpendBreachForEvent is the sync per-event entry used by the meter
-	// usage post-insert side effect when the debouncer is off.
-	EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer)
 }
 
 type alertService struct {

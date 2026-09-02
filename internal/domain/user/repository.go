@@ -11,6 +11,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	Update(ctx context.Context, user *User) error
+	UpdateRoles(ctx context.Context, id string, roles []string) error
 	Delete(ctx context.Context, id string) error
 	ListByFilter(ctx context.Context, filter *types.UserFilter) ([]*User, int64, error)
 }

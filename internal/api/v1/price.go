@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -223,6 +223,7 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 // @Param lookup_key path string true "Lookup key"
 // @Success 200 {object} dto.PriceResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Price not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/lookup/{lookup_key} [get]
 func (h *PriceHandler) GetByLookupKey(c *gin.Context) {

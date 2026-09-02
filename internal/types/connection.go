@@ -2,6 +2,8 @@ package types
 
 import (
 	"encoding/json"
+	"net/url"
+	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
@@ -127,11 +129,41 @@ func (r *RazorpayConnectionMetadata) Validate() error {
 
 // ChargebeeConnectionMetadata represents Chargebee-specific connection metadata
 type ChargebeeConnectionMetadata struct {
-	Site            string `json:"site"`                       // Chargebee site name (not encrypted)
-	APIKey          string `json:"api_key"`                    // Chargebee API key (encrypted)
+	Site   string `json:"site"`    // Chargebee site name (not encrypted)
+	APIKey string `json:"api_key"` // Chargebee API key (encrypted)
 	WebhookSecret   string `json:"webhook_secret,omitempty"`   // Chargebee Webhook Secret (encrypted, optional, NOT USED in v2)
 	WebhookUsername string `json:"webhook_username,omitempty"` // Basic Auth username for webhooks (encrypted)
 	WebhookPassword string `json:"webhook_password,omitempty"` // Basic Auth password for webhooks (encrypted)
+	// GatewayAccountID optionally pins which gateway account NEW cards are vaulted
+	// against. Charging an existing card never needs it — the payment source carries
+	// its own gateway. Empty defers to the site's own routing, which is correct for a
+	// deliberately configured multi-gateway site; set it only to override that, e.g.
+	// when flow-specific defaults would otherwise split one customer's cards across
+	// gateways. Not a secret; not encrypted.
+	GatewayAccountID string `json:"gateway_account_id,omitempty"`
+}
+
+// isValidChargebeeSite reports whether s is a bare Chargebee site name.
+// Chargebee sites are DNS labels: letters, digits and hyphens, not starting or
+// ending with a hyphen.
+func isValidChargebeeSite(s string) bool {
+	if s == "" || len(s) > 63 {
+		return false
+	}
+	if strings.HasPrefix(s, "-") || strings.HasSuffix(s, "-") {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Validate validates the Chargebee connection metadata
@@ -141,9 +173,31 @@ func (c *ChargebeeConnectionMetadata) Validate() error {
 			WithHint("Chargebee site name is required").
 			Mark(ierr.ErrValidation)
 	}
+	// The SDK builds request URLs by appending .chargebee.com to this value, so
+	// it must be a bare site name. Anything containing URL syntax — a fragment,
+	// path, port, or dot — would change which host the request reaches rather
+	// than which Chargebee site it addresses.
+	if !isValidChargebeeSite(c.Site) {
+		return ierr.NewError("site must be a valid Chargebee site name").
+			WithHint("Chargebee site must be the bare site name (letters, digits and hyphens only), not a URL").
+			Mark(ierr.ErrValidation)
+	}
 	if c.APIKey == "" {
 		return ierr.NewError("api_key is required").
 			WithHint("Chargebee API key is required").
+			Mark(ierr.ErrValidation)
+	}
+	// Chargebee v2 has no webhook signature scheme, so Basic Auth is the only
+	// supported way to authenticate incoming webhooks. Without it, anyone who
+	// knows a Chargebee invoice id can forge payment_succeeded events.
+	if c.WebhookUsername == "" {
+		return ierr.NewError("webhook_username is required").
+			WithHint("Enable Basic Auth on the Chargebee webhook and set webhook_username to match").
+			Mark(ierr.ErrValidation)
+	}
+	if c.WebhookPassword == "" {
+		return ierr.NewError("webhook_password is required").
+			WithHint("Enable Basic Auth on the Chargebee webhook and set webhook_password to match").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -286,7 +340,109 @@ func (z *ZohoBooksConnectionMetadata) Validate() error {
 			WithHint("Zoho Books organization_id is required for API calls").
 			Mark(ierr.ErrValidation)
 	}
+
+	// accounts_server and api_domain are stored and then re-read as the host for
+	// every subsequent token refresh and API call, which send this connection's
+	// client_id and client_secret. They are only ever Zoho datacenter endpoints,
+	// so restrict them to Zoho domains rather than accepting any host supplied
+	// when the connection is created.
+	if err := validateZohoEndpoint(z.AccountsURL, "accounts_server"); err != nil {
+		return err
+	}
+	if err := validateZohoEndpoint(z.APIDomain, "api_domain"); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// zohoEndpointSuffixes are the domains Zoho serves its accounts and API
+// endpoints from across all datacenters. accounts_server uses the zoho.*
+// domains; api_domain uses the zohoapis.* ones.
+var zohoEndpointSuffixes = []string{
+	".zoho.com",
+	".zoho.eu",
+	".zoho.in",
+	".zoho.com.au",
+	".zoho.jp",
+	".zoho.com.cn",
+	".zoho.sa",
+	".zoho.uk",
+	".zohocloud.ca",
+	".zohoapis.com",
+	".zohoapis.eu",
+	".zohoapis.in",
+	".zohoapis.com.au",
+	".zohoapis.jp",
+	".zohoapis.com.cn",
+	".zohoapis.sa",
+	".zohoapis.uk",
+	".zohoapiscloud.ca",
+}
+
+// ValidateZohoEndpoint restricts a client-supplied Zoho URL to an https Zoho
+// domain. Callers performing the OAuth token exchange must apply this to the
+// accounts_server before sending client_id/client_secret to it, so those
+// credentials cannot be exfiltrated to an attacker-chosen host.
+//
+// Unlike the internal check, this enforces a bare-origin invariant: the value is
+// concatenated with a fixed OAuth path (e.g. accounts_server + "/oauth/v2/token"),
+// so any path, query, fragment, or userinfo component would change which URL is
+// actually reached — a query would swallow the OAuth path, a fragment would strip
+// the OAuth query, and userinfo would send credentials to a different authority.
+// It also rejects an empty value.
+func ValidateZohoEndpoint(raw, field string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ierr.NewError(field+" is required").
+			WithHintf("Zoho Books %s must be provided", field).
+			Mark(ierr.ErrValidation)
+	}
+
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return ierr.NewError(field+" must be a valid https URL").
+			WithHintf("Zoho Books %s must be an https URL", field).
+			Mark(ierr.ErrValidation)
+	}
+	if u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return ierr.NewError(field+" must be a bare origin").
+			WithHintf("Zoho Books %s must be a scheme and host only, with no path, query, fragment, or credentials", field).
+			Mark(ierr.ErrValidation)
+	}
+
+	return validateZohoEndpoint(trimmed, field)
+}
+
+// validateZohoEndpoint checks a Zoho-supplied URL is https and served from a
+// Zoho domain. An empty value is allowed: these fields are populated by the
+// token exchange and are absent before OAuth completes.
+func validateZohoEndpoint(raw, field string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !u.IsAbs() || u.Scheme != "https" {
+		return ierr.NewError(field+" must be a valid https URL").
+			WithHintf("Zoho Books %s must be an https URL", field).
+			Mark(ierr.ErrValidation)
+	}
+
+	host := strings.ToLower(u.Hostname())
+	for _, suffix := range zohoEndpointSuffixes {
+		// Match the bare domain as well as any subdomain of it.
+		if strings.HasSuffix(host, suffix) || host == strings.TrimPrefix(suffix, ".") {
+			return nil
+		}
+	}
+
+	return ierr.NewError(field+" must be a Zoho endpoint").
+		WithHintf("Zoho Books %s must be a Zoho domain", field).
+		WithReportableDetails(map[string]any{
+			"allowed_domains": zohoEndpointSuffixes,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // Validate validates the Paddle connection metadata
@@ -331,10 +487,10 @@ func (s *StripeConnectionMetadata) Validate() error {
 
 // WhopConnectionMetadata represents Whop-specific connection metadata
 type WhopConnectionMetadata struct {
-	APIKey        string `json:"api_key"`                  // Whop API key / Bearer token (encrypted)
-	CompanyID     string `json:"company_id"`               // Whop company ID (biz_...)
-	ProductID     string `json:"product_id,omitempty"`     // Whop product ID (prod_...) - created on first sync if empty
-	WebhookSecret string `json:"webhook_secret,omitempty"` // Whop webhook signing secret (encrypted) - required to verify incoming webhooks
+	APIKey        string `json:"api_key"`              // Whop API key / Bearer token (encrypted)
+	CompanyID     string `json:"company_id"`           // Whop company ID (biz_...)
+	ProductID     string `json:"product_id,omitempty"` // Whop product ID (prod_...) - created on first sync if empty
+	WebhookSecret string `json:"webhook_secret"`       // Whop webhook signing secret (encrypted) - required to verify incoming webhooks
 }
 
 // Validate validates the Whop connection metadata
@@ -347,6 +503,11 @@ func (w *WhopConnectionMetadata) Validate() error {
 	if w.CompanyID == "" {
 		return ierr.NewError("company_id is required").
 			WithHint("Whop company ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if w.WebhookSecret == "" {
+		return ierr.NewError("webhook_secret is required").
+			WithHint("Whop webhook secret is required").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -436,7 +597,53 @@ func (g *GCPMarketplaceConnectionSecrets) Validate() error {
 			WithHint("GCP Marketplace credentials_json must include audience, token_url, credential_source, and service_account_impersonation_url — paste the file generated by `gcloud iam workload-identity-pools create-cred-config --aws` unmodified").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Both URLs are contacted synchronously during connection verification and
+	// on every later token exchange. The generated config always points at
+	// Google's STS and IAM endpoints, so anything else means the file was edited
+	// after generation and must not be used as an outbound request target.
+	if err := validateGoogleEndpoint(parsed.TokenURL, "token_url"); err != nil {
+		return err
+	}
+	if err := validateGoogleEndpoint(parsed.ServiceAccountImpersonationURL, "service_account_impersonation_url"); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// googleEndpointSuffixes are the domains Google serves its STS and IAM
+// credential endpoints from.
+// googleEndpointHosts are the exact hosts the workload identity federation flow
+// contacts. Matched exactly rather than by domain suffix: a suffix match on
+// googleapis.com would also accept hosts serving tenant-controlled content,
+// such as storage.googleapis.com.
+var googleEndpointHosts = []string{
+	"sts.googleapis.com",
+	"iamcredentials.googleapis.com",
+}
+
+// validateGoogleEndpoint checks a URL from a workload identity federation
+// config is https and addresses one of Google's credential endpoints.
+func validateGoogleEndpoint(raw, field string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !u.IsAbs() || u.Scheme != "https" {
+		return ierr.NewError(field+" must be a valid https URL").
+			WithHintf("GCP Marketplace credentials_json %s must be an https URL", field).
+			Mark(ierr.ErrValidation)
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if lo.Contains(googleEndpointHosts, host) {
+		return nil
+	}
+
+	return ierr.NewError(field+" must be a Google credentials endpoint").
+		WithHintf("GCP Marketplace credentials_json %s must be a Google credentials endpoint — paste the file generated by `gcloud iam workload-identity-pools create-cred-config` unmodified", field).
+		WithReportableDetails(map[string]any{
+			"allowed_hosts": googleEndpointHosts,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // AzureMarketplaceConnectionSecrets represents Azure Marketplace connection secrets. All three

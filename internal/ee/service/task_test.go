@@ -2,29 +2,27 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
-	"io"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/domain/feature"
-	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/task"
-	"github.com/flexprice/flexprice/internal/httpclient"
+	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
 type TaskServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	service  TaskService
-	client   *testutil.MockHTTPClient
+	storage  *fakeImportStorage
+	resolver *fakeImportResolver
 	testData struct {
 		task   *task.Task
 		events struct {
@@ -41,15 +39,14 @@ func TestTaskService(t *testing.T) {
 
 func (s *TaskServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
-	s.client = testutil.NewMockHTTPClient()
+	s.storage = newFakeImportStorage()
+	s.resolver = &fakeImportResolver{bucket: "test-imports", store: s.storage}
 	s.setupService()
-	s.configureRetryableHTTPClient()
 	s.setupTestData()
 }
 
 func (s *TaskServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
-	s.client.Clear()
 }
 
 func (s *TaskServiceSuite) setupService() {
@@ -58,7 +55,6 @@ func (s *TaskServiceSuite) setupService() {
 			Logger:             s.GetLogger(),
 			Config:             s.GetConfig(),
 			DB:                 s.GetDB(),
-			Client:             s.client,
 			EventRepo:          s.GetStores().EventRepo,
 			TaskRepo:           s.GetStores().TaskRepo,
 			CustomerRepo:       s.GetStores().CustomerRepo,
@@ -82,109 +78,40 @@ func (s *TaskServiceSuite) setupService() {
 			TaxRateRepo:        s.GetStores().TaxRateRepo,
 			TaxAppliedRepo:     s.GetStores().TaxAppliedRepo,
 			TaxAssociationRepo: s.GetStores().TaxAssociationRepo,
+			StorageResolver:    s.resolver,
 		},
 	)
 }
 
-// mockHTTPTransport is a custom http.RoundTripper that routes requests through the mock client
-type mockHTTPTransport struct {
-	client *testutil.MockHTTPClient
-}
-
-func (m *mockHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Convert http.Request to httpclient.Request
-	var body []byte
-	var err error
-	if req.Body != nil {
-		body, err = io.ReadAll(req.Body)
-		if err != nil {
-			return nil, err
-		}
-		req.Body.Close()
-	}
-
-	httpClientReq := &httpclient.Request{
-		Method:  req.Method,
-		URL:     req.URL.String(),
-		Headers: make(map[string]string),
-		Body:    body,
-	}
-
-	for key, values := range req.Header {
-		if len(values) > 0 {
-			httpClientReq.Headers[key] = values[0]
-		}
-	}
-
-	// Use the mock client to send the request
-	resp, err := m.client.Send(req.Context(), httpClientReq)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert httpclient.Response back to http.Response
-	httpResp := &http.Response{
-		StatusCode: resp.StatusCode,
-		Body:       io.NopCloser(bytes.NewReader(resp.Body)),
-		Header:     make(http.Header),
-	}
-
-	for key, value := range resp.Headers {
-		httpResp.Header.Set(key, value)
-	}
-
-	return httpResp, nil
-}
-
-// configureRetryableHTTPClient sets up the task service to use the mock HTTP client
-func (s *TaskServiceSuite) configureRetryableHTTPClient() {
-	ts := s.service.(*taskService)
-	if ts.fileProcessor != nil && ts.fileProcessor.StreamingProcessor != nil {
-		// Create a custom transport that uses our mock client
-		mockTransport := &mockHTTPTransport{client: s.client}
-
-		// Replace the RetryClient's HTTP client with one using our mock transport
-		ts.fileProcessor.StreamingProcessor.RetryClient.HTTPClient = &http.Client{
-			Transport: mockTransport,
-		}
-	}
+// registerImportCSV puts CSV bytes at the exact key the service will compute
+// for the given upload_id in the test context. Tests then build a task with
+// metadata upload_id and ProcessTaskWithStreaming resolves to that object.
+func (s *TaskServiceSuite) registerImportCSV(uploadID string, data []byte) string {
+	key := importObjectKey(
+		s.GetConfig().FlexpriceS3Imports.KeyPrefix,
+		uploadID,
+		types.GetTenantID(s.GetContext()),
+		types.GetEnvironmentID(s.GetContext()),
+	)
+	s.storage.put(key, data)
+	return key
 }
 
 func (s *TaskServiceSuite) setupTestData() {
 	s.testData.now = time.Now().UTC()
 
-	// Create test task
 	s.testData.task = &task.Task{
 		ID:         "task_123",
 		TaskType:   types.TaskTypeImport,
 		EntityType: types.EntityTypeEvents,
-		FileURL:    "https://example.com/test.csv",
 		FileType:   types.FileTypeCSV,
 		TaskStatus: types.TaskStatusPending,
+		Metadata:   map[string]interface{}{"upload_id": "test", "file_provider": dto.FileProviderCSVBox},
 		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), s.testData.task))
 
-	// Register mock CSV response
-	data := [][]string{
-		{"event_name", "external_customer_id", "timestamp", "properties.bytes_used", "properties.region", "properties.tier"},
-		{"api_call", "cust_ext_123", s.testData.now.Add(-1 * time.Hour).Format(time.RFC3339), "", "", ""},
-		{"storage_usage", "cust_ext_123", s.testData.now.Add(-30 * time.Minute).Format(time.RFC3339), "100", "us-east-1", "standard"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("test.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Create test events
-	// Standard events
+	// Existing standard events (unrelated to import flow but used by other assertions)
 	for i := 0; i < 10; i++ {
 		event := &events.Event{
 			ID:                 s.GetUUID(),
@@ -197,118 +124,111 @@ func (s *TaskServiceSuite) setupTestData() {
 		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
 		s.testData.events.standard = append(s.testData.events.standard, event)
 	}
+}
 
-	// Events with properties
-	eventsWithProps := []struct {
-		name  string
-		props map[string]interface{}
-	}{
-		{
-			name: "storage_usage",
-			props: map[string]interface{}{
-				"bytes_used": float64(100),
-				"region":     "us-east-1",
-				"tier":       "standard",
-			},
-		},
-		{
-			name: "storage_usage",
-			props: map[string]interface{}{
-				"bytes_used": float64(200),
-				"region":     "us-east-1",
-				"tier":       "archive",
-			},
-		},
+// enableImports flips the flag + populates a fake bucket so CreateTask
+// stops rejecting. Call before tests that exercise the create path.
+func (s *TaskServiceSuite) enableImports() {
+	s.GetConfig().FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{
+		Enabled:            true,
+		Bucket:             "test-imports",
+		Region:             "us-east-1",
+		KeyPrefix:          "csvbox",
+		AWSAccessKeyID:     "test-key",
+		AWSSecretAccessKey: "test-secret",
 	}
-
-	for _, e := range eventsWithProps {
-		event := &events.Event{
-			ID:                 s.GetUUID(),
-			TenantID:           s.testData.task.TenantID,
-			EventName:          e.name,
-			ExternalCustomerID: "cust_ext_123",
-			Timestamp:          s.testData.now.Add(-30 * time.Minute),
-			Properties:         e.props,
-		}
-		s.NoError(s.GetStores().EventRepo.InsertEvent(s.GetContext(), event))
-		s.testData.events.withProps = append(s.testData.events.withProps, event)
-	}
+	s.setupService()
 }
 
 func (s *TaskServiceSuite) TestCreateTask() {
+	s.enableImports()
+
 	tests := []struct {
 		name    string
 		req     dto.CreateTaskRequest
-		mockCSV bool
-		want    *dto.TaskResponse
 		wantErr bool
 	}{
 		{
 			name: "successful_task_creation",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: true,
 			wantErr: false,
 		},
 		{
 			name: "invalid_task_type",
 			req: dto.CreateTaskRequest{
-				TaskType:   "INVALID",
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     "INVALID",
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
 			wantErr: true,
 		},
 		{
-			name: "invalid_entity_type",
+			name: "export_task_type_rejected",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: "INVALID",
-				FileURL:    "https://example.com/events.csv",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeExport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
 			wantErr: true,
 		},
 		{
-			name: "empty_file_url",
+			name: "non_events_entity_type_rejected",
 			req: dto.CreateTaskRequest{
-				TaskType:   types.TaskTypeImport,
-				EntityType: types.EntityTypeEvents,
-				FileURL:    "",
-				FileType:   types.FileTypeCSV,
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeCustomers,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
 			},
-			mockCSV: false,
+			wantErr: true,
+		},
+		{
+			name: "non_csv_file_type_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeJSON,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "abc123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown_file_provider_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: "dropbox",
+				UploadID:     "abc123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "path_traversal_upload_id_rejected",
+			req: dto.CreateTaskRequest{
+				TaskType:     types.TaskTypeImport,
+				EntityType:   types.EntityTypeEvents,
+				FileType:     types.FileTypeCSV,
+				FileProvider: dto.FileProviderCSVBox,
+				UploadID:     "../../etc/passwd",
+			},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			if tt.mockCSV {
-				data := [][]string{
-					{"event_name", "external_customer_id", "timestamp", "properties.bytes_used", "properties.region"},
-					{"api_call", "cust_ext_123", s.testData.now.Add(-1 * time.Hour).Format(time.RFC3339), "100", "us-east-1"},
-				}
-				var buf bytes.Buffer
-				writer := csv.NewWriter(&buf)
-				s.NoError(writer.WriteAll(data))
-
-				s.client.RegisterResponse("events.csv", testutil.MockResponse{
-					StatusCode: http.StatusOK,
-					Body:       buf.Bytes(),
-					Headers: map[string]string{
-						"Content-Type": "text/csv",
-					},
-				})
-			}
-
 			resp, err := s.service.CreateTask(s.GetContext(), tt.req)
 			if tt.wantErr {
 				s.Error(err)
@@ -320,30 +240,132 @@ func (s *TaskServiceSuite) TestCreateTask() {
 			s.NotEmpty(resp.ID)
 			s.Equal(tt.req.TaskType, resp.TaskType)
 			s.Equal(tt.req.EntityType, resp.EntityType)
-			s.Equal(tt.req.FileURL, resp.FileURL)
 			s.Equal(tt.req.FileType, resp.FileType)
+			s.Empty(resp.FileURL, "FileURL is derived at process time; nothing is persisted")
 			s.Equal(types.TaskStatusPending, resp.TaskStatus)
+			s.Equal(tt.req.UploadID, resp.Metadata["upload_id"])
+			s.Equal(tt.req.FileProvider, resp.Metadata["file_provider"])
 		})
 	}
+}
+
+// The imports feature is off by default; CreateTask must reject rather than
+// build a task whose downstream download will fail obscurely.
+func (s *TaskServiceSuite) TestCreateTask_RejectsWhenImportsDisabled() {
+	s.GetConfig().FlexpriceS3Imports = config.FlexpriceS3ImportsConfig{Enabled: false}
+	s.setupService()
+
+	_, err := s.service.CreateTask(s.GetContext(), dto.CreateTaskRequest{
+		TaskType:     types.TaskTypeImport,
+		EntityType:   types.EntityTypeEvents,
+		FileType:     types.FileTypeCSV,
+		FileProvider: dto.FileProviderCSVBox,
+		UploadID:     "abc123",
+	})
+	s.Error(err)
+}
+
+// End-to-end happy path: bytes registered under the derived key are picked up
+// by ProcessTaskWithStreaming and produce events via the chunk processor.
+func (s *TaskServiceSuite) TestProcessTaskWithStreaming_EventsImport() {
+	s.enableImports()
+
+	rows := [][]string{
+		{"event_name", "external_customer_id", "timestamp", "properties.bytes_used"},
+		{"api_call", "cust_ext_123", s.testData.now.Add(-1 * time.Hour).Format(time.RFC3339), "42"},
+		{"api_call", "cust_ext_123", s.testData.now.Add(-30 * time.Minute).Format(time.RFC3339), "100"},
+	}
+	var buf bytes.Buffer
+	s.NoError(csv.NewWriter(&buf).WriteAll(rows))
+	s.registerImportCSV("evt-happy", buf.Bytes())
+
+	imp := &task.Task{
+		ID:         "task_import_events_ok",
+		TaskType:   types.TaskTypeImport,
+		EntityType: types.EntityTypeEvents,
+		FileType:   types.FileTypeCSV,
+		TaskStatus: types.TaskStatusPending,
+		Metadata:   map[string]interface{}{"upload_id": "evt-happy", "file_provider": dto.FileProviderCSVBox},
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), imp))
+
+	s.NoError(s.service.ProcessTaskWithStreaming(s.GetContext(), imp.ID))
+
+	updated, err := s.GetStores().TaskRepo.Get(s.GetContext(), imp.ID)
+	s.NoError(err)
+	s.Equal(types.TaskStatusCompleted, updated.TaskStatus)
+	s.Equal(2, updated.ProcessedRecords)
+	s.Equal(2, updated.SuccessfulRecords)
+	s.Equal(0, updated.FailedRecords)
+}
+
+// A task whose upload_id resolves to no object must fail cleanly, not
+// crash — a common state during Temporal retries if CSV Box is still
+// uploading when the workflow first fires.
+func (s *TaskServiceSuite) TestProcessTaskWithStreaming_UnknownUploadIDFails() {
+	s.enableImports()
+
+	imp := &task.Task{
+		ID:         "task_import_missing",
+		TaskType:   types.TaskTypeImport,
+		EntityType: types.EntityTypeEvents,
+		FileType:   types.FileTypeCSV,
+		TaskStatus: types.TaskStatusPending,
+		Metadata:   map[string]interface{}{"upload_id": "not-yet-uploaded", "file_provider": dto.FileProviderCSVBox},
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), imp))
+
+	err := s.service.ProcessTaskWithStreaming(s.GetContext(), imp.ID)
+	s.Error(err)
+
+	updated, gerr := s.GetStores().TaskRepo.Get(s.GetContext(), imp.ID)
+	s.NoError(gerr)
+	s.Equal(types.TaskStatusFailed, updated.TaskStatus)
+}
+
+// Cross-tenant safety: an upload_id from tenant A must not fetch bytes
+// registered by tenant B, because the key derivation includes tenant/env
+// from the calling context.
+func (s *TaskServiceSuite) TestProcessTaskWithStreaming_CrossTenantIsolated() {
+	s.enableImports()
+
+	rows := [][]string{
+		{"event_name", "external_customer_id", "timestamp"},
+		{"api_call", "cust", s.testData.now.Format(time.RFC3339)},
+	}
+	var buf bytes.Buffer
+	s.NoError(csv.NewWriter(&buf).WriteAll(rows))
+
+	// Register the file under a DIFFERENT tenant's key by manually poking the
+	// map; the caller's ctx must not be able to reach it.
+	foreignKey := importObjectKey("csvbox", "shared-id", "other-tenant", "other-env")
+	s.storage.put(foreignKey, buf.Bytes())
+
+	imp := &task.Task{
+		ID:         "task_import_cross_tenant",
+		TaskType:   types.TaskTypeImport,
+		EntityType: types.EntityTypeEvents,
+		FileType:   types.FileTypeCSV,
+		TaskStatus: types.TaskStatusPending,
+		Metadata:   map[string]interface{}{"upload_id": "shared-id", "file_provider": dto.FileProviderCSVBox},
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), imp))
+
+	err := s.service.ProcessTaskWithStreaming(s.GetContext(), imp.ID)
+	s.Error(err, "must not fetch another tenant's object")
 }
 
 func (s *TaskServiceSuite) TestGetTask() {
 	tests := []struct {
 		name    string
 		id      string
-		want    *dto.TaskResponse
 		wantErr bool
 	}{
-		{
-			name:    "existing_task",
-			id:      s.testData.task.ID,
-			wantErr: false,
-		},
-		{
-			name:    "non_existent_task",
-			id:      "non_existent",
-			wantErr: true,
-		},
+		{name: "existing_task", id: s.testData.task.ID, wantErr: false},
+		{name: "non_existent_task", id: "non_existent", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -353,7 +375,6 @@ func (s *TaskServiceSuite) TestGetTask() {
 				s.Error(err)
 				return
 			}
-
 			s.NoError(err)
 			s.NotNil(resp)
 			s.Equal(tt.id, resp.ID)
@@ -362,13 +383,11 @@ func (s *TaskServiceSuite) TestGetTask() {
 }
 
 func (s *TaskServiceSuite) TestListTasks() {
-	// Create additional test tasks
 	testTasks := []*task.Task{
 		{
 			ID:         "task_1",
 			TaskType:   types.TaskTypeImport,
 			EntityType: types.EntityTypeEvents,
-			FileURL:    "https://example.com/test1.csv",
 			FileType:   types.FileTypeCSV,
 			TaskStatus: types.TaskStatusCompleted,
 			BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
@@ -377,64 +396,34 @@ func (s *TaskServiceSuite) TestListTasks() {
 			ID:         "task_2",
 			TaskType:   types.TaskTypeImport,
 			EntityType: types.EntityTypeEvents,
-			FileURL:    "https://example.com/test2.csv",
 			FileType:   types.FileTypeCSV,
 			TaskStatus: types.TaskStatusFailed,
 			BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
 		},
 	}
-
 	for _, t := range testTasks {
 		s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), t))
 	}
 
-	completedStatus := types.TaskStatusCompleted
-	failedStatus := types.TaskStatusFailed
+	completed := types.TaskStatusCompleted
+	failed := types.TaskStatusFailed
 
 	tests := []struct {
 		name      string
 		filter    *types.TaskFilter
 		wantCount int
-		wantErr   bool
 	}{
-		{
-			name:      "list_all_tasks",
-			filter:    &types.TaskFilter{QueryFilter: types.NewDefaultQueryFilter()},
-			wantCount: 3, // 2 new + 1 from setupTestData
-			wantErr:   false,
-		},
-		{
-			name: "filter_by_status_completed",
-			filter: &types.TaskFilter{
-				QueryFilter: types.NewDefaultQueryFilter(),
-				TaskStatus:  &completedStatus,
-			},
-			wantCount: 1,
-			wantErr:   false,
-		},
-		{
-			name: "filter_by_status_failed",
-			filter: &types.TaskFilter{
-				QueryFilter: types.NewDefaultQueryFilter(),
-				TaskStatus:  &failedStatus,
-			},
-			wantCount: 1,
-			wantErr:   false,
-		},
+		{name: "list_all", filter: &types.TaskFilter{QueryFilter: types.NewDefaultQueryFilter()}, wantCount: 3},
+		{name: "filter_completed", filter: &types.TaskFilter{QueryFilter: types.NewDefaultQueryFilter(), TaskStatus: &completed}, wantCount: 1},
+		{name: "filter_failed", filter: &types.TaskFilter{QueryFilter: types.NewDefaultQueryFilter(), TaskStatus: &failed}, wantCount: 1},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			resp, err := s.service.ListTasks(s.GetContext(), tt.filter)
-			if tt.wantErr {
-				s.Error(err)
-				return
-			}
-
 			s.NoError(err)
 			s.NotNil(resp)
 			s.Len(resp.Items, tt.wantCount)
-
 			if tt.filter.TaskStatus != nil {
 				for _, task := range resp.Items {
 					s.Equal(*tt.filter.TaskStatus, task.TaskStatus)
@@ -451,30 +440,10 @@ func (s *TaskServiceSuite) TestUpdateTaskStatus() {
 		newStatus types.TaskStatus
 		wantErr   bool
 	}{
-		{
-			name:      "pending_to_processing",
-			id:        s.testData.task.ID,
-			newStatus: types.TaskStatusProcessing,
-			wantErr:   false,
-		},
-		{
-			name:      "processing_to_completed",
-			id:        s.testData.task.ID,
-			newStatus: types.TaskStatusCompleted,
-			wantErr:   false,
-		},
-		{
-			name:      "completed_to_processing",
-			id:        s.testData.task.ID,
-			newStatus: types.TaskStatusProcessing,
-			wantErr:   true, // Invalid transition
-		},
-		{
-			name:      "non_existent_task",
-			id:        "non_existent",
-			newStatus: types.TaskStatusProcessing,
-			wantErr:   true,
-		},
+		{name: "pending_to_processing", id: s.testData.task.ID, newStatus: types.TaskStatusProcessing, wantErr: false},
+		{name: "processing_to_completed", id: s.testData.task.ID, newStatus: types.TaskStatusCompleted, wantErr: false},
+		{name: "completed_to_processing", id: s.testData.task.ID, newStatus: types.TaskStatusProcessing, wantErr: true},
+		{name: "non_existent_task", id: "non_existent", newStatus: types.TaskStatusProcessing, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -484,702 +453,90 @@ func (s *TaskServiceSuite) TestUpdateTaskStatus() {
 				s.Error(err)
 				return
 			}
-
 			s.NoError(err)
-			task, err := s.GetStores().TaskRepo.Get(s.GetContext(), tt.id)
+			t, err := s.GetStores().TaskRepo.Get(s.GetContext(), tt.id)
 			s.NoError(err)
-			s.Equal(tt.newStatus, task.TaskStatus)
+			s.Equal(tt.newStatus, t.TaskStatus)
 		})
 	}
 }
 
+// Guard against a regression in the PROCESSING→PROCESSING short-circuit that
+// makes ProcessTaskWithStreaming safe under Temporal retries.
 func (s *TaskServiceSuite) TestProcessTaskWithStreamingIdempotent() {
-	// Test that ProcessTaskWithStreaming is idempotent when called multiple times
-	// This simulates Temporal retry behavior
+	s.NoError(s.service.UpdateTaskStatus(s.GetContext(), s.testData.task.ID, types.TaskStatusProcessing))
 
-	// First, set task to processing status
+	// A direct UpdateTaskStatus call is intentionally NOT idempotent — the
+	// transition validator refuses PROCESSING→PROCESSING. ProcessTaskWithStreaming
+	// must skip that transition check for the retry case.
 	err := s.service.UpdateTaskStatus(s.GetContext(), s.testData.task.ID, types.TaskStatusProcessing)
-	s.NoError(err)
-
-	// Verify task is in processing status
-	task, err := s.GetStores().TaskRepo.Get(s.GetContext(), s.testData.task.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusProcessing, task.TaskStatus)
-
-	// Test the idempotent behavior by calling UpdateTaskStatus with PROCESSING again
-	// This should not fail due to the status transition validation
-	err = s.service.UpdateTaskStatus(s.GetContext(), s.testData.task.ID, types.TaskStatusProcessing)
-
-	// This should fail with status transition error because we haven't made UpdateTaskStatus idempotent
-	// But ProcessTaskWithStreaming should handle this gracefully
 	s.Error(err)
 	s.Contains(err.Error(), "invalid status transition from PROCESSING to PROCESSING")
 
-	// Now test that ProcessTaskWithStreaming handles this gracefully
-	// We'll test just the status check part by creating a mock task service
-	// that only tests the status transition logic
-	_ = s.service.(*taskService)
-
-	// Get the task again to ensure we have the latest state
-	task, err = s.GetStores().TaskRepo.Get(s.GetContext(), s.testData.task.ID)
+	got, err := s.GetStores().TaskRepo.Get(s.GetContext(), s.testData.task.ID)
 	s.NoError(err)
-	s.Equal(types.TaskStatusProcessing, task.TaskStatus)
-
-	// The key test: ProcessTaskWithStreaming should not fail when called on a task
-	// that's already in PROCESSING status due to our idempotent fix
-	// We can't easily test the full method due to file processing dependencies,
-	// but we can verify the logic by checking that the status check works correctly
-
-	// Verify that the task is in the expected state
-	s.Equal(types.TaskStatusProcessing, task.TaskStatus)
+	s.Equal(types.TaskStatusProcessing, got.TaskStatus)
 }
 
-func (s *TaskServiceSuite) TestPriceImport() {
-	// Create test plan and meter
-	testPlan := &plan.Plan{
-		ID:          s.GetUUID(),
-		Name:        "Test Plan",
-		LookupKey:   "test-plan",
-		Description: "Test plan for price import",
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), testPlan))
+// --- fakes ------------------------------------------------------------------
 
-	testMeter := &meter.Meter{
-		ID:        s.GetUUID(),
-		Name:      "API Calls",
-		EventName: "api_call",
-		Aggregation: meter.Aggregation{
-			Type: types.AggregationCount,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter))
-
-	// Create a price import task
-	priceTask := &task.Task{
-		ID:         "task_price_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypePrices,
-		FileURL:    "https://example.com/prices.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), priceTask))
-
-	// Register mock CSV response with basic price
-	data := [][]string{
-		{"entity_type", "entity_id", "currency", "billing_model", "billing_period", "billing_period_count", "type", "amount", "meter_id", "billing_cadence", "invoice_cadence"},
-		{"PLAN", testPlan.ID, "usd", "FLAT_FEE", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("prices.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(1, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords)
-	s.Equal(0, updatedTask.FailedRecords)
-
-	// Verify price was created
-	prices, err := s.GetStores().PriceRepo.List(s.GetContext(), &types.PriceFilter{
-		QueryFilter: types.NewDefaultQueryFilter(),
-		EntityType:  lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN),
-		EntityIDs:   []string{testPlan.ID},
-	})
-	s.NoError(err)
-	s.GreaterOrEqual(len(prices), 1) // At least 1 price should exist
+// fakeImportStorage is a minimal in-memory storagetypes.Storage. Only
+// Download is exercised; other methods stub to satisfy the interface.
+type fakeImportStorage struct {
+	objects map[string][]byte
 }
 
-func (s *TaskServiceSuite) TestPriceImportPackage() {
-	// Create test plan and meter
-	testPlan := &plan.Plan{
-		ID:          s.GetUUID(),
-		Name:        "Package Plan",
-		LookupKey:   "package-plan",
-		Description: "Test plan for package price",
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), testPlan))
-
-	testMeter := &meter.Meter{
-		ID:        s.GetUUID(),
-		Name:      "Storage",
-		EventName: "storage_event",
-		Aggregation: meter.Aggregation{
-			Type:  types.AggregationSum,
-			Field: "bytes_used",
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter))
-
-	// Create a price import task
-	priceTask := &task.Task{
-		ID:         "task_price_package_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypePrices,
-		FileURL:    "https://example.com/prices_package.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), priceTask))
-
-	// Register mock CSV response with package price
-	data := [][]string{
-		{"entity_type", "entity_id", "currency", "billing_model", "billing_period", "billing_period_count", "type", "amount", "meter_id", "billing_cadence", "invoice_cadence", "transform_quantity_divide_by", "transform_quantity_round"},
-		{"PLAN", testPlan.ID, "usd", "PACKAGE", "MONTHLY", "1", "USAGE", "50", testMeter.ID, "RECURRING", "ARREAR", "10", "up"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("prices_package.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(1, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords)
+func newFakeImportStorage() *fakeImportStorage {
+	return &fakeImportStorage{objects: make(map[string][]byte)}
 }
 
-func (s *TaskServiceSuite) TestPriceImportTiered() {
-	// Create test plan and meter
-	testPlan := &plan.Plan{
-		ID:          s.GetUUID(),
-		Name:        "Tiered Plan",
-		LookupKey:   "tiered-plan",
-		Description: "Test plan for tiered price",
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+func (f *fakeImportStorage) put(key string, data []byte) { f.objects[key] = data }
+
+func (f *fakeImportStorage) Upload(context.Context, *storagetypes.UploadRequest) (*storagetypes.UploadResponse, error) {
+	return nil, nil
+}
+func (f *fakeImportStorage) Download(_ context.Context, key string) ([]byte, error) {
+	b, ok := f.objects[key]
+	if !ok {
+		return nil, notFoundErr(key)
 	}
-	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), testPlan))
+	return b, nil
+}
+func (f *fakeImportStorage) Exists(_ context.Context, key string) (bool, error) {
+	_, ok := f.objects[key]
+	return ok, nil
+}
+func (f *fakeImportStorage) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://fake/" + key, nil
+}
+func (f *fakeImportStorage) ValidateConnection(context.Context) error { return nil }
+func (f *fakeImportStorage) FileURL(key string) string                { return "s3://fake/" + key }
+func (f *fakeImportStorage) Provider() storagetypes.Provider          { return storagetypes.ProviderS3 }
 
-	testMeter := &meter.Meter{
-		ID:        s.GetUUID(),
-		Name:      "API Usage",
-		EventName: "api_usage_event",
-		Aggregation: meter.Aggregation{
-			Type: types.AggregationCount,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter))
-
-	// Create a price import task
-	priceTask := &task.Task{
-		ID:         "task_price_tiered_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypePrices,
-		FileURL:    "https://example.com/prices_tiered.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), priceTask))
-
-	// Register mock CSV response with tiered price
-	data := [][]string{
-		{"entity_type", "entity_id", "currency", "billing_model", "billing_period", "billing_period_count", "type", "meter_id", "billing_cadence", "invoice_cadence", "tier_mode", "tiers"},
-		{"PLAN", testPlan.ID, "usd", "TIERED", "MONTHLY", "1", "USAGE", testMeter.ID, "RECURRING", "ARREAR", "VOLUME", `[{"up_to":123,"unit_amount":"1","flat_amount":"20"}]`},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("prices_tiered.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(1, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords)
+type fakeImportResolver struct {
+	bucket string
+	store  storagetypes.Storage
 }
 
-func (s *TaskServiceSuite) TestPriceImportWithMetadata() {
-	// Create test plan and meter
-	testPlan := &plan.Plan{
-		ID:          s.GetUUID(),
-		Name:        "Metadata Plan",
-		LookupKey:   "metadata-plan",
-		Description: "Test plan for price with metadata",
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+func (r *fakeImportResolver) ForPlatform(_ context.Context, purpose storage.Purpose) (storagetypes.Storage, error) {
+	if purpose != storage.PurposeImport {
+		return nil, notFoundErr(string(purpose))
 	}
-	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), testPlan))
-
-	testMeter := &meter.Meter{
-		ID:        s.GetUUID(),
-		Name:      "Metadata Meter",
-		EventName: "metadata_event",
-		Aggregation: meter.Aggregation{
-			Type: types.AggregationCount,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	return r.store, nil
+}
+func (r *fakeImportResolver) ForConnection(context.Context, string) (storagetypes.Storage, error) {
+	return nil, nil
+}
+func (r *fakeImportResolver) Provider() storage.Provider { return storage.ProviderS3 }
+func (r *fakeImportResolver) BucketConfigFor(purpose storage.Purpose) (config.BucketConfig, error) {
+	if purpose != storage.PurposeImport {
+		return config.BucketConfig{}, notFoundErr(string(purpose))
 	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter))
-
-	// Create a price import task
-	priceTask := &task.Task{
-		ID:         "task_price_metadata_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypePrices,
-		FileURL:    "https://example.com/prices_metadata.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), priceTask))
-
-	// Register mock CSV response with metadata fields
-	data := [][]string{
-		{"entity_type", "entity_id", "currency", "billing_model", "billing_period", "billing_period_count", "type", "amount", "meter_id", "billing_cadence", "invoice_cadence", "metadata.category", "metadata.priority"},
-		{"PLAN", testPlan.ID, "usd", "FLAT_FEE", "MONTHLY", "1", "FIXED", "20", testMeter.ID, "RECURRING", "ARREAR", "support", "high"},
-		{"PLAN", testPlan.ID, "usd", "FLAT_FEE", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR", "", ""},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("prices_metadata.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
-	s.Equal(0, updatedTask.FailedRecords)
+	return config.BucketConfig{Bucket: r.bucket, KeyPrefix: "csvbox", PresignExpiryDuration: "5m"}, nil
 }
 
-func (s *TaskServiceSuite) TestPriceImportErrorHandling() {
-	// Create test plan and meter
-	testPlan := &plan.Plan{
-		ID:          s.GetUUID(),
-		Name:        "Error Plan",
-		LookupKey:   "error-plan",
-		Description: "Test plan for error handling",
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), testPlan))
+type notFoundError struct{ what string }
 
-	testMeter := &meter.Meter{
-		ID:        s.GetUUID(),
-		Name:      "Error Meter",
-		EventName: "error_event",
-		Aggregation: meter.Aggregation{
-			Type: types.AggregationCount,
-		},
-		ResetUsage: types.ResetUsageBillingPeriod,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(s.GetContext(), testMeter))
+func (e *notFoundError) Error() string { return "not found: " + e.what }
+func notFoundErr(what string) error    { return &notFoundError{what: what} }
 
-	// Create a price import task
-	priceTask := &task.Task{
-		ID:         "task_price_errors",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypePrices,
-		FileURL:    "https://example.com/prices_errors.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), priceTask))
-
-	// Register mock CSV response with invalid data
-	data := [][]string{
-		{"entity_type", "entity_id", "currency", "billing_model", "billing_period", "billing_period_count", "type", "amount", "meter_id", "billing_cadence", "invoice_cadence", "tiers"},
-		{"", testPlan.ID, "usd", "FLAT_FEE", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR", ""},                  // Missing entity_type
-		{"PLAN", testPlan.ID, "", "FLAT_FEE", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR", ""},                 // Missing currency
-		{"PLAN", testPlan.ID, "usd", "INVALID", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR", ""},               // Invalid billing_model
-		{"PLAN", testPlan.ID, "usd", "TIERED", "MONTHLY", "1", "USAGE", "", testMeter.ID, "RECURRING", "ARREAR", `{"invalid": "json"`}, // Malformed JSON in tiers
-		{"PLAN", testPlan.ID, "usd", "FLAT_FEE", "MONTHLY", "1", "USAGE", "100", testMeter.ID, "RECURRING", "ARREAR", ""},              // Valid price
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("prices_errors.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), priceTask.ID)
-	s.NoError(err) // Processing should complete even with errors
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), priceTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(5, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords) // Only one valid price
-	s.Equal(4, updatedTask.FailedRecords)
-	s.NotNil(updatedTask.ErrorSummary)
-	s.Contains(*updatedTask.ErrorSummary, "Record 0")
-	s.Contains(*updatedTask.ErrorSummary, "Record 1")
-	s.Contains(*updatedTask.ErrorSummary, "Record 2")
-	s.Contains(*updatedTask.ErrorSummary, "Record 3") // Malformed JSON tiers
-}
-
-func (s *TaskServiceSuite) TestFeatureImport() {
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with various feature types
-	data := [][]string{
-		{"name", "type", "lookup_key", "unit_singular", "unit_plural"},
-		{"Premium Support", "boolean", "premium_support", "", ""},
-		{"Storage", "static", "storage", "GB", "GB"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
-	s.Equal(0, updatedTask.FailedRecords)
-
-	// Verify features were created
-	features, err := s.GetStores().FeatureRepo.List(s.GetContext(), &types.FeatureFilter{
-		QueryFilter: types.NewDefaultQueryFilter(),
-	})
-	s.NoError(err)
-	s.GreaterOrEqual(len(features), 2) // At least 2 features should exist
-}
-
-func (s *TaskServiceSuite) TestFeatureImportWithMeter() {
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_meter_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features_meter.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with metered feature and meter fields
-	data := [][]string{
-		{"name", "type", "lookup_key", "meter_name", "event_name", "aggregation_type", "aggregation_field", "reset_usage", "aggregation_multiplier", "aggregation_bucket_size"},
-		{"API Calls", "metered", "api_calls", "API Calls Meter", "api_call", "COUNT", "", "BILLING_PERIOD", "1.0", ""},
-		{"Storage Usage", "metered", "storage_usage", "Storage Meter", "storage_event", "SUM", "bytes_used", "NEVER", "0.001", "DAY"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features_meter.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
-}
-
-func (s *TaskServiceSuite) TestFeatureImportWithMetadata() {
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_metadata_import",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features_metadata.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with metadata fields
-	data := [][]string{
-		{"name", "type", "lookup_key", "metadata.category", "metadata.priority", "metadata.tags"},
-		{"Premium Support", "boolean", "premium_support", "support", "medium", "support"},
-		{"Storage Feature", "static", "storage_feature", "storage", "high", "storage,core"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features_metadata.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
-}
-
-func (s *TaskServiceSuite) TestFeatureImportUpdate() {
-	// Create an existing feature
-	existingFeature := &feature.Feature{
-		ID:           s.GetUUID(),
-		Name:         "Existing Feature",
-		LookupKey:    "existing_feature",
-		Type:         types.FeatureTypeBoolean,
-		UnitSingular: "",
-		UnitPlural:   "",
-		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().FeatureRepo.Create(s.GetContext(), existingFeature))
-
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_update",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features_update.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with same lookup_key but different name
-	data := [][]string{
-		{"name", "type", "lookup_key", "unit_singular", "unit_plural"},
-		{"Updated Feature Name", "boolean", "existing_feature", "", ""},
-		{"New Feature", "static", "new_feature", "item", "items"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features_update.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(2, updatedTask.ProcessedRecords)
-	s.Equal(2, updatedTask.SuccessfulRecords)
-
-	// Verify the existing feature was updated
-	updatedFeature, err := s.GetStores().FeatureRepo.Get(s.GetContext(), existingFeature.ID)
-	s.NoError(err)
-	s.Equal("Updated Feature Name", updatedFeature.Name)
-}
-
-func (s *TaskServiceSuite) TestFeatureImportMeteredFeatureCreation() {
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_metered_creation",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features_metered.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with metered feature that should create a meter
-	data := [][]string{
-		{"name", "type", "lookup_key", "meter_name", "event_name", "aggregation_type", "aggregation_field", "reset_usage"},
-		{"API Calls", "metered", "api_calls_metered", "API Calls Meter", "api_call", "COUNT", "", "BILLING_PERIOD"},
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features_metered.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(1, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords)
-
-	// Verify feature was created with meter by checking all features
-	allFeatures, err := s.GetStores().FeatureRepo.List(s.GetContext(), &types.FeatureFilter{
-		QueryFilter: types.NewDefaultQueryFilter(),
-	})
-	s.NoError(err)
-
-	// Find the feature we just created
-	var createdFeature *feature.Feature
-	for _, f := range allFeatures {
-		if f.LookupKey == "api_calls_metered" {
-			createdFeature = f
-			break
-		}
-	}
-	s.NotNil(createdFeature, "Feature with lookup_key 'api_calls_metered' should exist")
-	s.Equal(types.FeatureTypeMetered, createdFeature.Type)
-	s.NotEmpty(createdFeature.MeterID)
-}
-
-func (s *TaskServiceSuite) TestFeatureImportErrorHandling() {
-	// Create a feature import task
-	featureTask := &task.Task{
-		ID:         "task_feature_errors",
-		TaskType:   types.TaskTypeImport,
-		EntityType: types.EntityTypeFeatures,
-		FileURL:    "https://example.com/features_errors.csv",
-		FileType:   types.FileTypeCSV,
-		TaskStatus: types.TaskStatusPending,
-		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().TaskRepo.Create(s.GetContext(), featureTask))
-
-	// Register mock CSV response with invalid data (missing required fields)
-	data := [][]string{
-		{"name", "type", "lookup_key"},
-		{"", "METERED", "api_calls"},                       // Missing name
-		{"Valid Feature", "INVALID_TYPE", "valid"},         // Invalid type
-		{"Another Feature", "METERED", "metered_no_meter"}, // Metered without meter
-		{"Good Feature", "boolean", "good_feature"},        // Valid feature
-	}
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-	s.NoError(writer.WriteAll(data))
-
-	s.client.RegisterResponse("features_errors.csv", testutil.MockResponse{
-		StatusCode: http.StatusOK,
-		Body:       buf.Bytes(),
-		Headers: map[string]string{
-			"Content-Type": "text/csv",
-		},
-	})
-
-	// Process the task
-	err := s.service.ProcessTaskWithStreaming(s.GetContext(), featureTask.ID)
-	s.NoError(err) // Processing should complete even with errors
-
-	// Verify task status
-	updatedTask, err := s.GetStores().TaskRepo.Get(s.GetContext(), featureTask.ID)
-	s.NoError(err)
-	s.Equal(types.TaskStatusCompleted, updatedTask.TaskStatus)
-	s.Equal(4, updatedTask.ProcessedRecords)
-	s.Equal(1, updatedTask.SuccessfulRecords) // Only one valid feature
-	s.Equal(3, updatedTask.FailedRecords)
-	s.NotNil(updatedTask.ErrorSummary)
-	s.Contains(*updatedTask.ErrorSummary, "Record 0")
-	s.Contains(*updatedTask.ErrorSummary, "Record 1")
-	s.Contains(*updatedTask.ErrorSummary, "Record 2")
-}

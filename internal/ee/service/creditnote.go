@@ -67,7 +67,20 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			"reason", req.Reason,
 			"line_items_count", len(req.LineItems))
 
-		// Validate credit note creation rules
+		// Lock the invoice row FIRST — before any validation that reads
+		// RefundedAmount. ValidateCreditNoteCreation -> validateCreditNoteAmounts
+		// -> calculateMaxCreditableAmount computes AmountPaid - RefundedAmount,
+		// a read-then-write on a mutable field. With the lock taken after that
+		// check, two concurrent CreateCreditNote calls would both evaluate the
+		// guard against unlocked state, both pass, and both produce valid credit
+		// notes — an over-refund with no finalize-time race
+		// (VAPT SFX-2026-0203-F02-EXT). Finalize and void already take this
+		// lock; creation must too.
+		if _, err := s.InvoiceRepo.GetForUpdate(tx, req.InvoiceID); err != nil {
+			return err
+		}
+
+		// Validate credit note creation rules (reads the now-locked invoice)
 		if err := s.ValidateCreditNoteCreation(tx, req); err != nil {
 			return err
 		}
@@ -425,14 +438,46 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 			Mark(ierr.ErrValidation)
 	}
 
-	// Store original status for logging
-	originalStatus := cn.CreditNoteStatus
+	var originalStatus types.CreditNoteStatus
 
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
-			// Lock to serialize against a concurrent finalize/void on the same invoice.
-			if _, err := s.InvoiceRepo.GetForUpdate(tx, cn.InvoiceID); err != nil {
-				return err
-			}
+		// Lock to serialize against a concurrent finalize/void on the same invoice.
+		if _, err := s.InvoiceRepo.GetForUpdate(tx, cn.InvoiceID); err != nil {
+			return err
+		}
+
+		// Re-fetch under the lock and re-run the guards: the checks above ran
+		// before the transaction, so a concurrent finalize may have committed
+		// while this call waited on the invoice lock. Voiding the stale draft
+		// snapshot would overwrite the finalized status, bypass the
+		// completed-refund rejection, and skip the recalculation below (because
+		// originalStatus would still read Draft).
+		cn, err = s.CreditNoteRepo.Get(tx, cn.ID)
+		if err != nil {
+			return err
+		}
+
+		if cn.CreditNoteStatus != types.CreditNoteStatusDraft && cn.CreditNoteStatus != types.CreditNoteStatusFinalized {
+			return ierr.NewError("cannot void this credit note").
+				WithHintf("This credit note is %s and cannot be voided. You can only void draft or finalized credit notes.", cn.CreditNoteStatus).
+				WithReportableDetails(map[string]any{
+					"current_status": cn.CreditNoteStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		if cn.CreditNoteType == types.CreditNoteTypeRefund && cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
+			return ierr.NewError("cannot void completed refund").
+				WithHint("This refund has already been processed and money has been added to the customer's wallet. Refunds cannot be voided once completed.").
+				WithReportableDetails(map[string]any{
+					"credit_note_status": cn.CreditNoteStatus,
+					"credit_note_type":   cn.CreditNoteType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Derived from the locked record, not the pre-transaction snapshot.
+		originalStatus = cn.CreditNoteStatus
 
 		cn.CreditNoteStatus = types.CreditNoteStatusVoided
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {

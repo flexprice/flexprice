@@ -3,17 +3,110 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/e2eprobe"
-	checks_pkg "github.com/flexprice/flexprice/internal/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// buildLoggingConfig assembles the LoggingConfig used by logger.NewLogger.
+// It wires OTLP log export from the standard OTEL env vars so that
+// e2eprobe's structured logs land in the same SigNoz/Grafana pipeline as
+// the app's — auth via OTEL_EXPORTER_OTLP_HEADERS (single "name=value" pair).
+//
+// Traces already flow through internal/ee/e2eprobe/otel.go, which uses the
+// SDK's implicit env var handling for endpoint/headers. This function
+// only wires LOGS, which take an explicit config path.
+func buildLoggingConfig(cfg *e2eprobe.Config) config.LoggingConfig {
+	lc := config.LoggingConfig{
+		Level: types.LogLevel(cfg.LogLevel),
+	}
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if !cfg.OTEL.Enabled || endpoint == "" {
+		return lc
+	}
+	lc.OtelEnabled = true
+	lc.OtelEndpoint = endpoint
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	if protocol == "" {
+		protocol = "grpc"
+	}
+	lc.OtelProtocol = protocol
+	if hdr, val, ok := parseFirstOTLPHeader(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")); ok {
+		lc.OtelAuthHeader = hdr
+		lc.OtelAuthValue = val
+	}
+	return lc
+}
+
+// parseFirstOTLPHeader extracts the first "name=value" pair from the
+// standard OTLP headers env var (which allows comma-separated pairs).
+// The logger's LoggingConfig only supports a single auth header, which is
+// enough for common SigNoz / Grafana Cloud / Datadog access-token setups.
+func parseFirstOTLPHeader(raw string) (string, string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", false
+	}
+	first, _, _ := strings.Cut(raw, ",")
+	name, value, ok := strings.Cut(first, "=")
+	if !ok {
+		return "", "", false
+	}
+	name = strings.TrimSpace(name)
+	value = strings.TrimSpace(value)
+	if name == "" || value == "" {
+		return "", "", false
+	}
+	return name, value, true
+}
+
+// mintFunc provisions a fresh credential. Injected so tests need no network.
+type mintFunc func() (*bootstrap.Credentials, error)
+
+// resolveAPIKey returns the API key the probe should run with.
+//
+// The stored key always wins. Environment variables resolve at container
+// start, so a container restart inside the same pod re-reads the original
+// empty value; without this read the probe would mint a new key on every
+// crash loop and leak them, since nothing revokes them.
+func resolveAPIKey(ctx context.Context, cfg *e2eprobe.Config, store bootstrap.SecretStore, inCluster bool, mint mintFunc) (string, error) {
+	if inCluster && store != nil {
+		stored, _, err := store.Read(ctx, cfg.PodNamespace, cfg.BootstrapSecretName, cfg.BootstrapSecretKey)
+		if err != nil {
+			return "", fmt.Errorf("bootstrap step=read_secret: %w", err)
+		}
+		if stored != "" {
+			return stored, nil
+		}
+	}
+
+	creds, err := mint()
+	if err != nil {
+		return "", err
+	}
+
+	if inCluster && store != nil {
+		// Fatal on purpose: a probe that cannot persist its key would
+		// re-bootstrap on every restart, minting keys nothing cleans up.
+		if err := store.Write(ctx, cfg.PodNamespace, cfg.BootstrapSecretName, cfg.BootstrapSecretKey, creds); err != nil {
+			return "", fmt.Errorf("bootstrap step=persist: %w", err)
+		}
+	}
+
+	cfg.TenantID = creds.TenantID()
+	cfg.EnvironmentID = creds.EnvironmentID()
+	return creds.APIKey(), nil
+}
 
 func main() {
 	cfg, err := e2eprobe.LoadConfig()
@@ -26,7 +119,7 @@ func main() {
 		return
 	}
 
-	lg, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevel(cfg.LogLevel)}})
+	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
@@ -72,6 +165,33 @@ func main() {
 	}
 	runner := e2eprobe.NewRunner(reporter, lg, runID, globalAttrs)
 	runner.SetHeartbeatInterval(cfg.HeartbeatInterval)
+
+	if cfg.NeedsBootstrap() {
+		store, inCluster, err := bootstrap.NewK8sStore()
+		if err != nil {
+			lg.Error(ctx, "bootstrap: kubernetes client unavailable", "error", err)
+			os.Exit(1)
+		}
+
+		key, err := resolveAPIKey(ctx, cfg, store, inCluster, func() (*bootstrap.Credentials, error) {
+			return bootstrap.Run(ctx, http.DefaultClient, cfg.APIHost, cfg.Email, cfg.Password, "e2eprobe-"+runID)
+		})
+		if err != nil {
+			lg.Error(ctx, "bootstrap failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.APIKey = key
+
+		if !inCluster {
+			// No Secret exists outside a cluster, so hand the operator the
+			// credential they would otherwise have no way to keep.
+			lg.Info(ctx, "bootstrap complete (not in-cluster): store this key as E2EPROBE_API_KEY to skip bootstrap next run",
+				"api_key", cfg.APIKey, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		} else {
+			lg.Info(ctx, "bootstrap complete: credential written to secret",
+				"secret", cfg.BootstrapSecretName, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		}
+	}
 
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {
@@ -125,6 +245,11 @@ func main() {
 		runner.Add(ci, e2eprobe.NewTickerScheduler(ci, cfg.Checks["CYCLE_INVOICE_PROBE"].Interval))
 	}
 
+	if cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Enabled {
+		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID, lg)
+		runner.Add(mci, e2eprobe.NewTickerScheduler(mci, cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Interval))
+	}
+
 	if cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Enabled {
 		eu := checks_pkg.NewEntitlementAndUsageProbe(client, reg, runID)
 		runner.Add(eu, e2eprobe.NewTickerScheduler(eu, cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Interval))
@@ -143,6 +268,41 @@ func main() {
 	if cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Enabled {
 		smf := checks_pkg.NewSubscriptionModificationFlow(client, reg, runID)
 		runner.Add(smf, e2eprobe.NewTickerScheduler(smf, cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Interval))
+	}
+
+	if cfg.Checks["BUCKETED_METER_PROBE"].Enabled {
+		bmp := checks_pkg.NewBucketedMeterProbe(client, reg, runID, lg)
+		runner.Add(bmp, e2eprobe.NewTickerScheduler(bmp, cfg.Checks["BUCKETED_METER_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Enabled {
+		ctup := checks_pkg.NewCommitmentTrueUpProbe(client, reg, runID, lg)
+		runner.Add(ctup, e2eprobe.NewTickerScheduler(ctup, cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Enabled {
+		eep := checks_pkg.NewEntitlementEnforcementProbe(client, reg, runID, lg)
+		runner.Add(eep, e2eprobe.NewTickerScheduler(eep, cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Interval))
+	}
+
+	if cfg.Checks["TAX_APPLICATION_PROBE"].Enabled {
+		tap := checks_pkg.NewTaxApplicationProbe(client, reg, runID, lg)
+		runner.Add(tap, e2eprobe.NewTickerScheduler(tap, cfg.Checks["TAX_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COUPON_APPLICATION_PROBE"].Enabled {
+		cap_ := checks_pkg.NewCouponApplicationProbe(client, reg, runID, lg)
+		runner.Add(cap_, e2eprobe.NewTickerScheduler(cap_, cfg.Checks["COUPON_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Enabled {
+		pbip := checks_pkg.NewPersistentBillingInvariantsProbe(client, reg, runID, lg)
+		runner.Add(pbip, e2eprobe.NewTickerScheduler(pbip, cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Enabled {
+		egap := checks_pkg.NewEntitlementGrantAdditiveProbe(client, reg, runID, lg)
+		runner.Add(egap, e2eprobe.NewTickerScheduler(egap, cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Interval))
 	}
 
 	// The listener is created regardless of the LOW_WALLET_ALERT_LISTENER flag

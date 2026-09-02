@@ -1,0 +1,26 @@
+{{- if and .Values.e2eprobe.enabled .Values.e2eprobe.bootstrap.enabled }}
+# Scoped to exactly one Secret, by name.
+#
+# get   — read the stored key before minting, so a restart reuses it rather
+#         than minting a second key nothing revokes
+# patch — write the minted key back
+#
+# No list or watch: a collection request carries no object name, so RBAC cannot
+# apply resourceNames to it. Granting either verb would mean dropping
+# resourceNames and handing over every Secret in the namespace.
+#
+# No create either — it cannot be restricted by name — which is why the Secret
+# is rendered by the chart instead of being made by the probe.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe-bootstrap
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ .Values.e2eprobe.bootstrap.secretName | quote }}
+    verbs: ["get", "patch"]
+{{- end }}

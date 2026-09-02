@@ -404,6 +404,14 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 			s.customer_id AS customer_id
 		FROM
 			subs_batch s
+			-- TODO(multi-cadence): this exact-match join silently drops prices whose
+			-- cadence merely divides the sub cadence (e.g. monthly price on a
+			-- quarterly sub) - the plan-price sync worker will not propagate them.
+			-- Follow-up: relax to accept exact-match OR ONETIME OR (both month-based
+			-- AND sub_effective_months mod price_effective_months = 0), matching
+			-- types.CompatibleBillingPeriodsFor + IsCadenceCompatible semantics.
+			-- Also normalize billing_period_count to max(count, 1) before the modulo
+			-- to guard against 0 counts (zero-divisor / broad-match risk).
 			JOIN plan_prices p ON lower(p.currency) = lower(s.currency)
 				AND p.billing_period = s.billing_period
 				AND p.billing_period_count = s.billing_period_count

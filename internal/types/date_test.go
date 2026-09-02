@@ -2660,3 +2660,227 @@ func TestNextBillingDate_IST(t *testing.T) {
 		})
 	}
 }
+
+func TestFloorToStartOfDay(t *testing.T) {
+	// IST offset from UTC is +5:30 (no DST); Kolkata never shifts.
+	// 2026-08-13 14:37 UTC == 2026-08-13 20:07 IST. Start of 2026-08-13 IST is 2026-08-12 18:30 UTC.
+	tests := []struct {
+		name string
+		in   time.Time
+		tz   string
+		want time.Time
+	}{
+		{
+			name: "UTC, empty tz",
+			in:   time.Date(2026, 8, 13, 14, 37, 12, 0, time.UTC),
+			tz:   "",
+			want: time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "UTC, explicit UTC tz",
+			in:   time.Date(2026, 8, 13, 14, 37, 12, 0, time.UTC),
+			tz:   "UTC",
+			want: time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Asia/Kolkata — mid-day UTC lands late evening IST, floors to IST day start",
+			in:   time.Date(2026, 8, 13, 14, 37, 0, 0, time.UTC),
+			tz:   "Asia/Kolkata",
+			want: time.Date(2026, 8, 12, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			name: "Asia/Kolkata — early morning UTC still same IST day",
+			in:   time.Date(2026, 8, 13, 22, 0, 0, 0, time.UTC), // 03:30 IST next day
+			tz:   "Asia/Kolkata",
+			want: time.Date(2026, 8, 13, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			name: "America/New_York — DST fall-back day (2026-11-01)",
+			// 2026-11-01 05:00 UTC is 2026-11-01 01:00 EDT (still DST); start-of-day EDT is 2026-11-01 04:00 UTC.
+			in:   time.Date(2026, 11, 1, 5, 0, 0, 0, time.UTC),
+			tz:   "America/New_York",
+			want: time.Date(2026, 11, 1, 4, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "unknown tz falls back to UTC",
+			in:   time.Date(2026, 8, 13, 14, 37, 12, 0, time.UTC),
+			tz:   "Not/A_Real_Zone",
+			want: time.Date(2026, 8, 13, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FloorToStartOfDay(tc.in, tc.tz)
+			require.Equal(t, tc.want.UTC(), got.UTC(), "FloorToStartOfDay result mismatch")
+		})
+	}
+}
+
+func TestFloorToStartOfHour(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		tz   string
+		want time.Time
+	}{
+		{
+			name: "UTC, mid-hour input",
+			in:   time.Date(2026, 8, 13, 14, 37, 15, 0, time.UTC),
+			tz:   "UTC",
+			want: time.Date(2026, 8, 13, 14, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "UTC, empty tz",
+			in:   time.Date(2026, 8, 13, 14, 37, 15, 0, time.UTC),
+			tz:   "",
+			want: time.Date(2026, 8, 13, 14, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Asia/Kolkata (+5:30) — top-of-local-hour is offset from UTC hour",
+			// 14:37 UTC = 20:07 IST; local top-of-hour = 20:00 IST = 14:30 UTC.
+			in:   time.Date(2026, 8, 13, 14, 37, 0, 0, time.UTC),
+			tz:   "Asia/Kolkata",
+			want: time.Date(2026, 8, 13, 14, 30, 0, 0, time.UTC),
+		},
+		{
+			name: "Asia/Kathmandu (+5:45) — quarter-hour offset",
+			// 14:37 UTC = 20:22 NPT; local top-of-hour = 20:00 NPT = 14:15 UTC.
+			in:   time.Date(2026, 8, 13, 14, 37, 0, 0, time.UTC),
+			tz:   "Asia/Kathmandu",
+			want: time.Date(2026, 8, 13, 14, 15, 0, 0, time.UTC),
+		},
+		{
+			name: "unknown tz falls back to UTC",
+			in:   time.Date(2026, 8, 13, 14, 37, 15, 0, time.UTC),
+			tz:   "Not/A_Real_Zone",
+			want: time.Date(2026, 8, 13, 14, 0, 0, 0, time.UTC),
+		},
+		{
+			// DST fall-back day: 2026-11-01 in America/New_York rolls 02:00 EDT
+			// back to 01:00 EST at T06:00Z, so 01:00 local occurs twice — first
+			// as 01:00 EDT (T05:00Z), then as 01:00 EST (T06:00Z).
+			// Input T06:30Z is 01:30 EST (30 min into the second occurrence).
+			// Correct floor preserves the EST instance → T06:00Z.
+			// A time.Date reconstruction would pick the first (EDT) occurrence
+			// and rewind to T05:00Z.
+			name: "America/New_York — DST fall-back preserves the EST occurrence of 01:00",
+			in:   time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC),
+			tz:   "America/New_York",
+			want: time.Date(2026, 11, 1, 6, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FloorToStartOfHour(tc.in, tc.tz)
+			require.Equal(t, tc.want.UTC(), got.UTC())
+		})
+	}
+}
+
+func TestFloorToStartOfWeek(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		tz   string
+		want time.Time
+	}{
+		{
+			name: "UTC, Thursday event → Monday of same ISO week",
+			// 2026-08-13 is a Thursday; ISO week 33 starts Mon 2026-08-10.
+			in:   time.Date(2026, 8, 13, 14, 37, 0, 0, time.UTC),
+			tz:   "UTC",
+			want: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "UTC, Monday morning → same Monday at 00:00",
+			in:   time.Date(2026, 8, 10, 9, 0, 0, 0, time.UTC),
+			tz:   "UTC",
+			want: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "UTC, Sunday evening → Monday BEFORE (ISO week starts Monday)",
+			// 2026-08-16 is a Sunday; still ISO week starting Mon 2026-08-10.
+			in:   time.Date(2026, 8, 16, 20, 0, 0, 0, time.UTC),
+			tz:   "UTC",
+			want: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Asia/Kolkata — Monday early-morning IST is previous Sunday in UTC",
+			// 2026-08-10 04:00 IST = 2026-08-09 22:30 UTC; but "Monday 04:00 IST" is inside the
+			// ISO week that starts on Mon 2026-08-10 IST = 2026-08-09 18:30 UTC.
+			in:   time.Date(2026, 8, 9, 22, 30, 0, 0, time.UTC),
+			tz:   "Asia/Kolkata",
+			want: time.Date(2026, 8, 9, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			name: "empty tz falls back to UTC",
+			in:   time.Date(2026, 8, 13, 14, 37, 0, 0, time.UTC),
+			tz:   "",
+			want: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FloorToStartOfWeek(tc.in, tc.tz)
+			require.Equal(t, tc.want.UTC(), got.UTC())
+		})
+	}
+}
+
+func TestAdvanceDays(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		n    int
+		tz   string
+		want time.Time
+	}{
+		{
+			name: "UTC — simple day addition preserves time-of-day",
+			in:   time.Date(2026, 7, 13, 12, 34, 56, 0, time.UTC),
+			n:    3,
+			tz:   "UTC",
+			want: time.Date(2026, 7, 16, 12, 34, 56, 0, time.UTC),
+		},
+		{
+			name: "UTC — negative n moves backward",
+			in:   time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC),
+			n:    -5,
+			tz:   "UTC",
+			want: time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// 2026-03-05 00:00 EST = T05:00Z. DST spring-forward Sun 2026-03-08
+			// 02:00 EST → 03:00 EDT. 2026-03-10 00:00 EDT = T04:00Z.
+			// Calendar-safe +5 lands on T04:00Z (00:00 EDT).
+			// Fixed 120h math would give T05:00Z (01:00 EDT) — 1h drift.
+			name: "America/New_York — crosses DST spring-forward",
+			in:   time.Date(2026, 3, 5, 5, 0, 0, 0, time.UTC),
+			n:    5,
+			tz:   "America/New_York",
+			want: time.Date(2026, 3, 10, 4, 0, 0, 0, time.UTC),
+		},
+		{
+			// 2026-10-30 00:00 EDT = T04:00Z. DST fall-back Sun 2026-11-01
+			// 02:00 EDT → 01:00 EST. 2026-11-02 00:00 EST = T05:00Z.
+			name: "America/New_York — crosses DST fall-back",
+			in:   time.Date(2026, 10, 30, 4, 0, 0, 0, time.UTC),
+			n:    3,
+			tz:   "America/New_York",
+			want: time.Date(2026, 11, 2, 5, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "unknown tz falls back to UTC",
+			in:   time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC),
+			n:    3,
+			tz:   "Not/A_Real_Zone",
+			want: time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AdvanceDays(tc.in, tc.n, tc.tz)
+			require.Equal(t, tc.want.UTC(), got.UTC())
+		})
+	}
+}

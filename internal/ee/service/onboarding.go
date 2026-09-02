@@ -437,6 +437,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	newUser := &user.User{
 		ID:       req.UserID,
 		Email:    req.Email,
+		Type:     types.UserTypeUser,
+		Roles:    []string{types.RoleSuperAdmin.String()},
 		Metadata: req.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,

@@ -10,6 +10,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// MaxCouponRedemptionsLimit caps the max_redemptions a coupon may be created
+// with. Prevents impractically large limits that undermine business controls
+// (VAPT 6.4: no upper bound on max_redemptions).
+const MaxCouponRedemptionsLimit = 1_000_000
+
 // CreateCouponRequest represents the request to create a new coupon
 type CreateCouponRequest struct {
 	Name              string                  `json:"name" validate:"required"`
@@ -81,9 +86,13 @@ func (r *CreateCouponRequest) Validate() error {
 		}
 	}
 
-	if r.MaxRedemptions != nil && *r.MaxRedemptions <= 0 {
-		return ierr.NewError("max_redemptions must be greater than zero").
+	if r.MaxRedemptions != nil && (*r.MaxRedemptions <= 0 || *r.MaxRedemptions > MaxCouponRedemptionsLimit) {
+		return ierr.NewError("max_redemptions must be between 1 and 1000000").
 			WithHint("Please provide a valid maximum redemption count").
+			WithReportableDetails(map[string]interface{}{
+				"max_redemptions": *r.MaxRedemptions,
+				"limit":           MaxCouponRedemptionsLimit,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 

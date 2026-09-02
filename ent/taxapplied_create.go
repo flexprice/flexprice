@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/taxapplied"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -195,6 +196,20 @@ func (tac *TaxAppliedCreate) SetNillableIdempotencyKey(s *string) *TaxAppliedCre
 	return tac
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (tac *TaxAppliedCreate) SetTaxBehavior(tb types.TaxBehavior) *TaxAppliedCreate {
+	tac.mutation.SetTaxBehavior(tb)
+	return tac
+}
+
+// SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAppliedCreate {
+	if tb != nil {
+		tac.SetTaxBehavior(*tb)
+	}
+	return tac
+}
+
 // SetID sets the "id" field.
 func (tac *TaxAppliedCreate) SetID(s string) *TaxAppliedCreate {
 	tac.mutation.SetID(s)
@@ -318,6 +333,11 @@ func (tac *TaxAppliedCreate) check() error {
 	if _, ok := tac.mutation.AppliedAt(); !ok {
 		return &ValidationError{Name: "applied_at", err: errors.New(`ent: missing required field "TaxApplied.applied_at"`)}
 	}
+	if v, ok := tac.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_behavior": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -420,6 +440,10 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	if value, ok := tac.mutation.IdempotencyKey(); ok {
 		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = &value
+	}
+	if value, ok := tac.mutation.TaxBehavior(); ok {
+		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
+		_node.TaxBehavior = value
 	}
 	return _node, _spec
 }

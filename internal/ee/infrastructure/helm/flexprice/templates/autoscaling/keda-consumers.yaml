@@ -1,0 +1,80 @@
+{{- /*
+  KEDA ScaledObject per entry in the `.Values.consumers` MAP whose keda.enabled
+  is true. Scales each map-consumer Deployment on its own Kafka consumer-group
+  lag. Mirrors keda-consumer.yaml (the singular consumer) — same trigger shape,
+  same SASL mapping, same authenticationRef handling — but ranges over the map.
+
+  Additive: renders nothing unless `.Values.consumers.<name>.keda.enabled`.
+  Requires KEDA (https://keda.sh) installed cluster-wide.
+*/ -}}
+{{- range $name, $cfg := .Values.consumers }}
+{{- $keda := $cfg.keda | default dict }}
+{{- if and ($cfg.enabled | default true) $keda.enabled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "flexprice.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" $ "component" "consumer") | nindent 4 }}
+    app.kubernetes.io/consumer: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "flexprice.fullname" $ }}-{{ $name }}
+  pollingInterval: {{ $keda.pollingInterval | default 15 }}
+  cooldownPeriod: {{ $keda.cooldownPeriod | default 300 }}
+  minReplicaCount: {{ $keda.minReplicas | default 1 }}
+  maxReplicaCount: {{ $keda.maxReplicas | default 10 }}
+  {{- with $keda.fallback }}
+  fallback:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  triggers:
+    {{- $topics := $keda.topics }}
+    {{- if not $topics }}
+    {{- $topics = list (dict "topic" $.Values.kafkaConfig.topic "lagThreshold" $keda.lagThreshold) }}
+    {{- end }}
+    {{- range $t := $topics }}
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ include "flexprice.kafkaBrokers" $ | quote }}
+        consumerGroup: {{ $.Values.kafkaConfig.consumerGroup | quote }}
+        topic: {{ $t.topic | quote }}
+        lagThreshold: {{ $t.lagThreshold | default $keda.lagThreshold | default 1000 | quote }}
+        offsetResetPolicy: {{ $keda.offsetResetPolicy | default "earliest" | quote }}
+        {{- if or $.Values.kafkaConfig.tls $.Values.kafkaConfig.useSASL }}
+        tls: enable
+        {{- end }}
+        {{- if $.Values.kafkaConfig.useSASL }}
+        {{- /* KEDA's Kafka scaler wants lowercase underscore mechanism names
+               (scram_sha512), not sarama's SCRAM-SHA-512. Map here rather than
+               asking operators to set the value twice. Unmapped = render failure,
+               not a silent plaintext default. Matches keda-consumer.yaml. */}}
+        {{- $saslMap := dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer" }}
+        {{- $mechanism := $.Values.kafkaConfig.saslMechanism | default "PLAIN" }}
+        {{- if not (hasKey $saslMap $mechanism) }}
+        {{- fail (printf "kafkaConfig.saslMechanism %q has no KEDA equivalent; the KEDA Kafka scaler supports only: %s. Set the sarama spelling (e.g. SCRAM-SHA-512), or disable consumers.%s.keda.enabled." $mechanism (join ", " (keys $saslMap | sortAlpha)) $name) }}
+        {{- end }}
+        sasl: {{ get $saslMap $mechanism | quote }}
+        {{- end }}
+      {{- with $keda.authenticationRef }}
+      authenticationRef:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- if $keda.cpuValue }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ $keda.cpuValue | quote }}
+    {{- end }}
+    {{- if $keda.memValue }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: {{ $keda.memValue | quote }}
+    {{- end }}
+{{- end }}
+{{- end }}

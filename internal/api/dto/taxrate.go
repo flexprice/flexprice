@@ -22,13 +22,10 @@ type CreateTaxRateRequest struct {
 	// description is an optional text description providing details about the tax rate
 	Description string `json:"description,omitempty"`
 
-	// percentage_value is the percentage value (0-100) when tax_rate_type is "percentage"
+	// percentage_value is the percentage value (0-100)
 	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty" swaggertype:"string"`
 
-	// fixed_value is the fixed monetary amount when tax_rate_type is "fixed"
-	FixedValue *decimal.Decimal `json:"fixed_value,omitempty" swaggertype:"string"`
-
-	// tax_rate_type determines how the tax is calculated ("percentage" or "fixed")
+	// tax_rate_type is always "percentage" — fixed-amount tax rates are not supported
 	TaxRateType types.TaxRateType `json:"tax_rate_type"`
 
 	// scope defines where this tax rate applies
@@ -52,7 +49,7 @@ type UpdateTaxRateRequest struct {
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// tax_rate_type determines how the tax is calculated ("percentage" or "fixed")
+	// tax_rate_status is the updated status of the tax rate
 	TaxRateStatus *types.TaxRateStatus `json:"tax_rate_status,omitempty"`
 }
 
@@ -87,39 +84,21 @@ func (r CreateTaxRateRequest) Validate() error {
 		}
 	}
 
-	if r.TaxRateType == types.TaxRateTypePercentage {
-		if r.PercentageValue == nil {
-			return ierr.NewError("percentage_value is required").
-				WithHint("Tax rate percentage value is required").
-				Mark(ierr.ErrValidation)
-		}
-
-		if r.PercentageValue.IsNegative() || r.PercentageValue.GreaterThan(decimal.NewFromInt(100)) {
-			return ierr.NewError("percentage_value cannot be negative").
-				WithHint("Tax rate percentage must be in range 0-100").
-				Mark(ierr.ErrValidation)
-		}
-
+	if r.PercentageValue == nil {
+		return ierr.NewError("percentage_value is required").
+			WithHint("Tax rate percentage value is required").
+			Mark(ierr.ErrValidation)
 	}
 
-	if r.TaxRateType == types.TaxRateTypeFixed {
-		if r.FixedValue == nil {
-			return ierr.NewError("fixed_value is required").
-				WithHint("Tax rate fixed value is required").
-				Mark(ierr.ErrValidation)
-		}
-
-		if r.FixedValue.IsNegative() {
-			return ierr.NewError("fixed_value cannot be negative").
-				WithHint("Tax rate fixed value cannot be less than 0").
-				Mark(ierr.ErrValidation)
-		}
-
+	if r.PercentageValue.IsNegative() {
+		return ierr.NewError("percentage_value cannot be negative").
+			WithHint("Tax rate percentage must be in range 0-100").
+			Mark(ierr.ErrValidation)
 	}
 
-	if r.PercentageValue != nil && r.FixedValue != nil {
-		return ierr.NewError("percentage_value and fixed_value cannot be provided together").
-			WithHint("Tax rate must have either a percentage or fixed value, but not both").
+	if r.PercentageValue.GreaterThan(decimal.NewFromInt(100)) {
+		return ierr.NewError("percentage_value cannot be greater than 100").
+			WithHint("Tax rate percentage must be in range 0-100").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -140,7 +119,6 @@ func (r CreateTaxRateRequest) ToTaxRate(ctx context.Context) *taxrate.TaxRate {
 		Code:            r.Code,
 		Description:     r.Description,
 		PercentageValue: r.PercentageValue,
-		FixedValue:      r.FixedValue,
 		Scope:           lo.FromPtr(r.Scope),
 		TaxRateType:     r.TaxRateType,
 		Metadata:        r.Metadata,

@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -16,12 +17,23 @@ import (
 type InMemoryInvoiceStore struct {
 	*InMemoryStore[*invoice.Invoice]
 	lineItemStore *InMemoryInvoiceLineItemStore
+
+	// accessLog records the order of Get / GetForUpdate calls per invoice so
+	// tests can assert lock-before-read ordering.
+	accessMu  sync.Mutex
+	accessLog map[string][]string
+
+	// BeforeGetForUpdate, when set, runs immediately before a row lock is taken.
+	// It lets a test land a concurrent commit inside the read-then-lock window
+	// that real callers race against.
+	BeforeGetForUpdate func(id string)
 }
 
 // NewInMemoryInvoiceStore creates a new in-memory invoice store
 func NewInMemoryInvoiceStore() *InMemoryInvoiceStore {
 	return &InMemoryInvoiceStore{
 		InMemoryStore: NewInMemoryStore[*invoice.Invoice](),
+		accessLog:     make(map[string][]string),
 	}
 }
 
@@ -70,6 +82,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
+			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
 		})
@@ -102,6 +115,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		PaidAt:                     inv.PaidAt,
 		VoidedAt:                   inv.VoidedAt,
 		FinalizedAt:                inv.FinalizedAt,
+		IssueDate:                  inv.IssueDate,
 		BillingPeriod:              inv.BillingPeriod,
 		PeriodStart:                inv.PeriodStart,
 		PeriodEnd:                  inv.PeriodEnd,
@@ -110,9 +124,11 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		LineItems:                  lineItems,
 		Metadata:                   inv.Metadata,
 		Version:                    inv.Version,
+		TaxExemptionReasonCode:     inv.TaxExemptionReasonCode,
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		LastComputedAt:             inv.LastComputedAt,
+		IsManuallyEdited:           inv.IsManuallyEdited,
 		BaseModel:                  inv.BaseModel,
 	}
 }
@@ -192,6 +208,7 @@ func (s *InMemoryInvoiceStore) RemoveLineItems(ctx context.Context, invoiceID st
 }
 
 func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Invoice, error) {
+	s.recordAccess(id, "get")
 	inv, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("invoice get failed").Mark(ierr.ErrDatabase)
@@ -199,9 +216,55 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
-// GetForUpdate returns the invoice; in-memory store has no row locking.
+// GetForUpdate returns the invoice; the in-memory store has no row locking, so
+// it cannot provide real mutual exclusion (that is SELECT ... FOR UPDATE in
+// Postgres). It records the access so tests can assert that a code path takes
+// the lock *before* it reads mutable invoice state.
+//
+// Mirrors the real ent repository's GetForUpdate, which fetches published line
+// items via ListByInvoiceID and populates the result's LineItems field.
 func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
-	return s.Get(ctx, id)
+	if hook := s.BeforeGetForUpdate; hook != nil {
+		hook(id)
+	}
+	s.recordAccess(id, "get_for_update")
+	inv, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("invoice get failed").Mark(ierr.ErrDatabase)
+	}
+	result := copyInvoice(inv)
+	if s.lineItemStore != nil {
+		lineItems, err := s.lineItemStore.ListByInvoiceID(ctx, id)
+		if err != nil {
+			return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
+		}
+		result.LineItems = lineItems
+	}
+	return result, nil
+}
+
+func (s *InMemoryInvoiceStore) recordAccess(id, kind string) {
+	s.accessMu.Lock()
+	defer s.accessMu.Unlock()
+	if s.accessLog == nil {
+		s.accessLog = make(map[string][]string)
+	}
+	s.accessLog[id] = append(s.accessLog[id], kind)
+}
+
+// InvoiceAccessLog returns the ordered read operations recorded for an invoice,
+// each entry either "get" or "get_for_update".
+func (s *InMemoryInvoiceStore) InvoiceAccessLog(id string) []string {
+	s.accessMu.Lock()
+	defer s.accessMu.Unlock()
+	return append([]string(nil), s.accessLog[id]...)
+}
+
+// ResetInvoiceAccessLog clears the recorded reads for an invoice.
+func (s *InMemoryInvoiceStore) ResetInvoiceAccessLog(id string) {
+	s.accessMu.Lock()
+	defer s.accessMu.Unlock()
+	delete(s.accessLog, id)
 }
 
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
@@ -211,8 +274,21 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	return s.InMemoryStore.Update(ctx, inv.ID, copyInvoice(inv))
 }
 
+// Delete marks the invoice and its line items deleted, matching the ent repository, which soft
+// deletes both and leaves the rows readable. This double used to hard-delete, so any assertion that
+// an orphaned draft had been cleaned up passed whether or not the code did anything.
 func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
-	return s.InMemoryStore.Delete(ctx, id)
+	inv, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	inv.Status = types.StatusDeleted
+	for _, item := range inv.LineItems {
+		item.Status = types.StatusDeleted
+	}
+
+	return s.InMemoryStore.Update(ctx, id, inv)
 }
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {

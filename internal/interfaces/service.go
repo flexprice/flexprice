@@ -34,6 +34,9 @@ type PaymentService interface {
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
 	PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error)
+	// RecordAttempt appends the gateway's outcome for one charge attempt, leaving the
+	// parent payment's status untouched.
+	RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error
 	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
@@ -51,6 +54,8 @@ type InvoiceService interface {
 	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)
 	DeleteInvoice(ctx context.Context, id string) error
 	ReconcilePaymentStatus(ctx context.Context, invoiceID string, paymentStatus types.PaymentStatus, paymentAmount *decimal.Decimal) error
+
+	ApplyExternalInvoiceDiscount(ctx context.Context, invoiceID string, req dto.ApplyExternalInvoiceDiscountRequest) error
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 }
 
@@ -111,10 +116,18 @@ type SubscriptionService interface {
 	CalculatePauseImpact(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error)
 	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
 
-	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*dto.PriceResponse, error)
+	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType, includePriceIDs *[]string) ([]*dto.PriceResponse, error)
+
+	PreviewPlanChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeV2Request) (*dto.SubscriptionChangeV2Response, error)
+	ExecutePlanChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeV2Request, effectiveAt time.Time) (*dto.SubscriptionChangeV2Response, error)
+
+	ExecuteScheduledPlanChangeV2(ctx context.Context, schedule *subscription.SubscriptionSchedule, config *subscription.PlanChangeV2Configuration, sub *subscription.Subscription) error
 
 	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
+
+	AttachAddon(ctx context.Context, sub *subscription.Subscription, req *dto.AddAddonToSubscriptionRequest, checkout *dto.CheckoutParams) (*dto.AddonChangeResult, error)
+	DetachAddon(ctx context.Context, req *dto.RemoveAddonRequest, subscriptionID string) (*dto.AddonChangeResult, error)
 
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
@@ -256,4 +269,24 @@ type ServiceDependencies struct {
 	CreditAdjustmentService         CreditAdjustmentService
 	CheckoutSessionService          CheckoutSessionService
 	DB                              postgres.IClient
+}
+
+// PaymentProviderResolver answers which payment gateway an operation runs
+// against, from the tenant's published connections intersected with the
+// capabilities FlexPrice implements per gateway. Takes a customer id rather than
+// a session so an admin caller resolves identically to a portal one.
+type PaymentProviderResolver interface {
+	// ResolveProvider picks the gateway serving capability. An empty requested
+	// means "the only candidate"; a non-empty one is validated against them.
+	// ErrNotFound when nothing qualifies, ErrValidation when ambiguous or refused.
+	ResolveProvider(ctx context.Context, customerID string, capability types.IntegrationCapabilityType, requested types.PaymentGatewayType) (types.PaymentGatewayType, error)
+
+	// ListProviders returns configured gateways with a usable capability, ordered
+	// by gateway name.
+	ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error)
+}
+
+type ProviderCapabilities struct {
+	Gateway      types.PaymentGatewayType
+	Capabilities []types.IntegrationCapability
 }

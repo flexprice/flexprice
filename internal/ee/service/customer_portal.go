@@ -43,6 +43,24 @@ type CustomerPortalService interface {
 	GetUsageSummary(ctx context.Context, req dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
 	// GetPortalConfig returns the customer portal configuration for the current tenant/environment
 	GetPortalConfig(ctx context.Context) (*dto.SettingResponse, error)
+	GetIntegrations(ctx context.Context) (*dto.IntegrationsResponse, error)
+
+	// Wallet
+	TopUpWallet(ctx context.Context, walletID string, req *dto.PortalTopUpWalletRequest) (*dto.PortalTopUpWalletResponse, error)
+	UpdateAutoTopup(ctx context.Context, walletID string, req *dto.PortalUpdateAutoTopupRequest) (*dto.WalletResponse, error)
+
+	// Checkout
+	GetCheckoutSession(ctx context.Context, sessionID string) (*dto.PortalCheckoutSessionResponse, error)
+	CancelCheckoutSession(ctx context.Context, sessionID string) (*dto.PortalCheckoutSessionResponse, error)
+
+	// Invoices
+	PayInvoice(ctx context.Context, invoiceID string, req *dto.PortalPayInvoiceRequest) (*dto.PortalPayInvoiceResponse, error)
+
+	// Payment methods
+	ListPaymentMethods(ctx context.Context, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
+	AddPaymentMethod(ctx context.Context, req *dto.PortalAddPaymentMethodRequest) (*dto.AddPaymentMethodResponse, error)
+	DeletePaymentMethod(ctx context.Context, req *dto.PortalDeletePaymentMethodRequest) (*dto.SavedPaymentMethodsResponse, error)
+	SetDefaultPaymentMethod(ctx context.Context, req *dto.PortalSetDefaultPaymentMethodRequest) (*dto.SavedPaymentMethodsResponse, error)
 }
 
 type customerPortalService struct {

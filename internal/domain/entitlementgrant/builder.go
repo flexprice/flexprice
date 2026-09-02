@@ -27,6 +27,13 @@ func NewEntitlementGrantBuilder(g *EntitlementGrant) *entitlementGrantBuilder {
 		t := *g.QuotaCrossedAt
 		copied.QuotaCrossedAt = &t
 	}
+	if g.Metadata != nil {
+		m := make(types.Metadata, len(g.Metadata))
+		for k, v := range g.Metadata {
+			m[k] = v
+		}
+		copied.Metadata = m
+	}
 	return &entitlementGrantBuilder{grant: &copied}
 }
 
@@ -128,6 +135,14 @@ func (b *entitlementGrantBuilder) WithQuotaCrossedAt(t *time.Time) *entitlementG
 	return b
 }
 
+// WithMetadata replaces the metadata map wholesale.
+func (b *entitlementGrantBuilder) WithMetadata(m types.Metadata) *entitlementGrantBuilder {
+	if b == nil || b.grant == nil {
+		return b
+	}
+	b.grant.Metadata = m
+	return b
+}
 
 func (b *entitlementGrantBuilder) WithEnvironmentID(id string) *entitlementGrantBuilder {
 	if b == nil || b.grant == nil {

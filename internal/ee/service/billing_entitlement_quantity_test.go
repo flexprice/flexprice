@@ -404,6 +404,7 @@ func (s *EntitlementQuantityTestSuite) TestCancelImmediate_GenerateInvoice_SetsA
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_NilSubLineItemIDs_SetsAdjustedEntitlementQuantity() {
 	s.setupEntitlement(100)
 	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart
@@ -477,6 +478,7 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_NilSubLineItemIDs_SetsA
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_OverwritesFullPayload() {
 	s.setupEntitlement(100)
 	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart
@@ -515,6 +517,8 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 				AdjustedEntitlementQuantity: nil,                          // stale — must be set
 				Currency:                    "usd",
 				EnvironmentID:               types.GetEnvironmentID(ctx),
+				PeriodStart:                 &periodStart,
+				PeriodEnd:                   &periodEnd,
 				SubscriptionLineItemID:      lo.ToPtr(s.testData.usageSubLineItem.ID), // triggers update-in-place
 				BaseModel:                   types.GetDefaultBaseModel(ctx),
 			},
@@ -562,7 +566,7 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 //   - Item B (nil SubLineItemID) is not touched by the reconciler.
 func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedItemPreservesID() {
 	s.setupEntitlement(100)
-	s.fireEvents(500)
+	s.fireMeterUsage(500)
 
 	ctx := s.GetContext()
 	periodStart := s.testData.periodStart
@@ -590,7 +594,9 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedIte
 		BaseModel:       types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoicedomain.InvoiceLineItem{
 			{
-				// Item A — has a matching SubLineItemID → update-in-place
+				// Item A — has a matching SubLineItemID → update-in-place.
+				// Period must be set for reconcile's compound key
+				// (subLineItemID, periodStart, periodEnd) to match the fresh calculation.
 				ID:                          matchedRowID,
 				CustomerID:                  s.testData.customer.ID,
 				MeterID:                     lo.ToPtr(s.testData.meter.ID),
@@ -601,13 +607,15 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedIte
 				AdjustedEntitlementQuantity: nil, // stale
 				Currency:                    "usd",
 				EnvironmentID:               types.GetEnvironmentID(ctx),
+				PeriodStart:                 &periodStart,
+				PeriodEnd:                   &periodEnd,
 				SubscriptionLineItemID:      lo.ToPtr(s.testData.usageSubLineItem.ID),
 				BaseModel:                   types.GetDefaultBaseModel(ctx),
 			},
 			{
 				// Item B — nil SubLineItemID; since item A has one, the fallback is not triggered.
-				// This item is not in the existingBySubLineItemID index and so is neither matched
-				// nor explicitly archived by the reconciler.
+				// This item is not registered in the reconcile map (missing both SubLineItemID
+				// and periods) and so is neither matched nor explicitly archived by the reconciler.
 				ID:                     unmatchedRowID,
 				CustomerID:             s.testData.customer.ID,
 				DisplayName:            lo.ToPtr("PHANTOM - nil sub_line_item_id"),

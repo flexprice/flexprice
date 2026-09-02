@@ -326,6 +326,20 @@ func (ec *EntitlementCreate) SetNillableGrantDurationUnit(tgdu *types.Entitlemen
 	return ec
 }
 
+// SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
+func (ec *EntitlementCreate) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) *EntitlementCreate {
+	ec.mutation.SetGrantAllocationBehavior(tgab)
+	return ec
+}
+
+// SetNillableGrantAllocationBehavior sets the "grant_allocation_behavior" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableGrantAllocationBehavior(tgab *types.EntitlementGrantAllocationBehavior) *EntitlementCreate {
+	if tgab != nil {
+		ec.SetGrantAllocationBehavior(*tgab)
+	}
+	return ec
+}
+
 // SetGrantQuota sets the "grant_quota" field.
 func (ec *EntitlementCreate) SetGrantQuota(d decimal.Decimal) *EntitlementCreate {
 	ec.mutation.SetGrantQuota(d)
@@ -427,6 +441,10 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultDisplayOrder
 		ec.mutation.SetDisplayOrder(v)
 	}
+	if _, ok := ec.mutation.GrantAllocationBehavior(); !ok {
+		v := entitlement.DefaultGrantAllocationBehavior
+		ec.mutation.SetGrantAllocationBehavior(v)
+	}
 	if _, ok := ec.mutation.AggregationMode(); !ok {
 		v := entitlement.DefaultAggregationMode
 		ec.mutation.SetAggregationMode(v)
@@ -495,6 +513,11 @@ func (ec *EntitlementCreate) check() error {
 	if v, ok := ec.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := ec.mutation.GrantAllocationBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_allocation_behavior", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_allocation_behavior": %w`, err)}
 		}
 	}
 	if _, ok := ec.mutation.AggregationMode(); !ok {
@@ -640,6 +663,10 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.GrantDurationUnit(); ok {
 		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
 		_node.GrantDurationUnit = value
+	}
+	if value, ok := ec.mutation.GrantAllocationBehavior(); ok {
+		_spec.SetField(entitlement.FieldGrantAllocationBehavior, field.TypeString, value)
+		_node.GrantAllocationBehavior = value
 	}
 	if value, ok := ec.mutation.GrantQuota(); ok {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)

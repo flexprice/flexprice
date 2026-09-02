@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -21,6 +22,7 @@ type Handler struct {
 	client                       razorpay.RazorpayClient
 	paymentSvc                   *razorpay.PaymentService
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	lifecycle                    *payments.PaymentLifecycle
 	logger                       *logger.Logger
 }
 
@@ -29,12 +31,14 @@ func NewHandler(
 	client razorpay.RazorpayClient,
 	paymentSvc *razorpay.PaymentService,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
+	lifecycle *payments.PaymentLifecycle,
 	logger *logger.Logger,
 ) *Handler {
 	return &Handler{
 		client:                       client,
 		paymentSvc:                   paymentSvc,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		lifecycle:                    lifecycle,
 		logger:                       logger,
 	}
 }
@@ -150,7 +154,11 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 	}
 
 	// Mandate checkouts only send payment.captured — handle like payment_link.paid below.
-	if h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services) {
+	handled, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services)
+	if err != nil {
+		return err
+	}
+	if handled {
 		return nil
 	}
 
@@ -181,6 +189,16 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"payment_method", payment.Method,
 		"payment_method_id", paymentMethodID,
 		"amount", amount.String())
+
+	if err := h.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   payment.ID,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record succeeded attempt",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", payment.ID)
+	}
 
 	_, err = services.PaymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
 	if err != nil {
@@ -278,6 +296,33 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		errorMsg = payment.ErrorDescription
 	}
 
+	if paymentRecord.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+		session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+		if err != nil {
+			h.logger.Error(ctx, "failed to look up checkout session, leaving payment open",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", payment.ID)
+			return nil
+		}
+
+		// A session that is no longer pending has already been cleaned up, so nothing
+		// can settle this payment now and the decline is final.
+		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
+			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+				FlexpricePaymentID: flexpricePaymentID,
+				GatewayPaymentID:   payment.ID,
+				ErrorMessage:       errorMsg,
+			}); err != nil {
+				h.logger.Error(ctx, "failed to record failed attempt for payment link",
+					"error", err,
+					"flexprice_payment_id", flexpricePaymentID,
+					"razorpay_payment_id", payment.ID)
+			}
+			return nil
+		}
+	}
+
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
 	now := time.Now()
@@ -350,8 +395,8 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	h.handleCheckoutSessionForPayment(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
-	return nil
+	_, err = h.handleCheckoutSessionForPayment(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
+	return err
 }
 
 // handlePaymentLinkFailed processes payment_link.cancelled and payment_link.expired webhook events.
@@ -415,10 +460,18 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	flexpricePaymentID string,
 	razorpayPaymentID string,
 	services *ServiceDependencies,
-) bool {
-	session := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+) (bool, error) {
+	session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+	if err != nil {
+		h.logger.Error(ctx, "failed to look up checkout session for payment",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID,
+		)
+		return false, err
+	}
 	if session == nil {
-		return false
+		return false, nil
 	}
 
 	switch session.CheckoutStatus {
@@ -449,7 +502,8 @@ func (h *Handler) handleCheckoutSessionForPayment(
 			"razorpay_payment_id", razorpayPaymentID,
 		)
 	}
-	return true
+
+	return true, nil
 }
 
 // Checkout session for this payment ID, any status. Nil if not a checkout.
@@ -457,17 +511,21 @@ func (h *Handler) findCheckoutSessionForPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
 	services *ServiceDependencies,
-) *dto.CheckoutSessionResponse {
+) (*dto.CheckoutSessionResponse, error) {
 	filter := types.NewDefaultCheckoutSessionFilter()
 	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
 	filter.Limit = lo.ToPtr(1)
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	sessions, err := services.CheckoutSessionService.List(ctx, filter)
-	if err != nil || sessions == nil || len(sessions.Items) == 0 {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return sessions.Items[0]
+	if sessions == nil || len(sessions.Items) == 0 {
+		return nil, nil
+	}
+
+	return sessions.Items[0], nil
 }
 
 // convertPaymentToMap converts a Payment struct to a map using JSON marshaling

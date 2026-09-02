@@ -135,11 +135,6 @@ func PercentageValue(v decimal.Decimal) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldPercentageValue, v))
 }
 
-// FixedValue applies equality check predicate on the "fixed_value" field. It's identical to FixedValueEQ.
-func FixedValue(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldFixedValue, v))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldEQ(FieldTenantID, v))
@@ -1023,56 +1018,6 @@ func PercentageValueIsNil() predicate.TaxRate {
 // PercentageValueNotNil applies the NotNil predicate on the "percentage_value" field.
 func PercentageValueNotNil() predicate.TaxRate {
 	return predicate.TaxRate(sql.FieldNotNull(FieldPercentageValue))
-}
-
-// FixedValueEQ applies the EQ predicate on the "fixed_value" field.
-func FixedValueEQ(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldEQ(FieldFixedValue, v))
-}
-
-// FixedValueNEQ applies the NEQ predicate on the "fixed_value" field.
-func FixedValueNEQ(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNEQ(FieldFixedValue, v))
-}
-
-// FixedValueIn applies the In predicate on the "fixed_value" field.
-func FixedValueIn(vs ...decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIn(FieldFixedValue, vs...))
-}
-
-// FixedValueNotIn applies the NotIn predicate on the "fixed_value" field.
-func FixedValueNotIn(vs ...decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotIn(FieldFixedValue, vs...))
-}
-
-// FixedValueGT applies the GT predicate on the "fixed_value" field.
-func FixedValueGT(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGT(FieldFixedValue, v))
-}
-
-// FixedValueGTE applies the GTE predicate on the "fixed_value" field.
-func FixedValueGTE(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldGTE(FieldFixedValue, v))
-}
-
-// FixedValueLT applies the LT predicate on the "fixed_value" field.
-func FixedValueLT(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLT(FieldFixedValue, v))
-}
-
-// FixedValueLTE applies the LTE predicate on the "fixed_value" field.
-func FixedValueLTE(v decimal.Decimal) predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldLTE(FieldFixedValue, v))
-}
-
-// FixedValueIsNil applies the IsNil predicate on the "fixed_value" field.
-func FixedValueIsNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldIsNull(FieldFixedValue))
-}
-
-// FixedValueNotNil applies the NotNil predicate on the "fixed_value" field.
-func FixedValueNotNil() predicate.TaxRate {
-	return predicate.TaxRate(sql.FieldNotNull(FieldFixedValue))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

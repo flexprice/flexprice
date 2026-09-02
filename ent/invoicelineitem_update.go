@@ -451,6 +451,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.AdjustedEntitlementQuantityCleared() {
 		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
 	}
+	if iliu.mutation.ParentLineItemIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
+	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -965,6 +968,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.AdjustedEntitlementQuantityCleared() {
 		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
+	}
+	if iliuo.mutation.ParentLineItemIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

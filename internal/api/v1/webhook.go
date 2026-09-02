@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -529,9 +530,15 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 }
 
 func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
-	// Always return 200 OK to Chargebee to prevent retries
-	// We log errors internally but don't expose them to Chargebee
+	// Return 200 OK to Chargebee to prevent retries when we successfully accept
+	// the request. Skip the success body if an earlier branch already aborted
+	// (e.g. 401 for missing/invalid Basic Auth) — AbortWithStatus commits the
+	// status, but writing a "Webhook received" body over a rejection would still
+	// mislead operators reading the response.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -582,45 +589,64 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		conn.EncryptedSecretData.Chargebee.WebhookUsername != "" &&
 		conn.EncryptedSecretData.Chargebee.WebhookPassword != ""
 
+	// Every rejection below writes a JSON body rather than using a bare
+	// AbortWithStatus, so the response matches the API error contract used by the
+	// other webhook handlers in this file. AbortWithStatusJSON also marks the
+	// context aborted, which is what stops the deferred success body at the top
+	// of this handler from overwriting the rejection.
+	rejectUnauthorized := func(message string) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": message,
+		})
+	}
+
 	// Case 1: Auth configured in FlexPrice but webhook request has no auth
 	if hasWebhookAuthConfigured && !hasAuth {
-		h.logger.Error(context.Background(), "webhook auth is configured but request has no Basic Auth credentials",
-			"error", err,
+		h.logger.Error(ctx, "webhook auth is configured but request has no Basic Auth credentials",
+			"error", "webhook_basic_auth_header_missing",
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
-		c.AbortWithStatus(http.StatusUnauthorized)
+		rejectUnauthorized("Basic Auth credentials are required for this webhook")
 		return
 	}
 
 	// Case 2: Auth NOT configured in FlexPrice but webhook request has auth
 	if !hasWebhookAuthConfigured && hasAuth {
-		h.logger.Info(context.Background(), "webhook request has Basic Auth but no credentials configured in FlexPrice",
+		h.logger.Info(ctx, "webhook request has Basic Auth but no credentials configured in FlexPrice",
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"note", "Configure webhook_username and webhook_password in connection settings")
-		c.AbortWithStatus(http.StatusUnauthorized)
+		rejectUnauthorized("Webhook Basic Auth is not configured for this connection")
 		return
 	} else if hasWebhookAuthConfigured && hasAuth {
 		// Case 3: Both sides have auth - verify it
 		err = chargebeeIntegration.Client.VerifyWebhookBasicAuth(ctx, username, password)
 		if err != nil {
-			h.logger.Error(context.Background(), "Chargebee webhook basic auth verification failed",
+			h.logger.Error(ctx, "Chargebee webhook basic auth verification failed",
 				"error", err,
-				"remote_addr", c.ClientIP())
-			c.AbortWithStatus(http.StatusUnauthorized)
+				"remote_addr", c.ClientIP(),
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			rejectUnauthorized("Invalid webhook authentication")
 			return
 		}
-		h.logger.Debug(context.Background(), "Chargebee webhook basic auth verified",
+		h.logger.Debug(ctx, "Chargebee webhook basic auth verified",
 			"remote_addr", c.ClientIP())
 	} else {
-		// Case 4: Neither side has auth - allow but warn
-		h.logger.Info(context.Background(), "Chargebee webhook processing without authentication",
+		// Case 4: Neither side has auth - reject. Chargebee v2 has no signature
+		// scheme, so Basic Auth is the only supported webhook authentication.
+		// Accepting unauthenticated requests would let anyone who knows a
+		// Chargebee invoice ID forge payment_succeeded events for that tenant.
+		h.logger.Error(ctx, "Chargebee webhook rejected: Basic Auth is not configured on the connection",
+			"error", "webhook_basic_auth_not_configured",
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
-			"note", "Consider configuring Basic Auth for security")
+			"note", "Configure webhook_username and webhook_password in the Chargebee connection and enable Basic Auth in the Chargebee webhook settings")
+		rejectUnauthorized("Webhook Basic Auth is not configured for this connection")
+		return
 	}
 
 	// Parse webhook event
@@ -639,8 +665,20 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		"event_type", event.EventType,
 		"occurred_at", event.OccurredAt)
 
+	// Create service dependencies for webhook handler
+	serviceDeps := &chargebeewebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
+		DB:                              h.db,
+	}
+
 	// Handle the event
-	err = chargebeeIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID)
+	err = chargebeeIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
 	if err != nil {
 		h.logger.Error(context.Background(), "error processing Chargebee webhook event",
 			"error", err,
@@ -830,9 +868,20 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 		h.logger.Debug(c.Request.Context(), "Nomod webhook authentication successful",
 			"remote_addr", c.ClientIP())
 	} else {
-		h.logger.Debug(c.Request.Context(), "Nomod webhook processing without authentication",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		h.logger.Error(c.Request.Context(), "Nomod webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
+			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
-			"environment_id", environmentID)
+			"environment_id", environmentID,
+			"note", "Configure webhook_secret in the Nomod connection settings")
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
+		return
 	}
 
 	// Log webhook processing (without sensitive data)
@@ -886,7 +935,13 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Always return 200 OK to Moyasar to prevent retries
 	// We log errors internally but don't expose them to Moyasar
+	//
+	// Skipped when the request was aborted: a rejected webhook must keep its own
+	// status rather than be overwritten with a success body.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -963,8 +1018,9 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			return
 		}
 
-		// Verify the secret_token matches our configured (decrypted) webhook_secret
-		if event.SecretToken != moyasarConfig.WebhookSecret {
+		// Verify the secret_token matches our configured (decrypted) webhook_secret.
+		// Constant-time compare so response timing cannot be used to recover the secret.
+		if subtle.ConstantTimeCompare([]byte(event.SecretToken), []byte(moyasarConfig.WebhookSecret)) != 1 {
 			h.logger.Info(context.Background(), "Moyasar webhook secret_token verification failed - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
@@ -978,12 +1034,25 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			"environment_id", environmentID,
 			"event_id", event.ID)
 	} else {
-		// No webhook secret configured - allow with warning
-		h.logger.Info(context.Background(), "Moyasar webhook received without secret verification",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		//
+		// AbortWithStatusJSON rather than a bare return: the deferred success
+		// body at the top of this handler would otherwise answer 200 to a
+		// request that was refused. Aborting marks the context so the deferred
+		// write is skipped.
+		h.logger.Error(c.Request.Context(), "Moyasar webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"event_id", event.ID,
-			"note", "Configure webhook_secret in Moyasar connection for enhanced security")
+			"note", "Configure webhook_secret in the Moyasar connection settings")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
+		return
 	}
 
 	// Log webhook processing (without sensitive data)
@@ -1194,9 +1263,14 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	}
 }
 func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
-	// Always return 200 OK to Whop to prevent retries
-	// We log errors internally but don't expose them to Whop
+	// Return 200 OK to Whop to prevent retries once the request is accepted.
+	// We log errors internally but don't expose them to Whop. If the handler
+	// aborted (e.g. rejected an unauthenticated request with 401), skip this
+	// write so the rejection is not overwritten by a success body.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -1246,18 +1320,25 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		timestamp := c.GetHeader("webhook-timestamp")
 		signature := c.GetHeader("webhook-signature")
 		if webhookID == "" || timestamp == "" || signature == "" {
-			h.logger.Info(ctx, "Whop webhook secret configured but signature headers missing - rejecting request",
+			h.logger.Error(ctx, "Whop webhook rejected: signature headers missing",
+				"error", "signature_headers_missing",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Webhook signature headers are missing",
+			})
 			return
 		}
 
 		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, webhookID, timestamp, signature); err != nil {
-			h.logger.Info(ctx, "Whop webhook signature verification failed - rejecting request",
+			h.logger.Error(ctx, "Whop webhook rejected: signature verification failed",
 				"error", err,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
 				"note", "signature does not match configured webhook_secret")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Webhook signature verification failed",
+			})
 			return
 		}
 
@@ -1265,10 +1346,24 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	} else {
-		// No webhook secret configured - allow with warning
-		h.logger.Info(ctx, "Whop webhook received without secret verification",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		//
+		// AbortWithStatusJSON rather than a bare return: the deferred success
+		// body at the top of this handler would otherwise answer 200 to a
+		// request that was refused. Aborting marks the context so the deferred
+		// write is skipped.
+		h.logger.Error(ctx, "Whop webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
 			"tenant_id", tenantID,
-			"environment_id", environmentID)
+			"environment_id", environmentID,
+			"note", "Configure webhook_secret in the Whop connection settings")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
+		return
 	}
 
 	var event whopwebhook.WhopWebhookEvent

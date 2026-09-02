@@ -2448,6 +2448,8 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		TaxAssociationRepo:       stores.TaxAssociationRepo,
 		TaxRateRepo:              stores.TaxRateRepo,
 		TaxAppliedRepo:           stores.TaxAppliedRepo,
+		ConnectionRepo:           stores.ConnectionRepo,
+		IntegrationFactory:       s.GetIntegrationFactory(),
 	})
 }
 
@@ -2969,6 +2971,8 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		TaxAssociationRepo:       stores.TaxAssociationRepo,
 		TaxRateRepo:              stores.TaxRateRepo,
 		TaxAppliedRepo:           stores.TaxAppliedRepo,
+		ConnectionRepo:           stores.ConnectionRepo,
+		IntegrationFactory:       s.GetIntegrationFactory(),
 	})
 }
 
@@ -3593,6 +3597,77 @@ func (s *WalletServiceSuite) TestBonusCreditsTopupConfig_APIDispatch() {
 	getResp, err := svc.GetSettingByKey(s.GetContext(), types.SettingKeyBonusCreditsTopupConfig)
 	s.NoError(err, "GetSettingByKey must recognize bonus_credits_topup_config")
 	s.Equal(true, getResp.Value["enabled"])
+}
+
+func (s *WalletServiceSuite) seedFreeCreditLimit(limit decimal.Decimal) {
+	svc := NewSettingsService(s.service.(*walletService).ServiceParams).(*settingsService)
+	s.NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyWalletTopupConfig, types.WalletTopupConfig{
+		FreeCreditLimitPerTransaction: limit,
+	}))
+}
+
+// TestWalletTopupConfig_APIDispatch covers the three separate switches a new setting key has to
+// be registered in — types.ValidateSettingValue plus the service's Get/Update dispatchers — none
+// of which the generic GetSetting/UpdateSetting helpers exercise.
+func (s *WalletServiceSuite) TestWalletTopupConfig_APIDispatch() {
+	svc := NewSettingsService(s.service.(*walletService).ServiceParams)
+
+	updateResp, err := svc.UpdateSettingByKey(s.GetContext(), types.SettingKeyWalletTopupConfig, &dto.UpdateSettingRequest{
+		Value: map[string]interface{}{"free_credit_limit_per_transaction": "500"},
+	})
+	s.NoError(err, "UpdateSettingByKey must recognize wallet_topup_config")
+	s.Equal(types.SettingKeyWalletTopupConfig, updateResp.Key)
+
+	getResp, err := svc.GetSettingByKey(s.GetContext(), types.SettingKeyWalletTopupConfig)
+	s.NoError(err, "GetSettingByKey must recognize wallet_topup_config")
+	s.Equal("500", fmt.Sprint(getResp.Value["free_credit_limit_per_transaction"]))
+}
+
+func (s *WalletServiceSuite) TestWalletTopupConfig_RejectsNegativeLimit() {
+	svc := NewSettingsService(s.service.(*walletService).ServiceParams)
+
+	_, err := svc.UpdateSettingByKey(s.GetContext(), types.SettingKeyWalletTopupConfig, &dto.UpdateSettingRequest{
+		Value: map[string]interface{}{"free_credit_limit_per_transaction": "-1"},
+	})
+	s.ErrorContains(err, "cannot be negative", "a negative limit must be rejected on its own merits")
+}
+
+func (s *WalletServiceSuite) TestFreeCreditLimit_DefaultIsUnlimited() {
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100000),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("free_credit_default_unlimited"),
+	})
+	s.NoError(err, "the default limit of 0 must leave free credits uncapped")
+}
+
+func (s *WalletServiceSuite) TestFreeCreditLimit_EnforcedPerTransaction() {
+	s.seedFreeCreditLimit(decimal.NewFromInt(500))
+
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(501),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("free_credit_over_limit"),
+	})
+	s.Error(err, "501 must be rejected against a 500 limit")
+
+	_, err = s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(500),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("free_credit_at_limit"),
+	})
+	s.NoError(err, "the limit itself must be allowed")
+}
+
+func (s *WalletServiceSuite) TestFreeCreditLimit_DoesNotCapOtherReasons() {
+	s.seedFreeCreditLimit(decimal.NewFromInt(500))
+
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(5000),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("purchased_above_free_limit"),
+	})
+	s.NoError(err, "the free credit cap must not apply to purchased credits")
 }
 
 func (s *WalletServiceSuite) bonusTxByParent(parentID string) *wallet.Transaction {

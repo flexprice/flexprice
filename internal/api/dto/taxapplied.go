@@ -15,6 +15,7 @@ type CreateTaxAppliedRequest struct {
 	EntityID         string                  `json:"entity_id" validate:"required"`
 	TaxableAmount    decimal.Decimal         `json:"taxable_amount" validate:"required" swaggertype:"string"`
 	TaxAmount        decimal.Decimal         `json:"tax_amount" validate:"required" swaggertype:"string"`
+	TaxBehavior      types.TaxBehavior       `json:"tax_behavior" validate:"required"`
 	Currency         string                  `json:"currency" validate:"required"`
 	TaxAssociationID *string                 `json:"tax_association_id,omitempty"`
 	Metadata         map[string]string       `json:"metadata,omitempty"`
@@ -35,6 +36,7 @@ func (r *CreateTaxAppliedRequest) ToTaxApplied(ctx context.Context) *taxapplied.
 		EntityID:         r.EntityID,
 		TaxableAmount:    r.TaxableAmount,
 		TaxAmount:        r.TaxAmount,
+		TaxBehavior:      r.TaxBehavior,
 		Currency:         r.Currency,
 		TaxAssociationID: r.TaxAssociationID,
 		Metadata:         r.Metadata,

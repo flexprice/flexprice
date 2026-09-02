@@ -53,8 +53,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
-	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -63,12 +63,11 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger        *logger.Logger
-	Config        *config.Configuration
-	DB            postgres.IClient
-	PDFGenerator  pdf.Generator
-	S3            s3.Service
-	TracingSvc    *tracing.Service
+	Logger          *logger.Logger
+	Config          *config.Configuration
+	DB              postgres.IClient
+	PDFGenerator    pdf.Generator
+	TracingSvc      *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
@@ -139,6 +138,11 @@ type ServiceParams struct {
 	// Integration Factory
 	IntegrationFactory *integration.Factory
 
+	// StorageResolver selects the Flexprice-owned Storage backend for a Purpose
+	// (invoice/export/import). Services must reach cloud object storage through
+	// this — no direct AWS/GCP SDK imports outside internal/storage.
+	StorageResolver storage.Resolver
+
 	// Security
 	EncryptionService security.EncryptionService
 
@@ -197,7 +201,7 @@ func NewServiceParams(
 	couponApplicationRepo coupon_application.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
-	s3Service s3.Service,
+	storageResolver storage.Resolver,
 	client httpclient.Client,
 	addonRepo addon.Repository,
 	addonAssociationRepo addonassociation.Repository,
@@ -264,7 +268,7 @@ func NewServiceParams(
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
 		WebhookPublisher:             webhookPublisher,
-		S3:                           s3Service,
+		StorageResolver:              storageResolver,
 		Client:                       client,
 		CouponRepo:                   couponRepo,
 		CouponAssociationRepo:        couponAssociationRepo,

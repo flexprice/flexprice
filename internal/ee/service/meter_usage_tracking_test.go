@@ -480,9 +480,7 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 			Logger:       logger.NewNoopLogger(),
 			CustomerRepo: customerStore,
 			Config: &config.Configuration{
-				MeterUsageTracking: config.MeterUsageTrackingConfig{
-					WalletAlertPushEnabled: false,
-				},
+				MeterUsageTracking: config.MeterUsageTrackingConfig{},
 			},
 		},
 	}
@@ -495,4 +493,3 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 	svc.runMeterUsagePostInsertSideEffects(ctx, event, []*events.MeterUsage{})
 	assert.Equal(t, existing.ID, event.CustomerID)
 }
-

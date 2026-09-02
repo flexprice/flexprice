@@ -17,7 +17,6 @@ type TaxRate struct {
 	TaxRateType     types.TaxRateType   `json:"tax_rate_type,omitempty"`
 	Scope           types.TaxRateScope  `json:"scope,omitempty"`
 	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty" swaggertype:"string"`
-	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty" swaggertype:"string"`
 	Metadata        map[string]string   `json:"metadata,omitempty"`
 	types.BaseModel
 }
@@ -36,7 +35,6 @@ func FromEnt(e *ent.TaxRate) *TaxRate {
 		TaxRateType:     types.TaxRateType(e.TaxRateType),
 		Scope:           types.TaxRateScope(e.Scope),
 		PercentageValue: e.PercentageValue,
-		FixedValue:      e.FixedValue,
 		EnvironmentID:   e.EnvironmentID,
 		Metadata:        e.Metadata,
 		BaseModel: types.BaseModel{

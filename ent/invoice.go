@@ -104,6 +104,10 @@ type Invoice struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// ID of the replacement invoice created when this invoice was recalculated after voiding
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+	// True once a user has manually added, edited, or removed a line item on this draft invoice
+	IsManuallyEdited bool `json:"is_manually_edited,omitempty"`
+	// Why no tax was charged; null only when tax was actually charged
+	TaxExemptionReasonCode *types.TaxExemptionReasonCode `json:"tax_exemption_reason_code,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceQuery when eager-loading is set.
 	Edges        InvoiceEdges `json:"edges"`
@@ -150,9 +154,11 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
+		case invoice.FieldIsManuallyEdited:
+			values[i] = new(sql.NullBool)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldTaxExemptionReasonCode:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldIssueDate, invoice.FieldLastComputedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -450,6 +456,19 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.RecalculatedInvoiceID = new(string)
 				*i.RecalculatedInvoiceID = value.String
 			}
+		case invoice.FieldIsManuallyEdited:
+			if value, ok := values[j].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_manually_edited", values[j])
+			} else if value.Valid {
+				i.IsManuallyEdited = value.Bool
+			}
+		case invoice.FieldTaxExemptionReasonCode:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_exemption_reason_code", values[j])
+			} else if value.Valid {
+				i.TaxExemptionReasonCode = new(types.TaxExemptionReasonCode)
+				*i.TaxExemptionReasonCode = types.TaxExemptionReasonCode(value.String)
+			}
 		default:
 			i.selectValues.Set(columns[j], values[j])
 		}
@@ -658,6 +677,14 @@ func (i *Invoice) String() string {
 	if v := i.RecalculatedInvoiceID; v != nil {
 		builder.WriteString("recalculated_invoice_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("is_manually_edited=")
+	builder.WriteString(fmt.Sprintf("%v", i.IsManuallyEdited))
+	builder.WriteString(", ")
+	if v := i.TaxExemptionReasonCode; v != nil {
+		builder.WriteString("tax_exemption_reason_code=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteByte(')')
 	return builder.String()

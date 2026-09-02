@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -112,6 +113,14 @@ func (TaxApplied) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Comment("Idempotency key for the tax application"),
+
+		field.String("tax_behavior").
+			GoType(types.TaxBehavior("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Comment("inclusive or exclusive, frozen at apply time"),
 	}
 }
 

@@ -70,6 +70,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetAddressPostalCode(c.AddressPostalCode).
 		SetAddressCountry(c.AddressCountry).
 		SetTimezone(c.Timezone).
+		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
@@ -345,6 +346,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetAddressPostalCode(c.AddressPostalCode).
 		SetAddressCountry(c.AddressCountry).
 		SetTimezone(c.Timezone).
+		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).

@@ -45,7 +45,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 
 	cfg := &config.Configuration{
 		Logging: config.LoggingConfig{Level: types.LogLevelInfo},
-		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-32-bytes!!!"},
+		Secrets: config.SecretsConfig{EncryptionKey: testutil.NewEncryptionKey()},
 	}
 	log, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
@@ -152,8 +152,9 @@ func TestHandleWhopWebhook_RejectsMissingSignatureWhenSecretConfigured(t *testin
 		router.ServeHTTP(w, req)
 	}, "HandleWhopWebhook panicked (implies it reached HandleWebhookEvent without a valid signature)")
 
-	// Match Moyasar: always return 200 to avoid retry storms even when rejected.
-	require.Equal(t, http.StatusOK, w.Code)
+	// Missing signature headers on a secret-configured connection are rejected 401
+	// (mirrors Moyasar/Nomod/Chargebee); the deferred success body is skipped.
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestHandleWhopWebhook_RejectsInvalidSignatureWhenSecretConfigured(t *testing.T) {
@@ -175,7 +176,8 @@ func TestHandleWhopWebhook_RejectsInvalidSignatureWhenSecretConfigured(t *testin
 		router.ServeHTTP(w, req)
 	}, "HandleWhopWebhook panicked (implies it reached HandleWebhookEvent with an invalid signature)")
 
-	require.Equal(t, http.StatusOK, w.Code)
+	// Invalid signature is rejected 401; the deferred success body is skipped.
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestHandleWhopWebhook_AcceptsValidSignature(t *testing.T) {
@@ -205,9 +207,11 @@ func TestHandleWhopWebhook_AcceptsValidSignature(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-// Match Moyasar: connections without webhook_secret keep working (process events,
-// no signature required). Uses no-op.event so nil service deps are never touched.
-func TestHandleWhopWebhook_AllowsWhenSecretNotConfigured(t *testing.T) {
+// Fail closed when no webhook_secret is configured. This route is unauthenticated
+// and takes tenant/environment from the URL, so a request that cannot be verified
+// against a configured secret must be rejected — it drives invoice payment state.
+// Mirrors the Moyasar/Nomod/Chargebee handlers, which reject 401 in this case.
+func TestHandleWhopWebhook_RejectsWhenSecretNotConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	handler, _ := setupWhopWebhookHandler(t, "")
@@ -217,10 +221,10 @@ func TestHandleWhopWebhook_AllowsWhenSecretNotConfigured(t *testing.T) {
 
 	body := `{"type":"no-op.event","data":{}}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/webhooks/whop/tenant_test/env_test", strings.NewReader(body))
-	// deliberately no X-Whop-Signature — should still process when secret unset
+	// no signature headers and no configured secret — must be rejected, not processed
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }

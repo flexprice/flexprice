@@ -225,10 +225,27 @@ Backwards-compatible with the old hardcoded refs when the values block is unset.
 
 {{/*
 Resolve the PostgreSQL host.
-Uses the bitnami/postgresql subchart service name when internal, or the user-supplied host when external.
+Uses the bitnami/postgresql subchart service name when internal, or the
+user-supplied host when external.
+
+Under the config-autobind shape (.Values.env set), the address is declared as
+env.FLEXPRICE_POSTGRES_HOST and that is what the application reads. Templates
+that cannot go through the env block — the migration Job's init containers and
+the legacy ConfigMap — resolve the address through this helper instead, so
+prefer the autobind value when it is present and fall back to postgres.host.
+
+Without this, the address has to be declared TWICE in every values file and the
+two copies silently disagree the moment one is updated: the app connects fine
+while the migration Job loops "[n/60] Not ready yet..." against a dead IP. Every
+region currently mirrors the value by hand; asia-south1 even carries a comment
+telling the next person to keep them in sync. This makes the mirror unnecessary
+— a values file may still set postgres.host, and it is used only when the
+autobind key is absent, so existing regions render unchanged.
 */}}
 {{- define "flexprice.postgresHost" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_HOST") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_HOST" -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.host }}
 {{- else -}}
 {{- printf "%s-postgresql" .Release.Name }}
@@ -236,10 +253,12 @@ Uses the bitnami/postgresql subchart service name when internal, or the user-sup
 {{- end }}
 
 {{/*
-Resolve the PostgreSQL port.
+Resolve the PostgreSQL port. Same autobind precedence as the host above.
 */}}
 {{- define "flexprice.postgresPort" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_PORT") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_PORT" | toString -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.port | toString }}
 {{- else -}}
 5432
@@ -291,7 +310,18 @@ Resolve the ClickHouse address (host:port) based on clickhouse.mode.
 {{- if eq .Values.clickhouse.mode "external" -}}
 {{- .Values.clickhouse.address }}
 {{- else if eq .Values.clickhouse.mode "altinity" -}}
-{{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
+{{- /* Namespace-qualified when clickhouse.namespace is set, matching what the
+       standalone branch below already does via flexprice.clickhouseServiceHost.
+       The operator's Service lives in the ClickHouse namespace, so the bare
+       name only resolves for consumers in that same namespace — the migration
+       Job runs in the release namespace and failed with
+       "nc: bad address 'chi-flexprice-flexprice-0-0'". */ -}}
+{{- $chSvc := printf "chi-%s-flexprice-0-0" (include "flexprice.fullname" .) -}}
+{{- if .Values.clickhouse.namespace -}}
+{{- printf "%s.%s.svc.cluster.local:9000" $chSvc .Values.clickhouse.namespace }}
+{{- else -}}
+{{- printf "%s:9000" $chSvc }}
+{{- end -}}
 {{- else -}}
 {{- printf "%s:9000" (include "flexprice.clickhouseServiceHost" .) }}
 {{- end -}}
@@ -449,6 +479,17 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.kafkaConfig.topic | quote }}
 - name: FLEXPRICE_KAFKA_TOPIC_LAZY
   value: {{ .Values.kafkaConfig.topicLazy | quote }}
+{{- /*
+  topic_bulk has no default in the Go config (unlike topic/topic_lazy, which are
+  `validate:"required"` and fail fast when unset). An empty TopicBulk therefore
+  passes validation and only surfaces when a batched-ingest publish is attempted
+  against topic "", so emit it only when configured rather than emitting an
+  empty string.
+*/}}
+{{- with .Values.kafkaConfig.topicBulk }}
+- name: FLEXPRICE_KAFKA_TOPIC_BULK
+  value: {{ . | quote }}
+{{- end }}
 - name: FLEXPRICE_KAFKA_TLS
   value: {{ .Values.kafkaConfig.tls | quote }}
 {{- /*
@@ -556,41 +597,6 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_BILLING_ENVIRONMENT_ID
   value: {{ .Values.billing.environmentId | quote }}
 {{- end }}
-{{- /* ---- Observability ---- */}}
-- name: FLEXPRICE_SENTRY_ENABLED
-  value: {{ .Values.sentry.enabled | quote }}
-{{- if .Values.sentry.enabled }}
-- name: FLEXPRICE_SENTRY_DSN
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "flexprice.secretName" . }}
-      key: sentry-dsn
-- name: FLEXPRICE_SENTRY_ENVIRONMENT
-  value: {{ .Values.sentry.environment | quote }}
-- name: FLEXPRICE_SENTRY_SAMPLE_RATE
-  value: {{ .Values.sentry.sampleRate | quote }}
-{{- end }}
-- name: FLEXPRICE_PYROSCOPE_ENABLED
-  value: {{ .Values.pyroscope.enabled | quote }}
-{{- if .Values.pyroscope.enabled }}
-- name: FLEXPRICE_PYROSCOPE_SERVER_ADDRESS
-  value: {{ .Values.pyroscope.serverAddress | quote }}
-- name: FLEXPRICE_PYROSCOPE_APPLICATION_NAME
-  value: {{ .Values.pyroscope.applicationName | quote }}
-- name: FLEXPRICE_PYROSCOPE_SAMPLE_RATE
-  value: {{ .Values.pyroscope.sampleRate | quote }}
-- name: FLEXPRICE_PYROSCOPE_DISABLE_GC_RUNS
-  value: {{ .Values.pyroscope.disableGCRuns | quote }}
-{{- if .Values.pyroscope.basicAuthUser }}
-- name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_USER
-  value: {{ .Values.pyroscope.basicAuthUser | quote }}
-- name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "flexprice.secretName" . }}
-      key: pyroscope-basic-auth-password
-{{- end }}
-{{- end }}
 {{- /* ---- S3 ---- */}}
 {{- if .Values.s3.enabled }}
 - name: FLEXPRICE_S3_ENABLED
@@ -619,7 +625,7 @@ All service addresses are resolved via named templates above so this block stays
       key: encryption-key
 {{- end }}
 {{- /* ---- Email ---- */}}
-{{- if .Values.email.enabled }}
+{{- if .Values.app.email.enabled }}
 - name: FLEXPRICE_EMAIL_ENABLED
   value: "true"
 - name: FLEXPRICE_EMAIL_RESEND_API_KEY
@@ -628,11 +634,11 @@ All service addresses are resolved via named templates above so this block stays
       name: {{ include "flexprice.secretName" . }}
       key: email-resend-api-key
 - name: FLEXPRICE_EMAIL_FROM_ADDRESS
-  value: {{ .Values.email.fromAddress | quote }}
+  value: {{ .Values.app.email.fromAddress | quote }}
 - name: FLEXPRICE_EMAIL_REPLY_TO
-  value: {{ .Values.email.replyTo | quote }}
+  value: {{ .Values.app.email.replyTo | quote }}
 - name: FLEXPRICE_EMAIL_CALENDAR_URL
-  value: {{ .Values.email.calendarUrl | quote }}
+  value: {{ .Values.app.email.calendarUrl | quote }}
 {{- end }}
 {{- /* ---- Event processing ---- */}}
 - name: FLEXPRICE_EVENT_PROCESSING_TOPIC
@@ -751,3 +757,73 @@ All service addresses are resolved via named templates above so this block stays
 {{ toYaml . | trim }}
 {{- end }}
 {{- end }}
+
+{{/*
+Topology spread constraints for a component, with a defaulted labelSelector.
+Usage: include "flexprice.topologySpreadConstraints" (dict "ctx" . "component" "api")
+
+Resolves `.Values.<component>.topologySpreadConstraints` first, falling back to
+the global `.Values.topologySpreadConstraints`.
+
+Any constraint that carries NO labelSelector of its own gets one injected:
+the chart's selector labels (which honour nameOverride/fullnameOverride) plus
+the component key, so each workload spreads against its own replicas rather
+than against every pod in the release.
+
+This defaulting exists because the previous values.yaml hardcoded
+`app.kubernetes.io/name: flexprice`. That matched zero pods the moment an
+operator set nameOverride, and since the default whenUnsatisfiable is
+ScheduleAnyway the scheduler silently ignored the constraint — all replicas
+could land in one AZ with nothing in the manifest to show for it.
+
+A constraint that DOES define labelSelector is passed through untouched, so an
+operator can still spread against an arbitrary set of pods.
+
+Presence is tested with `hasKey`, not truthiness: an explicit `labelSelector: {}`
+is a VALID selector meaning "match every pod in the namespace", but it is falsey
+in Go templates. Testing truthiness would take the injection branch and emit
+`labelSelector` twice in the same constraint — YAML resolves the duplicate to the
+last occurrence, so the operator's explicit selector would be silently discarded
+rather than rejected.
+*/}}
+{{- define "flexprice.topologySpreadConstraints" -}}
+{{- $ctx := .ctx -}}
+{{- $component := .component -}}
+{{- $cfg := index $ctx.Values $component | default dict -}}
+{{- $tsc := default $ctx.Values.topologySpreadConstraints (get $cfg "topologySpreadConstraints") -}}
+{{- /* `--set topologySpreadConstraints=[]` yields the STRING "[]", not an empty
+       list, and `range` over a string is a render error. Anything that is not a
+       real list is treated as "no constraints" so the caller's `with` emits
+       nothing, matching `topologySpreadConstraints: []` set via a values file. */ -}}
+{{- if not (kindIs "slice" $tsc) }}{{- $tsc = list }}{{- end -}}
+{{- range $tsc }}
+{{- if hasKey . "labelSelector" }}
+- {{ toYaml . | nindent 2 | trim }}
+{{- else }}
+- {{ toYaml . | nindent 2 | trim }}
+  labelSelector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" $ctx | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+flexprice.image — the app image reference.
+
+Prefers an immutable digest when image.digest is set: renders
+"<repository>@<digest>" and ignores the tag entirely. Otherwise renders
+"<repository>:<tag>", tag defaulting to .Chart.AppVersion, the prior behaviour.
+
+A digest and a tag cannot both appear in one reference ("repo@sha256:x:tag" is
+invalid), so digest wins outright when present. This lets a client pin exactly
+the bytes shipped — the workloads and the migration Job all resolve through here.
+*/}}
+{{- define "flexprice.image" -}}
+{{- if .Values.image.digest -}}
+{{ .Values.image.repository }}@{{ .Values.image.digest }}
+{{- else -}}
+{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+{{- end -}}
+{{- end -}}

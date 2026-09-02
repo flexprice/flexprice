@@ -18,6 +18,7 @@ type TaxApplied struct {
 	TaxAssociationID *string                 `json:"tax_association_id,omitempty"`
 	TaxableAmount    decimal.Decimal         `json:"taxable_amount,omitempty" swaggertype:"string"`
 	TaxAmount        decimal.Decimal         `json:"tax_amount,omitempty" swaggertype:"string"`
+	TaxBehavior      types.TaxBehavior       `json:"tax_behavior,omitempty"`
 	Currency         string                  `json:"currency,omitempty"`
 	AppliedAt        time.Time               `json:"applied_at,omitempty"`
 	EnvironmentID    string                  `json:"environment_id,omitempty"`
@@ -27,6 +28,13 @@ type TaxApplied struct {
 }
 
 func FromEnt(ent *ent.TaxApplied) *TaxApplied {
+	// Rows written before tax_behavior existed have none, and exclusive is the only
+	// behavior that was ever charged back then.
+	taxBehavior := ent.TaxBehavior
+	if taxBehavior == "" {
+		taxBehavior = types.TaxBehaviorExclusive
+	}
+
 	return &TaxApplied{
 		ID:               ent.ID,
 		TaxRateID:        ent.TaxRateID,
@@ -35,6 +43,7 @@ func FromEnt(ent *ent.TaxApplied) *TaxApplied {
 		TaxAssociationID: ent.TaxAssociationID,
 		TaxableAmount:    ent.TaxableAmount,
 		TaxAmount:        ent.TaxAmount,
+		TaxBehavior:      taxBehavior,
 		Currency:         ent.Currency,
 		AppliedAt:        ent.AppliedAt,
 		EnvironmentID:    ent.EnvironmentID,

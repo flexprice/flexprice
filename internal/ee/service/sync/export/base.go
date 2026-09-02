@@ -16,6 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -39,6 +40,7 @@ type ExportService struct {
 	usageAnalyticsGetter     UsageAnalyticsGetter
 	connectionRepo           connection.Repository
 	integrationFactory       *integration.Factory
+	storageResolver          storage.Resolver
 	config                   *config.Configuration
 	logger                   *logger.Logger
 	eventRepo                events.Repository
@@ -52,6 +54,7 @@ func NewExportService(
 	invoiceRepo invoice.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	eventRepo events.Repository,
@@ -63,6 +66,7 @@ func NewExportService(
 		walletRepo:         nil,
 		connectionRepo:     connectionRepo,
 		integrationFactory: integrationFactory,
+		storageResolver:    storageResolver,
 		config:             cfg,
 		logger:             logger,
 		eventRepo:          eventRepo,
@@ -79,6 +83,7 @@ func NewExportServiceWithWallet(
 	customerRepo customer.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	usageAnalyticsGetter UsageAnalyticsGetter,
@@ -94,6 +99,7 @@ func NewExportServiceWithWallet(
 		customerRepo:             customerRepo,
 		connectionRepo:           connectionRepo,
 		integrationFactory:       integrationFactory,
+		storageResolver:          storageResolver,
 		config:                   cfg,
 		logger:                   logger,
 		usageAnalyticsGetter:     usageAnalyticsGetter,
@@ -160,8 +166,8 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 
 	// Step 3: Route to appropriate provider based on connection type
 	switch conn.ProviderType {
-	case types.SecretProviderS3:
-		return s.uploadToS3(ctx, request, exporter, csvBytes, recordCount)
+	case types.SecretProviderS3, types.SecretProviderGCS:
+		return s.uploadToStorage(ctx, request, exporter, csvBytes, recordCount)
 	default:
 		return nil, ierr.NewError("unsupported provider type").
 			WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
@@ -169,51 +175,45 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	}
 }
 
-// uploadToS3 handles S3-specific upload logic
-func (s *ExportService) uploadToS3(ctx context.Context, request *dto.ExportRequest, exporter Exporter, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
-	// Validate S3 job config is provided
+func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	if request.JobConfig == nil {
-		return nil, ierr.NewError("S3 job configuration is required").
-			WithHint("S3 job configuration must be provided for S3 uploads").
+		return nil, ierr.NewError("job configuration is required").
+			WithHint("job configuration must be provided for storage uploads").
 			Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Info(ctx, "uploading to S3",
-		"connection_id", request.ConnectionID,
-		"bucket", request.JobConfig.Bucket,
-		"region", request.JobConfig.Region)
-
-	// Get the S3 integration client from factory
-	s3IntegrationClient, err := s.integrationFactory.GetS3Client(ctx)
+	store, err := s.storageResolver.ForConnection(ctx, request.ConnectionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get S3 integration client from factory").
+			WithHint("Failed to get storage provider from factory").
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	// Get the configured S3 client with job config
-	s3Client, _, err := s3IntegrationClient.GetS3Client(ctx, request.JobConfig, request.ConnectionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get configured S3 client").
-			Mark(ierr.ErrHTTPClient)
-	}
-
-	// Generate filename with start and end times
-	// Format: {prefix}-start_time_{YYMMDDHHMMSS}-end_time_{YYMMDDHHMMSS}.csv
-	startTimeStr := request.StartTime.Format("060102150405") // YYMMDDHHMMSS
-	endTimeStr := request.EndTime.Format("060102150405")     // YYMMDDHHMMSS
+	startTimeStr := request.StartTime.Format("060102150405")
+	endTimeStr := request.EndTime.Format("060102150405")
 	filenamePrefix := exporter.GetFilenamePrefix()
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
+	key := storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
 
-	uploadResponse, err := s3Client.UploadCSV(ctx, filename, csvBytes, filenamePrefix)
+	// Use resolved destination, not JobConfig.Bucket.
+	s.logger.Info(ctx, "uploading export",
+		"connection_id", request.ConnectionID,
+		"provider", store.Provider(),
+		"destination", store.FileURL(key))
+
+	uploadResponse, err := store.Upload(ctx, &storage.UploadRequest{
+		Key:      key,
+		Data:     csvBytes,
+		Format:   storage.UploadFormatCSV,
+		Compress: request.JobConfig.Compression == types.S3CompressionTypeGzip,
+	})
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to upload CSV to S3").
+			WithHint("Failed to upload CSV export").
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Info(ctx, "successfully uploaded to S3",
+	s.logger.Info(ctx, "successfully uploaded export",
 		"file_url", uploadResponse.FileURL,
 		"file_size_bytes", uploadResponse.FileSizeBytes)
 

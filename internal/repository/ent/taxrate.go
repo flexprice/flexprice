@@ -67,7 +67,6 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 		SetMetadata(t.Metadata).
 		SetTaxRateType(string(t.TaxRateType)).
 		SetNillablePercentageValue(t.PercentageValue).
-		SetNillableFixedValue(t.FixedValue).
 		SetScope(string(t.Scope)).
 		SetStatus(string(t.Status)).
 		SetTenantID(t.TenantID).
@@ -252,7 +251,6 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 		SetDescription(t.Description).
 		SetMetadata(t.Metadata).
 		SetNillablePercentageValue(t.PercentageValue).
-		SetNillableFixedValue(t.FixedValue).
 		SetScope(string(t.Scope)).
 		SetStatus(string(t.Status)).
 		SetUpdatedAt(time.Now().UTC()).

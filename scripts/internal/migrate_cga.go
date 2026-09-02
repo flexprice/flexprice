@@ -163,9 +163,23 @@ func MigrateCGA() error {
 			continue
 		}
 
+		// The period end must be computed in the subscription's timezone, the same way the
+		// service computes it at runtime; backfilling in UTC would land non-UTC customers on
+		// a different day than every period the service goes on to generate.
+		var timezone string
+		if grant.SubscriptionID != nil && lo.FromPtr(grant.SubscriptionID) != "" {
+			sub, err := subscriptionRepo.Get(subCtx, lo.FromPtr(grant.SubscriptionID))
+			if err != nil {
+				log.Warnw("Failed to get subscription for timezone", "cga_id", cga.ID, "subscription_id", lo.FromPtr(grant.SubscriptionID), "error", err)
+				cgasSkipped++
+				continue
+			}
+			timezone = sub.Timezone
+		}
+
 		periodStart := cga.ScheduledFor
 		// Use credit grant's period config instead of subscription's billing period
-		_, periodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), periodStart, "")
+		_, periodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), periodStart, timezone)
 		if err != nil {
 			log.Warnw("Failed to calculate period_end", "cga_id", cga.ID, "error", err)
 			cgasSkipped++

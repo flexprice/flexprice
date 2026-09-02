@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -18,7 +20,10 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/interceptor"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -34,6 +39,8 @@ type temporalService struct {
 	tracing       *tracing.Service
 	workerConfig  config.TemporalWorkerConfig
 }
+
+const temporalStartTimeout = 2 * time.Minute
 
 // NewTemporalService creates a new temporal service instance
 func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) TemporalService {
@@ -79,13 +86,37 @@ func GetGlobalTemporalClient() client.TemporalClient {
 
 // Start implements TemporalService
 func (s *temporalService) Start(ctx context.Context) error {
-	// Start client
-	if err := s.client.Start(ctx); err != nil {
+	startCtx, cancel := context.WithTimeout(ctx, temporalStartTimeout)
+	defer cancel()
+
+	retry := backoff.NewExponentialBackOff()
+	retry.InitialInterval = 100 * time.Millisecond
+	retry.MaxInterval = 5 * time.Second
+	retry.MaxElapsedTime = temporalStartTimeout
+	err := backoff.Retry(func() error {
+		if err := s.client.Start(startCtx); err != nil {
+			if isRetryableTemporalStartError(err) {
+				return err
+			}
+			return backoff.Permanent(err)
+		}
+		return nil
+	}, backoff.WithContext(retry, startCtx))
+	if err != nil {
 		return fmt.Errorf("failed to start temporal client: %w", err)
 	}
 
 	s.logger.Info(ctx, "Temporal service started successfully")
 	return nil
+}
+
+func isRetryableTemporalStartError(err error) bool {
+	var unavailable *serviceerror.Unavailable
+	var deadlineExceeded *serviceerror.DeadlineExceeded
+	return stderrors.As(err, &unavailable) ||
+		stderrors.As(err, &deadlineExceeded) ||
+		status.Code(err) == codes.Unavailable ||
+		status.Code(err) == codes.DeadlineExceeded
 }
 
 // Stop implements TemporalService

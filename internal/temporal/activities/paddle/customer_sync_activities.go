@@ -44,13 +44,27 @@ func (a *CustomerSyncActivities) SyncCustomerToPaddle(ctx context.Context, input
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
 		// Let Temporal retry transient integration lookup failures.
+		a.logger.Error(ctx, "SyncCustomerToPaddle activity failed: get integration",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
 		return err
 	}
 
-	_, err = paddleIntegration.SyncSvc.EnsureCustomerSynced(ctx, paddleintg.EnsureCustomerSyncedRequest{
+	if _, err = paddleIntegration.SyncSvc.EnsureCustomerSynced(ctx, paddleintg.EnsureCustomerSyncedRequest{
 		CustomerID: input.CustomerID,
-	})
-	return err
+	}); err != nil {
+		a.logger.Error(ctx, "SyncCustomerToPaddle activity failed",
+			"error", err,
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return err
+	}
+	return nil
 }
 
 // EnsureCustomerSyncedToPaddle is called from PaddleInvoiceSyncWorkflow as an explicit pre-check

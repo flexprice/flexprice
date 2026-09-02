@@ -22088,6 +22088,7 @@ type CustomerMutation struct {
 	address_postal_code *string
 	address_country     *string
 	timezone            *string
+	tax_treatment       *types.TaxTreatment
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*Customer, error)
@@ -23051,6 +23052,42 @@ func (m *CustomerMutation) ResetTimezone() {
 	delete(m.clearedFields, customer.FieldTimezone)
 }
 
+// SetTaxTreatment sets the "tax_treatment" field.
+func (m *CustomerMutation) SetTaxTreatment(tt types.TaxTreatment) {
+	m.tax_treatment = &tt
+}
+
+// TaxTreatment returns the value of the "tax_treatment" field in the mutation.
+func (m *CustomerMutation) TaxTreatment() (r types.TaxTreatment, exists bool) {
+	v := m.tax_treatment
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxTreatment returns the old "tax_treatment" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldTaxTreatment(ctx context.Context) (v types.TaxTreatment, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxTreatment is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxTreatment requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxTreatment: %w", err)
+	}
+	return oldValue.TaxTreatment, nil
+}
+
+// ResetTaxTreatment resets all changes to the "tax_treatment" field.
+func (m *CustomerMutation) ResetTaxTreatment() {
+	m.tax_treatment = nil
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -23085,7 +23122,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -23143,6 +23180,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.timezone != nil {
 		fields = append(fields, customer.FieldTimezone)
 	}
+	if m.tax_treatment != nil {
+		fields = append(fields, customer.FieldTaxTreatment)
+	}
 	return fields
 }
 
@@ -23189,6 +23229,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.AddressCountry()
 	case customer.FieldTimezone:
 		return m.Timezone()
+	case customer.FieldTaxTreatment:
+		return m.TaxTreatment()
 	}
 	return nil, false
 }
@@ -23236,6 +23278,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddressCountry(ctx)
 	case customer.FieldTimezone:
 		return m.OldTimezone(ctx)
+	case customer.FieldTaxTreatment:
+		return m.OldTaxTreatment(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -23377,6 +23421,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTimezone(v)
+		return nil
+	case customer.FieldTaxTreatment:
+		v, ok := value.(types.TaxTreatment)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxTreatment(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
@@ -23565,6 +23616,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 	case customer.FieldTimezone:
 		m.ResetTimezone()
 		return nil
+	case customer.FieldTaxTreatment:
+		m.ResetTaxTreatment()
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -23620,42 +23674,43 @@ func (m *CustomerMutation) ResetEdge(name string) error {
 // EntitlementMutation represents an operation that mutates the Entitlement nodes in the graph.
 type EntitlementMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *string
-	tenant_id               *string
-	status                  *string
-	created_at              *time.Time
-	updated_at              *time.Time
-	created_by              *string
-	updated_by              *string
-	environment_id          *string
-	entity_type             *types.EntitlementEntityType
-	entity_id               *string
-	feature_id              *string
-	feature_type            *types.FeatureType
-	is_enabled              *bool
-	usage_limit             *int64
-	addusage_limit          *int64
-	usage_reset_period      *types.EntitlementUsageResetPeriod
-	is_soft_limit           *bool
-	static_value            *string
-	display_order           *int
-	adddisplay_order        *int
-	parent_entitlement_id   *string
-	start_date              *time.Time
-	end_date                *time.Time
-	config_value            *map[string]interface{}
-	grant_measure           *types.EntitlementGrantMeasure
-	grant_duration_value    *int
-	addgrant_duration_value *int
-	grant_duration_unit     *types.EntitlementGrantDurationUnit
-	grant_quota             *decimal.Decimal
-	aggregation_mode        *types.EntitlementAggregationMode
-	clearedFields           map[string]struct{}
-	done                    bool
-	oldValue                func(context.Context) (*Entitlement, error)
-	predicates              []predicate.Entitlement
+	op                        Op
+	typ                       string
+	id                        *string
+	tenant_id                 *string
+	status                    *string
+	created_at                *time.Time
+	updated_at                *time.Time
+	created_by                *string
+	updated_by                *string
+	environment_id            *string
+	entity_type               *types.EntitlementEntityType
+	entity_id                 *string
+	feature_id                *string
+	feature_type              *types.FeatureType
+	is_enabled                *bool
+	usage_limit               *int64
+	addusage_limit            *int64
+	usage_reset_period        *types.EntitlementUsageResetPeriod
+	is_soft_limit             *bool
+	static_value              *string
+	display_order             *int
+	adddisplay_order          *int
+	parent_entitlement_id     *string
+	start_date                *time.Time
+	end_date                  *time.Time
+	config_value              *map[string]interface{}
+	grant_measure             *types.EntitlementGrantMeasure
+	grant_duration_value      *int
+	addgrant_duration_value   *int
+	grant_duration_unit       *types.EntitlementGrantDurationUnit
+	grant_allocation_behavior *types.EntitlementGrantAllocationBehavior
+	grant_quota               *decimal.Decimal
+	aggregation_mode          *types.EntitlementAggregationMode
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*Entitlement, error)
+	predicates                []predicate.Entitlement
 }
 
 var _ ent.Mutation = (*EntitlementMutation)(nil)
@@ -24883,6 +24938,55 @@ func (m *EntitlementMutation) ResetGrantDurationUnit() {
 	delete(m.clearedFields, entitlement.FieldGrantDurationUnit)
 }
 
+// SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) {
+	m.grant_allocation_behavior = &tgab
+}
+
+// GrantAllocationBehavior returns the value of the "grant_allocation_behavior" field in the mutation.
+func (m *EntitlementMutation) GrantAllocationBehavior() (r types.EntitlementGrantAllocationBehavior, exists bool) {
+	v := m.grant_allocation_behavior
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantAllocationBehavior returns the old "grant_allocation_behavior" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantAllocationBehavior(ctx context.Context) (v types.EntitlementGrantAllocationBehavior, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantAllocationBehavior is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantAllocationBehavior requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantAllocationBehavior: %w", err)
+	}
+	return oldValue.GrantAllocationBehavior, nil
+}
+
+// ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) ClearGrantAllocationBehavior() {
+	m.grant_allocation_behavior = nil
+	m.clearedFields[entitlement.FieldGrantAllocationBehavior] = struct{}{}
+}
+
+// GrantAllocationBehaviorCleared returns if the "grant_allocation_behavior" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantAllocationBehaviorCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantAllocationBehavior]
+	return ok
+}
+
+// ResetGrantAllocationBehavior resets all changes to the "grant_allocation_behavior" field.
+func (m *EntitlementMutation) ResetGrantAllocationBehavior() {
+	m.grant_allocation_behavior = nil
+	delete(m.clearedFields, entitlement.FieldGrantAllocationBehavior)
+}
+
 // SetGrantQuota sets the "grant_quota" field.
 func (m *EntitlementMutation) SetGrantQuota(d decimal.Decimal) {
 	m.grant_quota = &d
@@ -25002,7 +25106,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 27)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -25075,6 +25179,9 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.grant_duration_unit != nil {
 		fields = append(fields, entitlement.FieldGrantDurationUnit)
 	}
+	if m.grant_allocation_behavior != nil {
+		fields = append(fields, entitlement.FieldGrantAllocationBehavior)
+	}
 	if m.grant_quota != nil {
 		fields = append(fields, entitlement.FieldGrantQuota)
 	}
@@ -25137,6 +25244,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.GrantDurationValue()
 	case entitlement.FieldGrantDurationUnit:
 		return m.GrantDurationUnit()
+	case entitlement.FieldGrantAllocationBehavior:
+		return m.GrantAllocationBehavior()
 	case entitlement.FieldGrantQuota:
 		return m.GrantQuota()
 	case entitlement.FieldAggregationMode:
@@ -25198,6 +25307,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldGrantDurationValue(ctx)
 	case entitlement.FieldGrantDurationUnit:
 		return m.OldGrantDurationUnit(ctx)
+	case entitlement.FieldGrantAllocationBehavior:
+		return m.OldGrantAllocationBehavior(ctx)
 	case entitlement.FieldGrantQuota:
 		return m.OldGrantQuota(ctx)
 	case entitlement.FieldAggregationMode:
@@ -25379,6 +25490,13 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGrantDurationUnit(v)
 		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		v, ok := value.(types.EntitlementGrantAllocationBehavior)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantAllocationBehavior(v)
+		return nil
 	case entitlement.FieldGrantQuota:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
@@ -25507,6 +25625,9 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldGrantDurationUnit) {
 		fields = append(fields, entitlement.FieldGrantDurationUnit)
 	}
+	if m.FieldCleared(entitlement.FieldGrantAllocationBehavior) {
+		fields = append(fields, entitlement.FieldGrantAllocationBehavior)
+	}
 	if m.FieldCleared(entitlement.FieldGrantQuota) {
 		fields = append(fields, entitlement.FieldGrantQuota)
 	}
@@ -25568,6 +25689,9 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldGrantDurationUnit:
 		m.ClearGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		m.ClearGrantAllocationBehavior()
 		return nil
 	case entitlement.FieldGrantQuota:
 		m.ClearGrantQuota()
@@ -25651,6 +25775,9 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldGrantDurationUnit:
 		m.ResetGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantAllocationBehavior:
+		m.ResetGrantAllocationBehavior()
 		return nil
 	case entitlement.FieldGrantQuota:
 		m.ResetGrantQuota()
@@ -25736,6 +25863,7 @@ type EntitlementGrantMutation struct {
 	grant_status          *types.EntitlementGrantStatus
 	last_computed_at      *time.Time
 	quota_crossed_at      *time.Time
+	metadata              *types.Metadata
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*EntitlementGrant, error)
@@ -26631,6 +26759,55 @@ func (m *EntitlementGrantMutation) ResetQuotaCrossedAt() {
 	delete(m.clearedFields, entitlementgrant.FieldQuotaCrossedAt)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *EntitlementGrantMutation) SetMetadata(t types.Metadata) {
+	m.metadata = &t
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *EntitlementGrantMutation) Metadata() (r types.Metadata, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldMetadata(ctx context.Context) (v types.Metadata, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *EntitlementGrantMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[entitlementgrant.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *EntitlementGrantMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, entitlementgrant.FieldMetadata)
+}
+
 // Where appends a list predicates to the EntitlementGrantMutation builder.
 func (m *EntitlementGrantMutation) Where(ps ...predicate.EntitlementGrant) {
 	m.predicates = append(m.predicates, ps...)
@@ -26665,7 +26842,7 @@ func (m *EntitlementGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementGrantMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlementgrant.FieldTenantID)
 	}
@@ -26726,6 +26903,9 @@ func (m *EntitlementGrantMutation) Fields() []string {
 	if m.quota_crossed_at != nil {
 		fields = append(fields, entitlementgrant.FieldQuotaCrossedAt)
 	}
+	if m.metadata != nil {
+		fields = append(fields, entitlementgrant.FieldMetadata)
+	}
 	return fields
 }
 
@@ -26774,6 +26954,8 @@ func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.LastComputedAt()
 	case entitlementgrant.FieldQuotaCrossedAt:
 		return m.QuotaCrossedAt()
+	case entitlementgrant.FieldMetadata:
+		return m.Metadata()
 	}
 	return nil, false
 }
@@ -26823,6 +27005,8 @@ func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (e
 		return m.OldLastComputedAt(ctx)
 	case entitlementgrant.FieldQuotaCrossedAt:
 		return m.OldQuotaCrossedAt(ctx)
+	case entitlementgrant.FieldMetadata:
+		return m.OldMetadata(ctx)
 	}
 	return nil, fmt.Errorf("unknown EntitlementGrant field %s", name)
 }
@@ -26972,6 +27156,13 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetQuotaCrossedAt(v)
 		return nil
+	case entitlementgrant.FieldMetadata:
+		v, ok := value.(types.Metadata)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant field %s", name)
 }
@@ -27017,6 +27208,9 @@ func (m *EntitlementGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlementgrant.FieldQuotaCrossedAt) {
 		fields = append(fields, entitlementgrant.FieldQuotaCrossedAt)
 	}
+	if m.FieldCleared(entitlementgrant.FieldMetadata) {
+		fields = append(fields, entitlementgrant.FieldMetadata)
+	}
 	return fields
 }
 
@@ -27045,6 +27239,9 @@ func (m *EntitlementGrantMutation) ClearField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuotaCrossedAt:
 		m.ClearQuotaCrossedAt()
+		return nil
+	case entitlementgrant.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant nullable field %s", name)
@@ -27113,6 +27310,9 @@ func (m *EntitlementGrantMutation) ResetField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuotaCrossedAt:
 		m.ResetQuotaCrossedAt()
+		return nil
+	case entitlementgrant.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant field %s", name)
@@ -32647,6 +32847,8 @@ type InvoiceMutation struct {
 	total_prepaid_credits_applied *decimal.Decimal
 	idempotency_key               *string
 	recalculated_invoice_id       *string
+	is_manually_edited            *bool
+	tax_exemption_reason_code     *types.TaxExemptionReasonCode
 	clearedFields                 map[string]struct{}
 	line_items                    map[string]struct{}
 	removedline_items             map[string]struct{}
@@ -34693,6 +34895,91 @@ func (m *InvoiceMutation) ResetRecalculatedInvoiceID() {
 	delete(m.clearedFields, invoice.FieldRecalculatedInvoiceID)
 }
 
+// SetIsManuallyEdited sets the "is_manually_edited" field.
+func (m *InvoiceMutation) SetIsManuallyEdited(b bool) {
+	m.is_manually_edited = &b
+}
+
+// IsManuallyEdited returns the value of the "is_manually_edited" field in the mutation.
+func (m *InvoiceMutation) IsManuallyEdited() (r bool, exists bool) {
+	v := m.is_manually_edited
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsManuallyEdited returns the old "is_manually_edited" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldIsManuallyEdited(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsManuallyEdited is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsManuallyEdited requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsManuallyEdited: %w", err)
+	}
+	return oldValue.IsManuallyEdited, nil
+}
+
+// ResetIsManuallyEdited resets all changes to the "is_manually_edited" field.
+func (m *InvoiceMutation) ResetIsManuallyEdited() {
+	m.is_manually_edited = nil
+}
+
+// SetTaxExemptionReasonCode sets the "tax_exemption_reason_code" field.
+func (m *InvoiceMutation) SetTaxExemptionReasonCode(terc types.TaxExemptionReasonCode) {
+	m.tax_exemption_reason_code = &terc
+}
+
+// TaxExemptionReasonCode returns the value of the "tax_exemption_reason_code" field in the mutation.
+func (m *InvoiceMutation) TaxExemptionReasonCode() (r types.TaxExemptionReasonCode, exists bool) {
+	v := m.tax_exemption_reason_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxExemptionReasonCode returns the old "tax_exemption_reason_code" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldTaxExemptionReasonCode(ctx context.Context) (v *types.TaxExemptionReasonCode, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxExemptionReasonCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxExemptionReasonCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxExemptionReasonCode: %w", err)
+	}
+	return oldValue.TaxExemptionReasonCode, nil
+}
+
+// ClearTaxExemptionReasonCode clears the value of the "tax_exemption_reason_code" field.
+func (m *InvoiceMutation) ClearTaxExemptionReasonCode() {
+	m.tax_exemption_reason_code = nil
+	m.clearedFields[invoice.FieldTaxExemptionReasonCode] = struct{}{}
+}
+
+// TaxExemptionReasonCodeCleared returns if the "tax_exemption_reason_code" field was cleared in this mutation.
+func (m *InvoiceMutation) TaxExemptionReasonCodeCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTaxExemptionReasonCode]
+	return ok
+}
+
+// ResetTaxExemptionReasonCode resets all changes to the "tax_exemption_reason_code" field.
+func (m *InvoiceMutation) ResetTaxExemptionReasonCode() {
+	m.tax_exemption_reason_code = nil
+	delete(m.clearedFields, invoice.FieldTaxExemptionReasonCode)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by ids.
 func (m *InvoiceMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -34835,7 +35122,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 42)
+	fields := make([]string, 0, 44)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -34962,6 +35249,12 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.recalculated_invoice_id != nil {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
+	if m.is_manually_edited != nil {
+		fields = append(fields, invoice.FieldIsManuallyEdited)
+	}
+	if m.tax_exemption_reason_code != nil {
+		fields = append(fields, invoice.FieldTaxExemptionReasonCode)
+	}
 	return fields
 }
 
@@ -35054,6 +35347,10 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.IdempotencyKey()
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.RecalculatedInvoiceID()
+	case invoice.FieldIsManuallyEdited:
+		return m.IsManuallyEdited()
+	case invoice.FieldTaxExemptionReasonCode:
+		return m.TaxExemptionReasonCode()
 	}
 	return nil, false
 }
@@ -35147,6 +35444,10 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIdempotencyKey(ctx)
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.OldRecalculatedInvoiceID(ctx)
+	case invoice.FieldIsManuallyEdited:
+		return m.OldIsManuallyEdited(ctx)
+	case invoice.FieldTaxExemptionReasonCode:
+		return m.OldTaxExemptionReasonCode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -35450,6 +35751,20 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRecalculatedInvoiceID(v)
 		return nil
+	case invoice.FieldIsManuallyEdited:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsManuallyEdited(v)
+		return nil
+	case invoice.FieldTaxExemptionReasonCode:
+		v, ok := value.(types.TaxExemptionReasonCode)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxExemptionReasonCode(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -35594,6 +35909,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldRecalculatedInvoiceID) {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
+	if m.FieldCleared(invoice.FieldTaxExemptionReasonCode) {
+		fields = append(fields, invoice.FieldTaxExemptionReasonCode)
+	}
 	return fields
 }
 
@@ -35694,6 +36012,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ClearRecalculatedInvoiceID()
+		return nil
+	case invoice.FieldTaxExemptionReasonCode:
+		m.ClearTaxExemptionReasonCode()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice nullable field %s", name)
@@ -35828,6 +36149,12 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ResetRecalculatedInvoiceID()
+		return nil
+	case invoice.FieldIsManuallyEdited:
+		m.ResetIsManuallyEdited()
+		return nil
+	case invoice.FieldTaxExemptionReasonCode:
+		m.ResetTaxExemptionReasonCode()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
@@ -35981,6 +36308,7 @@ type InvoiceLineItemMutation struct {
 	invoice_level_discount        *decimal.Decimal
 	subscription_line_item_id     *string
 	adjusted_entitlement_quantity *decimal.Decimal
+	parent_line_item_id           *string
 	clearedFields                 map[string]struct{}
 	invoice                       *string
 	clearedinvoice                bool
@@ -37596,6 +37924,55 @@ func (m *InvoiceLineItemMutation) ResetAdjustedEntitlementQuantity() {
 	delete(m.clearedFields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 }
 
+// SetParentLineItemID sets the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) SetParentLineItemID(s string) {
+	m.parent_line_item_id = &s
+}
+
+// ParentLineItemID returns the value of the "parent_line_item_id" field in the mutation.
+func (m *InvoiceLineItemMutation) ParentLineItemID() (r string, exists bool) {
+	v := m.parent_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentLineItemID returns the old "parent_line_item_id" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldParentLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentLineItemID: %w", err)
+	}
+	return oldValue.ParentLineItemID, nil
+}
+
+// ClearParentLineItemID clears the value of the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) ClearParentLineItemID() {
+	m.parent_line_item_id = nil
+	m.clearedFields[invoicelineitem.FieldParentLineItemID] = struct{}{}
+}
+
+// ParentLineItemIDCleared returns if the "parent_line_item_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) ParentLineItemIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldParentLineItemID]
+	return ok
+}
+
+// ResetParentLineItemID resets all changes to the "parent_line_item_id" field.
+func (m *InvoiceLineItemMutation) ResetParentLineItemID() {
+	m.parent_line_item_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldParentLineItemID)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -37711,7 +38088,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 33)
+	fields := make([]string, 0, 34)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -37811,6 +38188,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.adjusted_entitlement_quantity != nil {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
+	if m.parent_line_item_id != nil {
+		fields = append(fields, invoicelineitem.FieldParentLineItemID)
+	}
 	return fields
 }
 
@@ -37885,6 +38265,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionLineItemID()
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.AdjustedEntitlementQuantity()
+	case invoicelineitem.FieldParentLineItemID:
+		return m.ParentLineItemID()
 	}
 	return nil, false
 }
@@ -37960,6 +38342,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSubscriptionLineItemID(ctx)
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.OldAdjustedEntitlementQuantity(ctx)
+	case invoicelineitem.FieldParentLineItemID:
+		return m.OldParentLineItemID(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -38200,6 +38584,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAdjustedEntitlementQuantity(v)
 		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentLineItemID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -38302,6 +38693,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldAdjustedEntitlementQuantity) {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
+	if m.FieldCleared(invoicelineitem.FieldParentLineItemID) {
+		fields = append(fields, invoicelineitem.FieldParentLineItemID)
+	}
 	return fields
 }
 
@@ -38387,6 +38781,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ClearAdjustedEntitlementQuantity()
+		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		m.ClearParentLineItemID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -38494,6 +38891,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ResetAdjustedEntitlementQuantity()
+		return nil
+	case invoicelineitem.FieldParentLineItemID:
+		m.ResetParentLineItemID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -45881,6 +46281,7 @@ type PriceMutation struct {
 	meter_id                  *string
 	filter_values             *map[string][]string
 	tier_mode                 *types.BillingTier
+	bucket_size               *types.WindowSize
 	tiers                     *[]*types.PriceTier
 	appendtiers               []*types.PriceTier
 	price_unit_tiers          *[]*types.PriceTier
@@ -47255,6 +47656,55 @@ func (m *PriceMutation) ResetTierMode() {
 	delete(m.clearedFields, price.FieldTierMode)
 }
 
+// SetBucketSize sets the "bucket_size" field.
+func (m *PriceMutation) SetBucketSize(ts types.WindowSize) {
+	m.bucket_size = &ts
+}
+
+// BucketSize returns the value of the "bucket_size" field in the mutation.
+func (m *PriceMutation) BucketSize() (r types.WindowSize, exists bool) {
+	v := m.bucket_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBucketSize returns the old "bucket_size" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldBucketSize(ctx context.Context) (v types.WindowSize, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBucketSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBucketSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBucketSize: %w", err)
+	}
+	return oldValue.BucketSize, nil
+}
+
+// ClearBucketSize clears the value of the "bucket_size" field.
+func (m *PriceMutation) ClearBucketSize() {
+	m.bucket_size = nil
+	m.clearedFields[price.FieldBucketSize] = struct{}{}
+}
+
+// BucketSizeCleared returns if the "bucket_size" field was cleared in this mutation.
+func (m *PriceMutation) BucketSizeCleared() bool {
+	_, ok := m.clearedFields[price.FieldBucketSize]
+	return ok
+}
+
+// ResetBucketSize resets all changes to the "bucket_size" field.
+func (m *PriceMutation) ResetBucketSize() {
+	m.bucket_size = nil
+	delete(m.clearedFields, price.FieldBucketSize)
+}
+
 // SetTiers sets the "tiers" field.
 func (m *PriceMutation) SetTiers(tt []*types.PriceTier) {
 	m.tiers = &tt
@@ -48033,7 +48483,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -48117,6 +48567,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.tier_mode != nil {
 		fields = append(fields, price.FieldTierMode)
+	}
+	if m.bucket_size != nil {
+		fields = append(fields, price.FieldBucketSize)
 	}
 	if m.tiers != nil {
 		fields = append(fields, price.FieldTiers)
@@ -48221,6 +48674,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.FilterValues()
 	case price.FieldTierMode:
 		return m.TierMode()
+	case price.FieldBucketSize:
+		return m.BucketSize()
 	case price.FieldTiers:
 		return m.Tiers()
 	case price.FieldPriceUnitTiers:
@@ -48312,6 +48767,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFilterValues(ctx)
 	case price.FieldTierMode:
 		return m.OldTierMode(ctx)
+	case price.FieldBucketSize:
+		return m.OldBucketSize(ctx)
 	case price.FieldTiers:
 		return m.OldTiers(ctx)
 	case price.FieldPriceUnitTiers:
@@ -48543,6 +49000,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTierMode(v)
 		return nil
+	case price.FieldBucketSize:
+		v, ok := value.(types.WindowSize)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBucketSize(v)
+		return nil
 	case price.FieldTiers:
 		v, ok := value.([]*types.PriceTier)
 		if !ok {
@@ -48748,6 +49212,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldTierMode) {
 		fields = append(fields, price.FieldTierMode)
 	}
+	if m.FieldCleared(price.FieldBucketSize) {
+		fields = append(fields, price.FieldBucketSize)
+	}
 	if m.FieldCleared(price.FieldTiers) {
 		fields = append(fields, price.FieldTiers)
 	}
@@ -48836,6 +49303,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ClearTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ClearBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ClearTiers()
@@ -48958,6 +49428,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldTierMode:
 		m.ResetTierMode()
+		return nil
+	case price.FieldBucketSize:
+		m.ResetBucketSize()
 		return nil
 	case price.FieldTiers:
 		m.ResetTiers()
@@ -69295,6 +69768,7 @@ type TaxAppliedMutation struct {
 	applied_at         *time.Time
 	metadata           *map[string]string
 	idempotency_key    *string
+	tax_behavior       *types.TaxBehavior
 	clearedFields      map[string]struct{}
 	done               bool
 	oldValue           func(context.Context) (*TaxApplied, error)
@@ -70095,6 +70569,55 @@ func (m *TaxAppliedMutation) ResetIdempotencyKey() {
 	delete(m.clearedFields, taxapplied.FieldIdempotencyKey)
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (m *TaxAppliedMutation) SetTaxBehavior(tb types.TaxBehavior) {
+	m.tax_behavior = &tb
+}
+
+// TaxBehavior returns the value of the "tax_behavior" field in the mutation.
+func (m *TaxAppliedMutation) TaxBehavior() (r types.TaxBehavior, exists bool) {
+	v := m.tax_behavior
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxBehavior returns the old "tax_behavior" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxBehavior(ctx context.Context) (v types.TaxBehavior, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxBehavior is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxBehavior requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxBehavior: %w", err)
+	}
+	return oldValue.TaxBehavior, nil
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (m *TaxAppliedMutation) ClearTaxBehavior() {
+	m.tax_behavior = nil
+	m.clearedFields[taxapplied.FieldTaxBehavior] = struct{}{}
+}
+
+// TaxBehaviorCleared returns if the "tax_behavior" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxBehaviorCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxBehavior]
+	return ok
+}
+
+// ResetTaxBehavior resets all changes to the "tax_behavior" field.
+func (m *TaxAppliedMutation) ResetTaxBehavior() {
+	m.tax_behavior = nil
+	delete(m.clearedFields, taxapplied.FieldTaxBehavior)
+}
+
 // Where appends a list predicates to the TaxAppliedMutation builder.
 func (m *TaxAppliedMutation) Where(ps ...predicate.TaxApplied) {
 	m.predicates = append(m.predicates, ps...)
@@ -70129,7 +70652,7 @@ func (m *TaxAppliedMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAppliedMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, taxapplied.FieldTenantID)
 	}
@@ -70181,6 +70704,9 @@ func (m *TaxAppliedMutation) Fields() []string {
 	if m.idempotency_key != nil {
 		fields = append(fields, taxapplied.FieldIdempotencyKey)
 	}
+	if m.tax_behavior != nil {
+		fields = append(fields, taxapplied.FieldTaxBehavior)
+	}
 	return fields
 }
 
@@ -70223,6 +70749,8 @@ func (m *TaxAppliedMutation) Field(name string) (ent.Value, bool) {
 		return m.Metadata()
 	case taxapplied.FieldIdempotencyKey:
 		return m.IdempotencyKey()
+	case taxapplied.FieldTaxBehavior:
+		return m.TaxBehavior()
 	}
 	return nil, false
 }
@@ -70266,6 +70794,8 @@ func (m *TaxAppliedMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldMetadata(ctx)
 	case taxapplied.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
+	case taxapplied.FieldTaxBehavior:
+		return m.OldTaxBehavior(ctx)
 	}
 	return nil, fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -70394,6 +70924,13 @@ func (m *TaxAppliedMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIdempotencyKey(v)
 		return nil
+	case taxapplied.FieldTaxBehavior:
+		v, ok := value.(types.TaxBehavior)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxBehavior(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -70442,6 +70979,9 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	if m.FieldCleared(taxapplied.FieldIdempotencyKey) {
 		fields = append(fields, taxapplied.FieldIdempotencyKey)
 	}
+	if m.FieldCleared(taxapplied.FieldTaxBehavior) {
+		fields = append(fields, taxapplied.FieldTaxBehavior)
+	}
 	return fields
 }
 
@@ -70473,6 +71013,9 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 		return nil
 	case taxapplied.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
+		return nil
+	case taxapplied.FieldTaxBehavior:
+		m.ClearTaxBehavior()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied nullable field %s", name)
@@ -70532,6 +71075,9 @@ func (m *TaxAppliedMutation) ResetField(name string) error {
 		return nil
 	case taxapplied.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()
+		return nil
+	case taxapplied.FieldTaxBehavior:
+		m.ResetTaxBehavior()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)
@@ -70608,6 +71154,7 @@ type TaxAssociationMutation struct {
 	metadata       *map[string]string
 	start_date     *time.Time
 	end_date       *time.Time
+	tax_behavior   *types.TaxBehavior
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*TaxAssociation, error)
@@ -71405,6 +71952,55 @@ func (m *TaxAssociationMutation) ResetEndDate() {
 	delete(m.clearedFields, taxassociation.FieldEndDate)
 }
 
+// SetTaxBehavior sets the "tax_behavior" field.
+func (m *TaxAssociationMutation) SetTaxBehavior(tb types.TaxBehavior) {
+	m.tax_behavior = &tb
+}
+
+// TaxBehavior returns the value of the "tax_behavior" field in the mutation.
+func (m *TaxAssociationMutation) TaxBehavior() (r types.TaxBehavior, exists bool) {
+	v := m.tax_behavior
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxBehavior returns the old "tax_behavior" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldTaxBehavior(ctx context.Context) (v *types.TaxBehavior, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxBehavior is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxBehavior requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxBehavior: %w", err)
+	}
+	return oldValue.TaxBehavior, nil
+}
+
+// ClearTaxBehavior clears the value of the "tax_behavior" field.
+func (m *TaxAssociationMutation) ClearTaxBehavior() {
+	m.tax_behavior = nil
+	m.clearedFields[taxassociation.FieldTaxBehavior] = struct{}{}
+}
+
+// TaxBehaviorCleared returns if the "tax_behavior" field was cleared in this mutation.
+func (m *TaxAssociationMutation) TaxBehaviorCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldTaxBehavior]
+	return ok
+}
+
+// ResetTaxBehavior resets all changes to the "tax_behavior" field.
+func (m *TaxAssociationMutation) ResetTaxBehavior() {
+	m.tax_behavior = nil
+	delete(m.clearedFields, taxassociation.FieldTaxBehavior)
+}
+
 // Where appends a list predicates to the TaxAssociationMutation builder.
 func (m *TaxAssociationMutation) Where(ps ...predicate.TaxAssociation) {
 	m.predicates = append(m.predicates, ps...)
@@ -71439,7 +72035,7 @@ func (m *TaxAssociationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAssociationMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, taxassociation.FieldTenantID)
 	}
@@ -71488,6 +72084,9 @@ func (m *TaxAssociationMutation) Fields() []string {
 	if m.end_date != nil {
 		fields = append(fields, taxassociation.FieldEndDate)
 	}
+	if m.tax_behavior != nil {
+		fields = append(fields, taxassociation.FieldTaxBehavior)
+	}
 	return fields
 }
 
@@ -71528,6 +72127,8 @@ func (m *TaxAssociationMutation) Field(name string) (ent.Value, bool) {
 		return m.StartDate()
 	case taxassociation.FieldEndDate:
 		return m.EndDate()
+	case taxassociation.FieldTaxBehavior:
+		return m.TaxBehavior()
 	}
 	return nil, false
 }
@@ -71569,6 +72170,8 @@ func (m *TaxAssociationMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldStartDate(ctx)
 	case taxassociation.FieldEndDate:
 		return m.OldEndDate(ctx)
+	case taxassociation.FieldTaxBehavior:
+		return m.OldTaxBehavior(ctx)
 	}
 	return nil, fmt.Errorf("unknown TaxAssociation field %s", name)
 }
@@ -71690,6 +72293,13 @@ func (m *TaxAssociationMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEndDate(v)
 		return nil
+	case taxassociation.FieldTaxBehavior:
+		v, ok := value.(types.TaxBehavior)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxBehavior(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation field %s", name)
 }
@@ -71756,6 +72366,9 @@ func (m *TaxAssociationMutation) ClearedFields() []string {
 	if m.FieldCleared(taxassociation.FieldEndDate) {
 		fields = append(fields, taxassociation.FieldEndDate)
 	}
+	if m.FieldCleared(taxassociation.FieldTaxBehavior) {
+		fields = append(fields, taxassociation.FieldTaxBehavior)
+	}
 	return fields
 }
 
@@ -71790,6 +72403,9 @@ func (m *TaxAssociationMutation) ClearField(name string) error {
 		return nil
 	case taxassociation.FieldEndDate:
 		m.ClearEndDate()
+		return nil
+	case taxassociation.FieldTaxBehavior:
+		m.ClearTaxBehavior()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation nullable field %s", name)
@@ -71846,6 +72462,9 @@ func (m *TaxAssociationMutation) ResetField(name string) error {
 		return nil
 	case taxassociation.FieldEndDate:
 		m.ResetEndDate()
+		return nil
+	case taxassociation.FieldTaxBehavior:
+		m.ResetTaxBehavior()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation field %s", name)
@@ -71919,7 +72538,6 @@ type TaxRateMutation struct {
 	tax_rate_type    *string
 	scope            *string
 	percentage_value *decimal.Decimal
-	fixed_value      *decimal.Decimal
 	metadata         *map[string]string
 	clearedFields    map[string]struct{}
 	done             bool
@@ -72600,55 +73218,6 @@ func (m *TaxRateMutation) ResetPercentageValue() {
 	delete(m.clearedFields, taxrate.FieldPercentageValue)
 }
 
-// SetFixedValue sets the "fixed_value" field.
-func (m *TaxRateMutation) SetFixedValue(d decimal.Decimal) {
-	m.fixed_value = &d
-}
-
-// FixedValue returns the value of the "fixed_value" field in the mutation.
-func (m *TaxRateMutation) FixedValue() (r decimal.Decimal, exists bool) {
-	v := m.fixed_value
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldFixedValue returns the old "fixed_value" field's value of the TaxRate entity.
-// If the TaxRate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxRateMutation) OldFixedValue(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldFixedValue is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldFixedValue requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldFixedValue: %w", err)
-	}
-	return oldValue.FixedValue, nil
-}
-
-// ClearFixedValue clears the value of the "fixed_value" field.
-func (m *TaxRateMutation) ClearFixedValue() {
-	m.fixed_value = nil
-	m.clearedFields[taxrate.FieldFixedValue] = struct{}{}
-}
-
-// FixedValueCleared returns if the "fixed_value" field was cleared in this mutation.
-func (m *TaxRateMutation) FixedValueCleared() bool {
-	_, ok := m.clearedFields[taxrate.FieldFixedValue]
-	return ok
-}
-
-// ResetFixedValue resets all changes to the "fixed_value" field.
-func (m *TaxRateMutation) ResetFixedValue() {
-	m.fixed_value = nil
-	delete(m.clearedFields, taxrate.FieldFixedValue)
-}
-
 // SetMetadata sets the "metadata" field.
 func (m *TaxRateMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -72732,7 +73301,7 @@ func (m *TaxRateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxRateMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, taxrate.FieldTenantID)
 	}
@@ -72775,9 +73344,6 @@ func (m *TaxRateMutation) Fields() []string {
 	if m.percentage_value != nil {
 		fields = append(fields, taxrate.FieldPercentageValue)
 	}
-	if m.fixed_value != nil {
-		fields = append(fields, taxrate.FieldFixedValue)
-	}
 	if m.metadata != nil {
 		fields = append(fields, taxrate.FieldMetadata)
 	}
@@ -72817,8 +73383,6 @@ func (m *TaxRateMutation) Field(name string) (ent.Value, bool) {
 		return m.Scope()
 	case taxrate.FieldPercentageValue:
 		return m.PercentageValue()
-	case taxrate.FieldFixedValue:
-		return m.FixedValue()
 	case taxrate.FieldMetadata:
 		return m.Metadata()
 	}
@@ -72858,8 +73422,6 @@ func (m *TaxRateMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldScope(ctx)
 	case taxrate.FieldPercentageValue:
 		return m.OldPercentageValue(ctx)
-	case taxrate.FieldFixedValue:
-		return m.OldFixedValue(ctx)
 	case taxrate.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -72969,13 +73531,6 @@ func (m *TaxRateMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPercentageValue(v)
 		return nil
-	case taxrate.FieldFixedValue:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetFixedValue(v)
-		return nil
 	case taxrate.FieldMetadata:
 		v, ok := value.(map[string]string)
 		if !ok {
@@ -73028,9 +73583,6 @@ func (m *TaxRateMutation) ClearedFields() []string {
 	if m.FieldCleared(taxrate.FieldPercentageValue) {
 		fields = append(fields, taxrate.FieldPercentageValue)
 	}
-	if m.FieldCleared(taxrate.FieldFixedValue) {
-		fields = append(fields, taxrate.FieldFixedValue)
-	}
 	if m.FieldCleared(taxrate.FieldMetadata) {
 		fields = append(fields, taxrate.FieldMetadata)
 	}
@@ -73062,9 +73614,6 @@ func (m *TaxRateMutation) ClearField(name string) error {
 		return nil
 	case taxrate.FieldPercentageValue:
 		m.ClearPercentageValue()
-		return nil
-	case taxrate.FieldFixedValue:
-		m.ClearFixedValue()
 		return nil
 	case taxrate.FieldMetadata:
 		m.ClearMetadata()
@@ -73118,9 +73667,6 @@ func (m *TaxRateMutation) ResetField(name string) error {
 		return nil
 	case taxrate.FieldPercentageValue:
 		m.ResetPercentageValue()
-		return nil
-	case taxrate.FieldFixedValue:
-		m.ResetFixedValue()
 		return nil
 	case taxrate.FieldMetadata:
 		m.ResetMetadata()

@@ -318,6 +318,88 @@ func BillingPeriodToMonths(b BillingPeriod) int {
 	}
 }
 
+// EffectiveMonths returns the effective number of months a
+// (billing_period, billing_period_count) pair represents.
+// A count ≤ 0 is normalized to 1 (matches the service-layer default).
+// Returns 0 for ONETIME and sub-month periods (DAILY/WEEKLY) since they
+// cannot participate in month-based alignment checks — callers must
+// treat 0 as "not comparable" rather than a valid month count.
+func EffectiveMonths(period BillingPeriod, count int) int {
+	if count <= 0 {
+		count = 1
+	}
+	return BillingPeriodToMonths(period) * count
+}
+
+// CompatibleBillingPeriodsFor returns the discrete BillingPeriod values whose
+// effective months could equal or divide (subPeriod × subCount) months —
+// enough to be a candidate for a multi-cadence subscription's plan-price
+// prefetch. ONETIME is always included since it's not tied to a cadence.
+//
+// This is a SUPERSET filter for DB queries: it returns every candidate
+// period type, ignoring count. The in-memory IsCadenceCompatible check
+// still applies the exact count-aware filter after prices are loaded.
+//
+// Sub-month sub periods (DAILY/WEEKLY) return only themselves + ONETIME —
+// month math doesn't apply.
+func CompatibleBillingPeriodsFor(subPeriod BillingPeriod, subCount int) []BillingPeriod {
+	if subPeriod == BILLING_PERIOD_ONETIME {
+		return []BillingPeriod{BILLING_PERIOD_ONETIME}
+	}
+	if subCount <= 0 {
+		subCount = 1
+	}
+	if subPeriod == BILLING_PERIOD_DAILY || subPeriod == BILLING_PERIOD_WEEKLY {
+		return []BillingPeriod{subPeriod, BILLING_PERIOD_ONETIME}
+	}
+	subMonths := BillingPeriodToMonths(subPeriod) * subCount
+	out := make([]BillingPeriod, 0, 5)
+	for _, c := range []BillingPeriod{
+		BILLING_PERIOD_MONTHLY,
+		BILLING_PERIOD_QUARTER,
+		BILLING_PERIOD_HALF_YEAR,
+		BILLING_PERIOD_ANNUAL,
+	} {
+		m := BillingPeriodToMonths(c)
+		if m > 0 && subMonths%m == 0 {
+			out = append(out, c)
+		}
+	}
+	out = append(out, BILLING_PERIOD_ONETIME)
+	return out
+}
+
+// IsCadenceCompatible reports whether a line-item cadence
+// (itemPeriod × itemCount) equals or strictly divides a subscription
+// cadence (subPeriod × subCount).
+//
+// Rules:
+//   - Same period AND same count is always compatible (covers DAILY×N and
+//     WEEKLY×N where month-math doesn't apply).
+//   - Otherwise both sides must reduce to positive months and sub % item == 0.
+//   - Returns false for ONETIME on either side and for sub-month periods
+//     that don't match by exact (period, count).
+func IsCadenceCompatible(subPeriod BillingPeriod, subCount int, itemPeriod BillingPeriod, itemCount int) bool {
+	if subCount <= 0 {
+		subCount = 1
+	}
+	if itemCount <= 0 {
+		itemCount = 1
+	}
+	if subPeriod == BILLING_PERIOD_ONETIME || itemPeriod == BILLING_PERIOD_ONETIME {
+		return false
+	}
+	if subPeriod == itemPeriod && subCount == itemCount {
+		return true
+	}
+	subMonths := EffectiveMonths(subPeriod, subCount)
+	itemMonths := EffectiveMonths(itemPeriod, itemCount)
+	if subMonths == 0 || itemMonths == 0 {
+		return false
+	}
+	return subMonths%itemMonths == 0
+}
+
 // IsBillingPeriodMultiple returns true when longer is an exact multiple of shorter
 // (e.g. QUARTERLY is 3× MONTHLY). Both periods must be month-based; sub-month
 // periods always return false when compared with month-based periods.

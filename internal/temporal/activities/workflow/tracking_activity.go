@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/tracking"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -76,7 +76,16 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 	})
 
 	if err != nil {
-		a.logger.Error(ctx, "Failed to track workflow start", "error", err)
+		a.logger.Error(ctx, "Failed to track workflow start",
+			"error", err,
+			"workflow_id", input.WorkflowID,
+			"run_id", input.RunID,
+			"workflow_type", input.WorkflowType,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+			"entity", input.Entity,
+			"entity_id", input.EntityID,
+		)
 		// Don't fail the workflow if tracking fails - just log the error
 		return nil
 	}

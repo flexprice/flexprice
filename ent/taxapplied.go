@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/taxapplied"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -53,7 +54,9 @@ type TaxApplied struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Idempotency key for the tax application
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
-	selectValues   sql.SelectValues
+	// inclusive or exclusive, frozen at apply time
+	TaxBehavior  types.TaxBehavior `json:"tax_behavior,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -65,7 +68,7 @@ func (*TaxApplied) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case taxapplied.FieldTaxableAmount, taxapplied.FieldTaxAmount:
 			values[i] = new(decimal.Decimal)
-		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency, taxapplied.FieldIdempotencyKey:
+		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency, taxapplied.FieldIdempotencyKey, taxapplied.FieldTaxBehavior:
 			values[i] = new(sql.NullString)
 		case taxapplied.FieldCreatedAt, taxapplied.FieldUpdatedAt, taxapplied.FieldAppliedAt:
 			values[i] = new(sql.NullTime)
@@ -196,6 +199,12 @@ func (ta *TaxApplied) assignValues(columns []string, values []any) error {
 				ta.IdempotencyKey = new(string)
 				*ta.IdempotencyKey = value.String
 			}
+		case taxapplied.FieldTaxBehavior:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_behavior", values[i])
+			} else if value.Valid {
+				ta.TaxBehavior = types.TaxBehavior(value.String)
+			}
 		default:
 			ta.selectValues.Set(columns[i], values[i])
 		}
@@ -286,6 +295,9 @@ func (ta *TaxApplied) String() string {
 		builder.WriteString("idempotency_key=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("tax_behavior=")
+	builder.WriteString(fmt.Sprintf("%v", ta.TaxBehavior))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -13,6 +13,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -23,6 +24,9 @@ import (
 
 type PaymentProcessorService interface {
 	ProcessPayment(ctx context.Context, id string) (*payment.Payment, error)
+	// DispatchMarkPaid notifies the provider integrations holding a copy of the invoice
+	// (Zoho Books, Whop) that it has been paid in FlexPrice.
+	DispatchMarkPaid(ctx context.Context, invoiceID string)
 }
 
 type paymentProcessor struct {
@@ -63,15 +67,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 					"status":     paymentObj.PaymentStatus,
 				}).
 				Mark(ierr.ErrInvalidOperation)
-		}
-	}
-
-	// Create a new payment attempt if tracking is enabled
-	var attempt *payment.PaymentAttempt
-	if paymentObj.TrackAttempts {
-		attempt, err = p.createNewAttempt(ctx, paymentObj)
-		if err != nil {
-			return paymentObj, err
 		}
 	}
 
@@ -130,31 +125,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 				"payment_id": paymentObj.ID,
 			}).
 			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Update attempt status if tracking is enabled
-	if paymentObj.TrackAttempts && attempt != nil {
-		if processErr != nil {
-			// For payment links, keep attempt as pending even on error
-			if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
-				attempt.PaymentStatus = types.PaymentStatusPending
-				attempt.ErrorMessage = lo.ToPtr(processErr.Error())
-			} else {
-				attempt.PaymentStatus = types.PaymentStatusFailed
-				attempt.ErrorMessage = lo.ToPtr(processErr.Error())
-			}
-		} else {
-			// For payment links, keep attempt as pending
-			if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
-				attempt.PaymentStatus = types.PaymentStatusPending
-			} else {
-				attempt.PaymentStatus = types.PaymentStatusSucceeded
-			}
-		}
-		attempt.UpdatedAt = time.Now().UTC()
-		if err := p.PaymentRepo.UpdateAttempt(ctx, attempt); err != nil {
-			p.Logger.Error(ctx, "failed to update payment attempt", "error", err)
-		}
 	}
 
 	// Update payment status based on processing result
@@ -248,6 +218,8 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 		return p.handleRazorpayPaymentLinkCreation(ctx, paymentObj, invoice)
 	case types.PaymentGatewayTypeNomod:
 		return p.handleNomodPaymentLinkCreation(ctx, paymentObj, invoice)
+	case types.PaymentGatewayTypeChargebee:
+		return p.handleChargebeePaymentLinkCreation(ctx, paymentObj, invoice)
 	default:
 		return ierr.NewError("unsupported payment gateway").
 			WithHint("Payment gateway not supported for payment links").
@@ -302,8 +274,9 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			}
 			return false
 		}(),
-		Metadata:  linkMetadata,
-		PaymentID: paymentObj.ID,
+		Metadata:               linkMetadata,
+		PaymentID:              paymentObj.ID,
+		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
 	}
 
 	// Get Stripe integration for creating payment link
@@ -449,6 +422,85 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 		"payment_url", paymentLinkResp.PaymentURL)
 
 	return nil
+}
+
+// handleChargebeePaymentLinkCreation routes through the CheckoutProvider seam rather
+// than a bespoke client: CreatePaymentLink there is session-independent and already
+// mirrors the invoice and stamps the payment id Chargebee's webhook reconciles on.
+func (p *paymentProcessor) handleChargebeePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, inv *invoice.Invoice) error {
+	provider, err := p.IntegrationFactory.GetCheckoutProvider(
+		ctx,
+		types.CheckoutPaymentProviderChargebee,
+		NewCustomerService(p.ServiceParams),
+		NewInvoiceService(p.ServiceParams),
+	)
+	if err != nil {
+		return err
+	}
+
+	resp, err := provider.CreatePaymentLink(ctx, interfaces.CheckoutProviderRequest{
+		InvoiceID:  paymentObj.DestinationID,
+		CustomerID: inv.CustomerID,
+		Amount:     paymentObj.Amount,
+		Currency:   paymentObj.Currency,
+		PaymentID:  paymentObj.ID,
+		SuccessURL: gatewayURL(paymentObj, "success_url"),
+		FailureURL: gatewayURL(paymentObj, "failure_url"),
+		CancelURL:  gatewayURL(paymentObj, "cancel_url"),
+		Metadata:   linkMetadataFor(paymentObj),
+	})
+	if err != nil {
+		p.Logger.Error(ctx, "failed to create chargebee payment link",
+			"error", err,
+			"payment_id", paymentObj.ID,
+			"invoice_id", paymentObj.DestinationID)
+		return err
+	}
+
+	paymentObj.PaymentStatus = types.PaymentStatusPending
+	if resp.ProviderSessionID != "" {
+		paymentObj.GatewayTrackingID = &resp.ProviderSessionID
+	}
+	if paymentObj.GatewayMetadata == nil {
+		paymentObj.GatewayMetadata = types.Metadata{}
+	}
+	paymentObj.GatewayMetadata["payment_url"] = resp.NextAction.URL
+	paymentObj.GatewayMetadata["gateway"] = string(types.PaymentGatewayTypeChargebee)
+
+	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update payment with payment link information").
+			WithReportableDetails(map[string]interface{}{"payment_id": paymentObj.ID}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	p.Logger.Info(ctx, "created chargebee payment link",
+		"payment_id", paymentObj.ID,
+		"invoice_id", paymentObj.DestinationID)
+	return nil
+}
+
+func gatewayURL(paymentObj *payment.Payment, key string) string {
+	if url, ok := paymentObj.GatewayMetadata[key]; ok && url != "" {
+		return url
+	}
+	
+	return paymentObj.Metadata[key]
+}
+
+// linkMetadataFor drops the connection fields, which are internal, and stamps the
+// FlexPrice payment id the gateway webhooks key off.
+func linkMetadataFor(paymentObj *payment.Payment) map[string]string {
+	out := make(map[string]string, len(paymentObj.Metadata)+1)
+	for k, v := range paymentObj.Metadata {
+		if k == "connection_id" || k == "connection_name" {
+			continue
+		}
+		out[k] = v
+	}
+
+	out["flexprice_payment_id"] = paymentObj.ID
+	return out
 }
 
 func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
@@ -737,42 +789,12 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			"error", err)
 	}
 
-	// Invoice is fully paid — dispatch Whop and Zoho mark-paid directly if a mapping exists.
+	// Invoice is fully paid — dispatch mark-paid to whichever providers are connected.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		p.dispatchWhopMarkPaid(ctx, invoice.ID)
-		p.dispatchZohoMarkPaid(ctx, invoice.ID)
+		p.DispatchMarkPaid(ctx, invoice.ID)
 	}
 
 	return nil
-}
-
-func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *payment.Payment) (*payment.PaymentAttempt, error) {
-	// Get latest attempt to determine attempt number
-	latestAttempt, err := p.PaymentRepo.GetLatestAttempt(ctx, paymentObj.ID)
-	if err != nil && !ierr.IsNotFound(err) {
-		return nil, err
-	}
-
-	attemptNumber := 1
-	if latestAttempt != nil {
-		attemptNumber = latestAttempt.AttemptNumber + 1
-	}
-
-	attempt := &payment.PaymentAttempt{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
-		PaymentID:     paymentObj.ID,
-		AttemptNumber: attemptNumber,
-		PaymentStatus: types.PaymentStatusProcessing,
-		Metadata:      types.Metadata{},
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-
-	if err := p.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
-		return nil, err
-	}
-
-	return attempt, nil
 }
 
 func (p *paymentProcessor) dispatchWhopMarkPaid(ctx context.Context, invoiceID string) {
@@ -802,6 +824,34 @@ func (p *paymentProcessor) dispatchZohoMarkPaid(ctx context.Context, invoiceID s
 	input := temporalmodels.NewZohoBooksInvoiceMarkPaidWorkflowInput(invoiceID, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 	if _, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalZohoBooksInvoiceMarkPaidWorkflow, input); err != nil {
 		p.Logger.Error(ctx, "failed to start Zoho mark-paid workflow", "error", err, "invoice_id", invoiceID)
+	}
+}
+
+// DispatchMarkPaid lists the tenant's published connections once and only dispatches to providers
+// that are actually connected, instead of starting a workflow per provider blind and letting it
+// fail downstream with "connection not configured" for the ones that aren't.
+func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID string) {
+	if p.ConnectionRepo == nil {
+		return
+	}
+
+	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to list published connections, skipping mark-paid dispatch",
+			"error", err, "invoice_id", invoiceID)
+		return
+	}
+
+	connected := make(map[types.SecretProvider]bool, len(connections))
+	for _, c := range connections {
+		connected[c.ProviderType] = true
+	}
+
+	if connected[types.SecretProviderZohoBooks] {
+		p.dispatchZohoMarkPaid(ctx, invoiceID)
+	}
+	if connected[types.SecretProviderWhop] {
+		p.dispatchWhopMarkPaid(ctx, invoiceID)
 	}
 }
 

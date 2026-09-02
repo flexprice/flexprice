@@ -39,10 +39,14 @@ func TestParseJSON(t *testing.T) {
 	assert.Equal(t, 6, find(t, got, "prod_system_events").Partitions)
 }
 
-func TestSpec_RejectsZeroPartitions(t *testing.T) {
-	spec := &Spec{Topics: map[string]TopicSpec{"bad": {Partitions: 0}}}
-	_, err := spec.Resolve()
-	assert.Error(t, err)
+func TestSpec_ZeroPartitionsFallsBackToDefault(t *testing.T) {
+	spec := &Spec{
+		Defaults: Defaults{ReplicationFactor: 3, RetentionMs: 604800000},
+		Topics:   map[string]TopicSpec{"analytics": {Partitions: 0}},
+	}
+	got, err := spec.Resolve()
+	require.NoError(t, err)
+	assert.Equal(t, defaultPartitions, find(t, got, "analytics").Partitions)
 }
 
 func TestSpec_RejectsZeroReplicationFactor(t *testing.T) {

@@ -276,6 +276,17 @@ func RecalculatedInvoiceID(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldRecalculatedInvoiceID, v))
 }
 
+// IsManuallyEdited applies equality check predicate on the "is_manually_edited" field. It's identical to IsManuallyEditedEQ.
+func IsManuallyEdited(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIsManuallyEdited, v))
+}
+
+// TaxExemptionReasonCode applies equality check predicate on the "tax_exemption_reason_code" field. It's identical to TaxExemptionReasonCodeEQ.
+func TaxExemptionReasonCode(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldTaxExemptionReasonCode, vc))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTenantID, v))
@@ -2755,6 +2766,110 @@ func RecalculatedInvoiceIDEqualFold(v string) predicate.Invoice {
 // RecalculatedInvoiceIDContainsFold applies the ContainsFold predicate on the "recalculated_invoice_id" field.
 func RecalculatedInvoiceIDContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldRecalculatedInvoiceID, v))
+}
+
+// IsManuallyEditedEQ applies the EQ predicate on the "is_manually_edited" field.
+func IsManuallyEditedEQ(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIsManuallyEdited, v))
+}
+
+// IsManuallyEditedNEQ applies the NEQ predicate on the "is_manually_edited" field.
+func IsManuallyEditedNEQ(v bool) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldIsManuallyEdited, v))
+}
+
+// TaxExemptionReasonCodeEQ applies the EQ predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeEQ(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeNEQ applies the NEQ predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeNEQ(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldNEQ(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeIn applies the In predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeIn(vs ...types.TaxExemptionReasonCode) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldIn(FieldTaxExemptionReasonCode, v...))
+}
+
+// TaxExemptionReasonCodeNotIn applies the NotIn predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeNotIn(vs ...types.TaxExemptionReasonCode) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldNotIn(FieldTaxExemptionReasonCode, v...))
+}
+
+// TaxExemptionReasonCodeGT applies the GT predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeGT(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGT(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeGTE applies the GTE predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeGTE(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGTE(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeLT applies the LT predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeLT(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLT(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeLTE applies the LTE predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeLTE(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLTE(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeContains applies the Contains predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeContains(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContains(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeHasPrefix applies the HasPrefix predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeHasPrefix(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasPrefix(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeHasSuffix applies the HasSuffix predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeHasSuffix(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasSuffix(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeIsNil applies the IsNil predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldTaxExemptionReasonCode))
+}
+
+// TaxExemptionReasonCodeNotNil applies the NotNil predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldTaxExemptionReasonCode))
+}
+
+// TaxExemptionReasonCodeEqualFold applies the EqualFold predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeEqualFold(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEqualFold(FieldTaxExemptionReasonCode, vc))
+}
+
+// TaxExemptionReasonCodeContainsFold applies the ContainsFold predicate on the "tax_exemption_reason_code" field.
+func TaxExemptionReasonCodeContainsFold(v types.TaxExemptionReasonCode) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContainsFold(FieldTaxExemptionReasonCode, vc))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -137,6 +138,12 @@ func StartDate(v time.Time) predicate.TaxAssociation {
 // EndDate applies equality check predicate on the "end_date" field. It's identical to EndDateEQ.
 func EndDate(v time.Time) predicate.TaxAssociation {
 	return predicate.TaxAssociation(sql.FieldEQ(FieldEndDate, v))
+}
+
+// TaxBehavior applies equality check predicate on the "tax_behavior" field. It's identical to TaxBehaviorEQ.
+func TaxBehavior(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldEQ(FieldTaxBehavior, vc))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1002,6 +1009,100 @@ func EndDateIsNil() predicate.TaxAssociation {
 // EndDateNotNil applies the NotNil predicate on the "end_date" field.
 func EndDateNotNil() predicate.TaxAssociation {
 	return predicate.TaxAssociation(sql.FieldNotNull(FieldEndDate))
+}
+
+// TaxBehaviorEQ applies the EQ predicate on the "tax_behavior" field.
+func TaxBehaviorEQ(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldEQ(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorNEQ applies the NEQ predicate on the "tax_behavior" field.
+func TaxBehaviorNEQ(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldNEQ(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorIn applies the In predicate on the "tax_behavior" field.
+func TaxBehaviorIn(vs ...types.TaxBehavior) predicate.TaxAssociation {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxAssociation(sql.FieldIn(FieldTaxBehavior, v...))
+}
+
+// TaxBehaviorNotIn applies the NotIn predicate on the "tax_behavior" field.
+func TaxBehaviorNotIn(vs ...types.TaxBehavior) predicate.TaxAssociation {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxAssociation(sql.FieldNotIn(FieldTaxBehavior, v...))
+}
+
+// TaxBehaviorGT applies the GT predicate on the "tax_behavior" field.
+func TaxBehaviorGT(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldGT(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorGTE applies the GTE predicate on the "tax_behavior" field.
+func TaxBehaviorGTE(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldGTE(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorLT applies the LT predicate on the "tax_behavior" field.
+func TaxBehaviorLT(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldLT(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorLTE applies the LTE predicate on the "tax_behavior" field.
+func TaxBehaviorLTE(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldLTE(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorContains applies the Contains predicate on the "tax_behavior" field.
+func TaxBehaviorContains(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldContains(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorHasPrefix applies the HasPrefix predicate on the "tax_behavior" field.
+func TaxBehaviorHasPrefix(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldHasPrefix(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorHasSuffix applies the HasSuffix predicate on the "tax_behavior" field.
+func TaxBehaviorHasSuffix(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldHasSuffix(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorIsNil applies the IsNil predicate on the "tax_behavior" field.
+func TaxBehaviorIsNil() predicate.TaxAssociation {
+	return predicate.TaxAssociation(sql.FieldIsNull(FieldTaxBehavior))
+}
+
+// TaxBehaviorNotNil applies the NotNil predicate on the "tax_behavior" field.
+func TaxBehaviorNotNil() predicate.TaxAssociation {
+	return predicate.TaxAssociation(sql.FieldNotNull(FieldTaxBehavior))
+}
+
+// TaxBehaviorEqualFold applies the EqualFold predicate on the "tax_behavior" field.
+func TaxBehaviorEqualFold(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldEqualFold(FieldTaxBehavior, vc))
+}
+
+// TaxBehaviorContainsFold applies the ContainsFold predicate on the "tax_behavior" field.
+func TaxBehaviorContainsFold(v types.TaxBehavior) predicate.TaxAssociation {
+	vc := string(v)
+	return predicate.TaxAssociation(sql.FieldContainsFold(FieldTaxBehavior, vc))
 }
 
 // And groups predicates with the AND operator between them.
