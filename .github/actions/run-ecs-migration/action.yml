@@ -223,17 +223,28 @@ runs:
         # task: on EC2 launch type the awslogs driver uses the container
         # INSTANCE's role (AmazonEC2ContainerServiceforEC2Role), which grants
         # CreateLogStream and PutLogEvents but NOT CreateLogGroup.
-        aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>/dev/null || true
-        aws logs put-retention-policy --log-group-name "$LOG_GROUP" \
-          --retention-in-days 30 --region "$REGION" 2>/dev/null || true
-        if ! aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" --region "$REGION" \
-             --query "logGroups[?logGroupName=='$LOG_GROUP'].logGroupName" --output text | grep -q .; then
+        # Existence is confirmed from create-log-group's own outcome rather than a
+        # describe call: logs:DescribeLogGroups does not support resource-level
+        # permissions -- it is denied unless granted on "*" -- and a wildcard read
+        # grant is not worth adding for a check this can do directly.
+        CG_ERR="$(mktemp)"
+        if aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>"$CG_ERR"; then
+          echo "  created log group $LOG_GROUP"
+        elif grep -q "ResourceAlreadyExistsException" "$CG_ERR"; then
+          :
+        else
           echo "  ERROR: log group $LOG_GROUP does not exist and could not be created." >&2
           echo "         The migration task would fail to START with the awslogs driver," >&2
-          echo "         with an error that does not mention logging. Grant" >&2
-          echo "         logs:CreateLogGroup and logs:DescribeLogGroups to this role." >&2
-          exit 1
+          echo "         with an error that does not mention logging." >&2
+          sed 's/^/         /' "$CG_ERR" >&2
+          rm -f "$CG_ERR"; exit 1
         fi
+        rm -f "$CG_ERR"
+
+        # Best-effort: retention keeps this from accumulating, but a missing
+        # PutRetentionPolicy grant must not block a migration.
+        aws logs put-retention-policy --log-group-name "$LOG_GROUP" \
+          --retention-in-days 30 --region "$REGION" 2>/dev/null || true
 
         TASK=$(aws "${RUN_ARGS[@]}" --query 'tasks[0].taskArn' --output text)
         if [ -z "$TASK" ] || [ "$TASK" = "None" ]; then
