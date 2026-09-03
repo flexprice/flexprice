@@ -394,6 +394,25 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
+// referencePointForBillingReason maps an invoice's billing reason to the reference point
+// its charges were originally computed at. Recomputing an invoice at a different reference
+// point silently changes which charges it carries: only PERIOD_START emits current-period
+// advance charges, so a subscription-create invoice recomputed at PERIOD_END loses them —
+// one-time advance fees in particular, which are never re-emitted under any other reference
+// point. An empty billing reason (legacy rows) falls back to PERIOD_END.
+func referencePointForBillingReason(billingReason string) types.InvoiceReferencePoint {
+	switch types.InvoiceBillingReason(billingReason) {
+	case types.InvoiceBillingReasonSubscriptionCreate,
+		types.InvoiceBillingReasonSubscriptionTrialEnd,
+		types.InvoiceBillingReasonSubscriptionTrialStart,
+		types.InvoiceBillingReasonSubscriptionUpdate:
+		return types.ReferencePointPeriodStart
+	case types.InvoiceBillingReasonProration:
+		return types.ReferencePointCancel
+	}
+	return types.ReferencePointPeriodEnd
+}
+
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
 // applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
 // Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
@@ -444,19 +463,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return nil, false, err
 		}
-		refPoint := types.ReferencePointPeriodEnd
-		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate,
-			types.InvoiceBillingReasonSubscriptionTrialEnd,
-			types.InvoiceBillingReasonSubscriptionTrialStart,
-			types.InvoiceBillingReasonSubscriptionUpdate:
-
-			// for create, trial end, trial start, and update, we use the period start as the reference point
-			refPoint = types.ReferencePointPeriodStart
-
-		case types.InvoiceBillingReasonProration:
-			refPoint = types.ReferencePointCancel
-		}
+		refPoint := referencePointForBillingReason(inv.BillingReason)
 		billingService := NewBillingService(s.ServiceParams)
 		params := &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
@@ -3515,8 +3522,9 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// Line items are reconciled after this call (update-in-place or delete+create).
 		billingService := NewBillingService(s.ServiceParams)
 
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
+		// Recompute with the reference point the invoice was originally billed at, so the
+		// recalculation covers the same charges the invoice was created with.
+		referencePoint := referencePointForBillingReason(inv.BillingReason)
 
 		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:   sub,
@@ -3690,11 +3698,14 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 		sub.GatewayPaymentMethodID,
 	).NormalizePaymentParameters()
 
+	// The replacement stands in for the voided invoice, so it is billed at the same
+	// reference point and carries the same billing reason.
 	newInv, _, err := s.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 		SubscriptionID: *inv.SubscriptionID,
 		PeriodStart:    *inv.PeriodStart,
 		PeriodEnd:      *inv.PeriodEnd,
-		ReferencePoint: types.ReferencePointPeriodEnd,
+		ReferencePoint: referencePointForBillingReason(inv.BillingReason),
+		BillingReason:  types.InvoiceBillingReason(inv.BillingReason),
 	}, paymentParams, types.InvoiceFlowManual, false)
 	if err != nil {
 		s.Logger.Error(ctx, "invoice recalculation failed after voiding, invoice left voided with no replacement",

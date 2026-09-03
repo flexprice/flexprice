@@ -1126,3 +1126,99 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_HappyPath_Finaliz
 	s.Equal(types.InvoiceStatusFinalized, result.InvoiceStatus,
 		"invoice must be FINALIZED when finalize=true")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reference point derivation (one-time advance charges)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// addOneTimeAdvanceLineItem attaches a ONETIME + ADVANCE fixed charge (e.g. an
+// implementation fee) billed on the first day of the subscription's current period.
+func (s *InvoiceVoidRecalculateSuite) addOneTimeAdvanceLineItem(priceID string, amount decimal.Decimal) *subscription.SubscriptionLineItem {
+	onetimePrice := &price.Price{
+		ID:                 priceID,
+		Amount:             amount,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_ONETIME,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), onetimePrice))
+
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:  s.testData.subscription.ID,
+		CustomerID:      s.testData.customer.ID,
+		EntityID:        s.testData.plan.ID,
+		EntityType:      types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName: s.testData.plan.Name,
+		PriceID:         onetimePrice.ID,
+		PriceType:       onetimePrice.Type,
+		DisplayName:     "Implementation Fee",
+		Quantity:        decimal.NewFromInt(1),
+		Currency:        "usd",
+		BillingPeriod:   types.BILLING_PERIOD_ONETIME,
+		InvoiceCadence:  types.InvoiceCadenceAdvance,
+		StartDate:       s.testData.subscription.CurrentPeriodStart,
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), lineItem))
+	return lineItem
+}
+
+// buildDraftInvoiceWithBillingReason stores a DRAFT subscription invoice carrying an
+// explicit billing reason.
+func (s *InvoiceVoidRecalculateSuite) buildDraftInvoiceWithBillingReason(id string, reason types.InvoiceBillingReason) *invoice.Invoice {
+	inv := s.buildDraftInvoice(id)
+	inv.BillingReason = string(reason)
+	s.NoError(s.invoiceRepo.Update(s.GetContext(), inv))
+	return inv
+}
+
+// A one-time advance charge is classified as a current-period advance charge, which only
+// the PERIOD_START reference point emits. Recalculation must derive the reference point
+// from the invoice's billing reason instead of assuming PERIOD_END, otherwise the charge
+// is dropped from the invoice it was originally billed on.
+func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_SubscriptionCreate_KeepsOneTimeAdvanceCharge() {
+	s.addOneTimeAdvanceLineItem("price_vr_onetime", decimal.NewFromFloat(500))
+	inv := s.buildDraftInvoiceWithBillingReason("inv_v2_onetime", types.InvoiceBillingReasonSubscriptionCreate)
+
+	result, err := s.service.RecalculateInvoiceV2(s.GetContext(), inv.ID, false)
+	s.NoError(err)
+	s.NotNil(result)
+
+	onetimeLines := lo.Filter(result.LineItems, func(li *dto.InvoiceLineItemResponse, _ int) bool {
+		return lo.FromPtr(li.PriceID) == "price_vr_onetime"
+	})
+	s.Require().Len(onetimeLines, 1, "one-time advance charge must survive recalculation")
+	s.True(onetimeLines[0].Amount.Equal(decimal.NewFromFloat(500)),
+		"one-time advance charge must keep its amount, got %s", onetimeLines[0].Amount)
+}
+
+// The replacement invoice stands in for the voided one, so it must be billed at the same
+// reference point — otherwise a subscription-create invoice is replaced by a period-end
+// invoice that silently drops its one-time advance charges.
+func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoice_SubscriptionCreate_KeepsOneTimeAdvanceCharge() {
+	s.addOneTimeAdvanceLineItem("price_vr_onetime_v1", decimal.NewFromFloat(500))
+	inv := s.buildFinalizedInvoice("inv_v1_onetime", decimal.Zero, decimal.Zero, types.PaymentStatusPending)
+	inv.BillingReason = string(types.InvoiceBillingReasonSubscriptionCreate)
+	s.NoError(s.invoiceRepo.Update(s.GetContext(), inv))
+
+	newInv, err := s.service.RecalculateInvoice(s.GetContext(), inv.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(newInv)
+
+	onetimeLines := lo.Filter(newInv.LineItems, func(li *dto.InvoiceLineItemResponse, _ int) bool {
+		return lo.FromPtr(li.PriceID) == "price_vr_onetime_v1"
+	})
+	s.Require().Len(onetimeLines, 1, "one-time advance charge must survive void-and-replace recalculation")
+	s.True(onetimeLines[0].Amount.Equal(decimal.NewFromFloat(500)),
+		"one-time advance charge must keep its amount, got %s", onetimeLines[0].Amount)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCreate), newInv.BillingReason,
+		"replacement invoice must carry the original billing reason")
+}
