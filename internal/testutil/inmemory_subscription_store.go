@@ -412,10 +412,16 @@ func (s *InMemorySubscriptionStore) SetLineItemStore(store *InMemorySubscription
 // When lineItemStore is set, line items come from SubscriptionLineItemRepo only (mirrors DB + supports Update).
 // Otherwise returns the batch from CreateWithLineItems.
 func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
-	sub, err := s.Get(ctx, id)
+	stored, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Get hands back the stored pointer, so assigning LineItems below would mutate the
+	// shared record and race any concurrent reader. Copy first.
+	subCopy := *stored
+	sub := &subCopy
+
 	if s.lineItemStore != nil {
 		filter := types.NewNoLimitSubscriptionLineItemFilter()
 		filter.SubscriptionIDs = []string{id}

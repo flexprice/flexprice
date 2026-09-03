@@ -106,7 +106,15 @@ func (m *InMemoryPaymentStore) Create(ctx context.Context, p *payment.Payment) e
 
 // Get retrieves a payment by ID
 func (m *InMemoryPaymentStore) Get(ctx context.Context, id string) (*payment.Payment, error) {
-	return m.InMemoryStore.Get(ctx, id)
+	stored, err := m.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Hand back a copy. Callers mutate what they read before writing it back, and the
+	// real repository returns a fresh row each time; sharing the stored pointer makes
+	// two concurrent readers scribble over each other.
+	p := *stored
+	return &p, nil
 }
 
 // Update updates an existing payment
