@@ -43,9 +43,7 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 		if err != nil {
 			return err
 		}
-		if err := s.recordGatewayHandles(ctx, payResp.ID, providerResult); err != nil {
-			return err
-		}
+		s.recordGatewayHandles(ctx, payResp.ID, providerResult)
 		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 		session.CheckoutStatus = types.CheckoutStatusPending
 
@@ -192,13 +190,17 @@ func (s *checkoutSessionService) callCheckoutProvider(
 // the row carries no gateway ids for the life of a pending checkout —
 // CreatePaymentForCheckout runs before the provider is contacted and nothing backfilled
 // it — so no caller could reconcile it against the gateway.
+// It is best effort. The provider has already been called by this point, and on the
+// auto-charge path the card may already be captured — failing the checkout here would
+// archive the drafts and destroy a subscription the customer has paid for. A missing
+// handle only costs reconciliation, which the webhook still covers.
 func (s *checkoutSessionService) recordGatewayHandles(
 	ctx context.Context,
 	paymentID string,
 	providerResult *types.CheckoutProviderResult,
-) error {
+) {
 	if providerResult == nil {
-		return nil
+		return
 	}
 
 	updateReq := dto.UpdatePaymentRequest{}
@@ -209,14 +211,14 @@ func (s *checkoutSessionService) recordGatewayHandles(
 		updateReq.GatewayPaymentID = lo.ToPtr(providerResult.ProviderPaymentIntentID)
 	}
 	if updateReq.GatewayTrackingID == nil && updateReq.GatewayPaymentID == nil {
-		return nil
+		return
 	}
 
 	paySvc := NewPaymentService(s.ServiceParams)
 	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
-		return err
+		s.Logger.Error(ctx, "failed to record gateway handles on checkout payment",
+			"payment_id", paymentID, "error", err)
 	}
-	return nil
 }
 
 // resolveMaxMandateLimit caps MaxMandateLimit against the tenant's

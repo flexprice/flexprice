@@ -265,7 +265,7 @@ func (s *CheckoutPollSuite) TestWebhookLost_PollCompletesSession() {
 		GatewayPaymentID: "pay_rzp_001",
 	}
 
-	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
 	s.False(stale, "a response reconciled against the gateway is not stale")
 	s.Equal(1, s.provider.callCount())
@@ -324,7 +324,7 @@ func (s *CheckoutPollSuite) TestTerminalSession_MakesNoProviderCall() {
 			s.provider = &fakeCheckoutProvider{}
 			session := s.seedSession(status, "plink_001", "")
 
-			stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+			stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
 			s.False(stale, "stored state for a finished session is not stale, it is final")
 			s.Zero(s.provider.callCount())
@@ -382,11 +382,11 @@ func (s *CheckoutPollSuite) TestLosingTheClaim_IsNotStale() {
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusSucceeded}
 	s.svc.Locker = nil
 
-	first := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	first := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 	s.Require().False(first)
 
 	// Same in-memory copy, still believing it is pending — the loser's view.
-	second := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	second := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 	s.False(second, "ErrAlreadyExists means another caller completed it, which is success")
 }
 
@@ -399,8 +399,8 @@ func (s *CheckoutPollSuite) TestDebounce_SecondPollSkipsTheGateway() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusPending}
 
-	first := s.svc.refreshSessionFromGateway(s.GetContext(), session)
-	second := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	first := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
+	second := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
 	s.False(first)
 	s.True(second, "a debounced read is serving stored state and must say so")
@@ -430,7 +430,7 @@ func (s *CheckoutPollSuite) TestGatewayError_ServesStoredStateAsStale() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.err = ierr.NewError("razorpay timeout").Mark(ierr.ErrHTTPClient)
 
-	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
 	s.True(stale)
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(s.GetContext(), session.ID)
@@ -444,9 +444,9 @@ func (s *CheckoutPollSuite) TestProviderWithoutReadAPI_IsNotAnError() {
 	session := s.seedSession(types.CheckoutStatusPending, "hp_cb_001", "")
 	s.provider.err = ierr.NewError("not supported").Mark(ierr.ErrNotImplemented)
 
-	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
-	s.False(stale, "there was nothing to check against, which is not the same as stale")
+	s.True(stale, "a provider with no read API leaves the answer unchecked")
 }
 
 // ── what the poll may not do ─────────────────────────────────────────────────
@@ -458,7 +458,7 @@ func (s *CheckoutPollSuite) TestGatewayReportsFailed_WritesNothing() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusFailed}
 
-	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
 	s.False(stale, "the gateway answered, so the read is not stale")
 
@@ -489,9 +489,9 @@ func (s *CheckoutPollSuite) TestSessionWithoutPayment_MakesNoProviderCall() {
 	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
 
-	stale := s.svc.refreshSessionFromGateway(ctx, session)
+	stale := s.svc.refreshSessionFromGateway(ctx, session).stale
 
-	s.False(stale)
+	s.True(stale, "the provider was never consulted, so the answer is stored state")
 	s.Zero(s.provider.callCount())
 }
 
@@ -500,9 +500,9 @@ func (s *CheckoutPollSuite) TestSessionWithoutPayment_MakesNoProviderCall() {
 func (s *CheckoutPollSuite) TestPaymentWithoutHandles_MakesNoProviderCall() {
 	session := s.seedSession(types.CheckoutStatusPending, "", "")
 
-	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session)
+	stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale
 
-	s.False(stale)
+	s.True(stale, "nothing to ask about is not the same as a checked answer")
 	s.Zero(s.provider.callCount())
 }
 
@@ -537,7 +537,7 @@ func (s *CheckoutPollSuite) TestGet_ReconcilesAndReportsTerminal() {
 		GatewayPaymentID: "pay_rzp_001",
 	}
 
-	resp, err := s.svc.Get(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
 	s.Require().NoError(err)
 
 	s.Equal(types.CheckoutStatusCompleted, resp.CheckoutStatus,
@@ -556,10 +556,10 @@ func (s *CheckoutPollSuite) TestGet_DebouncedReadIsStaleAndKeepsPolling() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusPending}
 
-	_, err := s.svc.Get(s.GetContext(), session.ID)
+	_, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
 	s.Require().NoError(err)
 
-	resp, err := s.svc.Get(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
 	s.Require().NoError(err)
 
 	s.True(resp.Stale)
@@ -573,7 +573,7 @@ func (s *CheckoutPollSuite) TestGet_SurvivesGatewayOutage() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.err = ierr.NewError("razorpay unavailable").Mark(ierr.ErrHTTPClient)
 
-	resp, err := s.svc.Get(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
 
 	s.Require().NoError(err, "the read must not fail because the gateway did")
 	s.True(resp.Stale)
@@ -630,11 +630,10 @@ func (s *CheckoutPollSuite) TestRecordGatewayHandles_MakesThePaymentSelfDescribi
 	s.Nil(before.GatewayTrackingID)
 	s.Nil(before.GatewayPaymentID)
 
-	err = s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{
+	s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{
 		ProviderSessionID:       "plink_001",
 		ProviderPaymentIntentID: "pay_rzp_001",
 	})
-	s.Require().NoError(err)
 
 	after, err := s.GetStores().PaymentRepo.Get(ctx, paymentID)
 	s.Require().NoError(err)
@@ -649,10 +648,9 @@ func (s *CheckoutPollSuite) TestRecordGatewayHandles_TrackingIDAlone() {
 	session := s.seedSession(types.CheckoutStatusInitiated, "", "")
 	paymentID := *session.CheckoutPaymentID
 
-	err := s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{
+	s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{
 		ProviderSessionID: "inv_001",
 	})
-	s.Require().NoError(err)
 
 	after, err := s.GetStores().PaymentRepo.Get(ctx, paymentID)
 	s.Require().NoError(err)
@@ -667,8 +665,8 @@ func (s *CheckoutPollSuite) TestRecordGatewayHandles_NothingToRecord() {
 	session := s.seedSession(types.CheckoutStatusInitiated, "", "")
 	paymentID := *session.CheckoutPaymentID
 
-	s.Require().NoError(s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{}))
-	s.Require().NoError(s.svc.recordGatewayHandles(ctx, paymentID, nil))
+	s.svc.recordGatewayHandles(ctx, paymentID, &types.CheckoutProviderResult{})
+	s.svc.recordGatewayHandles(ctx, paymentID, nil)
 
 	after, err := s.GetStores().PaymentRepo.Get(ctx, paymentID)
 	s.Require().NoError(err)
@@ -695,6 +693,16 @@ func (s *CheckoutPollSuite) TestSessionOutlivesTheProviderLink() {
 				"session expiry is derived from link expiry so the two cannot drift")
 		})
 	}
+
+	// Chargebee's payment_intent lives 30 minutes and the adapter cannot shorten it, so
+	// the session must not outlast it — a session still reading as live over a dead
+	// intent sends a paying customer into a failure we could have prevented.
+	s.LessOrEqual(types.CheckoutPaymentProviderChargebee.SessionExpiry(), 30*time.Minute,
+		"a chargebee session must die before its payment intent does")
+	if false {
+		s.Run("unreachable", func() {
+		})
+	}
 }
 
 // Create is where a client first receives the payment URL and starts polling, so its
@@ -711,4 +719,11 @@ func (s *CheckoutPollSuite) TestCreateResponse_CarriesPollingHints() {
 	s.Require().NotNil(resp.Payment, "the payment being waited on must be reported")
 	s.Equal(*session.CheckoutPaymentID, resp.Payment.ID)
 	s.Equal(types.PaymentStatusPending, resp.Payment.Status)
+}
+
+// Chargebee's payment_intent lives 30 minutes and the adapter cannot shorten it, so the
+// session must not outlast it. A session still reading as live over a dead intent sends
+// a paying customer into a failure we could have prevented.
+func (s *CheckoutPollSuite) TestChargebeeSessionDiesBeforeItsPaymentIntent() {
+	s.LessOrEqual(types.CheckoutPaymentProviderChargebee.SessionExpiry(), 30*time.Minute)
 }

@@ -18,9 +18,9 @@ func (s *customerPortalService) GetCheckoutSession(ctx context.Context, sessionI
 	// it carries the same read-triggered reconciliation as the tenant-facing GET: a
 	// lost webhook must not leave them watching a spinner. Never fails the read.
 	checkoutSvc := &checkoutSessionService{ServiceParams: s.ServiceParams}
-	stale := checkoutSvc.refreshSessionFromGateway(ctx, session)
-	if !stale {
-		// Completion mutates the row; the copy above is behind it.
+	reconciled := checkoutSvc.refreshSessionFromGateway(ctx, session)
+	if reconciled.completed {
+		// Completion mutated the row; the copy above is behind it.
 		session, err = s.CheckoutSessionRepo.Get(ctx, sessionID)
 		if err != nil {
 			return nil, err
@@ -28,7 +28,7 @@ func (s *customerPortalService) GetCheckoutSession(ctx context.Context, sessionI
 	}
 
 	resp := toPortalCheckoutSession(dto.ToCheckoutSessionResponse(session))
-	resp.Stale = stale
+	resp.Stale = reconciled.stale
 	resp.NextPollAfterMs = checkoutPollInterval(session).Milliseconds()
 	return resp, nil
 }

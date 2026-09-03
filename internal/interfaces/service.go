@@ -240,6 +240,10 @@ type CreditAdjustmentService interface {
 type CheckoutSessionService interface {
 	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	// GetAndReconcile is Get plus reconciliation against the payment provider. It
+	// contacts the gateway and can complete the session, so only callers acting for
+	// the customer should use it; internal readers use Get.
+	GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
 	Delete(ctx context.Context, id string) error
 	// CleanupCheckoutSession fetches the session by ID, archives all fulfillment entities

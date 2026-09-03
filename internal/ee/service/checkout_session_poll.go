@@ -51,17 +51,27 @@ func checkoutPollInterval(session *domainCheckout.CheckoutSession) time.Duration
 // stale=true means this response is stored state that was not checked against the
 // provider — debounced, or the gateway did not answer. Errors are never returned: a
 // customer who paid and sees an error is worse off than one who sees "processing".
+// reconcileResult reports what a reconciliation attempt did. stale means the response
+// about to be served was not checked against the provider — debounced, or the gateway
+// did not answer, or this provider has no read API. completed means the session was
+// claimed and the caller must re-read it.
+type reconcileResult struct {
+	stale     bool
+	completed bool
+}
+
 func (s *checkoutSessionService) refreshSessionFromGateway(
 	ctx context.Context,
 	session *domainCheckout.CheckoutSession,
-) (stale bool) {
+) reconcileResult {
 	if session == nil || session.CheckoutStatus.IsTerminal() {
-		return false
+		// A finished session is final, not unchecked.
+		return reconcileResult{}
 	}
 	if session.CheckoutPaymentID == nil {
-		// Fulfilment never got as far as creating a payment; there is nothing to ask
-		// the provider about.
-		return false
+		// Fulfilment never reached payment creation, so the provider has nothing to
+		// say about this session yet — but it was not consulted either.
+		return reconcileResult{stale: true}
 	}
 
 	// Debounce. Acquired and never released — TTL expiry is the window, which is why
@@ -73,10 +83,10 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 		lockKey := cache.GenerateKey(ctx, cache.PrefixCheckoutPollLock, *session.CheckoutPaymentID)
 		lock, err := s.Locker.AcquireLock(ctx, lockKey, checkoutPollInterval(session))
 		if err != nil {
-			s.Logger.Warn(ctx, "checkout poll debounce unavailable, calling gateway anyway",
+			s.Logger.Info(ctx, "checkout poll debounce unavailable, calling gateway anyway",
 				"session_id", session.ID, "error", err)
 		} else if lock != nil && !lock.AcquiredSuccessfully() {
-			return true
+			return reconcileResult{stale: true}
 		}
 	}
 
@@ -86,10 +96,12 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 			"session_id", session.ID,
 			"payment_id", *session.CheckoutPaymentID,
 			"error", err)
-		return true
+		return reconcileResult{stale: true}
 	}
 	if state == nil {
-		return false
+		// No handles recorded, or this provider has no read API: the session was not
+		// checked against the gateway, so the answer is stored state.
+		return reconcileResult{stale: true}
 	}
 
 	// Success transitions only. A declined payment is deliberately left PENDING — the
@@ -97,7 +109,7 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 	// that window and then block the retry from reaching SUCCEEDED. Abandonment is the
 	// sweeper's job.
 	if state.Status != types.PaymentStatusSucceeded && state.Status != types.PaymentStatusOverpaid {
-		return false
+		return reconcileResult{}
 	}
 
 	// Carry the discovered pay_ into completion, which persists it onto the payment.
@@ -111,14 +123,14 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 		// ErrAlreadyExists means the webhook, the sweeper, or a concurrent poll got
 		// there first. The work is done; reporting failure would be wrong.
 		if ierr.IsAlreadyExists(err) {
-			return false
+			return reconcileResult{completed: true}
 		}
 		s.Logger.Error(ctx, "checkout poll completion failed",
 			"session_id", session.ID, "error", err)
-		return true
+		return reconcileResult{stale: true}
 	}
 
-	return false
+	return reconcileResult{completed: true}
 }
 
 // fetchProviderPaymentState asks the session's provider what happened to its payment.

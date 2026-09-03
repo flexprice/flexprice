@@ -139,8 +139,13 @@ func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 		// Razorpay's floor is 15m, checked on receipt — asking for exactly 15 arrives
 		// under it. Leave headroom rather than race the boundary.
 		return 20 * time.Minute
+	case CheckoutPaymentProviderChargebee:
+		// Chargebee hosted pages live 5 days and payment_intents 30 min, and the adapter
+		// cannot shorten either. Sized so SessionExpiry lands on the 30m intent rather
+		// than past it: an abandoned session must die before the intent's fund hold does.
+		return 25 * time.Minute
 	default:
-		return 30 * time.Minute
+		return 25 * time.Minute
 	}
 }
 

@@ -99,18 +99,38 @@ func (s *checkoutSessionService) Get(ctx context.Context, id string) (*dto.Check
 		return nil, err
 	}
 
-	// Read-triggered reconciliation, so a lost webhook does not leave a paying customer
-	// watching a spinner. Never fails the read — see refreshSessionFromGateway.
-	stale := s.refreshSessionFromGateway(ctx, session)
-	if !stale {
-		// Completion mutates the row; the copy above is behind it.
+	return s.toPollableResponse(ctx, session, false), nil
+}
+
+// GetAndReconcile is Get plus read-triggered reconciliation against the payment
+// provider, so a lost webhook does not leave a paying customer watching a spinner.
+//
+// Separate from Get because reconciliation contacts the gateway and can complete a
+// session: only a caller acting for the customer should trigger it. Internal readers
+// — the outbound webhook payload builder, for one — must use Get.
+func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("id is required").
+			WithHint("checkout session ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+
+	session, err := s.CheckoutSessionRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Never fails the read — see refreshSessionFromGateway.
+	reconciled := s.refreshSessionFromGateway(ctx, session)
+	if reconciled.completed {
+		// Completion mutated the row; the copy above is behind it.
 		session, err = s.CheckoutSessionRepo.Get(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return s.toPollableResponse(ctx, session, stale), nil
+	return s.toPollableResponse(ctx, session, reconciled.stale), nil
 }
 
 // toPollableResponse adds the fields a client needs to poll: whether the session is
@@ -608,9 +628,7 @@ func (s *checkoutSessionService) fulfillCheckoutSession(
 	if err != nil {
 		return err
 	}
-	if err := s.recordGatewayHandles(ctx, payResp.ID, providerResult); err != nil {
-		return err
-	}
+	s.recordGatewayHandles(ctx, payResp.ID, providerResult)
 	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 	session.CheckoutStatus = types.CheckoutStatusPending
 	return s.CheckoutSessionRepo.Update(ctx, session)
