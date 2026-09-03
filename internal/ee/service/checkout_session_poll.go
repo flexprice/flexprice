@@ -153,6 +153,18 @@ func (s *checkoutSessionService) fetchProviderPaymentState(
 		GatewayTrackingID: lo.FromPtr(p.GatewayTrackingID),
 		InvoiceID:         p.DestinationID,
 	}
+
+	// recordGatewayHandles is best effort — it must not fail a checkout whose money may
+	// already be taken — so the payment can be missing handles the provider did return.
+	// The session kept its own copy, and without this fallback such a checkout could
+	// never be reconciled and would expire unpaid-looking after a lost webhook.
+	if req.GatewayPaymentID == "" && req.GatewayTrackingID == "" {
+		if pr := session.ProviderResult.ToProviderResult(); pr != nil {
+			req.GatewayPaymentID = pr.ProviderPaymentIntentID
+			req.GatewayTrackingID = pr.ProviderSessionID
+		}
+	}
+
 	if req.GatewayPaymentID == "" && req.GatewayTrackingID == "" {
 		// The provider was never reached, or the session predates handle recording.
 		return nil, nil

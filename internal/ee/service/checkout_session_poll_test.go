@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -33,6 +34,10 @@ type fakeCheckoutProvider struct {
 
 	state *interfaces.PaymentState
 	err   error
+
+	// linkRequests records what callCheckoutProvider asked for, so a test can assert on
+	// the expiry we send rather than recomputing it.
+	linkRequests []interfaces.CheckoutProviderRequest
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(
@@ -54,8 +59,17 @@ func (f *fakeCheckoutProvider) callCount() int {
 }
 
 // The rest of interfaces.CheckoutProvider is unused by the poll.
-func (f *fakeCheckoutProvider) CreatePaymentLink(context.Context, interfaces.CheckoutProviderRequest) (*interfaces.CheckoutProviderResponse, error) {
-	return nil, ierr.NewError("not used").Mark(ierr.ErrNotImplemented)
+func (f *fakeCheckoutProvider) CreatePaymentLink(_ context.Context, req interfaces.CheckoutProviderRequest) (*interfaces.CheckoutProviderResponse, error) {
+	f.mu.Lock()
+	f.linkRequests = append(f.linkRequests, req)
+	f.mu.Unlock()
+	return &interfaces.CheckoutProviderResponse{
+		ProviderSessionID: "plink_created",
+		NextAction: types.PaymentAction{
+			Type: types.PaymentActionTypePaymentLink,
+			URL:  "https://rzp.io/test",
+		},
+	}, nil
 }
 func (f *fakeCheckoutProvider) CreateAuthorizationLink(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, error) {
 	return nil, ierr.NewError("not used").Mark(ierr.ErrNotImplemented)
@@ -729,17 +743,59 @@ func (s *CheckoutPollSuite) TestChargebeeSessionDiesBeforeItsPaymentIntent() {
 }
 
 // The link must close before the session whatever fulfilment costs. Deriving the link
-// deadline from time.Now inside callCheckoutProvider would let a slow fulfilment push
-// it past the session, inverting the guarantee the grace window rests on.
-func (s *CheckoutPollSuite) TestLinkExpiryDerivesFromTheSessionDeadline() {
-	provider := types.CheckoutPaymentProviderRazorpay
+// deadline from time.Now inside callCheckoutProvider would let a slow fulfilment push it
+// past the session, inverting the guarantee the grace window rests on — so assert on the
+// expiry the provider is actually sent, not on recomputed arithmetic.
+func (s *CheckoutPollSuite) TestLinkExpirySentToProviderDerivesFromTheSessionDeadline() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusInitiated, "", "")
 
-	// A session created a while ago, as a delayed fulfilment would see it.
-	sessionExpiresAt := time.Now().UTC().Add(-10 * time.Minute).Add(provider.SessionExpiry())
-	linkExpiresAt := sessionExpiresAt.Add(-provider.SessionGrace())
+	// Backdate the session as a fulfilment slower than the grace window would leave it.
+	session.ExpiresAt = time.Now().UTC().Add(-10 * time.Minute).
+		Add(session.PaymentProvider.SessionExpiry())
+	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
+		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodSendInvoice},
+	)
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
-	s.True(linkExpiresAt.Before(sessionExpiresAt),
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+
+	_, err = s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+	s.Require().NoError(err)
+
+	s.Require().Len(s.provider.linkRequests, 1)
+	sent := s.provider.linkRequests[0].ExpiresAt
+	s.Require().NotNil(sent, "an expiry must be sent so the link closes at a time we know")
+
+	s.True(sent.Before(session.ExpiresAt),
 		"the link must close before the session even when fulfilment is slow")
-	s.Equal(provider.SessionGrace(), sessionExpiresAt.Sub(linkExpiresAt),
+	s.Equal(session.PaymentProvider.SessionGrace(), session.ExpiresAt.Sub(*sent),
 		"the gap between them is exactly the grace window")
+}
+
+// recordGatewayHandles is best effort — it must not fail a checkout whose money may
+// already be taken — so the payment can end up without the handles the provider
+// returned. The session kept its own copy, and without falling back to it such a
+// checkout could never be reconciled and would expire looking unpaid.
+func (s *CheckoutPollSuite) TestFallsBackToSessionHandlesWhenThePaymentHasNone() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "", "")
+
+	session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+		ProviderSessionID: "plink_from_session",
+	})
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+
+	s.provider.state = &interfaces.PaymentState{
+		Status:           types.PaymentStatusSucceeded,
+		GatewayPaymentID: "pay_rzp_001",
+	}
+
+	result := s.svc.refreshSessionFromGateway(ctx, session)
+
+	s.True(result.completed, "a paid checkout must still be recoverable")
+	s.Require().Equal(1, s.provider.callCount())
+	s.Equal("plink_from_session", s.provider.calls[0].GatewayTrackingID,
+		"the handle comes from the session when the payment never got one")
 }

@@ -64,9 +64,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	session *domainCheckout.CheckoutSession,
 	payResp *dto.PaymentResponse,
 ) (*types.CheckoutProviderResult, error) {
-	customerSvc := NewCustomerService(s.ServiceParams)
-	invoiceSvc := NewInvoiceService(s.ServiceParams)
-	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, session.PaymentProvider, customerSvc, invoiceSvc)
+	provider, err := s.resolveCheckoutProvider(ctx, session.PaymentProvider)
 	if err != nil {
 		return nil, err
 	}

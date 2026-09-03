@@ -145,7 +145,7 @@ func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 		// than past it: an abandoned session must die before the intent's fund hold does.
 		return 25 * time.Minute
 	default:
-		return 25 * time.Minute
+		return 30 * time.Minute
 	}
 }
 
