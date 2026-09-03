@@ -228,6 +228,50 @@ func (s *PortalWalletSuite) TestAutoTopupEnableRequiresChargeableMethod() {
 	s.False(ierr.IsValidation(err), "a missing card is a state conflict, not a bad request")
 }
 
+// A cooloff has to be resettable, not just settable. UpdateWallet only reads the
+// cooloff when the pointer is non-nil, and a JSON null unmarshals to nil — which is
+// indistinguishable from an absent field — so passing it through left the stored
+// cooloff in place and the customer could never clear it.
+func (s *PortalWalletSuite) TestAutoTopupCooloffCanBeCleared() {
+	s.connect(types.SecretProviderChargebee)
+
+	stored, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
+		Enabled:  false,
+		Cooldown: &types.Duration{Value: 6, Unit: types.DurationUnitHour},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(stored.AutoTopup)
+	s.Require().NotNil(stored.AutoTopup.Cooldown, "the cooloff should be stored to begin with")
+	s.Equal(6, stored.AutoTopup.Cooldown.Value)
+
+	cleared, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
+		Enabled:  false,
+		Cooldown: nil,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(cleared.AutoTopup)
+	s.Nil(cleared.AutoTopup.Cooldown, "an absent cooloff must reset the stored one")
+}
+
+// The same clear, said the other way: an explicitly zero-valued duration.
+func (s *PortalWalletSuite) TestAutoTopupCooloffClearsOnZeroDuration() {
+	s.connect(types.SecretProviderChargebee)
+
+	_, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
+		Enabled:  false,
+		Cooldown: &types.Duration{Value: 30, Unit: types.DurationUnitMinute},
+	})
+	s.Require().NoError(err)
+
+	cleared, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
+		Enabled:  false,
+		Cooldown: &types.Duration{},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(cleared.AutoTopup)
+	s.Nil(cleared.AutoTopup.Cooldown)
+}
+
 // Disabling must never be gated on a card: a customer with no usable method still
 // has to be able to turn auto top-up off.
 func (s *PortalWalletSuite) TestAutoTopupDisableIsNotGated() {

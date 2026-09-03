@@ -384,8 +384,14 @@ func (a *AutoTopup) Validate() error {
 			WithHint("Invoicing boolean is required").
 			Mark(ierr.ErrValidation)
 	}
-	if err := a.Cooldown.Validate(); err != nil {
-		return err
+	// An empty cooloff is how a caller asks for the stored one to be cleared, so it
+	// must not be rejected as a malformed duration. Without this, wiring this
+	// validation into the update path — a reasonable hardening — would make
+	// clearing a cooloff impossible again.
+	if !a.Cooldown.IsEmpty() {
+		if err := a.Cooldown.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
