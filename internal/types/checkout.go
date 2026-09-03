@@ -38,6 +38,24 @@ func (s CheckoutStatus) Validate() error {
 	return nil
 }
 
+// ActiveCheckoutStatuses is the complement of IsTerminal, as a slice because the
+// repository builds SQL predicates from it. The same set is encoded in the partial
+// indexes on checkout_sessions, so adding a status needs a migration too.
+func ActiveCheckoutStatuses() []CheckoutStatus {
+	return []CheckoutStatus{CheckoutStatusInitiated, CheckoutStatusPending}
+}
+
+// IsTerminal reports whether the session has finished. Declared here because the set
+// was otherwise retyped by hand at every call site.
+func (s CheckoutStatus) IsTerminal() bool {
+	switch s {
+	case CheckoutStatusCompleted, CheckoutStatusFailed, CheckoutStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 type CheckoutAction string
 
 const (
@@ -113,18 +131,31 @@ func CheckoutProviderFromGateway(g PaymentGatewayType) (CheckoutPaymentProvider,
 	}
 }
 
-// SessionExpiry returns the default lifetime for a checkout session with this provider.
-func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
+// LinkExpiry is how long the provider-hosted payment object stays payable. Sent to
+// the provider at creation, so the gateway stops accepting payments at a known time.
+func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 	switch p {
 	case CheckoutPaymentProviderRazorpay:
-		return 15 * time.Minute
-	case CheckoutPaymentProviderChargebee:
-		// Chargebee hosted pages live 5 days and payment_intents 30 min. We pin the
-		// shorter of the two so an abandoned session dies before the intent's fund hold does.
-		return 30 * time.Minute
+		// Razorpay's floor is 15m, checked on receipt — asking for exactly 15 arrives
+		// under it. Leave headroom rather than race the boundary.
+		return 20 * time.Minute
 	default:
-		return 30 * time.Minute // Default to 30 minutes
+		return 30 * time.Minute
 	}
+}
+
+// SessionGrace is how long the session outlives the provider link. The gateway must
+// close first: once the link is dead no new payment can start, so this window only
+// covers a payment already in flight. Without it we tear the drafts down under a slow
+// payer and their payment lands on an expired session, where the only outcome is a refund.
+func (p CheckoutPaymentProvider) SessionGrace() time.Duration {
+	return 5 * time.Minute
+}
+
+// SessionExpiry is the link's lifetime plus the grace window, derived from LinkExpiry
+// so the two cannot drift apart.
+func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
+	return p.LinkExpiry() + p.SessionGrace()
 }
 
 type PaymentActionType string

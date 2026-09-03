@@ -16,7 +16,6 @@ import (
 	transactionModel "github.com/chargebee/chargebee-go/v3/models/transaction"
 	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 	"github.com/flexprice/flexprice/internal/api/dto"
-	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
@@ -209,10 +208,8 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 
 func (s *ChargebeeWebhookCheckoutSuite) seedSession(status types.CheckoutStatus) *dto.CheckoutSessionResponse {
 	session := &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{
-			ID:             "cs_001",
-			CheckoutStatus: status,
-		},
+		ID:             "cs_001",
+		CheckoutStatus: status,
 	}
 	s.checkoutSvc.session = session
 	return session

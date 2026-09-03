@@ -96,16 +96,19 @@ const (
 	PrefixWorkflowExecution        = "workflow_execution:v1:"
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
-	PrefixPriceSyncLock             = "price_sync:plan:"
-	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
+	PrefixPriceSyncLock              = "price_sync:plan:"
+	PrefixRazorpayWebhookRefundLock  = "razorpay:webhook-refund:"
 	PrefixChargebeeWebhookRefundLock = "chargebee:webhook-refund:"
 	PrefixTabsInvoiceSyncLock        = "tabs:invoice_sync:"
 	// PrefixStripeCustomerSyncLock guards first-time Stripe customer creation for a
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
-	PrefixPublishedConnections   = "published_connections:"
-	PrefixMeterFeature           = "meter:feature:v1:"
+	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
+	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
+	PrefixCheckoutPollLock     = "checkout:poll:"
+	PrefixPublishedConnections = "published_connections:"
+	PrefixMeterFeature         = "meter:feature:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

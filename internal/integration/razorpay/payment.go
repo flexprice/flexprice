@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/types/integrations"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -319,6 +320,17 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		"notes":           notes,
 	}
 
+	// expire_by closes the link at a known time so the session can outlive it.
+	if req.ExpiresAt != nil {
+		expireBy := *req.ExpiresAt
+		// Clamp past the floor, not onto it: Razorpay checks the bound on receipt, so a
+		// timestamp sitting exactly on it is already stale by then.
+		if minExpireBy := time.Now().UTC().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
+			expireBy = minExpireBy
+		}
+		paymentLinkData["expire_by"] = expireBy.Unix()
+	}
+
 	// Razorpay only supports a single callback_url (unlike Stripe's success_url and cancel_url)
 	// The customer will be redirected to this URL after completing OR cancelling the payment
 	// Use callback_method: "get" as required by Razorpay for payment links
@@ -393,6 +405,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 			"payment_link_id", paymentLinkID)
 	}
 
+	var expiresAt *time.Time
+	if expireByFloat, ok := razorpayPaymentLink["expire_by"].(float64); ok && expireByFloat > 0 {
+		t := time.Unix(int64(expireByFloat), 0).UTC()
+		expiresAt = &t
+	}
+
 	response := &RazorpayPaymentLinkResponse{
 		ID:         paymentLinkID,
 		PaymentURL: paymentLinkURL,
@@ -401,6 +419,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		Status:     status,
 		CreatedAt:  createdAt,
 		PaymentID:  req.PaymentID,
+		ExpiresAt:  expiresAt,
 	}
 
 	s.logger.Info(ctx, "successfully created razorpay payment link",
@@ -1171,6 +1190,100 @@ func (s *PaymentService) GetPaymentLinkStatus(ctx context.Context, paymentLinkID
 				out.RazorpayPaymentID = id
 				break
 			}
+		}
+	}
+	return out, nil
+}
+
+// InvoiceStatus is the outcome of fetching a Razorpay invoice (inv_xxx), used on
+// the mandate-authorization checkout path.
+type InvoiceStatus struct {
+	// Status is the Razorpay-native invoice status:
+	// "draft" | "issued" | "partially_paid" | "paid" | "cancelled" | "expired" | "deleted".
+	Status string
+	// RazorpayPaymentID is the pay_xxx recorded against the invoice, empty until paid.
+	RazorpayPaymentID string
+}
+
+// GetInvoiceStatus returns a Razorpay invoice's status plus the pay_xxx it carries.
+// The invoice exposes payment_id directly, so unlike orders this needs no second call.
+func (s *PaymentService) GetInvoiceStatus(ctx context.Context, invoiceID string) (*InvoiceStatus, error) {
+	if invoiceID == "" {
+		return nil, ierr.NewError("razorpay invoice_id is required").Mark(ierr.ErrValidation)
+	}
+	result, err := s.client.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	status, ok := result["status"].(string)
+	if !ok || status == "" {
+		return nil, ierr.NewError("razorpay invoice status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay GetInvoice response").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_invoice_id": invoiceID,
+				"status":              result["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
+	out := &InvoiceStatus{Status: status}
+	if paymentID, ok := result["payment_id"].(string); ok {
+		out.RazorpayPaymentID = paymentID
+	}
+	return out, nil
+}
+
+// OrderStatus is the outcome of fetching a Razorpay order (order_xxx), used on the
+// saved-token charge path when a retry never saw the payment id.
+type OrderStatus struct {
+	// Status is the Razorpay-native order status: "created" | "attempted" | "paid".
+	Status string
+	// RazorpayPaymentID is the pay_xxx of the first captured payment on the order,
+	// empty when none has been captured.
+	RazorpayPaymentID string
+}
+
+// GetOrderStatus returns a Razorpay order's status, and once it reports paid resolves
+// the captured pay_xxx from its payments collection — the order itself carries no
+// payment id, so that second call is made only when it can return something.
+func (s *PaymentService) GetOrderStatus(ctx context.Context, orderID string) (*OrderStatus, error) {
+	if orderID == "" {
+		return nil, ierr.NewError("razorpay order_id is required").Mark(ierr.ErrValidation)
+	}
+	order, err := s.client.FetchOrder(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	status, ok := order["status"].(string)
+	if !ok || status == "" {
+		return nil, ierr.NewError("razorpay order status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay FetchOrder response").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_order_id": orderID,
+				"status":            order["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	out := &OrderStatus{Status: status}
+	if status != string(integrations.RazorpayOrderStatusPaid) {
+		return out, nil
+	}
+
+	// Best effort: the status is the answer we need, the payment id only a trace. A
+	// failure here must not discard a known-paid outcome.
+	payments, err := s.client.FetchOrderPayments(ctx, orderID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to resolve pay_xxx for paid Razorpay order",
+			"order_id", orderID, "error", err)
+		return out, nil
+	}
+	for _, pm := range payments {
+		if pStatus, _ := pm["status"].(string); pStatus != string(integrations.RazorpayPaymentStatusCaptured) {
+			continue
+		}
+		if id, ok := pm["id"].(string); ok && id != "" {
+			out.RazorpayPaymentID = id
+			break
 		}
 	}
 	return out, nil
