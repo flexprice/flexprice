@@ -73,7 +73,11 @@ func (s *checkoutSessionService) callCheckoutProvider(
 
 	// The link must close before the session does, so the grace window only covers a
 	// payment already in flight. See SessionGrace.
-	linkExpiresAt := time.Now().UTC().Add(session.PaymentProvider.LinkExpiry())
+	//
+	// Derived from the session's own deadline rather than from now: ExpiresAt was set
+	// when the request was parsed, so starting a fresh LinkExpiry window here would let
+	// the link outlive the session whenever fulfilment took longer than the grace.
+	linkExpiresAt := session.ExpiresAt.Add(-session.PaymentProvider.SessionGrace())
 
 	req := interfaces.CheckoutProviderRequest{
 		InvoiceID:  *session.CheckoutInvoiceID,

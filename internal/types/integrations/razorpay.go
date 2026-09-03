@@ -16,12 +16,20 @@ const (
 )
 
 // ToFlexpricePaymentStatus maps a Razorpay payment status to a FlexPrice PaymentStatus.
+// "created" and "authorized" are in flight rather than outcomes, so they return an
+// empty status with a nil error to signal "still pending, no transition" — matching the
+// payment link, invoice and order mappers below. Anything genuinely unrecognised is an
+// error, so a status Razorpay adds later cannot be silently read as pending.
 func (s RazorpayPaymentStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
 	switch s {
 	case RazorpayPaymentStatusCaptured:
 		return types.PaymentStatusSucceeded, nil
+	case RazorpayPaymentStatusRefunded:
+		return types.PaymentStatusRefunded, nil
 	case RazorpayPaymentStatusFailed:
 		return types.PaymentStatusFailed, nil
+	case RazorpayPaymentStatusCreated, RazorpayPaymentStatusAuthorized:
+		return "", nil
 	default:
 		return "", ierr.NewError("unmapped razorpay payment status").
 			WithReportableDetails(map[string]interface{}{

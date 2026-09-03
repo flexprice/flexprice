@@ -72,10 +72,7 @@ func (a *CheckoutAdapter) FetchPaymentState(
 		}
 		status, err := integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
 		if err != nil {
-			// "created" and "authorized" are in-flight, not outcomes.
-			a.Svc.logger.Debug(ctx, "razorpay payment status is not an outcome",
-				"razorpay_payment_id", paymentID, "status", rawStatus)
-			return &interfaces.PaymentState{GatewayPaymentID: paymentID}, nil
+			return nil, err
 		}
 		return &interfaces.PaymentState{Status: status, GatewayPaymentID: paymentID}, nil
 	}

@@ -727,3 +727,19 @@ func (s *CheckoutPollSuite) TestCreateResponse_CarriesPollingHints() {
 func (s *CheckoutPollSuite) TestChargebeeSessionDiesBeforeItsPaymentIntent() {
 	s.LessOrEqual(types.CheckoutPaymentProviderChargebee.SessionExpiry(), 30*time.Minute)
 }
+
+// The link must close before the session whatever fulfilment costs. Deriving the link
+// deadline from time.Now inside callCheckoutProvider would let a slow fulfilment push
+// it past the session, inverting the guarantee the grace window rests on.
+func (s *CheckoutPollSuite) TestLinkExpiryDerivesFromTheSessionDeadline() {
+	provider := types.CheckoutPaymentProviderRazorpay
+
+	// A session created a while ago, as a delayed fulfilment would see it.
+	sessionExpiresAt := time.Now().UTC().Add(-10 * time.Minute).Add(provider.SessionExpiry())
+	linkExpiresAt := sessionExpiresAt.Add(-provider.SessionGrace())
+
+	s.True(linkExpiresAt.Before(sessionExpiresAt),
+		"the link must close before the session even when fulfilment is slow")
+	s.Equal(provider.SessionGrace(), sessionExpiresAt.Sub(linkExpiresAt),
+		"the gap between them is exactly the grace window")
+}
