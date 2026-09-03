@@ -399,6 +399,15 @@ init-kafka:
 	echo "Error: Kafka failed to become ready after 10 attempts"; \
 	exit 1
 
+# Replay a dead-letter topic back to origin. Dry-run first, then drop DRY_RUN.
+#   make dlq-replay SOURCE=staging_events_dlq
+#   make dlq-replay SOURCE=production_event_processing_dlq DRY_RUN=
+.PHONY: dlq-replay
+DRY_RUN ?= --dry-run
+dlq-replay:
+	@if [ -z "$(SOURCE)" ]; then echo "usage: make dlq-replay SOURCE=<dlq-topic> [DRY_RUN=]"; exit 1; fi
+	go run ./cmd/dlq replay --source $(SOURCE) $(DRY_RUN)
+
 # Clean all docker containers and volumes related to the project
 .PHONY: clean-docker
 clean-docker:

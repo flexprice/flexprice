@@ -705,6 +705,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildDraftAndComputeSubscriptionInvoiceInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessRawEventsWorkflow:
 		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalReplayDLQWorkflow:
+		// DLQ replay is cross-tenant infra: no tenant/env scoping. The caller
+		// already built the full workflow-input map; pass it through.
+		return params, nil
 	case types.TemporalEnvironmentCloneWorkflow:
 		return s.buildEnvironmentCloneInput(ctx, tenantID, environmentID, userID, params)
 	default:
