@@ -24,6 +24,11 @@ import (
 // hard minimum requirement.
 const razorpayMinExpireByBuffer = 15 * time.Minute
 
+// razorpayExpireBySafetyMargin is added when clamping to razorpayMinExpireByBuffer,
+// since Razorpay checks the bound on receipt and a timestamp landing exactly on the
+// floor arrives under it.
+const razorpayExpireBySafetyMargin = 2 * time.Minute
+
 // autoChargeLockTTL is the Redis distributed lock TTL for auto-charge operations.
 // Set longer than a typical HTTP timeout since gateway errors are treated as
 // ambiguous (network timeout vs. definitive failure can't be reliably told apart).

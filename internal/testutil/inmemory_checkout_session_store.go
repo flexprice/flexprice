@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -12,6 +13,11 @@ import (
 // InMemoryCheckoutSessionStore implements domainCheckout.Repository for tests.
 type InMemoryCheckoutSessionStore struct {
 	*InMemoryStore[*domainCheckout.CheckoutSession]
+
+	// claimMu makes MarkCompleted atomic. The real repository claims a session with a
+	// conditional UPDATE, so a double that read, checked and wrote without a lock would
+	// let two callers both win the claim — the opposite of what it stands in for.
+	claimMu sync.Mutex
 }
 
 func NewInMemoryCheckoutSessionStore() *InMemoryCheckoutSessionStore {
@@ -37,7 +43,14 @@ func (s *InMemoryCheckoutSessionStore) Create(ctx context.Context, session *doma
 }
 
 func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*domainCheckout.CheckoutSession, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	stored, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Hand back a copy. The real repository returns a fresh row per read, and callers
+	// mutate what they read; sharing the stored pointer races every concurrent reader.
+	session := *stored
+	return &session, nil
 }
 
 func (s *InMemoryCheckoutSessionStore) Update(ctx context.Context, session *domainCheckout.CheckoutSession) error {
@@ -145,7 +158,10 @@ func (s *InMemoryCheckoutSessionStore) Delete(ctx context.Context, id string) er
 }
 
 func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error) {
-	session, err := s.InMemoryStore.Get(ctx, sessionID)
+	s.claimMu.Lock()
+	defer s.claimMu.Unlock()
+
+	session, err := s.Get(ctx, sessionID)
 	if err != nil {
 		return false, err
 	}

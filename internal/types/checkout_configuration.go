@@ -279,6 +279,48 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
+// MergeOnto returns a copy of base with the non-empty fields of r overlaid. Callers
+// that learn only part of the result — a webhook knowing the payment id but not the
+// redirect action — pass a fragment; writing it straight to the column would drop the
+// NextAction and ProviderSessionID recorded at link creation. Either side may be nil.
+func (r *CheckoutProviderResult) MergeOnto(base *CheckoutProviderResult) *CheckoutProviderResult {
+	if r == nil {
+		return base
+	}
+	if base == nil {
+		return r
+	}
+
+	merged := *base
+	if r.NextAction != nil {
+		merged.NextAction = r.NextAction
+	}
+	if r.ProviderSessionID != "" {
+		merged.ProviderSessionID = r.ProviderSessionID
+	}
+	if r.ProviderPaymentIntentID != "" {
+		merged.ProviderPaymentIntentID = r.ProviderPaymentIntentID
+	}
+	if r.ExpiresAt != nil {
+		merged.ExpiresAt = r.ExpiresAt
+	}
+	if len(r.ProviderMetadata) > 0 {
+		if merged.ProviderMetadata == nil {
+			merged.ProviderMetadata = make(map[string]string, len(r.ProviderMetadata))
+		} else {
+			cloned := make(map[string]string, len(merged.ProviderMetadata)+len(r.ProviderMetadata))
+			for k, v := range merged.ProviderMetadata {
+				cloned[k] = v
+			}
+			merged.ProviderMetadata = cloned
+		}
+		for k, v := range r.ProviderMetadata {
+			merged.ProviderMetadata[k] = v
+		}
+	}
+	return &merged
+}
+
 func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	if r == nil {
 		return nil

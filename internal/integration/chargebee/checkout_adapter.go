@@ -269,3 +269,20 @@ func classifyTransaction(status transactionEnum.Status) transactionOutcome {
 		return transactionPending
 	}
 }
+
+// FetchPaymentState implements interfaces.CheckoutProvider. Not implemented —
+// Chargebee checkouts reconcile by webhook only, so a stale session waits for the
+// expiry sweep.
+//
+// To enable polling: interpret ProviderSessionID (a hosted page id, or an invoice id
+// on the authorization path), fetch that object, map its status onto
+// types.PaymentStatus (empty for non-terminal), and return the settling transaction id
+// as GatewayPaymentID. Nothing outside this adapter changes.
+func (a *CheckoutAdapter) FetchPaymentState(
+	ctx context.Context,
+	req interfaces.PaymentStateRequest,
+) (*interfaces.PaymentState, error) {
+	return nil, ierr.NewError("chargebee does not support checkout payment state reads").
+		WithHint("Chargebee checkout sessions are reconciled by webhook only").
+		Mark(ierr.ErrNotImplemented)
+}

@@ -30,7 +30,7 @@ type CheckoutSession struct {
 }
 
 func NewCheckoutSession(resp *dto.CheckoutSessionResponse) *CheckoutSession {
-	if resp == nil || resp.CheckoutSession == nil {
+	if resp == nil {
 		return nil
 	}
 	return &CheckoutSession{

@@ -22,6 +22,37 @@ type CheckoutProvider interface {
 	// registered instrument. charged=false means no usable method (caller should
 	// fall back to CreateAuthorizationLink). A hard provider error is returned as err.
 	TryAutoChargingSavedMethod(ctx context.Context, req AuthorizationLinkRequest) (resp *CheckoutProviderResponse, charged bool, err error)
+
+	// FetchPaymentState asks the provider what happened to a checkout's payment, so a
+	// session can be reconciled when the webhook was late, dropped, or errored.
+	//
+	// The handles are the ones this adapter produced at creation, and only it knows
+	// what kind of object each is, so interpreting them is the adapter's job.
+	// Providers without a read API return ierr.ErrNotImplemented.
+	FetchPaymentState(ctx context.Context, req PaymentStateRequest) (*PaymentState, error)
+}
+
+// PaymentStateRequest carries the provider handles recorded on the payment at
+// checkout creation. At least one is set, depending on provider and collection method.
+type PaymentStateRequest struct {
+	// GatewayPaymentID is the provider's payment id when known. Preferred by adapters:
+	// it is the object that actually settles.
+	GatewayPaymentID string
+	// GatewayTrackingID is the pre-payment handle — link, hosted page, invoice or
+	// order — that exists only to answer "has anyone paid yet?".
+	GatewayTrackingID string
+	// InvoiceID is the FlexPrice invoice being settled; some providers key lookups on
+	// it (Razorpay orders carry it as the receipt).
+	InvoiceID string
+}
+
+// PaymentState is what a provider reports about a checkout's payment right now.
+type PaymentState struct {
+	// Status is empty for a non-terminal state, meaning "still pending, no
+	// transition" — not a failure.
+	Status types.PaymentStatus
+	// GatewayPaymentID is the provider's payment id, empty before anyone has paid.
+	GatewayPaymentID string
 }
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.
@@ -35,6 +66,9 @@ type CheckoutProviderRequest struct {
 	FailureURL string
 	CancelURL  string
 	Metadata   map[string]string
+	// ExpiresAt is when the hosted object should stop accepting payments. Providers
+	// that cannot express this ignore it.
+	ExpiresAt *time.Time
 }
 
 // CheckoutProviderResponse is the unified output from all checkout provider adapters.

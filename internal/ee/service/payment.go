@@ -422,6 +422,14 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			p.PaymentStatus = types.PaymentStatusPending
 		}
 	}
+	if req.GatewayTrackingID != nil {
+		p.GatewayTrackingID = req.GatewayTrackingID
+		// A tracking handle means the gateway has something payable for this record,
+		// even on the paths where no payment id exists until the customer acts.
+		if p.PaymentStatus == types.PaymentStatusInitiated {
+			p.PaymentStatus = types.PaymentStatusPending
+		}
+	}
 	if req.PaymentMethodID != nil {
 		p.PaymentMethodID = *req.PaymentMethodID
 	}

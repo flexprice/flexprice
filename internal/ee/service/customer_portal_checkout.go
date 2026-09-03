@@ -13,7 +13,24 @@ func (s *customerPortalService) GetCheckoutSession(ctx context.Context, sessionI
 	if err != nil {
 		return nil, err
 	}
-	return toPortalCheckoutSession(dto.ToCheckoutSessionResponse(session)), nil
+
+	// This is the read a customer's browser sits on while the provider settles, so
+	// it carries the same read-triggered reconciliation as the tenant-facing GET: a
+	// lost webhook must not leave them watching a spinner. Never fails the read.
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.ServiceParams}
+	reconciled := checkoutSvc.refreshSessionFromGateway(ctx, session)
+	if reconciled.completed {
+		// Completion mutated the row; the copy above is behind it.
+		session, err = s.CheckoutSessionRepo.Get(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	resp := toPortalCheckoutSession(dto.ToCheckoutSessionResponse(session))
+	resp.Stale = reconciled.stale
+	resp.NextPollAfterMs = checkoutPollInterval(session).Milliseconds()
+	return resp, nil
 }
 
 // CancelCheckoutSession terminates an in-flight session.
@@ -51,22 +68,22 @@ func (s *customerPortalService) CancelCheckoutSession(ctx context.Context, sessi
 }
 
 func toPortalCheckoutSession(resp *dto.CheckoutSessionResponse) *dto.PortalCheckoutSessionResponse {
-	if resp == nil || resp.CheckoutSession == nil {
+	if resp == nil {
 		return nil
 	}
 
-	session := resp.CheckoutSession
-	gateway, _ := session.PaymentProvider.ToPaymentGateway()
+	gateway, _ := resp.PaymentProvider.ToPaymentGateway()
 	return &dto.PortalCheckoutSessionResponse{
-		ID:                session.ID,
-		CheckoutStatus:    session.CheckoutStatus,
+		Terminal:          resp.Terminal,
+		ID:                resp.ID,
+		CheckoutStatus:    resp.CheckoutStatus,
 		PaymentProvider:   gateway,
 		PaymentAction:     resp.PaymentAction,
-		CheckoutInvoiceID: session.CheckoutInvoiceID,
-		CheckoutPaymentID: session.CheckoutPaymentID,
-		ExpiresAt:         session.ExpiresAt,
-		CompletedAt:       session.CompletedAt,
-		CancelledAt:       session.CancelledAt,
-		FailureReason:     session.FailureReason,
+		CheckoutInvoiceID: resp.CheckoutInvoiceID,
+		CheckoutPaymentID: resp.CheckoutPaymentID,
+		ExpiresAt:         resp.ExpiresAt,
+		CompletedAt:       resp.CompletedAt,
+		CancelledAt:       resp.CancelledAt,
+		FailureReason:     resp.FailureReason,
 	}
 }
