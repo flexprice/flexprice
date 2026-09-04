@@ -126,26 +126,7 @@ func (s *customerPortalService) UpdateAutoTopup(ctx context.Context, walletID st
 
 	// Invoicing is pinned, never taken from the request: it selects the transaction
 	// reason and so decides whether credits are paid for at all.
-	// The portal submits the whole auto top-up form, so a cooloff the customer did
-	// not set means there is none — and that has to be said explicitly.
-	//
-	// UpdateWallet merges auto top-up field by field and only reads the cooloff
-	// when the pointer is non-nil. A JSON null unmarshals to nil, which is
-	// indistinguishable from the field being absent, so passing it straight through
-	// left the stored cooloff untouched: it could be set but never reset. An empty
-	// Duration is the merge's clear signal.
-	cooldown := req.Cooldown
-	if cooldown.IsEmpty() {
-		cooldown = &types.Duration{}
-	}
-
-	autoTopup := &types.AutoTopup{
-		Enabled:   lo.ToPtr(req.Enabled),
-		Threshold: req.Threshold,
-		Amount:    req.Amount,
-		Invoicing: lo.ToPtr(true),
-		Cooldown:  cooldown,
-	}
+	autoTopup := types.NewAutoTopup(req.Enabled, req.Threshold, req.Amount, true, req.Cooldown)
 
 	if req.Enabled {
 		if req.Amount == nil || req.Threshold == nil {

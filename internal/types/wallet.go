@@ -368,6 +368,24 @@ type AutoTopup struct {
 	Cooldown *Duration `json:"cooldown,omitempty"`
 }
 
+// NewAutoTopup builds an auto top-up config from a full form submission.
+//
+// A caller submitting the whole form expresses "no cooloff" as a nil or zero
+// Duration. UpdateWallet only reads the cooloff when the pointer is non-nil, so
+// nil would leave a stored one in place; an empty Duration is its clear signal.
+func NewAutoTopup(enabled bool, threshold, amount *decimal.Decimal, invoicing bool, cooldown *Duration) *AutoTopup {
+	if cooldown.IsEmpty() {
+		cooldown = &Duration{}
+	}
+	return &AutoTopup{
+		Enabled:   lo.ToPtr(enabled),
+		Threshold: threshold,
+		Amount:    amount,
+		Invoicing: lo.ToPtr(invoicing),
+		Cooldown:  cooldown,
+	}
+}
+
 func (a *AutoTopup) Validate() error {
 	if a.Threshold == nil {
 		return ierr.NewError("threshold is required").
@@ -384,14 +402,8 @@ func (a *AutoTopup) Validate() error {
 			WithHint("Invoicing boolean is required").
 			Mark(ierr.ErrValidation)
 	}
-	// An empty cooloff is how a caller asks for the stored one to be cleared, so it
-	// must not be rejected as a malformed duration. Without this, wiring this
-	// validation into the update path — a reasonable hardening — would make
-	// clearing a cooloff impossible again.
-	if !a.Cooldown.IsEmpty() {
-		if err := a.Cooldown.Validate(); err != nil {
-			return err
-		}
+	if err := a.Cooldown.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
