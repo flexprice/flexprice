@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -41,11 +42,11 @@ func TestFilterValidPricesForSubscription_IncludeIDsSemantics(t *testing.T) {
 	// Plan prices: one exact-cadence (quarterly), one divisor (monthly), one
 	// currency-mismatch, one ONETIME, one non-divisor (annual, on a quarterly sub).
 	prices := []*dto.PriceResponse{
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),      // exact match to sub
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),      // divisor (fan-out)
-		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1),      // divisor #2
-		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),      // always compatible
-		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),       // non-divisor for quarter
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1), // exact match to sub
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1), // divisor (fan-out)
+		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1), // divisor #2
+		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1), // always compatible
+		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),  // non-divisor for quarter
 	}
 	// Currency mismatch — should always be dropped regardless of includeIDs.
 	badCurrency := mkPrice("bc", types.BILLING_PERIOD_QUARTER, 1)
@@ -153,8 +154,8 @@ func TestFilterAddonPricesForSubscription_PreservesCompatSemantics(t *testing.T)
 	// Regression guard: addon path must keep divisor-compat acceptance so
 	// pre-existing addon tests (monthly-on-annual, etc.) still work.
 	prices := []*dto.PriceResponse{
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),  // divisor of annual
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),  // divisor of annual
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),   // divisor of annual
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),   // divisor of annual
 		mkPrice("h1", types.BILLING_PERIOD_HALF_YEAR, 1), // divisor of annual
 		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),
 	}
@@ -236,6 +237,42 @@ func TestValidateIncludePriceIDs_WrongCurrency(t *testing.T) {
 	}
 	if !containsAll(err.Error(), "m_eur", "wrong_currency") {
 		t.Fatalf("error should name the wrong-currency id and category; got: %v", err)
+	}
+}
+
+// Invariant: price.StartDate must be on or before the line item's start
+// (not the subscription's start). Comparing to sub.StartDate falsely
+// rejects mid-life addon attach / plan-change onto versioned prices.
+func TestValidatePriceStartNotAfterLineItem(t *testing.T) {
+	apr1 := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	aug31 := time.Date(2026, 8, 31, 20, 18, 14, 0, time.UTC)
+	dec1 := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+
+	late := &price.Price{ID: "p_after", StartDate: &aug31, DisplayName: "Monthly Flat Advance"}
+	if err := validatePriceStartNotAfterLineItem(late, apr1); err == nil {
+		t.Fatal("expected error when price starts after the line item")
+	} else if !containsAll(err.Error(), "p_after", "start_date") {
+		t.Fatalf("error should name the price and start_date; got: %v", err)
+	}
+
+	// Coverage starts at the addon/plan-change instant, after the price.
+	if err := validatePriceStartNotAfterLineItem(late, dec1); err != nil {
+		t.Fatalf("price that started before the line item must pass; got: %v", err)
+	}
+
+	equal := &price.Price{ID: "p_eq", StartDate: &apr1}
+	if err := validatePriceStartNotAfterLineItem(equal, apr1); err != nil {
+		t.Fatalf("equal start dates must pass; got: %v", err)
+	}
+
+	if err := validatePriceStartNotAfterLineItem(&price.Price{ID: "p_nil"}, apr1); err != nil {
+		t.Fatalf("nil price start (always effective) must pass; got: %v", err)
+	}
+	if err := validatePriceStartNotAfterLineItem(late, time.Time{}); err != nil {
+		t.Fatalf("zero line-item start must skip the check; got: %v", err)
+	}
+	if err := validatePriceStartNotAfterLineItem(nil, apr1); err != nil {
+		t.Fatalf("nil price must skip the check; got: %v", err)
 	}
 }
 

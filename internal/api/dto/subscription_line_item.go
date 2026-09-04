@@ -544,11 +544,10 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		}
 	}
 
-	// Effective start = latest of subscription start, price start, and request start_date (when provided).
+	// Effective start = latest of subscription start and request start_date.
+	// Catalog price start is validated separately against this date; bumping
+	// here would hide a price that is not yet effective at coverage start.
 	startDate := params.Subscription.StartDate
-	if params.Price != nil && params.Price.StartDate != nil && params.Price.StartDate.After(startDate) {
-		startDate = lo.FromPtr(params.Price.StartDate)
-	}
 	if r.StartDate != nil && r.StartDate.After(startDate) {
 		startDate = lo.FromPtr(r.StartDate)
 	}

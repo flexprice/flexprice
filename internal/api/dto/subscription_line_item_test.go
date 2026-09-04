@@ -287,6 +287,39 @@ func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_QuantityDefaul
 	}
 }
 
+func TestToSubscriptionLineItem_StartDateIgnoresPriceStart(t *testing.T) {
+	ctx := context.Background()
+	subStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	priceStart := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	reqStart := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	params := LineItemParams{
+		Subscription: &SubscriptionResponse{
+			Subscription: &subscription.Subscription{
+				ID:         "sub_test",
+				CustomerID: "cust_test",
+				Currency:   "usd",
+				StartDate:  subStart,
+			},
+		},
+		Price: &PriceResponse{
+			Price: &price.Price{
+				Type:           types.PRICE_TYPE_FIXED,
+				BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence: types.InvoiceCadenceAdvance,
+				StartDate:      &priceStart,
+			},
+		},
+		EntityType: types.SubscriptionLineItemEntityTypeSubscription,
+	}
+
+	item := (&CreateSubscriptionLineItemRequest{PriceID: "p1"}).ToSubscriptionLineItem(ctx, params)
+	assert.True(t, item.StartDate.Equal(subStart), "catalog price start must not bump the line item; got %s", item.StartDate)
+
+	item = (&CreateSubscriptionLineItemRequest{PriceID: "p1", StartDate: &reqStart}).ToSubscriptionLineItem(ctx, params)
+	assert.True(t, item.StartDate.Equal(reqStart), "request start should win over sub start; got %s", item.StartDate)
+}
+
 func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
 	amount := decimal.NewFromInt(100)
 
