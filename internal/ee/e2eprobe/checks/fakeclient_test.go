@@ -495,6 +495,12 @@ type fakeEvents struct {
 	anaErr    error
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
 	analyticsItems []types.UsageAnalyticItem
+
+	// analyticsEcho makes GetUsageAnalytics append an item whose points carry
+	// the timestamps of the events ingested so far — the shape a real bucketed
+	// meter read has. Any analyticsItems are returned ahead of it, so a test can
+	// stand in a second subscription's item.
+	analyticsEcho bool
 	// listRawItems, when set, is returned in ListRaw responses. Otherwise
 	// ListRaw echoes back the ingested events that match the filter.
 	listRawItems []types.Event
@@ -514,10 +520,23 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyt
 	if f.anaErr != nil {
 		return nil, f.anaErr
 	}
-	if len(f.analyticsItems) > 0 {
+	items := f.analyticsItems
+	if f.analyticsEcho {
+		points := make([]types.UsageAnalyticPoint, 0, len(f.ingested))
+		for _, ev := range f.ingested {
+			if ev.Timestamp == nil {
+				continue
+			}
+			ts := *ev.Timestamp
+			points = append(points, types.UsageAnalyticPoint{Timestamp: &ts})
+		}
+		items = append(append([]types.UsageAnalyticItem{}, items...),
+			types.UsageAnalyticItem{Points: points})
+	}
+	if len(items) > 0 {
 		return &dtos.GetUsageAnalyticsResponse{
 			GetUsageAnalyticsResponse: &types.GetUsageAnalyticsResponse{
-				Items: f.analyticsItems,
+				Items: items,
 			},
 		}, nil
 	}
