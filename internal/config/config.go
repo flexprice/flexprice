@@ -126,13 +126,6 @@ type S3Config struct {
 	Enabled             bool         `mapstructure:"enabled" validate:"required"`
 	Region              string       `mapstructure:"region" validate:"required"`
 	InvoiceBucketConfig BucketConfig `mapstructure:"invoice" validate:"required"`
-	// EndpointURL, UsePathStyle and the static keys point the platform buckets at
-	// an S3-compatible server instead of AWS — MinIO in local dev. Real deployments
-	// leave all four empty and resolve credentials through the ambient chain.
-	EndpointURL        string `mapstructure:"endpoint_url" validate:"omitempty"`
-	UsePathStyle       bool   `mapstructure:"use_path_style" default:"false"`
-	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"omitempty"`
-	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"omitempty"`
 }
 
 type BucketConfig struct {

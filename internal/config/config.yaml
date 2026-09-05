@@ -379,12 +379,6 @@ s3:
     bucket: "flexprice-invoices"
     presign_expiry_duration: "1h"
     key_prefix: ""
-  # Point the platform buckets at an S3-compatible server (MinIO in local dev).
-  # Empty everywhere else — AWS is addressed virtual-host style with ambient creds.
-  endpoint_url: "" # Set via FLEXPRICE_S3_ENDPOINT_URL (e.g. http://localhost:9000)
-  use_path_style: false # Set via FLEXPRICE_S3_USE_PATH_STYLE — required for MinIO
-  aws_access_key_id: "" # Set via FLEXPRICE_S3_AWS_ACCESS_KEY_ID
-  aws_secret_access_key: "" # Set via FLEXPRICE_S3_AWS_SECRET_ACCESS_KEY
 
 storage:
   # provider: "" auto-detects via CloudDetector (GCP metadata -> gcs, AWS metadata -> s3).

@@ -79,26 +79,6 @@ services:
       timeout: 3s
       retries: 30
 
-  # S3-compatible storage for invoice PDFs.
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "127.0.0.1:9100:9000"
-      - "127.0.0.1:9101:9001"
-    environment:
-      MINIO_ROOT_USER: flexprice
-      MINIO_ROOT_PASSWORD: flexprice123
-    # A bucket is just a directory on the data volume, so creating it before the
-    # server starts saves an init container and needs no client round-trip.
-    entrypoint: ["/bin/sh", "-c", "mkdir -p /data/flexprice-invoices && exec minio server /data --console-address :9001"]
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:main
     profiles:
@@ -265,4 +245,3 @@ volumes:
   kafka-data:
   clickhouse-data:
   redis-data:
-  minio-data:
