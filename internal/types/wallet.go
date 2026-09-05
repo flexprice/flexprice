@@ -384,14 +384,12 @@ func NewAutoTopup(enabled bool, threshold, amount *decimal.Decimal, invoicing bo
 	}
 }
 
-// autoTopupBuilder copies an existing config and applies field updates.
 type autoTopupBuilder struct {
 	autoTopup *AutoTopup
 }
 
-// NewAutoTopupBuilder returns a builder seeded from an existing config, or an
-// empty one when nil. Every setter ignores a nil argument, so a partial request
-// only overwrites the fields it actually carries.
+// NewAutoTopupBuilder seeds a builder from an existing config. Every setter
+// ignores a nil argument, so a partial request only overwrites what it carries.
 func NewAutoTopupBuilder(a *AutoTopup) *autoTopupBuilder {
 	if a == nil {
 		return &autoTopupBuilder{autoTopup: &AutoTopup{}}
@@ -446,8 +444,7 @@ func (b *autoTopupBuilder) WithCooldown(cooldown *Duration) *autoTopupBuilder {
 	return b
 }
 
-// WithAutoTopup applies every field of another config, honouring the nil and
-// empty rules of the individual setters.
+// WithAutoTopup applies every field of another config through the setters above.
 func (b *autoTopupBuilder) WithAutoTopup(a *AutoTopup) *autoTopupBuilder {
 	if b == nil || a == nil {
 		return b
