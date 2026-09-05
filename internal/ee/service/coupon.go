@@ -42,6 +42,19 @@ func (s *couponService) CreateCoupon(ctx context.Context, req dto.CreateCouponRe
 
 	c := req.ToCoupon(ctx)
 
+	// A fixed-amount coupon carries a currency and is matched against the subscription's,
+	// so one in an unsupported currency would silently never apply.
+	if c.Currency != "" {
+		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+		ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+		if err != nil {
+			return nil, err
+		}
+		if err := ccCfg.EnforceCurrency(c.Currency); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.CouponRepo.Create(ctx, c); err != nil {
 		return nil, err
 	}

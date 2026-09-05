@@ -44,6 +44,9 @@ type Invoice struct {
 	// amount_paid is the amount that has already been paid towards this invoice
 	AmountPaid decimal.Decimal `json:"amount_paid" swaggertype:"string"`
 
+	// custom_currency is the custom-currency equivalent; Currency itself is always fiat
+	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -182,6 +185,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Currency:               e.Currency,
 		AmountDue:              e.AmountDue,
 		AmountPaid:             e.AmountPaid,
+		CustomCurrency:         e.CustomCurrency,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
@@ -289,6 +293,82 @@ func (i *Invoice) Validate() error {
 	}
 
 	return nil
+}
+
+// DenominationCurrency is the currency money math runs in: the custom currency when set,
+// the invoice's fiat currency otherwise.
+func (i *Invoice) DenominationCurrency() string {
+	if i.CustomCurrency != nil {
+		return i.CustomCurrency.Code
+	}
+	return i.Currency
+}
+
+// CaptureCustomCurrencyDenomination snapshots the computed amounts as the denomination, then
+// projects the fiat columns from it. Compute runs the pricing, coupon and discount
+// pipeline in the subscription's currency; this is where that becomes explicit.
+func (i *Invoice) CaptureCustomCurrencyDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	cc.Subtotal = i.Subtotal
+	cc.TotalDiscount = i.TotalDiscount
+	cc.TotalTax = i.TotalTax
+	cc.TotalPrepaidCreditsApplied = i.TotalPrepaidCreditsApplied
+	cc.Total = i.Total
+	cc.AmountDue = i.AmountDue
+
+	for _, item := range i.LineItems {
+		item.CustomCurrency = &types.CustomCurrencyLineItem{
+			Amount:                item.Amount,
+			LineItemDiscount:      item.LineItemDiscount,
+			InvoiceLevelDiscount:  item.InvoiceLevelDiscount,
+			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
+		}
+	}
+
+	i.ProjectCustomCurrency()
+}
+
+// MirrorTaxIntoDenomination divides the tax totals back into the denomination. Tax is the one
+// amount computed in fiat, so capture cannot be used — it copies. Keeps the denomination's
+// AmountDue post-tax, matching the invoice's.
+func (i *Invoice) MirrorTaxIntoDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	cc.TotalTax = cc.FromFiat(i.TotalTax)
+	cc.Total = cc.FromFiat(i.Total)
+	cc.AmountDue = cc.Total
+}
+
+// ProjectCustomCurrency recomputes the fiat amount columns from the denomination. Runs at
+// compute with the live rate and at finalization with the frozen one.
+func (i *Invoice) ProjectCustomCurrency() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	i.Subtotal = cc.ToFiat(cc.Subtotal, i.Currency)
+	i.TotalDiscount = cc.ToFiat(cc.TotalDiscount, i.Currency)
+	i.TotalTax = cc.ToFiat(cc.TotalTax, i.Currency)
+	i.TotalPrepaidCreditsApplied = cc.ToFiat(cc.TotalPrepaidCreditsApplied, i.Currency)
+	i.Total = cc.ToFiat(cc.Total, i.Currency)
+	i.AmountDue = cc.ToFiat(cc.AmountDue, i.Currency)
+
+	i.AmountRemaining = i.AmountDue.Sub(i.AmountPaid)
+	if i.AmountRemaining.IsNegative() {
+		i.AmountRemaining = decimal.Zero
+	}
+
+	for _, item := range i.LineItems {
+		item.ProjectCustomCurrency(cc, i.Currency)
+	}
 }
 
 // PendingProviderInvoice is a lightweight projection of a finalized+unpaid invoice

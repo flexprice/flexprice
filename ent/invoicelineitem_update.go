@@ -243,6 +243,18 @@ func (iliu *InvoiceLineItemUpdate) ClearAdjustedEntitlementQuantity() *InvoiceLi
 	return iliu
 }
 
+// SetCustomCurrency sets the "custom_currency" field.
+func (iliu *InvoiceLineItemUpdate) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemUpdate {
+	iliu.mutation.SetCustomCurrency(tcli)
+	return iliu
+}
+
+// ClearCustomCurrency clears the value of the "custom_currency" field.
+func (iliu *InvoiceLineItemUpdate) ClearCustomCurrency() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearCustomCurrency()
+	return iliu
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (iliu *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
 	iliu.mutation.AddCouponApplicationIDs(ids...)
@@ -453,6 +465,12 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if iliu.mutation.ParentLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
+	}
+	if value, ok := iliu.mutation.CustomCurrency(); ok {
+		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
+	}
+	if iliu.mutation.CustomCurrencyCleared() {
+		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
 	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -731,6 +749,18 @@ func (iliuo *InvoiceLineItemUpdateOne) ClearAdjustedEntitlementQuantity() *Invoi
 	return iliuo
 }
 
+// SetCustomCurrency sets the "custom_currency" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetCustomCurrency(tcli)
+	return iliuo
+}
+
+// ClearCustomCurrency clears the value of the "custom_currency" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearCustomCurrency() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearCustomCurrency()
+	return iliuo
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (iliuo *InvoiceLineItemUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
 	iliuo.mutation.AddCouponApplicationIDs(ids...)
@@ -971,6 +1001,12 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.ParentLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
+	}
+	if value, ok := iliuo.mutation.CustomCurrency(); ok {
+		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
+	}
+	if iliuo.mutation.CustomCurrencyCleared() {
+		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

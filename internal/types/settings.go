@@ -36,6 +36,7 @@ const (
 	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 	SettingKeySAMLConfig                  SettingKey = "saml_config"
 	SettingKeyWalletTopupConfig           SettingKey = "wallet_topup_config"
+	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -58,6 +59,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyDraftInvoiceRecomputeConfig,
 		SettingKeySAMLConfig,
 		SettingKeyWalletTopupConfig,
+		SettingKeyCustomCurrencyConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -864,6 +866,14 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultWalletTopupConfigMap,
 			Description:  "Guard rails for wallet top-up operations (e.g. free credit limit per transaction)",
 		},
+		SettingKeyCustomCurrencyConfig: {
+			Key: SettingKeyCustomCurrencyConfig,
+			DefaultValue: map[string]interface{}{
+				"custom_currencies":     map[string]interface{}{},
+				"default_fiat_currency": "",
+			},
+			Description: "Tenant-defined custom currencies and their fiat conversion factors. Empty means no enforcement",
+		},
 	}, nil
 }
 
@@ -1010,6 +1020,10 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			return err
 		}
 		return config.Validate()
+
+	case SettingKeyCustomCurrencyConfig:
+		// Lenient here: a partial update fragment may omit required fields the merged result already has.
+		return nil
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).

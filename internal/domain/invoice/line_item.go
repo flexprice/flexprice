@@ -57,6 +57,10 @@ type InvoiceLineItem struct {
 	// an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
 
+	// custom_currency holds this line item's amounts in the tenant's custom currency.
+	// The fields above are fiat projections of it; nil for fiat invoices.
+	CustomCurrency *types.CustomCurrencyLineItem `json:"custom_currency,omitempty"`
+
 	types.BaseModel
 }
 
@@ -96,6 +100,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
 		SubscriptionLineItemID:      e.SubscriptionLineItemID,
 		ParentLineItemID:            e.ParentLineItemID,
+		CustomCurrency:              e.CustomCurrency,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -105,6 +110,43 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 			UpdatedAt: e.UpdatedAt,
 		},
 	}
+}
+
+// Denomination returns the amounts money math operates on: the custom-currency values
+// when present, the fiat fields otherwise. Read-only.
+func (i *InvoiceLineItem) Denomination() types.CustomCurrencyLineItem {
+	if i.CustomCurrency != nil {
+		return *i.CustomCurrency
+	}
+	return types.CustomCurrencyLineItem{
+		Amount:                i.Amount,
+		LineItemDiscount:      i.LineItemDiscount,
+		InvoiceLevelDiscount:  i.InvoiceLevelDiscount,
+		PrepaidCreditsApplied: i.PrepaidCreditsApplied,
+	}
+}
+
+// SetDenominationPrepaidCreditsApplied writes the applied credits into the field whose
+// currency they were drawn in. Its fiat counterpart follows from ProjectCustomCurrency.
+func (i *InvoiceLineItem) SetDenominationPrepaidCreditsApplied(applied decimal.Decimal) {
+	if i.CustomCurrency != nil {
+		i.CustomCurrency.PrepaidCreditsApplied = applied
+		return
+	}
+	i.PrepaidCreditsApplied = applied
+}
+
+// ProjectCustomCurrency recomputes the fiat amounts from the denomination at the invoice's rate.
+func (i *InvoiceLineItem) ProjectCustomCurrency(cc *types.CustomCurrency, fiatCurrency string) {
+	if i.CustomCurrency == nil || cc == nil {
+		return
+	}
+
+	i.Amount = cc.ToFiat(i.CustomCurrency.Amount, fiatCurrency)
+	i.LineItemDiscount = cc.ToFiat(i.CustomCurrency.LineItemDiscount, fiatCurrency)
+	i.InvoiceLevelDiscount = cc.ToFiat(i.CustomCurrency.InvoiceLevelDiscount, fiatCurrency)
+	i.PrepaidCreditsApplied = cc.ToFiat(i.CustomCurrency.PrepaidCreditsApplied, fiatCurrency)
+	i.Currency = fiatCurrency
 }
 
 // Validate validates the invoice line item

@@ -129,6 +129,9 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
+	// Loaded before the write so the by-key cache entry can be evicted too.
+	existing, getErr := r.Get(ctx, id)
+
 	r.log.Debug(ctx, "deleting setting",
 		"setting_id", id,
 		"tenant_id", types.GetTenantID(ctx),
@@ -161,6 +164,9 @@ func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
+	if getErr == nil {
+		r.DeleteCache(ctx, existing)
+	}
 	return nil
 }
 

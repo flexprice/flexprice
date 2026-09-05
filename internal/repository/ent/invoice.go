@@ -96,6 +96,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
+		SetCustomCurrency(inv.CustomCurrency).
 		Save(ctx)
 
 	if err != nil {
@@ -203,6 +204,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
+			SetCustomCurrency(inv.CustomCurrency).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -270,6 +272,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
 					SetCommitmentInfo(item.CommitmentInfo).
+					SetCustomCurrency(item.CustomCurrency).
 					SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 					SetLineItemDiscount(item.LineItemDiscount).
 					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -352,6 +355,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetCustomCurrency(item.CustomCurrency).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -572,6 +576,13 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetSubtotal(inv.Subtotal).
 		SetTotalDiscount(inv.TotalDiscount).
 		AddVersion(1) // Increment version atomically
+
+	// Never cleared: the denomination is written once at creation and is what every amount on
+	// the row was derived from. An update from a struct that did not load it would
+	// otherwise wipe it and leave the stored amounts unexplainable.
+	if inv.CustomCurrency != nil {
+		query.SetCustomCurrency(inv.CustomCurrency)
+	}
 
 	if inv.TaxExemptionReasonCode != nil {
 		query.SetTaxExemptionReasonCode(*inv.TaxExemptionReasonCode)

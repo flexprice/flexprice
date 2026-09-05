@@ -669,4 +669,7 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
 1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
 2. When updating "domain" entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
 3. Only add comments when some logic or definition is complex to understand or there is an edge case. Don't write comments on generic logic and easy to understand structs and methods.
+   - **Keep them short — one or two lines.** A comment says what a thing is for and what it does. It is not the place for rationale, alternatives considered, or background. A dev can read the code; a paragraph above every method makes the code harder to reach, not easier.
+   - No restating the code in prose, no "why not X" essays, no history of the change. If a decision genuinely needs explaining, it belongs in the design doc, not the file.
+   - Same rule for struct field comments and doc comments on exported methods.
 4. Logging: log only meaningful state changes, failures, and operational decisions, with the relevant IDs and error attached. `Warn` is reserved for bootstrap/setup code; use `Info` for a recovered/skipped condition and `Error` for a failure.

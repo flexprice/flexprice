@@ -14,10 +14,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -2309,4 +2311,657 @@ func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem 
 		PrepaidCreditsApplied: decimal.Zero,
 		LineItemDiscount:      decimal.Zero,
 	}
+}
+
+// seedCustomCurrencyConfig configures "mac" at 1 mac = 0.10 usd with usd as the
+// tenant's default fiat currency.
+func (s *InvoiceServiceSuite) seedCustomCurrencyConfig() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:                  "MoEngage AI Credits",
+				Symbol:                "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{"usd": decimal.NewFromFloat(0.1)},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.GetContext(), &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyCustomCurrencyConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+}
+
+// An invoice requested in a custom currency is denominated in the tenant's fiat
+// currency, carrying the custom-currency denomination alongside it.
+func (s *InvoiceServiceSuite) TestCreateDraftInvoice_CustomCurrencyBillsInFiat() {
+	s.seedCustomCurrencyConfig()
+
+	resp, err := s.service.CreateEmptyDraftInvoice(s.GetContext(), dto.CreateDraftInvoiceRequest{
+		CustomerID:  s.testData.customer.ID,
+		InvoiceType: types.InvoiceTypeOneOff,
+		Currency:    "mac",
+	})
+	s.NoError(err)
+	s.Equal("usd", resp.Currency, "invoice must be denominated in the tenant's fiat currency")
+	s.Require().NotNil(resp.CustomCurrency)
+	s.Equal("mac", resp.CustomCurrency.Code)
+	s.True(resp.CustomCurrency.Rate.Equal(decimal.NewFromFloat(0.1)),
+		"draft carries the live rate, got %s", resp.CustomCurrency.Rate)
+}
+
+// A plain fiat invoice is untouched — no denomination.
+func (s *InvoiceServiceSuite) TestCreateDraftInvoice_FiatCurrencyUnchanged() {
+	s.seedCustomCurrencyConfig()
+
+	resp, err := s.service.CreateEmptyDraftInvoice(s.GetContext(), dto.CreateDraftInvoiceRequest{
+		CustomerID:  s.testData.customer.ID,
+		InvoiceType: types.InvoiceTypeOneOff,
+		Currency:    "usd",
+	})
+	s.NoError(err)
+	s.Equal("usd", resp.Currency)
+	s.Nil(resp.CustomCurrency)
+}
+
+// A tenant with no custom currency configured is entirely unaffected.
+func (s *InvoiceServiceSuite) TestCreateDraftInvoice_UnconfiguredTenantUnaffected() {
+	resp, err := s.service.CreateEmptyDraftInvoice(s.GetContext(), dto.CreateDraftInvoiceRequest{
+		CustomerID:  s.testData.customer.ID,
+		InvoiceType: types.InvoiceTypeOneOff,
+		Currency:    "usd",
+	})
+	s.NoError(err)
+	s.Equal("usd", resp.Currency)
+	s.Nil(resp.CustomCurrency)
+}
+
+// A code is matched case-insensitively; config stores it lowercased.
+func (s *InvoiceServiceSuite) TestCreateDraftInvoice_CustomCurrencyCodeIsCaseInsensitive() {
+	s.seedCustomCurrencyConfig()
+
+	resp, err := s.service.CreateEmptyDraftInvoice(s.GetContext(), dto.CreateDraftInvoiceRequest{
+		CustomerID:  s.testData.customer.ID,
+		InvoiceType: types.InvoiceTypeOneOff,
+		Currency:    "MAC",
+	})
+	s.NoError(err)
+	s.Equal("usd", resp.Currency)
+	s.Require().NotNil(resp.CustomCurrency)
+	s.Equal("mac", resp.CustomCurrency.Code)
+}
+
+// customCurrencyDraft builds a draft whose denomination holds 15 units of code, projected
+// to fiat, split across two line items.
+func (s *InvoiceServiceSuite) customCurrencyDraft(code string, rate decimal.Decimal) *invoice.Invoice {
+	draft := &invoice.Invoice{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		InvoiceStatus: types.InvoiceStatusDraft,
+		PaymentStatus: types.PaymentStatusPending,
+		Currency:      "usd",
+		AmountPaid:    decimal.Zero,
+		CustomCurrency: &types.CustomCurrency{
+			Code:      code,
+			Rate:      rate,
+			Subtotal:  decimal.NewFromInt(15),
+			Total:     decimal.NewFromInt(15),
+			AmountDue: decimal.NewFromInt(15),
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+				CustomerID:     s.testData.customer.ID,
+				Quantity:       decimal.NewFromInt(1),
+				Currency:       "usd",
+				CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(10)},
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+				CustomerID:     s.testData.customer.ID,
+				Quantity:       decimal.NewFromInt(1),
+				Currency:       "usd",
+				CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(5)},
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
+	}
+	draft.ProjectCustomCurrency()
+	return draft
+}
+
+// Finalization freezes the rate and projects every fiat column from the denomination.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_FreezesRateAndProjectsLedger() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.Equal("usd", inv.Currency, "finalization must not move the invoice off fiat")
+	s.Require().NotNil(inv.CustomCurrency)
+	s.True(inv.CustomCurrency.Rate.Equal(decimal.NewFromFloat(0.1)),
+		"rate stored verbatim from config, got %s", inv.CustomCurrency.Rate)
+	s.True(inv.CustomCurrency.Subtotal.Equal(decimal.NewFromInt(15)),
+		"the denomination is untouched by conversion, got %s", inv.CustomCurrency.Subtotal)
+
+	// fiat = custom * rate, so 15 mac * 0.1 = 1.50 usd across every total.
+	s.True(inv.AmountDue.Equal(decimal.NewFromFloat(1.5)), "amount_due, got %s", inv.AmountDue)
+	s.True(inv.Total.Equal(decimal.NewFromFloat(1.5)), "total, got %s", inv.Total)
+	s.True(inv.Subtotal.Equal(decimal.NewFromFloat(1.5)), "subtotal, got %s", inv.Subtotal)
+	s.True(inv.AmountRemaining.Equal(decimal.NewFromFloat(1.5)), "amount_remaining, got %s", inv.AmountRemaining)
+}
+
+// Line items are fiat-denominated; the subtotal is summed from their denomination amounts.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_LineItemsAreFiatOverCustomLedger() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Require().Len(inv.LineItems, 2)
+
+	ledgerTotal := decimal.Zero
+	for _, item := range inv.LineItems {
+		s.Equal("usd", item.Currency, "line items are fiat so vendor sync is unaffected")
+		s.Require().NotNil(item.CustomCurrency)
+		ledgerTotal = ledgerTotal.Add(item.CustomCurrency.Amount)
+		s.True(item.Quantity.Equal(decimal.NewFromInt(1)), "quantity is a count and must not convert")
+
+		// The projected amount must be persisted, not just computed in memory.
+		projected := inv.CustomCurrency.ToFiat(item.CustomCurrency.Amount, inv.Currency)
+		s.True(item.Amount.Equal(projected),
+			"line item amount must be the projected fiat value, got %s want %s", item.Amount, projected)
+	}
+	s.True(ledgerTotal.Equal(inv.CustomCurrency.Subtotal),
+		"line item denomination sums to the denomination subtotal, got %s vs %s", ledgerTotal, inv.CustomCurrency.Subtotal)
+}
+
+// A rate frozen at finalization that differs from the one compute projected with must
+// restate the persisted line items, not just the invoice totals.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_ReprojectsLineItemsAtFrozenRate() {
+	s.seedCustomCurrencyConfig()
+
+	// Draft projected at 0.5; config says 0.1, so finalization must move the line items.
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.5))
+	draft.InvoiceType = types.InvoiceTypeSubscription
+	draft.BillingPeriod = lo.ToPtr(string(types.BILLING_PERIOD_MONTHLY))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.True(inv.CustomCurrency.Rate.Equal(decimal.NewFromFloat(0.1)), "rate reset from config, got %s", inv.CustomCurrency.Rate)
+
+	persisted, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Require().Len(persisted, 2)
+	for _, item := range persisted {
+		s.Require().NotNil(item.CustomCurrency)
+		projected := inv.CustomCurrency.ToFiat(item.CustomCurrency.Amount, inv.Currency)
+		s.True(item.Amount.Equal(projected),
+			"line item restated at the frozen rate, got %s want %s", item.Amount, projected)
+	}
+}
+
+// Without a factor there is no correct fiat amount, so finalization refuses.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_MissingConversionFactorFails() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("xyz", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+
+	err := s.service.FinalizeInvoice(s.GetContext(), draft.ID)
+	s.Error(err)
+	s.Contains(err.Error(), "conversion factor")
+}
+
+// A factor edited after finalization must not restate a sealed invoice.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_FrozenRateSurvivesConfigEdit() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:                  "MoEngage AI Credits",
+				Symbol:                "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{"usd": decimal.NewFromInt(1)},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	stored, err := s.GetStores().SettingsRepo.GetByKey(s.GetContext(), types.SettingKeyCustomCurrencyConfig)
+	s.NoError(err)
+	stored.Value = value
+	s.NoError(s.GetStores().SettingsRepo.Update(s.GetContext(), stored))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.True(inv.CustomCurrency.Rate.Equal(decimal.NewFromFloat(0.1)), "frozen rate, got %s", inv.CustomCurrency.Rate)
+	s.True(inv.AmountDue.Equal(decimal.NewFromFloat(1.5)), "amount stays at the sealed rate, got %s", inv.AmountDue)
+}
+
+// A custom amount too small to register in fiat rounds to zero and needs no collection.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_TinyCustomAmountRoundsToZeroFiat() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	draft.LineItems = nil
+	draft.CustomCurrency.Subtotal = decimal.NewFromFloat(0.01)
+	draft.CustomCurrency.Total = decimal.NewFromFloat(0.01)
+	draft.CustomCurrency.AmountDue = decimal.NewFromFloat(0.01)
+	draft.ProjectCustomCurrency()
+	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
+
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.True(inv.Total.IsZero(), "0.01 mac * 0.1 rounds below a cent, got %s", inv.Total)
+	s.Equal(types.PaymentStatusSucceeded, inv.PaymentStatus, "a zero-fiat total needs no collection")
+	s.True(inv.CustomCurrency.Subtotal.Equal(decimal.NewFromFloat(0.01)), "the denomination keeps the real amount")
+}
+
+// An invoice with no custom currency finalizes without gaining one.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_NoCustomCurrencyStaysNil() {
+	s.seedCustomCurrencyConfig()
+
+	draft := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		AmountRemaining: decimal.NewFromFloat(15),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
+
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Nil(inv.CustomCurrency)
+}
+
+// The denomination survives a write/read round trip; a dropped field here would silently
+// restate every amount at the next projection.
+func (s *InvoiceServiceSuite) TestCustomCurrencyLedgerSurvivesPersistence() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+
+	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Require().NotNil(inv.CustomCurrency)
+	s.Equal("mac", inv.CustomCurrency.Code)
+	s.Require().Len(inv.LineItems, 2)
+	for _, item := range inv.LineItems {
+		s.Require().NotNil(item.CustomCurrency, "line item denomination must round trip")
+		s.True(item.CustomCurrency.Amount.IsPositive())
+	}
+}
+
+// Projected line items are written through their own repository: InvoiceRepo.Update
+// writes the invoice row only, so without this the denomination and the projected fiat
+// amounts never reach the database.
+func (s *InvoiceServiceSuite) TestPersistProjectedLineItems() {
+	s.seedCustomCurrencyConfig()
+
+	inv := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	for _, item := range inv.LineItems {
+		item.InvoiceID = inv.ID
+		item.CustomCurrency = nil
+		s.NoError(s.GetStores().InvoiceLineItemRepo.Create(s.GetContext(), item))
+	}
+	inv.LineItems[0].Amount = decimal.NewFromInt(10)
+	inv.LineItems[1].Amount = decimal.NewFromInt(5)
+	inv.Subtotal = decimal.NewFromInt(15)
+	inv.Total = decimal.NewFromInt(15)
+	inv.AmountDue = decimal.NewFromInt(15)
+
+	inv.CaptureCustomCurrencyDenomination()
+	s.NoError(s.service.(*invoiceService).persistProjectedLineItems(s.GetContext(), inv))
+
+	persisted, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), inv.ID)
+	s.NoError(err)
+	s.Require().Len(persisted, 2)
+	for _, item := range persisted {
+		s.Require().NotNil(item.CustomCurrency, "the denomination must reach the database")
+	}
+	amounts := []string{persisted[0].Amount.String(), persisted[1].Amount.String()}
+	s.ElementsMatch([]string{"1", "0.5"}, amounts, "fiat amounts projected at the rate, got %v", amounts)
+}
+
+// A fiat invoice needs no line item rewrite.
+func (s *InvoiceServiceSuite) TestPersistProjectedLineItemsSkipsFiatInvoice() {
+	inv := &invoice.Invoice{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		Currency:  "usd",
+		LineItems: []*invoice.InvoiceLineItem{{ID: "missing_from_store", Amount: decimal.NewFromInt(10)}},
+	}
+	// The line item is not in the store, so any write would fail.
+	s.NoError(s.service.(*invoiceService).persistProjectedLineItems(s.GetContext(), inv))
+}
+
+// CaptureCustomCurrencyDenomination is the single point where compute's amounts, which are
+// denominated in the subscription's currency, become the denomination.
+func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationProjectsToFiat() {
+	inv := &invoice.Invoice{
+		Currency:       "usd",
+		Subtotal:       decimal.NewFromInt(15),
+		Total:          decimal.NewFromInt(15),
+		AmountDue:      decimal.NewFromInt(15),
+		CustomCurrency: &types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(0.1)},
+		LineItems: []*invoice.InvoiceLineItem{
+			{Amount: decimal.NewFromInt(10), Currency: "usd"},
+		},
+	}
+	inv.CaptureCustomCurrencyDenomination()
+
+	s.True(inv.CustomCurrency.Subtotal.Equal(decimal.NewFromInt(15)), "denomination keeps the computed amount")
+	s.True(inv.Subtotal.Equal(decimal.NewFromFloat(1.5)), "fiat is projected, got %s", inv.Subtotal)
+	s.Require().NotNil(inv.LineItems[0].CustomCurrency)
+	s.True(inv.LineItems[0].CustomCurrency.Amount.Equal(decimal.NewFromInt(10)))
+	s.True(inv.LineItems[0].Amount.Equal(decimal.NewFromInt(1)), "line item projected, got %s", inv.LineItems[0].Amount)
+}
+
+// A fiat invoice passes through capture untouched.
+func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationNoOpForFiat() {
+	inv := &invoice.Invoice{
+		Currency: "usd",
+		Subtotal: decimal.NewFromInt(15),
+		LineItems: []*invoice.InvoiceLineItem{
+			{Amount: decimal.NewFromInt(10), Currency: "usd"},
+		},
+	}
+	inv.CaptureCustomCurrencyDenomination()
+
+	s.Nil(inv.CustomCurrency)
+	s.True(inv.Subtotal.Equal(decimal.NewFromInt(15)))
+	s.Nil(inv.LineItems[0].CustomCurrency)
+}
+
+// Projection floors a negative remainder rather than reporting a credit.
+func (s *InvoiceServiceSuite) TestProjectCustomCurrencyFloorsAmountRemaining() {
+	inv := &invoice.Invoice{
+		Currency:       "usd",
+		AmountPaid:     decimal.NewFromInt(5),
+		CustomCurrency: &types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(0.1), AmountDue: decimal.NewFromInt(10)},
+	}
+	inv.ProjectCustomCurrency()
+
+	s.True(inv.AmountDue.Equal(decimal.NewFromInt(1)), "10 mac * 0.1, got %s", inv.AmountDue)
+	s.True(inv.AmountRemaining.IsZero(), "overpaid invoices report zero, got %s", inv.AmountRemaining)
+}
+
+// Denomination falls back to the fiat fields when there is no custom currency, so callers
+// need no nil handling of their own.
+func (s *InvoiceServiceSuite) TestLineItemLedgerFallsBackToFiatFields() {
+	item := &invoice.InvoiceLineItem{
+		Amount:                decimal.NewFromInt(10),
+		LineItemDiscount:      decimal.NewFromInt(2),
+		InvoiceLevelDiscount:  decimal.NewFromInt(1),
+		PrepaidCreditsApplied: decimal.NewFromInt(3),
+	}
+	denomination := item.Denomination()
+	s.True(denomination.Amount.Equal(decimal.NewFromInt(10)))
+	s.True(denomination.LineItemDiscount.Equal(decimal.NewFromInt(2)))
+	s.True(denomination.InvoiceLevelDiscount.Equal(decimal.NewFromInt(1)))
+	s.True(denomination.PrepaidCreditsApplied.Equal(decimal.NewFromInt(3)))
+
+	item.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(4))
+	s.True(item.PrepaidCreditsApplied.Equal(decimal.NewFromInt(4)), "writes land on the fiat field")
+	s.Nil(item.CustomCurrency)
+}
+
+// With a denomination present, Denomination reads it and writes go to it, leaving fiat untouched.
+func (s *InvoiceServiceSuite) TestLineItemLedgerPrefersCustomCurrency() {
+	item := &invoice.InvoiceLineItem{
+		Amount:         decimal.NewFromInt(1),
+		CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(10)},
+	}
+	s.True(item.Denomination().Amount.Equal(decimal.NewFromInt(10)))
+
+	item.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(4))
+	s.True(item.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(4)))
+	s.True(item.PrepaidCreditsApplied.IsZero(), "the fiat field is only written by projection")
+}
+
+// DenominationCurrency names the currency money math runs in.
+func (s *InvoiceServiceSuite) TestDenominationCurrency() {
+	fiat := &invoice.Invoice{Currency: "usd"}
+	s.Equal("usd", fiat.DenominationCurrency())
+
+	custom := &invoice.Invoice{Currency: "usd", CustomCurrency: &types.CustomCurrency{Code: "mac"}}
+	s.Equal("mac", custom.DenominationCurrency())
+}
+
+// Tax has no denomination form, so it is computed in fiat and restated. Preview and
+// finalization must reach the same numbers by the same route.
+func (s *InvoiceServiceSuite) TestMirrorTaxIntoDenomination() {
+	inv := &invoice.Invoice{
+		Currency:       "usd",
+		Total:          decimal.NewFromFloat(18242.5),
+		TotalTax:       decimal.NewFromFloat(868.69),
+		CustomCurrency: &types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(1.25)},
+	}
+	inv.MirrorTaxIntoDenomination()
+
+	s.True(inv.CustomCurrency.TotalTax.Equal(decimal.NewFromFloat(694.95)),
+		"868.69 / 1.25, got %s", inv.CustomCurrency.TotalTax)
+	s.True(inv.CustomCurrency.Total.Equal(decimal.NewFromInt(14594)),
+		"18242.50 / 1.25, got %s", inv.CustomCurrency.Total)
+	s.True(inv.CustomCurrency.AmountDue.Equal(inv.CustomCurrency.Total))
+}
+
+// A fiat invoice has no denomination to mirror into.
+func (s *InvoiceServiceSuite) TestMirrorTaxIntoDenominationNoOpForFiat() {
+	inv := &invoice.Invoice{Currency: "usd", TotalTax: decimal.NewFromInt(5)}
+	inv.MirrorTaxIntoDenomination()
+	s.Nil(inv.CustomCurrency)
+}
+
+// finalizedCustomInvoice persists a finalized fiat invoice whose denomination holds
+// macAmount, with one usage and one fixed line item.
+func (s *InvoiceServiceSuite) finalizedCustomInvoice(macAmount, amountPaid decimal.Decimal) *invoice.Invoice {
+	inv := &invoice.Invoice{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		Currency:      "usd",
+		AmountPaid:    amountPaid,
+		CustomCurrency: &types.CustomCurrency{
+			Code:      "mac",
+			Rate:      decimal.NewFromFloat(0.1),
+			Subtotal:  macAmount,
+			Total:     macAmount,
+			AmountDue: macAmount,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+				CustomerID:     s.testData.customer.ID,
+				PriceType:      lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				Quantity:       decimal.NewFromInt(1),
+				Currency:       "usd",
+				CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(40)},
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			},
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+				CustomerID:     s.testData.customer.ID,
+				PriceType:      lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				Quantity:       decimal.NewFromInt(1),
+				Currency:       "usd",
+				CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(10)},
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
+	}
+	inv.ProjectCustomCurrency()
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+	return inv
+}
+
+// A wallet in the custom currency matches the invoice through its denomination code and
+// sees amounts in its own terms.
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoices_CustomWalletMatchesLedgerCode() {
+	s.seedCustomCurrencyConfig()
+	s.finalizedCustomInvoice(decimal.NewFromInt(50), decimal.Zero)
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(s.GetContext(), dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: s.testData.customer.ID,
+		Currency:   "mac",
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Invoices, 1)
+	s.True(resp.TotalUnpaidAmount.Equal(decimal.NewFromInt(50)),
+		"amount due read from the denomination, not converted, got %s", resp.TotalUnpaidAmount)
+	s.True(resp.TotalUnpaidUsageCharges.Equal(decimal.NewFromInt(40)), "usage charges, got %s", resp.TotalUnpaidUsageCharges)
+	s.True(resp.TotalUnpaidFixedCharges.Equal(decimal.NewFromInt(10)), "fixed charges, got %s", resp.TotalUnpaidFixedCharges)
+}
+
+// The same invoice also matches a wallet in its fiat currency, reported in fiat.
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoices_FiatWalletSeesFiatAmounts() {
+	s.seedCustomCurrencyConfig()
+	s.finalizedCustomInvoice(decimal.NewFromInt(50), decimal.Zero)
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(s.GetContext(), dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: s.testData.customer.ID,
+		Currency:   "usd",
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Invoices, 1)
+	s.True(resp.TotalUnpaidAmount.Equal(decimal.NewFromInt(5)),
+		"50 mac * 0.1 = $5.00, got %s", resp.TotalUnpaidAmount)
+}
+
+// An unrelated currency matches neither the invoice currency nor its denomination code.
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoices_UnrelatedCurrencyMatchesNothing() {
+	s.seedCustomCurrencyConfig()
+	s.finalizedCustomInvoice(decimal.NewFromInt(50), decimal.Zero)
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(s.GetContext(), dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: s.testData.customer.ID,
+		Currency:   "eur",
+	})
+	s.NoError(err)
+	s.Empty(resp.Invoices)
+	s.True(resp.TotalUnpaidAmount.IsZero())
+}
+
+// A payment settled in fiat reduces what the denomination view reports as still owed.
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoices_PartialFiatPaymentReducesLedgerRemaining() {
+	s.seedCustomCurrencyConfig()
+	// 50 mac = $5.00; $2.00 paid leaves 30 mac owed.
+	s.finalizedCustomInvoice(decimal.NewFromInt(50), decimal.NewFromInt(2))
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(s.GetContext(), dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: s.testData.customer.ID,
+		Currency:   "mac",
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Invoices, 1)
+	s.True(resp.TotalUnpaidAmount.Equal(decimal.NewFromInt(30)),
+		"50 mac less the 20 mac equivalent of $2.00, got %s", resp.TotalUnpaidAmount)
+	s.True(resp.TotalPaidInvoiceAmount.Equal(decimal.NewFromInt(20)),
+		"paid amount restated in the denomination currency, got %s", resp.TotalPaidInvoiceAmount)
+}
+
+// A tenant with no custom currency is unaffected on this path.
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoices_FiatInvoiceUnaffected() {
+	inv := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromInt(5),
+		AmountRemaining: decimal.NewFromInt(5),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(s.GetContext(), dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: s.testData.customer.ID,
+		Currency:   "usd",
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Invoices, 1)
+	s.True(resp.TotalUnpaidAmount.Equal(decimal.NewFromInt(5)))
+}
+
+// The denomination is written once at creation. An update from a struct that never
+// loaded it must not wipe it, or the stored amounts lose what explains them.
+func (s *InvoiceServiceSuite) TestUpdatePreservesCustomCurrencyWhenNotLoaded() {
+	s.seedCustomCurrencyConfig()
+
+	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
+	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
+
+	stored, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Require().NotNil(stored.CustomCurrency)
+
+	// A caller that only touched payment fields, as UpdatePaymentStatus does.
+	stored.CustomCurrency = nil
+	stored.PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
+
+	reread, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
+	s.NoError(err)
+	s.Require().NotNil(reread.CustomCurrency, "the denomination must survive an unrelated update")
+	s.Equal("mac", reread.CustomCurrency.Code)
+}
+
+// SetDenominationPrepaidCreditsApplied puts the amount in the field whose currency it
+// was drawn in; the fiat column follows from projection, not from the setter.
+func (s *InvoiceServiceSuite) TestSetDenominationPrepaidCreditsApplied() {
+	custom := &invoice.InvoiceLineItem{
+		Currency:       "usd",
+		CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(80)},
+	}
+	custom.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(30))
+	s.True(custom.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)), "30 mac lands on the denomination")
+	s.True(custom.PrepaidCreditsApplied.IsZero(), "the setter does not convert")
+
+	custom.ProjectCustomCurrency(&types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(1.25)}, "usd")
+	s.True(custom.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(37.5)),
+		"30 mac * 1.25 = $37.50, got %s", custom.PrepaidCreditsApplied)
+
+	fiat := &invoice.InvoiceLineItem{Currency: "usd"}
+	fiat.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(30))
+	s.True(fiat.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)), "no denomination, so it lands on the fiat field")
+	s.Nil(fiat.CustomCurrency)
 }

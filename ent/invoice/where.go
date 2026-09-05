@@ -1674,6 +1674,16 @@ func TotalNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldTotal))
 }
 
+// CustomCurrencyIsNil applies the IsNil predicate on the "custom_currency" field.
+func CustomCurrencyIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldCustomCurrency))
+}
+
+// CustomCurrencyNotNil applies the NotNil predicate on the "custom_currency" field.
+func CustomCurrencyNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldCustomCurrency))
+}
+
 // DescriptionEQ applies the EQ predicate on the "description" field.
 func DescriptionEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDescription, v))

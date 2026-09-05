@@ -77,6 +77,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetMetadata(item.Metadata).
 		SetEnvironmentID(item.EnvironmentID).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetCustomCurrency(item.CustomCurrency).
 		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetNillableParentLineItemID(item.ParentLineItemID).
@@ -164,6 +165,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetMetadata(item.Metadata).
 				SetEnvironmentID(item.EnvironmentID).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetCustomCurrency(item.CustomCurrency).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableParentLineItemID(item.ParentLineItemID).
@@ -270,6 +272,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetCustomCurrency(item.CustomCurrency).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))

@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -119,6 +120,14 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 		}
 		if err := couponValidationService.ValidateCoupon(ctx, *coupon, nil); err != nil {
 			s.Logger.Error(ctx, "failed to validate coupon", "error", err, "coupon_id", couponID)
+			continue
+		}
+		// ValidateCoupon only checks currency when given a subscription, and there is none here.
+		if coupon.Currency != "" && !types.IsMatchingCurrency(coupon.Currency, req.Currency) {
+			s.Logger.Info(ctx, "skipping coupon - currency mismatch",
+				"coupon_id", couponID,
+				"coupon_currency", coupon.Currency,
+				"invoice_currency", req.Currency)
 			continue
 		}
 		validCoupons = append(validCoupons, dto.InvoiceCoupon{
@@ -278,6 +287,22 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 		inv.IdempotencyKey = &idempKey
 		inv.BillingSequence = billingSeq
 		inv.InvoiceStatus = types.InvoiceStatusDraft
+
+		// Entities bill in the custom currency, invoices in fiat. Amounts live in
+		// custom_currency; the fiat columns are projected from it.
+		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+		ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, txCtx, types.SettingKeyCustomCurrencyConfig)
+		if err != nil {
+			return err
+		}
+		code := strings.ToLower(req.Currency)
+		if ccCfg.IsCustom(code) {
+			inv.Currency = ccCfg.DefaultFiatCurrency
+			inv.CustomCurrency = &types.CustomCurrency{
+				Code: code,
+				Rate: ccCfg.RateFor(code, ccCfg.DefaultFiatCurrency),
+			}
+		}
 
 		// Validate invoice
 		if err := inv.Validate(); err != nil {
@@ -563,6 +588,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 					return err
 				}
 			}
+		}
+
+		// Snapshot the computed amounts as the denomination and project the fiat columns.
+		inv.CaptureCustomCurrencyDenomination()
+		if err := s.persistProjectedLineItems(txCtx, inv); err != nil {
+			return err
 		}
 
 		now := time.Now().UTC()
@@ -983,6 +1014,29 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			return ierr.NewError("invoice is not in draft status").WithHint("invoice was finalized concurrently").Mark(ierr.ErrValidation)
 		}
 
+		// A draft was projected at whatever the factor was when it was computed. Only a
+		// factor edited since then makes the stored line item amounts wrong.
+		rateChanged := false
+
+		// Freeze the rate first so every fiat column below uses the sealed rate.
+		if cc := lockedInv.CustomCurrency; cc != nil {
+			settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+			ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, txCtx, types.SettingKeyCustomCurrencyConfig)
+			if err != nil {
+				return err
+			}
+			rate := ccCfg.RateFor(cc.Code, lockedInv.Currency)
+			// No rate means no correct fiat amount; refuse rather than seal a wrong one.
+			if !rate.IsPositive() {
+				return ierr.NewErrorf("no conversion factor from %s to %s", cc.Code, lockedInv.Currency).
+					WithHintf("custom_currency_config must define a %s to %s conversion factor", cc.Code, lockedInv.Currency).
+					Mark(ierr.ErrValidation)
+			}
+			rateChanged = !cc.Rate.Equal(rate)
+			cc.Rate = rate
+			lockedInv.ProjectCustomCurrency()
+		}
+
 		// ====================================================================
 		// Apply prepaid credits and taxes for subscription invoices.
 		// One-off and credit invoices already have credits and taxes applied
@@ -1001,21 +1055,38 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 
 			if len(lockedInv.LineItems) > 0 {
 				// Apply credits — this debits wallets and updates line items
+				// Writes the applied total into whichever denomination it debited.
 				creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
-				creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(txCtx, lockedInv)
-				if err != nil {
+				if _, err := creditAdjustmentService.ApplyCreditsToInvoice(txCtx, lockedInv); err != nil {
 					return err
 				}
-				lockedInv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidCreditsApplied
 
-				// Recalculate total with credits applied
-				newTotal := lockedInv.Subtotal.Sub(lockedInv.TotalDiscount).Sub(lockedInv.TotalPrepaidCreditsApplied)
-				if newTotal.IsNegative() {
-					newTotal = decimal.Zero
+				// Recalculate total with credits applied, in the denomination currency
+				if cc := lockedInv.CustomCurrency; cc != nil {
+					cc.Total = cc.Subtotal.Sub(cc.TotalDiscount).Sub(cc.TotalPrepaidCreditsApplied)
+					if cc.Total.IsNegative() {
+						cc.Total = decimal.Zero
+					}
+					cc.AmountDue = cc.Total
+					lockedInv.ProjectCustomCurrency()
+
+					// ProjectCustomCurrency re-derives the line items from the same
+					// object, so they are never computed at a stale rate — but the
+					// rows only need rewriting when that rate actually moved.
+					if rateChanged {
+						if err := s.persistProjectedLineItems(txCtx, lockedInv); err != nil {
+							return err
+						}
+					}
+				} else {
+					newTotal := lockedInv.Subtotal.Sub(lockedInv.TotalDiscount).Sub(lockedInv.TotalPrepaidCreditsApplied)
+					if newTotal.IsNegative() {
+						newTotal = decimal.Zero
+					}
+					lockedInv.Total = newTotal
+					lockedInv.AmountDue = lockedInv.Total
+					lockedInv.AmountRemaining = lockedInv.Total.Sub(lockedInv.AmountPaid)
 				}
-				lockedInv.Total = newTotal
-				lockedInv.AmountDue = lockedInv.Total
-				lockedInv.AmountRemaining = lockedInv.Total.Sub(lockedInv.AmountPaid)
 
 				// Persist credit-adjusted totals before tax recalculation
 				if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
@@ -1026,6 +1097,8 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 				if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
 					return err
 				}
+				lockedInv.MirrorTaxIntoDenomination()
+
 			}
 		}
 
@@ -2059,7 +2132,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 			Mark(ierr.ErrValidation)
 	}
 
-	// Ledger freshness at the money moment: materialize any pending entitlement
+	// Denomination freshness at the money moment: materialize any pending entitlement
 	// grant overage (debounce gap) before charges are calculated. Idempotent;
 	// never blocks invoicing — worst case billing folds the last materialized
 	// values. Dep guard keeps partially-wired test services on the old path.
@@ -2147,10 +2220,17 @@ func (s *invoiceService) CreatePreviewInvoice(ctx context.Context, req dto.Creat
 		return dto.NewInvoiceResponse(inv), nil
 	}
 
+	// Amounts were built in the request's currency; a real invoice is fiat from here on,
+	// so tax is computed on the same amounts finalization would use.
+	if err := s.projectPreviewToFiat(ctx, inv); err != nil {
+		return nil, err
+	}
+
 	// Calculate, never apply: applying writes a tax_applied record per rate, and this
 	// invoice is never created.
 	result := taxSvc.CalculateTaxesOnInvoice(ctx, inv, rates)
 	applyTaxResultToInvoice(inv, result)
+	inv.MirrorTaxIntoDenomination()
 
 	response := dto.NewInvoiceResponse(inv)
 	response.WithTaxes(result.TaxAppliedRecords)
@@ -2235,11 +2315,18 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 		return nil, err
 	}
 
+	// Coupons ran in the subscription's currency; a real invoice is fiat from here on,
+	// so tax is computed on the same amounts finalization would use.
+	if err := s.projectPreviewToFiat(ctx, inv); err != nil {
+		return nil, err
+	}
+
 	// Calculate, never apply: applying writes a tax_applied record per rate, and this
 	// invoice is never created.
 	taxSvc := NewTaxService(s.ServiceParams)
 	result := taxSvc.CalculateTaxesOnInvoice(ctx, inv, invReq.PreparedTaxRates)
 	applyTaxResultToInvoice(inv, result)
+	inv.MirrorTaxIntoDenomination()
 
 	// Create preview response
 	response := dto.NewInvoiceResponse(inv)
@@ -2306,11 +2393,18 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 		return nil, err
 	}
 
+	// Coupons ran in the subscription's currency; a real invoice is fiat from here on,
+	// so tax is computed on the same amounts finalization would use.
+	if err := s.projectPreviewToFiat(ctx, inv); err != nil {
+		return nil, err
+	}
+
 	// Calculate, never apply: applying writes a tax_applied record per rate, and this
 	// invoice is never created.
 	taxSvc := NewTaxService(s.ServiceParams)
 	result := taxSvc.CalculateTaxesOnInvoice(ctx, inv, invReq.PreparedTaxRates)
 	applyTaxResultToInvoice(inv, result)
+	inv.MirrorTaxIntoDenomination()
 
 	// Create preview response
 	response := dto.NewInvoiceResponse(inv)
@@ -2472,8 +2566,9 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 			continue
 		}
 
-		// filter by currency
-		if !types.IsMatchingCurrency(inv.Currency, req.Currency) {
+		// A custom-currency invoice also matches a wallet in that custom currency.
+		inCustomCurrency := inv.CustomCurrency != nil && types.IsMatchingCurrency(inv.CustomCurrency.Code, req.Currency)
+		if !inCustomCurrency && !types.IsMatchingCurrency(inv.Currency, req.Currency) {
 			continue
 		}
 
@@ -2487,14 +2582,23 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		}
 
 		unpaidInvoices = append(unpaidInvoices, inv)
-		unpaidAmount = unpaidAmount.Add(inv.AmountRemaining)
-		totalInvoiceAmountPaid = totalInvoiceAmountPaid.Add(inv.AmountPaid)
+
+		remaining, paid := inv.AmountRemaining, inv.AmountPaid
+		if inCustomCurrency {
+			// amount_due on the denomination is post-tax, like the invoice's. Only the paid
+			// amount needs restating: payments settle in fiat and have no denomination form.
+			paid = inv.CustomCurrency.FromFiat(inv.AmountPaid)
+			remaining = inv.CustomCurrency.AmountDue.Sub(paid)
+		}
+		unpaidAmount = unpaidAmount.Add(remaining)
+		totalInvoiceAmountPaid = totalInvoiceAmountPaid.Add(paid)
 
 		for _, item := range inv.LineItems {
+			denomination := item.Denomination()
 			if lo.FromPtr(item.PriceType) == string(types.PRICE_TYPE_USAGE) {
-				unpaidUsageCharges = unpaidUsageCharges.Add(item.Amount).Sub(item.PrepaidCreditsApplied).Sub(item.LineItemDiscount)
+				unpaidUsageCharges = unpaidUsageCharges.Add(denomination.Amount).Sub(denomination.PrepaidCreditsApplied).Sub(denomination.LineItemDiscount)
 			} else {
-				unpaidFixedCharges = unpaidFixedCharges.Add(item.Amount)
+				unpaidFixedCharges = unpaidFixedCharges.Add(denomination.Amount)
 			}
 		}
 	}
@@ -3769,6 +3873,43 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 }
 
 // RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice.
+// persistProjectedLineItems writes line items whose fiat amounts were just projected
+// from the denomination. InvoiceRepo.Update writes only the invoice row.
+// projectPreviewToFiat restates a preview invoice the way a real one is stored: fiat
+// currency with the custom-currency denomination alongside.
+func (s *invoiceService) projectPreviewToFiat(ctx context.Context, inv *invoice.Invoice) error {
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+	if err != nil {
+		return err
+	}
+	if !ccCfg.IsCustom(inv.Currency) {
+		return nil
+	}
+
+	code := strings.ToLower(inv.Currency)
+	inv.Currency = ccCfg.DefaultFiatCurrency
+	inv.CustomCurrency = &types.CustomCurrency{
+		Code: code,
+		Rate: ccCfg.RateFor(code, ccCfg.DefaultFiatCurrency),
+	}
+	inv.CaptureCustomCurrencyDenomination()
+	return nil
+}
+
+func (s *invoiceService) persistProjectedLineItems(ctx context.Context, inv *invoice.Invoice) error {
+	if inv.CustomCurrency == nil {
+		return nil
+	}
+
+	for _, item := range inv.LineItems {
+		if err := s.InvoiceLineItemRepo.Update(ctx, item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
 	// Only apply taxes to subscription invoices
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
@@ -4432,10 +4573,14 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 // recalculateInvoiceTotals recalculates invoice subtotal, total, amount_due and amount_remaining
 // based on updated line item amounts after usage breakdown calculation
 func (s *invoiceService) recalculateInvoiceTotals(inv *dto.InvoiceResponse) {
-	// Calculate new subtotal from line item amounts
+	// Sum in the denomination currency and convert once; summing fiat lines would drift.
 	newSubtotal := decimal.Zero
 	for _, lineItem := range inv.LineItems {
-		newSubtotal = newSubtotal.Add(lineItem.Amount)
+		newSubtotal = newSubtotal.Add(lineItem.Denomination().Amount)
+	}
+	if inv.CustomCurrency != nil {
+		inv.CustomCurrency.Subtotal = newSubtotal
+		newSubtotal = inv.CustomCurrency.ToFiat(newSubtotal, inv.Currency)
 	}
 
 	// Update subtotal

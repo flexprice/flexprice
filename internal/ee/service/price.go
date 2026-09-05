@@ -125,9 +125,9 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	return response, nil
 }
 
-// preparePriceForCreation prepares a price for creation by setting display name,
-// converting the request to a Price domain object, and applying custom price unit conversion if needed.
-// This encapsulates the common price preparation logic used by both CreatePrice and CreateBulkPrice.
+// preparePriceForCreation prepares a price for creation: display name, converting the
+// request to a Price domain object, price unit conversion, and org currency enforcement.
+// Shared by CreatePrice and CreateBulkPrice.
 func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.CreatePriceRequest) (*price.Price, error) {
 	// Get display name if needed (before price creation)
 	s.setDisplayName(ctx, req)
@@ -166,6 +166,15 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 		if err := s.applyPriceUnitConversionToPrice(ctx, p); err != nil {
 			return nil, err
 		}
+	}
+
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+	if err != nil {
+		return nil, err
+	}
+	if err := ccCfg.EnforceCurrency(p.Currency); err != nil {
+		return nil, err
 	}
 
 	return p, nil

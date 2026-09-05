@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	cockroachErrors "github.com/cockroachdb/errors"
 	"sort"
 	"strings"
 	"testing"
@@ -14,9 +15,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -57,6 +60,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
 		FeatureRepo:   s.featureRepo,
+		SettingsRepo:  testutil.NewInMemorySettingsStore(),
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
@@ -2471,6 +2475,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2524,6 +2529,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2610,6 +2616,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2677,6 +2684,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2744,6 +2752,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2818,6 +2827,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityExistenceValidation() {
 		AddonRepo:     s.addonRepo,
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
+		SettingsRepo:  testutil.NewInMemorySettingsStore(),
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	})
@@ -2901,4 +2911,189 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityExistenceValidation() {
 		s.Require().NotNil(resp)
 		s.Len(resp.Items, 1)
 	})
+}
+
+// A tenant with custom currencies restricts prices to those currencies or its
+// default fiat currency.
+func (s *PriceServiceSuite) TestCreatePrice_CustomCurrencyEnforcement() {
+	settingsStore := testutil.NewInMemorySettingsStore()
+
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(settingsStore.Create(s.ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyCustomCurrencyConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	}))
+
+	priceSvc := NewPriceService(ServiceParams{
+		PriceRepo:     s.priceRepo,
+		MeterRepo:     s.meterRepo,
+		PlanRepo:      s.planRepo,
+		AddonRepo:     s.addonRepo,
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+		PriceUnitRepo: s.priceUnitRepo,
+		FeatureRepo:   s.featureRepo,
+		SettingsRepo:  settingsStore,
+		Logger:        s.logger,
+		DB:            testutil.NewMockPostgresClient(s.logger),
+	})
+
+	testPlan := &plan.Plan{ID: "plan-cc", Name: "Custom Currency Plan", BaseModel: types.GetDefaultBaseModel(s.ctx)}
+	s.NoError(s.planRepo.Create(s.ctx, testPlan))
+
+	tests := []struct {
+		name     string
+		currency string
+		wantErr  bool
+	}{
+		{name: "configured custom currency is allowed", currency: "mac"},
+		{name: "default fiat currency is allowed", currency: "usd"},
+		{name: "a mapped fiat currency is allowed even though it is not the default", currency: "inr"},
+		{name: "unconfigured currency is rejected", currency: "eur", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			amount := decimal.NewFromInt(100)
+			_, err := priceSvc.CreatePrice(s.ctx, dto.CreatePriceRequest{
+				Amount:             &amount,
+				Currency:           tt.currency,
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           testPlan.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:     types.InvoiceCadenceArrear,
+			})
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+		})
+	}
+}
+
+// Accepting any mapped fiat is only safe if every custom currency reaches all of them,
+// so a factor present in one and missing from another is rejected outright.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_FiatFactorsMustMatchAcrossCurrencies() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+			"fxp": {
+				Name:                  "Flexprice Credits",
+				Symbol:                "FXP",
+				FiatConversionFactors: map[string]decimal.Decimal{"usd": decimal.NewFromFloat(0.2)},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	err := cfg.Validate()
+	s.Error(err)
+	s.Contains(err.Error(), "inr")
+}
+
+// Equal-sized but different factor sets are still a mismatch.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_DisjointFiatSetsRejected() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+			"fxp": {
+				Name:   "Flexprice Credits",
+				Symbol: "FXP",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.2),
+					"eur": decimal.NewFromFloat(0.9),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	s.Error(cfg.Validate())
+}
+
+// Matching sets across currencies are accepted.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_MatchingFiatSetsAccepted() {
+	factors := func() map[string]decimal.Decimal {
+		return map[string]decimal.Decimal{
+			"usd": decimal.NewFromFloat(0.1),
+			"inr": decimal.NewFromFloat(8.5),
+		}
+	}
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {Name: "MoEngage AI Credits", Symbol: "MAC", FiatConversionFactors: factors()},
+			"fxp": {Name: "Flexprice Credits", Symbol: "FXP", FiatConversionFactors: factors()},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	s.NoError(cfg.Validate())
+}
+
+// The rejection names the supported currencies in two groups, not one merged list.
+func (s *PriceServiceSuite) TestEnforceCurrency_ErrorReportsBothGroups() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+
+	err := cfg.EnforceCurrency("eur")
+	s.Require().Error(err)
+	s.Contains(err.Error(), "eur", "the rejected currency is named")
+
+	hint := strings.Join(cockroachErrors.GetAllHints(err), " ")
+	s.Contains(hint, "Supported custom currencies: mac")
+	s.Contains(hint, "Supported fiat currencies: inr, usd")
+}
+
+// A tenant with no custom currencies configured accepts anything.
+func (s *PriceServiceSuite) TestEnforceCurrency_UnconfiguredTenantAllowsAnything() {
+	var cfg types.CustomCurrencyConfig
+	s.NoError(cfg.EnforceCurrency("eur"))
+	s.NoError(cfg.EnforceCurrency("anything"))
 }

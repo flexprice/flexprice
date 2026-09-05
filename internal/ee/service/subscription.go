@@ -120,6 +120,14 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 	sub := req.ToSubscription(ctx)
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+	if err != nil {
+		return nil, err
+	}
+	if err := ccCfg.EnforceCurrency(sub.Currency); err != nil {
+		return nil, err
+	}
 	// Always inherit timezone from the customer record.
 	// The timezone field in the API request is intentionally ignored.
 	sub.Timezone = customer.Timezone
