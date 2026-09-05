@@ -1,49 +1,69 @@
 package events
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
 
-func TestNormalizeProperties_TrimsKeys(t *testing.T) {
-	props := NormalizeProperties(map[string]interface{}{
-		" output_tokens": 100,
-		"input_tokens ":  50,
-		"model":          "gemma-4-31b",
-	})
+func TestNormalizeProperties(t *testing.T) {
+	tests := []struct {
+		name  string
+		input map[string]interface{}
+		want  map[string]interface{}
+	}{
+		{
+			name:  "trims leading and trailing padding",
+			input: map[string]interface{}{" output_tokens": 100, "input_tokens ": 50, "model": "gemma-4-31b"},
+			want:  map[string]interface{}{"output_tokens": 100, "input_tokens": 50, "model": "gemma-4-31b"},
+		},
+		{
+			// A padded key must never clobber a clean key that already carries the real value.
+			name:  "existing clean key wins a collision",
+			input: map[string]interface{}{"tokens": 100, " tokens": 999},
+			want:  map[string]interface{}{"tokens": 100},
+		},
+		{
+			// Map iteration order must not decide the billed quantity: between
+			// padded keys the lexicographically smallest ("  x" < " x") wins.
+			name:  "collision between padded keys resolves deterministically",
+			input: map[string]interface{}{" x": 1, "  x": 2},
+			want:  map[string]interface{}{"x": 2},
+		},
+		{
+			name:  "whitespace-only key is dropped",
+			input: map[string]interface{}{"   ": 1, "tokens": 5},
+			want:  map[string]interface{}{"tokens": 5},
+		},
+		{
+			name:  "clean map is untouched",
+			input: map[string]interface{}{"tokens": 5},
+			want:  map[string]interface{}{"tokens": 5},
+		},
+		{
+			name:  "nil is passed through",
+			input: nil,
+			want:  nil,
+		},
+	}
 
-	if _, ok := props["output_tokens"]; !ok {
-		t.Fatalf("leading-space key not trimmed: %v", props)
-	}
-	if _, ok := props["input_tokens"]; !ok {
-		t.Fatalf("trailing-space key not trimmed: %v", props)
-	}
-	if _, ok := props[" output_tokens"]; ok {
-		t.Fatal("padded key still present")
-	}
-	if props["model"] != "gemma-4-31b" {
-		t.Fatalf("clean key altered: %v", props["model"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeProperties(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-// A padded key must never clobber a clean key that already carries the real value.
-func TestNormalizeProperties_ClashKeepsCleanKey(t *testing.T) {
-	props := NormalizeProperties(map[string]interface{}{
-		"tokens":  100,
-		" tokens": 999,
-	})
-
-	if props["tokens"] != 100 {
-		t.Fatalf("clean key was overwritten: %v", props["tokens"])
-	}
-	if len(props) != 1 {
-		t.Fatalf("expected padded duplicate to be dropped: %v", props)
-	}
-}
-
-func TestNormalizeProperties_NilSafe(t *testing.T) {
-	if NormalizeProperties(nil) != nil {
-		t.Fatal("expected nil for nil input")
+// The padded-key winner must be stable across runs, not just within one.
+func TestNormalizeProperties_CollisionIsStableAcrossRuns(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		got := NormalizeProperties(map[string]interface{}{" x": 1, "  x": 2, "\tx": 3})
+		if got["x"] != 3 {
+			t.Fatalf("run %d picked %v, want the lexicographically smallest padded key", i, got["x"])
+		}
 	}
 }
 

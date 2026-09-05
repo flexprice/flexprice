@@ -1,6 +1,7 @@
 package events
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -199,18 +200,32 @@ func NewEvent(
 // NormalizeProperties trims surrounding whitespace from property keys. Meters
 // look a property up by exact key, and a meter's aggregation field is always
 // trimmed, so a padded key here could never be metered — the usage would be
-// recorded as zero with no error. A key that trims onto an existing clean key
-// is dropped rather than overwriting it.
+// recorded as zero with no error.
+//
+// Collisions resolve deterministically, because the winner decides the billed
+// quantity: an existing clean key always wins, and between several padded keys
+// that trim onto the same name the lexicographically smallest wins. Ranging over
+// the map and letting iteration order pick would make the same event bill
+// differently run to run.
 func NormalizeProperties(properties map[string]interface{}) map[string]interface{} {
 	if properties == nil {
 		return nil
 	}
+
+	var padded []string
 	for key := range properties {
-		trimmed := strings.TrimSpace(key)
-		if trimmed == key {
-			continue
+		if strings.TrimSpace(key) != key {
+			padded = append(padded, key)
 		}
-		if _, clash := properties[trimmed]; !clash && trimmed != "" {
+	}
+	if len(padded) == 0 {
+		return properties
+	}
+	sort.Strings(padded)
+
+	for _, key := range padded {
+		trimmed := strings.TrimSpace(key)
+		if _, taken := properties[trimmed]; !taken && trimmed != "" {
 			properties[trimmed] = properties[key]
 		}
 		delete(properties, key)
