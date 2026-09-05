@@ -127,9 +127,9 @@ func FromEnt(e *ent.Meter) *Meter {
 			UpdatedBy: e.UpdatedBy,
 		},
 	}
-	// Meters persisted before write-side normalization can carry stray whitespace
-	// in their lookup keys. Normalizing on read heals them without a data migration.
-	m.Normalize()
+	// Meters persisted before write-side sanitization can carry stray whitespace
+	// in their lookup keys. Sanitizing on read heals them without a data migration.
+	m.Sanitize()
 	return m
 }
 
@@ -172,14 +172,14 @@ func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 	}
 }
 
-// Normalize trims stray whitespace from the lookup keys the meter matches events
+// Sanitize trims stray whitespace from the lookup keys the meter matches events
 // on. These are looked up verbatim against event.properties, so a single leading
 // or trailing space makes every lookup miss and silently records zero usage
 // instead of failing loudly. Applied on both write and read.
 //
-// Only identifiers are normalized (event name, aggregation field/expression/group_by,
+// Only identifiers are sanitized (event name, aggregation field/expression/group_by,
 // filter keys) — filter values are matched against tenant data and are left as given.
-func (m *Meter) Normalize() {
+func (m *Meter) Sanitize() {
 	if m == nil {
 		return
 	}

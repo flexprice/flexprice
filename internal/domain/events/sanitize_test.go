@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestNormalizeProperties(t *testing.T) {
+func TestSanitizeProperties(t *testing.T) {
 	tests := []struct {
 		name  string
 		input map[string]interface{}
@@ -49,7 +49,7 @@ func TestNormalizeProperties(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeProperties(tt.input)
+			got := SanitizeProperties(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
@@ -58,16 +58,16 @@ func TestNormalizeProperties(t *testing.T) {
 }
 
 // The padded-key winner must be stable across runs, not just within one.
-func TestNormalizeProperties_CollisionIsStableAcrossRuns(t *testing.T) {
+func TestSanitizeProperties_CollisionIsStableAcrossRuns(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		got := NormalizeProperties(map[string]interface{}{" x": 1, "  x": 2, "\tx": 3})
+		got := SanitizeProperties(map[string]interface{}{" x": 1, "  x": 2, "\tx": 3})
 		if got["x"] != 3 {
 			t.Fatalf("run %d picked %v, want the lexicographically smallest padded key", i, got["x"])
 		}
 	}
 }
 
-func TestNewEvent_NormalizesNameAndPropertyKeys(t *testing.T) {
+func TestNewEvent_SanitizesNameAndPropertyKeys(t *testing.T) {
 	e := NewEvent(" llm_usage ", "tenant_1", "cust_1",
 		map[string]interface{}{" output_tokens": 42},
 		time.Time{}, "", "", "", "env_1")

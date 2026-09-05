@@ -104,13 +104,13 @@ func TestMeter_Validate_FieldOnlyStillWorks(t *testing.T) {
 	}
 }
 
-func TestMeter_Normalize_TrimsLookupKeys(t *testing.T) {
+func TestMeter_Sanitize_TrimsLookupKeys(t *testing.T) {
 	m := validBase()
 	m.EventName = " llm_usage "
 	m.Aggregation = Aggregation{Type: types.AggregationSum, Field: " output_tokens"}
 	m.Filters = []Filter{{Key: " model_name ", Values: []string{"gpt-4o"}}}
 
-	m.Normalize()
+	m.Sanitize()
 
 	if m.EventName != "llm_usage" {
 		t.Fatalf("event name not trimmed: %q", m.EventName)
@@ -127,11 +127,11 @@ func TestMeter_Normalize_TrimsLookupKeys(t *testing.T) {
 	}
 }
 
-func TestMeter_Normalize_WhitespaceOnlyFieldFailsValidation(t *testing.T) {
+func TestMeter_Sanitize_WhitespaceOnlyFieldFailsValidation(t *testing.T) {
 	m := validBase()
 	m.Aggregation = Aggregation{Type: types.AggregationSum, Field: "   "}
 
-	m.Normalize()
+	m.Sanitize()
 
 	err := m.Validate()
 	if err == nil {
@@ -142,7 +142,7 @@ func TestMeter_Normalize_WhitespaceOnlyFieldFailsValidation(t *testing.T) {
 	}
 }
 
-func TestMeter_Normalize_TrimsExpressionAndGroupBy(t *testing.T) {
+func TestMeter_Sanitize_TrimsExpressionAndGroupBy(t *testing.T) {
 	m := validBase()
 	m.Aggregation = Aggregation{
 		Type:       types.AggregationMax,
@@ -150,7 +150,7 @@ func TestMeter_Normalize_TrimsExpressionAndGroupBy(t *testing.T) {
 		GroupBy:    " request_id ",
 	}
 
-	m.Normalize()
+	m.Sanitize()
 
 	if m.Aggregation.Expression != "tokens * 2" {
 		t.Fatalf("expression not trimmed: %q", m.Aggregation.Expression)

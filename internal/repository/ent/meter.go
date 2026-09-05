@@ -37,7 +37,7 @@ func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache ca
 }
 
 func (r *meterRepository) CreateMeter(ctx context.Context, m *domainMeter.Meter) error {
-	m.Normalize()
+	m.Sanitize()
 
 	client := r.client.Writer(ctx)
 
@@ -364,7 +364,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 	)
 
 	m := &domainMeter.Meter{Filters: filters}
-	m.Normalize()
+	m.Sanitize()
 	_, err := client.Meter.Update().
 		Where(
 			meter.ID(id),

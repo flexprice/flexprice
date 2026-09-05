@@ -77,9 +77,9 @@ func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
 	m.Filters = r.Filters
 	m.ResetUsage = r.ResetUsage
 	m.Status = types.StatusPublished
-	// Normalize before the caller validates, so a field of only whitespace is
+	// Sanitize before the caller validates, so a field of only whitespace is
 	// rejected as missing rather than persisted as a key that never matches.
-	m.Normalize()
+	m.Sanitize()
 	return m
 }
 

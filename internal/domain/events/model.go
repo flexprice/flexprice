@@ -192,12 +192,12 @@ func NewEvent(
 		Source:             source,
 		EventName:          strings.TrimSpace(eventName),
 		Timestamp:          timestamp,
-		Properties:         NormalizeProperties(properties),
+		Properties:         SanitizeProperties(properties),
 		EnvironmentID:      environmentID,
 	}
 }
 
-// NormalizeProperties trims surrounding whitespace from property keys. Meters
+// SanitizeProperties trims surrounding whitespace from property keys. Meters
 // look a property up by exact key, and a meter's aggregation field is always
 // trimmed, so a padded key here could never be metered — the usage would be
 // recorded as zero with no error.
@@ -207,7 +207,7 @@ func NewEvent(
 // that trim onto the same name the lexicographically smallest wins. Ranging over
 // the map and letting iteration order pick would make the same event bill
 // differently run to run.
-func NormalizeProperties(properties map[string]interface{}) map[string]interface{} {
+func SanitizeProperties(properties map[string]interface{}) map[string]interface{} {
 	if properties == nil {
 		return nil
 	}

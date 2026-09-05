@@ -432,9 +432,9 @@ func TestTransformBentoBatch(t *testing.T) {
 }
 
 // Padded keys in the Bento payload must be trimmed before the derived fields are
-// computed. Normalizing only at the end produced trimmed stored properties while
+// computed. Sanitizing only at the end produced trimmed stored properties while
 // silently skipping billablePromptTokens, the model suffix and billable_value.
-func TestTransformBentoToEvent_NormalizesBeforeDerivedFields(t *testing.T) {
+func TestTransformBentoToEvent_SanitizesBeforeDerivedFields(t *testing.T) {
 	fields := validBase()
 	fields["data"] = map[string]interface{}{
 		" modelName":          "gpt-4.1",
