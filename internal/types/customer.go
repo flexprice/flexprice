@@ -97,9 +97,9 @@ func (f *CustomerFilter) GetOrder() string {
 }
 
 // GetStatus implements BaseFilter interface.
-// An unset query status defaults to published so listings hide archived customers.
-// When DSL filters already constrain status, return empty so the repository skips
-// that default and lets the DSL IN/eq predicate apply (e.g. published+archived).
+// An unset query status defaults to published so internal lists hide archived customers.
+// Search requests send a filters array (possibly empty); return empty then so
+// ApplyStatusFilter includes published+archived and DSL can narrow further.
 func (f *CustomerFilter) GetStatus() string {
 	if f == nil {
 		return string(StatusPublished)
@@ -109,7 +109,7 @@ func (f *CustomerFilter) GetStatus() string {
 			return status
 		}
 	}
-	if HasFieldFilter(f.Filters, "status") {
+	if f.Filters != nil {
 		return ""
 	}
 	return string(StatusPublished)

@@ -311,6 +311,18 @@ func (s *CustomerServiceSuite) TestGetCustomersStatusFilter() {
 			expectedCount: 1,
 		},
 		{
+			name: "empty_dsl_filters_include_archived",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: []*types.FilterCondition{},
+			},
+			expectedIDs:   []string{"cust-published", "cust-archived"},
+			expectedCount: 2,
+		},
+		{
 			name: "dsl_in_published_and_archived_returns_both",
 			filter: &types.CustomerFilter{
 				QueryFilter: &types.QueryFilter{

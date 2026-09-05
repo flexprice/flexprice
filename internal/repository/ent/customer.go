@@ -448,10 +448,11 @@ func (o CustomerQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query 
 }
 
 func (o CustomerQueryOptions) ApplyStatusFilter(query CustomerQuery, status string) CustomerQuery {
-	// Empty means skip the default published-only predicate. CustomerFilter.GetStatus
-	// returns "published" when unset, or "" when DSL filters already constrain status.
 	if status == "" {
-		return query
+		return query.Where(customer.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(customer.Status(status))
 }
