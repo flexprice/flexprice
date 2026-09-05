@@ -228,10 +228,8 @@ func (s *PortalWalletSuite) TestAutoTopupEnableRequiresChargeableMethod() {
 	s.False(ierr.IsValidation(err), "a missing card is a state conflict, not a bad request")
 }
 
-// A cooloff has to be resettable, not just settable. UpdateWallet only reads the
-// cooloff when the pointer is non-nil, and a JSON null unmarshals to nil — which is
-// indistinguishable from an absent field — so passing it through left the stored
-// cooloff in place and the customer could never clear it.
+// A JSON null unmarshals to a nil cooloff, which UpdateWallet cannot tell from an
+// absent field, so an unnormalised request left the stored cooloff in place.
 func (s *PortalWalletSuite) TestAutoTopupCooloffCanBeCleared() {
 	s.connect(types.SecretProviderChargebee)
 
@@ -253,15 +251,17 @@ func (s *PortalWalletSuite) TestAutoTopupCooloffCanBeCleared() {
 	s.Nil(cleared.AutoTopup.Cooldown, "an absent cooloff must reset the stored one")
 }
 
-// The same clear, said the other way: an explicitly zero-valued duration.
 func (s *PortalWalletSuite) TestAutoTopupCooloffClearsOnZeroDuration() {
 	s.connect(types.SecretProviderChargebee)
 
-	_, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
+	stored, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
 		Enabled:  false,
 		Cooldown: &types.Duration{Value: 30, Unit: types.DurationUnitMinute},
 	})
 	s.Require().NoError(err)
+	s.Require().NotNil(stored.AutoTopup)
+	s.Require().NotNil(stored.AutoTopup.Cooldown)
+	s.Equal(30, stored.AutoTopup.Cooldown.Value)
 
 	cleared, err := s.svc.UpdateAutoTopup(s.ctx, s.walletID, &dto.PortalUpdateAutoTopupRequest{
 		Enabled:  false,
