@@ -10,18 +10,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// InvoiceModificationHandler handles API requests for draft invoice modifications.
-type InvoiceModificationHandler struct {
+// InvoiceModificationExecutor is the router-facing surface of the invoice
+// modification handler; the concrete type stays private per repo convention.
+type InvoiceModificationExecutor interface {
+	Execute(c *gin.Context)
+}
+
+type invoiceModificationHandler struct {
 	invoiceService service.InvoiceService
 	log            *logger.Logger
 }
 
-// NewInvoiceModificationHandler creates a new InvoiceModificationHandler.
 func NewInvoiceModificationHandler(
 	invoiceService service.InvoiceService,
 	log *logger.Logger,
-) *InvoiceModificationHandler {
-	return &InvoiceModificationHandler{
+) InvoiceModificationExecutor {
+	return &invoiceModificationHandler{
 		invoiceService: invoiceService,
 		log:            log,
 	}
@@ -42,7 +46,7 @@ func NewInvoiceModificationHandler(
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/modify/execute [post]
-func (h *InvoiceModificationHandler) Execute(c *gin.Context) {
+func (h *invoiceModificationHandler) Execute(c *gin.Context) {
 	invoiceID := c.Param("id")
 	if invoiceID == "" {
 		c.Error(ierr.NewError("invoice ID is required").
