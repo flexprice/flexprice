@@ -205,7 +205,7 @@ func TransformBentoToEvent(payload string, tenantID, environmentID string) (*eve
 		EnvironmentID:      environmentID,
 		ExternalCustomerID: input.OrgID,
 		EventName:          strings.TrimSpace(eventName),
-		Properties:         properties,
+		Properties:         events.NormalizeProperties(properties),
 		Source:             source,
 		Timestamp:          timestamp,
 	}

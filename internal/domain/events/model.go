@@ -191,9 +191,31 @@ func NewEvent(
 		Source:             source,
 		EventName:          strings.TrimSpace(eventName),
 		Timestamp:          timestamp,
-		Properties:         properties,
+		Properties:         NormalizeProperties(properties),
 		EnvironmentID:      environmentID,
 	}
+}
+
+// NormalizeProperties trims surrounding whitespace from property keys. Meters
+// look a property up by exact key, and a meter's aggregation field is always
+// trimmed, so a padded key here could never be metered — the usage would be
+// recorded as zero with no error. A key that trims onto an existing clean key
+// is dropped rather than overwriting it.
+func NormalizeProperties(properties map[string]interface{}) map[string]interface{} {
+	if properties == nil {
+		return nil
+	}
+	for key := range properties {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == key {
+			continue
+		}
+		if _, clash := properties[trimmed]; !clash && trimmed != "" {
+			properties[trimmed] = properties[key]
+		}
+		delete(properties, key)
+	}
+	return properties
 }
 
 // Validate validates the event

@@ -103,3 +103,59 @@ func TestMeter_Validate_FieldOnlyStillWorks(t *testing.T) {
 		t.Fatalf("plain field-based SUM meter should validate, got %v", err)
 	}
 }
+
+func TestMeter_Normalize_TrimsLookupKeys(t *testing.T) {
+	m := validBase()
+	m.EventName = " llm_usage "
+	m.Aggregation = Aggregation{Type: types.AggregationSum, Field: " output_tokens"}
+	m.Filters = []Filter{{Key: " model_name ", Values: []string{"gpt-4o"}}}
+
+	m.Normalize()
+
+	if m.EventName != "llm_usage" {
+		t.Fatalf("event name not trimmed: %q", m.EventName)
+	}
+	if m.Aggregation.Field != "output_tokens" {
+		t.Fatalf("aggregation field not trimmed: %q", m.Aggregation.Field)
+	}
+	if m.Filters[0].Key != "model_name" {
+		t.Fatalf("filter key not trimmed: %q", m.Filters[0].Key)
+	}
+	// Filter values are tenant data, not identifiers, and are left untouched.
+	if m.Filters[0].Values[0] != "gpt-4o" {
+		t.Fatalf("filter value changed: %q", m.Filters[0].Values[0])
+	}
+}
+
+func TestMeter_Normalize_WhitespaceOnlyFieldFailsValidation(t *testing.T) {
+	m := validBase()
+	m.Aggregation = Aggregation{Type: types.AggregationSum, Field: "   "}
+
+	m.Normalize()
+
+	err := m.Validate()
+	if err == nil {
+		t.Fatal("expected whitespace-only field to be rejected as missing")
+	}
+	if !ierr.IsValidation(err) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestMeter_Normalize_TrimsExpressionAndGroupBy(t *testing.T) {
+	m := validBase()
+	m.Aggregation = Aggregation{
+		Type:       types.AggregationMax,
+		Expression: "  tokens * 2 ",
+		GroupBy:    " request_id ",
+	}
+
+	m.Normalize()
+
+	if m.Aggregation.Expression != "tokens * 2" {
+		t.Fatalf("expression not trimmed: %q", m.Aggregation.Expression)
+	}
+	if m.Aggregation.GroupBy != "request_id" {
+		t.Fatalf("group_by not trimmed: %q", m.Aggregation.GroupBy)
+	}
+}
