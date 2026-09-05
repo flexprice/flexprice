@@ -368,6 +368,101 @@ type AutoTopup struct {
 	Cooldown *Duration `json:"cooldown,omitempty"`
 }
 
+// NewAutoTopup builds a config from a full form submission. An absent cooloff
+// means the customer cleared it, carried as an empty Duration because the merge
+// in UpdateWallet reads a nil cooloff as "field not sent" and leaves it alone.
+func NewAutoTopup(enabled bool, threshold, amount *decimal.Decimal, invoicing bool, cooldown *Duration) *AutoTopup {
+	if cooldown.IsEmpty() {
+		cooldown = &Duration{}
+	}
+	return &AutoTopup{
+		Enabled:   lo.ToPtr(enabled),
+		Threshold: threshold,
+		Amount:    amount,
+		Invoicing: lo.ToPtr(invoicing),
+		Cooldown:  cooldown,
+	}
+}
+
+type autoTopupBuilder struct {
+	autoTopup *AutoTopup
+}
+
+// NewAutoTopupBuilder seeds a builder from an existing config. Every setter
+// ignores a nil argument, so a partial request only overwrites what it carries.
+func NewAutoTopupBuilder(a *AutoTopup) *autoTopupBuilder {
+	if a == nil {
+		return &autoTopupBuilder{autoTopup: &AutoTopup{}}
+	}
+	copied := *a
+	return &autoTopupBuilder{autoTopup: &copied}
+}
+
+func (b *autoTopupBuilder) WithEnabled(enabled *bool) *autoTopupBuilder {
+	if b == nil || b.autoTopup == nil || enabled == nil {
+		return b
+	}
+	b.autoTopup.Enabled = enabled
+	return b
+}
+
+func (b *autoTopupBuilder) WithThreshold(threshold *decimal.Decimal) *autoTopupBuilder {
+	if b == nil || b.autoTopup == nil || threshold == nil {
+		return b
+	}
+	b.autoTopup.Threshold = threshold
+	return b
+}
+
+func (b *autoTopupBuilder) WithAmount(amount *decimal.Decimal) *autoTopupBuilder {
+	if b == nil || b.autoTopup == nil || amount == nil {
+		return b
+	}
+	b.autoTopup.Amount = amount
+	return b
+}
+
+func (b *autoTopupBuilder) WithInvoicing(invoicing *bool) *autoTopupBuilder {
+	if b == nil || b.autoTopup == nil || invoicing == nil {
+		return b
+	}
+	b.autoTopup.Invoicing = invoicing
+	return b
+}
+
+// WithCooldown clears the stored cooloff when given an empty Duration, which is
+// how a caller says "no cooloff" without it being mistaken for an absent field.
+func (b *autoTopupBuilder) WithCooldown(cooldown *Duration) *autoTopupBuilder {
+	if b == nil || b.autoTopup == nil || cooldown == nil {
+		return b
+	}
+	if cooldown.IsEmpty() {
+		b.autoTopup.Cooldown = nil
+	} else {
+		b.autoTopup.Cooldown = cooldown
+	}
+	return b
+}
+
+// WithAutoTopup applies every field of another config through the setters above.
+func (b *autoTopupBuilder) WithAutoTopup(a *AutoTopup) *autoTopupBuilder {
+	if b == nil || a == nil {
+		return b
+	}
+	return b.WithEnabled(a.Enabled).
+		WithThreshold(a.Threshold).
+		WithAmount(a.Amount).
+		WithInvoicing(a.Invoicing).
+		WithCooldown(a.Cooldown)
+}
+
+func (b *autoTopupBuilder) Build() *AutoTopup {
+	if b == nil {
+		return nil
+	}
+	return b.autoTopup
+}
+
 func (a *AutoTopup) Validate() error {
 	if a.Threshold == nil {
 		return ierr.NewError("threshold is required").
