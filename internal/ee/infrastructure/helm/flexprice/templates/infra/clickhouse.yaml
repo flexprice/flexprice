@@ -161,10 +161,26 @@ spec:
       - name: flexprice
         layout:
           shardsCount: 1
-          replicasCount: 1
+          # >1 requires clickhouse.altinity.keeper.hosts and an EXISTING Keeper
+          # quorum: replicated tables need Keeper to coordinate, and a CHI that
+          # gains replicas without it brings its tables up read-only.
+          replicasCount: {{ .Values.clickhouse.altinity.replicasCount | default 1 }}
         templates:
           podTemplate: clickhouse-pod
           dataVolumeClaimTemplate: clickhouse-data
+{{- if .Values.clickhouse.altinity.keeper.hosts }}
+    # ClickHouse Keeper — coordination for Replicated*MergeTree engines.
+    # Hosts are the CHK-generated per-pod names, e.g. chk-<chk>-<cluster>-0-N.
+    # Keeper itself is deliberately NOT managed by this chart: it needs its own
+    # storage class (a different machine family may mean a different disk
+    # family entirely) and it must exist BEFORE this CHI references it.
+    zookeeper:
+      nodes:
+{{- range .Values.clickhouse.altinity.keeper.hosts }}
+        - host: {{ . | quote }}
+          port: {{ $.Values.clickhouse.altinity.keeper.port | default 2181 }}
+{{- end }}
+{{- end }}
 
     users:
       readonly/profile: readonly

@@ -874,6 +874,25 @@ clickhouse:
   # ── altinity mode ─────────────────────────────────────────────────────────────
   # ClickHouseInstallation CRD. Operator creates service: chi-<fullname>-flexprice-0-0
   altinity:
+    # Replicas in the single shard. Default 1 = every existing region is
+    # unchanged by this knob.
+    #
+    # Raising it to 2 requires BOTH:
+    #   * keeper.hosts below, pointing at a Keeper quorum that ALREADY EXISTS —
+    #     without it the new replica's tables come up read-only; and
+    #   * tables on Replicated*MergeTree engines. Plain MergeTree tables do not
+    #     replicate, so a second replica would serve an empty database.
+    replicasCount: 1
+    # ClickHouse Keeper coordination. Empty = no zookeeper block is rendered,
+    # which is what a single-replica install wants.
+    #
+    # Keeper is intentionally NOT deployed by this chart. It has its own storage
+    # class — on GKE a Keeper pool on N2 needs Persistent Disk while a ClickHouse
+    # pool on C4 needs Hyperdisk, and the two are not interchangeable — and it
+    # must be running before the CHI references it.
+    keeper:
+      hosts: []
+      port: 2181
     image:
       repository: altinity/clickhouse-server
       tag: "24.8.14.10459.altinitystable"
