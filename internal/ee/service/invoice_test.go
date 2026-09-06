@@ -2436,6 +2436,7 @@ func (s *InvoiceServiceSuite) customCurrencyDraft(code string, rate decimal.Deci
 		},
 	}
 	draft.ProjectCustomCurrency()
+	draft.AmountRemaining = draft.AmountDue.Sub(draft.AmountPaid)
 	return draft
 }
 
@@ -2709,16 +2710,18 @@ func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationNoOpForFiat()
 }
 
 // Projection floors a negative remainder rather than reporting a credit.
-func (s *InvoiceServiceSuite) TestProjectCustomCurrencyFloorsAmountRemaining() {
+func (s *InvoiceServiceSuite) TestProjectCustomCurrencyLeavesAmountRemainingToCaller() {
 	inv := &invoice.Invoice{
-		Currency:       "usd",
-		AmountPaid:     decimal.NewFromInt(5),
-		CustomCurrency: &types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(0.1), AmountDue: decimal.NewFromInt(10)},
+		Currency:        "usd",
+		AmountPaid:      decimal.NewFromInt(5),
+		AmountRemaining: decimal.NewFromInt(99),
+		CustomCurrency:  &types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(0.1), AmountDue: decimal.NewFromInt(10)},
 	}
 	inv.ProjectCustomCurrency()
 
 	s.True(inv.AmountDue.Equal(decimal.NewFromInt(1)), "10 mac * 0.1, got %s", inv.AmountDue)
-	s.True(inv.AmountRemaining.IsZero(), "overpaid invoices report zero, got %s", inv.AmountRemaining)
+	s.True(inv.AmountRemaining.Equal(decimal.NewFromInt(99)),
+		"amount_remaining is derived by the caller, not projected, got %s", inv.AmountRemaining)
 }
 
 // Denomination falls back to the fiat fields when there is no custom currency, so callers
@@ -2829,6 +2832,7 @@ func (s *InvoiceServiceSuite) finalizedCustomInvoice(macAmount, amountPaid decim
 		},
 	}
 	inv.ProjectCustomCurrency()
+	inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), inv))
 	return inv
 }

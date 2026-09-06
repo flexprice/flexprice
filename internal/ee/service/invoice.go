@@ -592,6 +592,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 		// Snapshot the computed amounts as the denomination and project the fiat columns.
 		inv.CaptureCustomCurrencyDenomination()
+		if inv.CustomCurrency != nil {
+			// Capture ends in ProjectCustomCurrency, which rewrites amount_due in fiat.
+			// amount_remaining is derived from it and would otherwise stay in the
+			// custom currency.
+			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+		}
 		if err := s.persistProjectedLineItems(txCtx, inv); err != nil {
 			return err
 		}
@@ -1069,6 +1075,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 					}
 					cc.AmountDue = cc.Total
 					lockedInv.ProjectCustomCurrency()
+					lockedInv.AmountRemaining = lockedInv.AmountDue.Sub(lockedInv.AmountPaid)
 
 					// ProjectCustomCurrency re-derives the line items from the same
 					// object, so they are never computed at a stale rate — but the
@@ -3872,9 +3879,6 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 	return s.GetInvoice(ctx, newInv.ID)
 }
 
-// RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice.
-// persistProjectedLineItems writes line items whose fiat amounts were just projected
-// from the denomination. InvoiceRepo.Update writes only the invoice row.
 // projectPreviewToFiat restates a preview invoice the way a real one is stored: fiat
 // currency with the custom-currency denomination alongside.
 func (s *invoiceService) projectPreviewToFiat(ctx context.Context, inv *invoice.Invoice) error {
@@ -3897,6 +3901,8 @@ func (s *invoiceService) projectPreviewToFiat(ctx context.Context, inv *invoice.
 	return nil
 }
 
+// persistProjectedLineItems writes line items whose fiat amounts were just projected
+// from the denomination. InvoiceRepo.Update writes only the invoice row.
 func (s *invoiceService) persistProjectedLineItems(ctx context.Context, inv *invoice.Invoice) error {
 	if inv.CustomCurrency == nil {
 		return nil

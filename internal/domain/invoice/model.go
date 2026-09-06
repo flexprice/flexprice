@@ -361,11 +361,6 @@ func (i *Invoice) ProjectCustomCurrency() {
 	i.Total = cc.ToFiat(cc.Total, i.Currency)
 	i.AmountDue = cc.ToFiat(cc.AmountDue, i.Currency)
 
-	i.AmountRemaining = i.AmountDue.Sub(i.AmountPaid)
-	if i.AmountRemaining.IsNegative() {
-		i.AmountRemaining = decimal.Zero
-	}
-
 	for _, item := range i.LineItems {
 		item.ProjectCustomCurrency(cc, i.Currency)
 	}
