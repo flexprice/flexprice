@@ -893,6 +893,10 @@ clickhouse:
     keeper:
       hosts: []
       port: 2181
+    # Empty = the chart supplies a REQUIRED hostname anti-affinity automatically
+    # whenever replicasCount > 1, and nothing at all when it is 1. Set this only
+    # to express a different topology (e.g. spreading across zones).
+    affinity: {}
     image:
       repository: altinity/clickhouse-server
       tag: "24.8.14.10459.altinitystable"
