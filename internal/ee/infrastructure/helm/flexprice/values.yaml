@@ -897,6 +897,14 @@ clickhouse:
     # whenever replicasCount > 1, and nothing at all when it is 1. Set this only
     # to express a different topology (e.g. spreading across zones).
     affinity: {}
+    # Pod-level securityContext. Empty by default so existing regions are
+    # untouched. Any region running more than one replica needs
+    #   fsGroup: 101
+    #   fsGroupChangePolicy: OnRootMismatch
+    # because a newly provisioned PVC mounts root-owned and the container runs as
+    # uid 101 — without it a second replica CrashLoopBackOffs on
+    # "cannot create directory /var/lib/clickhouse/tmp: Permission denied".
+    podSecurityContext: {}
     image:
       repository: altinity/clickhouse-server
       tag: "24.8.14.10459.altinitystable"

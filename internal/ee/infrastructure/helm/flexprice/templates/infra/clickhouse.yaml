@@ -260,6 +260,19 @@ spec:
     podTemplates:
       - name: clickhouse-pod
         spec:
+          {{- /*
+            POD-level securityContext. The container one below sets runAsUser 101,
+            which is fine for a volume that is ALREADY 101-owned — but a fresh PVC
+            mounts as root, so a non-root process cannot create
+            /var/lib/clickhouse/tmp and the server exits at startup. That makes
+            every NEW replica CrashLoopBackOff while the original keeps working.
+            fsGroup fixes it; fsGroupChangePolicy OnRootMismatch means an existing
+            correctly-owned volume is not recursively chowned on every mount.
+          */}}
+          {{- with .Values.clickhouse.altinity.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.clickhouse.altinity.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
