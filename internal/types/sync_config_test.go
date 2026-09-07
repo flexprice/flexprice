@@ -38,7 +38,7 @@ func TestMetadataCustomFieldValidate(t *testing.T) {
 	}
 }
 
-func TestValidateMetadataCustomFields(t *testing.T) {
+func TestValidateCustomFields(t *testing.T) {
 	servicePeriod := &ServicePeriodCustomFields{StartFieldID: "cf_start", EndFieldID: "cf_end"}
 
 	t.Run("distinct fields", func(t *testing.T) {
@@ -51,7 +51,7 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 				},
 			},
 		}
-		assert.NoError(t, s.ValidateMetadataCustomFields())
+		assert.NoError(t, s.ValidateCustomFields())
 	})
 
 	t.Run("duplicate target field", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 				},
 			},
 		}
-		assert.Error(t, s.ValidateMetadataCustomFields())
+		assert.Error(t, s.ValidateCustomFields())
 	})
 
 	t.Run("collides with service period field", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 				},
 			},
 		}
-		assert.Error(t, s.ValidateMetadataCustomFields())
+		assert.Error(t, s.ValidateCustomFields())
 	})
 
 	t.Run("too many mappings", func(t *testing.T) {
@@ -91,18 +91,62 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
 				MetadataCustomFields: many,
 			},
-		}).ValidateMetadataCustomFields())
+		}).ValidateCustomFields())
 		assert.NoError(t, (&InvoiceSyncSettings{
 			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
 				MetadataCustomFields: many[:MaxMetadataCustomFields],
 			},
-		}).ValidateMetadataCustomFields())
+		}).ValidateCustomFields())
 	})
 
 	t.Run("nil and empty", func(t *testing.T) {
 		var s *InvoiceSyncSettings
-		assert.NoError(t, s.ValidateMetadataCustomFields())
-		assert.NoError(t, (&InvoiceSyncSettings{}).ValidateMetadataCustomFields())
+		assert.NoError(t, s.ValidateCustomFields())
+		assert.NoError(t, (&InvoiceSyncSettings{}).ValidateCustomFields())
+	})
+
+	t.Run("global collides with metadata and service period", func(t *testing.T) {
+		withGlobal := func(field string) *InvoiceSyncSettings {
+			return &InvoiceSyncSettings{
+				ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+					ServicePeriodCustomFields: servicePeriod,
+					GlobalCustomFields:        []GlobalCustomField{{Field: field, Value: "flexprice"}},
+					MetadataCustomFields: []MetadataCustomField{
+						{MetadataCustomFieldSourceInvoice, "brand", "cf_brand"},
+					},
+				},
+			}
+		}
+		assert.NoError(t, withGlobal("cf_source").ValidateCustomFields())
+		assert.Error(t, withGlobal("cf_brand").ValidateCustomFields())
+		assert.Error(t, withGlobal("cf_end").ValidateCustomFields())
+	})
+
+	t.Run("global requires field and value", func(t *testing.T) {
+		withGlobal := func(g GlobalCustomField) *InvoiceSyncSettings {
+			return &InvoiceSyncSettings{
+				ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{GlobalCustomFields: []GlobalCustomField{g}},
+			}
+		}
+		assert.Error(t, withGlobal(GlobalCustomField{Field: "  ", Value: "v"}).ValidateCustomFields())
+		assert.Error(t, withGlobal(GlobalCustomField{Field: "cf_a", Value: "  "}).ValidateCustomFields())
+		assert.NoError(t, withGlobal(GlobalCustomField{Field: "cf_a", Value: "v"}).ValidateCustomFields())
+	})
+
+	t.Run("cap spans both families", func(t *testing.T) {
+		globals := make([]GlobalCustomField, 0, MaxMetadataCustomFields)
+		for i := 0; i < MaxMetadataCustomFields; i++ {
+			globals = append(globals, GlobalCustomField{Field: fmt.Sprintf("cf_g_%d", i), Value: "v"})
+		}
+		s := &InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				GlobalCustomFields: globals,
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceInvoice, "brand", "cf_brand"},
+				},
+			},
+		}
+		assert.Error(t, s.ValidateCustomFields())
 	})
 }
 

@@ -78,6 +78,10 @@ type ZohoInvoiceSyncSettings struct {
 	// Copies metadata values onto Zoho invoice custom fields verbatim.
 	MetadataCustomFields []MetadataCustomField `json:"metadata_custom_fields,omitempty"`
 
+	// Fixed values written to Zoho invoice custom fields on every sync, independent of
+	// any metadata source.
+	GlobalCustomFields []GlobalCustomField `json:"global_custom_fields,omitempty"`
+
 	// Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval
 	// rule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.
 	SubmitForApproval bool `json:"submit_for_approval,omitempty"`
@@ -211,37 +215,77 @@ func (m MetadataCustomField) Validate() error {
 	return nil
 }
 
-// Two mappings may not write to the same Zoho field, and neither may claim a field the
-// service period already uses.
-func (s *InvoiceSyncSettings) ValidateMetadataCustomFields() error {
-	if s == nil || len(s.MetadataCustomFields) == 0 {
+type GlobalCustomField struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
+func (g GlobalCustomField) Validate() error {
+	field := strings.TrimSpace(g.Field)
+	if field == "" {
+		return ierr.NewError("global custom field target is required").
+			WithHint("Provide the Zoho custom field API name or ID to write to").
+			Mark(ierr.ErrValidation)
+	}
+	if len(field) > maxCustomFieldRefLen {
+		return ierr.NewError("global custom field target is too long").
+			WithHint(fmt.Sprintf("field must be at most %d characters", maxCustomFieldRefLen)).
+			Mark(ierr.ErrValidation)
+	}
+	if strings.TrimSpace(g.Value) == "" {
+		return ierr.NewError("global custom field value is required").
+			WithHint("Provide the value to write, or drop the mapping").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// All three custom field families write into one Zoho field namespace, where a second write
+// silently overwrites the first, so they are validated together against a shared field set.
+func (s *InvoiceSyncSettings) ValidateCustomFields() error {
+	if s == nil {
 		return nil
 	}
 
-	if len(s.MetadataCustomFields) > MaxMetadataCustomFields {
-		return ierr.NewError("too many metadata custom field mappings").
-			WithHint(fmt.Sprintf("At most %d metadata custom fields may be mapped", MaxMetadataCustomFields)).
+	if len(s.MetadataCustomFields)+len(s.GlobalCustomFields) > MaxMetadataCustomFields {
+		return ierr.NewError("too many custom field mappings").
+			WithHint(fmt.Sprintf("At most %d custom fields may be mapped", MaxMetadataCustomFields)).
 			Mark(ierr.ErrValidation)
 	}
 
-	seen := make(map[string]struct{}, len(s.MetadataCustomFields)+2)
+	seen := make(map[string]struct{}, len(s.MetadataCustomFields)+len(s.GlobalCustomFields)+2)
 	if s.ServicePeriodCustomFields.IsConfigured() {
 		seen[s.ServicePeriodCustomFields.StartFieldID] = struct{}{}
 		seen[s.ServicePeriodCustomFields.EndFieldID] = struct{}{}
 	}
 
-	for _, m := range s.MetadataCustomFields {
-		if err := m.Validate(); err != nil {
-			return err
-		}
-
-		field := strings.TrimSpace(m.Field)
+	claim := func(field string) error {
+		field = strings.TrimSpace(field)
 		if _, dup := seen[field]; dup {
 			return ierr.NewError("duplicate zoho custom field mapping").
 				WithHint(fmt.Sprintf("Zoho custom field %q is mapped more than once", field)).
 				Mark(ierr.ErrValidation)
 		}
 		seen[field] = struct{}{}
+		return nil
+	}
+
+	for _, g := range s.GlobalCustomFields {
+		if err := g.Validate(); err != nil {
+			return err
+		}
+		if err := claim(g.Field); err != nil {
+			return err
+		}
+	}
+
+	for _, m := range s.MetadataCustomFields {
+		if err := m.Validate(); err != nil {
+			return err
+		}
+		if err := claim(m.Field); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -373,7 +417,7 @@ func (s *SyncConfig) Validate() error {
 		if err := s.InvoiceSyncSettings.ServicePeriodCustomFields.Validate(); err != nil {
 			return err
 		}
-		if err := s.InvoiceSyncSettings.ValidateMetadataCustomFields(); err != nil {
+		if err := s.InvoiceSyncSettings.ValidateCustomFields(); err != nil {
 			return err
 		}
 		if err := s.InvoiceSyncSettings.ValidateZohoPaymentSettings(); err != nil {

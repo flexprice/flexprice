@@ -128,6 +128,9 @@ type CustomField struct {
 // customfield_id. Zoho generates these as "cf_<label_slug>".
 const apiNamePrefix = "cf_"
 
+// Zoho caps reference_number at 100 characters.
+const maxZohoReferenceNumberLen = 100
+
 func NewCustomField(ref, value string) CustomField {
 	ref = strings.TrimSpace(ref)
 	if strings.HasPrefix(ref, apiNamePrefix) {
@@ -219,29 +222,46 @@ type customerPaymentInvoiceApplyWire struct {
 	AmountApplied decimal.Decimal `json:"amount_applied"`
 }
 
+// CustomerPaymentCreateParams are the inputs for NewCustomerPaymentCreateRequest.
+type CustomerPaymentCreateParams struct {
+	CustomerID  string
+	PaymentMode string
+	Amount      decimal.Decimal
+	Date        string
+	Invoices    []CustomerPaymentInvoiceApply
+	// AccountID is Zoho's "Deposit To" chart-of-accounts id. Empty omits the field, leaving
+	// Zoho's Undeposited Funds default.
+	AccountID string
+	// ReferenceNumber is the gateway payment id that settled the invoice. Empty omits the field.
+	ReferenceNumber string
+}
+
 // CustomerPaymentCreateRequest is the body for POST /books/v3/customerpayments.
 type CustomerPaymentCreateRequest struct {
-	customerID  string
-	paymentMode string
-	amount      decimal.Decimal
-	date        string
-	invoices    []CustomerPaymentInvoiceApply
+	customerID      string
+	paymentMode     string
+	amount          decimal.Decimal
+	date            string
+	invoices        []CustomerPaymentInvoiceApply
+	accountID       string
+	referenceNumber string
 }
 
 // NewCustomerPaymentCreateRequest builds the request body for recording a Zoho customer payment.
-func NewCustomerPaymentCreateRequest(
-	customerID string,
-	paymentMode string,
-	amount decimal.Decimal,
-	date string,
-	invoices []CustomerPaymentInvoiceApply,
-) *CustomerPaymentCreateRequest {
+func NewCustomerPaymentCreateRequest(params CustomerPaymentCreateParams) *CustomerPaymentCreateRequest {
+	reference := strings.TrimSpace(params.ReferenceNumber)
+	if len(reference) > maxZohoReferenceNumberLen {
+		reference = reference[:maxZohoReferenceNumberLen]
+	}
+
 	return &CustomerPaymentCreateRequest{
-		customerID:  customerID,
-		paymentMode: paymentMode,
-		amount:      amount,
-		date:        date,
-		invoices:    invoices,
+		customerID:      params.CustomerID,
+		paymentMode:     params.PaymentMode,
+		amount:          params.Amount,
+		date:            params.Date,
+		invoices:        params.Invoices,
+		accountID:       strings.TrimSpace(params.AccountID),
+		referenceNumber: reference,
 	}
 }
 
@@ -280,16 +300,32 @@ func (r *CustomerPaymentCreateRequest) Invoices() []CustomerPaymentInvoiceApply 
 	return r.invoices
 }
 
+func (r *CustomerPaymentCreateRequest) AccountID() string {
+	if r == nil {
+		return ""
+	}
+	return r.accountID
+}
+
+func (r *CustomerPaymentCreateRequest) ReferenceNumber() string {
+	if r == nil {
+		return ""
+	}
+	return r.referenceNumber
+}
+
 func (r *CustomerPaymentCreateRequest) MarshalJSON() ([]byte, error) {
 	if r == nil {
 		return []byte("null"), nil
 	}
 	return json.Marshal(customerPaymentCreateRequestWire{
-		CustomerID:  r.customerID,
-		PaymentMode: r.paymentMode,
-		Amount:      r.amount,
-		Date:        r.date,
-		Invoices:    r.invoices,
+		CustomerID:      r.customerID,
+		PaymentMode:     r.paymentMode,
+		Amount:          r.amount,
+		Date:            r.date,
+		Invoices:        r.invoices,
+		AccountID:       r.accountID,
+		ReferenceNumber: r.referenceNumber,
 	})
 }
 
@@ -303,15 +339,19 @@ func (r *CustomerPaymentCreateRequest) UnmarshalJSON(data []byte) error {
 	r.amount = wire.Amount
 	r.date = wire.Date
 	r.invoices = wire.Invoices
+	r.accountID = wire.AccountID
+	r.referenceNumber = wire.ReferenceNumber
 	return nil
 }
 
 type customerPaymentCreateRequestWire struct {
-	CustomerID  string                        `json:"customer_id"`
-	PaymentMode string                        `json:"payment_mode"`
-	Amount      decimal.Decimal               `json:"amount"`
-	Date        string                        `json:"date"`
-	Invoices    []CustomerPaymentInvoiceApply `json:"invoices"`
+	CustomerID      string                        `json:"customer_id"`
+	PaymentMode     string                        `json:"payment_mode"`
+	Amount          decimal.Decimal               `json:"amount"`
+	Date            string                        `json:"date"`
+	Invoices        []CustomerPaymentInvoiceApply `json:"invoices"`
+	AccountID       string                        `json:"account_id,omitempty"`
+	ReferenceNumber string                        `json:"reference_number,omitempty"`
 }
 
 // CustomerPaymentResponse is the response from POST /books/v3/customerpayments.

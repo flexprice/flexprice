@@ -146,10 +146,11 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	}
 
 	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
-	reqPayload.CustomFields = append(
-		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd),
-		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...,
-	)
+	// Ordered least to most specific: Zoho keeps the last write to a given field.
+	reqPayload.CustomFields = append(globalCustomFields(settings),
+		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)...)
+	reqPayload.CustomFields = append(reqPayload.CustomFields,
+		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -287,15 +288,15 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		"zoho_balance", zohoInv.Balance.String(),
 	)
 
-	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(
-		zohoInv.CustomerID,
-		"others",
-		zohoInv.Balance,
-		time.Now().UTC().Format("2006-01-02"),
-		[]CustomerPaymentInvoiceApply{
+	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(CustomerPaymentCreateParams{
+		CustomerID:  zohoInv.CustomerID,
+		PaymentMode: types.DefaultZohoPaymentMode,
+		Amount:      zohoInv.Balance,
+		Date:        time.Now().UTC().Format("2006-01-02"),
+		Invoices: []CustomerPaymentInvoiceApply{
 			NewCustomerPaymentInvoiceApply(zohoInvoiceID, zohoInv.Balance),
 		},
-	))
+	}))
 	if err != nil {
 		return err
 	}
@@ -476,6 +477,26 @@ func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *
 		NewCustomField(settings.ServicePeriodCustomFields.StartFieldID, start.Format(zohoAPIDateFormat)),
 		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(end).Format(zohoAPIDateFormat)),
 	}
+}
+
+func globalCustomFields(settings *types.InvoiceSyncSettings) []CustomField {
+	if settings == nil || len(settings.GlobalCustomFields) == 0 {
+		return nil
+	}
+
+	out := make([]CustomField, 0, len(settings.GlobalCustomFields))
+	for _, g := range settings.GlobalCustomFields {
+		value := strings.TrimSpace(g.Value)
+		if value == "" {
+			continue
+		}
+		out = append(out, NewCustomField(g.Field, value))
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // metadataCustomFields copies configured metadata values onto Zoho custom fields. A key

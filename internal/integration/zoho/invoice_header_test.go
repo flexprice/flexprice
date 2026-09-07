@@ -333,6 +333,26 @@ func TestMetadataCustomFields(t *testing.T) {
 	})
 }
 
+func TestGlobalCustomFields(t *testing.T) {
+	settings := &types.InvoiceSyncSettings{
+		ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+			GlobalCustomFields: []types.GlobalCustomField{
+				{Field: "cf_source", Value: "FlexPrice"},
+				{Field: "4069923000000000009", Value: "IN"},
+				{Field: "cf_blank", Value: "   "},
+			},
+		},
+	}
+
+	assert.Equal(t, []CustomField{
+		{APIName: "cf_source", Value: "FlexPrice"},
+		{CustomFieldID: "4069923000000000009", Value: "IN"},
+	}, globalCustomFields(settings))
+
+	assert.Nil(t, globalCustomFields(nil))
+	assert.Nil(t, globalCustomFields(&types.InvoiceSyncSettings{}))
+}
+
 func TestSyncInvoiceSendsMetadataCustomFieldsAlongsideServicePeriod(t *testing.T) {
 	inv := &invoice.Invoice{
 		ID:          "inv_3",
