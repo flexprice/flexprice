@@ -279,6 +279,62 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
+// CheckoutProviderResultBuilder assembles a CheckoutProviderResult.
+//
+// Most callers only learn part of the result — a webhook knows the gateway payment id
+// but not the redirect action recorded at link creation. Building states which fields
+// a caller is deliberately setting, where a struct literal with one field reads as an
+// oversight. Pair it with MergeOnto, which decides what happens to the fields left
+// unset.
+type CheckoutProviderResultBuilder struct {
+	result CheckoutProviderResult
+}
+
+// NewCheckoutProviderResult starts a builder. The zero value is a valid empty result.
+func NewCheckoutProviderResult() *CheckoutProviderResultBuilder {
+	return &CheckoutProviderResultBuilder{}
+}
+
+// WithNextAction records what the customer must do to complete payment.
+func (b *CheckoutProviderResultBuilder) WithNextAction(action *PaymentAction) *CheckoutProviderResultBuilder {
+	b.result.NextAction = action
+	return b
+}
+
+// WithProviderSessionID records the pre-payment handle — a payment link, hosted page,
+// invoice or order — that exists until someone pays.
+func (b *CheckoutProviderResultBuilder) WithProviderSessionID(id string) *CheckoutProviderResultBuilder {
+	b.result.ProviderSessionID = id
+	return b
+}
+
+// WithProviderPaymentIntentID records the provider's own charge or intent id.
+func (b *CheckoutProviderResultBuilder) WithProviderPaymentIntentID(id string) *CheckoutProviderResultBuilder {
+	b.result.ProviderPaymentIntentID = id
+	return b
+}
+
+// WithExpiresAt records when the provider closes its hosted object.
+func (b *CheckoutProviderResultBuilder) WithExpiresAt(t *time.Time) *CheckoutProviderResultBuilder {
+	b.result.ExpiresAt = t
+	return b
+}
+
+// WithProviderMetadata records provider-specific data not used for business logic.
+func (b *CheckoutProviderResultBuilder) WithProviderMetadata(m map[string]string) *CheckoutProviderResultBuilder {
+	b.result.ProviderMetadata = m
+	return b
+}
+
+// Build returns the assembled result. Safe on a nil builder.
+func (b *CheckoutProviderResultBuilder) Build() *CheckoutProviderResult {
+	if b == nil {
+		return nil
+	}
+	result := b.result
+	return &result
+}
+
 // MergeOnto returns a copy of base with the non-empty fields of r overlaid. Callers
 // that learn only part of the result — a webhook knowing the payment id but not the
 // redirect action — pass a fragment; writing it straight to the column would drop the
