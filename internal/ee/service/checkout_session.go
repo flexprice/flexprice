@@ -403,7 +403,9 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 
 	// Callers know only part of the result — the webhook has the payment id but not the
 	// redirect action. Merge onto what is stored so the claim does not clobber the rest.
-	mergedResult := providerResult.MergeOnto(session.ProviderResult.ToProviderResult())
+	mergedResult := types.NewCheckoutProviderResultFrom(session.ProviderResult.ToProviderResult()).
+		Overlay(providerResult).
+		Build()
 
 	// Run sub-steps idempotently before claiming the session.
 	// Safe to run in parallel with a duplicate webhook — each step is conditional.

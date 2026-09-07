@@ -48,8 +48,30 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 		return nil, err
 	}
 	// Hand back a copy. The real repository returns a fresh row per read, and callers
-	// mutate what they read; sharing the stored pointer races every concurrent reader.
+	// mutate what they read; sharing the stored record races every concurrent reader.
+	//
+	// The struct copy is not enough on its own — the JSONB fields are pointers, so two
+	// readers would still share whatever they point at.
 	session := *stored
+	if stored.ProviderResult != nil {
+		pr := *stored.ProviderResult
+		session.ProviderResult = &pr
+	}
+	if stored.Result != nil {
+		r := *stored.Result
+		session.Result = &r
+	}
+	if stored.PaymentProviderConfig != nil {
+		c := *stored.PaymentProviderConfig
+		session.PaymentProviderConfig = &c
+	}
+	if stored.Metadata != nil {
+		m := make(map[string]string, len(stored.Metadata))
+		for k, v := range stored.Metadata {
+			m[k] = v
+		}
+		session.Metadata = m
+	}
 	return &session, nil
 }
 
