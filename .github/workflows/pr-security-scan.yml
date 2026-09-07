@@ -6,10 +6,9 @@ name: PR Security Scan
 #   - trivy fs   -> go.sum dependency CVEs (the shift-left dep-CVE gate)
 #   - trivy config -> Dockerfile / Dockerfile.e2eprobe misconfiguration
 #
-# The dep-CVE baseline is triaged (0 fixable HIGH/CRITICAL on develop), so
-# `trivy fs` is a hard gate: it fails the PR on HIGH/CRITICAL fixable vulns.
-# `trivy config` stays soft-fail until the Dockerfile misconfig findings are
-# cleared, then it flips too.
+# Both are hard gates: their HIGH/CRITICAL baselines are 0 on develop.
+# `trivy fs` fails the PR on fixable dep CVEs; `trivy config` fails it on
+# Dockerfile misconfiguration.
 
 on:
   pull_request:
@@ -42,7 +41,8 @@ jobs:
           exit-code: '1'
 
       # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe).
-      # Stays soft-fail through phase 2 until the findings are cleared.
+      # Hard gate: HIGH/CRITICAL baseline is 0 on develop, so a new Dockerfile
+      # misconfig blocks the PR.
       - name: Trivy config scan (Dockerfile misconfig)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -50,4 +50,4 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           format: table
-          exit-code: '0'
+          exit-code: '1'

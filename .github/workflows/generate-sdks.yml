@@ -45,8 +45,10 @@ jobs:
 
       - name: Set version from release tag and set outputs
         id: version-check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          RAW="${{ github.event.release.tag_name }}"
+          RAW="$RELEASE_TAG"
           RESOLVED="${RAW#v}"
           echo "Using release tag: $RAW -> $RESOLVED"
           [ -z "$RESOLVED" ] && echo "::error::Version is empty (release tag)." && exit 1
