@@ -122,6 +122,27 @@ func TestValidateCustomFields(t *testing.T) {
 		assert.Error(t, withGlobal("cf_end").ValidateCustomFields())
 	})
 
+	t.Run("whitespace variant still collides with service period", func(t *testing.T) {
+		s := &InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: &ServicePeriodCustomFields{StartFieldID: " cf_start ", EndFieldID: "cf_end"},
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceInvoice, "k", "cf_start"},
+				},
+			},
+		}
+		assert.Error(t, s.ValidateCustomFields())
+	})
+
+	t.Run("service period start and end must differ", func(t *testing.T) {
+		s := &InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: &ServicePeriodCustomFields{StartFieldID: "cf_same", EndFieldID: "cf_same"},
+			},
+		}
+		assert.Error(t, s.ValidateCustomFields())
+	})
+
 	t.Run("global requires field and value", func(t *testing.T) {
 		withGlobal := func(g GlobalCustomField) *InvoiceSyncSettings {
 			return &InvoiceSyncSettings{

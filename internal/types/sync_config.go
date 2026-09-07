@@ -254,10 +254,6 @@ func (s *InvoiceSyncSettings) ValidateCustomFields() error {
 	}
 
 	seen := make(map[string]struct{}, len(s.MetadataCustomFields)+len(s.GlobalCustomFields)+2)
-	if s.ServicePeriodCustomFields.IsConfigured() {
-		seen[s.ServicePeriodCustomFields.StartFieldID] = struct{}{}
-		seen[s.ServicePeriodCustomFields.EndFieldID] = struct{}{}
-	}
 
 	claim := func(field string) error {
 		field = strings.TrimSpace(field)
@@ -268,6 +264,17 @@ func (s *InvoiceSyncSettings) ValidateCustomFields() error {
 		}
 		seen[field] = struct{}{}
 		return nil
+	}
+
+	// Claimed the same way as the other families so a whitespace variant cannot slip past
+	// the duplicate check and silently overwrite the field it collides with.
+	if s.ServicePeriodCustomFields.IsConfigured() {
+		if err := claim(s.ServicePeriodCustomFields.StartFieldID); err != nil {
+			return err
+		}
+		if err := claim(s.ServicePeriodCustomFields.EndFieldID); err != nil {
+			return err
+		}
 	}
 
 	for _, g := range s.GlobalCustomFields {
