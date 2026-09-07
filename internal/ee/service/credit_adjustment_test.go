@@ -257,6 +257,9 @@ func (s *CreditAdjustmentServiceSuite) customCurrencyInvoice(id string, macAmoun
 		Subtotal: macAmount,
 	}
 	inv.ProjectCustomCurrency()
+	// Finalize restores before applying credits, so the amount fields hold the
+	// denomination currency by the time the calculation runs.
+	inv.RestoreFromDenomination()
 	return inv
 }
 
@@ -272,8 +275,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_CustomCurr
 	s.Require().NoError(err)
 
 	s.True(decimal.NewFromInt(30).Equal(debits["wallet_mac"]), "30 mac debited against a 50 mac charge, got %s", debits["wallet_mac"])
-	s.True(decimal.NewFromInt(30).Equal(inv.LineItems[0].CustomCurrency.PrepaidCreditsApplied),
-		"credits recorded on the denomination, got %s", inv.LineItems[0].CustomCurrency.PrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(30).Equal(inv.LineItems[0].PrepaidCreditsApplied),
+		"credits recorded in the denomination currency, got %s", inv.LineItems[0].PrepaidCreditsApplied)
 }
 
 // The fiat columns are left alone by the calculation itself; projection is what moves them.
@@ -285,10 +288,15 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_CustomCurr
 
 	_, err := svc.CalculateCreditAdjustments(inv, wallets)
 	s.Require().NoError(err)
-	inv.LineItems[0].ProjectCustomCurrency(inv.CustomCurrency, inv.Currency)
+
+	// Capture and project are what convert, once, after the calculation.
+	inv.CaptureCustomCurrencyDenomination()
+	inv.ProjectCustomCurrency()
 
 	s.True(decimal.NewFromInt(3).Equal(inv.LineItems[0].PrepaidCreditsApplied),
 		"30 mac * 0.1 = $3.00, got %s", inv.LineItems[0].PrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(30).Equal(inv.LineItems[0].CustomCurrency.PrepaidCreditsApplied),
+		"the denomination keeps the original")
 }
 
 // A fiat wallet is not a candidate for a custom-currency invoice: ApplyCreditsToInvoice

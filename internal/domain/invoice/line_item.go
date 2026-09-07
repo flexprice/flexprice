@@ -126,16 +126,6 @@ func (i *InvoiceLineItem) Denomination() types.CustomCurrencyLineItem {
 	}
 }
 
-// SetDenominationPrepaidCreditsApplied writes the applied credits into the field whose
-// currency they were drawn in. Its fiat counterpart follows from ProjectCustomCurrency.
-func (i *InvoiceLineItem) SetDenominationPrepaidCreditsApplied(applied decimal.Decimal) {
-	if i.CustomCurrency != nil {
-		i.CustomCurrency.PrepaidCreditsApplied = applied
-		return
-	}
-	i.PrepaidCreditsApplied = applied
-}
-
 // ProjectCustomCurrency recomputes the fiat amounts from the denomination at the invoice's rate.
 func (i *InvoiceLineItem) ProjectCustomCurrency(cc *types.CustomCurrency, fiatCurrency string) {
 	if i.CustomCurrency == nil || cc == nil {

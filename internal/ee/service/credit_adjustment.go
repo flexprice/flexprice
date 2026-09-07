@@ -97,18 +97,17 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 	for _, lineItem := range inv.LineItems {
 		// Only usage-based items get amounts applied (one-time charges don't)
 		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
-			lineItem.SetDenominationPrepaidCreditsApplied(decimal.Zero)
+			lineItem.PrepaidCreditsApplied = decimal.Zero
 			continue
 		}
 
 		// Figure out how much this line item actually costs after discounts
 		// We apply amounts to the net amount, not the gross amount
-		denomination := lineItem.Denomination()
-		lineItemAmountAfterDiscounts := denomination.Amount.Sub(denomination.LineItemDiscount).Sub(denomination.InvoiceLevelDiscount)
+		lineItemAmountAfterDiscounts := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
 
 		// If it's already free (or negative), skip it
 		if lineItemAmountAfterDiscounts.LessThanOrEqual(decimal.Zero) {
-			lineItem.SetDenominationPrepaidCreditsApplied(decimal.Zero)
+			lineItem.PrepaidCreditsApplied = decimal.Zero
 			continue
 		}
 
@@ -156,7 +155,7 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 			}
 		}
 
-		lineItem.SetDenominationPrepaidCreditsApplied(amountAppliedToLineItem)
+		lineItem.PrepaidCreditsApplied = amountAppliedToLineItem
 
 		// Subtract what we used from the pool (use unrounded value to keep precision)
 		remainingAmountAvailable = remainingAmountAvailable.Sub(amountAppliedToLineItem)
@@ -306,24 +305,16 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			}
 		}
 
-		// Save how much was applied to each line item
-		// We calculated these values earlier, now we're just saving them to the database
+		// Total up what was applied. The line items themselves are persisted by the
+		// caller, once the amounts have been converted.
 		totalAmountApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
-			applied := lineItem.Denomination().PrepaidCreditsApplied
+			applied := lineItem.PrepaidCreditsApplied
 			if applied.IsZero() {
 				continue
 			}
 
 			totalAmountApplied = totalAmountApplied.Add(applied)
-
-			// Project before the write: Update persists both the denomination and the
-			// fiat column, so writing first would store the credits in the denomination
-			// and leave the fiat column at zero.
-			lineItem.ProjectCustomCurrency(inv.CustomCurrency, inv.Currency)
-			if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
-				return err
-			}
 		}
 
 		// Step 3: Set inv.TotalPrepaidApplied in memory (NOT persisted to database)
@@ -331,11 +322,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// persisted to the database. The caller is responsible for updating the invoice
 		// in the database if they need to persist TotalPrepaidApplied.
 		// This design allows callers to batch invoice updates with other operations.
-		if inv.CustomCurrency != nil {
-			inv.CustomCurrency.TotalPrepaidCreditsApplied = totalAmountApplied
-		} else {
-			inv.TotalPrepaidCreditsApplied = totalAmountApplied
-		}
+		inv.TotalPrepaidCreditsApplied = totalAmountApplied
 
 		result = &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalAmountApplied,

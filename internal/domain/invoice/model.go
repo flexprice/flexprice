@@ -304,6 +304,35 @@ func (i *Invoice) DenominationCurrency() string {
 	return i.Currency
 }
 
+// RestoreFromDenomination copies the denomination back into the amount fields so money
+// math runs in the custom currency. Call it at the start of any write path that loaded
+// the invoice from the database, where the amount fields hold fiat. Pair with
+// CaptureCustomCurrencyDenomination and ProjectCustomCurrency, which snapshot the result
+// and convert it exactly once.
+func (i *Invoice) RestoreFromDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	i.Subtotal = cc.Subtotal
+	i.TotalDiscount = cc.TotalDiscount
+	i.TotalTax = cc.TotalTax
+	i.TotalPrepaidCreditsApplied = cc.TotalPrepaidCreditsApplied
+	i.Total = cc.Total
+	i.AmountDue = cc.AmountDue
+
+	for _, item := range i.LineItems {
+		if item.CustomCurrency == nil {
+			continue
+		}
+		item.Amount = item.CustomCurrency.Amount
+		item.LineItemDiscount = item.CustomCurrency.LineItemDiscount
+		item.InvoiceLevelDiscount = item.CustomCurrency.InvoiceLevelDiscount
+		item.PrepaidCreditsApplied = item.CustomCurrency.PrepaidCreditsApplied
+	}
+}
+
 // CaptureCustomCurrencyDenomination snapshots the amount fields into the denomination.
 // Compute runs the pricing, coupon and discount pipeline in the subscription's currency;
 // this is where that becomes explicit. Follow it with ProjectCustomCurrency to write the
@@ -331,9 +360,9 @@ func (i *Invoice) CaptureCustomCurrencyDenomination() {
 	}
 }
 
-// MirrorTaxIntoDenomination divides the tax totals back into the denomination. Tax is the one
-// amount computed in fiat, so capture cannot be used — it copies. Keeps the denomination's
-// AmountDue post-tax, matching the invoice's.
+// MirrorTaxIntoDenomination divides the tax totals back into the denomination. Tax is
+// calculated after the conversion, in fiat, so capture cannot pick it up — capture copies
+// the amount fields as they are, and by then they hold fiat.
 func (i *Invoice) MirrorTaxIntoDenomination() {
 	if i.CustomCurrency == nil {
 		return

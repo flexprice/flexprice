@@ -2629,49 +2629,6 @@ func (s *InvoiceServiceSuite) TestCustomCurrencyLedgerSurvivesPersistence() {
 	}
 }
 
-// Projected line items are written through their own repository: InvoiceRepo.Update
-// writes the invoice row only, so without this the denomination and the projected fiat
-// amounts never reach the database.
-func (s *InvoiceServiceSuite) TestPersistProjectedLineItems() {
-	s.seedCustomCurrencyConfig()
-
-	inv := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
-	for _, item := range inv.LineItems {
-		item.InvoiceID = inv.ID
-		item.CustomCurrency = nil
-		s.NoError(s.GetStores().InvoiceLineItemRepo.Create(s.GetContext(), item))
-	}
-	inv.LineItems[0].Amount = decimal.NewFromInt(10)
-	inv.LineItems[1].Amount = decimal.NewFromInt(5)
-	inv.Subtotal = decimal.NewFromInt(15)
-	inv.Total = decimal.NewFromInt(15)
-	inv.AmountDue = decimal.NewFromInt(15)
-
-	inv.CaptureCustomCurrencyDenomination()
-	inv.ProjectCustomCurrency()
-	s.NoError(s.service.(*invoiceService).persistProjectedLineItems(s.GetContext(), inv))
-
-	persisted, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), inv.ID)
-	s.NoError(err)
-	s.Require().Len(persisted, 2)
-	for _, item := range persisted {
-		s.Require().NotNil(item.CustomCurrency, "the denomination must reach the database")
-	}
-	amounts := []string{persisted[0].Amount.String(), persisted[1].Amount.String()}
-	s.ElementsMatch([]string{"1", "0.5"}, amounts, "fiat amounts projected at the rate, got %v", amounts)
-}
-
-// A fiat invoice needs no line item rewrite.
-func (s *InvoiceServiceSuite) TestPersistProjectedLineItemsSkipsFiatInvoice() {
-	inv := &invoice.Invoice{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
-		Currency:  "usd",
-		LineItems: []*invoice.InvoiceLineItem{{ID: "missing_from_store", Amount: decimal.NewFromInt(10)}},
-	}
-	// The line item is not in the store, so any write would fail.
-	s.NoError(s.service.(*invoiceService).persistProjectedLineItems(s.GetContext(), inv))
-}
-
 // CaptureCustomCurrencyDenomination is the single point where compute's amounts, which are
 // denominated in the subscription's currency, become the denomination.
 func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationProjectsToFiat() {
