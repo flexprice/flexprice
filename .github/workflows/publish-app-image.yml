@@ -25,6 +25,16 @@ jobs:
   build-and-publish:
     name: Build, scan, publish multi-arch image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: ee
+            build_tags: ee
+            image_suffix: ""        # ghcr.io/<owner>/flexprice
+          - variant: oss
+            build_tags: ""
+            image_suffix: "-oss"    # ghcr.io/<owner>/flexprice-oss
     steps:
       # Audits runner egress; job holds GHCR_PUBLISH_TOKEN.
       - name: Harden runner
@@ -56,6 +66,10 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "semver=${TAG#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve image name
+        id: image
+        run: echo "name=${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
@@ -86,9 +100,11 @@ jobs:
           push: true
           provenance: true
           sbom: true
+          build-args: |
+            BUILD_TAGS=${{ matrix.build_tags }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.semver }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.tag.outputs.semver }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -99,7 +115,7 @@ jobs:
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
@@ -108,7 +124,7 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -118,7 +134,7 @@ jobs:
       # Signs the scanned digest, not a mutable tag.
       - name: Sign image (keyless)
         env:
-          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMG: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMG}@${DIGEST}"
 
@@ -126,7 +142,7 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest }}
-          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMG: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
         run: |
           {
             echo "## App Image Published"
