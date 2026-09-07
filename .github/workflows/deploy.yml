@@ -124,6 +124,11 @@ jobs:
           file: Dockerfile
           platforms: ${{ steps.image-tag.outputs.platforms }}
           push: true
+          # The flexprice image is the enterprise build (EE features compiled in),
+          # matching pre-boundary behavior. The community image is flexprice-oss,
+          # published separately by publish-app-image.yml.
+          build-args: |
+            BUILD_TAGS=ee
           tags: ${{ steps.image-tag.outputs.ghcr_tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
