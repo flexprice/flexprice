@@ -146,7 +146,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.logger,
 	)
 
-	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.logger)
+	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.priceRepo, f.logger)
 
 	// Create invoice sync service first
 	invoiceSyncSvc := stripe.NewInvoiceSyncService(
@@ -687,6 +687,7 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.invoiceRepo,
 		f.priceRepo,
 		f.entityIntegrationMappingRepo,
+		f.paymentRepo,
 		f.logger,
 	)
 
