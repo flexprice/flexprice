@@ -311,12 +311,18 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		totalAmountApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
 			applied := lineItem.Denomination().PrepaidCreditsApplied
+			if applied.IsZero() {
+				continue
+			}
+
+			totalAmountApplied = totalAmountApplied.Add(applied)
+
+			// Project before the write: Update persists both the denomination and the
+			// fiat column, so writing first would store the credits in the denomination
+			// and leave the fiat column at zero.
 			lineItem.ProjectCustomCurrency(inv.CustomCurrency, inv.Currency)
-			if applied.GreaterThan(decimal.Zero) {
-				totalAmountApplied = totalAmountApplied.Add(applied)
-				if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
-					return err
-				}
+			if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
+				return err
 			}
 		}
 

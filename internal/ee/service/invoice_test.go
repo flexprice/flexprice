@@ -2648,6 +2648,7 @@ func (s *InvoiceServiceSuite) TestPersistProjectedLineItems() {
 	inv.AmountDue = decimal.NewFromInt(15)
 
 	inv.CaptureCustomCurrencyDenomination()
+	inv.ProjectCustomCurrency()
 	s.NoError(s.service.(*invoiceService).persistProjectedLineItems(s.GetContext(), inv))
 
 	persisted, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), inv.ID)
@@ -2685,6 +2686,7 @@ func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationProjectsToFia
 		},
 	}
 	inv.CaptureCustomCurrencyDenomination()
+	inv.ProjectCustomCurrency()
 
 	s.True(inv.CustomCurrency.Subtotal.Equal(decimal.NewFromInt(15)), "denomination keeps the computed amount")
 	s.True(inv.Subtotal.Equal(decimal.NewFromFloat(1.5)), "fiat is projected, got %s", inv.Subtotal)
@@ -2703,6 +2705,7 @@ func (s *InvoiceServiceSuite) TestCaptureCustomCurrencyDenominationNoOpForFiat()
 		},
 	}
 	inv.CaptureCustomCurrencyDenomination()
+	inv.ProjectCustomCurrency()
 
 	s.Nil(inv.CustomCurrency)
 	s.True(inv.Subtotal.Equal(decimal.NewFromInt(15)))
@@ -2739,8 +2742,6 @@ func (s *InvoiceServiceSuite) TestLineItemLedgerFallsBackToFiatFields() {
 	s.True(denomination.InvoiceLevelDiscount.Equal(decimal.NewFromInt(1)))
 	s.True(denomination.PrepaidCreditsApplied.Equal(decimal.NewFromInt(3)))
 
-	item.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(4))
-	s.True(item.PrepaidCreditsApplied.Equal(decimal.NewFromInt(4)), "writes land on the fiat field")
 	s.Nil(item.CustomCurrency)
 }
 
@@ -2751,9 +2752,6 @@ func (s *InvoiceServiceSuite) TestLineItemLedgerPrefersCustomCurrency() {
 		CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(10)},
 	}
 	s.True(item.Denomination().Amount.Equal(decimal.NewFromInt(10)))
-
-	item.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(4))
-	s.True(item.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(4)))
 	s.True(item.PrepaidCreditsApplied.IsZero(), "the fiat field is only written by projection")
 }
 
@@ -2949,23 +2947,23 @@ func (s *InvoiceServiceSuite) TestUpdatePreservesCustomCurrencyWhenNotLoaded() {
 	s.Equal("mac", reread.CustomCurrency.Code)
 }
 
-// SetDenominationPrepaidCreditsApplied puts the amount in the field whose currency it
-// was drawn in; the fiat column follows from projection, not from the setter.
-func (s *InvoiceServiceSuite) TestSetDenominationPrepaidCreditsApplied() {
-	custom := &invoice.InvoiceLineItem{
-		Currency:       "usd",
-		CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(80)},
+// Credits recorded on the denomination reach the fiat column through projection, not
+// through the write itself.
+func (s *InvoiceServiceSuite) TestProjectCustomCurrencyConvertsPrepaidCredits() {
+	item := &invoice.InvoiceLineItem{
+		Currency: "usd",
+		CustomCurrency: &types.CustomCurrencyLineItem{
+			Amount:                decimal.NewFromInt(80),
+			PrepaidCreditsApplied: decimal.NewFromInt(30),
+		},
 	}
-	custom.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(30))
-	s.True(custom.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)), "30 mac lands on the denomination")
-	s.True(custom.PrepaidCreditsApplied.IsZero(), "the setter does not convert")
+	s.True(item.PrepaidCreditsApplied.IsZero(), "the fiat column is untouched until projection")
 
-	custom.ProjectCustomCurrency(&types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(1.25)}, "usd")
-	s.True(custom.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(37.5)),
-		"30 mac * 1.25 = $37.50, got %s", custom.PrepaidCreditsApplied)
+	item.ProjectCustomCurrency(&types.CustomCurrency{Code: "mac", Rate: decimal.NewFromFloat(1.25)}, "usd")
 
-	fiat := &invoice.InvoiceLineItem{Currency: "usd"}
-	fiat.SetDenominationPrepaidCreditsApplied(decimal.NewFromInt(30))
-	s.True(fiat.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)), "no denomination, so it lands on the fiat field")
-	s.Nil(fiat.CustomCurrency)
+	s.True(item.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(37.5)),
+		"30 mac * 1.25 = $37.50, got %s", item.PrepaidCreditsApplied)
+	s.True(item.Amount.Equal(decimal.NewFromInt(100)), "80 mac * 1.25 = $100.00, got %s", item.Amount)
+	s.True(item.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)),
+		"the denomination keeps the original")
 }

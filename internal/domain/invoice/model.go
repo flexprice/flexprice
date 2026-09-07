@@ -304,9 +304,10 @@ func (i *Invoice) DenominationCurrency() string {
 	return i.Currency
 }
 
-// CaptureCustomCurrencyDenomination snapshots the computed amounts as the denomination, then
-// projects the fiat columns from it. Compute runs the pricing, coupon and discount
-// pipeline in the subscription's currency; this is where that becomes explicit.
+// CaptureCustomCurrencyDenomination snapshots the amount fields into the denomination.
+// Compute runs the pricing, coupon and discount pipeline in the subscription's currency;
+// this is where that becomes explicit. Follow it with ProjectCustomCurrency to write the
+// fiat columns back.
 func (i *Invoice) CaptureCustomCurrencyDenomination() {
 	if i.CustomCurrency == nil {
 		return
@@ -328,8 +329,6 @@ func (i *Invoice) CaptureCustomCurrencyDenomination() {
 			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
 		}
 	}
-
-	i.ProjectCustomCurrency()
 }
 
 // MirrorTaxIntoDenomination divides the tax totals back into the denomination. Tax is the one

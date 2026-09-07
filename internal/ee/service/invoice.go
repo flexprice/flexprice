@@ -590,12 +590,13 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			}
 		}
 
-		// Snapshot the computed amounts as the denomination and project the fiat columns.
+		// The pipeline above ran in the subscription's currency. Snapshot it as the
+		// denomination, then write the fiat columns back from it.
 		inv.CaptureCustomCurrencyDenomination()
+		inv.ProjectCustomCurrency()
 		if inv.CustomCurrency != nil {
-			// Capture ends in ProjectCustomCurrency, which rewrites amount_due in fiat.
-			// amount_remaining is derived from it and would otherwise stay in the
-			// custom currency.
+			// The projection rewrote amount_due in fiat; amount_remaining is derived
+			// from it and would otherwise stay in the custom currency.
 			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 		}
 		if err := s.persistProjectedLineItems(txCtx, inv); err != nil {
@@ -3898,6 +3899,7 @@ func (s *invoiceService) projectPreviewToFiat(ctx context.Context, inv *invoice.
 		Rate: ccCfg.RateFor(code, ccCfg.DefaultFiatCurrency),
 	}
 	inv.CaptureCustomCurrencyDenomination()
+	inv.ProjectCustomCurrency()
 	return nil
 }
 
