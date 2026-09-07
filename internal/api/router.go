@@ -7,7 +7,6 @@ import (
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
-	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
@@ -66,9 +65,6 @@ type Handlers struct {
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
-
-	// Enterprise handlers
-	SAML *saml.Handler
 
 	// Portal handlers
 	Onboarding     *v1.OnboardingHandler
@@ -149,21 +145,6 @@ func NewRouter(
 		// Auth routes
 		v1Public.POST("/auth/signup", handlers.Auth.SignUp)
 		v1Public.POST("/auth/login", handlers.Auth.Login)
-
-		// SAML single sign-on. Public because these run before a session exists:
-		// the login redirect starts the flow, and the ACS callback is posted by
-		// the identity provider, which carries no credentials.
-		//
-		// Mounted only when the deployment offers SAML, so the endpoints 404 as
-		// though the feature did not exist rather than announcing a disabled one.
-		if handlers.SAML != nil && cfg.Auth.SAML.Enabled {
-			saml := v1Public.Group("/auth/saml/:tenant")
-			{
-				saml.GET("/metadata", handlers.SAML.Metadata)
-				saml.GET("/login", handlers.SAML.Login)
-				saml.POST("/acs", handlers.SAML.ACS)
-			}
-		}
 	}
 
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, environmentRepo, userRepo, logger))
