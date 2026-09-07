@@ -3091,9 +3091,18 @@ func (s *PriceServiceSuite) TestEnforceCurrency_ErrorReportsBothGroups() {
 	s.Contains(hint, "Supported fiat currencies: inr, usd")
 }
 
-// A tenant with no custom currencies configured accepts anything.
-func (s *PriceServiceSuite) TestEnforceCurrency_UnconfiguredTenantAllowsAnything() {
+// An environment with no custom currencies still rejects codes that are not real
+// currencies. Length is the only thing every other validator checks, so without this
+// a custom code configured in one environment is accepted in a fresh one.
+func (s *PriceServiceSuite) TestEnforceCurrency_UnconfiguredEnvironmentAllowsOnlyKnownFiat() {
 	var cfg types.CustomCurrencyConfig
+
 	s.NoError(cfg.EnforceCurrency("eur"))
-	s.NoError(cfg.EnforceCurrency("anything"))
+	s.NoError(cfg.EnforceCurrency("USD"), "matching is case-insensitive")
+
+	for _, currency := range []string{"mac", "zzz", "anything"} {
+		err := cfg.EnforceCurrency(currency)
+		s.Require().Error(err, "%s is not a known fiat currency", currency)
+		s.Contains(err.Error(), strings.ToLower(currency))
+	}
 }
