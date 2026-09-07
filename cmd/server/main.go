@@ -314,6 +314,9 @@ func main() {
 		),
 	)
 	opts = append(opts, fx.StartTimeout(3*time.Minute))
+
+	// Enterprise features, if built with -tags ee. Empty in a community build.
+	opts = append(opts, eeOptions()...)
 	app := fx.New(opts...)
 	app.Run()
 }
