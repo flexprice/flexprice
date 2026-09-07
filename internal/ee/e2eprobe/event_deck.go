@@ -8,11 +8,11 @@ import (
 )
 
 type EventDeckOpts struct {
-	Customers       []string
-	EventNames      []string
-	OrphanEventName string
-	OrphanFrequency int
-	Seed            int64
+	Customers        []string
+	EventNames       []string
+	OrphanEventName  string
+	OrphanFrequency  int
+	Seed             int64
 }
 
 type EventDraw struct {

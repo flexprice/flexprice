@@ -13,7 +13,7 @@ import (
 
 const (
 	Idx_tenant_environment_credit_note_number_unique         = "idx_tenant_environment_credit_note_number_unique"         // #nosec G101 -- index name, not a secret
-	Idx_tenant_environment_subscription_id_unique            = "idx_tenant_environment_subscription_id_unique"            // #nosec G101 -- index name, not a secret
+	Idx_tenant_environment_subscription_id_unique            = "idx_tenant_environment_subscription_id_unique"          // #nosec G101 -- index name, not a secret
 	Idx_tenant_environment_creditnote_idempotency_key_unique = "idx_tenant_environment_creditnote_idempotency_key_unique" // #nosec G101 -- index name, not a secret
 )
 

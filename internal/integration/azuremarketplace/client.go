@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	tokenURLTemplate      = "https://login.microsoftonline.com/%s/oauth2/v2.0/token" // #nosec G101 -- field name, not a secret
+	tokenURLTemplate      = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"  // #nosec G101 -- field name, not a secret
 	marketplaceAPIBaseURL = "https://marketplaceapi.microsoft.com/api"
 	apiVersion            = "2018-08-31"
 

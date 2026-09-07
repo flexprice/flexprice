@@ -18,7 +18,7 @@ const (
 	OAuthCredentialAuthCode     = "auth_code" // Temporary during OAuth flow
 
 	// Webhook security
-	OAuthCredentialWebhookVerifierToken = "webhook_verifier_token" // #nosec G101 -- field name constant, not a secret
+	OAuthCredentialWebhookVerifierToken = "webhook_verifier_token"  // #nosec G101 -- field name constant, not a secret
 	// OAuthCredentialWebhookSecret is the Zoho Books webhook signing secret (optional at OAuth init; stored encrypted).
 	OAuthCredentialWebhookSecret = "webhook_secret"
 

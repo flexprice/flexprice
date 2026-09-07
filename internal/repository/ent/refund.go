@@ -426,7 +426,7 @@ func (r *refundRepository) GetForUpdate(ctx context.Context, id string) (*domain
 	// Must be drained and closed before reusing the connection for the load below.
 	hasRow := rows.Next()
 	rowErr := rows.Err()
-	rows.Close() // #nosec G104 -- best-effort, error non-fatal
+	rows.Close()  // #nosec G104 -- best-effort, error non-fatal
 	if rowErr != nil {
 		SetSpanError(span, rowErr)
 		return nil, ierr.WithError(rowErr).WithHint("Failed to lock refund").Mark(ierr.ErrDatabase)

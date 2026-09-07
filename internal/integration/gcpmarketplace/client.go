@@ -29,7 +29,7 @@ const servicecontrolScope = "https://www.googleapis.com/auth/cloud-platform" // 
 
 // awsSubjectTokenType is the STS token type for an AWS-sourced external account credential
 // (external_account_authorized_user is a different flow; this is the one gcloud's --aws flag emits).
-const awsSubjectTokenType = "urn:ietf:params:aws:token-type:aws4_request" // #nosec G101 -- field name, not a secret
+const awsSubjectTokenType = "urn:ietf:params:aws:token-type:aws4_request"  // #nosec G101 -- field name, not a secret
 
 // UsageReportInput is one usage record to report via services.report. ValueCents is a single int64
 // scalar — the client wraps it into metricValueSets[0].metricValues[0].Int64Value; callers never

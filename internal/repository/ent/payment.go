@@ -62,34 +62,34 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 
 	// Not a loop var; local var shadowing package import, used synchronously below.
 	payment, err := client.Payment.Create(). // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
-							SetID(p.ID).
-							SetIdempotencyKey(p.IdempotencyKey).
-							SetDestinationType(string(p.DestinationType)).
-							SetDestinationID(p.DestinationID).
-							SetPaymentMethodType(string(p.PaymentMethodType)).
-							SetPaymentMethodID(p.PaymentMethodID).
-							SetNillablePaymentGateway(p.PaymentGateway).
-							SetNillableGatewayPaymentID(p.GatewayPaymentID).
-							SetNillableGatewayTrackingID(p.GatewayTrackingID).
-							SetGatewayMetadata(p.GatewayMetadata).
-							SetAmount(p.Amount).
-							SetCurrency(p.Currency).
-							SetPaymentStatus(string(p.PaymentStatus)).
-							SetTrackAttempts(p.TrackAttempts).
-							SetMetadata(p.Metadata).
-							SetNillableSucceededAt(p.SucceededAt).
-							SetNillableFailedAt(p.FailedAt).
-							SetNillableRefundedAt(p.RefundedAt).
-							SetNillableVoidedAt(p.VoidedAt).
-							SetNillableErrorMessage(p.ErrorMessage).
-							SetNillableRecordedAt(p.RecordedAt).
-							SetTenantID(p.TenantID).
-							SetCreatedAt(p.CreatedAt).
-							SetUpdatedAt(p.UpdatedAt).
-							SetCreatedBy(p.CreatedBy).
-							SetUpdatedBy(p.UpdatedBy).
-							SetEnvironmentID(p.EnvironmentID).
-							Save(ctx)
+		SetID(p.ID).
+		SetIdempotencyKey(p.IdempotencyKey).
+		SetDestinationType(string(p.DestinationType)).
+		SetDestinationID(p.DestinationID).
+		SetPaymentMethodType(string(p.PaymentMethodType)).
+		SetPaymentMethodID(p.PaymentMethodID).
+		SetNillablePaymentGateway(p.PaymentGateway).
+		SetNillableGatewayPaymentID(p.GatewayPaymentID).
+		SetNillableGatewayTrackingID(p.GatewayTrackingID).
+		SetGatewayMetadata(p.GatewayMetadata).
+		SetAmount(p.Amount).
+		SetCurrency(p.Currency).
+		SetPaymentStatus(string(p.PaymentStatus)).
+		SetTrackAttempts(p.TrackAttempts).
+		SetMetadata(p.Metadata).
+		SetNillableSucceededAt(p.SucceededAt).
+		SetNillableFailedAt(p.FailedAt).
+		SetNillableRefundedAt(p.RefundedAt).
+		SetNillableVoidedAt(p.VoidedAt).
+		SetNillableErrorMessage(p.ErrorMessage).
+		SetNillableRecordedAt(p.RecordedAt).
+		SetTenantID(p.TenantID).
+		SetCreatedAt(p.CreatedAt).
+		SetUpdatedAt(p.UpdatedAt).
+		SetCreatedBy(p.CreatedBy).
+		SetUpdatedBy(p.UpdatedBy).
+		SetEnvironmentID(p.EnvironmentID).
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

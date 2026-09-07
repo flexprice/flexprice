@@ -273,7 +273,7 @@ func main() {
 	}
 	if apiKey != "" {
 		os.Setenv("SCRIPT_FLEXPRICE_API_KEY", apiKey) // #nosec G104 -- seed tooling, non-prod
-		os.Setenv("FLEXPRICE_API_KEY", apiKey)        // #nosec G104 -- seed tooling, non-prod
+		os.Setenv("FLEXPRICE_API_KEY", apiKey) // #nosec G104 -- seed tooling, non-prod
 	}
 	if externalCustomerID != "" {
 		os.Setenv("EXTERNAL_CUSTOMER_ID", externalCustomerID) // #nosec G104 -- seed tooling, non-prod

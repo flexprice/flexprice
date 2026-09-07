@@ -894,7 +894,7 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 
 	results := make([]*events.MeterUsageDetailedResult, 0, len(byKey))
 	for _, g := range byKey {
-		eventCount := uint64(distinctIDCount(g.records))          // #nosec G115 -- test store, bounded
+		eventCount := uint64(distinctIDCount(g.records))         // #nosec G115 -- test store, bounded
 		countUnique := uint64(distinctUniqueHashCount(g.records)) // #nosec G115 -- test store, bounded
 		res := &events.MeterUsageDetailedResult{
 			MeterID:          g.meterID,
@@ -950,7 +950,7 @@ func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, an
 	buckets := bucketRecords(records, ws, anchor)
 	points := make([]events.MeterUsageDetailedPoint, 0, len(buckets))
 	for _, b := range buckets {
-		eventCount := uint64(distinctIDCount(b.records))          // #nosec G115 -- test store, bounded
+		eventCount := uint64(distinctIDCount(b.records))         // #nosec G115 -- test store, bounded
 		countUnique := uint64(distinctUniqueHashCount(b.records)) // #nosec G115 -- test store, bounded
 		points = append(points, events.MeterUsageDetailedPoint{
 			WindowStart:      b.start,

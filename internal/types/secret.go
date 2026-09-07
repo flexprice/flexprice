@@ -46,7 +46,7 @@ const (
 	SecretProviderTabs             SecretProvider = "tabs"
 	SecretProviderAWSMarketplace   SecretProvider = "aws_marketplace"
 	SecretProviderGCPMarketplace   SecretProvider = "gcp_marketplace"
-	SecretProviderAzureMarketplace SecretProvider = "azure_marketplace" // #nosec G101 -- provider enum value, not a secret
+	SecretProviderAzureMarketplace SecretProvider = "azure_marketplace"  // #nosec G101 -- provider enum value, not a secret
 )
 
 func (p SecretProvider) Validate() error {

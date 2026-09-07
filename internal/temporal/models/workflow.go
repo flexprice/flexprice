@@ -180,7 +180,7 @@ func (c *WorkflowConfig) ResolveOnboardingActions(onboardingWorkflowName string)
 	if custom, ok := c.CustomWorkflows[onboardingWorkflowName]; ok {
 		return custom, true
 	}
-
+	
 	return c.Actions, false
 }
 
@@ -576,7 +576,7 @@ const (
 	// Token-related property keys (Case 1: 5 features)
 	EventPropertyKeyPromptTokens             EventPropertyKey = "promptTokens"
 	EventPropertyKeyCompletionTokens         EventPropertyKey = "completionTokens"
-	EventPropertyKeyCachedPromptTokens       EventPropertyKey = "cachedPromptTokens" // #nosec G101 -- field name, not a secret
+	EventPropertyKeyCachedPromptTokens       EventPropertyKey = "cachedPromptTokens"  // #nosec G101 -- field name, not a secret
 	EventPropertyKeyCacheCreationInputTokens EventPropertyKey = "cacheCreationInputTokens"
 	EventPropertyKeyCacheReadInputTokens     EventPropertyKey = "cacheReadInputTokens"
 

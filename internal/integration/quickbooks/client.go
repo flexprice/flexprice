@@ -29,7 +29,7 @@ const maxQueryLiteralLen = 100
 // item name reach these queries from tenant-controlled entity fields, so without
 // escaping a single quote breaks out of the literal (SOQL-like injection).
 //
-// QuickBooks escapes a single quote by doubling it (”), not with a backslash
+// QuickBooks escapes a single quote by doubling it (''), not with a backslash
 // (backslash is not special). Control characters have no place in these fields
 // and could smuggle clauses or corrupt the request URL, so they are removed. The
 // result is length-bounded to the field maximum.
