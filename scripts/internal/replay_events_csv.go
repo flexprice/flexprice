@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -122,8 +123,12 @@ func ReplayEventsFromCSV() error {
 		batches++
 		firstRow, lastRow := batchRows[0], batchRows[len(batchRows)-1]
 		if err := postEventBatch(client, endpoint, apiKey, batch); err != nil {
-			failed += len(batch)
-			recordErr(fmt.Sprintf("batch %d (rows %d-%d, %d events) failed: %v", batches, firstRow, lastRow, len(batch), err))
+			if errors.Is(err, errAmbiguousBatchOutcome) {
+				fmt.Printf("batch %d (rows %d-%d, %d events) outcome uncertain: %v\n", batches, firstRow, lastRow, len(batch), err)
+			} else {
+				failed += len(batch)
+				recordErr(fmt.Sprintf("batch %d (rows %d-%d, %d events) failed: %v", batches, firstRow, lastRow, len(batch), err))
+			}
 		} else {
 			success += len(batch)
 			fmt.Printf("progress: %d accepted / %d processed (batch %d, rows %d-%d)\n", success, total, batches, firstRow, lastRow)
@@ -140,6 +145,7 @@ func ReplayEventsFromCSV() error {
 			break
 		}
 		if err != nil {
+			flush()
 			return fmt.Errorf("read csv row %d: %w", total+1, err)
 		}
 		total++
@@ -263,6 +269,10 @@ func parseEventTimestamp(raw string) (time.Time, error) {
 	return time.Time{}, lastErr
 }
 
+// errAmbiguousBatchOutcome is returned after retries when the last attempt was a
+// transport error, 429, or 5xx. The request may already have been accepted.
+var errAmbiguousBatchOutcome = errors.New("batch outcome ambiguous")
+
 func postEventBatch(client *http.Client, endpoint, apiKey string, batch []*dto.IngestEventRequest) error {
 	body, err := json.Marshal(dto.BulkIngestEventRequest{Events: batch})
 	if err != nil {
@@ -306,5 +316,8 @@ func postEventBatch(client *http.Client, endpoint, apiKey string, batch []*dto.I
 		}
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
-	return lastErr
+	if lastErr != nil {
+		return fmt.Errorf("%w: %w", errAmbiguousBatchOutcome, lastErr)
+	}
+	return nil
 }
