@@ -7428,6 +7428,15 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 	currentStart := sub.CurrentPeriodStart
 	currentEnd := sub.CurrentPeriodEnd
 
+	// A subscription cancelled mid-period keeps its untruncated CurrentPeriodEnd.
+	if sub.EndDate != nil && sub.EndDate.After(currentStart) && sub.EndDate.Before(currentEnd) {
+		s.Logger.Info(ctx, "truncating open billing period to subscription end date",
+			"subscription_id", sub.ID,
+			"current_period_end", currentEnd,
+			"end_date", *sub.EndDate)
+		currentEnd = *sub.EndDate
+	}
+
 	periods := make([]dto.Period, 0)
 
 	periods = append(periods, dto.Period{
@@ -7450,6 +7459,18 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 		if err != nil {
 			return nil, err
 		}
+
+		// Backstop for data the truncation above cannot repair, e.g. an end date at or before
+		// CurrentPeriodStart. Never emit a period that runs backwards.
+		if nextEnd.Before(nextStart) {
+			s.Logger.Info(ctx, "stopped period generation - next period end precedes its start",
+				"subscription_id", sub.ID,
+				"next_start", nextStart,
+				"next_end", nextEnd,
+				"end_date", sub.EndDate)
+			break
+		}
+
 		periods = append(periods, dto.Period{
 			Start: nextStart,
 			End:   nextEnd,
