@@ -291,11 +291,6 @@ type CheckoutProviderResultBuilder struct {
 	result CheckoutProviderResult
 }
 
-// NewCheckoutProviderResult starts an empty builder.
-func NewCheckoutProviderResult() *CheckoutProviderResultBuilder {
-	return &CheckoutProviderResultBuilder{}
-}
-
 // NewCheckoutProviderResultFrom starts from an existing result — typically the one
 // already stored on the session — so an overlay only has to supply what it knows.
 // A nil base starts empty.
@@ -340,31 +335,6 @@ func (b *CheckoutProviderResultBuilder) Overlay(r *CheckoutProviderResult) *Chec
 		}
 		b.result.ProviderMetadata[k] = v
 	}
-	return b
-}
-
-// WithNextAction records what the customer must do to complete payment.
-func (b *CheckoutProviderResultBuilder) WithNextAction(action *PaymentAction) *CheckoutProviderResultBuilder {
-	b.result.NextAction = action
-	return b
-}
-
-// WithProviderSessionID records the pre-payment handle — a payment link, hosted page,
-// invoice or order — that exists only until someone pays.
-func (b *CheckoutProviderResultBuilder) WithProviderSessionID(id string) *CheckoutProviderResultBuilder {
-	b.result.ProviderSessionID = id
-	return b
-}
-
-// WithProviderPaymentIntentID records the provider's own charge or intent id.
-func (b *CheckoutProviderResultBuilder) WithProviderPaymentIntentID(id string) *CheckoutProviderResultBuilder {
-	b.result.ProviderPaymentIntentID = id
-	return b
-}
-
-// WithExpiresAt records when the provider closes its hosted object.
-func (b *CheckoutProviderResultBuilder) WithExpiresAt(t *time.Time) *CheckoutProviderResultBuilder {
-	b.result.ExpiresAt = t
 	return b
 }
 
