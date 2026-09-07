@@ -2593,10 +2593,11 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 		remaining, paid := inv.AmountRemaining, inv.AmountPaid
 		if inCustomCurrency {
-			// amount_due on the denomination is post-tax, like the invoice's. Only the paid
-			// amount needs restating: payments settle in fiat and have no denomination form.
+			// Restated from the invoice, not read off the denomination: credit notes and
+			// external discounts reduce amount_due and amount_remaining after finalization
+			// without touching the denomination, so its amount_due can be stale.
+			remaining = inv.CustomCurrency.FromFiat(inv.AmountRemaining)
 			paid = inv.CustomCurrency.FromFiat(inv.AmountPaid)
-			remaining = inv.CustomCurrency.AmountDue.Sub(paid)
 		}
 		unpaidAmount = unpaidAmount.Add(remaining)
 		totalInvoiceAmountPaid = totalInvoiceAmountPaid.Add(paid)
