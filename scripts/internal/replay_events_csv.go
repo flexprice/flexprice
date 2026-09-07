@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,19 +19,23 @@ import (
 const (
 	defaultEventsCSVPath = "scripts/internal/events.csv"
 	defaultAPIBaseURL    = "https://api.cloud.flexprice.io/v1"
-	replayTimeoutSeconds = 15
+	defaultReplayBatch   = 100
+	// maxReplayBatch mirrors the API cap on dto.BulkIngestEventRequest.Events.
+	maxReplayBatch       = 1000
+	replayTimeoutSeconds = 60
 	replayMaxRetries     = 2
 	replayInitialBackoff = 200 * time.Millisecond
 )
 
-// ReplayEventsFromCSV reads events from a CSV and POSTs each to POST /v1/events.
+// ReplayEventsFromCSV reads events from a CSV and POSTs them in batches to POST /v1/events/bulk.
 //
 // Usage:
 //
 //	go run scripts/main.go -cmd replay-events-csv \
 //	  -api-key "sk_..." \
 //	  -file-path "scripts/internal/events.csv" \
-//	  -api-base-url "https://api.cloud.flexprice.io/v1"
+//	  -api-base-url "https://api.cloud.flexprice.io/v1" \
+//	  -batch-size 100
 //
 // Optional: -dry-run true (parse + print first few payloads, no HTTP calls)
 func ReplayEventsFromCSV() error {
@@ -51,7 +56,19 @@ func ReplayEventsFromCSV() error {
 	if baseURL == "" {
 		baseURL = defaultAPIBaseURL
 	}
-	endpoint := baseURL + "/events"
+	endpoint := baseURL + "/events/bulk"
+
+	batchSize := defaultReplayBatch
+	if raw := strings.TrimSpace(os.Getenv("BATCH_SIZE")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid batch size %q: must be a positive integer", raw)
+		}
+		if parsed > maxReplayBatch {
+			return fmt.Errorf("invalid batch size %d: maximum is %d", parsed, maxReplayBatch)
+		}
+		batchSize = parsed
+	}
 
 	dryRun := strings.EqualFold(os.Getenv("DRY_RUN"), "true")
 
@@ -83,12 +100,39 @@ func ReplayEventsFromCSV() error {
 		success   int
 		failed    int
 		skipped   int
+		batches   int
 		start     = time.Now()
 		dryShown  int
 		firstErrs []string
+		batch     []*dto.IngestEventRequest
+		batchRows []int
 	)
 
-	fmt.Printf("Replaying events from %s → %s (dry_run=%v)\n", filePath, endpoint, dryRun)
+	recordErr := func(msg string) {
+		if len(firstErrs) < 10 {
+			firstErrs = append(firstErrs, msg)
+		}
+		fmt.Println(msg)
+	}
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		batches++
+		firstRow, lastRow := batchRows[0], batchRows[len(batchRows)-1]
+		if err := postEventBatch(client, endpoint, apiKey, batch); err != nil {
+			failed += len(batch)
+			recordErr(fmt.Sprintf("batch %d (rows %d-%d, %d events) failed: %v", batches, firstRow, lastRow, len(batch), err))
+		} else {
+			success += len(batch)
+			fmt.Printf("progress: %d accepted / %d processed (batch %d, rows %d-%d)\n", success, total, batches, firstRow, lastRow)
+		}
+		batch = batch[:0]
+		batchRows = batchRows[:0]
+	}
+
+	fmt.Printf("Replaying events from %s → %s (batch_size=%d dry_run=%v)\n", filePath, endpoint, batchSize, dryRun)
 
 	for {
 		row, err := reader.Read()
@@ -103,11 +147,7 @@ func ReplayEventsFromCSV() error {
 		event, err := csvRowToIngestEvent(row, col)
 		if err != nil {
 			failed++
-			msg := fmt.Sprintf("row %d: parse error: %v", total, err)
-			if len(firstErrs) < 10 {
-				firstErrs = append(firstErrs, msg)
-			}
-			fmt.Println(msg)
+			recordErr(fmt.Sprintf("row %d: parse error: %v", total, err))
 			continue
 		}
 
@@ -127,24 +167,16 @@ func ReplayEventsFromCSV() error {
 			continue
 		}
 
-		if err := postSingleEvent(client, endpoint, apiKey, event); err != nil {
-			failed++
-			msg := fmt.Sprintf("row %d: event_id=%s failed: %v", total, event.EventID, err)
-			if len(firstErrs) < 10 {
-				firstErrs = append(firstErrs, msg)
-			}
-			fmt.Println(msg)
-			continue
-		}
-
-		success++
-		if success%100 == 0 {
-			fmt.Printf("progress: %d accepted / %d processed\n", success, total)
+		batch = append(batch, event)
+		batchRows = append(batchRows, total)
+		if len(batch) >= batchSize {
+			flush()
 		}
 	}
+	flush()
 
 	fmt.Printf("\nDone in %s\n", time.Since(start).Round(time.Millisecond))
-	fmt.Printf("total=%d success=%d failed=%d skipped=%d\n", total, success, failed, skipped)
+	fmt.Printf("total=%d success=%d failed=%d skipped=%d batches=%d\n", total, success, failed, skipped, batches)
 	if len(firstErrs) > 0 {
 		fmt.Println("first errors:")
 		for _, e := range firstErrs {
@@ -231,8 +263,8 @@ func parseEventTimestamp(raw string) (time.Time, error) {
 	return time.Time{}, lastErr
 }
 
-func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.IngestEventRequest) error {
-	body, err := json.Marshal(event)
+func postEventBatch(client *http.Client, endpoint, apiKey string, batch []*dto.IngestEventRequest) error {
+	body, err := json.Marshal(dto.BulkIngestEventRequest{Events: batch})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
