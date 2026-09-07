@@ -719,11 +719,6 @@ func (s *subscriptionChangeService) executeChange(
 	if isTrialing {
 		cancelInvoicePolicy = types.CancelImmediatelyInvoicePolicySkip
 	}
-	// Immediate cancellation closes CurrentPeriodEnd at the effective date on the persisted row,
-	// and does so in place on this struct. Everything below prorates the period that just ended,
-	// so it needs the period as it was before the cancellation — restore it on the local copy.
-	periodStartBeforeCancel := currentSub.CurrentPeriodStart
-	periodEndBeforeCancel := currentSub.CurrentPeriodEnd
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
@@ -736,8 +731,6 @@ func (s *subscriptionChangeService) executeChange(
 	if err != nil {
 		return nil, err
 	}
-	currentSub.CurrentPeriodStart = periodStartBeforeCancel
-	currentSub.CurrentPeriodEnd = periodEndBeforeCancel
 
 	// For immediate plan changes with create_prorations, we net the old subscription's proration
 	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
