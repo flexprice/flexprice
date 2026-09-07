@@ -161,8 +161,9 @@ spec:
       - name: flexprice
         layout:
           shardsCount: 1
-          # >1 requires keeper.hosts pointing at a running quorum, else the
-          # replicated tables come up read-only.
+          {{- if and (gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1) (not .Values.clickhouse.altinity.keeper.hosts) }}
+            {{- fail "clickhouse.altinity.replicasCount > 1 requires clickhouse.altinity.keeper.hosts: without a Keeper quorum the replicated tables come up read-only." }}
+          {{- end }}
           replicasCount: {{ .Values.clickhouse.altinity.replicasCount | default 1 }}
         templates:
           podTemplate: clickhouse-pod
@@ -256,11 +257,17 @@ spec:
     podTemplates:
       - name: clickhouse-pod
         spec:
-          {{- /* fsGroup: a fresh PVC mounts root-owned and the container runs
-              as uid 101, so a new replica cannot create /var/lib/clickhouse/tmp. */}}
-          {{- with .Values.clickhouse.altinity.podSecurityContext }}
+          {{- /* fsGroup: a fresh PVC mounts root-owned and the container runs as
+              uid 101, so without it a new replica cannot create
+              /var/lib/clickhouse/tmp. Defaulted when replicas > 1 rather than left
+              to the caller, because the failure only appears on the new replica. */}}
+          {{- if .Values.clickhouse.altinity.podSecurityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
+            {{- toYaml .Values.clickhouse.altinity.podSecurityContext | nindent 12 }}
+          {{- else if gt (int (.Values.clickhouse.altinity.replicasCount | default 1)) 1 }}
+          securityContext:
+            fsGroup: 101
+            fsGroupChangePolicy: OnRootMismatch
           {{- end }}
           {{- with .Values.clickhouse.altinity.nodeSelector }}
           nodeSelector:

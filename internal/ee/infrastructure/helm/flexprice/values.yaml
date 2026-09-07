@@ -874,7 +874,8 @@ clickhouse:
   # ── altinity mode ─────────────────────────────────────────────────────────────
   # ClickHouseInstallation CRD. Operator creates service: chi-<fullname>-flexprice-0-0
   altinity:
-    # >1 also requires keeper.hosts and Replicated*MergeTree tables.
+    # >1 requires keeper.hosts (enforced: rendering fails without it) and
+    # Replicated*MergeTree tables.
     replicasCount: 1
     # Empty renders no zookeeper block. Keeper is not deployed by this chart:
     # it needs its own storage class (N2 pools take PD, C4 pools take Hyperdisk)
@@ -884,8 +885,8 @@ clickhouse:
       port: 2181
     # Empty = chart adds a required hostname anti-affinity when replicas > 1.
     affinity: {}
-    # Needs {fsGroup: 101, fsGroupChangePolicy: OnRootMismatch} for replicas > 1,
-    # or a new replica cannot write its freshly provisioned PVC.
+    # Empty = chart supplies {fsGroup: 101, fsGroupChangePolicy: OnRootMismatch}
+    # when replicas > 1, without which a new replica cannot write its fresh PVC.
     podSecurityContext: {}
     image:
       repository: altinity/clickhouse-server
