@@ -65,7 +65,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
         with:
-          # No GHA build cache: a poisoned layer must never reach a signed image.
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
           cache-binary: false
 
       - name: Login to GitHub Container Registry
@@ -460,7 +461,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
         with:
-          # No GHA build cache: a poisoned layer must never reach a signed image.
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
           cache-binary: false
 
       - name: Retag :<sha> -> :main (manifest copy, no rebuild)

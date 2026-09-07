@@ -55,5 +55,9 @@ jobs:
       # BLOCKING gate: HIGH-severity baseline is 0 on develop, so a new
       # high-confidence workflow finding fails the PR. Lower severities remain
       # advisory via the SARIF upload above.
+      # Online (GITHUB_TOKEN) so online audits — known-vulnerable-actions,
+      # impostor-commit, typosquat-uses — are included in the HIGH gate.
       - name: zizmor gate (fail on HIGH)
-        run: zizmor --offline --min-severity high .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --min-severity high .

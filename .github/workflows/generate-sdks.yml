@@ -51,7 +51,10 @@ jobs:
           RAW="$RELEASE_TAG"
           RESOLVED="${RAW#v}"
           echo "Using release tag: $RAW -> $RESOLVED"
-          [ -z "$RESOLVED" ] && echo "::error::Version is empty (release tag)." && exit 1
+          if ! printf '%s' "$RESOLVED" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Invalid release tag (expected semver like v1.2.3): $RAW"
+            exit 1
+          fi
 
           GEN_VERSION=""
           if [ -f .speakeasy/gen/go.yaml ]; then
@@ -154,7 +157,9 @@ jobs:
 
       # SDKs: generate with resolved version only (from version-check job)
       - name: Generate SDKs and MCP
-        run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
+        env:
+          SDK_VERSION: ${{ needs.version-check.outputs.version }}
+        run: make sdk-all VERSION="$SDK_VERSION"
 
       # Overwrite Speakeasy version in artifacts with resolved version only
       - name: Apply resolved version to SDK artifacts
