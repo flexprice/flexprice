@@ -80,6 +80,7 @@ func NewRouter(
 	handlers Handlers,
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	params service.ServiceParams,
 	secretService service.SecretService,
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
@@ -819,6 +820,15 @@ func NewRouter(
 		workflows.GET("/:workflow_id/:run_id/timeline", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowTimeline)
 		workflows.GET("/:workflow_id/:run_id", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowDetails)
 	}
+
+	// EE route hook, mounted last so it never shadows a community route.
+	applyEERoutes(EERouteParams{
+		Config:        cfg,
+		Logger:        logger,
+		ServiceParams: params,
+		Public:        v1Public,
+		Private:       v1Private,
+	})
 
 	return router
 }
