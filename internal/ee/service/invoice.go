@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -40,7 +41,6 @@ type InvoiceService interface {
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error)
 	FinalizeInvoice(ctx context.Context, id string) error
-	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
@@ -53,8 +53,8 @@ type InvoiceService interface {
 	GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
 	AttemptPayment(ctx context.Context, id string) error
-	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
-	GetInvoicePDFUrl(ctx context.Context, id string, forceGenerate bool) (string, error)
+	GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error)
+	GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
@@ -815,7 +815,13 @@ func (s *invoiceService) mapBulkAnalyticsToLineItems(ctx context.Context, analyt
 			}
 
 			if analyticsItem.EventCount > 0 {
-				eventCount := int(analyticsItem.EventCount)
+				if analyticsItem.EventCount > math.MaxInt {
+					return nil, ierr.NewError("event count exceeds int range").
+						WithHint("Event count exceeds supported range").
+						WithReportableDetails(map[string]any{"event_count": analyticsItem.EventCount}).
+						Mark(ierr.ErrValidation)
+				}
+				eventCount := int(analyticsItem.EventCount) // #nosec G115 -- bounded above before cast
 				usageItem.EventCount = &eventCount
 			}
 
@@ -1249,19 +1255,19 @@ func validateInvoiceVoidable(inv *invoice.Invoice) error {
 	return nil
 }
 
-func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error {
+func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error) {
 
 	if err := req.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := validateInvoiceVoidable(inv); err != nil {
-		return err
+		return nil, err
 	}
 
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
@@ -1321,7 +1327,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		return s.InvoiceRepo.Update(tx, inv)
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
@@ -1351,7 +1357,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID)
-	return nil
+	return inv, nil
 }
 
 func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {
@@ -2783,7 +2789,8 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 	return nil
 }
 
-func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceGenerate bool) (string, error) {
+func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error) {
+	id := req.InvoiceID
 
 	// get invoice
 	inv, err := s.InvoiceRepo.Get(ctx, id)
@@ -2793,6 +2800,10 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 
 	if inv.InvoicePDFURL != nil {
 		return lo.FromPtr(inv.InvoicePDFURL), nil
+	}
+
+	if url, err := s.billingProviderPDFURL(ctx, id); err == nil && url != "" {
+		return url, nil
 	}
 
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
@@ -2814,7 +2825,7 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 			Mark(ierr.ErrValidation)
 	}
 
-	if !forceGenerate {
+	if !req.ForceGenerate {
 		exists, err := store.Exists(ctx, key)
 		if err != nil {
 			return "", err
@@ -2824,7 +2835,7 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 		}
 	}
 
-	data, err := s.GetInvoicePDF(ctx, id)
+	data, err := s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: id})
 	if err != nil {
 		return "", err
 	}
@@ -2841,8 +2852,45 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 	return store.PresignGet(ctx, key, presignExpiry)
 }
 
+// billingProviderPDFURL returns the enabled billing provider's own rendering of
+// this invoice, or "" when none applies. The first connection with outbound
+// invoice sync enabled wins.
+func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID string) (string, error) {
+	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
+	if err != nil || len(providers) == 0 {
+		return "", err
+	}
+
+	provider := providers[0].Provider
+	url, err := s.providerInvoicePDFURL(ctx, provider, invoiceID)
+	if err != nil {
+		s.Logger.Info(ctx, "billing provider has no pdf for this invoice, rendering our own",
+			"provider", provider, "invoice_id", invoiceID, "reason", err.Error())
+		return "", nil
+	}
+	return url, nil
+}
+
+func (s *invoiceService) providerInvoicePDFURL(ctx context.Context, provider types.SecretProvider, invoiceID string) (string, error) {
+	switch provider {
+	case types.SecretProviderChargebee:
+		integration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		return integration.InvoiceSvc.GetInvoicePDFURL(ctx, invoiceID)
+	default:
+		return "", ierr.NewErrorf("provider %s cannot serve invoice PDFs", provider).
+			WithHint("This provider has no on-demand invoice PDF").
+			WithReportableDetails(map[string]any{"provider": provider, "invoice_id": invoiceID}).
+			Mark(ierr.ErrNotImplemented)
+	}
+}
+
 // GetInvoicePDF implements InvoiceService.
-func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
+func (s *invoiceService) GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error) {
+	id := req.InvoiceID
 
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	pdfConfig, err := GetSetting[types.InvoicePDFConfig](
@@ -2855,17 +2903,17 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	}
 
 	// validate request
-	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
+	breakdownReq := dto.GetInvoiceWithBreakdownRequest{ID: id}
 
 	// Use typed config directly
-	req.GroupBy = pdfConfig.GroupBy
+	breakdownReq.GroupBy = pdfConfig.GroupBy
 	templateName := pdfConfig.TemplateName
-	if err := req.Validate(); err != nil {
+	if err := breakdownReq.Validate(); err != nil {
 		return nil, err
 	}
 
 	// get invoice by id
-	inv, err := s.GetInvoiceWithBreakdown(ctx, req)
+	inv, err := s.GetInvoiceWithBreakdown(ctx, breakdownReq)
 	if err != nil {
 		return nil, err
 	}
@@ -3669,10 +3717,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 
 	// All non-mutating prerequisites passed — safe to void now.
 	if inv.InvoiceStatus != types.InvoiceStatusVoided {
-		if err := s.VoidInvoice(ctx, id, dto.InvoiceVoidRequest{}); err != nil {
-			return nil, err
-		}
-		inv, err = s.InvoiceRepo.Get(ctx, id)
+		inv, err = s.VoidInvoice(ctx, id, dto.InvoiceVoidRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -3825,9 +3870,29 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		return nil, err
 	}
 
+	// Finalized + apply_discount runs void-and-recreate and the update lands on the copy.
 	var updatedInv *invoice.Invoice
+	recreated := false
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, id)
+		targetID := id
+
+		locked, err := s.InvoiceRepo.GetForUpdate(txCtx, id)
+		if err != nil {
+			return err
+		}
+		if err := rejectVoidedInvoiceEdit(locked); err != nil {
+			return err
+		}
+		if locked.InvoiceStatus == types.InvoiceStatusFinalized && req.ApplyDiscount {
+			draft, err := s.voidAndRecreateDraftForEdit(txCtx, locked)
+			if err != nil {
+				return err
+			}
+			recreated = true
+			targetID = draft.ID
+		}
+
+		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, targetID)
 		if err != nil {
 			return err
 		}
@@ -3837,7 +3902,7 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 			return ierr.NewError("cannot update invoice in current status").
 				WithHint("Invoice can only be updated when in draft or finalized status").
 				WithReportableDetails(map[string]any{
-					"invoice_id":     id,
+					"invoice_id":     targetID,
 					"current_status": inv.InvoiceStatus,
 				}).
 				Mark(ierr.ErrValidation)
@@ -3853,7 +3918,8 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 			inv.Metadata = *req.Metadata
 		}
 
-		if req.ApplyDiscount {
+		if req.ApplyDiscount && !recreated {
+			// Draft path only — the recreate path already applied the discount to the copy.
 			if err := s.recalculateDiscountOnInvoice(txCtx, inv); err != nil {
 				return err
 			}
@@ -3869,7 +3935,7 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		return nil, err
 	}
 
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, id)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, updatedInv.ID)
 	return dto.NewInvoiceResponse(updatedInv), nil
 }
 
@@ -4281,7 +4347,7 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(analyticsResponse *dto.
 			}
 
 			if analyticsItem.EventCount > 0 {
-				eventCount := int(analyticsItem.EventCount)
+				eventCount := int(analyticsItem.EventCount) // #nosec G115 -- event count bounded by real usage volume
 				breakdownItem.EventCount = &eventCount
 			}
 

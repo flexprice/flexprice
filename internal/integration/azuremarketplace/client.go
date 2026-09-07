@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	tokenURLTemplate      = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+	tokenURLTemplate      = "https://login.microsoftonline.com/%s/oauth2/v2.0/token" // #nosec G101 -- field name, not a secret
 	marketplaceAPIBaseURL = "https://marketplaceapi.microsoft.com/api"
 	apiVersion            = "2018-08-31"
 
@@ -32,7 +32,7 @@ const (
 	// service principal for this ID in their own directory (a one-time step on their side —
 	// `az ad sp create --id 20e940b3-4c77-4b0b-9a53-9e16a1b010a7`, per Microsoft's SaaS registration
 	// guide). Flexprice never creates or touches this service principal itself.
-	marketplaceSaaSResourceID = "20e940b3-4c77-4b0b-9a53-9e16a1b010a7"
+	marketplaceSaaSResourceID = "20e940b3-4c77-4b0b-9a53-9e16a1b010a7" // #nosec G101 -- public Microsoft resource ID, not a secret
 
 	// defaultTokenTTL is used if the token response omits expires_in.
 	defaultTokenTTL = time.Hour

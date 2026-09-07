@@ -448,6 +448,7 @@ func (p *paymentProcessor) handleChargebeePaymentLinkCreation(ctx context.Contex
 		FailureURL: gatewayURL(paymentObj, "failure_url"),
 		CancelURL:  gatewayURL(paymentObj, "cancel_url"),
 		Metadata:   linkMetadataFor(paymentObj),
+		LineItems:  checkoutLineItemsFor(inv),
 	})
 	if err != nil {
 		p.Logger.Error(ctx, "failed to create chargebee payment link",
@@ -484,8 +485,31 @@ func gatewayURL(paymentObj *payment.Payment, key string) string {
 	if url, ok := paymentObj.GatewayMetadata[key]; ok && url != "" {
 		return url
 	}
-	
+
 	return paymentObj.Metadata[key]
+}
+
+// checkoutLineItemsFor itemises an invoice for providers that can carry line items.
+// Zero-amount lines are dropped — some gateways reject a zero charge outright.
+func checkoutLineItemsFor(inv *invoice.Invoice) []interfaces.CheckoutLineItem {
+	if inv == nil {
+		return nil
+	}
+
+	items := make([]interfaces.CheckoutLineItem, 0, len(inv.LineItems))
+	for _, li := range inv.LineItems {
+		if li == nil || li.Amount.IsZero() {
+			continue
+		}
+		items = append(items, interfaces.CheckoutLineItem{
+			Description: li.GetDescription(),
+			Amount:      li.Amount,
+			Quantity:    li.Quantity,
+			PeriodStart: li.PeriodStart,
+			PeriodEnd:   li.PeriodEnd,
+		})
+	}
+	return items
 }
 
 // linkMetadataFor drops the connection fields, which are internal, and stamps the

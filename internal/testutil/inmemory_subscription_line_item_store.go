@@ -181,6 +181,11 @@ func (s *InMemorySubscriptionLineItemStore) Get(ctx context.Context, id string) 
 	return item, nil
 }
 
+// GetForUpdate has no lock to take: the in-memory store already serializes access.
+func (s *InMemorySubscriptionLineItemStore) GetForUpdate(ctx context.Context, id string) (*subscription.SubscriptionLineItem, error) {
+	return s.Get(ctx, id)
+}
+
 // Update updates a subscription line item
 func (s *InMemorySubscriptionLineItemStore) Update(ctx context.Context, item *subscription.SubscriptionLineItem) error {
 	if item == nil {

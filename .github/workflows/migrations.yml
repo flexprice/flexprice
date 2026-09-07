@@ -101,7 +101,9 @@ jobs:
         run: make migrate-check-checksum
 
       - name: Order — do new migrations sort after committed ones?
-        run: ./scripts/migrations/order-check.sh migrations/versioned/postgres origin/${{ github.base_ref || 'develop' }}
+        env:
+          BASE_REF: ${{ github.base_ref || 'develop' }}
+        run: ./scripts/migrations/order-check.sh migrations/versioned/postgres "origin/$BASE_REF"
 
       # Disabled 2026-08-25. migrations/versioned/clickhouse/ is the old
       # incremental set and does not describe the real cluster: it creates 3 of
@@ -159,9 +161,11 @@ jobs:
         # Not a gate. Prints the statements so a reviewer sees them before they
         # reach a customer database.
         if: always()
+        env:
+          BASE_REF: ${{ github.base_ref || 'develop' }}
         run: |
           echo "### Migrations added by this PR" >> "$GITHUB_STEP_SUMMARY"
-          for f in $(git diff --name-only --diff-filter=A origin/${{ github.base_ref || 'develop' }}...HEAD -- migrations/versioned/ || true); do
+          for f in $(git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" -- migrations/versioned/ || true); do
             echo "<details><summary>$f</summary>" >> "$GITHUB_STEP_SUMMARY"
             echo '```sql' >> "$GITHUB_STEP_SUMMARY"
             cat "$f" >> "$GITHUB_STEP_SUMMARY"

@@ -200,7 +200,8 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 
 	if req.ProcessPayment {
 		paymentProcessor := NewPaymentProcessorService(s.ServiceParams)
-		p, err = paymentProcessor.ProcessPayment(ctx, p.ID)
+		// Not a loop var; synchronous reassignment, no closure/goroutine.
+		p, err = paymentProcessor.ProcessPayment(ctx, p.ID) // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 		if err != nil {
 			return nil, ierr.WithError(err).
 				WithHint("Failed to process payment").
@@ -367,7 +368,8 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 	}
 
 	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
-	p, err = s.syncPaymentStatusFromGateway(ctx, p)
+	// Not a loop var; synchronous reassignment, no closure/goroutine.
+	p, err = s.syncPaymentStatusFromGateway(ctx, p) // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 	if err != nil {
 		s.Logger.Error(ctx, "failed to sync payment status from gateway", "payment_id", p.ID, "error", err)
 	}

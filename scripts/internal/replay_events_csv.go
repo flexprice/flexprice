@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -54,7 +55,7 @@ func ReplayEventsFromCSV() error {
 
 	dryRun := strings.EqualFold(os.Getenv("DRY_RUN"), "true")
 
-	f, err := os.Open(filePath)
+	f, err := os.Open(filePath) // #nosec G703,G304 -- CLI/env file path, dev tooling
 	if err != nil {
 		return fmt.Errorf("open csv %s: %w", filePath, err)
 	}
@@ -242,7 +243,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 			time.Sleep(replayInitialBackoff * time.Duration(attempt))
 		}
 
-		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, bytes.NewReader(body)) // #nosec G704 -- endpoint from env, replays to own API
 		if err != nil {
 			return fmt.Errorf("create request: %w", err)
 		}
@@ -250,7 +251,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("x-api-key", apiKey)
 
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) // #nosec G704 -- endpoint from env, replays to own API
 		if err != nil {
 			lastErr = fmt.Errorf("http: %w", err)
 			continue
@@ -260,7 +261,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 		if err != nil {
 			return fmt.Errorf("read response body: %w", err)
 		}
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- seed tooling, non-prod
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil

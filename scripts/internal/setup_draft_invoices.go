@@ -112,7 +112,7 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 	redisCache := cache.NewRedisCache()
 
 	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, redisCache)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, redisCache)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger)
 	invoiceSvc := service.NewInvoiceService(service.ServiceParams{
 		Logger:      appLogger,
 		Config:      cfg,

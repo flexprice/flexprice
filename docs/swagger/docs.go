@@ -2163,6 +2163,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Finalize options",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/FinalizeCreditNoteRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -4967,7 +4975,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a modification on a draft invoice. Currently supports line item changes: add (bulk), update (one line item per call; the edit is versioned, so the line item id changes), and remove (bulk, soft delete). Totals are recalculated from the remaining line items; a manual edit marks the invoice as manually edited, which disables recompute.",
+                "description": "Execute a modification on a draft or finalized invoice. Supports line item changes: add (bulk), update (one line item per call; the edit is versioned, so the line item id changes), and remove (bulk, soft delete). Totals are recalculated from the remaining line items; a manual edit marks the invoice as manually edited, which disables recompute. Modifying a FINALIZED invoice voids it and recreates it as a draft copy carrying all current data (description, billing period, due date, metadata, line items); the modification lands on the copy and the response returns the new draft — chain subsequent calls to the returned invoice id; a call that still targets the voided original is rejected with an error naming the replacement.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7216,6 +7224,244 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/refunds": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to see where refunded money actually went and whether it has settled. Filter by invoice_ids to get every settlement row for one invoice.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "List refunds",
+                "operationId": "listRefunds",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by invoice IDs",
+                        "name": "invoice_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by payment IDs",
+                        "name": "payment_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by credit note IDs",
+                        "name": "credit_note_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by refund status",
+                        "name": "refund_statuses",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by refund destination",
+                        "name": "refund_destinations",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by payment gateway",
+                        "name": "gateway",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only refunds that have settled",
+                        "name": "only_settled",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListRefundsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/refunds/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to inspect a single refund: its destination, settled amount and failure reason.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "Get refund",
+                "operationId": "getRefund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Refund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RefundResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/refunds/{id}/retry": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a refund failed or is stuck pending. A failed gateway refund is retried into the customer's wallet; an already-settled refund is rejected.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "Retry refund",
+                "operationId": "retryRefund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Refund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RefundResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/secrets/api/keys": {
@@ -12338,6 +12584,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/refund.created": {
+            "post": {
+                "description": "Fired when a refund is planned against an invoice, before the money moves. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/refund.failed": {
+            "post": {
+                "description": "Fired when a refund fails. A gateway refund that fails is retried into the customer's wallet. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/refund.succeeded": {
+            "post": {
+                "description": "Fired when a refund settles, to the original payment gateway or to a wallet. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.succeeded",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/subscription.activated": {
             "post": {
                 "description": "Fired when a draft subscription is activated. Doc-only for parsing.",
@@ -13354,8 +13669,8 @@ const docTemplate = `{
                 "collection_method": {
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
-                "customer_present": {
-                    "description": "CustomerPresent declares the charge as customer-initiated (CIT) rather than\nmerchant-initiated (MIT). It changes which SCA/3DS exemptions the gateway may\nclaim and who carries chargeback liability, so it must describe reality: true\nonly when the customer is actually at the keyboard, as in a portal one-click\ntop-up. Unattended charges (auto top-up, dunning) leave it false.",
+                "customer_not_present": {
+                    "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up).",
                     "type": "boolean"
                 },
                 "max_mandate_limit": {
@@ -13854,7 +14169,16 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "display_name": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
                     "type": "string"
                 },
                 "quantity": {
@@ -15783,6 +16107,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.CreditNoteReason"
+                        }
+                    ]
+                },
+                "refund_target": {
+                    "description": "refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE\nreturns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.\nOnly honoured when the credit note is processed by this same call; a separately\nfinalized credit note takes it from the finalize request instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RefundTarget"
                         }
                     ]
                 }
@@ -18327,6 +18659,19 @@ const docTemplate = `{
                 }
             }
         },
+        "FinalizeCreditNoteRequest": {
+            "type": "object",
+            "properties": {
+                "refund_target": {
+                    "description": "refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE\nreturns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RefundTarget"
+                        }
+                    ]
+                }
+            }
+        },
         "GCPMarketplaceAgreement": {
             "type": "object",
             "required": [
@@ -19426,7 +19771,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_id": {
-                    "description": "LineItemID and Update are required for action 'update' (one line item per call;\nthe update is versioned, so the item id changes after each edit).",
+                    "description": "Required for action 'update' (one line item per call; edits are versioned, so the id changes).",
                     "type": "string"
                 },
                 "line_item_ids": {
@@ -19899,6 +20244,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/PaymentResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListRefundsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RefundResponse"
                     }
                 },
                 "pagination": {
@@ -20798,6 +21157,105 @@ const docTemplate = `{
                 },
                 "proration_date": {
                     "description": "proration_date is the date used for proration calculations",
+                    "type": "string"
+                }
+            }
+        },
+        "RefundResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_note_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "failed_at": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "gateway_idempotency_token": {
+                    "type": "string"
+                },
+                "gateway_metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "gateway_refund_id": {
+                    "type": "string"
+                },
+                "gateway_tracking_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "initiated_at": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "refund_destination": {
+                    "$ref": "#/definitions/types.RefundDestination"
+                },
+                "refund_destination_id": {
+                    "type": "string"
+                },
+                "refund_reason": {
+                    "$ref": "#/definitions/types.RefundReason"
+                },
+                "refund_status": {
+                    "$ref": "#/definitions/types.RefundStatus"
+                },
+                "settled_amount": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "succeeded_at": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
                     "type": "string"
                 }
             }
@@ -23586,7 +24044,16 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "display_name": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
                     "type": "string"
                 },
                 "quantity": {
@@ -26258,6 +26725,9 @@ const docTemplate = `{
                 "alert_enabled": {
                     "type": "boolean"
                 },
+                "alert_threshold_type": {
+                    "$ref": "#/definitions/types.AlertThresholdType"
+                },
                 "critical": {
                     "$ref": "#/definitions/types.AlertThreshold"
                 },
@@ -26367,6 +26837,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.AlertThresholdType": {
+            "type": "string",
+            "enum": [
+                "absolute",
+                "percentage"
+            ],
+            "x-enum-varnames": [
+                "AlertThresholdTypeAbsolute",
+                "AlertThresholdTypePercentage"
+            ]
         },
         "types.AlertType": {
             "type": "string",
@@ -26584,8 +27065,8 @@ const docTemplate = `{
                 "collection_method": {
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
-                "customer_present": {
-                    "description": "CustomerPresent declares the charge as customer-initiated (CIT) rather than\nmerchant-initiated (MIT). It changes which SCA/3DS exemptions the gateway may\nclaim and who carries chargeback liability, so it must describe reality: true\nonly when the customer is actually at the keyboard, as in a portal one-click\ntop-up. Unattended charges (auto top-up, dunning) leave it false.",
+                "customer_not_present": {
+                    "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up).",
                     "type": "boolean"
                 },
                 "max_mandate_limit": {
@@ -26811,6 +27292,9 @@ const docTemplate = `{
                 "recurring_credit_grant",
                 "onetime_credit_grant"
             ],
+            "x-enum-comments": {
+                "ApplicationReasonFirstTimeRecurringCreditGrant": "#nosec G101 -- enum value name, not a secret"
+            },
             "x-enum-varnames": [
                 "ApplicationReasonFirstTimeRecurringCreditGrant",
                 "ApplicationReasonRecurringCreditGrant",
@@ -28360,6 +28844,66 @@ const docTemplate = `{
                 }
             }
         },
+        "types.RefundDestination": {
+            "type": "string",
+            "enum": [
+                "GATEWAY",
+                "WALLET",
+                "OUT_OF_BAND"
+            ],
+            "x-enum-varnames": [
+                "RefundDestinationGateway",
+                "RefundDestinationWallet",
+                "RefundDestinationOutOfBand"
+            ]
+        },
+        "types.RefundReason": {
+            "type": "string",
+            "enum": [
+                "DUPLICATE",
+                "FRAUDULENT",
+                "REQUESTED_BY_CUSTOMER",
+                "ORDER_CHANGE",
+                "SERVICE_ISSUE",
+                "OTHER"
+            ],
+            "x-enum-varnames": [
+                "RefundReasonDuplicate",
+                "RefundReasonFraudulent",
+                "RefundReasonRequestedByCustomer",
+                "RefundReasonOrderChange",
+                "RefundReasonServiceIssue",
+                "RefundReasonOther"
+            ]
+        },
+        "types.RefundStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "PROCESSING",
+                "SUCCEEDED",
+                "FAILED",
+                "CANCELLED"
+            ],
+            "x-enum-varnames": [
+                "RefundStatusPending",
+                "RefundStatusProcessing",
+                "RefundStatusSucceeded",
+                "RefundStatusFailed",
+                "RefundStatusCancelled"
+            ]
+        },
+        "types.RefundTarget": {
+            "type": "string",
+            "enum": [
+                "PREPAID_WALLET",
+                "BACK_TO_SOURCE"
+            ],
+            "x-enum-varnames": [
+                "RefundTargetPrepaidWallet",
+                "RefundTargetBackToSource"
+            ]
+        },
         "types.RejectedEventReason": {
             "type": "string",
             "enum": [
@@ -28590,7 +29134,9 @@ const docTemplate = `{
                 "azure_marketplace"
             ],
             "x-enum-comments": {
+                "SecretProviderAzureMarketplace": "#nosec G101 -- provider enum value, not a secret",
                 "SecretProviderGCS": "supports multiple connections per environment, service-account JSON creds",
+                "SecretProviderQuickBooks": "#nosec G101 -- enum value name, not a secret",
                 "SecretProviderS3": "supports multiple connections per environment"
             },
             "x-enum-varnames": [
@@ -29723,6 +30269,9 @@ const docTemplate = `{
                 "payment.failed",
                 "payment.success",
                 "payment.pending",
+                "refund.created",
+                "refund.succeeded",
+                "refund.failed",
                 "customer.created",
                 "customer.updated",
                 "customer.deleted",
@@ -29782,6 +30331,9 @@ const docTemplate = `{
                 "WebhookEventPaymentFailed",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
+                "WebhookEventRefundCreated",
+                "WebhookEventRefundSucceeded",
+                "WebhookEventRefundFailed",
                 "WebhookEventCustomerCreated",
                 "WebhookEventCustomerUpdated",
                 "WebhookEventCustomerDeleted",
@@ -30676,6 +31228,76 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/types.PriceType"
+                }
+            }
+        },
+        "webhookDto.Refund": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "credit_note_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "failed_at": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "gateway_refund_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "refund_destination": {
+                    "$ref": "#/definitions/types.RefundDestination"
+                },
+                "refund_destination_id": {
+                    "type": "string"
+                },
+                "refund_reason": {
+                    "$ref": "#/definitions/types.RefundReason"
+                },
+                "refund_status": {
+                    "$ref": "#/definitions/types.RefundStatus"
+                },
+                "settled_amount": {
+                    "type": "string"
+                },
+                "succeeded_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.RefundWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "refund": {
+                    "$ref": "#/definitions/webhookDto.Refund"
                 }
             }
         },

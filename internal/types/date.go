@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -669,7 +670,17 @@ func isBetween(eventTimestamp time.Time, periodStart time.Time, periodEnd time.T
 }
 
 func calculatePeriodID(periodStart time.Time) uint64 {
-	return uint64(periodStart.Unix() * 1000)
+	unixSec := periodStart.Unix()
+	// Billing periods are always post-epoch; a pre-epoch input has no
+	// meaningful period ID, so treat it as epoch rather than underflowing.
+	if unixSec < 0 {
+		return 0
+	}
+	// Guard the *1000 multiply against overflowing int64 before the uint64 cast.
+	if unixSec > math.MaxInt64/1000 {
+		return math.MaxUint64
+	}
+	return uint64(unixSec * 1000) // #nosec G115 -- bounded above before cast
 }
 
 // GetNextUsageResetAtParams holds the inputs for GetNextUsageResetAt.

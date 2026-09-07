@@ -57,7 +57,7 @@ func SyncPriceToSubscriptions() error {
 		}
 	}
 
-	log.Printf("Starting price sync for tenant: %s, environment: %s, price: %s, start_date: %s, user_id: %s, dry_run: %v\n",
+	log.Printf("Starting price sync for tenant: %s, environment: %s, price: %s, start_date: %s, user_id: %s, dry_run: %v\n", // #nosec G706 -- seed tooling, non-prod logging
 		tenantID, environmentID, priceID, startDateStr, userID, dryRun)
 
 	// Initialize script
@@ -76,7 +76,7 @@ func SyncPriceToSubscriptions() error {
 		return fmt.Errorf("failed to get price: %w", err)
 	}
 
-	log.Printf("Found price: %s (type: %s, entity_id: %s, entity_type: %s)\n",
+	log.Printf("Found price: %s (type: %s, entity_id: %s, entity_type: %s)\n", // #nosec G706 -- seed tooling, non-prod logging
 		p.ID, p.Type, p.EntityID, p.EntityType)
 
 	// Validate price entity type is PLAN
@@ -91,14 +91,14 @@ func SyncPriceToSubscriptions() error {
 	if err != nil {
 		return fmt.Errorf("failed to get plan: %w", err)
 	}
-	log.Printf("Found plan: %s (%s)\n", pln.ID, pln.Name)
+	log.Printf("Found plan: %s (%s)\n", pln.ID, pln.Name) // #nosec G706 -- seed tooling, non-prod logging
 
 	// Get meter display name if meter_id exists
 	var meterDisplayName string
 	if p.MeterID != "" {
 		m, err := script.meterRepo.GetMeter(ctx, p.MeterID)
 		if err != nil {
-			log.Printf("Warning: Failed to get meter %s: %v\n", p.MeterID, err)
+			log.Printf("Warning: Failed to get meter %s: %v\n", p.MeterID, err) // #nosec G706 -- seed tooling, non-prod logging
 		} else {
 			meterDisplayName = m.Name
 		}
@@ -121,7 +121,7 @@ func SyncPriceToSubscriptions() error {
 		return fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
-	log.Printf("Found %d subscriptions with plan %s and start_date %s (out of %d total)\n",
+	log.Printf("Found %d subscriptions with plan %s and start_date %s (out of %d total)\n", // #nosec G706 -- seed tooling, non-prod logging
 		len(subscriptions), planID, startDateStr, len(subscriptions))
 
 	if len(subscriptions) == 0 {
@@ -152,7 +152,7 @@ func SyncPriceToSubscriptions() error {
 		}
 
 		if len(existingLineItems) > 0 {
-			log.Printf("Skipping subscription %s - line item with price %s already exists\n", sub.ID, priceID)
+			log.Printf("Skipping subscription %s - line item with price %s already exists\n", sub.ID, priceID) // #nosec G706 -- seed tooling, non-prod logging
 			totalSkipped++
 			continue
 		}

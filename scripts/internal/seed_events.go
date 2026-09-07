@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seed tooling, non-prod
 	"sync"
 	"time"
 
@@ -64,7 +64,7 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 		// For sum/avg aggregation, we need to generate a value for the aggregation field
 		if selectedMeter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 1000
-			properties[selectedMeter.Aggregation.Field] = rand.Int63n(1000) + 1
+			properties[selectedMeter.Aggregation.Field] = rand.Int63n(1000) + 1 // #nosec G404 -- seed tooling, non-prod
 		}
 	}
 
@@ -72,7 +72,7 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 	for _, filter := range selectedMeter.Filters {
 		if len(filter.Values) > 0 {
 			// Select a random value from the filter values
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))] // #nosec G404 -- seed tooling, non-prod
 		}
 	}
 
@@ -81,7 +81,7 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 
 	return dto.IngestEventRequest{
 		EventID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
-		ExternalCustomerID: g.customerIDs[rand.Intn(len(g.customerIDs))],
+		ExternalCustomerID: g.customerIDs[rand.Intn(len(g.customerIDs))], // #nosec G404 -- seed tooling, non-prod
 		EventName:          selectedMeter.EventName,
 		Timestamp:          timestamp,
 		Properties:         properties,
@@ -96,7 +96,8 @@ func SeedEventsFromMeters() error {
 		log.Fatalf("Error creating config: %v", err)
 	}
 
-	log, err := logger.NewLogger(cfg)
+	// Not a loop var; shadows "log" stdlib package intentionally, used synchronously.
+	log, err := logger.NewLogger(cfg) // nosemgrep: trailofbits.go.invalid-usage-of-modified-variable.invalid-usage-of-modified-variable
 	if err != nil {
 		log.Fatalf("Error creating logger: %v", err)
 	}

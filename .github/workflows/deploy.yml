@@ -28,9 +28,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write
+  # id-token is needed by nearly every job here (AWS OIDC on migrate + all
+  # deploys, keyless cosign on build), so it stays workflow-level.
+  id-token: write # zizmor: ignore[excessive-permissions]
   contents: read
-  packages: write
 
 env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
@@ -46,6 +47,10 @@ jobs:
     name: Build & Push Docker Image
     runs-on: self-hosted
     if: ${{ github.event.inputs.dry_run != 'true' }}
+    permissions:
+      contents: read
+      id-token: write # keyless cosign
+      packages: write # GHCR push
     outputs:
       image: ${{ steps.set-image.outputs.image }}
 
@@ -59,6 +64,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
+          cache-binary: false
 
       - name: Login to GitHub Container Registry
         # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
@@ -79,9 +88,10 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          IS_DEVELOP="${{ github.ref_name == 'develop' }}"
-          IS_MAIN="${{ github.ref_name == 'main' }}"
-          IS_DEVELOP="${{ github.ref_name == 'develop' }}"
+          # Compare via the env var, not GitHub-expression interpolation, so
+          # a crafted branch name cannot inject shell.
+          IS_DEVELOP=$([ "$GITHUB_REF_NAME" = "develop" ] && echo true || echo false)
+          IS_MAIN=$([ "$GITHUB_REF_NAME" = "main" ] && echo true || echo false)
 
           {
             echo "ghcr_tags<<TAGS_EOF"
@@ -107,6 +117,7 @@ jobs:
           fi
 
       - name: Build & push image to GHCR
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
@@ -114,10 +125,28 @@ jobs:
           platforms: ${{ steps.image-tag.outputs.platforms }}
           push: true
           tags: ${{ steps.image-tag.outputs.ghcr_tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
           provenance: false
           # Shared layer cache in GHCR (both AWS + GCP self-hosted runners reach it).
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
+
+      # Empty digest = best-effort GHCR login failed, nothing pushed to sign.
+      - name: Install cosign
+        if: ${{ steps.build.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+      # Signs the digest; every tag on it inherits the signature.
+      - name: Sign image (keyless)
+        if: ${{ steps.build.outputs.digest != '' }}
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${GHCR_IMAGE}@${DIGEST}"
 
       - name: Set image output
         id: set-image
@@ -179,12 +208,13 @@ jobs:
         id: config
         env:
           PROD_TARGETS: ${{ vars.PROD_DEPLOY_TARGETS }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           # Only production targets exist (staging ECS deprovisioned).
           ENV="production"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Default dry_run to false when not explicitly set
-            DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            DRY_RUN="$INPUT_DRY_RUN"
             if [ -z "$DRY_RUN" ]; then DRY_RUN="false"; fi
           else
             DRY_RUN="false"
@@ -417,6 +447,9 @@ jobs:
           (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: gcp-prod-approval
+    permissions:
+      contents: read
+      packages: write # GHCR imagetools push
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -427,6 +460,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
+          cache-binary: false
 
       - name: Retag :<sha> -> :main (manifest copy, no rebuild)
         env:

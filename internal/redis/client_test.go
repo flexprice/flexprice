@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -123,6 +124,49 @@ func TestBuildOptions_CredentialSplit(t *testing.T) {
 	if fo.SentinelUsername != "sentinel-user" || fo.SentinelPassword != "sentinel-pw" {
 		t.Errorf("Failover() sentinel creds = %q/%q, want sentinel-user/sentinel-pw", fo.SentinelUsername, fo.SentinelPassword)
 	}
+}
+
+// TestBuildOptions_TLS guards the TLS wiring: skip-verify is configurable (not
+// hardcoded), ServerName is honoured, and MinVersion is TLS 1.2.
+func TestBuildOptions_TLS(t *testing.T) {
+	t.Run("no TLS -> nil config", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if opts.TLSConfig != nil {
+			t.Fatalf("TLSConfig = %v, want nil when UseTLS is false", opts.TLSConfig)
+		}
+	})
+
+	t.Run("verify opt-in wires ServerName", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379, UseTLS: true, TLSSkipVerify: false, TLSServerName: "cache.example.com"})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if opts.TLSConfig == nil {
+			t.Fatal("TLSConfig = nil, want set when UseTLS is true")
+		}
+		if opts.TLSConfig.InsecureSkipVerify {
+			t.Error("InsecureSkipVerify = true, want false when TLSSkipVerify is false")
+		}
+		if opts.TLSConfig.ServerName != "cache.example.com" {
+			t.Errorf("ServerName = %q, want cache.example.com", opts.TLSConfig.ServerName)
+		}
+		if opts.TLSConfig.MinVersion != tls.VersionTLS12 {
+			t.Errorf("MinVersion = %d, want TLS 1.2", opts.TLSConfig.MinVersion)
+		}
+	})
+
+	t.Run("skip-verify honoured", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379, UseTLS: true, TLSSkipVerify: true})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if !opts.TLSConfig.InsecureSkipVerify {
+			t.Error("InsecureSkipVerify = false, want true when TLSSkipVerify is set")
+		}
+	})
 }
 
 // TestBuildOptions_UsernameOptional guards backward compatibility: an unset

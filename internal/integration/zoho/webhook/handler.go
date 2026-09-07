@@ -135,7 +135,7 @@ func (h *Handler) handleInvoiceVoided(ctx context.Context, zohoInvID string, dep
 			"zoho_invoice_id": zohoInvID,
 		},
 	}
-	if err := deps.InvoiceService.VoidInvoice(ctx, mapping.EntityID, voidReq); err != nil {
+	if _, err := deps.InvoiceService.VoidInvoice(ctx, mapping.EntityID, voidReq); err != nil {
 		h.logger.Error(ctx, "zoho webhook: VoidInvoice failed",
 			"error", err,
 			"invoice_id", mapping.EntityID,

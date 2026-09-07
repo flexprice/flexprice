@@ -6,48 +6,61 @@ import (
 
 	"github.com/chargebee/chargebee-go/v3/actions/invoice"
 	"github.com/chargebee/chargebee-go/v3/enum"
+	downloadModel "github.com/chargebee/chargebee-go/v3/models/download"
 	invoiceModel "github.com/chargebee/chargebee-go/v3/models/invoice"
 	"github.com/samber/lo"
 )
 
-// CreateAdHocInvoice creates a Chargebee invoice carrying a single ad-hoc charge.
-// This is the "mirror" of the Flexprice draft invoice. Ad-hoc is required because
-// a wallet top-up has no Price entity, so there is no item_price to reference —
-// the existing catalog-based sync path rejects such line items outright.
-//
-// poNumber is the correlation key the hosted page also carries, so a webhook
-// resolves the same way whichever path created the invoice.
+type AdHocInvoiceRequest struct {
+	ChargebeeCustomerID string
+	Currency            string
+	Charges             []AdHocCharge
+	// InvoiceNote is the correlation carrier the hosted page also uses, so a webhook
+	// resolves the same way whichever path created the invoice.
+	InvoiceNote    string
+	IdempotencyKey string
+	// AutoCollect charges the primary source as part of the create call, which
+	// Chargebee books as merchant-initiated. Off leaves the invoice as the allocation
+	// target for an explicit collect_payment, the only way to declare the charge
+	// customer-initiated — and the caller must then collect, or nothing charges at all.
+	AutoCollect     bool
+	CustomerPresent bool
+}
+
+// CreateAdHocInvoice mirrors a Flexprice draft invoice. Ad-hoc is required because
+// a wallet top-up has no Price entity, so there is no item_price to reference — the
+// catalog-based sync path rejects such line items outright.
 func (c *Client) CreateAdHocInvoice(
 	ctx context.Context,
-	chargebeeCustomerID, currency string,
-	amountMinor int64,
-	description, poNumber, idempotencyKey string,
-	autoCollect, customerPresent bool,
+	adHocReq AdHocInvoiceRequest,
 ) (*invoiceModel.Invoice, error) {
 	env, err := c.env(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	charges := make([]*invoiceModel.CreateForChargeItemsAndChargesChargeParams, 0, len(adHocReq.Charges))
+	for _, ch := range adHocReq.Charges {
+		from, to := ch.dateRange()
+		charges = append(charges, &invoiceModel.CreateForChargeItemsAndChargesChargeParams{
+			Amount:      lo.ToPtr(ch.AmountMinor),
+			Description: ch.Description,
+			DateFrom:    from,
+			DateTo:      to,
+		})
+	}
+
 	req := invoice.CreateForChargeItemsAndCharges(&invoiceModel.CreateForChargeItemsAndChargesRequestParams{
-		CustomerId:   chargebeeCustomerID,
-		CurrencyCode: strings.ToUpper(currency),
-		Charges: []*invoiceModel.CreateForChargeItemsAndChargesChargeParams{{
-			Amount:      lo.ToPtr(amountMinor),
-			Description: description,
-		}},
-		PoNumber: poNumber,
-		// autoCollect charges the customer's primary source as part of this call,
-		// which Chargebee books as merchant-initiated. Off leaves the invoice as the
-		// allocation target for an explicit collect_payment, the only way to declare
-		// the charge customer-initiated — and the caller must then collect, or nothing
-		// charges at all.
-		AutoCollection: lo.Ternary(autoCollect, enum.AutoCollectionOn, enum.AutoCollectionOff),
-		PaymentInitiator: lo.Ternary(customerPresent,
+		CustomerId:     adHocReq.ChargebeeCustomerID,
+		CurrencyCode:   strings.ToUpper(adHocReq.Currency),
+		Charges:        charges,
+		InvoiceNote:    adHocReq.InvoiceNote,
+		AutoCollection: lo.Ternary(adHocReq.AutoCollect, enum.AutoCollectionOn, enum.AutoCollectionOff),
+		PaymentInitiator: lo.Ternary(adHocReq.CustomerPresent,
 			enum.PaymentInitiatorCustomer, enum.PaymentInitiatorMerchant),
 	})
-	if idempotencyKey != "" {
-		req = req.SetIdempotencyKey(idempotencyKey)
+	if adHocReq.IdempotencyKey != "" {
+		req = req.SetIdempotencyKey(adHocReq.IdempotencyKey)
 	}
 
 	res, err := req.RequestWithEnv(env)
@@ -58,6 +71,26 @@ func (c *Client) CreateAdHocInvoice(
 		return nil, missingPayload("invoice")
 	}
 	return res.Invoice, nil
+}
+
+// RetrieveInvoicePDF returns a signed link to Chargebee's rendering.
+func (c *Client) RetrieveInvoicePDF(ctx context.Context, chargebeeInvoiceID string) (*downloadModel.Download, error) {
+	env, err := c.env(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := invoice.Pdf(chargebeeInvoiceID, &invoiceModel.PdfRequestParams{
+		DispositionType: enum.DispositionTypeAttachment,
+	}).RequestWithEnv(env)
+	if err != nil {
+		return nil, wrapAPIError(err, "Failed to retrieve Chargebee invoice PDF")
+	}
+	if res.Download == nil || res.Download.DownloadUrl == "" {
+		return nil, missingPayload("invoice pdf download")
+	}
+
+	return res.Download, nil
 }
 
 // VoidInvoice abandons an invoice at Chargebee. An ad-hoc invoice created with

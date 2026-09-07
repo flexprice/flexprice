@@ -90,6 +90,7 @@ const (
 	PrefixInvoiceLineItem          = "invoice_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
 	PrefixUsageAlertSchedule       = "usage_alert_schedule:v1:"
+	PrefixSettingsByKey            = "settings_by_key:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"
 	PrefixWalletRealTimeBalance    = "wallet_realtime_balance:v1:"

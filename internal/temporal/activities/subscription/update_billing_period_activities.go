@@ -3,7 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- jitter, not security-sensitive
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -269,7 +269,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
-			900+rand.Intn(300), // adding a random delay between 900 and 1200 seconds
+			900+rand.Intn(300), // #nosec G404 -- jitter, not security-sensitive
 		)
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",

@@ -102,13 +102,13 @@ func (c *compiler) Compile(opts CompileOpts) (string, error) {
 	outputFile := filepath.Join(c.outputDir, opts.OutputFile)
 	if opts.OutputFile == "" {
 		tmpFilePath := filepath.Join(c.outputDir, fmt.Sprintf("typst-%d.pdf", time.Now().UnixMilli()))
-		tmpFile, err := os.Create(tmpFilePath)
+		tmpFile, err := os.Create(tmpFilePath) // #nosec G304 -- code-generated temp path
 		if err != nil {
 			return "", ierr.WithError(err).
 				WithMessage("failed to create temporary output file").
 				WithHint("template error").Mark(ierr.ErrSystem)
 		}
-		tmpFile.Close()
+		tmpFile.Close() // #nosec G104 -- best-effort, error non-fatal
 		outputFile = tmpFilePath
 	}
 
@@ -135,7 +135,10 @@ func (c *compiler) Compile(opts CompileOpts) (string, error) {
 
 	c.logger.Debug(context.Background(), "Executing command to compile typst document", "binary", c.binaryPath, "args", args)
 
-	cmd := exec.Command(c.binaryPath, args...)
+	// binaryPath is configured, not user input; args are separate argv elements,
+	// not shell-interpreted, so neither can inject a command.
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	cmd := exec.Command(c.binaryPath, args...) // #nosec G204 -- fixed binary, argv not shell
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -161,7 +164,7 @@ func (c *compiler) CompileToBytes(opts CompileOpts) ([]byte, error) {
 		return nil, err
 	}
 	defer os.Remove(pdfPath)
-	return os.ReadFile(pdfPath)
+	return os.ReadFile(pdfPath) // #nosec G304 -- compiler output path, code-controlled
 }
 
 // CompileTemplate compiles a Typst template with the provided data
@@ -197,7 +200,7 @@ func (c *compiler) CompileTemplate(
 			WithHint("template error").Mark(ierr.ErrSystem)
 	}
 
-	jsonFile.Close()
+	jsonFile.Close() // #nosec G104 -- best-effort, error non-fatal
 
 	// Compile the template
 	compileOpts := CompileOpts{
@@ -218,7 +221,7 @@ func (c *compiler) CompileTemplate(
 func (c *compiler) CleanupGeneratedFiles(files ...string) {
 	for _, file := range files {
 		if file != "" {
-			os.Remove(file)
+			os.Remove(file) // #nosec G104 -- best-effort, error non-fatal
 		}
 	}
 }
@@ -264,7 +267,7 @@ func CopyDir(src, dst string) error {
 
 // CopyFile copies a file from src to dst
 func CopyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
+	sourceFile, err := os.Open(src) // #nosec G304 -- internal asset copy, not user input
 	if err != nil {
 		return err
 	}
@@ -272,11 +275,11 @@ func CopyFile(src, dst string) error {
 
 	// Create destination directory if it doesn't exist
 	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	if err := os.MkdirAll(dstDir, 0750); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	destFile, err := os.Create(dst)
+	destFile, err := os.Create(dst) // #nosec G304 -- internal asset copy, not user input
 	if err != nil {
 		return err
 	}

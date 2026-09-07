@@ -63,8 +63,8 @@ func (p *PubSub) Subscribe(ctx context.Context, topic string) (<-chan *message.M
 
 // Close closes the pubsub
 func (p *PubSub) Close() error {
-	p.producer.Close()
-	p.consumer.Close()
+	p.producer.Close() // #nosec G104 -- best-effort, error non-fatal
+	p.consumer.Close() // #nosec G104 -- best-effort, error non-fatal
 
 	return nil
 }

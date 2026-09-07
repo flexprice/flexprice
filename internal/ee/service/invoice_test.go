@@ -2126,6 +2126,45 @@ func (s *InvoiceServiceSuite) TestUpdateInvoice() {
 	s.Require().Equal("https://example.com/paid-invoice.pdf", *updatedPaidInvoice.InvoicePDFURL)
 }
 
+// Applying a discount to a FINALIZED invoice must void it and land the update on a new draft copy.
+func (s *InvoiceServiceSuite) TestUpdateInvoiceApplyDiscountOnFinalizedVoidsAndRecreates() {
+	ctx := s.GetContext()
+
+	inv, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100.00),
+		Total:         decimal.NewFromFloat(100.00),
+		Subtotal:      decimal.NewFromFloat(100.00),
+		BillingReason: types.InvoiceBillingReasonManual,
+		Description:   "August platform charges",
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+
+	updated, err := s.service.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{ApplyDiscount: true})
+	s.Require().NoError(err)
+	s.Require().NotNil(updated)
+
+	// The update landed on a new draft copy carrying the invoice data.
+	s.Require().NotEqual(inv.ID, updated.ID)
+	s.Require().Equal(types.InvoiceStatusDraft, updated.InvoiceStatus)
+	s.Require().Equal("August platform charges", updated.Description)
+
+	// The invoice was created with amounts but no line items — the draft must keep
+	// that value rather than recomputing it to zero from zero copied items.
+	s.Require().True(updated.Subtotal.Equal(decimal.NewFromFloat(100.00)), "subtotal: %s", updated.Subtotal)
+	s.Require().True(updated.Total.Equal(decimal.NewFromFloat(100.00)), "total: %s", updated.Total)
+	s.Require().True(updated.AmountDue.Equal(decimal.NewFromFloat(100.00)), "amount_due: %s", updated.AmountDue)
+
+	// The original is voided and linked to the replacement.
+	original, err := s.service.GetInvoice(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(types.InvoiceStatusVoided, original.InvoiceStatus)
+	s.Require().Equal(updated.ID, lo.FromPtr(original.RecalculatedInvoiceID))
+}
+
 // TestCreateSubscriptionInvoiceWithInvoicingCustomerID tests invoice creation with invoicing customer ID
 func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithInvoicingCustomerID() {
 	// Create invoicing customer

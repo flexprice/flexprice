@@ -1,0 +1,25 @@
+name: skip-coderabbit-develop-to-main
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [main]
+
+jobs:
+  skip:
+    if: github.head_ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - run: |
+          body=$(gh pr view "$PR" --json body --jq '.body')
+          if printf '%s' "$body" | grep -qF '@coderabbitai ignore'; then
+            echo "marker already present, skipping"
+            exit 0
+          fi
+          printf '%s\n\n@coderabbitai ignore\n' "$body" | gh pr edit "$PR" --body-file -
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}

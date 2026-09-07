@@ -42,9 +42,9 @@ func (m *MockHTTPClient) RegisterResponse(url string, resp MockResponse) {
 func (m *MockHTTPClient) RegisterCSVResponse(url string, headers []string, records [][]string) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
-	writer.Write(headers)
+	writer.Write(headers) // #nosec G104 -- best-effort, error non-fatal
 	for _, record := range records {
-		writer.Write(record)
+		writer.Write(record) // #nosec G104 -- best-effort, error non-fatal
 	}
 	writer.Flush()
 

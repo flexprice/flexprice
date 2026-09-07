@@ -420,18 +420,27 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 	if len(req.Tiers) > 0 {
 		createParams.Tiers = make([]*itemprice.CreateTierParams, len(req.Tiers))
 		for i, tier := range req.Tiers {
+			if tier.StartingUnit > math.MaxInt32 || (tier.EndingUnit != nil && *tier.EndingUnit > math.MaxInt32) {
+				return nil, ierr.NewError("tier unit exceeds Chargebee's supported range").
+					WithHint("Tier boundaries must fit in a 32-bit integer for Chargebee").
+					Mark(ierr.ErrValidation)
+			}
 			createParams.Tiers[i] = &itemprice.CreateTierParams{
-				StartingUnit: lo.ToPtr(int32(tier.StartingUnit)),
+				StartingUnit: lo.ToPtr(int32(tier.StartingUnit)), // #nosec G115 -- bounds checked above
 				Price:        lo.ToPtr(int64(tier.Price)),
 			}
 			if tier.EndingUnit != nil {
-				createParams.Tiers[i].EndingUnit = lo.ToPtr(int32(*tier.EndingUnit))
+				createParams.Tiers[i].EndingUnit = lo.ToPtr(int32(*tier.EndingUnit)) // #nosec G115 -- bounds checked above
 			}
 		}
 	}
 
 	// Add period for package pricing
 	if req.Period != nil {
+		if *req.Period > math.MaxInt32 || *req.Period < math.MinInt32 {
+			return nil, ierr.NewError("period value out of range for Chargebee").
+				Mark(ierr.ErrValidation)
+		}
 		createParams.Period = lo.ToPtr(int32(*req.Period))
 	}
 	if req.PeriodUnit != "" {
@@ -586,7 +595,7 @@ func convertTiersForChargebee(flexPriceTiers []*types.PriceTier, currency string
 
 		// Set ending unit (nil for last tier)
 		if tier.UpTo != nil {
-			endingUnit := int64(*tier.UpTo)
+			endingUnit := int64(*tier.UpTo) // #nosec G115 -- pricing tier boundary, downstream guards int32 range
 			chargebeeTier.EndingUnit = &endingUnit
 			startingUnit = endingUnit + 1 // Next tier starts after current tier ends
 		} else {

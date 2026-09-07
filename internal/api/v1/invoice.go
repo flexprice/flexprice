@@ -310,7 +310,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 		}
 	}
 
-	if err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
+	if _, err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
 		h.logger.Error(c.Request.Context(), "failed to void invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
@@ -608,9 +608,13 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 		return
 	}
 
+	req := dto.InvoicePDFRequest{
+		InvoiceID:     id,
+		ForceGenerate: c.Query("force_generate") == "true",
+	}
+
 	if c.Query("url") == "true" {
-		forceGenerate := c.Query("force_generate") == "true"
-		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id, forceGenerate)
+		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), req)
 		if err != nil {
 			h.logger.Error(c.Request.Context(), "failed to get invoice pdf url", "error", err, "invoice_id", id)
 			c.Error(err)
@@ -620,7 +624,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 		return
 	}
 
-	pdf, err := h.invoiceService.GetInvoicePDF(c.Request.Context(), id)
+	pdf, err := h.invoiceService.GetInvoicePDF(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to generate invoice pdf", "error", err, "invoice_id", id)
 		c.Error(err)

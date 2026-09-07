@@ -540,8 +540,14 @@ type ClickHouseConfig struct {
 	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
 	DialTimeout time.Duration `mapstructure:"dial_timeout"`
 	ReadTimeout time.Duration `mapstructure:"read_timeout"`
-	Address     string        `mapstructure:"address" validate:"required"`
-	TLS         bool          `mapstructure:"tls"`
+	// ConnMaxLifetime retires pooled connections on a timer so they reopen and
+	// re-pick a replica. A ClusterIP balances per TCP connection, so without this
+	// a pod's pool stays pinned to whichever replica it first drew: measured 1795
+	// queries to replica 0 vs 14 to replica 1 on a healthy 2-replica nane2.
+	// Zero = unbounded (driver default); 5-10m is the useful range.
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	Address         string        `mapstructure:"address" validate:"required"`
+	TLS             bool          `mapstructure:"tls"`
 	// TLSSkipVerify disables server certificate and hostname verification on the
 	// TLS connection. It only takes effect when TLS is true. Intended for dev
 	// environments whose ClickHouse serves a self-signed certificate (equivalent to
@@ -1006,13 +1012,17 @@ type RedisConfig struct {
 	Host string `mapstructure:"host" default:"localhost"`
 	Port int    `mapstructure:"port" default:"6379"`
 	// Username is the data-node ACL user; leave empty for requirepass-style auth.
-	Username  string        `mapstructure:"username" default:""`
-	Password  string        `mapstructure:"password" default:""`
-	DB        int           `mapstructure:"db" default:"0"`
-	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
-	PoolSize  int           `mapstructure:"pool_size" default:"10"`
-	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
-	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
+	Username string `mapstructure:"username" default:""`
+	Password string `mapstructure:"password" default:""`
+	DB       int    `mapstructure:"db" default:"0"`
+	UseTLS   bool   `mapstructure:"use_tls" default:"false"`
+	// Set to the cert SAN to verify ElastiCache wildcard certs.
+	TLSServerName string `mapstructure:"tls_server_name" default:""`
+	// Defaults true for ElastiCache compatibility; set false to verify.
+	TLSSkipVerify bool          `mapstructure:"tls_skip_verify" default:"true"`
+	PoolSize      int           `mapstructure:"pool_size" default:"10"`
+	Timeout       time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix     string        `mapstructure:"key_prefix" default:"flexprice"`
 	// ClusterMode: true → *redis.ClusterClient (Redis Cluster, ElastiCache
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
@@ -1334,6 +1344,9 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		MaxOpenConns: c.MaxOpenConns,
 		MaxIdleConns: c.MaxIdleConns,
 	}
+	if c.ConnMaxLifetime > 0 {
+		options.ConnMaxLifetime = c.ConnMaxLifetime
+	}
 	if c.DialTimeout > 0 {
 		options.DialTimeout = c.DialTimeout
 	}
@@ -1341,7 +1354,7 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
-		options.TLS = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
+		options.TLS = &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
 	}
 	options.Protocol = c.protocol()
 

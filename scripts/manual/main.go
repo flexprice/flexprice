@@ -118,7 +118,7 @@ func main() {
 // - An ordered slice of all rows (to preserve original ordering)
 // - A map of feature_name -> OldRow (for quick lookup)
 func readOldCSV(path string) ([]OldRow, map[string]OldRow) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- CLI file path, manual ops tooling
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: Cannot open old CSV %s: %v\n", path, err)
 		os.Exit(1)
@@ -204,7 +204,7 @@ func readAndTransformNewCSV(path string) map[string]TransformedNewRow {
 
 // readNewCSVRaw reads the client's CSV file (no header, 3 columns) with corruption handling.
 func readNewCSVRaw(path string) []RawNewRow {
-	rawBytes, err := os.ReadFile(path)
+	rawBytes, err := os.ReadFile(path) // #nosec G304 -- CLI file path, manual ops tooling
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: Cannot read new CSV %s: %v\n", path, err)
 		os.Exit(1)
@@ -401,7 +401,7 @@ func normalizePriceForCompare(price string) string {
 // ============================================================================
 
 func writeOutputCSV(path string, rows []OutputRow) {
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- CLI file path, manual ops tooling
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: Cannot create output CSV %s: %v\n", path, err)
 		os.Exit(1)

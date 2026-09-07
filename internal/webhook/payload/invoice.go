@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -60,7 +61,7 @@ func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType type
 	}
 
 	// inject the invoice pdf url into the invoice response
-	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, invoiceID, false)
+	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})
 	if err != nil {
 		b.services.Tracing.CaptureException(ctx, err)
 

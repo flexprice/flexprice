@@ -215,12 +215,17 @@ func (s *ChargebeeWebhookCheckoutSuite) seedSession(status types.CheckoutStatus)
 	return session
 }
 
+// paymentNotes builds the notes[] array Chargebee echoes for an invoice we created.
+func paymentNotes(flexPaymentID string) []map[string]any {
+	return []map[string]any{{"note": chargebee.PaymentNote(flexPaymentID)}}
+}
+
 // contentForInvoice builds event content against a specific Chargebee invoice id,
 // so a test can choose whether that id has a FlexPrice mapping.
 func (s *ChargebeeWebhookCheckoutSuite) contentForInvoice(chargebeeInvoiceID string) json.RawMessage {
 	content, err := json.Marshal(map[string]any{
 		"transaction": map[string]any{"id": testChargebeeTxnID, "amount": 10000, "currency_code": "USD"},
-		"invoice":     map[string]any{"id": chargebeeInvoiceID, "po_number": testFlexpricePaymentID},
+		"invoice":     map[string]any{"id": chargebeeInvoiceID, "notes": paymentNotes(testFlexpricePaymentID)},
 	})
 	s.Require().NoError(err)
 	return content
@@ -229,7 +234,7 @@ func (s *ChargebeeWebhookCheckoutSuite) contentForInvoice(chargebeeInvoiceID str
 func (s *ChargebeeWebhookCheckoutSuite) event(eventType ChargebeeEventType) *ChargebeeWebhookEvent {
 	content, err := json.Marshal(map[string]any{
 		"transaction": map[string]any{"id": testChargebeeTxnID, "amount": 10000, "currency_code": "USD"},
-		"invoice":     map[string]any{"id": testChargebeeInvoiceID, "po_number": testFlexpricePaymentID},
+		"invoice":     map[string]any{"id": testChargebeeInvoiceID, "notes": paymentNotes(testFlexpricePaymentID)},
 	})
 	s.Require().NoError(err)
 	return &ChargebeeWebhookEvent{ID: "ev_001", EventType: string(eventType), Content: content}
@@ -354,8 +359,8 @@ func (s *ChargebeeWebhookCheckoutSuite) TestUnhandledEventTypeIsIgnored() {
 }
 
 // A hosted checkout page creates its own Chargebee invoice with no entity mapping.
-// po_number carries the Flexprice payment id — verified live against the test site.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_HostedPageRoutesByPONumber() {
+// The invoice note carries the Flexprice payment id — verified live against the test site.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_HostedPageRoutesByInvoiceNote() {
 	session := s.seedSession(types.CheckoutStatusPending)
 
 	handled, err := s.handler.handleCheckoutSessionForPayment(
@@ -367,13 +372,13 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_HostedPageRoutesByP
 }
 
 // End to end through HandleWebhookEvent: no invoice mapping exists, so routing must
-// come from po_number alone.
+// come from the invoice note alone.
 func (s *ChargebeeWebhookCheckoutSuite) TestHostedPageWebhook_UnmappedInvoiceCompletesSession() {
 	session := s.seedSession(types.CheckoutStatusPending)
 
 	content, err := json.Marshal(map[string]any{
 		"transaction": map[string]any{"id": testChargebeeTxnID, "amount": 1000, "currency_code": "USD"},
-		"invoice":     map[string]any{"id": "cb_inv_unmapped", "po_number": testFlexpricePaymentID},
+		"invoice":     map[string]any{"id": "cb_inv_unmapped", "notes": paymentNotes(testFlexpricePaymentID)},
 	})
 	s.Require().NoError(err)
 
@@ -398,8 +403,8 @@ func (s *fakeInvoiceService) ReconcilePaymentStatus(_ context.Context, id string
 
 // A payment link issued for an existing invoice has no checkout session, and the
 // hosted page invoices the charge on a Chargebee invoice of its own — so neither
-// route that predates it can settle the money. po_number is the only thread back.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettledViaPONumber() {
+// route that predates it can settle the money. The invoice note is the only thread back.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettledViaInvoiceNote() {
 	invoiceSvc := &fakeInvoiceService{}
 	s.services.InvoiceService = invoiceSvc
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
@@ -417,9 +422,9 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettle
 	s.Equal([]string{testFlexpriceInvoiceID}, invoiceSvc.reconciled)
 }
 
-// po_number is free text a tenant can set on any Chargebee invoice, so anything
-// that is not one of our payment ids must be left alone.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_UnknownPONumberIsIgnored() {
+// A tenant's own general notes land in the same array, so anything that is not one
+// of our payment ids must be left alone.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_UnknownPaymentIDIsIgnored() {
 	invoiceSvc := &fakeInvoiceService{}
 	s.services.InvoiceService = invoiceSvc
 	s.paymentSvc.getErr = ierr.NewError("not found").Mark(ierr.ErrNotFound)

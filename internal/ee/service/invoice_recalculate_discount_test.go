@@ -239,15 +239,39 @@ func (s *RecalculateDiscountOnInvoiceSuite) TestInvoiceNotFound() {
 	s.Error(err)
 }
 
-func (s *RecalculateDiscountOnInvoiceSuite) TestRejectsNonDraftInvoice() {
+// Finalized invoices are no longer rejected: applying a discount voids the invoice and
+// lands the recalculation on a new draft copy (the void-and-recreate edit flow).
+func (s *RecalculateDiscountOnInvoiceSuite) TestFinalizedInvoiceVoidsAndRecreatesOnApplyDiscount() {
 	ctx := s.GetContext()
 	inv := s.createOneOffDraftInvoice("inv_finalized", decimal.NewFromInt(100))
 	inv.InvoiceStatus = types.InvoiceStatusFinalized
+	inv.PaymentStatus = types.PaymentStatusPending
+	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+
+	resp, err := s.applyDiscount(ctx, inv.ID)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.NotEqual(inv.ID, resp.ID)
+	s.Equal(types.InvoiceStatusDraft, resp.InvoiceStatus)
+
+	original, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusVoided, original.InvoiceStatus)
+	s.Equal(resp.ID, lo.FromPtr(original.RecalculatedInvoiceID))
+}
+
+// A finalized invoice that cannot be voided (payment status outside the voidable set)
+// still rejects the discount recalculation.
+func (s *RecalculateDiscountOnInvoiceSuite) TestUnvoidableFinalizedInvoiceRejectsApplyDiscount() {
+	ctx := s.GetContext()
+	inv := s.createOneOffDraftInvoice("inv_finalized_refunded", decimal.NewFromInt(100))
+	inv.InvoiceStatus = types.InvoiceStatusFinalized
+	inv.PaymentStatus = types.PaymentStatusRefunded
 	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
 
 	_, err := s.applyDiscount(ctx, inv.ID)
 	s.Error(err)
-	s.Contains(err.Error(), "not in draft status")
+	s.Contains(err.Error(), "payment status is not allowed")
 }
 
 func (s *RecalculateDiscountOnInvoiceSuite) TestAppliesInvoiceLevelCoupon() {

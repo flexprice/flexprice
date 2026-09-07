@@ -18,6 +18,10 @@ type LineItemRepository interface {
 	// Get retrieves a subscription line item by ID
 	Get(ctx context.Context, id string) (*SubscriptionLineItem, error)
 
+	// GetForUpdate retrieves a subscription line item by ID and row-locks it for the
+	// duration of the surrounding transaction.
+	GetForUpdate(ctx context.Context, id string) (*SubscriptionLineItem, error)
+
 	// Update updates an existing subscription line item
 	Update(ctx context.Context, lineItem *SubscriptionLineItem) error
 

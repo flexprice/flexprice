@@ -180,7 +180,7 @@ func (c *WorkflowConfig) ResolveOnboardingActions(onboardingWorkflowName string)
 	if custom, ok := c.CustomWorkflows[onboardingWorkflowName]; ok {
 		return custom, true
 	}
-	
+
 	return c.Actions, false
 }
 
@@ -576,14 +576,14 @@ const (
 	// Token-related property keys (Case 1: 5 features)
 	EventPropertyKeyPromptTokens             EventPropertyKey = "promptTokens"
 	EventPropertyKeyCompletionTokens         EventPropertyKey = "completionTokens"
-	EventPropertyKeyCachedPromptTokens       EventPropertyKey = "cachedPromptTokens"
+	EventPropertyKeyCachedPromptTokens       EventPropertyKey = "cachedPromptTokens" // #nosec G101 -- field name, not a secret
 	EventPropertyKeyCacheCreationInputTokens EventPropertyKey = "cacheCreationInputTokens"
 	EventPropertyKeyCacheReadInputTokens     EventPropertyKey = "cacheReadInputTokens"
 
 	// Audio/Text token property keys (Case 2: 6 features)
-	EventPropertyKeyUncachedPromptAudioTokens EventPropertyKey = "uncachedPromptAudioTokens"
-	EventPropertyKeyUncachedPromptTextTokens  EventPropertyKey = "uncachedPromptTextTokens"
-	EventPropertyKeyCachedPromptAudioTokens   EventPropertyKey = "cachedPromptAudioTokens"
+	EventPropertyKeyUncachedPromptAudioTokens EventPropertyKey = "uncachedPromptAudioTokens" // #nosec G101 -- property key name, not a secret
+	EventPropertyKeyUncachedPromptTextTokens  EventPropertyKey = "uncachedPromptTextTokens"  // #nosec G101 -- property key name, not a secret
+	EventPropertyKeyCachedPromptAudioTokens   EventPropertyKey = "cachedPromptAudioTokens"   // #nosec G101 -- property key name, not a secret
 	EventPropertyKeyCachedPromptTextTokens    EventPropertyKey = "cachedPromptTextTokens"
 	EventPropertyKeyCandidatesAudioTokens     EventPropertyKey = "candidatesAudioTokens"
 	EventPropertyKeyCandidatesTextTokens      EventPropertyKey = "candidatesTextTokens"

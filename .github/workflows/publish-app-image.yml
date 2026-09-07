@@ -26,6 +26,12 @@ jobs:
     name: Build, scan, publish multi-arch image
     runs-on: ubuntu-latest
     steps:
+      # Audits runner egress; job holds GHCR_PUBLISH_TOKEN.
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -55,6 +61,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
+          cache-binary: false
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -85,10 +95,11 @@ jobs:
             org.opencontainers.image.version=${{ steps.tag.outputs.semver }}
             org.opencontainers.image.licenses=AGPL-3.0-only
 
+      # Scan by digest, not the mutable tag, so Trivy scans the exact image cosign signs.
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
@@ -100,6 +111,16 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+      # Signs the scanned digest, not a mutable tag.
+      - name: Sign image (keyless)
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMG}@${DIGEST}"
 
       - name: Summary
         env:

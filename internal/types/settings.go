@@ -25,6 +25,8 @@ const (
 	SettingKeyTenantConfig                SettingKey = "tenant_config"
 	SettingKeyCustomerOnboarding          SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig    SettingKey = "wallet_balance_alert_config"
+	SettingKeySubscriptionAlertConfig     SettingKey = "subscription_alert_config"
+	SettingKeyEntitlementAlertConfig      SettingKey = "entitlement_alert_config"
 	SettingKeyPrepareProcessedEvents      SettingKey = "prepare_processed_events_config"
 	SettingKeyCustomAnalytics             SettingKey = "custom_analytics_config"
 	SettingKeyCustomerPortalConfig        SettingKey = "customer_portal_config"
@@ -45,6 +47,8 @@ func (s *SettingKey) Validate() error {
 		SettingKeyTenantConfig,
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
+		SettingKeySubscriptionAlertConfig,
+		SettingKeyEntitlementAlertConfig,
 		SettingKeyPrepareProcessedEvents,
 		SettingKeyCustomAnalytics,
 		SettingKeyCustomerPortalConfig,
@@ -636,6 +640,19 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	// Subscription and entitlement alert toggles: pure on/off — thresholds live
+	// per-row in alert_settings (subscription) and per-grant (entitlement).
+	defaultSubscriptionAlertConfig := AlertToggleConfig{AlertEnabled: lo.ToPtr(false)}
+	defaultSubscriptionAlertConfigMap, err := utils.ToMap(defaultSubscriptionAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+	defaultEntitlementAlertConfig := AlertToggleConfig{AlertEnabled: lo.ToPtr(false)}
+	defaultEntitlementAlertConfigMap, err := utils.ToMap(defaultEntitlementAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	// Already a map, no conversion needed
 	defaultPrepareProcessedEventsConfigMap := defaultPrepareProcessedEventsConfig
 
@@ -781,6 +798,16 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultWalletBalanceAlertConfigMap,
 			Description:  "Default configuration for wallet balance alert configuration",
 		},
+		SettingKeySubscriptionAlertConfig: {
+			Key:          SettingKeySubscriptionAlertConfig,
+			DefaultValue: defaultSubscriptionAlertConfigMap,
+			Description:  "Tenant-wide toggle for subscription spend alert evaluation (per-row thresholds live in alert_settings)",
+		},
+		SettingKeyEntitlementAlertConfig: {
+			Key:          SettingKeyEntitlementAlertConfig,
+			DefaultValue: defaultEntitlementAlertConfigMap,
+			Description:  "Tenant-wide toggle for entitlement grant alert evaluation (threshold/exhaustion)",
+		},
 		SettingKeyPrepareProcessedEvents: {
 			Key:          SettingKeyPrepareProcessedEvents,
 			DefaultValue: defaultPrepareProcessedEventsConfigMap,
@@ -910,6 +937,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyWalletBalanceAlertConfig:
 		config, err := utils.ToStruct[AlertSettings](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeySubscriptionAlertConfig, SettingKeyEntitlementAlertConfig:
+		config, err := utils.ToStruct[AlertToggleConfig](value)
 		if err != nil {
 			return err
 		}

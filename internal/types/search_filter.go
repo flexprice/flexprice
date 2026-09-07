@@ -128,6 +128,16 @@ func (f *FilterCondition) Validate() error {
 	return nil
 }
 
+// HasFieldFilter reports whether any filter condition targets the given field.
+func HasFieldFilter(filters []*FilterCondition, field string) bool {
+	for _, f := range filters {
+		if f != nil && lo.FromPtr(f.Field) == field {
+			return true
+		}
+	}
+	return false
+}
+
 // sorting options
 type SortDirection string
 

@@ -65,7 +65,7 @@ type CreditGrantApplicationReason string
 const (
 	// ApplicationReasonFirstTimeRecurringCreditGrant is used when a recurring credit is being granted
 	// for the first time for a subscription. Typically applied at the start of a recurring billing cycle.
-	ApplicationReasonFirstTimeRecurringCreditGrant CreditGrantApplicationReason = "first_time_recurring_credit_grant"
+	ApplicationReasonFirstTimeRecurringCreditGrant CreditGrantApplicationReason = "first_time_recurring_credit_grant" // #nosec G101 -- enum value name, not a secret
 
 	// ApplicationReasonRecurringCreditGrant is used for recurring credit grants that are applied
 	// on a regular interval (e.g. monthly, annually) after the initial credit grant has been processed.

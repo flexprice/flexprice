@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -14,7 +13,7 @@ import (
 
 type PaymentProviderResolverSuite struct {
 	testutil.BaseServiceTestSuite
-	svc interfaces.PaymentProviderResolver
+	svc *PaymentProviderResolver
 }
 
 func TestPaymentProviderResolverSuite(t *testing.T) {

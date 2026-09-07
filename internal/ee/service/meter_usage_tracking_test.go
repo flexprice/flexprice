@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -325,6 +326,7 @@ func (s *MeterUsageTrackingSuite) TestConvertToDecimal_AllTypes() {
 		{"int32", int32(50), decimal.NewFromInt(50)},
 		{"uint", uint(7), decimal.NewFromInt(7)},
 		{"uint64", uint64(999), decimal.NewFromInt(999)},
+		{"uint_above_maxint64", uint(math.MaxUint64), decimal.RequireFromString("18446744073709551615")},
 		{"string", "123.456", decimal.RequireFromString("123.456")},
 		{"invalid_string", "not_a_number", decimal.Zero},
 		{"bool", true, decimal.Zero},

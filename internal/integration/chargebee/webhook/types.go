@@ -3,6 +3,8 @@ package webhook
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/integration/chargebee"
 )
 
 // ChargebeeWebhookEvent represents the structure of a Chargebee webhook event
@@ -52,11 +54,13 @@ type ChargebeeTransaction struct {
 // ChargebeeInvoice represents an invoice in the webhook content
 type ChargebeeInvoice struct {
 	ID string `json:"id"`
-	// PONumber carries the Flexprice payment id for invoices created by a hosted
-	// checkout page. That page's invoice is created by Chargebee, so this is the
-	// only link back to a Flexprice entity. Empty on invoices we mirrored ourselves,
-	// which are resolved through the entity mapping instead.
-	PONumber       string                     `json:"po_number,omitempty"`
+	// Notes carries the Flexprice payment id for invoices created by a hosted
+	// checkout page, whose invoice is Chargebee's own and has no mapping of ours.
+	// A general note comes back with no entity_type, and Chargebee merges the
+	// tenant's own plan/customer/site notes into the same array.
+	Notes []struct {
+		Note string `json:"note"`
+	} `json:"notes,omitempty"`
 	CustomerID     string                     `json:"customer_id"`
 	SubscriptionID string                     `json:"subscription_id,omitempty"`
 	CurrencyCode   string                     `json:"currency_code"`
@@ -76,6 +80,15 @@ type ChargebeeInvoice struct {
 		AppliedAt         int64  `json:"applied_at"`
 		TransactionStatus string `json:"txn_status,omitempty"`
 	} `json:"linked_payments,omitempty"`
+}
+
+// ResolvePaymentID names the Flexprice payment this invoice was created for.
+func (i ChargebeeInvoice) ResolvePaymentID() string {
+	notes := make([]string, 0, len(i.Notes))
+	for _, n := range i.Notes {
+		notes = append(notes, n.Note)
+	}
+	return chargebee.ParsePaymentIDFromNotes(notes)
 }
 
 // ChargebeeInvoiceLineItem represents a line item in an invoice

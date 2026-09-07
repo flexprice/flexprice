@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,7 +65,8 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 			wantErr: true, errSub: "hour",
 		},
 		{
-			name: "rejects missing overage factor",
+			// overage_factor is optional on the wire and defaults to 1.0.
+			name: "accepts missing overage factor",
 			req: CommitmentBucketRequest{
 				Start:           types.Bucket{Hour: 9, Minute: 0},
 				End:             types.Bucket{Hour: 10, Minute: 0},
@@ -72,7 +74,6 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(100),
 			},
-			wantErr: true, errSub: "overage_factor is required",
 		},
 		{
 			// Exactly 1.0 is valid for buckets: overage bills at base rate.
@@ -369,5 +370,65 @@ func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *test
 				require.NoError(t, err)
 			}
 		})
+	}
+}
+
+func TestCreateSubscriptionLineItemRequest_DefaultsCommitmentOverageFactor(t *testing.T) {
+	t.Run("defaults to 1.0 when omitted", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:          "price_test",
+			CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
+		}
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if req.CommitmentOverageFactor == nil {
+			t.Fatal("expected commitment_overage_factor to be defaulted")
+		}
+		if !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default of 1, got: %s", req.CommitmentOverageFactor)
+		}
+	})
+
+	t.Run("keeps an explicit factor", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:                 "price_test",
+			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
+			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(1.5)),
+		}
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if !req.CommitmentOverageFactor.Equal(decimal.NewFromFloat(1.5)) {
+			t.Fatalf("expected 1.5, got: %s", req.CommitmentOverageFactor)
+		}
+	})
+
+	t.Run("still rejects a factor below 1.0", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:                 "price_test",
+			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
+			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(0.5)),
+		}
+		err := req.Validate(nil, nil)
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(err.Error(), "commitment_overage_factor must be at least 1.0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *testing.T) {
+	b := CommitmentBucketRequest{
+		Start:           types.Bucket{Hour: 9, Minute: 0},
+		End:             types.Bucket{Hour: 10, Minute: 0},
+		CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentValue: decimal.NewFromInt(100),
+	}.ToTimeOfDayBucket()
+
+	if b.OverageFactor == nil || !b.OverageFactor.Equal(decimal.NewFromInt(1)) {
+		t.Fatalf("expected overage factor to default to 1, got: %v", b.OverageFactor)
 	}
 }

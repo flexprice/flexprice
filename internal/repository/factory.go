@@ -148,7 +148,7 @@ func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 }
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
-	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger)
 }
 
 func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
@@ -256,7 +256,7 @@ func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Reposito
 }
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
-	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {

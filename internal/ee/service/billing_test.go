@@ -3106,6 +3106,128 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_WindowedTrueUp_Uses
 	s.True(totalAmount.LessThan(fullPeriodTotal), "amount should not project full-period commitment")
 }
 
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_DeferredCommitment_DoesNotChargeUntilStart() {
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	now := time.Now().UTC()
+	periodStart := now.Add(-48 * time.Hour)
+	periodEnd := now.Add(20 * 24 * time.Hour)
+	futureStart := now.Add(13 * 24 * time.Hour)
+
+	flatPrice := &price.Price{
+		ID:                 "price_deferred_commitment_flat",
+		Amount:             decimal.RequireFromString("12.50"),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, flatPrice))
+
+	commitmentQty := decimal.NewFromInt(30)
+	overageFactor := decimal.NewFromInt(1)
+
+	newDeferredItem := func(id string, start, end time.Time, windowed bool) *subscription.SubscriptionLineItem {
+		return &subscription.SubscriptionLineItem{
+			ID:                      id,
+			SubscriptionID:          s.testData.subscription.ID,
+			CustomerID:              s.testData.subscription.CustomerID,
+			EntityID:                s.testData.plan.ID,
+			EntityType:              types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:         s.testData.plan.Name,
+			PriceID:                 flatPrice.ID,
+			PriceType:               types.PRICE_TYPE_USAGE,
+			MeterID:                 s.testData.meters.apiCalls.ID,
+			MeterDisplayName:        s.testData.meters.apiCalls.Name,
+			DisplayName:             "Deferred commitment",
+			Quantity:                decimal.Zero,
+			Currency:                s.testData.subscription.Currency,
+			BillingPeriod:           s.testData.subscription.BillingPeriod,
+			InvoiceCadence:          types.InvoiceCadenceArrear,
+			StartDate:               start,
+			EndDate:                 end,
+			CommitmentType:          types.COMMITMENT_TYPE_QUANTITY,
+			CommitmentQuantity:      &commitmentQty,
+			CommitmentOverageFactor: &overageFactor,
+			CommitmentTrueUpEnabled: true,
+			CommitmentWindowed:      windowed,
+			BaseModel:               types.GetDefaultBaseModel(ctx),
+		}
+	}
+
+	tests := []struct {
+		name     string
+		item     *subscription.SubscriptionLineItem
+		wantZero bool
+	}{
+		{
+			name:     "future_start_non_windowed",
+			item:     newDeferredItem("sub_li_deferred_flat", futureStart, time.Time{}, false),
+			wantZero: true,
+		},
+		{
+			name:     "future_start_windowed",
+			item:     newDeferredItem("sub_li_deferred_windowed", futureStart, time.Time{}, true),
+			wantZero: true,
+		},
+		{
+			name:     "zero_length_at_future_start",
+			item:     newDeferredItem("sub_li_deferred_zero_length", futureStart, futureStart, false),
+			wantZero: true,
+		},
+		{
+			name:     "already_started_non_windowed_still_charges",
+			item:     newDeferredItem("sub_li_active_commitment", s.testData.subscription.StartDate, time.Time{}, false),
+			wantZero: false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			subCopy := *s.testData.subscription
+			subCopy.CurrentPeriodStart = periodStart
+			subCopy.CurrentPeriodEnd = periodEnd
+			subCopy.LineItems = []*subscription.SubscriptionLineItem{tt.item}
+
+			usage := &dto.GetUsageBySubscriptionResponse{
+				StartTime: periodStart,
+				EndTime:   periodEnd,
+				Currency:  subCopy.Currency,
+				Charges: []*dto.SubscriptionUsageByMetersResponse{
+					{
+						SubscriptionLineItemID: tt.item.ID,
+						Price:                  flatPrice,
+						Quantity:               0,
+						Amount:                 0,
+						IsOverage:              false,
+					},
+				},
+			}
+
+			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
+				periodStart, periodEnd, types.UsageSourceWallet,
+			)
+			s.NoError(err)
+			if tt.wantZero {
+				s.True(totalAmount.IsZero(), "deferred/zero-length commitment must not affect balance, got %s", totalAmount)
+				s.Empty(lineItems)
+				return
+			}
+			expected := flatPrice.Amount.Mul(commitmentQty)
+			s.True(totalAmount.Equal(expected), "active commitment should true-up to %s, got %s", expected, totalAmount)
+			s.Len(lineItems, 1)
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitment() {
 	// Monthly subscription with annual commitment ($60), overage factor 2x
 	ctx := s.GetContext()

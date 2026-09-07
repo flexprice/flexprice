@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"math"
 	"strconv"
 	"time"
 
@@ -183,6 +184,15 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 		}
 
 		for _, item := range response.Items {
+			eventCount := item.EventCount
+			if eventCount > math.MaxInt64 {
+				e.logger.Info(ctx, "event count exceeds int64 range, clamping",
+					"customer_id", c.ID,
+					"external_id", c.ExternalID,
+					"feature_id", item.FeatureID,
+					"event_count", eventCount)
+				eventCount = math.MaxInt64
+			}
 			record := &usageAnalyticsRecord{
 				CustomerName:       c.Name,
 				CustomerID:         c.ID,
@@ -192,7 +202,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				FeatureName:        item.FeatureName,
 				FeatureID:          item.FeatureID,
 				EventName:          item.EventName,
-				EventCount:         int64(item.EventCount),
+				EventCount:         int64(eventCount), // #nosec G115 -- bounded above before cast
 				TotalUsage:         item.TotalUsage,
 				TotalCost:          item.TotalCost,
 				Currency:           item.Currency,

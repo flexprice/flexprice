@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -71,6 +72,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		}
 
 		lineItem = resolvedReq.ToSubscriptionLineItem(txCtx, *params)
+		stripCallerLineageMetadata(lineItem)
 		if usedInlinePrice {
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
@@ -137,10 +139,22 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	priceResp, priceErr := NewPriceService(s.ServiceParams).GetPrice(ctx, lineItem.PriceID)
+	if priceErr != nil {
+		s.Logger.Info(ctx, "skipped price expansion for created line item", "line_item_id", lineItem.ID, "price_id", lineItem.PriceID, "error", priceErr)
+	}
+
+	if lineItem != nil && lineItem.IsUsage() && lineItem.Meter == nil {
+		m, err := s.MeterRepo.GetMeter(ctx, lineItem.MeterID)
+		if err != nil {
+			s.Logger.Info(ctx, "skipped meter expansion for line item", "line_item_id", lineItem.ID, "meter_id", lineItem.MeterID, "error", err)
+		}
+		lineItem.Meter = m
+	}
+
 	// Apply proration for the add if requested. Skip usage prices (unknown future consumption).
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
 		lineItem.PriceType != types.PRICE_TYPE_USAGE {
-
 		effectiveDate := time.Now().UTC()
 		if req.StartDate != nil {
 			effectiveDate = req.StartDate.UTC()
@@ -160,39 +174,35 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			return nil, err
 		}
 
-		priceSvc := NewPriceService(s.ServiceParams)
-		priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
-		if err != nil {
-			return nil, err
-		}
+		if priceResp != nil && priceResp.Price != nil {
+			// Temporarily override current period on a copy so LineItemProrationService
+			// uses the period that actually contains effectiveDate.
+			subCopy := *sub
+			subCopy.CurrentPeriodStart = period.Start
+			subCopy.CurrentPeriodEnd = period.End
 
-		// Temporarily override current period on a copy so LineItemProrationService
-		// uses the period that actually contains effectiveDate.
-		subCopy := *sub
-		subCopy.CurrentPeriodStart = period.Start
-		subCopy.CurrentPeriodEnd = period.End
-
-		prorationReq := LineItemProrationRequest{
-			Subscription:   &subCopy,
-			EffectiveDate:  effectiveDate,
-			Behavior:       req.ProrationBehavior,
-			IdempotencyKey: types.GenerateUUIDWithPrefix("proration_add"),
-			Entries: []LineItemProrationEntry{
-				{
-					LineItem:    lineItem,
-					Price:       priceResp.Price,
-					Action:      types.ProrationActionAddItem,
-					NewQuantity: lineItem.Quantity,
+			prorationReq := LineItemProrationRequest{
+				Subscription:   &subCopy,
+				EffectiveDate:  effectiveDate,
+				Behavior:       req.ProrationBehavior,
+				IdempotencyKey: types.GenerateUUIDWithPrefix("proration_add"),
+				Entries: []LineItemProrationEntry{
+					{
+						LineItem:    lineItem,
+						Price:       priceResp.Price,
+						Action:      types.ProrationActionAddItem,
+						NewQuantity: lineItem.Quantity,
+					},
 				},
-			},
-		}
-		if _, applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
-			s.Logger.Info(ctx, "proration apply failed for line item add",
-				"line_item_id", lineItem.ID, "error", applyErr)
+			}
+			if _, applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
+				s.Logger.Info(ctx, "proration apply failed for line item add",
+					"line_item_id", lineItem.ID, "error", applyErr)
+			}
 		}
 	}
 
-	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
+	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem, Price: priceResp}, nil
 }
 
 // buildLineItemParamsForPrice builds LineItemParams for a price, resolving Plan/Addon/Subscription when skipEntitlementCheck is true.
@@ -332,8 +342,47 @@ func validateLineItemEndDateChange(lineItem *subscription.SubscriptionLineItem, 
 		Mark(ierr.ErrValidation)
 }
 
-// DeleteSubscriptionLineItem marks a line item as deleted by setting its end date
+// DeleteSubscriptionLineItem is the public delete path. A line item that has
+// not started yet can only be reverted immediately. Scheduling a later delete of a
+// scheduled version is rejected so we do not stack scheduled changes.
 func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
+	lineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	if successor, err := s.findPublishedSuccessor(ctx, lineItem); err != nil {
+		return nil, err
+	} else if successor != nil {
+		return nil, ierr.NewError("line item has a successor and cannot be deleted").
+			WithHint("Delete the latest scheduled version first").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":           lineItemID,
+				"successor_line_item_id": successor.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	now := time.Now().UTC()
+	if lineItem.StartDate.After(now) {
+		if req.EffectiveFrom != nil && req.EffectiveFrom.UTC().After(now) {
+			return nil, ierr.NewError("cannot schedule deletion of a line item that has not started").
+				WithHint("Omit effective_from to revert the scheduled line item immediately").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id":   lineItemID,
+					"start_date":     lineItem.StartDate,
+					"effective_from": req.EffectiveFrom.UTC(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		resp, err := s.cancelScheduledLineItem(ctx, lineItem)
+		if err != nil {
+			return nil, err
+		}
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
+		return resp, nil
+	}
+
 	resp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, req)
 	if err != nil {
 		return nil, err
@@ -453,6 +502,148 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
 
+// cancelScheduledLineItem removes a line item that has not started yet and
+// reopens the predecessor this successor replaced, if one was recorded.
+func (s *subscriptionService) cancelScheduledLineItem(ctx context.Context, lineItem *subscription.SubscriptionLineItem) (*dto.SubscriptionLineItemResponse, error) {
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if predID := predecessorLineItemID(lineItem); predID != "" {
+			pred, err := s.SubscriptionLineItemRepo.Get(ctx, predID)
+			if err != nil {
+				return err
+			}
+			pred.EndDate = lineItem.EndDate
+			clearSuccessorLineItemID(pred)
+			if err := s.SubscriptionLineItemRepo.Update(ctx, pred); err != nil {
+				return err
+			}
+		}
+
+		lineItem.Status = types.StatusDeleted
+		return s.SubscriptionLineItemRepo.Update(ctx, lineItem)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
+}
+
+func (s *subscriptionService) findPublishedSuccessor(ctx context.Context, item *subscription.SubscriptionLineItem) (*subscription.SubscriptionLineItem, error) {
+	succID := successorLineItemID(item)
+	if succID == "" {
+		return nil, nil
+	}
+	succ, err := s.SubscriptionLineItemRepo.Get(ctx, succID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if succ.Status != types.StatusPublished {
+		return nil, nil
+	}
+	return succ, nil
+}
+
+func predecessorLineItemID(item *subscription.SubscriptionLineItem) string {
+	if item == nil || item.Metadata == nil {
+		return ""
+	}
+	return item.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID]
+}
+
+func successorLineItemID(item *subscription.SubscriptionLineItem) string {
+	if item == nil || item.Metadata == nil {
+		return ""
+	}
+	return item.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+}
+
+func setLineItemMetadataID(item *subscription.SubscriptionLineItem, key, id string) {
+	if item == nil || id == "" {
+		return
+	}
+	copied := make(map[string]string, len(item.Metadata)+1)
+	maps.Copy(copied, item.Metadata)
+	copied[key] = id
+	item.Metadata = copied
+}
+
+func setPredecessorLineItemID(item *subscription.SubscriptionLineItem, predecessorID string) {
+	setLineItemMetadataID(item, types.SubscriptionLineItemMetadataKeyPredecessorID, predecessorID)
+}
+
+func setSuccessorLineItemID(item *subscription.SubscriptionLineItem, successorID string) {
+	setLineItemMetadataID(item, types.SubscriptionLineItemMetadataKeySuccessorID, successorID)
+}
+
+// lineageMetadataKeys are service-owned. Callers must never set them: a forged pointer
+// would make delete reopen, or refuse to delete, an unrelated line item.
+var lineageMetadataKeys = []string{
+	types.SubscriptionLineItemMetadataKeyPredecessorID,
+	types.SubscriptionLineItemMetadataKeySuccessorID,
+}
+
+func clearLineItemMetadataIDs(item *subscription.SubscriptionLineItem, keys ...string) {
+	if item == nil || item.Metadata == nil {
+		return
+	}
+	present := false
+	for _, key := range keys {
+		if _, ok := item.Metadata[key]; ok {
+			present = true
+			break
+		}
+	}
+	if !present {
+		return
+	}
+	copied := make(map[string]string, len(item.Metadata))
+	maps.Copy(copied, item.Metadata)
+	for _, key := range keys {
+		delete(copied, key)
+	}
+	item.Metadata = copied
+}
+
+func clearSuccessorLineItemID(item *subscription.SubscriptionLineItem) {
+	clearLineItemMetadataIDs(item, types.SubscriptionLineItemMetadataKeySuccessorID)
+}
+
+// stripCallerLineageMetadata drops version pointers that arrived in a request payload.
+func stripCallerLineageMetadata(item *subscription.SubscriptionLineItem) {
+	clearLineItemMetadataIDs(item, lineageMetadataKeys...)
+}
+
+func alreadyScheduledVersionError(lineItemID, successorID string) error {
+	return ierr.NewError("line item already has a scheduled version").
+		WithHint("Update the scheduled version instead, or delete it to revert this line item").
+		WithReportableDetails(map[string]interface{}{
+			"line_item_id":           lineItemID,
+			"successor_line_item_id": successorID,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
+// replaceMetadataPreservingLineage applies caller-supplied metadata without dropping the
+// version pointers. Those are service-owned: losing them detaches a scheduled version
+// from the line it replaced, which breaks both the delete guard and the revert.
+func replaceMetadataPreservingLineage(item *subscription.SubscriptionLineItem, metadata map[string]string) {
+	if item == nil {
+		return
+	}
+	updated := make(map[string]string, len(metadata)+len(lineageMetadataKeys))
+	maps.Copy(updated, metadata)
+	for _, key := range lineageMetadataKeys {
+		// Drop whatever the caller sent under a reserved key before restoring the stored value.
+		delete(updated, key)
+		if id := item.Metadata[key]; id != "" {
+			updated[key] = id
+		}
+	}
+	item.Metadata = updated
+}
+
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one
 // This method reuses existing service methods for creating and deleting line items
 func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
@@ -475,6 +666,16 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				"status":       existingLineItem.Status,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// A line item that already has a scheduled version must be edited through that
+	// version. Versioning it again would leave two published lines starting on the
+	// same date and orphan the first successor. The versioning branch re-checks this
+	// under a row lock; this pass just fails fast before any work is done.
+	if successor, err := s.findPublishedSuccessor(ctx, existingLineItem); err != nil {
+		return nil, err
+	} else if successor != nil {
+		return nil, alreadyScheduledVersionError(lineItemID, successor.ID)
 	}
 
 	// Get the subscription
@@ -500,77 +701,95 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		endDate = req.EffectiveFrom.UTC()
 	}
 
-	// Effective date must not be before the line item's start date (avoids end_date < start_date)
-	if !existingLineItem.StartDate.IsZero() && endDate.Before(existingLineItem.StartDate) {
-		return nil, ierr.NewError("effective date must be on or after line item start date").
-			WithHint("The effective date for terminating this line item cannot be before the line item's start date").
-			WithReportableDetails(map[string]interface{}{
-				"line_item_id":   lineItemID,
-				"start_date":     existingLineItem.StartDate,
-				"effective_from": endDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	// Check if we need to create a new line item (with price overrides)
 	if req.ShouldCreateNewLineItem() {
-		if err := validateLineItemEndDateChange(existingLineItem, endDate); err != nil {
-			return nil, err
-		}
-
-		// existingLineItem and the repo's copy are the same object, so this must be
-		// read before deleteSubscriptionLineItem below overwrites EndDate in place.
-		oldEndDate := existingLineItem.EndDate
-
-		// Get price for override logic (and ensure endDate >= existing line item start already validated above)
-		priceService := NewPriceService(s.ServiceParams)
-		price, err := priceService.GetPrice(ctx, existingLineItem.PriceID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Convert request to OverrideLineItemRequest format to reuse existing logic
-		overrideReq := dto.OverrideLineItemRequest{
-			PriceID:           existingLineItem.PriceID,
-			Quantity:          &existingLineItem.Quantity,
-			BillingModel:      req.BillingModel,
-			Amount:            req.Amount,
-			TierMode:          req.TierMode,
-			Tiers:             req.Tiers,
-			TransformQuantity: req.TransformQuantity,
-			BucketSize:        req.BucketSize,
-		}
-
-		priceMap := map[string]*dto.PriceResponse{existingLineItem.PriceID: price}
-
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
 		err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-			// Process the price override using existing method
-			lineItems := []*subscription.SubscriptionLineItem{existingLineItem}
-			err = s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap)
+			locked, lockErr := s.SubscriptionLineItemRepo.GetForUpdate(ctx, lineItemID)
+			if lockErr != nil {
+				return lockErr
+			}
+			if locked.Status != types.StatusPublished {
+				return ierr.NewError("line item is not active").
+					WithHint("Cannot update an inactive line item").
+					WithReportableDetails(map[string]interface{}{
+						"line_item_id": lineItemID,
+						"status":       locked.Status,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			if successor, findErr := s.findPublishedSuccessor(ctx, locked); findErr != nil {
+				return findErr
+			} else if successor != nil {
+				return alreadyScheduledVersionError(lineItemID, successor.ID)
+			}
+
+			// Effective date must not be before the line item's start date (avoids end_date < start_date).
+			// Only the versioning path terminates the line item, so an in-place edit of a line
+			// that starts in the future must not be blocked by the default now() end date.
+			if !locked.StartDate.IsZero() && endDate.Before(locked.StartDate) {
+				return ierr.NewError("effective date must be on or after line item start date").
+					WithHint("The effective date for terminating this line item cannot be before the line item's start date").
+					WithReportableDetails(map[string]interface{}{
+						"line_item_id":   lineItemID,
+						"start_date":     locked.StartDate,
+						"effective_from": endDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			if err := validateLineItemEndDateChange(locked, endDate); err != nil {
+				return err
+			}
+
+			// locked and the repo's copy can be the same object, so this must be read
+			// before deleteSubscriptionLineItem below overwrites EndDate in place.
+			oldEndDate := locked.EndDate
+
+			price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
 			if err != nil {
 				return err
 			}
 
+			// Convert request to OverrideLineItemRequest format to reuse existing logic
+			overrideReq := dto.OverrideLineItemRequest{
+				PriceID:           locked.PriceID,
+				Quantity:          &locked.Quantity,
+				BillingModel:      req.BillingModel,
+				Amount:            req.Amount,
+				TierMode:          req.TierMode,
+				Tiers:             req.Tiers,
+				TransformQuantity: req.TransformQuantity,
+				BucketSize:        req.BucketSize,
+			}
+			priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
+
+			// Process the price override using existing method
+			lineItems := []*subscription.SubscriptionLineItem{locked}
+			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, []dto.OverrideLineItemRequest{overrideReq}, lineItems, priceMap); err != nil {
+				return err
+			}
+
 			// The ProcessSubscriptionPriceOverrides method updates the line item's PriceID
-			newPriceID := existingLineItem.PriceID
+			newPriceID := locked.PriceID
 
 			// Terminate the existing line item using existing method
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
 				EffectiveFrom: &endDate,
 			}
-			_, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
-			if err != nil {
+			if _, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq); err != nil {
 				return err
 			}
 
 			// Create new line item using the DTO method
-			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
+			newLineItem = req.ToSubscriptionLineItem(ctx, locked, newPriceID)
 			newLineItem.StartDate = endDate // Start where the old one ends
 			if !oldEndDate.IsZero() {
 				newLineItem.EndDate = oldEndDate // Fill the gap freed up by the backdate
 			}
+			setPredecessorLineItemID(newLineItem, lineItemID)
+			clearSuccessorLineItemID(newLineItem)
 
 			// Materialize bucket prices when the update request carries
 			// commitment_time_buckets: ToSubscriptionLineItem rebuilt
@@ -584,7 +803,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
 			// explicit empty slice clears them.
 			if req.CommitmentTimeBuckets != nil {
-				if err := s.createBucketPrices(ctx, newLineItem.ID, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
+				if err := s.createBucketPrices(ctx, newLineItem.ID, locked.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, locked.CommitmentTimeBuckets); err != nil {
 					return err
 				}
 			}
@@ -616,7 +835,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
 			}
-			return nil
+			predecessor, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
+			if err != nil {
+				return err
+			}
+			setSuccessorLineItemID(predecessor, newLineItem.ID)
+			return s.SubscriptionLineItemRepo.Update(ctx, predecessor)
 		})
 
 		if err != nil {
@@ -625,7 +849,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		s.Logger.Info(ctx, "updated subscription line item with price overrides",
 			"subscription_id", sub.ID,
-			"old_line_item_id", existingLineItem.ID,
+			"old_line_item_id", lineItemID,
 			"new_line_item_id", newLineItem.ID,
 			"end_date", endDate,
 		)
@@ -635,7 +859,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	} else {
 		// Update metadata and commitment fields if provided
 		if req.Metadata != nil {
-			existingLineItem.Metadata = req.Metadata
+			replaceMetadataPreservingLineage(existingLineItem, req.Metadata)
 		}
 
 		// Update commitment fields if provided
@@ -779,12 +1003,11 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 2: Overage factor must be at least 1.0 when commitment is set.
-	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
+	// Rule 2: Overage factor is optional and defaults to 1.0 when a commitment is
+	// set without one — usage beyond commitment then bills at the base rate.
+	// When supplied it must be at least 1.0.
 	if lineItem.CommitmentOverageFactor == nil {
-		return ierr.NewError("commitment_overage_factor is required when commitment is set").
-			WithHint("Specify a commitment_overage_factor of 1.0 or greater").
-			Mark(ierr.ErrValidation)
+		lineItem.CommitmentOverageFactor = types.DefaultOverageFactor()
 	}
 
 	if lineItem.CommitmentOverageFactor.LessThan(decimal.NewFromInt(1)) {

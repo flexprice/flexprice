@@ -1553,8 +1553,8 @@ func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.Checko
 		}
 		return &chargebee.CheckoutAdapter{
 			Client:      i.Client,
-			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
-			InvoiceSvc:  i.InvoiceSvc.(*chargebee.InvoiceService),
+			CustomerSvc: i.CustomerSvc,
+			InvoiceSvc:  i.InvoiceSvc,
 			Logger:      f.logger,
 		}, nil
 	default:

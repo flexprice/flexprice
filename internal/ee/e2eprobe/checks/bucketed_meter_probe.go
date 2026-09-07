@@ -112,8 +112,8 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Poll analytics for exactly 3 buckets aligned to the expected boundaries.
-	if err := p.pollAnalytics(ctx, spec, customerExt, featID, ts[0], now, values); err != nil {
+	// Poll analytics until every seeded bucket boundary is visible.
+	if err := p.pollAnalytics(ctx, spec, customerExt, featID, ts, now); err != nil {
 		return err
 	}
 	return nil
@@ -186,13 +186,28 @@ func (p *BucketedMeterProbe) pollRawEvents(ctx context.Context, spec bucketedSpe
 	}
 }
 
-func (p *BucketedMeterProbe) pollAnalytics(ctx context.Context, spec bucketedSpec, custExt, featID string, start, end time.Time, wantValues []int) error {
+// analyticsPollTimeout bounds the wait for the analytics view. Ingestion is
+// already verified by pollRawEvents, and the seeded rows are queryable in
+// meter_usage within a second of the ingest call, so a longer wait here buys
+// nothing: when this check fails it is because the assertion below did not
+// match, not because a rollup was still materializing.
+const analyticsPollTimeout = 90 * time.Second
+
+// pollAnalytics waits until every seeded bucket boundary is visible in the
+// analytics view.
+//
+// The response carries one item per subscription line item, in no guaranteed
+// order, and a persistent customer holds more than one subscription on the
+// probe plan — seed-ensure keeps a second, quarterly one for multi-cadence
+// coverage. A young or cancelled subscription contributes an item with few or
+// zero points, so reading Items[0] asserts against whichever subscription the
+// server happened to list first. Assert over the union of the items for this
+// feature instead, and on the bucket boundaries themselves rather than a count,
+// so an unrelated bucket can never stand in for a seeded one.
+func (p *BucketedMeterProbe) pollAnalytics(ctx context.Context, spec bucketedSpec, custExt, featID string, buckets []time.Time, end time.Time) error {
 	windowSize := spec.window
-	// Day-granularity rollups materialize slower than the 15m/hour specs, so the
-	// analytics view occasionally lags past 90s under load. Raw ingestion is
-	// verified separately, so this only waits on aggregation.
-	analyticsTimeout := 180 * time.Second
-	deadline := time.Now().Add(analyticsTimeout)
+	start := buckets[0]
+	deadline := time.Now().Add(analyticsPollTimeout)
 	for {
 		resp, err := p.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
 			ExternalCustomerID: &custExt,
@@ -201,10 +216,10 @@ func (p *BucketedMeterProbe) pollAnalytics(ctx context.Context, spec bucketedSpe
 			EndTime:            &end,
 			WindowSize:         &windowSize,
 		})
-		if err == nil && resp.GetUsageAnalyticsResponse != nil && len(resp.GetUsageAnalyticsResponse.Items) > 0 {
-			item := resp.GetUsageAnalyticsResponse.Items[0]
-			// The response's Points slice should contain one entry per bucket.
-			if len(item.Points) >= len(wantValues) {
+		var missing []time.Time
+		if err == nil && resp.GetUsageAnalyticsResponse != nil {
+			missing = missingBuckets(buckets, seenBuckets(resp.GetUsageAnalyticsResponse.Items, featID))
+			if len(missing) == 0 {
 				return nil
 			}
 		}
@@ -214,7 +229,9 @@ func (p *BucketedMeterProbe) pollAnalytics(ctx context.Context, spec bucketedSpe
 				"external_customer_id": custExt,
 				"event_name":           spec.eventName,
 				"feature_id":           featID,
-			}, "expected %d buckets after %s, got fewer", len(wantValues), analyticsTimeout)
+				"window_size":          string(windowSize),
+				"missing_buckets":      formatBuckets(missing),
+			}, "expected %d buckets after %s, missing %d", len(buckets), analyticsPollTimeout, len(missing))
 		}
 		select {
 		case <-ctx.Done():
@@ -222,4 +239,46 @@ func (p *BucketedMeterProbe) pollAnalytics(ctx context.Context, spec bucketedSpe
 		case <-time.After(5 * time.Second):
 		}
 	}
+}
+
+// seenBuckets collects every bucket boundary present across the analytics items
+// for featID, keyed by unix seconds. Items with no feature_id are counted: the
+// query is already scoped to one feature, and some server versions omit the
+// field on the response.
+func seenBuckets(items []types.UsageAnalyticItem, featID string) map[int64]bool {
+	seen := make(map[int64]bool)
+	for _, item := range items {
+		if item.FeatureID != nil && *item.FeatureID != "" && *item.FeatureID != featID {
+			continue
+		}
+		for _, point := range item.Points {
+			if point.Timestamp == nil {
+				continue
+			}
+			ts, err := time.Parse(time.RFC3339Nano, *point.Timestamp)
+			if err != nil {
+				continue
+			}
+			seen[ts.UTC().Unix()] = true
+		}
+	}
+	return seen
+}
+
+func missingBuckets(want []time.Time, seen map[int64]bool) []time.Time {
+	missing := make([]time.Time, 0, len(want))
+	for _, b := range want {
+		if !seen[b.UTC().Unix()] {
+			missing = append(missing, b)
+		}
+	}
+	return missing
+}
+
+func formatBuckets(ts []time.Time) string {
+	out := make([]string, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, t.UTC().Format(time.RFC3339))
+	}
+	return strings.Join(out, ",")
 }

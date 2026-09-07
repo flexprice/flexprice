@@ -365,7 +365,7 @@ func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.Met
 
 	if params.WindowSize == "" {
 		result.TotalValue = aggregateScalar(matched, params.AggregationType)
-		result.EventCount = uint64(distinctIDCount(matched))
+		result.EventCount = uint64(distinctIDCount(matched)) // #nosec G115 -- test store, bounded
 		return result, nil
 	}
 
@@ -376,7 +376,7 @@ func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.Met
 		points = append(points, events.MeterUsageResult{
 			WindowStart: b.start,
 			Value:       aggregateScalar(b.records, params.AggregationType),
-			EventCount:  uint64(distinctIDCount(b.records)),
+			EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
 		})
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
@@ -410,7 +410,7 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 
 		if params.WindowSize == "" {
 			res.TotalValue = aggregateScalar(recs, params.AggregationType)
-			res.EventCount = uint64(distinctIDCount(recs))
+			res.EventCount = uint64(distinctIDCount(recs)) // #nosec G115 -- test store, bounded
 			results = append(results, res)
 			continue
 		}
@@ -421,7 +421,7 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 			points = append(points, events.MeterUsageResult{
 				WindowStart: b.start,
 				Value:       aggregateScalar(b.records, params.AggregationType),
-				EventCount:  uint64(distinctIDCount(b.records)),
+				EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
 			})
 		}
 		sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
@@ -529,7 +529,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 					bucket:     bucket,
 					groupKey:   k,
 					value:      aggFn(crecs),
-					eventCount: uint64(distinctIDCount(crecs)),
+					eventCount: uint64(distinctIDCount(crecs)), // #nosec G115 -- test store, bounded
 				})
 			}
 		}
@@ -544,7 +544,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 			entries = append(entries, entry{
 				bucket:     bucket,
 				value:      aggFn(recs),
-				eventCount: uint64(distinctIDCount(recs)),
+				eventCount: uint64(distinctIDCount(recs)), // #nosec G115 -- test store, bounded
 			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].bucket.Before(entries[j].bucket) })
@@ -654,7 +654,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMetersDetailed(_ context.Co
 				combos[ck] = cs
 			}
 			v := aggFn(crecs)
-			ec := uint64(distinctIDCount(crecs))
+			ec := uint64(distinctIDCount(crecs)) // #nosec G115 -- test store, bounded
 			cs.cells[bucket] = &bucketCell{value: v, eventCount: ec}
 			cs.buckets = append(cs.buckets, bucket)
 			cs.total = cs.total.Add(v)
@@ -894,8 +894,8 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 
 	results := make([]*events.MeterUsageDetailedResult, 0, len(byKey))
 	for _, g := range byKey {
-		eventCount := uint64(distinctIDCount(g.records))
-		countUnique := uint64(distinctUniqueHashCount(g.records))
+		eventCount := uint64(distinctIDCount(g.records))          // #nosec G115 -- test store, bounded
+		countUnique := uint64(distinctUniqueHashCount(g.records)) // #nosec G115 -- test store, bounded
 		res := &events.MeterUsageDetailedResult{
 			MeterID:          g.meterID,
 			Source:           g.source,
@@ -950,8 +950,8 @@ func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, an
 	buckets := bucketRecords(records, ws, anchor)
 	points := make([]events.MeterUsageDetailedPoint, 0, len(buckets))
 	for _, b := range buckets {
-		eventCount := uint64(distinctIDCount(b.records))
-		countUnique := uint64(distinctUniqueHashCount(b.records))
+		eventCount := uint64(distinctIDCount(b.records))          // #nosec G115 -- test store, bounded
+		countUnique := uint64(distinctUniqueHashCount(b.records)) // #nosec G115 -- test store, bounded
 		points = append(points, events.MeterUsageDetailedPoint{
 			WindowStart:      b.start,
 			TotalUsage:       primaryAggregationValue(b.records, aggTypes, eventCount, countUnique),
@@ -977,9 +977,9 @@ func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.Aggr
 	case aggSet[types.AggregationSum]:
 		return aggregateScalar(records, types.AggregationSum)
 	case aggSet[types.AggregationCount]:
-		return decimal.NewFromInt(int64(eventCount))
+		return decimal.NewFromInt(int64(eventCount)) // #nosec G115 -- test store, bounded
 	case aggSet[types.AggregationCountUnique]:
-		return decimal.NewFromInt(int64(countUnique))
+		return decimal.NewFromInt(int64(countUnique)) // #nosec G115 -- test store, bounded
 	case aggSet[types.AggregationMax]:
 		return aggregateScalar(records, types.AggregationMax)
 	case aggSet[types.AggregationAvg]:

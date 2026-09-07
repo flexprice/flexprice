@@ -173,7 +173,7 @@ func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*
 	// Check and close before running another query on the same connection.
 	hasRow := rows.Next()
 	rowErr := rows.Err()
-	rows.Close()
+	rows.Close() // #nosec G104 -- best-effort, error non-fatal
 	if rowErr != nil {
 		SetSpanError(span, rowErr)
 		return nil, ierr.WithError(rowErr).WithHint("subscription lock failed").Mark(ierr.ErrDatabase)

@@ -201,11 +201,10 @@ func (c *LineItemCommitmentConfig) Validate() error {
 		}
 	}
 
-	// overage_factor is required; 1.0 means usage beyond commitment bills at the base rate.
+	// overage_factor is optional; omitting it defaults to 1.0, meaning usage beyond
+	// the commitment bills at the base rate.
 	if c.OverageFactor == nil {
-		return ierr.NewError("overage_factor is required when commitment is set").
-			WithHint("Specify an overage_factor of 1.0 or greater").
-			Mark(ierr.ErrValidation)
+		c.OverageFactor = types.DefaultOverageFactor()
 	}
 
 	if c.OverageFactor.LessThan(decimal.NewFromInt(1)) {

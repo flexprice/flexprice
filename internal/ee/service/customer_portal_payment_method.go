@@ -188,12 +188,12 @@ func (s *customerPortalService) methodManagementProviders(
 	if err != nil {
 		return nil, err
 	}
-	capable := lo.Filter(providers, func(p interfaces.ProviderCapabilities, _ int) bool {
+	capable := lo.Filter(providers, func(p ProviderCapabilities, _ int) bool {
 		return lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
 			return c.Type == types.IntegrationCapabilityPaymentMethodManagement
 		})
 	})
-	return lo.Map(capable, func(p interfaces.ProviderCapabilities, _ int) types.PaymentGatewayType {
+	return lo.Map(capable, func(p ProviderCapabilities, _ int) types.PaymentGatewayType {
 		return p.Gateway
 	}), nil
 }

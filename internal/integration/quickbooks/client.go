@@ -29,7 +29,7 @@ const maxQueryLiteralLen = 100
 // item name reach these queries from tenant-controlled entity fields, so without
 // escaping a single quote breaks out of the literal (SOQL-like injection).
 //
-// QuickBooks escapes a single quote by doubling it (''), not with a backslash
+// QuickBooks escapes a single quote by doubling it (”), not with a backslash
 // (backslash is not special). Control characters have no place in these fields
 // and could smuggle clauses or corrupt the request URL, so they are removed. The
 // result is length-bounded to the field maximum.
@@ -917,7 +917,7 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 		"environment", qbConfig.Environment)
 
 	// QuickBooks OAuth token endpoint
-	tokenURL := "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+	tokenURL := "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer" // #nosec G101 -- public API endpoint, not a secret
 
 	// Prepare form data for OAuth 2.0 authorization code grant
 	data := url.Values{}
@@ -1257,7 +1257,7 @@ func (c *Client) makeRequestWithRetry(ctx context.Context, method, endpoint stri
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		// Read response body to check error details
 		bodyBytes, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- best-effort, error non-fatal
 
 		if readErr == nil {
 			// Create a new response with the body for parsing

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"testing"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -65,4 +66,29 @@ func TestClickHouseConfig_GetClientOptions_MaxMemoryUsage(t *testing.T) {
 	if got != wantMaxMemoryUsageBytes {
 		t.Errorf("max_memory_usage: got %d, want %d (50 GB)", got, wantMaxMemoryUsageBytes)
 	}
+}
+
+// TLS is only configured when enabled, and always pins a TLS 1.2 floor.
+func TestClickHouseConfig_GetClientOptions_TLS(t *testing.T) {
+	base := ClickHouseConfig{Address: "127.0.0.1:9440", Username: "u", Password: "p", Database: "d", MaxMemoryUsage: 50}
+
+	t.Run("TLS off leaves options.TLS nil", func(t *testing.T) {
+		c := base
+		c.TLS = false
+		if got := c.GetClientOptions().TLS; got != nil {
+			t.Errorf("TLS = %v, want nil when disabled", got)
+		}
+	})
+
+	t.Run("TLS on pins MinVersion 1.2", func(t *testing.T) {
+		c := base
+		c.TLS = true
+		opts := c.GetClientOptions()
+		if opts.TLS == nil {
+			t.Fatal("TLS = nil, want set when enabled")
+		}
+		if opts.TLS.MinVersion != tls.VersionTLS12 {
+			t.Errorf("MinVersion = %d, want TLS 1.2", opts.TLS.MinVersion)
+		}
+	})
 }

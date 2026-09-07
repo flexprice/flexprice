@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -590,7 +591,13 @@ func (s *Service) Flush(timeout uint) bool {
 		return true
 	}
 	if s.sentryEnabled {
-		return sentry.Flush(time.Duration(timeout) * time.Second)
+		// Bound before the multiply so an oversized timeout cannot wrap
+		// time.Duration into a negative/invalid value.
+		const maxSeconds = uint(math.MaxInt64 / int64(time.Second))
+		if timeout > maxSeconds {
+			timeout = maxSeconds
+		}
+		return sentry.Flush(time.Duration(timeout) * time.Second) // #nosec G115 -- bounded above before multiply
 	}
 	return true
 }

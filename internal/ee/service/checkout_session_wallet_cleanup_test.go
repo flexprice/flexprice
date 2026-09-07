@@ -197,7 +197,8 @@ func (s *WalletServiceSuite) TestVoidInvoice_FailsPendingPurchasedCreditTransact
 	s.Require().NoError(err)
 
 	invSvc := NewInvoiceService(params)
-	s.Require().NoError(invSvc.VoidInvoice(ctx, invID, dto.InvoiceVoidRequest{}))
+	_, voidErr := invSvc.VoidInvoice(ctx, invID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(voidErr)
 
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
 	s.Require().NoError(err)

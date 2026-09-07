@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainInvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -24,18 +23,16 @@ import (
 )
 
 type invoiceRepository struct {
-	client     postgres.IClient
-	logger     *logger.Logger
-	queryOpts  InvoiceQueryOptions
-	redisCache cache.RedisCache
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts InvoiceQueryOptions
 }
 
-func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger) domainInvoice.Repository {
 	return &invoiceRepository{
-		client:     client,
-		logger:     logger,
-		queryOpts:  InvoiceQueryOptions{},
-		redisCache: redisCache,
+		client:    client,
+		logger:    logger,
+		queryOpts: InvoiceQueryOptions{},
 	}
 }
 
@@ -427,11 +424,6 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedInvoice := r.GetCache(ctx, id); cachedInvoice != nil {
-		return cachedInvoice, nil
-	}
-
 	r.logger.Debug(ctx, "getting invoice", "id", id)
 
 	invoice, err := r.client.Writer(ctx).Invoice.Query().
@@ -463,7 +455,6 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
 	}
 	invoiceData.LineItems = items
-	r.SetCache(ctx, invoiceData)
 	return invoiceData, nil
 }
 
@@ -488,7 +479,7 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 	// Must check and close rows BEFORE running another query on the same connection
 	hasRow := rows.Next()
 	rowErr := rows.Err()
-	rows.Close() // Close immediately, not deferred
+	rows.Close() // #nosec G104 -- best-effort close, error non-fatal
 	if rowErr != nil {
 		return nil, ierr.WithError(rowErr).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
 	}
@@ -622,7 +613,6 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 				"expected_version": inv.Version + 1,
 			}).Mark(ierr.ErrVersionConflict)
 	}
-	r.DeleteCache(ctx, inv.ID)
 	return nil
 }
 
@@ -1191,44 +1181,6 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 
 	return query, nil
-}
-
-func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Invoice) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "set", map[string]interface{}{
-		"invoice_id": inv.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, inv.ID)
-	r.redisCache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
-}
-
-func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "get", map[string]interface{}{
-		"invoice_id": id,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, id)
-	value, found := r.redisCache.Get(ctx, cacheKey)
-	if !found {
-		return nil
-	}
-	inv, ok := cache.UnmarshalCacheValue[domainInvoice.Invoice](value)
-	if !ok {
-		return nil
-	}
-	return inv
-}
-
-func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
-		"invoice_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, key)
-	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination

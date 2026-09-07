@@ -45,8 +45,7 @@ type InvoiceModifyLineItemParams struct {
 	Items []AddLineItemRequest `json:"items,omitempty" validate:"omitempty,min=1"`
 	// Required for action 'remove'. Must contain at least one line item ID.
 	LineItemIDs []string `json:"line_item_ids,omitempty" validate:"omitempty,min=1"`
-	// LineItemID and Update are required for action 'update' (one line item per call;
-	// the update is versioned, so the item id changes after each edit).
+	// Required for action 'update' (one line item per call; edits are versioned, so the id changes).
 	LineItemID string                 `json:"line_item_id,omitempty"`
 	Update     *UpdateLineItemRequest `json:"update,omitempty"`
 }

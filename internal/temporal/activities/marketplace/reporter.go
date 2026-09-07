@@ -333,11 +333,11 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 	// sent in USD cents — the tenant prices their dimension per cent. Turning cents into a charge is
 	// AWS's job: it bills quantity x the dimension's rate.
 	quantity := types.ToSmallestUnit(rec.Amount, marketplaceReportingCurrency)
-	if quantity > math.MaxInt32 {
+	if quantity > math.MaxInt32 || quantity < 0 {
 		r.logger.Error(ctx, "marketplace usage report: failed to convert amount to an aws quantity", "marketplace", marketplaceConn.conn.ProviderType,
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
 			"usage_record_id", rec.ID, "connection_id", marketplaceConn.conn.ID, "amount", rec.Amount, "currency", rec.Currency, "quantity", quantity,
-			"error", "quantity exceeds the maximum aws accepts", "stage", "convert_quantity")
+			"error", "quantity out of the range aws accepts", "stage", "convert_quantity")
 		return types.UsageRecordSyncEntry{}, false
 	}
 
@@ -346,7 +346,7 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 		LicenseArn:           licenseArn,
 		ProductCode:          productCode,
 		Dimension:            plan.dimension,
-		Quantity:             int32(quantity),
+		Quantity:             int32(quantity), // #nosec G115 -- bounds checked above
 		// PeriodEnd is the timestamp so a retry sends an identical record and AWS de-duplicates it.
 		Timestamp: rec.PeriodEnd,
 	})

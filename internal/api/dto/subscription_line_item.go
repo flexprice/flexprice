@@ -392,15 +392,9 @@ func validateCommitmentFieldsCommon(
 		}
 	}
 
-	// Rule 5: Overage factor is required and must be at least 1.0.
-	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
-	if commitmentOverageFactor == nil {
-		return ierr.NewError("commitment_overage_factor is required when commitment is set").
-			WithHint("Specify a commitment_overage_factor of 1.0 or greater").
-			Mark(ierr.ErrValidation)
-	}
-
-	if commitmentOverageFactor.LessThan(decimal.NewFromFloat(1)) {
+	// Rule 5: Overage factor is optional; when omitted it defaults to 1.0 (usage
+	// beyond commitment bills at the base rate). When supplied it must be >= 1.0.
+	if commitmentOverageFactor != nil && commitmentOverageFactor.LessThan(decimal.NewFromFloat(1)) {
 		return ierr.NewError("commitment_overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
@@ -454,6 +448,12 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	}
 	if err := validateTimeOfDayBuckets(r.CommitmentTimeBuckets); err != nil {
 		return err
+	}
+
+	// Omitted commitment_overage_factor defaults to 1.0 (base rate for overage);
+	// the field is optional in the API contract.
+	if r.HasCommitment() && r.CommitmentOverageFactor == nil {
+		r.CommitmentOverageFactor = types.DefaultOverageFactor()
 	}
 
 	// Auto-set commitment type if not provided (only for create requests)
@@ -716,7 +716,7 @@ func (r CommitmentBucketRequest) Validate(idx int) error {
 		End:             r.End,
 		CommitmentType:  r.CommitmentType,
 		CommitmentValue: r.CommitmentValue,
-		OverageFactor:   r.OverageFactor,
+		OverageFactor:   r.overageFactorOrDefault(),
 		TrueUpEnabled:   r.TrueUpEnabled,
 	}
 	if err := tmp.Validate(); err != nil {
@@ -743,9 +743,18 @@ func (r CommitmentBucketRequest) ToTimeOfDayBucket() types.TimeOfDayBucket {
 		End:             r.End,
 		CommitmentType:  r.CommitmentType,
 		CommitmentValue: r.CommitmentValue,
-		OverageFactor:   r.OverageFactor,
+		OverageFactor:   r.overageFactorOrDefault(),
 		TrueUpEnabled:   r.TrueUpEnabled,
 	}
+}
+
+// overageFactorOrDefault returns the bucket's overage factor, falling back to
+// 1.0 when omitted — overage_factor is optional on the wire.
+func (r CommitmentBucketRequest) overageFactorOrDefault() *decimal.Decimal {
+	if r.OverageFactor != nil {
+		return r.OverageFactor
+	}
+	return types.DefaultOverageFactor()
 }
 
 // bucketRequestsToDomain maps a slice of bucket requests to domain buckets

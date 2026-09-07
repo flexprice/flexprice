@@ -49,7 +49,7 @@ func GenerateCreditUsageReport() error {
 		return fmt.Errorf("TENANT_ID and ENVIRONMENT_ID are required")
 	}
 
-	log.Printf("Starting credit balance report for tenant: %s, environment: %s\n", tenantID, environmentID)
+	log.Printf("Starting credit balance report for tenant: %s, environment: %s\n", tenantID, environmentID) // #nosec G706 -- seed tooling, non-prod logging
 
 	// Initialize script
 	script, err := newCreditUsageReportScript()
@@ -148,7 +148,7 @@ func GenerateCreditUsageReport() error {
 		return fmt.Errorf("failed to generate CSV report: %w", err)
 	}
 
-	log.Printf("Credit usage report generated successfully: %s\n", outputFile)
+	log.Printf("Credit usage report generated successfully: %s\n", outputFile) // #nosec G706 -- seed tooling, non-prod logging
 	log.Printf("Total customers processed: %d\n", len(reportData))
 
 	return nil
@@ -156,7 +156,7 @@ func GenerateCreditUsageReport() error {
 
 // generateCSVReport generates a CSV file from the report data
 func generateCSVReport(data []CreditUsageReportData, filename string) error {
-	file, err := os.Create(filename)
+	file, err := os.Create(filename) // #nosec G703,G304 -- CLI file path, dev tooling
 	if err != nil {
 		return fmt.Errorf("failed to create CSV file: %w", err)
 	}
@@ -238,7 +238,7 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient, redisCache)
 	addonRepo := entRepo.NewAddonRepository(client, log, cacheClient)
 	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, log, redisCache)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, log, redisCache)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, log)
 	eventRepo := chRepo.NewEventRepository(chStore, log)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
 

@@ -116,7 +116,7 @@ func newPricingImportScript(tenantID, environmentID string) (*pricingImportScrip
 
 // parsePricingCSV parses the pricing CSV file
 func (s *pricingImportScript) parsePricingCSV(filePath string) ([]PricingRow, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G703,G304 -- CLI file path, dev import tooling
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}

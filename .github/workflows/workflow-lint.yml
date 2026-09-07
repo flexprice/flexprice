@@ -1,0 +1,62 @@
+# Static audit of the workflows themselves.
+#
+# zizmor checks what this repo currently enforces only by convention and code
+# review: SHA-pinned actions, least-privilege permissions, no template injection
+# of untrusted github.event.* into run: scripts, persist-credentials hygiene.
+# Nothing else mechanically catches a regression in a new or edited workflow.
+#
+# Phase 1: SOFT-FAIL. Reports findings via SARIF but never blocks, matching the
+# SAST/Trivy rollout — flip to blocking once the baseline is triaged. Runs only
+# when workflow/action files change.
+name: Workflow Lint
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload-sarif writes to the code-scanning API
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        run: pip install zizmor==1.5.2
+
+      # SARIF for code-scanning — soft, written even if the gate below fails.
+      # --offline: no token, no rate-limit flakiness (skips online audits).
+      - name: Run zizmor (SARIF for code-scanning)
+        continue-on-error: true
+        run: zizmor --offline --format sarif . > zizmor.sarif
+
+      - name: Upload zizmor SARIF
+        if: always() && hashFiles('zizmor.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: zizmor.sarif
+
+      # BLOCKING gate: HIGH-severity baseline is 0 on develop, so a new
+      # high-confidence workflow finding fails the PR. Lower severities remain
+      # advisory via the SARIF upload above.
+      # Offline: online audits (known-vulnerable-actions, impostor-commit,
+      # typosquat-uses) need cross-repo tag listing that github.token 403s on
+      # third-party actions; they stay advisory via SARIF, not a blocking gate.
+      - name: zizmor gate (fail on HIGH)
+        run: zizmor --offline --min-severity high .

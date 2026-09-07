@@ -65,7 +65,8 @@ func buildOptions(c config.RedisConfig) (*redis.UniversalOptions, redisMode, err
 	if c.UseTLS {
 		tlsConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, // Required for AWS ElastiCache wildcard certificates
+			ServerName:         c.TLSServerName,
+			InsecureSkipVerify: c.TLSSkipVerify, // #nosec G402 -- default true for ElastiCache; set false + ServerName to verify
 		}
 	}
 

@@ -56,7 +56,8 @@ FROM ghcr.io/typst/typst:v0.13.1 AS typst
 
 # Final stage
 FROM alpine:3.20
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata && \
+    addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
 COPY --from=builder /app/server .
@@ -69,8 +70,10 @@ COPY --from=builder /app/assets/email-templates ./assets/email-templates
 COPY --from=typst /bin/typst /usr/local/bin/
 # `./migrate postgres up` execs this; keep it on PATH.
 COPY --from=dbmate /out/dbmate /usr/local/bin/dbmate
+RUN chown -R app:app /app
 
 ENV TZ=UTC
+USER app
 
 EXPOSE 8080
 CMD ["./server"]

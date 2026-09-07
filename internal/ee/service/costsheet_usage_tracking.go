@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -180,6 +181,13 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		}
 		m := meterMap[item.MeterID]
 
+		itemEventCount, err := safeInt64FromEventCount(item.EventCount)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Event count exceeds supported range").
+				Mark(ierr.ErrValidation)
+		}
+
 		// Compute the cost using PriceService. Bucketed meters need
 		// CalculateBucketedCost (single-bucket fallback when there are no
 		// time-series points); standard meters use CalculateCost on the
@@ -206,7 +214,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 			Properties:    item.Properties,
 			TotalCost:     totalCost,
 			TotalQuantity: item.TotalUsage,
-			TotalEvents:   int64(item.EventCount),
+			TotalEvents:   itemEventCount, // #nosec G115 -- bounded above before cast, see safeInt64FromEventCount
 			Currency:      csPrice.Currency,
 			PriceID:       csPrice.ID,
 			CostsheetID:   costSheet.ID,
@@ -218,12 +226,18 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		if len(item.Points) > 0 {
 			costItem.CostByPeriod = make([]dto.CostPoint, 0, len(item.Points))
 			for _, pt := range item.Points {
+				pointEventCount, err := safeInt64FromEventCount(pt.EventCount)
+				if err != nil {
+					return nil, ierr.WithError(err).
+						WithHint("Event count exceeds supported range").
+						Mark(ierr.ErrValidation)
+				}
 				pointCost := priceService.CalculateCost(ctx, csPrice, pt.Usage)
 				costItem.CostByPeriod = append(costItem.CostByPeriod, dto.CostPoint{
 					Timestamp:  pt.Timestamp,
 					Cost:       pointCost,
 					Quantity:   pt.Usage,
-					EventCount: int64(pt.EventCount),
+					EventCount: pointEventCount, // #nosec G115 -- bounded above before cast, see safeInt64FromEventCount
 				})
 			}
 		}
@@ -231,13 +245,25 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		response.CostAnalytics = append(response.CostAnalytics, costItem)
 		response.TotalCost = response.TotalCost.Add(totalCost)
 		response.TotalQuantity = response.TotalQuantity.Add(item.TotalUsage)
-		response.TotalEvents += int64(item.EventCount)
+		response.TotalEvents += itemEventCount // #nosec G115 -- bounded above before cast, see safeInt64FromEventCount
 		if response.Currency == "" && csPrice.Currency != "" {
 			response.Currency = csPrice.Currency
 		}
 	}
 
 	return response, nil
+}
+
+// safeInt64FromEventCount converts a ClickHouse COUNT(DISTINCT ...) result to
+// int64, rejecting values above math.MaxInt64 instead of silently wrapping.
+func safeInt64FromEventCount(ec uint64) (int64, error) {
+	if ec > math.MaxInt64 {
+		return 0, ierr.NewError("event count exceeds int64 range").
+			WithHint("Event count exceeds int64 range").
+			WithReportableDetails(map[string]any{"event_count": ec}).
+			Mark(ierr.ErrValidation)
+	}
+	return int64(ec), nil
 }
 
 // emptyCostAnalyticsResponse returns a zero-valued cost response — used when

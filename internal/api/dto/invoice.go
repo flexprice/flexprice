@@ -941,11 +941,20 @@ type AddLineItemRequest struct {
 	DisplayName string          `json:"display_name" validate:"required"`
 	Amount      decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
 	Quantity    decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
+	Description *string         `json:"description,omitempty"`
+	PeriodStart *time.Time      `json:"period_start,omitempty"`
+	PeriodEnd   *time.Time      `json:"period_end,omitempty"`
 }
 
 func (r *AddLineItemRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.PeriodStart != nil && r.PeriodEnd != nil && r.PeriodEnd.Before(*r.PeriodStart) {
+		return ierr.NewError("period_end must not be before period_start").
+			WithHint("period_end must not be before period_start").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.Amount.IsNegative() {
@@ -1005,12 +1014,20 @@ type UpdateLineItemRequest struct {
 	DisplayName *string          `json:"display_name,omitempty"`
 	Amount      *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	Description *string          `json:"description,omitempty"`
+	PeriodStart *time.Time       `json:"period_start,omitempty"`
+	PeriodEnd   *time.Time       `json:"period_end,omitempty"`
 }
 
 func (r *UpdateLineItemRequest) Validate() error {
-	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil {
+	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil && r.Description == nil && r.PeriodStart == nil && r.PeriodEnd == nil {
 		return ierr.NewError("at least one field must be provided").
-			WithHint("at least one of display_name, amount, or quantity must be provided").
+			WithHint("at least one of display_name, amount, quantity, description, period_start, or period_end must be provided").
+			Mark(ierr.ErrValidation)
+	}
+	if r.PeriodStart != nil && r.PeriodEnd != nil && r.PeriodEnd.Before(*r.PeriodStart) {
+		return ierr.NewError("period_end must not be before period_start").
+			WithHint("period_end must not be before period_start").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1581,4 +1598,11 @@ func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemption
 		TotalExclusiveTax: exclusiveTax,
 		TotalTax:          inclusiveTax.Add(exclusiveTax),
 	}
+}
+
+// InvoicePDFRequest selects which rendering of an invoice to return.
+type InvoicePDFRequest struct {
+	InvoiceID string `json:"invoice_id" validate:"required"`
+	// ForceGenerate re-renders even when a stored PDF exists.
+	ForceGenerate bool `json:"force_generate"`
 }

@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- synthetic demo data, non-security
 	"time"
 
 	"encoding/json"
@@ -391,7 +391,7 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 		// For sum/avg aggregation, we need to generate a value for the aggregation field
 		if meter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 100
-			properties[meter.Aggregation.Field] = rand.Int63n(100) + 1
+			properties[meter.Aggregation.Field] = rand.Int63n(100) + 1 // #nosec G404 -- synthetic demo data, non-security
 		}
 	}
 
@@ -399,7 +399,7 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 	for _, filter := range meter.Filters {
 		if len(filter.Values) > 0 {
 			// Select a random value from the filter values
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))] // #nosec G404 -- synthetic demo data, non-security
 		}
 	}
 

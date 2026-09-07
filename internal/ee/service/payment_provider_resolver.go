@@ -5,12 +5,9 @@ import (
 	"sort"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
-
-type PaymentProviderResolver = interfaces.PaymentProviderResolver
 
 // gatewayCapabilities mirrors three switch statements that must agree with it:
 // Factory.GetCheckoutProvider, Factory.GetPaymentMethodProvider, and
@@ -38,15 +35,25 @@ var gatewayCapabilities = map[types.PaymentGatewayType][]types.IntegrationCapabi
 	},
 }
 
-type paymentProviderResolver struct {
+// PaymentProviderResolver answers which payment gateway an operation runs against,
+// from the tenant's published connections intersected with the capabilities
+// FlexPrice implements per gateway.
+type PaymentProviderResolver struct {
 	ServiceParams
 }
 
-func NewPaymentProviderResolver(params ServiceParams) interfaces.PaymentProviderResolver {
-	return &paymentProviderResolver{ServiceParams: params}
+func NewPaymentProviderResolver(params ServiceParams) *PaymentProviderResolver {
+	return &PaymentProviderResolver{ServiceParams: params}
 }
 
-func (s *paymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]interfaces.ProviderCapabilities, error) {
+type ProviderCapabilities struct {
+	Gateway      types.PaymentGatewayType
+	Capabilities []types.IntegrationCapability
+}
+
+// ListProviders returns configured gateways with a usable capability, ordered by
+// gateway name.
+func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error) {
 	gateways, err := s.configuredGateways(ctx)
 	if err != nil {
 		return nil, err
@@ -56,18 +63,19 @@ func (s *paymentProviderResolver) ListProviders(ctx context.Context, customerID 
 		return len(gatewayCapabilities[gw]) > 0
 	})
 
-	out := make([]interfaces.ProviderCapabilities, 0, len(usable))
+	out := make([]ProviderCapabilities, 0, len(usable))
 	for _, gw := range usable {
 		caps := lo.Map(gatewayCapabilities[gw], func(c types.IntegrationCapabilityType, _ int) types.IntegrationCapability {
 			return types.IntegrationCapability{Type: c}
 		})
-		out = append(out, interfaces.ProviderCapabilities{Gateway: gw, Capabilities: caps})
+		out = append(out, ProviderCapabilities{Gateway: gw, Capabilities: caps})
 	}
 
 	return out, nil
 }
 
-func (s *paymentProviderResolver) ResolveProvider(
+// ResolveProvider picks the gateway serving capability.
+func (s *PaymentProviderResolver) ResolveProvider(
 	ctx context.Context,
 	customerID string,
 	capability types.IntegrationCapabilityType,
@@ -133,7 +141,7 @@ func (s *paymentProviderResolver) ResolveProvider(
 }
 
 // configuredGateways deduplicates and sorts so listings and error messages are stable.
-func (s *paymentProviderResolver) configuredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
+func (s *PaymentProviderResolver) configuredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
 	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
 	if err != nil {
 		return nil, err

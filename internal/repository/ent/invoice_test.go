@@ -21,7 +21,7 @@ func newTestInvoiceRepository(t *testing.T) domainInvoice.Repository {
 		Logging: config.LoggingConfig{Level: types.LogLevelInfo},
 	})
 	require.NoError(t, err)
-	return NewInvoiceRepository(client, log, noopRedisCache{})
+	return NewInvoiceRepository(client, log)
 }
 
 func testInvoiceContext() context.Context {

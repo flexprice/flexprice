@@ -2,17 +2,17 @@ package e2eprobe
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- e2e probe synthetic test data
 	"strconv"
 	"sync"
 )
 
 type EventDeckOpts struct {
-	Customers        []string
-	EventNames       []string
-	OrphanEventName  string
-	OrphanFrequency  int
-	Seed             int64
+	Customers       []string
+	EventNames      []string
+	OrphanEventName string
+	OrphanFrequency int
+	Seed            int64
 }
 
 type EventDraw struct {
@@ -44,7 +44,7 @@ func NewEventDeck(opts EventDeckOpts) *EventDeck {
 	if len(opts.EventNames) == 0 {
 		panic("e2eprobe: EventDeck requires at least one event name")
 	}
-	return &EventDeck{opts: opts, rnd: rand.New(rand.NewSource(opts.Seed))}
+	return &EventDeck{opts: opts, rnd: rand.New(rand.NewSource(opts.Seed))} // #nosec G404 -- e2e probe test data, non-security
 }
 
 func (d *EventDeck) Next() EventDraw {

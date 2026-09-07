@@ -10,6 +10,7 @@ const (
 	IntegrationCapabilitySetDefaultMethod        IntegrationCapabilityType = "set_default_method"
 	IntegrationCapabilityPaymentLink             IntegrationCapabilityType = "payment_link"
 	IntegrationCapabilityPaymentMethodManagement IntegrationCapabilityType = "payment_method_management"
+	IntegrationCapabilityInvoiceSync             IntegrationCapabilityType = "invoice_sync"
 )
 
 func (t IntegrationCapabilityType) String() string { return string(t) }

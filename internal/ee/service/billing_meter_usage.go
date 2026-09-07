@@ -29,6 +29,24 @@ type meterUsageBaseChargeInfo struct {
 	adjustedEntitlementQuantity *decimal.Decimal
 }
 
+// elapsedLineItemWindow clips a line item's overlap with [periodStart, periodEnd)
+// against asOf. ok is false when nothing has elapsed yet — the line starts in
+// the future, has already ended, or is zero-length (EndDate == StartDate).
+func elapsedLineItemWindow(item *subscription.SubscriptionLineItem, periodStart, periodEnd, asOf time.Time) (start, end time.Time, ok bool) {
+	start = item.GetPeriodStart(periodStart)
+	end = item.GetPeriodEnd(periodEnd)
+	if start.After(asOf) {
+		return start, end, false
+	}
+	if !item.EndDate.IsZero() && !item.EndDate.After(item.StartDate) {
+		return start, end, false
+	}
+	if end.After(asOf) {
+		end = asOf
+	}
+	return start, end, end.After(start) || start.Equal(asOf)
+}
+
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
 // All queries (bucketed meters, windowed entitlements, windowed commitments) read from
 // MeterUsageRepo — never from raw events.
@@ -134,6 +152,22 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+
+		// Clip the line's period to elapsed time so a version that has not started yet (or a zero-length EndDate==StartDate leftover)
+		// cannot contribute commitment to wallet/invoice totals.
+		if _, _, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf); !active {
+			s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during elapsed window",
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID,
+				"invoice_period_start", periodStart,
+				"invoice_period_end", periodEnd,
+				"item_start_date", item.StartDate,
+				"item_end_date", item.EndDate,
+				"as_of", asOf,
+			)
 			continue
 		}
 
@@ -305,21 +339,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 				}
 			}
 
-			// Clip the invoice period against the line item's own active range.
 			psStart := item.GetPeriodStart(periodStart)
 			psEnd := item.GetPeriodEnd(periodEnd)
-			if !psEnd.After(psStart) {
-				s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during invoice window",
-					"subscription_id", sub.ID,
-					"line_item_id", item.ID,
-					"price_id", item.PriceID,
-					"invoice_period_start", periodStart,
-					"invoice_period_end", periodEnd,
-					"item_start_date", item.StartDate,
-					"item_end_date", item.EndDate,
-				)
-				continue
-			}
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				EntityID:                    lo.ToPtr(item.EntityID),
 				EntityType:                  lo.ToPtr(string(item.EntityType)),
@@ -564,10 +585,10 @@ func (s *billingService) applyMeterUsageCommitment(
 	// Windowed commitment — needs bucketed values from meter_usage
 	linePeriodStart := item.GetPeriodStart(periodStart)
 	linePeriodEnd := item.GetPeriodEnd(periodEnd)
-	effectiveEnd := asOf
-	if effectiveEnd.Before(linePeriodStart) {
-		effectiveEnd = linePeriodStart
+	if asOf.Before(linePeriodStart) {
+		return decimal.Zero, nil, nil
 	}
+	effectiveEnd := asOf
 	if effectiveEnd.After(linePeriodEnd) {
 		effectiveEnd = linePeriodEnd
 	}

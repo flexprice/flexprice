@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seed tooling, non-prod
 	"os"
 	"slices"
 	"strconv"
@@ -118,7 +118,7 @@ func SetupDummyBillingCustomer() error {
 	priceRepo := entRepo.NewPriceRepository(client, appLogger, redisCache)
 	priceUnitRepo := entRepo.NewPriceUnitRepository(client, appLogger, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(client, appLogger, cacheClient)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, redisCache)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger)
 	invoiceLineItemRepo := entRepo.NewInvoiceLineItemRepository(client, appLogger)
 	featureRepo := entRepo.NewFeatureRepository(client, appLogger, cacheClient, redisCache)
 	entitlementRepo := entRepo.NewEntitlementRepository(client, appLogger, cacheClient, redisCache)
@@ -141,7 +141,7 @@ func SetupDummyBillingCustomer() error {
 	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, appLogger, redisCache)
 	connectionRepo := entRepo.NewConnectionRepository(client, appLogger, redisCache)
 	entityIntegrationMappingRepo := entRepo.NewEntityIntegrationMappingRepository(client, appLogger, redisCache)
-	settingsRepo := entRepo.NewSettingsRepository(client, appLogger, redisCache)
+	settingsRepo := entRepo.NewSettingsRepository(client, appLogger, cacheClient)
 	taskRepo := entRepo.NewTaskRepository(client, appLogger)
 	costSheetRepo := entRepo.NewCostsheetRepository(client, appLogger)
 	alertLogsRepo := entRepo.NewAlertLogsRepository(client, appLogger)
@@ -290,8 +290,6 @@ func SetupDummyBillingCustomer() error {
 		return fmt.Errorf("plan %s is not in environment %s", planID, environmentID)
 	}
 
-	rand.Seed(time.Now().UnixNano())
-
 	sendInvoice := types.CollectionMethodSendInvoice
 	subReqBase := dto.CreateSubscriptionRequest{
 		PlanID:             planID,
@@ -370,10 +368,10 @@ func SetupDummyBillingCustomer() error {
 				return fmt.Errorf("%s create event %d: %w", prefix, i+1, err)
 			}
 		}
-		log.Printf("%s Published %d events for event_name=%s\n", prefix, dummyBillingEventCount, m.EventName)
+		log.Printf("%s Published %d events for event_name=%s\n", prefix, dummyBillingEventCount, m.EventName) // #nosec G706 -- seed tooling, non-prod logging
 	}
 
-	log.Printf("Done: %d customer(s), subscriptions, wallet top-ups, and events (ensure Kafka consumer is running for ClickHouse).\n", customerCount)
+	log.Printf("Done: %d customer(s), subscriptions, wallet top-ups, and events (ensure Kafka consumer is running for ClickHouse).\n", customerCount) // #nosec G706 -- seed tooling, non-prod logging
 	return nil
 }
 
@@ -396,12 +394,12 @@ func eventPropertiesForMeter(m *meter.Meter) map[string]interface{} {
 	if m.Aggregation.Type == types.AggregationSum ||
 		m.Aggregation.Type == types.AggregationAvg {
 		if m.Aggregation.Field != "" {
-			properties[m.Aggregation.Field] = rand.Int63n(1000) + 1
+			properties[m.Aggregation.Field] = rand.Int63n(1000) + 1 // #nosec G404 -- seed tooling, non-prod
 		}
 	}
 	for _, filter := range m.Filters {
 		if len(filter.Values) > 0 {
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))] // #nosec G404 -- seed tooling, non-prod
 		}
 	}
 	return properties

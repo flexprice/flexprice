@@ -114,17 +114,20 @@ func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 // Apply executes the mutating actions (create, grow). Warn-only actions
 // (skip-shrink, RF mismatch, retention mismatch) and unchanged topics are
 // counted but not acted on.
+//
+// act.Topic.Partitions is upper-bounded to math.MaxInt32 by
+// topicspec.Spec.Resolve, so the int32 casts below cannot overflow.
 func Apply(a Admin, plan []Action) (Result, error) {
 	var res Result
 	for _, act := range plan {
 		switch act.Kind {
 		case ActionCreate:
-			if err := a.CreateTopic(act.Topic.Name, int32(act.Topic.Partitions), act.Topic.ReplicationFactor, act.Topic.RetentionMs); err != nil {
+			if err := a.CreateTopic(act.Topic.Name, int32(act.Topic.Partitions), act.Topic.ReplicationFactor, act.Topic.RetentionMs); err != nil { // #nosec G115 -- bounded above in topicspec.Spec.Resolve
 				return res, fmt.Errorf("create topic %s: %w", act.Topic.Name, err)
 			}
 			res.Created++
 		case ActionGrow:
-			if err := a.CreatePartitions(act.Topic.Name, int32(act.Topic.Partitions)); err != nil {
+			if err := a.CreatePartitions(act.Topic.Name, int32(act.Topic.Partitions)); err != nil { // #nosec G115 -- bounded above in topicspec.Spec.Resolve
 				return res, fmt.Errorf("grow partitions %s: %w", act.Topic.Name, err)
 			}
 			res.Grown++

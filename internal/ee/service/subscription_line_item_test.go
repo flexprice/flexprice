@@ -268,6 +268,270 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Effect
 	s.True(li.EndDate.IsZero(), "line item should remain unterminated")
 }
 
+// --- Scheduled version lineage ---
+//
+// UpdateSubscriptionLineItem versions a line item by terminating the predecessor and
+// creating a successor that starts where it ended, linking the two with metadata pointers
+// in both directions. Delete uses those pointers to revert a bad scheduled change and to
+// refuse deleting a chain out of order. The tests below cover that round trip, the
+// ordering guard rails, and the edits that must not break the pointers.
+
+// scheduleVersion versions lineItemID at effectiveFrom and returns the successor the
+// service created — one link of a predecessor -> successor chain.
+func (s *SubscriptionLineItemServiceSuite) scheduleVersion(lineItemID string, amount int64, effectiveFrom time.Time) *subscription.SubscriptionLineItem {
+	s.T().Helper()
+	newAmount := decimal.NewFromInt(amount)
+	resp, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), lineItemID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &newAmount,
+		EffectiveFrom: &effectiveFrom,
+	})
+	s.NoError(err)
+	return resp.SubscriptionLineItem
+}
+
+// stageLineItem persists a clone of the suite's line item. Rows created this way carry no
+// version pointers, standing in for line items the versioning flow did not produce.
+func (s *SubscriptionLineItemServiceSuite) stageLineItem(mutate func(*subscription.SubscriptionLineItem)) *subscription.SubscriptionLineItem {
+	s.T().Helper()
+	clone := *s.testData.lineItem
+	clone.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	mutate(&clone)
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &clone))
+	return &clone
+}
+
+func (s *SubscriptionLineItemServiceSuite) reloadLineItem(id string) *subscription.SubscriptionLineItem {
+	s.T().Helper()
+	item, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), id)
+	s.NoError(err)
+	return item
+}
+
+// revertScheduledVersion is the delete call with no effective_from, the only shape a
+// not-yet-started line item accepts.
+func (s *SubscriptionLineItemServiceSuite) revertScheduledVersion(id string) error {
+	_, err := s.service.DeleteSubscriptionLineItem(s.GetContext(), id, dto.DeleteSubscriptionLineItemRequest{})
+	return err
+}
+
+func (s *SubscriptionLineItemServiceSuite) assertEndDate(item *subscription.SubscriptionLineItem, expected time.Time, msg string) {
+	s.T().Helper()
+	s.Equal(expected.Truncate(time.Second).Unix(), item.EndDate.Truncate(time.Second).Unix(), msg)
+}
+
+// The round trip: versioning links both sides, reverting deletes the successor, reopens
+// the predecessor, and drops the pointer that would otherwise dangle.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_ScheduledVersion_RevertsPredecessor() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+	s.NotEqual(s.testData.lineItem.ID, successor.ID)
+	s.Equal(s.testData.lineItem.ID, successor.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+
+	predecessor := s.reloadLineItem(s.testData.lineItem.ID)
+	s.assertEndDate(predecessor, futureStart, "versioning must terminate the predecessor where the successor starts")
+	s.Equal(successor.ID, predecessor.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+
+	s.NoError(s.revertScheduledVersion(successor.ID))
+
+	s.Equal(types.StatusDeleted, s.reloadLineItem(successor.ID).Status)
+	restored := s.reloadLineItem(s.testData.lineItem.ID)
+	s.Equal(types.StatusPublished, restored.Status)
+	s.True(restored.EndDate.IsZero(), "reverting the scheduled version should reopen the prior line")
+	s.Empty(restored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+}
+
+// Reverting restores exactly the referenced predecessor. A scheduled row with no pointer
+// restores nothing, and a sibling sharing the same meter and price terminated at the same
+// boundary is not a candidate — the flow once matched on meter/price plus boundary rather
+// than on the pointer.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_ScheduledVersion_RestoresOnlyReferencedPredecessor() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+
+	sibling := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.EndDate = futureStart
+	})
+	unlinked := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.StartDate = futureStart
+		li.EndDate = time.Time{}
+		li.Metadata = nil
+	})
+
+	s.NoError(s.revertScheduledVersion(unlinked.ID))
+	s.Equal(types.StatusDeleted, s.reloadLineItem(unlinked.ID).Status)
+	s.assertEndDate(s.reloadLineItem(sibling.ID), futureStart, "a row without a predecessor pointer must restore nothing")
+
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+	s.NoError(s.revertScheduledVersion(successor.ID))
+
+	s.True(s.reloadLineItem(s.testData.lineItem.ID).EndDate.IsZero(), "only the referenced predecessor should be reopened")
+	s.assertEndDate(s.reloadLineItem(sibling.ID), futureStart, "sibling sharing meter and price must stay terminated")
+}
+
+// Chains unwind from the tip: with A -> B -> C, B cannot be deleted while C exists, so a
+// chain can never develop a deleted middle link.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_ScheduledVersion_MustDeleteTipFirst() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+
+	itemB := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+	itemC := s.scheduleVersion(itemB.ID, 90, futureStart)
+
+	err := s.revertScheduledVersion(itemB.ID)
+	s.Error(err)
+	s.Contains(err.Error(), "line item has a successor and cannot be deleted")
+
+	s.NoError(s.revertScheduledVersion(itemC.ID))
+	s.NoError(s.revertScheduledVersion(itemB.ID))
+
+	restoredA := s.reloadLineItem(s.testData.lineItem.ID)
+	s.Equal(types.StatusPublished, restoredA.Status)
+	s.True(restoredA.EndDate.IsZero(), "unwinding the chain must reopen the original line")
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemB.ID).Status)
+	s.Equal(types.StatusDeleted, s.reloadLineItem(itemC.ID).Status)
+}
+
+// A not-yet-started line can only be reverted immediately; scheduling its deletion would
+// stack a scheduled change on top of a scheduled change.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_ScheduledVersion_FutureEffectiveFromRejected() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+
+	_, err := s.service.DeleteSubscriptionLineItem(s.GetContext(), successor.ID, dto.DeleteSubscriptionLineItemRequest{
+		EffectiveFrom: &futureStart,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "cannot schedule deletion of a line item that has not started")
+
+	unchanged := s.reloadLineItem(successor.ID)
+	s.Equal(types.StatusPublished, unchanged.Status)
+	s.True(unchanged.EndDate.IsZero())
+}
+
+// Versioning a line that already has a scheduled version would leave two published lines
+// starting on the same date and orphan the first successor.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_AlreadyScheduled_Rejected() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	nextAmount := decimal.NewFromInt(90)
+
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), s.testData.lineItem.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &nextAmount,
+		EffectiveFrom: &futureStart,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "line item already has a scheduled version")
+
+	// Reverting frees the line item for a fresh edit, and the replacement must not inherit
+	// the pointer to the successor that was just deleted.
+	s.NoError(s.revertScheduledVersion(successor.ID))
+	replacement := s.scheduleVersion(s.testData.lineItem.ID, 90, futureStart)
+	s.Equal(s.testData.lineItem.ID, replacement.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Empty(replacement.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+		"a newly created version must not inherit the predecessor's successor pointer")
+}
+
+// An in-place edit of the scheduled version takes a branch that rewrites metadata
+// wholesale, which must not drop the pointers the revert depends on.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ScheduledVersion_MetadataEditKeepsLineage() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), successor.ID, dto.UpdateSubscriptionLineItemRequest{
+		Metadata: map[string]string{"note": "renamed"},
+	})
+	s.NoError(err)
+
+	stillLinked := s.reloadLineItem(successor.ID)
+	s.Equal("renamed", stillLinked.Metadata["note"])
+	s.Equal(s.testData.lineItem.ID, stillLinked.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+
+	s.NoError(s.revertScheduledVersion(successor.ID))
+	s.True(s.reloadLineItem(s.testData.lineItem.ID).EndDate.IsZero(),
+		"predecessor must still be reverted after a metadata-only edit")
+}
+
+// The lineage keys are reserved. A caller that sends them must not be able to forge a
+// link: the stored predecessor wins, and a successor the service never wrote is dropped
+// rather than locking the line against deletion.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_MetadataEdit_IgnoresCallerSuppliedLineage() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+	forgedTarget := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.EndDate = futureStart
+	})
+
+	_, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), successor.ID, dto.UpdateSubscriptionLineItemRequest{
+		Metadata: map[string]string{
+			types.SubscriptionLineItemMetadataKeyPredecessorID: forgedTarget.ID,
+			types.SubscriptionLineItemMetadataKeySuccessorID:   forgedTarget.ID,
+			"note": "kept",
+		},
+	})
+	s.NoError(err)
+
+	stored := s.reloadLineItem(successor.ID)
+	s.Equal("kept", stored.Metadata["note"])
+	s.Equal(s.testData.lineItem.ID, stored.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID],
+		"a caller must not be able to repoint the predecessor")
+	s.Empty(stored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+		"a caller must not be able to forge a successor")
+
+	// The forged pointers must not have changed what the revert does.
+	s.NoError(s.revertScheduledVersion(successor.ID))
+	s.True(s.reloadLineItem(s.testData.lineItem.ID).EndDate.IsZero())
+	s.assertEndDate(s.reloadLineItem(forgedTarget.ID), futureStart, "the forged target must be untouched")
+}
+
+// Same reserved keys, other entry point: a future-dated line item created with a forged
+// predecessor would otherwise reopen that line when it is reverted.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_IgnoresCallerSuppliedLineage() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	forgedTarget := s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.EndDate = futureStart
+	})
+
+	added, err := s.service.AddSubscriptionLineItem(s.GetContext(), s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:   s.testData.price.ID,
+		Quantity:  decimal.NewFromInt(1),
+		StartDate: &futureStart,
+		Metadata: map[string]string{
+			types.SubscriptionLineItemMetadataKeyPredecessorID: forgedTarget.ID,
+			types.SubscriptionLineItemMetadataKeySuccessorID:   forgedTarget.ID,
+			"note": "kept",
+		},
+	})
+	s.NoError(err)
+	s.Equal("kept", added.SubscriptionLineItem.Metadata["note"])
+	s.Empty(added.SubscriptionLineItem.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Empty(added.SubscriptionLineItem.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+
+	s.NoError(s.revertScheduledVersion(added.SubscriptionLineItem.ID))
+	s.assertEndDate(s.reloadLineItem(forgedTarget.ID), futureStart, "the forged target must be untouched")
+}
+
+// Amending a pending change goes through the scheduled version: it gets terminated and
+// replaced, and its own predecessor stays closed rather than being reverted.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ScheduledVersion_TerminatesWithoutRevert() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	nextAmount := decimal.NewFromInt(90)
+
+	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
+
+	replaced, err := s.service.UpdateSubscriptionLineItem(s.GetContext(), successor.ID, dto.UpdateSubscriptionLineItemRequest{
+		Amount:        &nextAmount,
+		EffectiveFrom: &futureStart,
+	})
+	s.NoError(err)
+	s.NotEqual(successor.ID, replaced.SubscriptionLineItem.ID)
+
+	ended := s.reloadLineItem(successor.ID)
+	s.Equal(types.StatusPublished, ended.Status, "the replaced line is terminated, not deleted")
+	s.assertEndDate(ended, futureStart, "the scheduled line must be terminated where its replacement starts")
+	s.assertEndDate(s.reloadLineItem(s.testData.lineItem.ID), futureStart,
+		"update must terminate the scheduled line, not revert its predecessor")
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_EffectiveFromOnOrAfterStartDate() {
 	ctx := s.GetContext()
 	effectiveFrom := s.testData.lineItem.StartDate.Add(24 * time.Hour) // 1 day after start
@@ -2077,4 +2341,85 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_D
 	})
 	s.Require().NoError(err)
 	s.Equal(0, s.countSubscriptionUpdated())
+}
+
+// TestAddSubscriptionLineItem_ResponseCarriesExpandedPrice asserts the create
+// response embeds the resulting price, so a caller creating an inline price
+// learns its amount and currency without a second call.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_ResponseCarriesExpandedPrice() {
+	ctx := s.GetContext()
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		Price: &dto.SubscriptionPriceCreateRequest{
+			Type:               types.PRICE_TYPE_FIXED,
+			PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			Amount:             lo.ToPtr(decimal.NewFromInt(42)),
+			LookupKey:          "inline_price_expansion",
+		},
+		SkipEntitlementCheck: true,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.Price, "create response must embed the resulting price")
+	s.Equal(resp.PriceID, resp.Price.ID)
+	s.True(decimal.NewFromInt(42).Equal(resp.Price.Amount), "expected amount 42, got %s", resp.Price.Amount)
+	s.Equal(s.testData.subscription.Currency, resp.Price.Currency)
+}
+
+// TestAddSubscriptionLineItem_CommitmentOverageFactorDefaultsToOne asserts a
+// commitment without commitment_overage_factor is accepted and stored as 1.0,
+// matching the field being optional in the OpenAPI spec.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_CommitmentOverageFactorDefaultsToOne() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Commitment Default Meter",
+		EventName: "commitment_default_event",
+		Aggregation: meter.Aggregation{
+			Type:  types.AggregationSum,
+			Field: "value",
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(2),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           s.testData.subscription.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            m.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePrice.ID,
+		SkipEntitlementCheck: true,
+		CommitmentAmount:     lo.ToPtr(decimal.NewFromInt(100)),
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err, "commitment without an overage factor must be accepted")
+	s.Require().NotNil(resp.CommitmentOverageFactor)
+	s.True(decimal.NewFromInt(1).Equal(*resp.CommitmentOverageFactor),
+		"expected default overage factor 1, got %s", resp.CommitmentOverageFactor)
+	s.Equal(types.COMMITMENT_TYPE_AMOUNT, resp.CommitmentType)
+
+	// The create response also carries the meter for usage line items.
+	s.Require().NotNil(resp.Meter, "usage line item response must embed its meter")
+	s.Equal(m.ID, resp.Meter.ID)
 }

@@ -206,6 +206,80 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	return lineItemData, nil
 }
 
+// GetForUpdate row-locks the line item so a read-decide-write sequence in the caller's
+// transaction is serialized against concurrent transactions doing the same.
+func (r *subscriptionLineItemRepository) GetForUpdate(ctx context.Context, id string) (*subscription.SubscriptionLineItem, error) {
+	span := StartRepositorySpan(ctx, "subscription_line_item", "get_for_update", map[string]interface{}{
+		"line_item_id": id,
+		"tenant_id":    types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	if client == nil {
+		err := ierr.NewError("failed to get database client").
+			WithHint("Database client is not available").
+			Mark(ierr.ErrDatabase)
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	lockQuery := `SELECT id FROM subscription_line_items WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 FOR UPDATE`
+	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to lock subscription line item").
+			WithReportableDetails(map[string]interface{}{"line_item_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	// Check and close before running another query on the same connection.
+	hasRow := rows.Next()
+	rowErr := rows.Err()
+	rows.Close() // #nosec G104 -- best-effort, error non-fatal
+	if rowErr != nil {
+		SetSpanError(span, rowErr)
+		return nil, ierr.WithError(rowErr).
+			WithHint("Failed to lock subscription line item").
+			WithReportableDetails(map[string]interface{}{"line_item_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	if !hasRow {
+		return nil, ierr.NewError("subscription line item not found").
+			WithHintf("Subscription line item with ID %s not found", id).
+			WithReportableDetails(map[string]interface{}{"line_item_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Read on the same connection, so this sees the locked row.
+	item, err := client.SubscriptionLineItem.Query().
+		Where(
+			subscriptionlineitem.ID(id),
+			subscriptionlineitem.TenantID(tenantID),
+			subscriptionlineitem.EnvironmentID(environmentID),
+		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Subscription line item with ID %s not found", id).
+				WithReportableDetails(map[string]interface{}{"line_item_id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve subscription line item").
+			WithReportableDetails(map[string]interface{}{"line_item_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return subscription.SubscriptionLineItemFromEnt(item), nil
+}
+
 // Update updates a subscription line item
 func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subscription.SubscriptionLineItem) error {
 	// Start a span for this repository operation
@@ -221,7 +295,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	)
 
 	client := r.client.Writer(ctx)
-	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
+	builder := client.SubscriptionLineItem.UpdateOneID(item.ID).
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
@@ -239,7 +313,6 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetCurrency(item.Currency).
 		SetBillingPeriod(item.BillingPeriod).
 		SetNillableStartDate(types.ToNillableTime(item.StartDate)).
-		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 		SetMetadata(item.Metadata).
 		// Commitment fields
 		SetNillableCommitmentAmount(item.CommitmentAmount).
@@ -251,8 +324,13 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
+		SetUpdatedAt(time.Now())
+	if item.EndDate.IsZero() {
+		builder.ClearEndDate()
+	} else {
+		builder.SetEndDate(item.EndDate)
+	}
+	_, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

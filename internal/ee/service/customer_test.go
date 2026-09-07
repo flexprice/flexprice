@@ -264,6 +264,106 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 	}
 }
 
+func (s *CustomerServiceSuite) TestGetCustomersStatusFilter() {
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:    "cust-published",
+		Name:  "Published Customer",
+		Email: "published@example.com",
+		BaseModel: types.BaseModel{
+			Status: types.StatusPublished,
+		},
+	})
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:    "cust-archived",
+		Name:  "Archived Customer",
+		Email: "archived@example.com",
+		BaseModel: types.BaseModel{
+			Status: types.StatusArchived,
+		},
+	})
+
+	statusIn := func(values ...string) []*types.FilterCondition {
+		return []*types.FilterCondition{
+			{
+				Field:    lo.ToPtr("status"),
+				Operator: lo.ToPtr(types.IN),
+				DataType: lo.ToPtr(types.DataTypeArray),
+				Value:    &types.Value{Array: values},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		filter        *types.CustomerFilter
+		expectedIDs   []string
+		expectedCount int
+	}{
+		{
+			name: "default_excludes_archived",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+			},
+			expectedIDs:   []string{"cust-published"},
+			expectedCount: 1,
+		},
+		{
+			name: "empty_dsl_filters_include_archived",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: []*types.FilterCondition{},
+			},
+			expectedIDs:   []string{"cust-published", "cust-archived"},
+			expectedCount: 2,
+		},
+		{
+			name: "dsl_in_published_and_archived_returns_both",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: statusIn(string(types.StatusPublished), string(types.StatusArchived)),
+			},
+			expectedIDs:   []string{"cust-published", "cust-archived"},
+			expectedCount: 2,
+		},
+		{
+			name: "dsl_in_archived_only",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: statusIn(string(types.StatusArchived)),
+			},
+			expectedIDs:   []string{"cust-archived"},
+			expectedCount: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			resp, err := s.service.GetCustomers(s.ctx, tc.filter)
+			s.NoError(err)
+			s.NotNil(resp)
+			s.Equal(tc.expectedCount, len(resp.Items))
+			s.Equal(tc.expectedCount, resp.Pagination.Total)
+
+			gotIDs := lo.Map(resp.Items, func(item *dto.CustomerResponse, _ int) string {
+				return item.Customer.ID
+			})
+			s.ElementsMatch(tc.expectedIDs, gotIDs)
+		})
+	}
+}
+
 func (s *CustomerServiceSuite) TestUpdateCustomer() {
 	// Prepopulate the repository with a customer
 	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{

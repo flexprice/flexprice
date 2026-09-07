@@ -31,27 +31,43 @@ func (s *invoiceService) recalculateDiscountOnInvoice(ctx context.Context, inv *
 		return err
 	}
 
-	invoiceCoupons, lineItemCoupons, err := s.resolveCurrentInvoiceCoupons(ctx, inv)
+	return s.applyCurrentDiscountToDraft(ctx, inv, inv)
+}
+
+// applyCurrentDiscountToDraft re-derives discount, tax, and totals from current coupon
+// associations; assumes no stale coupon applications (recalculateDiscountOnInvoice wipes first).
+func (s *invoiceService) applyCurrentDiscountToDraft(ctx context.Context, sourceInvoice, destinationInvoice *invoice.Invoice) error {
+	if destinationInvoice.InvoiceStatus != types.InvoiceStatusDraft {
+		return ierr.NewError("invoice is not in draft status").
+			WithHint("Only draft invoices can have their discount recalculated").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":     destinationInvoice.ID,
+				"current_status": destinationInvoice.InvoiceStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	invoiceCoupons, lineItemCoupons, err := s.resolveCurrentInvoiceCoupons(ctx, sourceInvoice)
 	if err != nil {
 		return err
 	}
 
 	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
 	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
-		Invoice:         inv,
+		Invoice:         destinationInvoice,
 		InvoiceCoupons:  invoiceCoupons,
 		LineItemCoupons: lineItemCoupons,
 	})
 	if err != nil {
 		return err
 	}
-	inv.TotalDiscount = couponResult.TotalDiscountAmount
+	destinationInvoice.TotalDiscount = couponResult.TotalDiscountAmount
 
 	// Tax depends on discount (taxableAmount = Subtotal - TotalDiscount); refresh it via real
 	// TaxApplied records rather than TotalTax==0, which a full discount can zero legitimately.
 	taxFilter := types.NewNoLimitTaxAppliedFilter()
 	taxFilter.EntityType = types.TaxRateEntityTypeInvoice
-	taxFilter.EntityID = inv.ID
+	taxFilter.EntityID = destinationInvoice.ID
 	taxAppliedCount, err := s.TaxAppliedRepo.Count(ctx, taxFilter)
 	if err != nil {
 		return err
@@ -59,18 +75,18 @@ func (s *invoiceService) recalculateDiscountOnInvoice(ctx context.Context, inv *
 	if taxAppliedCount > 0 {
 		// Reset first: applyTaxesToInvoice no-ops (leaving TotalTax stale) when the current
 		// subscription resolves to no active tax rates, e.g. the association was removed.
-		inv.TotalTax = decimal.Zero
-		if err := s.applyTaxesToInvoice(ctx, inv, dto.InvoiceComputeRequest{}); err != nil {
+		destinationInvoice.TotalTax = decimal.Zero
+		if err := s.applyTaxesToInvoice(ctx, destinationInvoice, dto.InvoiceComputeRequest{}); err != nil {
 			return err
 		}
 	}
 
-	inv.Total = decimal.Max(inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied).Sub(inv.TotalDiscount).Add(inv.TotalTax), decimal.Zero)
-	inv.AmountDue = inv.Total
-	inv.AmountRemaining = decimal.Max(inv.Total.Sub(inv.AmountPaid), decimal.Zero)
+	destinationInvoice.Total = decimal.Max(destinationInvoice.Subtotal.Sub(destinationInvoice.TotalPrepaidCreditsApplied).Sub(destinationInvoice.TotalDiscount).Add(destinationInvoice.TotalTax), decimal.Zero)
+	destinationInvoice.AmountDue = destinationInvoice.Total
+	destinationInvoice.AmountRemaining = decimal.Max(destinationInvoice.Total.Sub(destinationInvoice.AmountPaid), decimal.Zero)
 
 	s.Logger.Info(ctx, "recalculated discount on invoice",
-		"invoice_id", inv.ID, "total_discount", inv.TotalDiscount, "new_total", inv.Total)
+		"invoice_id", destinationInvoice.ID, "total_discount", destinationInvoice.TotalDiscount, "new_total", destinationInvoice.Total)
 
 	return nil
 }

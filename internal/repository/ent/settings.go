@@ -18,16 +18,16 @@ import (
 )
 
 type settingsRepository struct {
-	client     postgres.IClient
-	log        *logger.Logger
-	redisCache cache.RedisCache
+	client postgres.IClient
+	log    *logger.Logger
+	cache  cache.InMemoryCache
 }
 
-func NewSettingsRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainSettings.Repository {
+func NewSettingsRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainSettings.Repository {
 	return &settingsRepository{
-		client:     client,
-		log:        log,
-		redisCache: redisCache,
+		client: client,
+		log:    log,
+		cache:  cache,
 	}
 }
 
@@ -78,6 +78,10 @@ func (r *settingsRepository) Create(ctx context.Context, s *domainSettings.Setti
 	}
 
 	*s = *domainSettings.FromEnt(setting)
+	// Bust any stale entries (including negative-hits from before this row
+	// existed) so the next read hits the DB and re-populates.
+	r.DeleteCache(ctx, s)
+	r.DeleteCacheByKey(ctx, s.Key, s.EnvironmentID)
 	return nil
 }
 
@@ -118,6 +122,7 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 	}
 
 	r.DeleteCache(ctx, s)
+	r.DeleteCacheByKey(ctx, s.Key, s.EnvironmentID)
 	return nil
 }
 
@@ -199,6 +204,14 @@ func (r *settingsRepository) Get(ctx context.Context, id string) (*domainSetting
 }
 
 func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	if cachedSetting, notFound := r.GetCacheByKey(ctx, key, envID); cachedSetting != nil {
+		return cachedSetting, nil
+	} else if notFound {
+		return nil, notFoundSettingErr(key)
+	}
 
 	client := r.client.Reader(ctx)
 	r.log.Debug(ctx, "getting setting by key", "key", key)
@@ -206,14 +219,15 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	s, err := client.Settings.Query().
 		Where(
 			settings.Key(string(key)),
-			settings.TenantID(types.GetTenantID(ctx)),
-			settings.EnvironmentID(types.GetEnvironmentID(ctx)),
+			settings.TenantID(tenantID),
+			settings.EnvironmentID(envID),
 			settings.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
+			r.SetCacheByKeyNotFound(ctx, key, envID)
 			return nil, ierr.WithError(err).
 				WithHintf("Setting with key %s was not found", string(key)).
 				WithReportableDetails(map[string]any{
@@ -227,19 +241,29 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	}
 
 	setting := domainSettings.FromEnt(s)
+	r.SetCacheByKey(ctx, key, envID, setting)
 	return setting, nil
 }
 
 // GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
 // This is for settings that apply tenant-wide across all environments
 func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+	tenantID := types.GetTenantID(ctx)
+
+	// Tenant-level rows carry environment_id = ""
+	if cachedSetting, notFound := r.GetCacheByKey(ctx, key, ""); cachedSetting != nil {
+		return cachedSetting, nil
+	} else if notFound {
+		return nil, notFoundSettingErr(key)
+	}
+
 	client := r.client.Reader(ctx)
 	r.log.Debug(ctx, "getting tenant-level setting by key", "key", key)
 
 	s, err := client.Settings.Query().
 		Where(
 			settings.Key(string(key)),
-			settings.TenantID(types.GetTenantID(ctx)),
+			settings.TenantID(tenantID),
 			settings.EnvironmentID(""),
 			settings.Status(string(types.StatusPublished)),
 		).
@@ -247,6 +271,7 @@ func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key
 
 	if err != nil {
 		if ent.IsNotFound(err) {
+			r.SetCacheByKeyNotFound(ctx, key, "")
 			return nil, ierr.WithError(err).
 				WithHintf("Setting with key %s was not found", string(key)).
 				WithReportableDetails(map[string]any{
@@ -260,6 +285,7 @@ func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key
 	}
 
 	setting := domainSettings.FromEnt(s)
+	r.SetCacheByKey(ctx, key, "", setting)
 	return setting, nil
 }
 
@@ -278,6 +304,7 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingK
 
 	// Delete from cache
 	r.DeleteCache(ctx, setting)
+	r.DeleteCacheByKey(ctx, key, types.GetEnvironmentID(ctx))
 	return nil
 }
 
@@ -341,28 +368,40 @@ func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, 
 
 	// Delete from cache
 	r.DeleteCache(ctx, setting)
+	r.DeleteCacheByKey(ctx, key, "")
 	return nil
 }
 
+// notFoundSettingErr rebuilds the ErrNotFound this repo returns on a real
+// DB miss so a negative-cache hit is indistinguishable to the caller.
+func notFoundSettingErr(key types.SettingKey) error {
+	return ierr.NewErrorf("setting with key %s was not found", string(key)).
+		WithHintf("Setting with key %s was not found", string(key)).
+		WithReportableDetails(map[string]any{
+			"key": string(key),
+		}).
+		Mark(ierr.ErrNotFound)
+}
+
 func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettings.Setting) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "set", map[string]interface{}{
 		"setting_id": setting.ID,
 		"key":        setting.Key,
 	})
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, setting.ID)
-	r.redisCache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultRedis)
+	r.cache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "get", map[string]interface{}{
 		"key": id,
 	})
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, id)
-	value, found := r.redisCache.Get(ctx, cacheKey)
+	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -374,14 +413,86 @@ func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSet
 }
 
 func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSettings.Setting) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "delete", map[string]interface{}{
 		"setting_id": setting.ID,
 		"key":        setting.Key,
 	})
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, setting.ID)
-	r.redisCache.Delete(ctx, cacheKey)
+	r.cache.Delete(ctx, cacheKey)
+}
+
+// settingNotFoundSentinel marks a negative cache hit — the row is
+// known-absent for this (tenant, env, key). Without it, every
+// GetSetting → default-value lookup would still round-trip Postgres.
+type settingNotFoundSentinel struct{}
+
+// settingsByKeyCacheKey scopes the cache entry to the exact
+// (tenant, environment, key) tuple. Built by hand rather than through
+// cache.GenerateKey because that helper folds ctx.environment_id in
+// automatically — wrong for tenant-level settings (envID = "") and
+// would let a caller in env A miss/hide an entry cached from env B.
+func settingsByKeyCacheKey(tenantID, envID string, key types.SettingKey) string {
+	return cache.PrefixSettingsByKey + tenantID + ":" + envID + ":" + string(key)
+}
+
+// GetCacheByKey returns (setting, notFound). notFound=true means a
+// negative-hit sentinel was stored and the caller should short-circuit
+// with ErrNotFound. setting=nil && notFound=false is a plain cache miss.
+func (r *settingsRepository) GetCacheByKey(ctx context.Context, key types.SettingKey, envID string) (*domainSettings.Setting, bool) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "get_by_key", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := settingsByKeyCacheKey(types.GetTenantID(ctx), envID, key)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil, false
+	}
+	if _, isNF := value.(settingNotFoundSentinel); isNF {
+		return nil, true
+	}
+	s, ok := cache.UnmarshalCacheValue[domainSettings.Setting](value)
+	if !ok {
+		return nil, false
+	}
+	return s, false
+}
+
+func (r *settingsRepository) SetCacheByKey(ctx context.Context, key types.SettingKey, envID string, setting *domainSettings.Setting) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "set_by_key", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := settingsByKeyCacheKey(types.GetTenantID(ctx), envID, key)
+	r.cache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
+}
+
+// SetCacheByKeyNotFound caches a negative hit for a lookup that missed.
+// A subsequent read for the same (tenant, env, key) returns from cache
+// without a DB round-trip until either the TTL expires or a Create /
+// Update / Delete invalidates via DeleteCacheByKey.
+func (r *settingsRepository) SetCacheByKeyNotFound(ctx context.Context, key types.SettingKey, envID string) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "set_by_key_not_found", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := settingsByKeyCacheKey(types.GetTenantID(ctx), envID, key)
+	r.cache.Set(ctx, cacheKey, settingNotFoundSentinel{}, cache.ExpiryDefaultInMemory)
+}
+
+func (r *settingsRepository) DeleteCacheByKey(ctx context.Context, key types.SettingKey, envID string) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "settings", "delete_by_key", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := settingsByKeyCacheKey(types.GetTenantID(ctx), envID, key)
+	r.cache.Delete(ctx, cacheKey)
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments

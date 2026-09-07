@@ -725,7 +725,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 		s.False(matched.CommitmentWindowed)
 	})
 
-	s.Run("rejects_invalid_commitment_config_missing_overage_factor", func() {
+	s.Run("defaults_overage_factor_when_omitted", func() {
 		addonID := "addon_commitment_missing_overage"
 		priceID := "price_addon_commitment_missing_overage"
 		createAddonWithUsagePrice(addonID, priceID, s.testData.meters.apiCalls.ID)
@@ -745,7 +745,24 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 				},
 			},
 		})
-		s.Error(err)
+		s.NoError(err)
+
+		filter := types.NewNoLimitSubscriptionLineItemFilter()
+		filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+		items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+		s.NoError(err)
+
+		var matched *subscription.SubscriptionLineItem
+		for _, it := range items {
+			if it.EntityType == types.SubscriptionLineItemEntityTypeAddon && it.EntityID == addonID && it.PriceID == priceID {
+				matched = it
+				break
+			}
+		}
+		s.Require().NotNil(matched)
+		s.Require().NotNil(matched.CommitmentOverageFactor)
+		s.True(decimal.NewFromInt(1).Equal(*matched.CommitmentOverageFactor),
+			"expected default overage factor 1, got %s", matched.CommitmentOverageFactor)
 	})
 
 	s.Run("rejects_window_commitment_when_meter_has_no_bucket_size", func() {

@@ -52,21 +52,14 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 		}
 		lockedInv = inv
 
-		existingItem, err := s.InvoiceLineItemRepo.Get(txCtx, lineItemID)
-		if err != nil {
-			return err
-		}
-		if existingItem.InvoiceID != invoiceID {
+		// Resolve against the locked invoice's line items; a stale id maps to its copy via parent lineage.
+		existingItem, ok := lo.Find(lockedInv.LineItems, func(li *invoice.InvoiceLineItem) bool {
+			return li.ID == lineItemID || (li.ParentLineItemID != nil && *li.ParentLineItemID == lineItemID)
+		})
+		if !ok {
 			return ierr.NewError("line item not found").
-				WithHintf("line item %s does not belong to invoice %s", lineItemID, invoiceID).
+				WithHintf("line item %s does not exist on invoice %s (or is not the current version)", lineItemID, invoiceID).
 				Mark(ierr.ErrNotFound)
-		}
-		if existingItem.Status != types.StatusPublished {
-			// Editing an already-archived/deleted row would branch the lineage
-			// chain instead of extending it, or resurrect a removed item.
-			return ierr.NewError("line item is not editable").
-				WithHintf("line item %s has status %s and is not the current version", lineItemID, existingItem.Status).
-				Mark(ierr.ErrValidation)
 		}
 
 		builder := invoice.NewInvoiceLineItemBuilder(existingItem).
@@ -82,6 +75,15 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 		}
 		if req.Quantity != nil {
 			builder = builder.WithQuantity(*req.Quantity)
+		}
+		if req.Description != nil {
+			builder = builder.WithDescription(req.Description)
+		}
+		if req.PeriodStart != nil {
+			builder = builder.WithPeriodStart(req.PeriodStart)
+		}
+		if req.PeriodEnd != nil {
+			builder = builder.WithPeriodEnd(req.PeriodEnd)
 		}
 
 		newItem := builder.Build()
@@ -147,6 +149,9 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 				WithCustomerID(inv.CustomerID).
 				WithEnvironmentID(inv.EnvironmentID).
 				WithDisplayName(lo.ToPtr(item.DisplayName)).
+				WithDescription(item.Description).
+				WithPeriodStart(item.PeriodStart).
+				WithPeriodEnd(item.PeriodEnd).
 				WithAmount(item.Amount).
 				WithQuantity(item.Quantity).
 				WithCurrency(inv.Currency).
@@ -200,26 +205,33 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 		}
 		lockedInv = inv
 
+		// Resolve against the locked invoice's line items; stale ids map to their copies via parent lineage.
+		byID := make(map[string]bool, len(lockedInv.LineItems))
+		byParent := make(map[string]string, len(lockedInv.LineItems))
+		for _, li := range lockedInv.LineItems {
+			byID[li.ID] = true
+			if li.ParentLineItemID != nil {
+				byParent[*li.ParentLineItemID] = li.ID
+			}
+		}
 		removedIDs := make(map[string]bool, len(req.LineItemIDs))
+		resolvedIDs := make([]string, 0, len(req.LineItemIDs))
 		for _, lineItemID := range req.LineItemIDs {
-			existingItem, err := s.InvoiceLineItemRepo.Get(txCtx, lineItemID)
-			if err != nil {
-				return err
+			resolved := lineItemID
+			if !byID[resolved] {
+				mapped, ok := byParent[lineItemID]
+				if !ok {
+					return ierr.NewError("line item not found").
+						WithHintf("line item %s does not exist on invoice %s (or is not the current version)", lineItemID, invoiceID).
+						Mark(ierr.ErrNotFound)
+				}
+				resolved = mapped
 			}
-			if existingItem.InvoiceID != invoiceID {
-				return ierr.NewError("line item not found").
-					WithHintf("line item %s does not belong to invoice %s", lineItemID, invoiceID).
-					Mark(ierr.ErrNotFound)
-			}
-			if existingItem.Status != types.StatusPublished {
-				return ierr.NewError("line item is not removable").
-					WithHintf("line item %s has status %s and is not the current version", lineItemID, existingItem.Status).
-					Mark(ierr.ErrValidation)
-			}
-			removedIDs[lineItemID] = true
+			removedIDs[resolved] = true
+			resolvedIDs = append(resolvedIDs, resolved)
 		}
 
-		if err := s.InvoiceRepo.RemoveLineItems(txCtx, invoiceID, req.LineItemIDs); err != nil {
+		if err := s.InvoiceRepo.RemoveLineItems(txCtx, invoiceID, resolvedIDs); err != nil {
 			return err
 		}
 
@@ -261,30 +273,138 @@ func (s *invoiceService) ModifyInvoice(ctx context.Context, invoiceID string, re
 }
 
 func (s *invoiceService) executeLineItemModification(ctx context.Context, invoiceID string, params *dto.InvoiceModifyLineItemParams) (*dto.InvoiceModifyResponse, error) {
-	var (
-		resp *dto.InvoiceResponse
-		err  error
-	)
+	// One transaction, one lock: the locked read decides the branch. A finalized
+	// invoice is voided and recreated as a draft, and the edit lands on the copy.
+	var resp *dto.InvoiceResponse
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		locked, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		if err := rejectVoidedInvoiceEdit(locked); err != nil {
+			return err
+		}
 
-	switch params.Action {
-	case dto.InvoiceModifyLineItemActionAdd:
-		resp, err = s.AddBulkLineItem(ctx, invoiceID, dto.AddBulkLineItemRequest{
-			Items: params.Items,
-		})
-	case dto.InvoiceModifyLineItemActionUpdate:
-		resp, err = s.UpdateLineItem(ctx, invoiceID, params.LineItemID, *params.Update)
-	case dto.InvoiceModifyLineItemActionRemove:
-		resp, err = s.RemoveBulkLineItem(ctx, invoiceID, dto.RemoveBulkLineItemRequest{
-			LineItemIDs: params.LineItemIDs,
-		})
-	default:
-		return nil, ierr.NewError("unknown line item action: " + string(params.Action)).
-			WithHint("valid values: add, update, remove").
-			Mark(ierr.ErrValidation)
-	}
+		targetID := locked.ID
+		if locked.InvoiceStatus == types.InvoiceStatusFinalized {
+			draft, err := s.voidAndRecreateDraftForEdit(txCtx, locked)
+			if err != nil {
+				return err
+			}
+			targetID = draft.ID
+		}
+
+		resp, err = s.applyLineItemAction(txCtx, targetID, params)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &dto.InvoiceModifyResponse{Invoice: resp}, nil
+}
+
+// applyLineItemAction dispatches one line-item modification against the given invoice.
+func (s *invoiceService) applyLineItemAction(ctx context.Context, invoiceID string, params *dto.InvoiceModifyLineItemParams) (*dto.InvoiceResponse, error) {
+	switch params.Action {
+	case dto.InvoiceModifyLineItemActionAdd:
+		return s.AddBulkLineItem(ctx, invoiceID, dto.AddBulkLineItemRequest{Items: params.Items})
+	case dto.InvoiceModifyLineItemActionUpdate:
+		return s.UpdateLineItem(ctx, invoiceID, params.LineItemID, *params.Update)
+	case dto.InvoiceModifyLineItemActionRemove:
+		return s.RemoveBulkLineItem(ctx, invoiceID, dto.RemoveBulkLineItemRequest{LineItemIDs: params.LineItemIDs})
+	default:
+		return nil, ierr.NewError("unknown line item action: " + string(params.Action)).
+			WithHint("valid values: add, update, remove").
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// rejectVoidedInvoiceEdit hard-stops edits on a voided invoice, naming its replacement when one exists.
+func rejectVoidedInvoiceEdit(inv *invoice.Invoice) error {
+	if inv.InvoiceStatus != types.InvoiceStatusVoided {
+		return nil
+	}
+	if inv.RecalculatedInvoiceID != nil {
+		return ierr.NewError("invoice is voided and was replaced by "+*inv.RecalculatedInvoiceID).
+			WithHintf("invoice %s was voided and replaced by %s — retry the edit against the replacement", inv.ID, *inv.RecalculatedInvoiceID).
+			WithReportableDetails(map[string]any{"recalculated_invoice_id": *inv.RecalculatedInvoiceID}).
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.NewError("invoice is voided").
+		WithHintf("invoice %s is voided and can no longer be edited", inv.ID).
+		Mark(ierr.ErrValidation)
+}
+
+// voidAndRecreateDraftForEdit voids a finalized invoice and creates a DRAFT copy of it
+// (data + line items, discount re-derived), linking the original to the copy. Run inside a transaction.
+func (s *invoiceService) voidAndRecreateDraftForEdit(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
+	voided, err := s.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	draftID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE)
+	baseModel := types.GetDefaultBaseModel(ctx)
+
+	sourceItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, voided.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	lineItems := make([]*invoice.InvoiceLineItem, 0, len(sourceItems))
+	for _, li := range sourceItems {
+		if li.Status != types.StatusPublished {
+			continue
+		}
+		copied := invoice.NewInvoiceLineItemBuilder(li).
+			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
+			WithInvoiceID(draftID).
+			WithParentLineItemID(lo.ToPtr(li.ID)).
+			WithBaseModel(baseModel).
+			Build()
+		lineItems = append(lineItems, copied)
+	}
+
+	draft := voided.CopyForDraftEdit(draftID, baseModel)
+	draft.LineItems = lineItems
+	if len(lineItems) > 0 {
+		s.recalculateTotalsFromLineItems(draft, lineItems)
+	} else {
+		// No line items to recompute from (e.g. amount-only one-off) — keep the copied subtotal.
+		draft.Total = draft.Subtotal
+		draft.AmountDue = draft.Total
+		draft.AmountRemaining = draft.Total
+	}
+
+	if err := s.InvoiceRepo.CreateWithLineItems(ctx, draft); err != nil {
+		s.Logger.Error(ctx, "finalized invoice edit failed after voiding",
+			"error", err, "invoice_id", voided.ID)
+		return nil, err
+	}
+
+	if draft.SubscriptionID != nil {
+		if err := s.applyCurrentDiscountToDraft(ctx, voided, draft); err != nil {
+			return nil, err
+		}
+		if err := s.InvoiceRepo.Update(ctx, draft); err != nil {
+			return nil, err
+		}
+	}
+
+	voided = invoice.NewInvoiceBuilder(voided).
+		WithRecalculatedInvoiceID(lo.ToPtr(draft.ID)).
+		Build()
+	if err := s.InvoiceRepo.Update(ctx, voided); err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "voided finalized invoice and recreated as draft for editing",
+		"original_invoice_id", voided.ID, "draft_invoice_id", draft.ID)
+
+	// Both invoices announce themselves: VoidInvoice published the voided event for
+	// the original; the replacement draft goes out as an invoice update.
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, draft.ID)
+
+	return draft, nil
 }

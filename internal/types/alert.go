@@ -584,3 +584,16 @@ func (At *AlertSettings) AlertState(ongoingBalance decimal.Decimal) (AlertState,
 func (at *AlertSettings) IsAlertEnabled() bool {
 	return at.AlertEnabled != nil && *at.AlertEnabled
 }
+
+// AlertToggleConfig is the tenant-wide on/off used by settings that have no
+// tenant-level thresholds (subscription spend and entitlement grant alerts —
+// thresholds for those live per-row in alert_settings or per-grant).
+type AlertToggleConfig struct {
+	AlertEnabled *bool `json:"alert_enabled"`
+}
+
+func (c AlertToggleConfig) Validate() error { return nil }
+
+func (c *AlertToggleConfig) IsAlertEnabled() bool {
+	return c != nil && c.AlertEnabled != nil && *c.AlertEnabled
+}

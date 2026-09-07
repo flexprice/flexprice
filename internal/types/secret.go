@@ -37,7 +37,7 @@ const (
 	SecretProviderHubSpot          SecretProvider = "hubspot"
 	SecretProviderRazorpay         SecretProvider = "razorpay"
 	SecretProviderChargebee        SecretProvider = "chargebee"
-	SecretProviderQuickBooks       SecretProvider = "quickbooks"
+	SecretProviderQuickBooks       SecretProvider = "quickbooks" // #nosec G101 -- enum value name, not a secret
 	SecretProviderZohoBooks        SecretProvider = "zoho_books"
 	SecretProviderNomod            SecretProvider = "nomod"
 	SecretProviderMoyasar          SecretProvider = "moyasar"
@@ -46,7 +46,7 @@ const (
 	SecretProviderTabs             SecretProvider = "tabs"
 	SecretProviderAWSMarketplace   SecretProvider = "aws_marketplace"
 	SecretProviderGCPMarketplace   SecretProvider = "gcp_marketplace"
-	SecretProviderAzureMarketplace SecretProvider = "azure_marketplace"
+	SecretProviderAzureMarketplace SecretProvider = "azure_marketplace" // #nosec G101 -- provider enum value, not a secret
 )
 
 func (p SecretProvider) Validate() error {

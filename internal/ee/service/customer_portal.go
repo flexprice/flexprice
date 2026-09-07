@@ -400,7 +400,7 @@ func (s *customerPortalService) GetInvoicePDFUrl(ctx context.Context, invoiceID 
 	}
 
 	// Get the presigned URL
-	return invoiceService.GetInvoicePDFUrl(ctx, invoiceID, false)
+	return invoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})
 }
 
 // GetPortalConfig returns the customer_portal_config setting for the current tenant/environment.

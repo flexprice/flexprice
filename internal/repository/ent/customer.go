@@ -449,7 +449,10 @@ func (o CustomerQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query 
 
 func (o CustomerQueryOptions) ApplyStatusFilter(query CustomerQuery, status string) CustomerQuery {
 	if status == "" {
-		return query.Where(customer.StatusEQ(string(types.StatusPublished)))
+		return query.Where(customer.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(customer.Status(status))
 }

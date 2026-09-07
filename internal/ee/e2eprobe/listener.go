@@ -96,7 +96,7 @@ func (h *HTTPWebhookListener) Subscribe(ctx context.Context) (<-chan ListenerEve
 	h.mu.Unlock()
 
 	go func() { _ = h.srv.Serve(ln) }()
-	go func() {
+	go func() { // #nosec G118 -- parent ctx already Done, fresh ctx needed for shutdown deadline
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -194,3 +194,19 @@ func methodTypeFor(t enum.Type) (types.PaymentMethodType, bool) {
 		return "", false
 	}
 }
+
+// paymentMethodTypeFor maps the method Chargebee reports on a settled transaction.
+// This is a different Chargebee enum from the payment source type methodTypeFor
+// reads, so the two switches cannot be shared even though the members overlap.
+func paymentMethodTypeFor(m enum.PaymentMethod) (types.PaymentMethodType, bool) {
+	switch m {
+	case enum.PaymentMethodCard, enum.PaymentMethodApplePay, enum.PaymentMethodGooglePay:
+		return types.PaymentMethodTypeCard, true
+	case enum.PaymentMethodDirectDebit, enum.PaymentMethodAchCredit:
+		return types.PaymentMethodTypeACH, true
+	case enum.PaymentMethodUpi:
+		return types.PaymentMethodTypeUPI, true
+	default:
+		return "", false
+	}
+}

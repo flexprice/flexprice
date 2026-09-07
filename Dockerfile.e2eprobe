@@ -28,15 +28,18 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Final stage
 FROM alpine:3.20
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata && \
+    addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
 COPY --from=builder /app/e2eprobe .
+RUN chown -R app:app /app
 
 # All e2eprobe defaults now live in internal/ee/e2eprobe/config.go and match
 # cmd/e2eprobe/.env.example, so nothing needs baking here. Override any knob
 # at runtime with -e VAR=val.
 ENV TZ=UTC
+USER app
 
 # Required at runtime (not baked — keeps secrets out of image layers):
 #   E2EPROBE_API_HOST, E2EPROBE_API_KEY
