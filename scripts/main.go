@@ -131,7 +131,7 @@ var commands = []Command{
 	},
 	{
 		Name:        "replay-events-csv",
-		Description: "Replay events from a CSV via POST /v1/events (preserves event_id, timestamp, event_name, source, properties)",
+		Description: "Replay events from a CSV via POST /v1/events/bulk in batches of -batch-size (preserves event_id, timestamp, event_name, source, properties)",
 		Run:         internal.ReplayEventsFromCSV,
 	},
 }
@@ -196,7 +196,7 @@ func main() {
 	flag.StringVar(&eventName, "event-name", "", "Event name filter for reprocessing")
 	flag.StringVar(&startTime, "start-time", "", "Start time for reprocessing (ISO-8601 format)")
 	flag.StringVar(&endTime, "end-time", "", "End time for reprocessing (ISO-8601 format)")
-	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
+	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing and event replay (max 1000)")
 	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
 	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
