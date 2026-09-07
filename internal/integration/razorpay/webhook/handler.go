@@ -484,10 +484,9 @@ func (h *Handler) handleCheckoutSessionForPayment(
 
 	switch session.CheckoutStatus {
 	case types.CheckoutStatusPending:
-		providerResult := types.NewCheckoutProviderResult().
-			WithProviderPaymentIntentID(razorpayPaymentID).
-			Build()
-		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, providerResult); err != nil {
+		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: razorpayPaymentID,
+		}); err != nil {
 			h.logger.Error(ctx, "failed to complete checkout session",
 				"error", err,
 				"session_id", session.ID,

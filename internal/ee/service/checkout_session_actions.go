@@ -185,13 +185,14 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		}
 	}
 
-	return types.NewCheckoutProviderResult().
-		WithProviderSessionID(resp.ProviderSessionID).
-		WithProviderPaymentIntentID(resp.ProviderPaymentIntentID).
-		WithExpiresAt(resp.ExpiresAt).
-		WithProviderMetadata(resp.ProviderMetadata).
-		WithNextAction(lo.ToPtr(resp.NextAction)).
-		Build(), nil
+	result := &types.CheckoutProviderResult{
+		ProviderSessionID:       resp.ProviderSessionID,
+		ProviderPaymentIntentID: resp.ProviderPaymentIntentID,
+		ExpiresAt:               resp.ExpiresAt,
+		ProviderMetadata:        resp.ProviderMetadata,
+		NextAction:              lo.ToPtr(resp.NextAction),
+	}
+	return result, nil
 }
 
 // recordGatewayHandles writes the provider's identifiers onto the payment. Without it

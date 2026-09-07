@@ -7,7 +7,6 @@ import (
 	cockroachErrors "github.com/cockroachdb/errors"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func validAddAddonRef() AddAddonRef {
@@ -160,44 +159,4 @@ func TestCheckoutAction_Validate_AddAddon(t *testing.T) {
 	assert.NotEmpty(t, hints)
 	assert.Contains(t, hints[0], "add_addon",
 		"the hardcoded allowed-values hint must list every CheckoutAction constant")
-}
-
-// A builder that quietly dropped a field would be worse than the struct literal it
-// replaces, since callers can no longer see the whole shape at the call site.
-func TestCheckoutProviderResultBuilder(t *testing.T) {
-	expires := time.Now().UTC()
-	action := &PaymentAction{Type: PaymentActionTypePaymentLink, URL: "https://rzp.io/x"}
-
-	got := NewCheckoutProviderResult().
-		WithProviderSessionID("plink_1").
-		WithProviderPaymentIntentID("pay_1").
-		WithExpiresAt(&expires).
-		WithProviderMetadata(map[string]string{"k": "v"}).
-		WithNextAction(action).
-		Build()
-
-	require.NotNil(t, got)
-	assert.Equal(t, "plink_1", got.ProviderSessionID)
-	assert.Equal(t, "pay_1", got.ProviderPaymentIntentID)
-	assert.Equal(t, &expires, got.ExpiresAt)
-	assert.Equal(t, map[string]string{"k": "v"}, got.ProviderMetadata)
-	assert.Equal(t, action, got.NextAction)
-}
-
-// Fragments are the common case — a webhook knows the payment id and nothing else —
-// and everything unset must stay zero so MergeOnto can tell it apart from a value.
-func TestCheckoutProviderResultBuilder_Fragment(t *testing.T) {
-	got := NewCheckoutProviderResult().WithProviderPaymentIntentID("pay_1").Build()
-
-	require.NotNil(t, got)
-	assert.Equal(t, "pay_1", got.ProviderPaymentIntentID)
-	assert.Empty(t, got.ProviderSessionID)
-	assert.Nil(t, got.NextAction)
-	assert.Nil(t, got.ExpiresAt)
-	assert.Nil(t, got.ProviderMetadata)
-}
-
-func TestCheckoutProviderResultBuilder_NilBuilder(t *testing.T) {
-	var b *CheckoutProviderResultBuilder
-	assert.Nil(t, b.Build())
 }

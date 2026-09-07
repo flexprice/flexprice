@@ -116,9 +116,7 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 	// Merging onto the stored result happens inside CompleteCheckoutSession.
 	var providerResult *types.CheckoutProviderResult
 	if state.GatewayPaymentID != "" {
-		providerResult = types.NewCheckoutProviderResult().
-			WithProviderPaymentIntentID(state.GatewayPaymentID).
-			Build()
+		providerResult = &types.CheckoutProviderResult{ProviderPaymentIntentID: state.GatewayPaymentID}
 	}
 
 	if err := s.CompleteCheckoutSession(ctx, session.ID, providerResult); err != nil {

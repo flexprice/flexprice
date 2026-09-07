@@ -228,13 +228,12 @@ func (h *Handler) handleCheckoutSessionForPayment(
 
 	switch session.CheckoutStatus {
 	case types.CheckoutStatusPending:
-		providerResult := types.NewCheckoutProviderResult().
-			WithProviderPaymentIntentID(chargebeeTransactionID).
-			WithProviderMetadata(map[string]string{
+		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: chargebeeTransactionID,
+			ProviderMetadata: map[string]string{
 				"chargebee_transaction_id": chargebeeTransactionID,
-			}).
-			Build()
-		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, providerResult)
+			},
+		})
 		switch {
 		case err == nil:
 			h.logger.Info(ctx, "completed checkout session from chargebee webhook",
