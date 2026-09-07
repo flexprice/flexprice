@@ -116,6 +116,33 @@ jobs:
             org.opencontainers.image.version=${{ steps.tag.outputs.semver }}
             org.opencontainers.image.licenses=${{ matrix.license }}
 
+      # Guard: the license label must match the build variant. Derived from
+      # build_tags (the source of truth for what compiled in), so a matrix edit
+      # that sets build_tags without the matching license fails here rather than
+      # publishing a mislabeled image. ee → commercial; anything else → AGPL.
+      - name: Verify license label matches build
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          BUILD_TAGS: ${{ matrix.build_tags }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILD_TAGS" = "ee" ]; then
+            EXPECTED="LicenseRef-Flexprice-Commercial"
+          else
+            EXPECTED="AGPL-3.0-only"
+          fi
+          # Extract the whole labels map as JSON and read the key with jq, so a
+          # missing label yields empty (a clean mismatch) instead of a Go-template
+          # nil-index crash.
+          ACTUAL=$(docker buildx imagetools inspect "$IMAGE_REF" \
+            --format '{{ json .Image.Config.Labels }}' \
+            | jq -r '."org.opencontainers.image.licenses" // ""')
+          echo "build_tags='$BUILD_TAGS' expected='$EXPECTED' actual='$ACTUAL'"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::license label '$ACTUAL' does not match build variant (expected '$EXPECTED')"
+            exit 1
+          fi
+
       # Scan by digest, not the mutable tag, so Trivy scans the exact image cosign signs.
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
