@@ -23,6 +23,32 @@ func TestApplyEEContributions_CommunityBuildUnchanged(t *testing.T) {
 	}
 }
 
+func TestEEContributorCount(t *testing.T) {
+	resetContributors(t)
+	if EEContributorCount() != 0 {
+		t.Fatalf("want 0, got %d", EEContributorCount())
+	}
+	RegisterEEContributor(func(_ eeservice.ServiceParams, _ types.TemporalTaskQueue) WorkerConfig {
+		return WorkerConfig{}
+	})
+	if EEContributorCount() != 1 {
+		t.Fatalf("want 1, got %d", EEContributorCount())
+	}
+}
+
+func TestApplyEEContributions_SkipsEmptyContribution(t *testing.T) {
+	resetContributors(t)
+	// A contributor that returns an empty WorkerConfig is skipped, not merged.
+	RegisterEEContributor(func(_ eeservice.ServiceParams, _ types.TemporalTaskQueue) WorkerConfig {
+		return WorkerConfig{}
+	})
+	in := WorkerConfig{TaskQueue: types.TemporalTaskQueueWorkflows}
+	out := applyEEContributions(in, eeservice.ServiceParams{}, types.TemporalTaskQueueWorkflows)
+	if len(out.Workflows) != 0 || len(out.Activities) != 0 {
+		t.Fatalf("empty contribution must add nothing, got %d/%d", len(out.Workflows), len(out.Activities))
+	}
+}
+
 func TestApplyEEContributions_AppendsForMatchingQueue(t *testing.T) {
 	resetContributors(t)
 	marker := func() {}

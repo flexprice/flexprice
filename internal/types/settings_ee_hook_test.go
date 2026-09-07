@@ -43,6 +43,27 @@ func TestRegisterEESetting_RejectsCoreKey(t *testing.T) {
 	RegisterEESetting(EESettingDefinition{Key: SettingKeyTenantConfig, DefaultValue: map[string]interface{}{}})
 }
 
+func TestRegisterEESetting_RejectsEmptyKey(t *testing.T) {
+	resetEESettings(t)
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on empty key")
+		}
+	}()
+	RegisterEESetting(EESettingDefinition{Key: "", DefaultValue: map[string]interface{}{}})
+}
+
+func TestRegisterEESetting_RejectsDuplicate(t *testing.T) {
+	resetEESettings(t)
+	RegisterEESetting(EESettingDefinition{Key: "ee_dup", DefaultValue: map[string]interface{}{}})
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on duplicate registration")
+		}
+	}()
+	RegisterEESetting(EESettingDefinition{Key: "ee_dup", DefaultValue: map[string]interface{}{}})
+}
+
 func TestSettingKeyValidate_AcceptsRegisteredEEKey(t *testing.T) {
 	resetEESettings(t)
 	key := SettingKey("ee_registered_key")
