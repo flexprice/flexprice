@@ -65,6 +65,13 @@ func (s *SettingKey) Validate() error {
 
 	allowedKeys := coreSettingKeys
 
+	// An enterprise build registers additional keys via RegisterEESetting; a
+	// community build's registry is empty, so this only widens acceptance under
+	// -tags ee.
+	if _, ok := LookupEESetting(*s); ok {
+		return nil
+	}
+
 	if !lo.Contains(allowedKeys, *s) {
 		return ierr.NewErrorf("invalid setting key: %s", *s).
 			WithHint("Please provide a valid setting key").

@@ -68,7 +68,10 @@ jobs:
 
       - name: Resolve image name
         id: image
-        run: echo "name=${{ env.IMAGE_NAME }}${{ matrix.image_suffix }}" >> "$GITHUB_OUTPUT"
+        env:
+          BASE_NAME: ${{ env.IMAGE_NAME }}
+          SUFFIX: ${{ matrix.image_suffix }}
+        run: echo "name=${BASE_NAME}${SUFFIX}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4

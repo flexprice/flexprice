@@ -42,3 +42,15 @@ func TestRegisterEESetting_RejectsCoreKey(t *testing.T) {
 	}()
 	RegisterEESetting(EESettingDefinition{Key: SettingKeyTenantConfig, DefaultValue: map[string]interface{}{}})
 }
+
+func TestSettingKeyValidate_AcceptsRegisteredEEKey(t *testing.T) {
+	resetEESettings(t)
+	key := SettingKey("ee_registered_key")
+	if err := key.Validate(); err == nil {
+		t.Fatal("unregistered EE key must fail Validate")
+	}
+	RegisterEESetting(EESettingDefinition{Key: key, DefaultValue: map[string]interface{}{}})
+	if err := key.Validate(); err != nil {
+		t.Fatalf("registered EE key must pass Validate, got %v", err)
+	}
+}

@@ -213,7 +213,7 @@ build-ee:
 	go build -tags ee ./cmd/server ./internal/... ./ee/...
 
 # Enterprise tests.
-test-ee:
+test-ee: install-typst
 	$(call run-go-test,-tags ee ./ee/... ./cmd/server/... ./internal/...)
 
 # Enterprise image. ee/ is in-repo and always in build context; the tag alone

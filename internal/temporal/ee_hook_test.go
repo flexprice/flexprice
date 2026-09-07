@@ -53,6 +53,18 @@ func TestApplyEEContributions_WrongQueuePanics(t *testing.T) {
 
 func TestBuildWorkerConfig_IncludesEEContribution(t *testing.T) {
 	resetContributors(t)
+
+	build := func() WorkerConfig {
+		return buildWorkerConfig(
+			types.TemporalTaskQueueWorkflows,
+			eeservice.ServiceParams{},
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		)
+	}
+
+	base := len(build().Workflows)
+
 	marker := func() {}
 	RegisterEEContributor(func(_ eeservice.ServiceParams, q types.TemporalTaskQueue) WorkerConfig {
 		if q != types.TemporalTaskQueueWorkflows {
@@ -60,13 +72,8 @@ func TestBuildWorkerConfig_IncludesEEContribution(t *testing.T) {
 		}
 		return WorkerConfig{Workflows: []interface{}{marker}}
 	})
-	cfg := buildWorkerConfig(
-		types.TemporalTaskQueueWorkflows,
-		eeservice.ServiceParams{},
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-	)
-	if len(cfg.Workflows) == 0 {
-		t.Fatal("buildWorkerConfig did not include any workflows; EE contribution missing")
+	cfg := build()
+	if len(cfg.Workflows) != base+1 {
+		t.Fatalf("EE contribution missing: want %d workflows, got %d", base+1, len(cfg.Workflows))
 	}
 }
