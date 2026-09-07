@@ -513,6 +513,17 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 				"original_err", err,
 			)
 		}
+
+		if params := req.Configuration.WalletTopupParams; params != nil && params.WalletTransactionID != "" {
+			walletSvc := NewWalletService(s.ServiceParams)
+			if failErr := walletSvc.FailPurchasedCreditTransaction(ctx, params.WalletTransactionID, err.Error()); failErr != nil {
+				s.Logger.Error(ctx, "failed to fail wallet top-up transaction after checkout session create failure",
+					"wallet_transaction_id", params.WalletTransactionID,
+					"error", failErr,
+					"original_err", err,
+				)
+			}
+		}
 		return nil, err
 	}
 

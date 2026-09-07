@@ -163,6 +163,7 @@ type CheckoutSessionFilter struct {
 	PaymentProviders   []CheckoutPaymentProvider    `json:"payment_providers,omitempty"`
 	CheckoutStatuses   []CheckoutStatus             `json:"checkout_statuses,omitempty"`
 	ExpiresAtLT        *time.Time                   `json:"expires_at_lt,omitempty"`
+	ExpiresAtGT        *time.Time                   `json:"expires_at_gt,omitempty"`
 	CheckoutInvoiceIDs []string                     `json:"checkout_invoice_ids,omitempty"`
 	CheckoutPaymentIDs []string                     `json:"checkout_payment_ids,omitempty"`
 	Configuration      *CheckoutConfigurationFilter `json:"configuration,omitempty"`

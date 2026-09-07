@@ -878,6 +878,9 @@ func (s *walletService) getAnyPendingCheckoutSession(ctx context.Context, custom
 			types.CheckoutStatusPending,
 		},
 		Configuration: &types.CheckoutConfigurationFilter{WalletID: walletID},
+		// A session past its expiry no longer blocks: the sweep that settles it runs
+		// asynchronously, and until it does the row would wedge the wallet forever.
+		ExpiresAtGT: lo.ToPtr(time.Now().UTC()),
 	}
 	pendingFilter.Limit = lo.ToPtr(1)
 
