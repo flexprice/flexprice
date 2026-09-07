@@ -39,28 +39,31 @@ const (
 	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
 )
 
+// coreSettingKeys is the closed set of keys the community build ships.
+var coreSettingKeys = []SettingKey{
+	SettingKeyInvoiceConfig,
+	SettingKeySubscriptionConfig,
+	SettingKeyInvoicePDFConfig,
+	SettingKeyTenantConfig,
+	SettingKeyCustomerOnboarding,
+	SettingKeyWalletBalanceAlertConfig,
+	SettingKeySubscriptionAlertConfig,
+	SettingKeyEntitlementAlertConfig,
+	SettingKeyPrepareProcessedEvents,
+	SettingKeyCustomAnalytics,
+	SettingKeyCustomerPortalConfig,
+	SettingKeyEventIngestionFilter,
+	SettingKeyBonusCreditsTopupConfig,
+	SettingKeyPaymentMandateLimits,
+	SettingKeyDraftInvoiceRecomputeConfig,
+	SettingKeySAMLConfig,
+	SettingKeyWalletTopupConfig,
+	SettingKeyCustomCurrencyConfig,
+}
+
 func (s *SettingKey) Validate() error {
 
-	allowedKeys := []SettingKey{
-		SettingKeyInvoiceConfig,
-		SettingKeySubscriptionConfig,
-		SettingKeyInvoicePDFConfig,
-		SettingKeyTenantConfig,
-		SettingKeyCustomerOnboarding,
-		SettingKeyWalletBalanceAlertConfig,
-		SettingKeySubscriptionAlertConfig,
-		SettingKeyEntitlementAlertConfig,
-		SettingKeyPrepareProcessedEvents,
-		SettingKeyCustomAnalytics,
-		SettingKeyCustomerPortalConfig,
-		SettingKeyEventIngestionFilter,
-		SettingKeyBonusCreditsTopupConfig,
-		SettingKeyPaymentMandateLimits,
-		SettingKeyDraftInvoiceRecomputeConfig,
-		SettingKeySAMLConfig,
-		SettingKeyWalletTopupConfig,
-		SettingKeyCustomCurrencyConfig,
-	}
+	allowedKeys := coreSettingKeys
 
 	if !lo.Contains(allowedKeys, *s) {
 		return ierr.NewErrorf("invalid setting key: %s", *s).
