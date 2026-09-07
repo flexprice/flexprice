@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seed tooling, non-prod
 	"os"
 	"slices"
 	"strconv"
@@ -289,8 +289,6 @@ func SetupDummyBillingCustomer() error {
 	if p.EnvironmentID != "" && p.EnvironmentID != environmentID {
 		return fmt.Errorf("plan %s is not in environment %s", planID, environmentID)
 	}
-
-	rand.Seed(time.Now().UnixNano())
 
 	sendInvoice := types.CollectionMethodSendInvoice
 	subReqBase := dto.CreateSubscriptionRequest{
