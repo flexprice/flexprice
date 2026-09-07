@@ -768,12 +768,6 @@ func (s *InMemoryEventStore) FindUnprocessedEvents(ctx context.Context, params *
 		Mark(ierr.ErrSystem)
 }
 
-func (s *InMemoryEventStore) FindUnprocessedEventsFromFeatureUsage(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
-	return nil, ierr.NewError("not implemented").
-		WithHint("not implemented").
-		Mark(ierr.ErrSystem)
-}
-
 // GetTotalEventCount returns the total count of events in the given time range with optional windowed time-series data
 func (s *InMemoryEventStore) GetTotalEventCount(ctx context.Context, startTime, endTime time.Time, windowSize types.WindowSize) (*events.EventCountResult, error) {
 	s.mu.RLock()
