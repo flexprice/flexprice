@@ -22,9 +22,12 @@ COPY . .
 ARG TARGETARCH
 ENV CGO_ENABLED=0 \
     GOOS=linux
+# Enterprise build tag. Empty by default → community (flexprice-oss) image.
+# Pass ee to include enterprise features (ee/ is in-repo, always in context).
+ARG BUILD_TAGS=""
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
+    GOARCH=$TARGETARCH go build -tags "$BUILD_TAGS" -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate
 
 # dbmate stage
