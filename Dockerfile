@@ -59,6 +59,7 @@ FROM ghcr.io/typst/typst:v0.13.1 AS typst
 
 # Final stage
 FROM alpine:3.20
+LABEL org.opencontainers.image.source="https://github.com/flexprice/flexprice"
 RUN apk --no-cache add ca-certificates tzdata && \
     addgroup -S app && adduser -S -G app app
 
