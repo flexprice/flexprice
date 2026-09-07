@@ -28,9 +28,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write
+  # id-token is needed by nearly every job here (AWS OIDC on migrate + all
+  # deploys, keyless cosign on build), so it stays workflow-level.
+  id-token: write # zizmor: ignore[excessive-permissions]
   contents: read
-  packages: write
 
 env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
@@ -46,6 +47,10 @@ jobs:
     name: Build & Push Docker Image
     runs-on: self-hosted
     if: ${{ github.event.inputs.dry_run != 'true' }}
+    permissions:
+      contents: read
+      id-token: write # keyless cosign
+      packages: write # GHCR push
     outputs:
       image: ${{ steps.set-image.outputs.image }}
 
@@ -59,6 +64,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
+          cache-binary: false
 
       - name: Login to GitHub Container Registry
         # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
@@ -438,6 +447,9 @@ jobs:
           (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: gcp-prod-approval
+    permissions:
+      contents: read
+      packages: write # GHCR imagetools push
     steps:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -448,6 +460,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        with:
+          # Skip GHA caching of Buildx binary.
+          # No layer cache configured; builds from source.
+          cache-binary: false
 
       - name: Retag :<sha> -> :main (manifest copy, no rebuild)
         env:
