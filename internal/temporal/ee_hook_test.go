@@ -50,3 +50,23 @@ func TestApplyEEContributions_WrongQueuePanics(t *testing.T) {
 	}()
 	applyEEContributions(WorkerConfig{TaskQueue: types.TemporalTaskQueueWorkflows}, eeservice.ServiceParams{}, types.TemporalTaskQueueWorkflows)
 }
+
+func TestBuildWorkerConfig_IncludesEEContribution(t *testing.T) {
+	resetContributors(t)
+	marker := func() {}
+	RegisterEEContributor(func(_ eeservice.ServiceParams, q types.TemporalTaskQueue) WorkerConfig {
+		if q != types.TemporalTaskQueueWorkflows {
+			return WorkerConfig{}
+		}
+		return WorkerConfig{Workflows: []interface{}{marker}}
+	})
+	cfg := buildWorkerConfig(
+		types.TemporalTaskQueueWorkflows,
+		eeservice.ServiceParams{},
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	if len(cfg.Workflows) == 0 {
+		t.Fatal("buildWorkerConfig did not include any workflows; EE contribution missing")
+	}
+}
