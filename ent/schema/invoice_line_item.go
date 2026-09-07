@@ -208,6 +208,12 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Nillable().
 			Immutable().
 			Comment("ID of the line item this one replaced, if it was created by editing an existing line item"),
+
+		field.JSON("custom_currency", &types.CustomCurrencyLineItem{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 

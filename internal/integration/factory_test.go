@@ -653,6 +653,77 @@ func TestFactory_GetStorageProvider_RepositoryFailure_PreservesOriginalErrorKind
 	require.ErrorIs(t, err, dbErr)
 }
 
+// GetStorageProviderExport must resolve a BYOB connection's DESTINATION from the
+// per-run job_config passed in, not the connection's sync_config row. The seeded
+// connection records bucket "test-bucket"/us-east-1; the export run targets a
+// different bucket/region, which must win.
+func TestFactory_GetStorageProviderExport_BYOB_UsesJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+
+	conn := seedS3Connection(ctx, t, connRepo, encSvc) // sync_config bucket=test-bucket region=us-east-1
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, "run-bucket", "ap-south-1", "AES256", false)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+	require.Contains(t, got.FileURL("k.csv"), "run-bucket",
+		"BYOB export must write to the job_config bucket, not the connection sync_config bucket")
+	require.NotContains(t, got.FileURL("k.csv"), "test-bucket")
+}
+
+// A BYOB export whose job_config carries an empty bucket or region must fail loud
+// at construction rather than reaching the S3 SDK as "A region must be set".
+func TestFactory_GetStorageProviderExport_BYOB_EmptyDestination_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+
+	conn := seedS3Connection(ctx, t, connRepo, encSvc)
+
+	_, err := factory.GetStorageProviderExport(ctx, conn.ID, "run-bucket", "", "AES256", false)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+// Managed exports must ignore the per-run job_config destination and force the
+// platform/connection bucket — the run cannot redirect a managed export elsewhere.
+func TestFactory_GetStorageProviderExport_Managed_IgnoresJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "platform-config-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo) // no recorded bucket
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, "attacker-bucket", "eu-west-1", "AES256", false)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Contains(t, got.FileURL("k.csv"), "platform-config-bucket",
+		"managed export must ignore job_config destination and use platform config")
+	require.NotContains(t, got.FileURL("k.csv"), "attacker-bucket")
+}
+
+func TestFactory_GetStorageProviderExport_MissingConnectionID_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	factory, _ := buildStorageTestFactory(testutil.NewInMemoryConnectionStore())
+
+	_, err := factory.GetStorageProviderExport(ctx, "", "b", "r", "AES256", false)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
 func TestFactory_GetRefundProvider(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	factory, _ := buildStorageTestFactory(testutil.NewInMemoryConnectionStore())

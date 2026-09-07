@@ -182,7 +182,14 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 			Mark(ierr.ErrValidation)
 	}
 
-	store, err := s.storageResolver.ForConnection(ctx, request.ConnectionID)
+	store, err := s.storageResolver.ForConnectionExport(
+		ctx,
+		request.ConnectionID,
+		request.JobConfig.Bucket,
+		request.JobConfig.Region,
+		string(request.JobConfig.Encryption),
+		request.JobConfig.Compression == types.S3CompressionTypeGzip,
+	)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get storage provider from factory").

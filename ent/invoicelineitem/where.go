@@ -2322,6 +2322,16 @@ func ParentLineItemIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldParentLineItemID, v))
 }
 
+// CustomCurrencyIsNil applies the IsNil predicate on the "custom_currency" field.
+func CustomCurrencyIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldCustomCurrency))
+}
+
+// CustomCurrencyNotNil applies the NotNil predicate on the "custom_currency" field.
+func CustomCurrencyNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCustomCurrency))
+}
+
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.
 func HasInvoice() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(func(s *sql.Selector) {

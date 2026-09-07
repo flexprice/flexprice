@@ -77,6 +77,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			PeriodEnd:                   item.PeriodEnd,
 			Metadata:                    item.Metadata,
 			CommitmentInfo:              item.CommitmentInfo,
+			CustomCurrency:              item.CustomCurrency,
 			PrepaidCreditsApplied:       item.PrepaidCreditsApplied,
 			LineItemDiscount:            item.LineItemDiscount,
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
@@ -99,6 +100,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Currency:                   inv.Currency,
 		AmountDue:                  inv.AmountDue,
 		AmountPaid:                 inv.AmountPaid,
+		CustomCurrency:             inv.CustomCurrency,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -271,7 +273,16 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
 	}
-	return s.InMemoryStore.Update(ctx, inv.ID, copyInvoice(inv))
+
+	updated := copyInvoice(inv)
+	// The ent repository never clears custom_currency, so a caller that did not load it
+	// leaves the stored value in place. Match that here or the double hides the bug.
+	if updated.CustomCurrency == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.CustomCurrency = existing.CustomCurrency
+		}
+	}
+	return s.InMemoryStore.Update(ctx, inv.ID, updated)
 }
 
 // Delete marks the invoice and its line items deleted, matching the ent repository, which soft

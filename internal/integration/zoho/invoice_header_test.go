@@ -81,9 +81,11 @@ func TestServicePeriodCustomFields(t *testing.T) {
 	start := tPtr("2026-04-01T00:00:00Z")
 	end := tPtr("2026-05-01T00:00:00Z")
 	configured := &types.InvoiceSyncSettings{
-		ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
-			StartFieldID: "4069923000000000001",
-			EndFieldID:   "4069923000000000002",
+		ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
+				StartFieldID: "4069923000000000001",
+				EndFieldID:   "4069923000000000002",
+			},
 		},
 	}
 
@@ -105,7 +107,9 @@ func TestServicePeriodCustomFields(t *testing.T) {
 
 	t.Run("nil when only one field ID is set", func(t *testing.T) {
 		half := &types.InvoiceSyncSettings{
-			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{StartFieldID: "cf_service_period_start"},
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: &types.ServicePeriodCustomFields{StartFieldID: "cf_service_period_start"},
+			},
 		}
 		assert.Nil(t, servicePeriodCustomFields(half, start, end),
 			"a start date with no end date would render a broken header")
@@ -171,9 +175,11 @@ func TestSyncInvoiceSendsGSTHeaderFields(t *testing.T) {
 
 	syncConfig := &types.SyncConfig{
 		InvoiceSyncSettings: &types.InvoiceSyncSettings{
-			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
-				StartFieldID: "cf_start",
-				EndFieldID:   "cf_end",
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
+					StartFieldID: "cf_start",
+					EndFieldID:   "cf_end",
+				},
 			},
 		},
 	}
@@ -271,9 +277,11 @@ func TestCustomFieldSerialisesOnlyOneKey(t *testing.T) {
 
 func TestServicePeriodCustomFieldsUsesAPINames(t *testing.T) {
 	settings := &types.InvoiceSyncSettings{
-		ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
-			StartFieldID: "cf_service_period_start",
-			EndFieldID:   "cf_service_period_end",
+		ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
+				StartFieldID: "cf_service_period_start",
+				EndFieldID:   "cf_service_period_end",
+			},
 		},
 	}
 	got := servicePeriodCustomFields(settings, tPtr("2026-04-01T00:00:00Z"), tPtr("2026-05-01T00:00:00Z"))
@@ -287,10 +295,12 @@ func TestServicePeriodCustomFieldsUsesAPINames(t *testing.T) {
 
 func TestMetadataCustomFields(t *testing.T) {
 	settings := &types.InvoiceSyncSettings{
-		MetadataCustomFields: []types.MetadataCustomField{
-			{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
-			{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "4069923000000000009"},
-			{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
+		ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+			MetadataCustomFields: []types.MetadataCustomField{
+				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
+				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "4069923000000000009"},
+				{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
+			},
 		},
 	}
 	customerMeta := map[string]string{"hubspot_company_id": "164213581519", "brand_name": "Mankind Pharma"}
@@ -323,6 +333,26 @@ func TestMetadataCustomFields(t *testing.T) {
 	})
 }
 
+func TestGlobalCustomFields(t *testing.T) {
+	settings := &types.InvoiceSyncSettings{
+		ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+			GlobalCustomFields: []types.GlobalCustomField{
+				{Field: "cf_source", Value: "FlexPrice"},
+				{Field: "4069923000000000009", Value: "IN"},
+				{Field: "cf_blank", Value: "   "},
+			},
+		},
+	}
+
+	assert.Equal(t, []CustomField{
+		{APIName: "cf_source", Value: "FlexPrice"},
+		{CustomFieldID: "4069923000000000009", Value: "IN"},
+	}, globalCustomFields(settings))
+
+	assert.Nil(t, globalCustomFields(nil))
+	assert.Nil(t, globalCustomFields(&types.InvoiceSyncSettings{}))
+}
+
 func TestSyncInvoiceSendsMetadataCustomFieldsAlongsideServicePeriod(t *testing.T) {
 	inv := &invoice.Invoice{
 		ID:          "inv_3",
@@ -336,15 +366,17 @@ func TestSyncInvoiceSendsMetadataCustomFieldsAlongsideServicePeriod(t *testing.T
 
 	client := &fakeSyncZohoClient{syncConfig: &types.SyncConfig{
 		InvoiceSyncSettings: &types.InvoiceSyncSettings{
-			ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
-				StartFieldID: "cf_start",
-				EndFieldID:   "cf_end",
-			},
-			MetadataCustomFields: []types.MetadataCustomField{
-				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
-				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "cf_brand_name"},
-				{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
-				{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "absent", Field: "cf_absent"},
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: &types.ServicePeriodCustomFields{
+					StartFieldID: "cf_start",
+					EndFieldID:   "cf_end",
+				},
+				MetadataCustomFields: []types.MetadataCustomField{
+					{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "hubspot_company_id", Field: "cf_hubspot_id"},
+					{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "brand_name", Field: "cf_brand_name"},
+					{Source: types.MetadataCustomFieldSourceInvoice, MetadataKey: "po_number", Field: "cf_po"},
+					{Source: types.MetadataCustomFieldSourceCustomer, MetadataKey: "absent", Field: "cf_absent"},
+				},
 			},
 		},
 	}}

@@ -66,6 +66,8 @@ type Invoice struct {
 	TotalDiscount *decimal.Decimal `json:"total_discount,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
+	// CustomCurrency holds the value of the "custom_currency" field.
+	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -150,7 +152,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoice.FieldMetadata:
+		case invoice.FieldCustomCurrency, invoice.FieldMetadata:
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
@@ -324,6 +326,14 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field total", values[j])
 			} else if value != nil {
 				i.Total = *value
+			}
+		case invoice.FieldCustomCurrency:
+			if value, ok := values[j].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_currency", values[j])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &i.CustomCurrency); err != nil {
+					return fmt.Errorf("unmarshal field custom_currency: %w", err)
+				}
 			}
 		case invoice.FieldDescription:
 			if value, ok := values[j].(*sql.NullString); !ok {
@@ -591,6 +601,9 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total=")
 	builder.WriteString(fmt.Sprintf("%v", i.Total))
+	builder.WriteString(", ")
+	builder.WriteString("custom_currency=")
+	builder.WriteString(fmt.Sprintf("%v", i.CustomCurrency))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(i.Description)
