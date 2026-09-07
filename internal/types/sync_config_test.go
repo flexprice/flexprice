@@ -43,10 +43,12 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 
 	t.Run("distinct fields", func(t *testing.T) {
 		s := &InvoiceSyncSettings{
-			ServicePeriodCustomFields: servicePeriod,
-			MetadataCustomFields: []MetadataCustomField{
-				{MetadataCustomFieldSourceCustomer, "hubspot_company_id", "cf_hubspot_id"},
-				{MetadataCustomFieldSourceCustomer, "brand_name", "cf_brand_name"},
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: servicePeriod,
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceCustomer, "hubspot_company_id", "cf_hubspot_id"},
+					{MetadataCustomFieldSourceCustomer, "brand_name", "cf_brand_name"},
+				},
 			},
 		}
 		assert.NoError(t, s.ValidateMetadataCustomFields())
@@ -54,9 +56,11 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 
 	t.Run("duplicate target field", func(t *testing.T) {
 		s := &InvoiceSyncSettings{
-			MetadataCustomFields: []MetadataCustomField{
-				{MetadataCustomFieldSourceCustomer, "brand_name", "cf_brand"},
-				{MetadataCustomFieldSourceInvoice, "brand", "cf_brand"},
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceCustomer, "brand_name", "cf_brand"},
+					{MetadataCustomFieldSourceInvoice, "brand", "cf_brand"},
+				},
 			},
 		}
 		assert.Error(t, s.ValidateMetadataCustomFields())
@@ -64,9 +68,11 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 
 	t.Run("collides with service period field", func(t *testing.T) {
 		s := &InvoiceSyncSettings{
-			ServicePeriodCustomFields: servicePeriod,
-			MetadataCustomFields: []MetadataCustomField{
-				{MetadataCustomFieldSourceCustomer, "brand_name", "cf_end"},
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				ServicePeriodCustomFields: servicePeriod,
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceCustomer, "brand_name", "cf_end"},
+				},
 			},
 		}
 		assert.Error(t, s.ValidateMetadataCustomFields())
@@ -81,8 +87,16 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 				fmt.Sprintf("cf_%d", i),
 			})
 		}
-		assert.Error(t, (&InvoiceSyncSettings{MetadataCustomFields: many}).ValidateMetadataCustomFields())
-		assert.NoError(t, (&InvoiceSyncSettings{MetadataCustomFields: many[:MaxMetadataCustomFields]}).ValidateMetadataCustomFields())
+		assert.Error(t, (&InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				MetadataCustomFields: many,
+			},
+		}).ValidateMetadataCustomFields())
+		assert.NoError(t, (&InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				MetadataCustomFields: many[:MaxMetadataCustomFields],
+			},
+		}).ValidateMetadataCustomFields())
 	})
 
 	t.Run("nil and empty", func(t *testing.T) {
@@ -95,8 +109,10 @@ func TestValidateMetadataCustomFields(t *testing.T) {
 func TestSyncConfigValidateRejectsBadMetadataCustomFields(t *testing.T) {
 	cfg := &SyncConfig{
 		InvoiceSyncSettings: &InvoiceSyncSettings{
-			MetadataCustomFields: []MetadataCustomField{
-				{MetadataCustomFieldSourceCustomer, "brand_name", ""},
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				MetadataCustomFields: []MetadataCustomField{
+					{MetadataCustomFieldSourceCustomer, "brand_name", ""},
+				},
 			},
 		},
 	}

@@ -57,32 +57,96 @@ type EntitySyncConfig struct {
 	Outbound bool `json:"outbound"` // Outbound from FlexPrice to external provider
 }
 
-// InvoiceSyncSettings controls how invoice line items are transformed during outbound sync.
+// InvoiceSyncSettings controls how invoices are transformed during outbound sync.
 type InvoiceSyncSettings struct {
 	// NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
 	// For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
 	// qty=3, rate=$100. Empty string means no normalization (keep original).
 	NormalizeFixedTo BillingPeriod `json:"normalize_fixed_to,omitempty"`
 
-	// ServicePeriodCustomFields names the Zoho custom fields that receive the
-	// invoice's service start and end dates.
+	// Embedded rather than nested so the provider-specific settings stay inline in the
+	// same JSON object they have always been stored in.
+	ZohoInvoiceSyncSettings
+}
+
+// ZohoInvoiceSyncSettings holds the outbound invoice settings that map onto Zoho Books API
+// concepts rather than to anything generic.
+type ZohoInvoiceSyncSettings struct {
+	// Zoho custom fields that receive the invoice's service start and end dates.
 	ServicePeriodCustomFields *ServicePeriodCustomFields `json:"service_period_custom_fields,omitempty"`
 
-	// MetadataCustomFields copies metadata values onto Zoho invoice custom fields
-	// verbatim.
+	// Copies metadata values onto Zoho invoice custom fields verbatim.
 	MetadataCustomFields []MetadataCustomField `json:"metadata_custom_fields,omitempty"`
 
-	// SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval
-	// flow before recording payment. Zoho rejects payments on draft invoices, and merchants
-	// configure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for
-	// that rule to fire, then pay.
+	// Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval
+	// rule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.
 	SubmitForApproval bool `json:"submit_for_approval,omitempty"`
+
+	// Zoho payment modes are merchant-editable free strings with no id, so this is passed
+	// through verbatim. Empty means DefaultZohoPaymentMode.
+	PaymentMode string `json:"payment_mode,omitempty"`
+
+	// Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
+	// Undeposited Funds default.a
+	DepositToAccountID string `json:"deposit_to_account_id,omitempty"`
 }
 
 // IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the
 // merchant's Zoho Books approval flow before payment is recorded against them.
 func (s *InvoiceSyncSettings) IsSubmitForApprovalEnabled() bool {
 	return s != nil && s.SubmitForApproval
+}
+
+func (s *InvoiceSyncSettings) ZohoPaymentMode() string {
+	if s == nil {
+		return DefaultZohoPaymentMode
+	}
+	if mode := strings.TrimSpace(s.PaymentMode); mode != "" {
+		return mode
+	}
+	return DefaultZohoPaymentMode
+}
+
+func (s *InvoiceSyncSettings) ZohoDepositToAccountID() string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.DepositToAccountID)
+}
+
+// The payment mode is deliberately not checked against Zoho's built-in list: merchants edit
+// that list and add their own modes.
+func (s *InvoiceSyncSettings) ValidateZohoPaymentSettings() error {
+	if s == nil {
+		return nil
+	}
+
+	if mode := strings.TrimSpace(s.PaymentMode); len(mode) > maxZohoPaymentModeLen {
+		return ierr.NewError("zoho payment mode is too long").
+			WithHint(fmt.Sprintf("payment_mode must be at most %d characters", maxZohoPaymentModeLen)).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Zoho entity ids are numeric, so rejecting anything else catches the likely
+	// misconfiguration - pasting the account name - at save time instead of during mark-paid.
+	accountID := strings.TrimSpace(s.DepositToAccountID)
+	if accountID == "" {
+		return nil
+	}
+	if len(accountID) > maxZohoAccountIDLen {
+		return ierr.NewError("zoho deposit to account id is too long").
+			WithHint(fmt.Sprintf("deposit_to_account_id must be at most %d characters", maxZohoAccountIDLen)).
+			Mark(ierr.ErrValidation)
+	}
+	for _, r := range accountID {
+		if r < '0' || r > '9' {
+			return ierr.NewError("invalid zoho deposit to account id").
+				WithHint("deposit_to_account_id must be the numeric Zoho chart-of-accounts id, not the account name").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 type MetadataCustomFieldSource string
@@ -92,6 +156,11 @@ const (
 	// custom fields per module than this.
 	MaxMetadataCustomFields = 50
 	maxCustomFieldRefLen    = 255
+
+	// Zoho's built-in catch-all payment mode.
+	DefaultZohoPaymentMode = "others"
+	maxZohoPaymentModeLen  = 100
+	maxZohoAccountIDLen    = 30
 )
 
 const (
@@ -305,6 +374,9 @@ func (s *SyncConfig) Validate() error {
 			return err
 		}
 		if err := s.InvoiceSyncSettings.ValidateMetadataCustomFields(); err != nil {
+			return err
+		}
+		if err := s.InvoiceSyncSettings.ValidateZohoPaymentSettings(); err != nil {
 			return err
 		}
 	}
