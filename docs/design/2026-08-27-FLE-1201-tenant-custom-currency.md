@@ -102,7 +102,16 @@ The example above is internally consistent: `usd: 0.10` and `inr: 8.50` together
 
 A custom currency code is 3 characters, so it passes every existing currency validator unchanged — none of them check that a code is a real world currency, only its length (`internal/types/currency.go:93`, `dto/price.go:19`, `dto/subscription.go:531`).
 
-The one new rule, `CustomCurrencyConfig.EnforceCurrency`: when creating a Price, Subscription, Wallet, Addon or Coupon, the currency must be **either a configured custom code or any fiat currency the mappings name**. Tenants with no config are unaffected. The error reports the two sets separately — supported custom currencies, supported fiat currencies.
+The one new rule, `CustomCurrencyConfig.EnforceCurrency`, runs when creating a Price, Subscription, Wallet, Addon or Coupon:
+
+| Environment | Accepted |
+| --- | --- |
+| Custom currencies configured | a configured custom code, or any fiat currency the mappings name |
+| None configured | any code in `CURRENCY_CONFIG` (`internal/types/currency.go:11`) |
+
+The second row is not a formality. Length is the only property every other validator checks, so without it a code configured in one environment is accepted in every other environment of the same tenant — a fresh environment would take `mac` on a price and produce a plan denominated in a currency it cannot convert. Settings are already scoped by tenant **and** environment at every layer (`isTenantLevelSetting` excludes this key, `GetByKey` filters `environment_id`, and the cache key carries it), so the gap was the absent check, not a leak across environments.
+
+Both branches report what is supported: custom currencies and fiat separately when configured, the fiat registry otherwise.
 
 `Validate` requires every custom currency to define factors for the same set of fiat currencies. That is what makes accepting any mapped fiat safe: an entity created in `inr` is reachable from every custom currency, not just the one that happened to list it.
 
@@ -116,7 +125,27 @@ This is the core of the design.
 
 > **The `custom_currency` object is the denomination. The fiat columns are a projection of it.**
 
-Every monetary computation — subtotal, prepaid credits, discounts, tax — happens in custom-currency space, reading and writing `custom_currency.*`. The fiat columns (`subtotal`, `total`, `amount_due`, …) are then produced by one multiplication and stored so that everything downstream — payments, gateways, vendor sync, PDF, analytics — sees ordinary fiat and needs no knowledge of this feature.
+Every monetary computation — subtotal, prepaid credits, discounts — happens in custom-currency space. The fiat columns (`subtotal`, `total`, `amount_due`, …) are a projection of it, produced by one multiplication and stored so that everything downstream — payments, gateways, vendor sync, PDF, analytics — sees ordinary fiat and needs no knowledge of this feature.
+
+That computation does not read and write `custom_currency.*` directly. Each write path restores the denomination onto the ordinary amount fields, runs unchanged arithmetic against them, and captures and projects once at the end:
+
+```
+restore    denomination -> amount fields    // now custom currency
+...        plain arithmetic, no currency branches
+capture    amount fields -> denomination
+project    denomination -> amount fields    // now fiat, converted once
+```
+
+Conversion therefore happens exactly once per write. Everything between restore and capture is currency-agnostic, so the existing billing logic needs no custom-currency branch. Capture is all-or-nothing and is only valid while the amount fields still hold custom currency — that is what forces the ordering above rather than targeted per-field writes.
+
+| Method | Direction |
+| --- | --- |
+| `RestoreFromDenomination` | `custom_currency.*` → amount fields |
+| `CaptureCustomCurrencyDenomination` | amount fields → `custom_currency.*` |
+| `ProjectCustomCurrency` | `custom_currency.*` → amount fields, × rate |
+| `MirrorTaxIntoDenomination` | fiat tax → `custom_currency.*`, ÷ rate |
+
+On an invoice with no `custom_currency` all four early-return, so unconfigured tenants run the original code path untouched.
 
 The projection is refreshed twice:
 
@@ -125,7 +154,7 @@ The projection is refreshed twice:
 | Compute | live factor from config | Draft is self-describing and correctly denominated |
 | Finalization | frozen into `custom_currency.rate` | Sealed; later factor edits cannot restate it |
 
-Line items are re-persisted at finalization only when the frozen rate differs from the one compute used — otherwise the projection reproduces identical values and the writes are wasted.
+Line items are re-persisted at finalization unconditionally, straight after projection — the frozen rate can differ from the live one compute used, and the loop is not worth guarding.
 
 Nothing in the custom pipeline ever reads a fiat column, with one exception: **tax**. The tax service is percentage-only and works on the fiat columns, and its `tax_applied` records go to external integrations, so tax is computed in fiat and divided back into the denomination (`MirrorTaxIntoDenomination`). That keeps the denomination's `amount_due` post-tax, matching the invoice's.
 
@@ -364,7 +393,7 @@ The field is dropped on write unless every hand-enumerated field list is updated
 `performFinalizeInvoiceActions`.
 
 - `credit_adjustment.go:218` — pass the **custom code** to `GetWalletsForCreditAdjustment` when `custom_currency != nil`, so a MAC wallet matches and a USD one does not. This is the one genuine bug fix in the plan: today it passes `inv.Currency`, so a USD wallet erases custom-magnitude line items 1:1, off by the whole rate.
-- Run the total math in custom space off `custom_currency.*` (§2.5).
+- Restore the denomination onto the amount fields, run the total math against them, then capture and project (§2.3).
 - Freeze the rate; fail the finalize if no factor exists for `inv.Currency`.
 - Project every fiat column once.
 - Move the zero-total payment shortcut to after projection.
@@ -373,7 +402,7 @@ The field is dropped on write unless every hand-enumerated field list is updated
 
 ### Step 7 — read paths
 
-- `GetUnpaidInvoicesToBePaid` (`invoice.go:2525`) — when the wallet currency is a custom code, match on `custom_currency.code` and use `amount_remaining / rate`. Both ongoing-balance paths pick this up from the one change.
+- `GetUnpaidInvoicesToBePaid` (`invoice.go:2525`) — when the wallet currency is a custom code, match on `custom_currency.code` and use `amount_remaining / rate`. Both ongoing-balance paths pick this up from the one change. Restore is the wrong tool here: it is a read path, the invoices it walks are returned to the caller, and `amount_remaining` / `amount_paid` are not in the denomination anyway (§2.5), so the values are derived rather than restored. The usage/fixed split below it still needs the same treatment — open question 7.
 - `recalculateInvoiceTotals` (`invoice.go:4375`) — custom-aware branch. Read-time only, sole caller at `:4351` behind `group_by` + `force_runtime_recalculation`, so it never persists — but without this it displays a subtotal a few cents off the stored one.
 - `invoice.go:121` — `ValidateCoupon(ctx, *coupon, nil)` passes a nil subscription, so the `subscription != nil` guard at `coupon_validation.go:111` short-circuits and the currency check is skipped. Close it for invoices carrying a `custom_currency`.
 
@@ -441,3 +470,4 @@ Configured: `custom_currencies` = `mac` (factor `usd: 0.10`); `default_fiat_curr
 4. **Removing a custom currency is deferred, not solved.** Needs a cross-rate through a fiat pivot, wallet balance conversion as an audited denomination movement, and new Price rows with line items repointed rather than mutated. Its own design, arriving as an explicit delete mechanism.
 5. **Customer-level fiat currency.** Today every invoice uses the tenant's `default_fiat_currency`. A customer-level override is the natural next step and the schema already supports it — `custom_currency` carries its own rate per invoice, so nothing here assumes one global fiat. No work now; noted so it stays cheap.
 6. **Interaction with the existing `PriceUnit` entity.** `PriceUnit.base_currency` pegs a price unit to a fiat currency. If a PriceUnit-priced Price can land in a currency this config does not recognise, it bypasses §2.2 enforcement. Codes are 3 characters either way, so allowing it needs no schema change — only a resolution order at PriceUnit creation.
+7. **`GetUnpaidInvoicesToBePaid` mixes units in one response.** The totals honour the wallet currency, but the usage/fixed charge split reads `item.Denomination()` unconditionally, so a *fiat* wallet holding a custom-currency invoice gets `TotalUnpaidAmount` in fiat alongside `TotalUnpaidUsageCharges` and `TotalUnpaidFixedCharges` in custom currency — off by the whole rate and not reconcilable against each other. The split needs the same `inCustomCurrency` branch the totals already use. Affects `GetWalletBalance` for `PRE_PAID` wallets.

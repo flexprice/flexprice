@@ -160,12 +160,19 @@ func (c *CustomCurrencyConfig) Validate() error {
 }
 
 // EnforceCurrency restricts a price, subscription, wallet or addon to a configured
-// custom currency or the default fiat. Unconfigured tenants are unaffected.
+// custom currency or the default fiat. With no config the currency must be a known
+// fiat, since every other validator only checks that a code is 3 characters long.
 func (c CustomCurrencyConfig) EnforceCurrency(currency string) error {
-	if len(c.CustomCurrencies) == 0 {
-		return nil
-	}
 	currency = strings.ToLower(currency)
+
+	if len(c.CustomCurrencies) == 0 {
+		if _, ok := CURRENCY_CONFIG[currency]; ok {
+			return nil
+		}
+		return ierr.NewErrorf("currency %q is not supported", currency).
+			WithHint("Please provide a supported currency code").
+			Mark(ierr.ErrValidation)
+	}
 
 	customCodes := lo.Keys(c.CustomCurrencies)
 	fiatCodes := []string{c.DefaultFiatCurrency}
