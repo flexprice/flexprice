@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -36,6 +37,7 @@ type InvoiceService struct {
 	invoiceRepo  invoice.Repository
 	priceRepo    price.Repository
 	mappingRepo  entityintegrationmapping.Repository
+	paymentRepo  payment.Repository
 	logger       *logger.Logger
 }
 
@@ -48,6 +50,7 @@ func NewInvoiceService(
 	invoiceRepo invoice.Repository,
 	priceRepo price.Repository,
 	mappingRepo entityintegrationmapping.Repository,
+	paymentRepo payment.Repository,
 	logger *logger.Logger,
 ) ZohoInvoiceService {
 	return &InvoiceService{
@@ -59,6 +62,7 @@ func NewInvoiceService(
 		invoiceRepo:  invoiceRepo,
 		priceRepo:    priceRepo,
 		mappingRepo:  mappingRepo,
+		paymentRepo:  paymentRepo,
 		logger:       logger,
 	}
 }
@@ -146,10 +150,11 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	}
 
 	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
-	reqPayload.CustomFields = append(
-		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd),
-		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...,
-	)
+	// Ordered least to most specific: Zoho keeps the last write to a given field.
+	reqPayload.CustomFields = append(globalCustomFields(settings),
+		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)...)
+	reqPayload.CustomFields = append(reqPayload.CustomFields,
+		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -278,6 +283,12 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		return nil
 	}
 
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return err
+	}
+	referenceNumber := s.settlementReferenceNumber(ctx, flexpriceInvoiceID)
+
 	// Zoho's total is tax-inclusive while Flexprice's is tax-exclusive, so log both sides of the
 	// amount being settled to explain any mismatch between the two systems' figures.
 	s.logger.Info(ctx, "recording Zoho customer payment for synced invoice",
@@ -285,17 +296,22 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		"zoho_invoice_id", zohoInvoiceID,
 		"zoho_customer_id", zohoInv.CustomerID,
 		"zoho_balance", zohoInv.Balance.String(),
+		"payment_mode", settings.ZohoPaymentMode(),
+		"deposit_to_account_id", settings.ZohoDepositToAccountID(),
+		"reference_number", referenceNumber,
 	)
 
-	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(
-		zohoInv.CustomerID,
-		"others",
-		zohoInv.Balance,
-		time.Now().UTC().Format("2006-01-02"),
-		[]CustomerPaymentInvoiceApply{
+	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(CustomerPaymentCreateParams{
+		CustomerID:  zohoInv.CustomerID,
+		PaymentMode: settings.ZohoPaymentMode(),
+		Amount:      zohoInv.Balance,
+		Date:        time.Now().UTC().Format("2006-01-02"),
+		Invoices: []CustomerPaymentInvoiceApply{
 			NewCustomerPaymentInvoiceApply(zohoInvoiceID, zohoInv.Balance),
 		},
-	))
+		AccountID:       settings.ZohoDepositToAccountID(),
+		ReferenceNumber: referenceNumber,
+	}))
 	if err != nil {
 		return err
 	}
@@ -421,6 +437,47 @@ func (s *InvoiceService) totalLineItemDiscount(lineItems []InvoiceLineItem) deci
 	return total
 }
 
+// settlementReferenceNumber returns the gateway payment id that settled the invoice, for
+// Zoho's reference_number. Empty when the invoice was settled without a gateway payment
+// (offline, credits) or when the lookup fails: this runs inside a retried Temporal activity,
+// and failing here would leave the Zoho invoice unpaid over a reconciliation-only field.
+func (s *InvoiceService) settlementReferenceNumber(ctx context.Context, flexpriceInvoiceID string) string {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(flexpriceInvoiceID)
+
+	payments, err := s.paymentRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Info(ctx, "could not resolve gateway payment id for Zoho reference number",
+			"error", err,
+			"invoice_id", flexpriceInvoiceID)
+		return ""
+	}
+
+	// PaymentFilter carries a single status, so covering both settled states means filtering
+	// here rather than paying for a second round trip.
+	var latest *payment.Payment
+	for _, p := range payments {
+		if p == nil || p.SucceededAt == nil {
+			continue
+		}
+		if p.PaymentStatus != types.PaymentStatusSucceeded && p.PaymentStatus != types.PaymentStatusOverpaid {
+			continue
+		}
+		if p.GatewayPaymentID == nil || strings.TrimSpace(*p.GatewayPaymentID) == "" {
+			continue
+		}
+		if latest == nil || p.SucceededAt.After(*latest.SucceededAt) {
+			latest = p
+		}
+	}
+	if latest == nil {
+		return ""
+	}
+	return strings.TrimSpace(*latest.GatewayPaymentID)
+}
+
 func (s *InvoiceService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {
 	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
 	if err != nil {
@@ -476,6 +533,26 @@ func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *
 		NewCustomField(settings.ServicePeriodCustomFields.StartFieldID, start.Format(zohoAPIDateFormat)),
 		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(end).Format(zohoAPIDateFormat)),
 	}
+}
+
+func globalCustomFields(settings *types.InvoiceSyncSettings) []CustomField {
+	if settings == nil || len(settings.GlobalCustomFields) == 0 {
+		return nil
+	}
+
+	out := make([]CustomField, 0, len(settings.GlobalCustomFields))
+	for _, g := range settings.GlobalCustomFields {
+		value := strings.TrimSpace(g.Value)
+		if value == "" {
+			continue
+		}
+		out = append(out, NewCustomField(g.Field, value))
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // metadataCustomFields copies configured metadata values onto Zoho custom fields. A key

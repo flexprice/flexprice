@@ -27,7 +27,7 @@ func TestBuildSyncedLineItems_HappyPath(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -54,7 +54,7 @@ func TestBuildSyncedLineItems_MissingPriceIDFallsBackForThatItem(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -76,7 +76,7 @@ func TestBuildSyncedLineItems_MissingPriceIDFallsBackForThatItem(t *testing.T) {
 func TestBuildSyncedLineItems_AllMissingPriceIDReturnsNilForFullFallback(t *testing.T) {
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, &syncTestMappingRepo{}, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, &syncTestMappingRepo{}, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -98,7 +98,7 @@ func TestBuildSyncedLineItems_DuplicatePriceIDAcrossLineItems(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -119,7 +119,7 @@ func TestBuildSyncedLineItems_SyncFailurePropagates(t *testing.T) {
 	mappingRepo := &syncTestMappingRepo{listErr: errors.New("db unavailable")}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -140,7 +140,7 @@ func TestBuildSyncedLineItems_ZeroAmountLineItemsSkipped(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
