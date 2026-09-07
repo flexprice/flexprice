@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   zizmor:
-    name: zizmor (soft-fail)
+    name: zizmor
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,8 +39,9 @@ jobs:
       - name: Install zizmor
         run: pip install zizmor==1.5.2
 
+      # SARIF for code-scanning — soft, written even if the gate below fails.
       # --offline: no token, no rate-limit flakiness (skips online audits).
-      - name: Run zizmor
+      - name: Run zizmor (SARIF for code-scanning)
         continue-on-error: true
         run: zizmor --offline --format sarif . > zizmor.sarif
 
@@ -50,3 +51,12 @@ jobs:
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: zizmor.sarif
+
+      # BLOCKING gate: HIGH-severity baseline is 0 on develop, so a new
+      # high-confidence workflow finding fails the PR. Lower severities remain
+      # advisory via the SARIF upload above.
+      # Offline: online audits (known-vulnerable-actions, impostor-commit,
+      # typosquat-uses) need cross-repo tag listing that github.token 403s on
+      # third-party actions; they stay advisory via SARIF, not a blocking gate.
+      - name: zizmor gate (fail on HIGH)
+        run: zizmor --offline --min-severity high .

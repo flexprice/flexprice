@@ -1,9 +1,9 @@
 # Static Application Security Testing (SAST) at PR time.
 #
-# Phase 1 (this file): SOFT-FAIL. Semgrep and gosec run on every PR and report
-# findings, but never block the merge — we need a clean baseline triage first.
-# Phase 2: flip to blocking on high-confidence rules once the baseline is
-# triaged (stop tolerating the findings exit codes — semgrep 1, gosec 1).
+# Phase 2 (this file): BLOCKING on high-confidence findings. The baseline is
+# triaged clean, so a finding now fails the PR instead of only reporting.
+#   - Semgrep: p/default + p/golang findings (exit 1) block the job.
+#   - gosec: scoped to -severity high -confidence high; findings block.
 # Scanner *execution* errors already fail the job today.
 #
 # Scope boundaries (don't duplicate what already runs):
@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   semgrep:
-    name: Semgrep (soft-fail)
+    name: Semgrep
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,21 +39,36 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep==1.175.0
 
-      # SOFT phase-1: findings (exit 1) never block the PR, but scanner execution
-      # errors (exit >=2: bad config, parse/load failure) still fail the job so a
-      # broken scan can't show green. `--error` makes findings exit 1.
+      # BLOCKING: `--error` makes findings exit 1 and we let it propagate, so a
+      # finding fails the PR. Scanner execution errors (exit >=2) fail too.
+      # SARIF is still emitted for code-scanning even when the scan exits non-zero.
       - name: Semgrep scan
         run: |
-          rc=0
+          # Generated SDK output (api/go, api/python, api/typescript) is
+          # excluded: it is machine-generated from the OpenAPI spec, not source
+          # we hand-edit, and suppressions there are overwritten on regeneration.
           semgrep scan \
             --config p/default \
             --config p/golang \
             --metrics=off \
             --error \
+            --exclude api/go \
+            --exclude api/python \
+            --exclude api/typescript \
             --sarif --output semgrep.sarif \
-            . || rc=$?
-          # exit 1 = findings (soft-fail, ignore); exit >=2 = scanner error (fail)
-          if [ "$rc" -ge 2 ]; then exit "$rc"; fi
+            .
+
+      # Drop results semgrep marked as suppressed (inline `nosemgrep`) before
+      # upload. semgrep keeps them in SARIF tagged `suppressions`, but GitHub
+      # code-scanning still posts each as a PR review comment, re-surfacing every
+      # triaged nosemgrep site. Stripping them keeps real findings visible in
+      # code-scanning without the dismissed-finding noise.
+      - name: Strip suppressed results from SARIF
+        if: always() && hashFiles('semgrep.sarif') != ''
+        run: |
+          jq '.runs[].results |= map(select((.suppressions // []) | length == 0))' \
+            semgrep.sarif > semgrep.filtered.sarif
+          mv semgrep.filtered.sarif semgrep.sarif
 
       # continue-on-error + hashFiles guard: a private repo without GitHub code
       # scanning enabled will reject the upload, and that must not fail the job
@@ -66,7 +81,7 @@ jobs:
           sarif_file: semgrep.sarif
 
   gosec:
-    name: gosec (soft-fail)
+    name: gosec
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,12 +96,13 @@ jobs:
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
 
-      # SOFT phase-1: findings (exit 1) never block, but processing errors (exit
-      # 2: package load / parse failure) still fail the job. gosec's `-no-fail`
-      # returns 0 for both, so we don't use it — we allow exit 1 explicitly.
+      # BLOCKING on high-confidence findings: scoped to -severity high
+      # -confidence high so only high/high issues fail the PR. Findings (exit 1)
+      # and processing errors (exit 2) both fail the job.
+      #
+      # api/custom and api/go are excluded: the custom SDK tree depends on
+      # generated types (*Flexprice) and does not compile standalone, so gosec's
+      # package load errors on it — a build-graph artifact, not a security issue.
+      # (Same generated-SDK exclusion as the Semgrep job.)
       - name: gosec scan
-        run: |
-          rc=0
-          gosec -fmt text ./... || rc=$?
-          # exit 1 = findings (soft-fail, ignore); anything else = processing error
-          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then exit "$rc"; fi
+        run: gosec -severity high -confidence high -exclude-dir=api/custom -exclude-dir=api/go -fmt text ./...

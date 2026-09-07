@@ -474,11 +474,10 @@ func initIntegrationFactory(factory *integration.Factory, paymentService interfa
 // provideStorageResolver constructs the platform storage resolver at boot.
 // The resolver runs CloudDetector once (which blocks on metadata probes), so
 // a background context is used deliberately — this must not be per-request.
-// ConnectionStorageProvider is left nil because customer BYOB connections are
-// not yet migrated to the new storage interface; ForConnection returns a
-// clear error until that wiring lands.
-func provideStorageResolver(cfg *config.Configuration, log *logger.Logger) storage.Resolver {
-	return storage.NewResolver(context.Background(), cfg, nil, log)
+// Factory is passed as ConnectionStorageProvider so ForConnection can resolve
+// customer BYOB buckets from the connection row.
+func provideStorageResolver(cfg *config.Configuration, log *logger.Logger, factory *integration.Factory) storage.Resolver {
+	return storage.NewResolver(context.Background(), cfg, factory, log)
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {

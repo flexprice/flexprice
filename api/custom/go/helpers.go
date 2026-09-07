@@ -3,7 +3,7 @@ package flexprice
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- SDK helper id, not security-sensitive
 	"net/http"
 	"regexp"
 	"time"

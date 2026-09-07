@@ -183,7 +183,9 @@ api:
       authenticationRef: {}   # TriggerAuthentication for IRSA (podIdentity: aws) built in infra
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable so a single-replica api still permits one eviction.
+    minAvailable: ""
+    maxUnavailable: 1
   # RollingUpdate strategy: maxSurge controls how many extra pods can spin up
   # over `replicaCount`; maxUnavailable how many existing pods can go down.
   # Defaults are HA-safe (one extra up, zero unavailable) so api rollouts
@@ -277,7 +279,10 @@ consumer:
     authenticationRef: {}
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable (not minAvailable) so a single-replica consumer still
+    # permits one eviction — minAvailable:1 on 1 replica blocks GKE node drains.
+    minAvailable: ""
+    maxUnavailable: 1
   # Kafka consumer prefers one-at-a-time rollout to minimise consumer-group
   # rebalance churn. maxSurge=0 keeps the partition assignment stable.
   strategy:
@@ -435,7 +440,9 @@ worker:
     authenticationRef: {}   # in-cluster plaintext temporal needs none; set for Temporal Cloud
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable so a single-replica worker still permits one eviction.
+    minAvailable: ""
+    maxUnavailable: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -874,6 +881,20 @@ clickhouse:
   # ── altinity mode ─────────────────────────────────────────────────────────────
   # ClickHouseInstallation CRD. Operator creates service: chi-<fullname>-flexprice-0-0
   altinity:
+    # >1 requires keeper.hosts (enforced: rendering fails without it) and
+    # Replicated*MergeTree tables.
+    replicasCount: 1
+    # Empty renders no zookeeper block. Keeper is not deployed by this chart:
+    # it needs its own storage class (N2 pools take PD, C4 pools take Hyperdisk)
+    # and must be running before the CHI references it.
+    keeper:
+      hosts: []
+      port: 2181
+    # Empty = chart adds a required hostname anti-affinity when replicas > 1.
+    affinity: {}
+    # Empty = chart supplies {fsGroup: 101, fsGroupChangePolicy: OnRootMismatch}
+    # when replicas > 1, without which a new replica cannot write its fresh PVC.
+    podSecurityContext: {}
     image:
       repository: altinity/clickhouse-server
       tag: "24.8.14.10459.altinitystable"

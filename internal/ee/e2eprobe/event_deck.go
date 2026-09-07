@@ -2,7 +2,7 @@ package e2eprobe
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- e2e probe synthetic test data
 	"strconv"
 	"sync"
 )
