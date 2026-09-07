@@ -217,6 +217,15 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	// Convert to domain wallet model
 	w := req.ToWallet(ctx)
 
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+	if err != nil {
+		return nil, err
+	}
+	if err := ccCfg.EnforceCurrency(w.Currency); err != nil {
+		return nil, err
+	}
+
 	for _, existing := range existingWallets {
 		if existing.WalletStatus == types.WalletStatusActive && existing.Currency == w.Currency && existing.WalletType == w.WalletType {
 			return nil, ierr.NewError("customer already has an active wallet with the same currency and wallet type").
@@ -1682,7 +1691,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
+				s.Logger.Info(ctx, "skipping subscription - currency mismatch",
+					"subscription_id", sub.ID,
+					"subscription_currency", sub.Currency,
+					"wallet_currency", w.Currency)
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
@@ -3280,13 +3292,17 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
+				s.Logger.Info(ctx, "skipping subscription - currency mismatch",
+					"subscription_id", sub.ID,
+					"subscription_currency", sub.Currency,
+					"wallet_currency", w.Currency)
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
 				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
+
 			filteredSubscriptions = append(filteredSubscriptions, sub)
 		}
 

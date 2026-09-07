@@ -90,6 +90,9 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 	// We'll consume wallets in order (first wallet first, then second, etc.)
 	currentWalletIdx := 0
 
+	// Credits apply in the denomination currency, before any conversion.
+	denominationCurrency := inv.DenominationCurrency()
+
 	// Go through each line item and apply amounts
 	for _, lineItem := range inv.LineItems {
 		// Only usage-based items get amounts applied (one-time charges don't)
@@ -128,7 +131,7 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 
 			// Take as much as we can from this wallet (either all of it or what we need, whichever is less)
 			rawAmount := decimal.Min(currentWalletBalance, amountStillNeeded)
-			roundedAmountFromWallet := decimal.Min(types.RoundToCurrencyPrecision(rawAmount, inv.Currency), rawAmount)
+			roundedAmountFromWallet := decimal.Min(types.RoundToCurrencyPrecision(rawAmount, denominationCurrency), rawAmount)
 
 			// Avoid hang when raw amount is positive but rounds to zero (e.g. 0.001 in USD)
 			if roundedAmountFromWallet.IsZero() && rawAmount.GreaterThan(decimal.Zero) && currentWalletBalance.GreaterThan(decimal.Zero) {
@@ -207,7 +210,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		s.Logger.Info(ctx, "no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:                   inv.Currency,
+			Currency:                   inv.DenominationCurrency(),
 		}, nil
 	}
 
@@ -215,16 +218,20 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	// Get all the prepaid wallets we can use for this customer
 	// Only prepaid wallets work here - postpaid wallets are for payments, not amount applications
-	wallets, err := walletPaymentService.GetWalletsForCreditAdjustment(ctx, inv.CustomerID, inv.Currency)
+	// Match on the denomination currency so a fiat wallet never applies at a 1:1 rate.
+	denominationCurrency := inv.DenominationCurrency()
+	wallets, err := walletPaymentService.GetWalletsForCreditAdjustment(ctx, inv.CustomerID, denominationCurrency)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(wallets) == 0 {
-		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
+		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result",
+			"invoice_id", inv.ID,
+			"denomination_currency", denominationCurrency)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:                   inv.Currency,
+			Currency:                   denominationCurrency,
 		}, nil
 	}
 
@@ -244,7 +251,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(amountsToDebitFromWallets) == 0 {
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:                   inv.Currency,
+			Currency:                   denominationCurrency,
 		}, nil
 	}
 
@@ -298,16 +305,16 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			}
 		}
 
-		// Save how much was applied to each line item
-		// We calculated these values earlier, now we're just saving them to the database
+		// Total up what was applied. The line items themselves are persisted by the
+		// caller, once the amounts have been converted.
 		totalAmountApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
-			if lineItem.PrepaidCreditsApplied.GreaterThan(decimal.Zero) {
-				totalAmountApplied = totalAmountApplied.Add(lineItem.PrepaidCreditsApplied)
-				if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
-					return err
-				}
+			applied := lineItem.PrepaidCreditsApplied
+			if applied.IsZero() {
+				continue
 			}
+
+			totalAmountApplied = totalAmountApplied.Add(applied)
 		}
 
 		// Step 3: Set inv.TotalPrepaidApplied in memory (NOT persisted to database)
@@ -319,7 +326,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 		result = &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalAmountApplied,
-			Currency:                   inv.Currency,
+			Currency:                   denominationCurrency,
 		}
 
 		return nil

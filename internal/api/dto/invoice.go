@@ -817,7 +817,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 	if r.SubscriptionID != nil {
 		subscriptionID = r.SubscriptionID
 	}
-	return &invoice.InvoiceLineItem{
+
+	lineItem := &invoice.InvoiceLineItem{
 		ID:                          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:                   inv.ID,
 		CustomerID:                  inv.CustomerID,
@@ -847,6 +848,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
+
+	return lineItem
 }
 
 // InvoiceLineItemResponse represents a line item in invoice response payloads

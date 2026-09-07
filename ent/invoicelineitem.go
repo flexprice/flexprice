@@ -89,6 +89,8 @@ type InvoiceLineItem struct {
 	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty"`
 	// ID of the line item this one replaced, if it was created by editing an existing line item
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
+	// CustomCurrency holds the value of the "custom_currency" field.
+	CustomCurrency *types.CustomCurrencyLineItem `json:"custom_currency,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -133,7 +135,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedEntitlementQuantity:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo:
+		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo, invoicelineitem.FieldCustomCurrency:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
@@ -390,6 +392,14 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				ili.ParentLineItemID = new(string)
 				*ili.ParentLineItemID = value.String
 			}
+		case invoicelineitem.FieldCustomCurrency:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_currency", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &ili.CustomCurrency); err != nil {
+					return fmt.Errorf("unmarshal field custom_currency: %w", err)
+				}
+			}
 		default:
 			ili.selectValues.Set(columns[i], values[i])
 		}
@@ -577,6 +587,9 @@ func (ili *InvoiceLineItem) String() string {
 		builder.WriteString("parent_line_item_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("custom_currency=")
+	builder.WriteString(fmt.Sprintf("%v", ili.CustomCurrency))
 	builder.WriteByte(')')
 	return builder.String()
 }

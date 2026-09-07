@@ -452,6 +452,12 @@ func (ilic *InvoiceLineItemCreate) SetNillableParentLineItemID(s *string) *Invoi
 	return ilic
 }
 
+// SetCustomCurrency sets the "custom_currency" field.
+func (ilic *InvoiceLineItemCreate) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemCreate {
+	ilic.mutation.SetCustomCurrency(tcli)
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -774,6 +780,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.ParentLineItemID(); ok {
 		_spec.SetField(invoicelineitem.FieldParentLineItemID, field.TypeString, value)
 		_node.ParentLineItemID = &value
+	}
+	if value, ok := ilic.mutation.CustomCurrency(); ok {
+		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
+		_node.CustomCurrency = value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
