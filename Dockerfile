@@ -74,6 +74,11 @@ COPY --from=builder /app/assets/email-templates ./assets/email-templates
 COPY --from=typst /bin/typst /usr/local/bin/
 # `./migrate postgres up` execs this; keep it on PATH.
 COPY --from=dbmate /out/dbmate /usr/local/bin/dbmate
+# License texts shipped in the image. The AGPL LICENSE governs the community
+# build; the enterprise LICENSE additionally governs the -tags ee build (see the
+# org.opencontainers.image.licenses label for which applies to this image).
+COPY --from=builder /app/LICENSE ./LICENSE
+COPY --from=builder /app/internal/ee/LICENSE ./LICENSE.enterprise
 RUN chown -R app:app /app
 
 ENV TZ=UTC

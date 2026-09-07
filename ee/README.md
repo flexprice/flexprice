@@ -70,4 +70,16 @@ make docker-build-ee   # docker build --build-arg BUILD_TAGS=ee -t flexprice .
 
 `ee/` is commercial-licensed enterprise code, not covered by the repository's
 AGPL-3.0 core license. Building or running the `ee`-tagged binary requires a
-commercial license.
+commercial license (see `internal/ee/LICENSE`).
+
+Each published image declares its license via the
+`org.opencontainers.image.licenses` OCI label and ships the text in its
+filesystem:
+
+| Image | `licenses` label | Files in image |
+|---|---|---|
+| `flexprice-oss` (community) | `AGPL-3.0-only` | `/app/LICENSE` |
+| `flexprice` (enterprise, `-tags ee`) | `LicenseRef-Flexprice-Commercial` | `/app/LICENSE` (AGPL core) + `/app/LICENSE.enterprise` |
+
+The enterprise image is **not** AGPL-only — it contains commercial `ee/` code,
+so its label is the commercial identifier, not `AGPL-3.0-only`.
