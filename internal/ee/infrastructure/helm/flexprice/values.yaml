@@ -183,7 +183,9 @@ api:
       authenticationRef: {}   # TriggerAuthentication for IRSA (podIdentity: aws) built in infra
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable so a single-replica api still permits one eviction.
+    minAvailable: ""
+    maxUnavailable: 1
   # RollingUpdate strategy: maxSurge controls how many extra pods can spin up
   # over `replicaCount`; maxUnavailable how many existing pods can go down.
   # Defaults are HA-safe (one extra up, zero unavailable) so api rollouts
@@ -277,7 +279,10 @@ consumer:
     authenticationRef: {}
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable (not minAvailable) so a single-replica consumer still
+    # permits one eviction — minAvailable:1 on 1 replica blocks GKE node drains.
+    minAvailable: ""
+    maxUnavailable: 1
   # Kafka consumer prefers one-at-a-time rollout to minimise consumer-group
   # rebalance churn. maxSurge=0 keeps the partition assignment stable.
   strategy:
@@ -435,7 +440,9 @@ worker:
     authenticationRef: {}   # in-cluster plaintext temporal needs none; set for Temporal Cloud
   podDisruptionBudget:
     enabled: true
-    minAvailable: 1
+    # maxUnavailable so a single-replica worker still permits one eviction.
+    minAvailable: ""
+    maxUnavailable: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
