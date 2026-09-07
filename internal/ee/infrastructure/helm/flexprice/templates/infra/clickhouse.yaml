@@ -161,19 +161,15 @@ spec:
       - name: flexprice
         layout:
           shardsCount: 1
-          # >1 requires clickhouse.altinity.keeper.hosts and an EXISTING Keeper
-          # quorum: replicated tables need Keeper to coordinate, and a CHI that
-          # gains replicas without it brings its tables up read-only.
+          # >1 requires keeper.hosts pointing at a running quorum, else the
+          # replicated tables come up read-only.
           replicasCount: {{ .Values.clickhouse.altinity.replicasCount | default 1 }}
         templates:
           podTemplate: clickhouse-pod
           dataVolumeClaimTemplate: clickhouse-data
 {{- if .Values.clickhouse.altinity.keeper.hosts }}
-    # ClickHouse Keeper — coordination for Replicated*MergeTree engines.
-    # Hosts are the CHK-generated per-pod names, e.g. chk-<chk>-<cluster>-0-N.
-    # Keeper itself is deliberately NOT managed by this chart: it needs its own
-    # storage class (a different machine family may mean a different disk
-    # family entirely) and it must exist BEFORE this CHI references it.
+    # CHK-generated per-pod names, e.g. chk-<chk>-<cluster>-0-N. Keeper is not
+    # chart-managed: it needs its own storage class and must exist first.
     zookeeper:
       nodes:
 {{- range .Values.clickhouse.altinity.keeper.hosts }}
@@ -260,15 +256,8 @@ spec:
     podTemplates:
       - name: clickhouse-pod
         spec:
-          {{- /*
-            POD-level securityContext. The container one below sets runAsUser 101,
-            which is fine for a volume that is ALREADY 101-owned — but a fresh PVC
-            mounts as root, so a non-root process cannot create
-            /var/lib/clickhouse/tmp and the server exits at startup. That makes
-            every NEW replica CrashLoopBackOff while the original keeps working.
-            fsGroup fixes it; fsGroupChangePolicy OnRootMismatch means an existing
-            correctly-owned volume is not recursively chowned on every mount.
-          */}}
+          {{- /* fsGroup: a fresh PVC mounts root-owned and the container runs
+              as uid 101, so a new replica cannot create /var/lib/clickhouse/tmp. */}}
           {{- with .Values.clickhouse.altinity.podSecurityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -281,14 +270,9 @@ spec:
           tolerations:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- /*
-            Spread replicas across nodes. Two replicas on one node is not HA —
-            it is two copies of a single failure domain — so when replicasCount
-            > 1 this defaults to a REQUIRED hostname anti-affinity. Required,
-            not preferred: a second replica that cannot be spread should stay
-            Pending and be noticed, rather than quietly co-locate.
-            Override with clickhouse.altinity.affinity for custom topologies.
-          */}}
+          {{- /* Required (not preferred) hostname anti-affinity when replicas > 1:
+              an unspreadable replica should stay Pending, not silently co-locate.
+              Note: Go templates have no `else if` on `with`. */}}
           {{- if .Values.clickhouse.altinity.affinity }}
           affinity:
             {{- toYaml .Values.clickhouse.altinity.affinity | nindent 12 }}

@@ -874,36 +874,18 @@ clickhouse:
   # ── altinity mode ─────────────────────────────────────────────────────────────
   # ClickHouseInstallation CRD. Operator creates service: chi-<fullname>-flexprice-0-0
   altinity:
-    # Replicas in the single shard. Default 1 = every existing region is
-    # unchanged by this knob.
-    #
-    # Raising it to 2 requires BOTH:
-    #   * keeper.hosts below, pointing at a Keeper quorum that ALREADY EXISTS —
-    #     without it the new replica's tables come up read-only; and
-    #   * tables on Replicated*MergeTree engines. Plain MergeTree tables do not
-    #     replicate, so a second replica would serve an empty database.
+    # >1 also requires keeper.hosts and Replicated*MergeTree tables.
     replicasCount: 1
-    # ClickHouse Keeper coordination. Empty = no zookeeper block is rendered,
-    # which is what a single-replica install wants.
-    #
-    # Keeper is intentionally NOT deployed by this chart. It has its own storage
-    # class — on GKE a Keeper pool on N2 needs Persistent Disk while a ClickHouse
-    # pool on C4 needs Hyperdisk, and the two are not interchangeable — and it
-    # must be running before the CHI references it.
+    # Empty renders no zookeeper block. Keeper is not deployed by this chart:
+    # it needs its own storage class (N2 pools take PD, C4 pools take Hyperdisk)
+    # and must be running before the CHI references it.
     keeper:
       hosts: []
       port: 2181
-    # Empty = the chart supplies a REQUIRED hostname anti-affinity automatically
-    # whenever replicasCount > 1, and nothing at all when it is 1. Set this only
-    # to express a different topology (e.g. spreading across zones).
+    # Empty = chart adds a required hostname anti-affinity when replicas > 1.
     affinity: {}
-    # Pod-level securityContext. Empty by default so existing regions are
-    # untouched. Any region running more than one replica needs
-    #   fsGroup: 101
-    #   fsGroupChangePolicy: OnRootMismatch
-    # because a newly provisioned PVC mounts root-owned and the container runs as
-    # uid 101 — without it a second replica CrashLoopBackOffs on
-    # "cannot create directory /var/lib/clickhouse/tmp: Permission denied".
+    # Needs {fsGroup: 101, fsGroupChangePolicy: OnRootMismatch} for replicas > 1,
+    # or a new replica cannot write its freshly provisioned PVC.
     podSecurityContext: {}
     image:
       repository: altinity/clickhouse-server

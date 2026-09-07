@@ -540,24 +540,11 @@ type ClickHouseConfig struct {
 	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
 	DialTimeout time.Duration `mapstructure:"dial_timeout"`
 	ReadTimeout time.Duration `mapstructure:"read_timeout"`
-	// ConnMaxLifetime retires each pooled connection after this long, forcing it to
-	// be reopened.
-	//
-	// This is what makes a MULTI-REPLICA cluster actually share load. A ClusterIP
-	// Service balances per TCP CONNECTION, in the kernel — it cannot move traffic
-	// that is already flowing. Pods open their pool at startup and, with no
-	// lifetime, hold those connections forever, so the distribution is frozen at
-	// whatever the first random draw happened to be. Measured on nane2 right after
-	// pointing the app at a 2-replica ClusterIP: 1795 queries to replica 0 against
-	// 14 to replica 1, with both replicas healthy and the Service correct.
-	//
-	// Recycling connections on a timer makes each one take a fresh draw, and the
-	// distribution converges. It also bounds how long a pod can keep talking to a
-	// replica that is being drained.
-	//
-	// Zero leaves connections unbounded (the clickhouse-go default). Something in
-	// the 5-10 minute range is the useful setting; much shorter just pays TCP and
-	// native-handshake cost for no extra evenness.
+	// ConnMaxLifetime retires pooled connections on a timer so they reopen and
+	// re-pick a replica. A ClusterIP balances per TCP connection, so without this
+	// a pod's pool stays pinned to whichever replica it first drew: measured 1795
+	// queries to replica 0 vs 14 to replica 1 on a healthy 2-replica nane2.
+	// Zero = unbounded (driver default); 5-10m is the useful range.
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 	Address         string        `mapstructure:"address" validate:"required"`
 	TLS             bool          `mapstructure:"tls"`
@@ -1357,8 +1344,6 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		MaxOpenConns: c.MaxOpenConns,
 		MaxIdleConns: c.MaxIdleConns,
 	}
-	// Left unset the driver keeps connections forever, which pins each pod to
-	// whichever replica its pool first landed on. See the field comment.
 	if c.ConnMaxLifetime > 0 {
 		options.ConnMaxLifetime = c.ConnMaxLifetime
 	}
