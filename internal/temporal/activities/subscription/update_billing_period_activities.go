@@ -3,7 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- jitter, not security-sensitive
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
