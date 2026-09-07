@@ -99,5 +99,10 @@ jobs:
       # BLOCKING on high-confidence findings: scoped to -severity high
       # -confidence high so only high/high issues fail the PR. Findings (exit 1)
       # and processing errors (exit 2) both fail the job.
+      #
+      # api/custom and api/go are excluded: the custom SDK tree depends on
+      # generated types (*Flexprice) and does not compile standalone, so gosec's
+      # package load errors on it — a build-graph artifact, not a security issue.
+      # (Same generated-SDK exclusion as the Semgrep job.)
       - name: gosec scan
-        run: gosec -severity high -confidence high -fmt text ./...
+        run: gosec -severity high -confidence high -exclude-dir=api/custom -exclude-dir=api/go -fmt text ./...
