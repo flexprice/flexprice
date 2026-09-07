@@ -1849,8 +1849,6 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 		existing.Metadata = *req.Metadata
 	}
 	if req.AutoTopup != nil {
-		// Seeded from the stored config so ent's validator still sees the required
-		// fields when the request only carries some of them.
 		existing.AutoTopup = types.NewAutoTopupBuilder(existing.AutoTopup).
 			WithAutoTopup(req.AutoTopup).
 			Build()

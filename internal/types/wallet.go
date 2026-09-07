@@ -368,9 +368,6 @@ type AutoTopup struct {
 	Cooldown *Duration `json:"cooldown,omitempty"`
 }
 
-// NewAutoTopup builds a config from a full form submission. An absent cooloff
-// means the customer cleared it, carried as an empty Duration because the merge
-// in UpdateWallet reads a nil cooloff as "field not sent" and leaves it alone.
 func NewAutoTopup(enabled bool, threshold, amount *decimal.Decimal, invoicing bool, cooldown *Duration) *AutoTopup {
 	if cooldown.IsEmpty() {
 		cooldown = &Duration{}
@@ -388,8 +385,6 @@ type autoTopupBuilder struct {
 	autoTopup *AutoTopup
 }
 
-// NewAutoTopupBuilder seeds a builder from an existing config. Every setter
-// ignores a nil argument, so a partial request only overwrites what it carries.
 func NewAutoTopupBuilder(a *AutoTopup) *autoTopupBuilder {
 	if a == nil {
 		return &autoTopupBuilder{autoTopup: &AutoTopup{}}
@@ -430,8 +425,6 @@ func (b *autoTopupBuilder) WithInvoicing(invoicing *bool) *autoTopupBuilder {
 	return b
 }
 
-// WithCooldown clears the stored cooloff when given an empty Duration, which is
-// how a caller says "no cooloff" without it being mistaken for an absent field.
 func (b *autoTopupBuilder) WithCooldown(cooldown *Duration) *autoTopupBuilder {
 	if b == nil || b.autoTopup == nil || cooldown == nil {
 		return b
@@ -444,7 +437,6 @@ func (b *autoTopupBuilder) WithCooldown(cooldown *Duration) *autoTopupBuilder {
 	return b
 }
 
-// WithAutoTopup applies every field of another config through the setters above.
 func (b *autoTopupBuilder) WithAutoTopup(a *AutoTopup) *autoTopupBuilder {
 	if b == nil || a == nil {
 		return b

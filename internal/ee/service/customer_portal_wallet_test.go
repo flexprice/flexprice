@@ -228,8 +228,6 @@ func (s *PortalWalletSuite) TestAutoTopupEnableRequiresChargeableMethod() {
 	s.False(ierr.IsValidation(err), "a missing card is a state conflict, not a bad request")
 }
 
-// A JSON null unmarshals to a nil cooloff, which UpdateWallet cannot tell from an
-// absent field, so an unnormalised request left the stored cooloff in place.
 func (s *PortalWalletSuite) TestAutoTopupCooloffCanBeCleared() {
 	s.connect(types.SecretProviderChargebee)
 

@@ -78,8 +78,6 @@ func TestAutoTopupBuilder_Cooldown(t *testing.T) {
 	}
 }
 
-// The portal submits the whole form, so its output has to survive the merge that
-// UpdateWallet performs on top of a stored config.
 func TestNewAutoTopup_ClearsThroughTheBuilder(t *testing.T) {
 	stored := &AutoTopup{
 		Threshold: lo.ToPtr(decimal.NewFromInt(10)),
