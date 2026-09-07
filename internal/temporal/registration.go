@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
-	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -263,11 +262,6 @@ func RegisterWorkflowsAndActivities(
 		params.Logger,
 	)
 
-	// Meter-usage-driven alert activities (spend-breach + wallet-balance checks).
-	// Registered on TemporalTaskQueueWorkflows alongside CustomerOnboardingWorkflow;
-	// both are event-driven, low-frequency-per-customer, short-lived workflows.
-	alertActs := alertActivities.NewAlertActivities(params, params.Logger)
-
 	// Environment clone activities
 	envActivities := environmentActivities.NewEnvironmentActivities(params)
 
@@ -313,7 +307,7 @@ func RegisterWorkflowsAndActivities(
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, params, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, envActivities, cronBundle, alertActs, marketplaceFlushActivities)
+		config := buildWorkerConfig(taskQueue, params, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, envActivities, cronBundle, marketplaceFlushActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -361,7 +355,6 @@ func buildWorkerConfig(
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
 	cron *cronActivityBundle,
-	alertActs *alertActivities.AlertActivities,
 	marketplaceFlushActivities *marketplaceActivities.FlushActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
@@ -509,7 +502,6 @@ func buildWorkerConfig(
 			workflows.CustomerOnboardingWorkflow,
 			workflows.PrepareProcessedEventsWorkflow,
 			workflows.EnvironmentCloneWorkflow,
-			workflows.UsageAlertWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			customerActivities.CreateCustomerActivity,
@@ -520,8 +512,6 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
-			alertActs.SpendAndEntitlementAlertsActivity,
-			alertActs.WalletAlertsActivity,
 		)
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,

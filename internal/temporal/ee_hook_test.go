@@ -64,7 +64,7 @@ func TestBuildWorkerConfig_IncludesEEContribution(t *testing.T) {
 		types.TemporalTaskQueueWorkflows,
 		eeservice.ServiceParams{},
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 	if len(cfg.Workflows) == 0 {
 		t.Fatal("buildWorkerConfig did not include any workflows; EE contribution missing")
