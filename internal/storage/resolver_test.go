@@ -316,6 +316,68 @@ func TestResolver_Imports_RejectsWhenDisabled(t *testing.T) {
 	assert.Contains(t, hints, "FLEXPRICE_FLEXPRICE_S3_IMPORTS_ENABLED")
 }
 
+type fakeConnStorageProvider struct {
+	export func(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error)
+}
+
+func (f *fakeConnStorageProvider) GetStorageProvider(context.Context, string) (Storage, error) {
+	return nil, nil
+}
+func (f *fakeConnStorageProvider) GetStorageProviderExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error) {
+	return f.export(ctx, connectionID, bucket, region, encryption, gzip)
+}
+
+func TestResolver_ForConnectionExport(t *testing.T) {
+	t.Run("nil connSvc fails loud", func(t *testing.T) {
+		r := newTestResolver(t, ProviderS3, testConfig()) // connSvc left nil
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", "bucket", "us-east-1", "AES256", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "connection storage is not configured")
+	})
+
+	t.Run("empty bucket fails loud before delegation", func(t *testing.T) {
+		called := false
+		r := newTestResolver(t, ProviderS3, testConfig())
+		r.connSvc = &fakeConnStorageProvider{export: func(context.Context, string, string, string, string, bool) (Storage, error) {
+			called = true
+			return nil, nil
+		}}
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", "", "us-east-1", "AES256", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing bucket or region")
+		assert.False(t, called, "must not delegate when bucket empty")
+	})
+
+	t.Run("empty region fails loud before delegation", func(t *testing.T) {
+		r := newTestResolver(t, ProviderS3, testConfig())
+		r.connSvc = &fakeConnStorageProvider{export: func(context.Context, string, string, string, string, bool) (Storage, error) {
+			return nil, nil
+		}}
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", "bucket", "", "AES256", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing bucket or region")
+	})
+
+	t.Run("delegates job_config destination through to provider", func(t *testing.T) {
+		var got struct {
+			connID, bucket, region, enc string
+			gzip                        bool
+		}
+		r := newTestResolver(t, ProviderS3, testConfig())
+		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, connID, bucket, region, enc string, gzip bool) (Storage, error) {
+			got.connID, got.bucket, got.region, got.enc, got.gzip = connID, bucket, region, enc, gzip
+			return nil, nil
+		}}
+		_, err := r.ForConnectionExport(context.Background(), "conn_9", "byob-bucket", "ap-south-1", "AES256", true)
+		require.NoError(t, err)
+		assert.Equal(t, "conn_9", got.connID)
+		assert.Equal(t, "byob-bucket", got.bucket)
+		assert.Equal(t, "ap-south-1", got.region)
+		assert.Equal(t, "AES256", got.enc)
+		assert.True(t, got.gzip)
+	})
+}
+
 func TestResolver_ForPlatform_Caches(t *testing.T) {
 	cfg := testConfig()
 	r := newTestResolver(t, ProviderS3, cfg)
