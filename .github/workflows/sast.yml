@@ -58,6 +58,18 @@ jobs:
             --sarif --output semgrep.sarif \
             .
 
+      # Drop results semgrep marked as suppressed (inline `nosemgrep`) before
+      # upload. semgrep keeps them in SARIF tagged `suppressions`, but GitHub
+      # code-scanning still posts each as a PR review comment, re-surfacing every
+      # triaged nosemgrep site. Stripping them keeps real findings visible in
+      # code-scanning without the dismissed-finding noise.
+      - name: Strip suppressed results from SARIF
+        if: always() && hashFiles('semgrep.sarif') != ''
+        run: |
+          jq '.runs[].results |= map(select((.suppressions // []) | length == 0))' \
+            semgrep.sarif > semgrep.filtered.sarif
+          mv semgrep.filtered.sarif semgrep.sarif
+
       # continue-on-error + hashFiles guard: a private repo without GitHub code
       # scanning enabled will reject the upload, and that must not fail the job
       # (learned the hard way with Checkov).
