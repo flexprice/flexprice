@@ -726,6 +726,21 @@ func (s *SeedEnsure) ensureAlertCanaryCustomer(ctx context.Context) error {
 
 const e2eprobePlanLookupKey = "e2eprobe_plan"
 
+// planPriceQueryFilter lists published PLAN prices for one plan. Always use
+// entity_ids + entity_type — PriceFilter.PlanIds was historically ignored by
+// the server and returned the first page of every published price in the env.
+func planPriceQueryFilter(planID string) types.PriceFilter {
+	published := types.StatusPublished
+	entityType := types.PriceEntityTypePlan
+	limit := int64(1000)
+	return types.PriceFilter{
+		EntityIds:  []string{planID},
+		EntityType: &entityType,
+		Status:     &published,
+		Limit:      &limit,
+	}
+}
+
 // ensurePlan creates a single e2eprobe plan if it doesn't exist.
 func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error {
 	resp, err := s.client.Plans().Query(ctx, types.PlanFilter{
@@ -769,13 +784,8 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 		return nil // no plan, skip
 	}
 	planID := seeds.PlanIDs[0]
-	planEntityType := types.PriceEntityTypePlan
 
-	// Query existing prices for this plan.
-	existResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds:    []string{planID},
-		EntityType: &planEntityType,
-	})
+	existResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
 	}
@@ -1187,15 +1197,7 @@ func (s *SeedEnsure) ensureMultiCadenceSubscription(
 	// include_price_ids. Without the opt-in, the plan-attach filter now
 	// defaults to strict-equal cadence (post-PR #2713) and a QUARTERLY sub
 	// against a MONTHLY-only plan returns "no prices found for entity".
-	// Use entity_ids + entity_type — PriceFilter.PlanIds is ignored by the
-	// server and would return the first page of every published price in the env.
-	published := types.StatusPublished
-	planEntityType := types.PriceEntityTypePlan
-	pricesResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		EntityIds:  []string{planID},
-		EntityType: &planEntityType,
-		Status:     &published,
-	})
+	pricesResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "multi_cadence_prices_query", "plan_id": planID}, "list plan prices: %w", err)
 	}
@@ -1313,11 +1315,7 @@ func (s *SeedEnsure) ensureSubscriptionPriceSync(ctx context.Context, seeds *e2e
 	}
 	planID := seeds.PlanIDs[0]
 
-	planEntityType := types.PriceEntityTypePlan
-	priceResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds:    []string{planID},
-		EntityType: &planEntityType,
-	})
+	priceResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
 	}
