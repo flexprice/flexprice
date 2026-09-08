@@ -24,8 +24,8 @@ concurrency:
   group: revert-ecs
   cancel-in-progress: false
 
+# Least privilege at the top; only the deploy jobs get id-token (OIDC to AWS).
 permissions:
-  id-token: write
   contents: read
 
 env:
@@ -82,6 +82,9 @@ jobs:
           needs.validate.result == 'success' &&
           (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         target: ${{ fromJson(needs.validate.outputs.targets) }}
@@ -118,6 +121,9 @@ jobs:
           needs.validate.result == 'success' &&
           (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         target: ${{ fromJson(needs.validate.outputs.targets) }}
@@ -154,6 +160,9 @@ jobs:
           needs.validate.result == 'success' &&
           (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         target: ${{ fromJson(needs.validate.outputs.targets) }}
