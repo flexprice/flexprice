@@ -65,17 +65,27 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 		return err
 	}
 
-	// Get HubSpot contact ID for the customer
-	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactID(ctx, input.CustomerID)
+	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactIDForInvoice(ctx, input.InvoiceID)
 	if err != nil {
-		a.logger.Info(context.Background(), "customer not synced to HubSpot",
+		if ierr.IsNotFound(err) {
+			a.logger.Info(ctx, "customer not synced to HubSpot, skipping invoice sync",
+				"error", err,
+				"invoice_id", input.InvoiceID,
+				"customer_id", input.CustomerID)
+			return temporal.NewNonRetryableApplicationError(
+				"customer not linked to HubSpot",
+				"CustomerNotLinked",
+				err,
+			)
+		}
+		a.logger.Error(ctx, "failed to resolve HubSpot contact for invoice",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
 		return err
 	}
 
-	a.logger.Info(ctx, "found HubSpot contact for customer",
+	a.logger.Info(ctx, "found HubSpot contact for invoice customer",
 		"customer_id", input.CustomerID,
 		"hubspot_contact_id", hubspotContactID,
 		"invoice_id", input.InvoiceID)
