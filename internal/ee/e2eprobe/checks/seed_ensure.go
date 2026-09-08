@@ -1183,14 +1183,18 @@ func (s *SeedEnsure) ensureMultiCadenceSubscription(
 		}
 	}
 
-	// Fetch every published plan price so we can pass their IDs via
+	// Fetch this plan's published prices so we can pass their IDs via
 	// include_price_ids. Without the opt-in, the plan-attach filter now
 	// defaults to strict-equal cadence (post-PR #2713) and a QUARTERLY sub
 	// against a MONTHLY-only plan returns "no prices found for entity".
+	// Use entity_ids + entity_type — PriceFilter.PlanIds is ignored by the
+	// server and would return the first page of every published price in the env.
 	published := types.StatusPublished
+	planEntityType := types.PriceEntityTypePlan
 	pricesResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds: []string{planID},
-		Status:  &published,
+		EntityIds:  []string{planID},
+		EntityType: &planEntityType,
+		Status:     &published,
 	})
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "multi_cadence_prices_query", "plan_id": planID}, "list plan prices: %w", err)

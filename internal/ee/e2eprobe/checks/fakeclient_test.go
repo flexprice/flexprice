@@ -223,16 +223,17 @@ func (f *fakePrices) CreateBucketed(_ context.Context, req types.CreatePriceRequ
 func (f *fakePrices) Query(_ context.Context, filter types.PriceFilter) (*dtos.QueryPriceResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// Filter by PlanIds when provided (the seed's multi-cadence lookup uses
-	// this). Callers that pass no filter get every created price back.
+	// Scope by entity_ids / plan_ids when provided (multi-cadence seed uses
+	// entity_ids). Callers that pass no filter get every created price back.
+	wantEntities := append(append([]string{}, filter.EntityIds...), filter.PlanIds...)
 	var items []types.PriceResponse
 	for i, req := range f.created {
-		if len(filter.PlanIds) > 0 {
+		if len(wantEntities) > 0 {
 			if req.EntityID == "" {
 				continue
 			}
 			matched := false
-			for _, pid := range filter.PlanIds {
+			for _, pid := range wantEntities {
 				if req.EntityID == pid {
 					matched = true
 					break
