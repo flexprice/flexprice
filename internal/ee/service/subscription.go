@@ -6298,6 +6298,11 @@ func (s *subscriptionService) determineEffectiveDate(
 		if customDate != nil && customDate.Before(now) {
 			return customDate.UTC(), nil
 		}
+		// A subscription that has not started yet ends at its start, never before it:
+		// an earlier end date would persist a row whose end precedes its own period.
+		if now.Before(subscription.CurrentPeriodStart) {
+			return subscription.CurrentPeriodStart.UTC(), nil
+		}
 		return now, nil
 
 	case types.CancellationTypeEndOfPeriod:
@@ -6426,7 +6431,7 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		// A cancelled subscription must never report a period running past its end date: should
 		// anything later flip it back to active, the billing cron is otherwise handed a period
 		// it cannot split into valid sub-periods.
-		if effectiveDate.After(subscription.CurrentPeriodStart) &&
+		if !effectiveDate.Before(subscription.CurrentPeriodStart) &&
 			effectiveDate.Before(subscription.CurrentPeriodEnd) {
 			subscription.CurrentPeriodEnd = effectiveDate
 		}

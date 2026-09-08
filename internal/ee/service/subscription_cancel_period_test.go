@@ -142,3 +142,52 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ImmediateProrationKeyU
 	s.NoError(err, "proration credit must be keyed on the pre-cancellation period")
 	s.NotNil(txn)
 }
+
+// TestCancelSubscription_ImmediateOnNotYetStartedSubscription covers a subscription whose
+// period starts in the future and is cancelled immediately with cancel_at omitted. The
+// derived effective date is time.Now(), which precedes the period; left unclamped it
+// persisted an end_date before current_period_start while current_period_end kept running
+// to the original boundary. An explicit cancel_at before the period start is rejected
+// outright, so only the derived date could reach this shape.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_ImmediateOnNotYetStartedSubscription() {
+	futureStart := s.testData.now.Add(10 * 24 * time.Hour)
+	futureEnd := s.testData.now.Add(40 * 24 * time.Hour)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_immediate_not_yet_started",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          futureStart,
+		CurrentPeriodStart: futureStart,
+		CurrentPeriodEnd:   futureEnd,
+		BillingAnchor:      futureStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           types.DefaultTimezone,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+
+	_, err := s.service.CancelSubscription(s.GetContext(), sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_not_yet_started",
+	})
+	s.NoError(err)
+
+	cancelled, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.NoError(err)
+
+	s.Equal(types.SubscriptionStatusCancelled, cancelled.SubscriptionStatus)
+	s.Require().NotNil(cancelled.EndDate)
+	s.True(cancelled.EndDate.Equal(futureStart),
+		"end_date (%s) must be clamped to the period start (%s), not time.Now()",
+		*cancelled.EndDate, futureStart)
+	s.False(cancelled.EndDate.Before(cancelled.CurrentPeriodStart),
+		"end_date must never precede current_period_start")
+	s.True(cancelled.CurrentPeriodEnd.Equal(*cancelled.EndDate),
+		"current_period_end (%s) must close at end_date (%s)",
+		cancelled.CurrentPeriodEnd, *cancelled.EndDate)
+}
