@@ -28,9 +28,9 @@ func NewSubscriptionScheduleHandler(scheduleService service.SubscriptionSchedule
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
-// @Param id path string true "Schedule ID"
+// @Param schedule_id path string true "Schedule ID"
 // @Success 200 {object} dto.SubscriptionScheduleResponse
-// @Router /v1/subscription-schedules/{id} [get]
+// @Router /subscriptions/schedules/{schedule_id} [get]
 func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")
 
@@ -51,9 +51,9 @@ func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
-// @Param subscription_id path string true "Subscription ID"
+// @Param id path string true "Subscription ID"
 // @Success 200 {object} dto.GetPendingSchedulesResponse
-// @Router /v1/subscriptions/{subscription_id}/schedules [get]
+// @Router /subscriptions/{id}/schedules [get]
 func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
 
@@ -81,7 +81,7 @@ func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Contex
 // @Param schedule_id path string false "Schedule ID (optional if using request body)"
 // @Param request body dto.CancelScheduleRequest false "Cancel request (optional if using path parameter)"
 // @Success 200 {object} dto.CancelScheduleResponse
-// @Router /v1/subscriptions/schedules/{schedule_id}/cancel [post]
+// @Router /subscriptions/schedules/{schedule_id}/cancel [post]
 func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")
 
@@ -148,7 +148,7 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 // @Param limit query int false "Limit results"
 // @Param offset query int false "Offset for pagination"
 // @Success 200 {object} dto.GetPendingSchedulesResponse
-// @Router /v1/subscription-schedules [get]
+// @Router /subscriptions/schedules [get]
 func (h *SubscriptionScheduleHandler) ListSchedules(c *gin.Context) {
 	// Parse filter from query params
 	filter := &types.SubscriptionScheduleFilter{

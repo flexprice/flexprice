@@ -445,9 +445,8 @@ const (
 )
 
 // ChangedInvoiceStatus is the high-level status for ChangedInvoice.
-// Values "preview" and "issued" are used for preview payloads and completed wallet credits.
-// Proration invoice results use the same strings as types.PaymentStatus (e.g. SUCCEEDED, PENDING, FAILED).
-// @Description preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED
+// "preview" and "issued" are used for dry-run and wallet credits.
+// Persisted invoices use the same strings as types.PaymentStatus.
 type ChangedInvoiceStatus string
 
 const (
@@ -485,7 +484,7 @@ type ChangedInvoice struct {
 	// Action is created for a proration charge invoice, wallet_credit for downgrade credit.
 	Action ChangedInvoiceAction `json:"action"`
 	// Status is preview (dry-run), issued (wallet credit applied), or a PaymentStatus string for real invoices.
-	Status ChangedInvoiceStatus `json:"status"`
+	Status ChangedInvoiceStatus `json:"status" enums:"preview,issued,INITIATED,PENDING,PROCESSING,SUCCEEDED,OVERPAID,FAILED,REFUNDED,PARTIALLY_REFUNDED,VOIDED"`
 	// Invoice is set for proration charges: preview returns a synthetic invoice; execute returns the persisted invoice when created.
 	Invoice *InvoiceResponse `json:"invoice,omitempty"`
 	// WalletTransaction is set for downgrade wallet credits: preview is synthetic; execute returns the transaction from the top-up.

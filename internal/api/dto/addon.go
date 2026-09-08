@@ -157,7 +157,7 @@ type AddonAssociationResponse struct {
 }
 
 // ListAddonAssociationsResponse represents the response for listing addon associations
-type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse]
+type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse] // @name ListAddonAssociationsResponse
 
 type AddAddonToSubscriptionResponse struct {
 	*addonassociation.AddonAssociation

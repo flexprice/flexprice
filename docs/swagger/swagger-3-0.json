@@ -9904,10 +9904,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AddonAssociationResponse"
-                  }
+                  "$ref": "#/components/schemas/ListAddonAssociationsResponse"
                 }
               }
             }
@@ -13375,7 +13372,7 @@
         "x-codegen-request-body-name": "request"
       }
     },
-    "/v1/subscription-schedules": {
+    "/subscriptions/schedules": {
       "get": {
         "tags": [
           "Subscriptions"
@@ -13431,7 +13428,7 @@
         }
       }
     },
-    "/v1/subscription-schedules/{id}": {
+    "/subscriptions/schedules/{schedule_id}": {
       "get": {
         "tags": [
           "Subscriptions"
@@ -13441,7 +13438,7 @@
         "operationId": "getSubscriptionSchedule",
         "parameters": [
           {
-            "name": "id",
+            "name": "schedule_id",
             "in": "path",
             "description": "Schedule ID",
             "required": true,
@@ -13464,7 +13461,7 @@
         }
       }
     },
-    "/v1/subscriptions/schedules/{schedule_id}/cancel": {
+    "/subscriptions/schedules/{schedule_id}/cancel": {
       "post": {
         "tags": [
           "Subscriptions"
@@ -13509,7 +13506,7 @@
         "x-codegen-request-body-name": "request"
       }
     },
-    "/v1/subscriptions/{subscription_id}/schedules": {
+    "/subscriptions/{id}/schedules": {
       "get": {
         "tags": [
           "Subscriptions"
@@ -13519,7 +13516,7 @@
         "operationId": "listSubscriptionSchedules",
         "parameters": [
           {
-            "name": "subscription_id",
+            "name": "id",
             "in": "path",
             "description": "Subscription ID",
             "required": true,
@@ -15710,6 +15707,20 @@
           }
         }
       },
+      "ListAddonAssociationsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AddonAssociationResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListAlertSettingsResponse": {
         "type": "object",
         "properties": {
@@ -17184,14 +17195,32 @@
       },
       "ChangedInvoiceStatus": {
         "type": "string",
-        "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED",
+        "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED | VOIDED",
         "enum": [
           "preview",
-          "issued"
+          "issued",
+          "INITIATED",
+          "PENDING",
+          "PROCESSING",
+          "SUCCEEDED",
+          "OVERPAID",
+          "FAILED",
+          "REFUNDED",
+          "PARTIALLY_REFUNDED",
+          "VOIDED"
         ],
         "x-enum-varnames": [
           "ChangedInvoiceStatusPreview",
-          "ChangedInvoiceStatusWalletIssued"
+          "ChangedInvoiceStatusWalletIssued",
+          "ChangedInvoiceStatusInitiated",
+          "ChangedInvoiceStatusPending",
+          "ChangedInvoiceStatusProcessing",
+          "ChangedInvoiceStatusSucceeded",
+          "ChangedInvoiceStatusOverpaid",
+          "ChangedInvoiceStatusFailed",
+          "ChangedInvoiceStatusRefunded",
+          "ChangedInvoiceStatusPartiallyRefunded",
+          "ChangedInvoiceStatusVoided"
         ]
       },
       "ChangedLineItem": {

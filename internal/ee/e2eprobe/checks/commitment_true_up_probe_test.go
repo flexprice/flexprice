@@ -93,8 +93,9 @@ func TestCommitmentTrueUpProbe_OverLegWrongTotalFails(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	// Total should be commitment+overage+base; return raw usage without 1.5×.
-	total := "7.00"
+	// Unadjusted preview: raw 550×$0.01 + base $19.99 = $25.49 (no 1.5×).
+	// Over-leg must be $5 + $0.50×1.5 + $19.99 = $25.74.
+	total := "25.49"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{Total: &total},
 	}
@@ -103,7 +104,7 @@ func TestCommitmentTrueUpProbe_OverLegWrongTotalFails(t *testing.T) {
 	p.cursor = 1 // force over leg
 	err := p.Run(context.Background())
 	if err == nil {
-		t.Fatalf("expected error when over-leg total deviates from $8, got nil")
+		t.Fatalf("expected error when over-leg total deviates from $25.74, got nil")
 	}
 }
 
