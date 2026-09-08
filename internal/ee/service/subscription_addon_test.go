@@ -333,6 +333,12 @@ func (s *SubscriptionServiceSuite) TestAddAddon_NoCheckout_PayLaterUnchanged() {
 	amount := decimal.NewFromInt(30)
 	s.seedFixedPriceAddon(addonID, amount, types.InvoiceCadenceAdvance)
 
+	// The shared fixture declares a monthly cadence but only a 7-day current period. A monthly
+	// addon is priced against a whole month, so give the subscription the full period this test
+	// is about before attaching.
+	sub.CurrentPeriodEnd = sub.CurrentPeriodStart.AddDate(0, 1, 0)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
 	periodStart := sub.CurrentPeriodStart
 	resp, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
 		SubscriptionID: sub.ID,

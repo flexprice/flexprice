@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -138,6 +139,7 @@ func calculateBucketedMeterCost(
 		Quantity: totalQuantity,
 	}
 }
+
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
 	params *dto.CalculateFixedChargesParams,
@@ -256,11 +258,21 @@ func (s *billingService) CalculateFixedCharges(
 
 				windowDuration := w.End.Sub(w.Start)
 				effectiveDuration := effectiveEnd.Sub(effectiveStart)
+				fullPeriod := fullPeriodDuration(ctx, s.Logger, item, w.Start, sub.Timezone, windowDuration)
+				// A line item on a cadence other than the subscription's is priced against its own
+				// period, so a window cut short by a calendar stub bills only the days it covers.
+				// applyProrationToLineItem cannot do this: it works in subscription periods.
+				shortWindowForItem := !sameCadenceAsSubscription(item, sub) &&
+					sub.ProrationBehavior != types.ProrationBehaviorNone &&
+					windowDuration < fullPeriod
+
 				var wLinePeriodStart, wLinePeriodEnd time.Time
-				if effectiveDuration < windowDuration {
-					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio, same as today.
+				if effectiveDuration < windowDuration || shortWindowForItem {
+					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio.
+					// The divisor is one full period of THIS line item, not the window, so a short window
+					// (e.g. a calendar stub) cannot inflate the fraction charged for a longer-cadence price.
 					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-						Div(decimal.NewFromFloat(windowDuration.Seconds()))
+						Div(decimal.NewFromFloat(fullPeriod.Seconds()))
 					wAmount = wAmount.Mul(ratio)
 					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
 				} else {
@@ -417,6 +429,20 @@ func endDateBoundaryForMatching(periodEnd time.Time, billingPeriod types.Billing
 	}
 }
 
+// sameCadenceAsSubscription reports whether the line item bills on exactly the subscription's
+// cadence, treating an unset count as 1.
+func sameCadenceAsSubscription(item *subscription.SubscriptionLineItem, sub *subscription.Subscription) bool {
+	itemCount := item.BillingPeriodCount
+	if itemCount <= 0 {
+		itemCount = 1
+	}
+	subCount := sub.BillingPeriodCount
+	if subCount <= 0 {
+		subCount = 1
+	}
+	return item.BillingPeriod == sub.BillingPeriod && itemCount == subCount
+}
+
 // periodWindow is a half-open [Start, End) sub-range of an invoice period.
 type periodWindow struct {
 	Start time.Time
@@ -455,7 +481,7 @@ func splitInvoicePeriodByLineItemCadence(
 	// Covers month-based AND sub-month periods (DAILY/WEEKLY) uniformly.
 	// The fan-out path below relies on month math that doesn't apply to
 	// sub-month periods, so DAILY×N-on-DAILY×N must take this fast path.
-	if lineItem.BillingPeriod == sub.BillingPeriod && itemCount == subCount {
+	if sameCadenceAsSubscription(lineItem, sub) {
 		return []periodWindow{{Start: invoicePeriodStart, End: invoicePeriodEnd}}, nil
 	}
 
@@ -522,6 +548,43 @@ func splitInvoicePeriodByLineItemCadence(
 		}
 	}
 	return windows, nil
+}
+
+// fullPeriodDuration returns the length of one complete billing period of this line item
+// starting at windowStart. Falls back to fallback when the date math fails, and never returns
+// less than fallback so a malformed cadence cannot push a proration ratio above 1.
+func fullPeriodDuration(
+	ctx context.Context,
+	log *logger.Logger,
+	item *subscription.SubscriptionLineItem,
+	windowStart time.Time,
+	timezone string,
+	fallback time.Duration,
+) time.Duration {
+	count := item.BillingPeriodCount
+	if count <= 0 {
+		count = 1
+	}
+
+	next, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: windowStart,
+		BillingAnchor:      windowStart,
+		Unit:               count,
+		Period:             item.BillingPeriod,
+		Timezone:           timezone,
+	})
+	if err != nil {
+		log.Info(ctx, "failed to derive line item period length, using invoice window",
+			"error", err,
+			"line_item_id", item.ID,
+			"billing_period", item.BillingPeriod)
+		return fallback
+	}
+
+	if d := next.Sub(windowStart); d > fallback {
+		return d
+	}
+	return fallback
 }
 
 // Used when the line item has a longer cadence than the subscription (e.g. quarterly on monthly).
@@ -2315,8 +2378,10 @@ func (s *billingService) applyProrationToLineItem(
 		return originalAmount, nil
 	}
 
-	// Mixed billing periods and proration are mutually exclusive.
-	if sub.HasMixedBillingPeriods() {
+	// Proration is expressed against the subscription's own period, so it only applies to
+	// items that share that cadence. Others are already priced per window by the fan-out;
+	// one such item must not switch proration off for the rest of the subscription.
+	if !sameCadenceAsSubscription(item, sub) {
 		return originalAmount, nil
 	}
 
