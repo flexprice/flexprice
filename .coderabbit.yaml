@@ -3,9 +3,10 @@ language: en-US
 reviews:
   auto_review:
     enabled: true
-    # base_branches defaults to the default branch (develop) only, so
-    # develop->main promotion PRs are not auto-reviewed. The
-    # skip-coderabbit workflow posts `@coderabbitai ignore` as a
-    # belt-and-suspenders guard for any manual review trigger.
+    # Review PRs into main and develop. The develop->main promotion PR
+    # is also a PR into main, which base_branches cannot exclude on its
+    # own; the skip-coderabbit workflow posts `@coderabbitai ignore` on
+    # those (head=develop, base=main) to suppress the review.
     base_branches:
-      - develop
+      - ^main$
+      - ^develop$
