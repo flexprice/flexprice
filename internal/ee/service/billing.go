@@ -258,9 +258,11 @@ func (s *billingService) CalculateFixedCharges(
 				effectiveDuration := effectiveEnd.Sub(effectiveStart)
 				var wLinePeriodStart, wLinePeriodEnd time.Time
 				if effectiveDuration < windowDuration {
-					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio, same as today.
+					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio.
+					// The divisor is one full period of THIS line item, not the window, so a short window
+					// (e.g. a calendar stub) cannot inflate the fraction charged for a longer-cadence price.
 					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-						Div(decimal.NewFromFloat(windowDuration.Seconds()))
+						Div(decimal.NewFromFloat(s.fullPeriodDuration(ctx, item, w.Start, sub.Timezone, windowDuration).Seconds()))
 					wAmount = wAmount.Mul(ratio)
 					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
 				} else {
@@ -522,6 +524,42 @@ func splitInvoicePeriodByLineItemCadence(
 		}
 	}
 	return windows, nil
+}
+
+// fullPeriodDuration returns the length of one complete billing period of this line item
+// starting at windowStart. Falls back to fallback when the date math fails, and never returns
+// less than fallback so a malformed cadence cannot push a proration ratio above 1.
+func (s *billingService) fullPeriodDuration(
+	ctx context.Context,
+	item *subscription.SubscriptionLineItem,
+	windowStart time.Time,
+	timezone string,
+	fallback time.Duration,
+) time.Duration {
+	count := item.BillingPeriodCount
+	if count <= 0 {
+		count = 1
+	}
+
+	next, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: windowStart,
+		BillingAnchor:      windowStart,
+		Unit:               count,
+		Period:             item.BillingPeriod,
+		Timezone:           timezone,
+	})
+	if err != nil {
+		s.Logger.Info(ctx, "failed to derive line item period length, using invoice window",
+			"error", err,
+			"line_item_id", item.ID,
+			"billing_period", item.BillingPeriod)
+		return fallback
+	}
+
+	if d := next.Sub(windowStart); d > fallback {
+		return d
+	}
+	return fallback
 }
 
 // Used when the line item has a longer cadence than the subscription (e.g. quarterly on monthly).
