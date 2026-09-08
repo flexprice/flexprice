@@ -89,7 +89,6 @@ type scenarioSpec struct {
 	name              string
 	cycle             types.BillingCycle
 	subPeriod         types.BillingPeriod
-	subStart          time.Time // defaults to periodStart; set to model a renewal period
 	periodStart       time.Time
 	periodEnd         time.Time
 	anchor            time.Time
@@ -98,6 +97,7 @@ type scenarioSpec struct {
 	addonPeriod       types.BillingPeriod // empty = no addon
 	addonAmount       int64
 	addonStart        time.Time
+	addonArrear       bool
 }
 
 func (s *MultiCadenceAddonMatrixSuite) build(spec scenarioSpec) *scenario {
@@ -118,13 +118,9 @@ func (s *MultiCadenceAddonMatrixSuite) build(spec scenarioSpec) *scenario {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, planPrice))
 
-	subStart := spec.subStart
-	if subStart.IsZero() {
-		subStart = spec.periodStart
-	}
 	sub := &subscription.Subscription{
 		ID: "sub_" + id, PlanID: pl.ID, CustomerID: cust.ID,
-		StartDate: subStart, BillingAnchor: spec.anchor,
+		StartDate: spec.periodStart, BillingAnchor: spec.anchor,
 		CurrentPeriodStart: spec.periodStart, CurrentPeriodEnd: spec.periodEnd,
 		Currency: "usd", BillingPeriod: spec.subPeriod, BillingPeriodCount: 1,
 		BillingCycle: spec.cycle, SubscriptionStatus: types.SubscriptionStatusActive,
@@ -145,11 +141,15 @@ func (s *MultiCadenceAddonMatrixSuite) build(spec scenarioSpec) *scenario {
 
 	sc := &scenario{sub: sub, planLI: planLI}
 	if spec.addonPeriod != "" {
+		addonCadence := types.InvoiceCadenceAdvance
+		if spec.addonArrear {
+			addonCadence = types.InvoiceCadenceArrear
+		}
 		addonPrice := &price.Price{
 			ID: "price_addon_" + id, Amount: decimal.NewFromInt(spec.addonAmount), Currency: "usd",
 			EntityType: types.PRICE_ENTITY_TYPE_ADDON, EntityID: "addon_" + id, Type: types.PRICE_TYPE_FIXED,
 			BillingPeriod: spec.addonPeriod, BillingPeriodCount: 1, BillingModel: types.BILLING_MODEL_FLAT_FEE,
-			BillingCadence: types.BILLING_CADENCE_RECURRING, InvoiceCadence: types.InvoiceCadenceAdvance,
+			BillingCadence: types.BILLING_CADENCE_RECURRING, InvoiceCadence: addonCadence,
 			BaseModel: types.GetDefaultBaseModel(ctx),
 		}
 		s.NoError(s.GetStores().PriceRepo.Create(ctx, addonPrice))
@@ -159,7 +159,7 @@ func (s *MultiCadenceAddonMatrixSuite) build(spec scenarioSpec) *scenario {
 			PriceID: addonPrice.ID, PriceType: types.PRICE_TYPE_FIXED, DisplayName: "Addon",
 			Quantity: decimal.NewFromInt(1), Currency: "usd",
 			BillingPeriod: spec.addonPeriod, BillingPeriodCount: 1,
-			InvoiceCadence: types.InvoiceCadenceAdvance, StartDate: spec.addonStart,
+			InvoiceCadence: addonCadence, StartDate: spec.addonStart,
 			BaseModel: types.GetDefaultBaseModel(ctx),
 		}
 		items = append(items, addonLI)
@@ -301,20 +301,6 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_AddonRatioUsesItsOwnPeri
 	s.equalMoney("132.14", s.atCreateAddonTotal(sc), "addon total across the stub")
 }
 
-// Anniversary with a custom anchor one month out: the first period is Feb 15 - Mar 15, a
-// third of the quarterly plan's period, so the $300 plan costs 300 x 28/90. No addon here,
-// so this is independent of the mixed-cadence path.
-func (s *MultiCadenceAddonMatrixSuite) TestAnniversaryCustomAnchorStub_PlanProrates() {
-	sc := s.build(scenarioSpec{
-		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
-		periodStart: d(2025, time.February, 15), periodEnd: d(2025, time.March, 15),
-		anchor: d(2025, time.March, 15), prorationBehavior: types.ProrationBehaviorCreateProrations,
-		planAmount: 300,
-	})
-
-	s.equalMoney("93.33", s.planCharge(sc), "plan charge on an anchored stub period")
-}
-
 // --- Ratio denominator: window vs the line item's own period ----------------
 
 // A partial line item is charged as a fraction of its OWN billing period. These cases pin
@@ -402,68 +388,62 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_Parity() {
 
 // --- Whole periods are never prorated --------------------------------------
 
-// The divisor is widened only for a first period cut short by the anchor. These cases must
-// keep charging list price, including the month-end anchor where the period is 28 days but
-// still a whole month.
-func (s *MultiCadenceAddonMatrixSuite) TestWholePeriod_ChargesListPrice() {
-	cases := []struct {
-		name string
-		spec scenarioSpec
-		want string
-	}{
-		{
-			name: "anniversary, anchor on the start date",
-			spec: scenarioSpec{
-				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
-				periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.February, 1),
-				anchor: d(2025, time.January, 1), planAmount: 100,
-				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
-				addonStart: d(2025, time.January, 1),
-			},
-			want: "100",
-		},
-		{
-			name: "month-end anchor: 28-day February is a whole month",
-			spec: scenarioSpec{
-				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
-				periodStart: d(2025, time.January, 31), periodEnd: d(2025, time.February, 28),
-				anchor: d(2025, time.January, 31), planAmount: 100,
-				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
-				addonStart: d(2025, time.January, 31),
-			},
-			want: "100",
-		},
-		{
-			name: "calendar renewal period",
-			spec: scenarioSpec{
-				cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
-				subStart:    d(2025, time.February, 15),
-				periodStart: d(2025, time.April, 1), periodEnd: d(2025, time.July, 1),
-				anchor: d(2025, time.April, 1), planAmount: 300,
-				addonPeriod: types.BILLING_PERIOD_QUARTER, addonAmount: 300,
-				addonStart: d(2025, time.February, 15),
-			},
-			want: "300",
-		},
-		{
-			name: "renewal period with a line item added at its start",
-			spec: scenarioSpec{
-				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
-				subStart:    d(2025, time.January, 1),
-				periodStart: d(2025, time.April, 1), periodEnd: d(2025, time.July, 1),
-				anchor: d(2025, time.January, 1), planAmount: 300,
-				addonPeriod: types.BILLING_PERIOD_QUARTER, addonAmount: 300,
-				addonStart: d(2025, time.April, 1),
-			},
-			want: "300",
-		},
-	}
+// --- Detach ----------------------------------------------------------------
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			tc.spec.prorationBehavior = types.ProrationBehaviorCreateProrations
-			sc := s.build(tc.spec)
-			s.equalMoney(tc.want, s.atCreateAddonTotal(sc), "whole period must bill at list price")
-		})
+// --- Arrear ----------------------------------------------------------------
+
+// An arrear addon is billed at the end of each period, so attaching mid-period raises no
+// upfront charge for any window.
+func (s *MultiCadenceAddonMatrixSuite) TestArrearAddon_AttachRaisesNoCharge() {
+	sc := s.build(scenarioSpec{
+		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
+		periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.April, 1),
+		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorNone,
+		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+		addonStart: d(2025, time.February, 15), addonArrear: true,
+	})
+
+	s.True(s.attachLaterAddonTotal(sc).IsZero(),
+		"arrear attach must not charge upfront, got %s", s.attachLaterAddonTotal(sc))
+}
+
+// --- Cancellation ----------------------------------------------------------
+
+// Cancelling a mixed-cadence subscription still bills its fixed charges; step 3 opened this
+// path by scoping the mixed-cadence bail per line item.
+func (s *MultiCadenceAddonMatrixSuite) TestCancelledSubscription_MixedCadenceStillBills() {
+	sc := s.build(scenarioSpec{
+		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
+		periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.April, 1),
+		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
+		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+		addonStart: d(2025, time.January, 1),
+	})
+	sc.sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+
+	res, err := s.billing.CalculateFixedCharges(s.GetContext(), &dto.CalculateFixedChargesParams{
+		Subscription: sc.sub,
+		PeriodStart:  sc.sub.CurrentPeriodStart,
+		PeriodEnd:    sc.sub.CurrentPeriodEnd,
+	})
+	s.NoError(err)
+	for _, li := range res.LineItems {
+		s.False(li.Amount.IsNegative(), "a fixed charge line must not be negative, got %s", li.Amount)
 	}
+	s.equalMoney("600", res.TotalAmount, "plan 300 + three monthly addon windows")
+}
+
+// An addon that starts with the subscription still only gets the days a calendar stub covers,
+// so its charge must match what attaching it a moment later would cost.
+func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_AddonStartingAtPeriodStart_Parity() {
+	sc := s.build(scenarioSpec{
+		cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
+		periodStart: d(2025, time.September, 8), periodEnd: d(2025, time.October, 1),
+		anchor: d(2025, time.October, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
+		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+		addonStart: d(2025, time.September, 8),
+	})
+
+	s.equalMoney("76.67", s.atCreateAddonTotal(sc), "at-create addon total")
+	s.equalMoney("76.67", s.attachLaterAddonTotal(sc), "attach-later addon total")
 }

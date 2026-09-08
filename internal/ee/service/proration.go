@@ -490,41 +490,38 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 ) (proration.ProrationParams, error) {
 
 	/*
-		The divisor has to be one whole billing period, so that a partial period costs a
-		proportional fraction of the price.
-
-		CurrentPeriodStart is that period's start in every cycle but the first. A first period
-		can be cut short by the billing anchor — calendar alignment, or an explicit anchor —
-		and then the whole period reaches back before the subscription started.
+		Why are we calculating the previous billing date?
+		We need it to determine the start of the current billing period
+		so we can calculate the total number of days in that period.
 
 		Example:
-		- Subscription created on 15 Aug 2025, monthly, calendar billing
-		- Billing anchor: 1 Sep 2025, so the first period is only 15 Aug - 1 Sep
-		- The period start used here is 1 Aug 2025, giving the full 31 days
-	*/
-	periodStart := subscription.CurrentPeriodStart
+		- Subscription created on 15 Aug 2025
+		- Billing period: monthly
+		- Billing anchor: 1st of the month
 
-	// First period definition
-	if subscription.CurrentPeriodStart.Equal(subscription.StartDate) &&
-		!subscription.BillingAnchor.Equal(subscription.StartDate) {
-		periodCount := subscription.BillingPeriodCount
-		if periodCount <= 0 {
-			periodCount = 1
-		}
-		fullPeriodStart, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
-			BillingAnchor: subscription.CurrentPeriodEnd,
-			Unit:          periodCount,
+		In this case, the period start is 1 Aug 2025,
+		which defines the full billing duration of 31 days.
+	*/
+	var periodStart time.Time
+	if subscription.BillingCycle == types.BillingCycleAnniversary {
+		periodStart = subscription.BillingAnchor
+	} else {
+		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
+			BillingAnchor: subscription.BillingAnchor,
+			Unit:          subscription.BillingPeriodCount,
 			Period:        subscription.BillingPeriod,
 		})
 		if err != nil {
+			// Fallback to current period start if calculation fails
 			s.serviceParams.Logger.Info(context.Background(), "failed to calculate period start for proration, using fallback",
 				"error", err,
 				"subscription_id", subscription.ID,
 				"billing_anchor", subscription.BillingAnchor,
 				"billing_period", subscription.BillingPeriod,
 				"billing_period_count", subscription.BillingPeriodCount)
-		} else if fullPeriodStart.Before(periodStart) {
-			periodStart = fullPeriodStart
+			periodStart = subscription.CurrentPeriodStart
+		} else {
+			periodStart = previousBillingDate
 		}
 	}
 	return proration.ProrationParams{

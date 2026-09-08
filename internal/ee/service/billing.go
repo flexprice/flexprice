@@ -258,13 +258,21 @@ func (s *billingService) CalculateFixedCharges(
 
 				windowDuration := w.End.Sub(w.Start)
 				effectiveDuration := effectiveEnd.Sub(effectiveStart)
+				fullPeriod := fullPeriodDuration(ctx, s.Logger, item, w.Start, sub.Timezone, windowDuration)
+				// A line item on a cadence other than the subscription's is priced against its own
+				// period, so a window cut short by a calendar stub bills only the days it covers.
+				// applyProrationToLineItem cannot do this: it works in subscription periods.
+				shortWindowForItem := !sameCadenceAsSubscription(item, sub) &&
+					sub.ProrationBehavior != types.ProrationBehaviorNone &&
+					windowDuration < fullPeriod
+
 				var wLinePeriodStart, wLinePeriodEnd time.Time
-				if effectiveDuration < windowDuration {
+				if effectiveDuration < windowDuration || shortWindowForItem {
 					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio.
 					// The divisor is one full period of THIS line item, not the window, so a short window
 					// (e.g. a calendar stub) cannot inflate the fraction charged for a longer-cadence price.
 					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-						Div(decimal.NewFromFloat(fullPeriodDuration(ctx, s.Logger, item, w.Start, sub.Timezone, windowDuration).Seconds()))
+						Div(decimal.NewFromFloat(fullPeriod.Seconds()))
 					wAmount = wAmount.Mul(ratio)
 					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
 				} else {

@@ -117,6 +117,13 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			continue
 		}
 
+		// Arrear items are billed by the regular invoice at the end of each period. Charging
+		// for them here would bill the same period twice, since the period-end invoice only
+		// deduplicates against other subscription invoices, not against this one-off.
+		if entry.Action == types.ProrationActionAddItem && p.InvoiceCadence == types.InvoiceCadenceArrear {
+			continue
+		}
+
 		// A line item is priced against its own cadence, so a monthly addon on a quarterly
 		// subscription is quoted as one partial month plus the whole months that follow —
 		// the same lines the opening invoice would have raised. Same-cadence items yield a
