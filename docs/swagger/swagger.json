@@ -30636,6 +30636,9 @@
                 "id": {
                     "type": "string"
                 },
+                "invoicing_customer_id": {
+                    "type": "string"
+                },
                 "line_items": {
                     "type": "array",
                     "items": {
