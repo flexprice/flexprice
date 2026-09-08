@@ -19381,6 +19381,9 @@
             },
             "description": "Deprecated: use SubscriptionCoupons instead."
           },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
+          },
           "line_items": {
             "type": "array",
             "description": "LineItems are extra (non-plan) line items added at creation.",
@@ -24590,6 +24593,9 @@
           "latest_invoice": {
             "$ref": "#/components/schemas/InvoiceResponse"
           },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
+          },
           "line_items": {
             "type": "array",
             "items": {
@@ -24810,6 +24816,9 @@
           "invoicing_customer_id": {
             "type": "string",
             "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)"
+          },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
           },
           "line_items": {
             "type": "array",
@@ -30135,6 +30144,18 @@
           "InvoiceTypeCredit"
         ],
         "x-speakeasy-name-override": "InvoiceType"
+      },
+      "types.LineItemGrouping": {
+        "type": "string",
+        "enum": [
+          "PER_CHARGE_PERIOD",
+          "PER_BILLING_PERIOD"
+        ],
+        "x-enum-varnames": [
+          "LINE_ITEM_GROUPING_PER_CHARGE_PERIOD",
+          "LINE_ITEM_GROUPING_PER_BILLING_PERIOD"
+        ],
+        "x-speakeasy-name-override": "LineItemGrouping"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",

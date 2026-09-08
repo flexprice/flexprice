@@ -17212,6 +17212,14 @@ const docTemplate = `{
                         }
                     }
                 },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping: PER_CHARGE_PERIOD (default) bills a monthly price on a quarterly\nsub as 3 line items, PER_BILLING_PERIOD as 1. Same total either way.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
+                        }
+                    ]
+                },
                 "line_items": {
                     "description": "LineItems are extra (non-plan) line items added at creation.",
                     "type": "array",
@@ -22685,6 +22693,14 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping controls whether a charge shorter than the billing period bills\nas one line item per charge period (default) or one per billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
+                        }
+                    ]
+                },
                 "line_items": {
                     "type": "array",
                     "items": {
@@ -22920,6 +22936,14 @@ const docTemplate = `{
                 "invoicing_customer_id": {
                     "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)",
                     "type": "string"
+                },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping controls whether a charge shorter than the billing period bills\nas one line item per charge period (default) or one per billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
+                        }
+                    ]
                 },
                 "line_items": {
                     "description": "LineItems is expanded only if \"subscription_line_items\" is in expand parameter\nEach line item can optionally include expanded price data",
@@ -28295,6 +28319,17 @@ const docTemplate = `{
                 "InvoiceTypeSubscription",
                 "InvoiceTypeOneOff",
                 "InvoiceTypeCredit"
+            ]
+        },
+        "types.LineItemGrouping": {
+            "type": "string",
+            "enum": [
+                "PER_CHARGE_PERIOD",
+                "PER_BILLING_PERIOD"
+            ],
+            "x-enum-varnames": [
+                "LINE_ITEM_GROUPING_PER_CHARGE_PERIOD",
+                "LINE_ITEM_GROUPING_PER_BILLING_PERIOD"
             ]
         },
         "types.ListResponse-dto_WalletResponse": {

@@ -56581,6 +56581,7 @@ type SubscriptionMutation struct {
 	gateway_payment_method_id  *string
 	timezone                   *string
 	proration_behavior         *types.ProrationBehavior
+	line_item_grouping         *types.LineItemGrouping
 	enable_true_up             *bool
 	parent_subscription_id     *string
 	payment_terms              *types.PaymentTerms
@@ -58324,6 +58325,42 @@ func (m *SubscriptionMutation) ResetProrationBehavior() {
 	m.proration_behavior = nil
 }
 
+// SetLineItemGrouping sets the "line_item_grouping" field.
+func (m *SubscriptionMutation) SetLineItemGrouping(tig types.LineItemGrouping) {
+	m.line_item_grouping = &tig
+}
+
+// LineItemGrouping returns the value of the "line_item_grouping" field in the mutation.
+func (m *SubscriptionMutation) LineItemGrouping() (r types.LineItemGrouping, exists bool) {
+	v := m.line_item_grouping
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLineItemGrouping returns the old "line_item_grouping" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldLineItemGrouping(ctx context.Context) (v types.LineItemGrouping, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLineItemGrouping is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLineItemGrouping requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLineItemGrouping: %w", err)
+	}
+	return oldValue.LineItemGrouping, nil
+}
+
+// ResetLineItemGrouping resets all changes to the "line_item_grouping" field.
+func (m *SubscriptionMutation) ResetLineItemGrouping() {
+	m.line_item_grouping = nil
+}
+
 // SetEnableTrueUp sets the "enable_true_up" field.
 func (m *SubscriptionMutation) SetEnableTrueUp(b bool) {
 	m.enable_true_up = &b
@@ -59087,7 +59124,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 45)
+	fields := make([]string, 0, 46)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -59202,6 +59239,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.proration_behavior != nil {
 		fields = append(fields, subscription.FieldProrationBehavior)
 	}
+	if m.line_item_grouping != nil {
+		fields = append(fields, subscription.FieldLineItemGrouping)
+	}
 	if m.enable_true_up != nil {
 		fields = append(fields, subscription.FieldEnableTrueUp)
 	}
@@ -59307,6 +59347,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.Timezone()
 	case subscription.FieldProrationBehavior:
 		return m.ProrationBehavior()
+	case subscription.FieldLineItemGrouping:
+		return m.LineItemGrouping()
 	case subscription.FieldEnableTrueUp:
 		return m.EnableTrueUp()
 	case subscription.FieldInvoicingCustomerID:
@@ -59406,6 +59448,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldTimezone(ctx)
 	case subscription.FieldProrationBehavior:
 		return m.OldProrationBehavior(ctx)
+	case subscription.FieldLineItemGrouping:
+		return m.OldLineItemGrouping(ctx)
 	case subscription.FieldEnableTrueUp:
 		return m.OldEnableTrueUp(ctx)
 	case subscription.FieldInvoicingCustomerID:
@@ -59694,6 +59738,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProrationBehavior(v)
+		return nil
+	case subscription.FieldLineItemGrouping:
+		v, ok := value.(types.LineItemGrouping)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLineItemGrouping(v)
 		return nil
 	case subscription.FieldEnableTrueUp:
 		v, ok := value.(bool)
@@ -60062,6 +60113,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldProrationBehavior:
 		m.ResetProrationBehavior()
+		return nil
+	case subscription.FieldLineItemGrouping:
+		m.ResetLineItemGrouping()
 		return nil
 	case subscription.FieldEnableTrueUp:
 		m.ResetEnableTrueUp()

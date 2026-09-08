@@ -550,7 +550,11 @@ type CreateSubscriptionRequest struct {
 	CollectionMethod       *types.CollectionMethod `json:"collection_method,omitempty"`
 	// ProrationBehavior: create_prorations or none (default). Ignored for anniversary billing.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
-	Timezone          string                  `json:"timezone" validate:"omitempty,timezone"`
+
+	// LineItemGrouping: PER_CHARGE_PERIOD (default) bills a monthly price on a quarterly
+	// sub as 3 line items, PER_BILLING_PERIOD as 1. Same total either way.
+	LineItemGrouping types.LineItemGrouping `json:"line_item_grouping,omitempty"`
+	Timezone         string                 `json:"timezone" validate:"omitempty,timezone"`
 	// BillingAnchor overrides the derived anchor for anniversary billing. For monthly billing,
 	// the day-of-month defines cycle boundaries (shorter first period if start is before that day).
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
@@ -924,6 +928,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
 		return ierr.NewError("opening invoice adjustment amount must be >= 0").
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := r.LineItemGrouping.Validate(); err != nil {
+		return err
 	}
 
 	if r.AutoInvoiceThreshold != nil && r.AutoInvoiceThreshold.IsNegative() {
@@ -1426,6 +1434,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		BillingCycle:       r.BillingCycle,
 		Timezone:           r.Timezone,
 		ProrationBehavior:  r.ProrationBehavior,
+		LineItemGrouping:   r.LineItemGrouping.Default(),
 
 		// New payment behavior fields
 		PaymentBehavior:        string(paymentBehavior),

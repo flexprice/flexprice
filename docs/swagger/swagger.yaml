@@ -2763,6 +2763,12 @@ definitions:
           type: array
         description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
+      line_item_grouping:
+        allOf:
+        - $ref: '#/definitions/types.LineItemGrouping'
+        description: |-
+          LineItemGrouping: PER_CHARGE_PERIOD (default) bills a monthly price on a quarterly
+          sub as 3 line items, PER_BILLING_PERIOD as 1. Same total either way.
       line_items:
         description: LineItems are extra (non-plan) line items added at creation.
         items:
@@ -6744,6 +6750,12 @@ definitions:
         allOf:
         - $ref: '#/definitions/InvoiceResponse'
         description: Latest invoice information for incomplete subscriptions
+      line_item_grouping:
+        allOf:
+        - $ref: '#/definitions/types.LineItemGrouping'
+        description: |-
+          LineItemGrouping controls whether a charge shorter than the billing period bills
+          as one line item per charge period (default) or one per billing period.
       line_items:
         items:
           $ref: '#/definitions/subscription.SubscriptionLineItem'
@@ -6939,6 +6951,12 @@ definitions:
           InvoicingCustomerID is the customer ID to use for invoicing
           This can differ from the subscription customer (e.g., parent company invoicing for child company)
         type: string
+      line_item_grouping:
+        allOf:
+        - $ref: '#/definitions/types.LineItemGrouping'
+        description: |-
+          LineItemGrouping controls whether a charge shorter than the billing period bills
+          as one line item per charge period (default) or one per billing period.
       line_items:
         description: |-
           LineItems is expanded only if "subscription_line_items" is in expand parameter
@@ -10873,6 +10891,14 @@ definitions:
     - InvoiceTypeSubscription
     - InvoiceTypeOneOff
     - InvoiceTypeCredit
+  types.LineItemGrouping:
+    enum:
+    - PER_CHARGE_PERIOD
+    - PER_BILLING_PERIOD
+    type: string
+    x-enum-varnames:
+    - LINE_ITEM_GROUPING_PER_CHARGE_PERIOD
+    - LINE_ITEM_GROUPING_PER_BILLING_PERIOD
   types.ListResponse-dto_WalletResponse:
     properties:
       items:

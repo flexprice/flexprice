@@ -200,6 +200,53 @@ func (c CollectionMethod) Validate() error {
 	return nil
 }
 
+// LineItemGrouping controls how many invoice line items a charge produces when its
+// cadence is shorter than the subscription's. Presentation only: charges are always
+// computed per charge period, so the total is the same under either value.
+type LineItemGrouping string
+
+const (
+	// LINE_ITEM_GROUPING_PER_CHARGE_PERIOD - one line item per charge period (monthly price on a quarterly sub bills as 3 rows)
+	LINE_ITEM_GROUPING_PER_CHARGE_PERIOD LineItemGrouping = "PER_CHARGE_PERIOD"
+
+	// LINE_ITEM_GROUPING_PER_BILLING_PERIOD - those rows collapsed into one spanning the billing period
+	LINE_ITEM_GROUPING_PER_BILLING_PERIOD LineItemGrouping = "PER_BILLING_PERIOD"
+)
+
+func (g LineItemGrouping) String() string {
+	return string(g)
+}
+
+func (g LineItemGrouping) Validate() error {
+	allowed := []LineItemGrouping{
+		LINE_ITEM_GROUPING_PER_CHARGE_PERIOD,
+		LINE_ITEM_GROUPING_PER_BILLING_PERIOD,
+	}
+
+	if g != "" && !lo.Contains(allowed, g) {
+		return ierr.NewError("invalid line item grouping").
+			WithHint("Invalid line item grouping").
+			WithReportableDetails(map[string]any{
+				"line_item_grouping": g,
+				"allowed_values":     allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// Default resolves an unset value to the fan-out behavior that predates this setting.
+func (g LineItemGrouping) Default() LineItemGrouping {
+	if g == "" {
+		return LINE_ITEM_GROUPING_PER_CHARGE_PERIOD
+	}
+	return g
+}
+
+func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
+	return g.Default() == LINE_ITEM_GROUPING_PER_BILLING_PERIOD
+}
+
 // PaymentTerms represents net payment terms (e.g. "30 NET" = payment due in 30 days).
 // Used to compute invoice due date from period end.
 type PaymentTerms string

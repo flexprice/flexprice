@@ -1286,3 +1286,77 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_ExplicitDraftParentRej
 	s.Require().Error(err)
 	s.Contains(err.Error(), "parent subscription is not active")
 }
+
+// seedMonthlyPriceQuarterlyGroupingPlan registers a plan whose only price is a MONTHLY
+// FIXED ADVANCE charge, so a QUARTERLY subscription attaching it spans 3 charge periods.
+func (s *SubscriptionServiceSuite) seedMonthlyPriceQuarterlyGroupingPlan(planID string) *price.Price {
+	ctx := s.GetContext()
+
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, &plan.Plan{
+		ID:        planID,
+		Name:      "Monthly Charge Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	p := &price.Price{
+		ID:                 "price_" + planID,
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	return p
+}
+
+// End to end: create a QUARTERLY subscription carrying a MONTHLY $100 charge, then read the
+// invoice it raises. PER_CHARGE_PERIOD bills 3 monthly line items, PER_BILLING_PERIOD bills 1
+// covering the quarter, and the invoice total is $300 either way.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToEnd() {
+	tests := []struct {
+		name          string
+		grouping      types.LineItemGrouping
+		wantLineItems int
+	}{
+		{"per charge period bills each month", types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, 3},
+		{"per billing period bills the quarter once", types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD, 1},
+		{"omitted keeps the per charge period default", types.LineItemGrouping(""), 3},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			planID := fmt.Sprintf("plan_grouping_e2e_%d", i)
+			monthlyPrice := s.seedMonthlyPriceQuarterlyGroupingPlan(planID)
+
+			resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           planID,
+				Currency:         "usd",
+				BillingPeriod:    types.BILLING_PERIOD_QUARTER,
+				BillingCycle:     types.BillingCycleAnniversary,
+				StartDate:        lo.ToPtr(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+				IncludePriceIDs:  lo.ToPtr([]string{monthlyPrice.ID}),
+				LineItemGrouping: tt.grouping,
+			})
+			s.Require().NoError(err)
+
+			invoices := s.invoicesForSubscription(resp.Subscription.ID)
+			s.Require().Len(invoices, 1, "subscription create should raise exactly one invoice")
+
+			inv, err := s.GetStores().InvoiceRepo.Get(ctx, invoices[0].ID)
+			s.Require().NoError(err)
+
+			s.Len(inv.LineItems, tt.wantLineItems)
+			s.True(inv.AmountDue.Equal(decimal.NewFromInt(300)),
+				"invoice total = %s, want 300 under either grouping", inv.AmountDue)
+		})
+	}
+}

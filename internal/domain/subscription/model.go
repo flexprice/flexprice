@@ -122,6 +122,10 @@ type Subscription struct {
 
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
 
+	// LineItemGrouping controls whether a charge shorter than the billing period bills
+	// as one line item per charge period (default) or one per billing period.
+	LineItemGrouping types.LineItemGrouping `db:"line_item_grouping" json:"line_item_grouping"`
+
 	EnableTrueUp bool `json:"enable_true_up"`
 	// InvoicingCustomerID is the customer ID to use for invoicing
 	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
@@ -270,6 +274,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		Phases:               phases,
 		Timezone:             sub.Timezone,
 		ProrationBehavior:    types.ProrationBehavior(sub.ProrationBehavior),
+		LineItemGrouping:     types.LineItemGrouping(sub.LineItemGrouping),
 		EnableTrueUp:         sub.EnableTrueUp,
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,

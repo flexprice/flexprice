@@ -373,3 +373,48 @@ func TestCalculateBillingPeriods_Monthly_FirstPeriodCliffedToSubscriptionEnd(t *
 		t.Errorf("first period = [%v, %v], want [%v, %v]", periods[0].Start, periods[0].End, start, wantEnd)
 	}
 }
+
+func TestLineItemGroupingValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   LineItemGrouping
+		wantErr bool
+	}{
+		{"per_charge_period", LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, false},
+		{"per_billing_period", LINE_ITEM_GROUPING_PER_BILLING_PERIOD, false},
+		{"empty_is_allowed_and_defaults", LineItemGrouping(""), false},
+		{"unknown", LineItemGrouping("WEEKLY_ISH"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.value.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("Validate(%q) = nil, want error", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Validate(%q) = %v, want nil", tt.value, err)
+			}
+		})
+	}
+}
+
+func TestLineItemGroupingDefaultPreservesExistingBehavior(t *testing.T) {
+	if got := LineItemGrouping("").Default(); got != LINE_ITEM_GROUPING_PER_CHARGE_PERIOD {
+		t.Errorf("Default() = %q, want %q (unset must keep per-charge-period fan-out)", got, LINE_ITEM_GROUPING_PER_CHARGE_PERIOD)
+	}
+	if got := LINE_ITEM_GROUPING_PER_BILLING_PERIOD.Default(); got != LINE_ITEM_GROUPING_PER_BILLING_PERIOD {
+		t.Errorf("Default() = %q, want it to preserve an explicit value", got)
+	}
+}
+
+func TestLineItemGroupingMergesPerBillingPeriod(t *testing.T) {
+	if LINE_ITEM_GROUPING_PER_CHARGE_PERIOD.MergesIntoBillingPeriod() {
+		t.Error("per-charge-period must not merge")
+	}
+	if !LINE_ITEM_GROUPING_PER_BILLING_PERIOD.MergesIntoBillingPeriod() {
+		t.Error("per-billing-period must merge")
+	}
+	if LineItemGrouping("").MergesIntoBillingPeriod() {
+		t.Error("unset must not merge (defaults to today's behavior)")
+	}
+}
