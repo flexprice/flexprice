@@ -84,28 +84,57 @@ func (s *WalletServiceSuite) TestTopUpWallet_CheckoutWrongReason_Rejected() {
 	s.Empty(sessions)
 }
 
-func (s *WalletServiceSuite) TestTopUpWallet_CheckoutConcurrentGuard() {
+func (s *WalletServiceSuite) TestTopUpWallet_CheckoutExistingSessionReportsAlreadyExists() {
 	s.seedAutoComplete(false)
 	ctx := s.GetContext()
-	s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
+	existing := s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
 
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = s.testData.customer.ID
 	before, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.Require().NoError(err)
 
-	_, err = s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
+	resp, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
 		CreditsToAdd:      decimal.NewFromInt(100),
 		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
 		Checkout:          s.checkoutParamsRazorpay(),
 		IdempotencyKey:    lo.ToPtr("topup-checkout-concurrent"),
 	})
-	s.Require().Error(err)
-	s.True(ierr.IsAlreadyExists(err), "expected concurrent guard AlreadyExists, got %v", err)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CheckoutSession)
+	s.Require().NotNil(resp.CheckoutSession.EntityCreationResult)
+	s.Equal(types.EntityCreationStatusFailedAlreadyExists, resp.CheckoutSession.EntityCreationResult.Status)
+	s.Equal(existing.ID, resp.CheckoutSession.EntityCreationResult.EntityId)
 
 	after, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.Require().NoError(err)
-	s.Equal(len(before), len(after), "guard must reject before creating a credit-purchase draft")
+	s.Equal(len(before), len(after), "a blocked top-up must not create a credit-purchase draft")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_CheckoutExistingSessionSuperseded() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+	existing := s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
+
+	checkout := s.checkoutParamsRazorpay()
+	checkout.EntityCreationOptions = &types.EntityCreationOptions{
+		EntityCreationConflictPolicies: &types.EntityCreationConflictPolicies{
+			OnExistingEntity: types.OnExistingEntityPolicySupersede,
+		},
+	}
+
+	// The provider call cannot succeed in the test env, so this asserts the supersede
+	// itself: the in-flight session is retired before the replacement is attempted.
+	_, _ = s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Checkout:          checkout,
+		IdempotencyKey:    lo.ToPtr("topup-checkout-supersede"),
+	})
+
+	superseded, err := s.GetStores().CheckoutSessionRepo.Get(ctx, existing.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, superseded.CheckoutStatus)
 }
 
 func (s *WalletServiceSuite) TestTopUpWallet_CheckoutSessionCreateFailureArchivesDraft() {

@@ -171,7 +171,7 @@ func (s *PortalWalletSuite) TestTopUpIgnoresProvidersWithoutCheckout() {
 
 // An abandoned session locks the wallet until it expires; the customer gets the
 // in-flight session back instead of a conflict they cannot act on.
-func (s *PortalWalletSuite) TestTopUpReturnsExistingPendingSession() {
+func (s *PortalWalletSuite) TestTopUpReportsAlreadyExistsWhenSessionInFlight() {
 	s.connect(types.SecretProviderChargebee)
 	s.seedPendingSession("cs_inflight")
 
@@ -181,10 +181,34 @@ func (s *PortalWalletSuite) TestTopUpReturnsExistingPendingSession() {
 		Checkout:       &dto.PortalCheckoutParams{},
 	})
 
-	s.NoError(err, "an in-flight session must not surface as a conflict")
+	s.Require().NoError(err, "an in-flight session is reported on the response, not as an error")
 	s.Require().NotNil(resp.CheckoutSession)
 	s.Equal("cs_inflight", resp.CheckoutSession.ID)
-	s.Nil(resp.WalletTransaction, "no new transaction is created when one is in flight")
+	s.Require().NotNil(resp.CheckoutSession.EntityCreationResult)
+	s.Equal(types.EntityCreationStatusFailedAlreadyExists, resp.CheckoutSession.EntityCreationResult.Status)
+}
+
+func (s *PortalWalletSuite) TestTopUpSupersedesSessionInFlight() {
+	s.connect(types.SecretProviderChargebee)
+	s.seedPendingSession("cs_inflight")
+
+	// The provider call cannot succeed here, so this asserts the supersede itself:
+	// the in-flight session is retired before the replacement is attempted.
+	_, _ = s.svc.TopUpWallet(s.ctx, s.walletID, &dto.PortalTopUpWalletRequest{
+		CreditsToAdd:   decimal.NewFromInt(5),
+		IdempotencyKey: lo.ToPtr("idem_1"),
+		Checkout: &dto.PortalCheckoutParams{
+			EntityCreationOptions: &types.EntityCreationOptions{
+				EntityCreationConflictPolicies: &types.EntityCreationConflictPolicies{
+					OnExistingEntity: types.OnExistingEntityPolicySupersede,
+				},
+			},
+		},
+	})
+
+	superseded, err := s.GetStores().CheckoutSessionRepo.Get(s.ctx, "cs_inflight")
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, superseded.CheckoutStatus)
 }
 
 func (s *PortalWalletSuite) seedPendingSession(id string) {

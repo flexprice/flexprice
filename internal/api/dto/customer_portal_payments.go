@@ -19,9 +19,10 @@ type PortalCheckoutParams struct {
 	// Authorisation for this one payment, given while the customer is present.
 	// Deliberately not persisted. Falls back to a link when no usable saved
 	// method exists or the charge declines — read payment_action, not the URL.
-	UseSavedMethod bool              `json:"use_saved_method,omitempty"`
-	IdempotencyKey *string           `json:"idempotency_key,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	UseSavedMethod        bool                         `json:"use_saved_method,omitempty"`
+	IdempotencyKey        *string                      `json:"idempotency_key,omitempty"`
+	Metadata              map[string]string            `json:"metadata,omitempty"`
+	EntityCreationOptions *types.EntityCreationOptions `json:"entity_creation_options,omitempty"`
 }
 
 // transaction_reason, expiry and priority are pinned server-side so a portal
@@ -38,16 +39,17 @@ type PortalTopUpWalletRequest struct {
 // provider_result (gateway ids, intent ids) and payment_provider_config, none of
 // which may reach a browser. payment_action is the only channel for provider data.
 type PortalCheckoutSessionResponse struct {
-	ID                string                   `json:"id"`
-	CheckoutStatus    types.CheckoutStatus     `json:"checkout_status"`
-	PaymentProvider   types.PaymentGatewayType `json:"payment_provider"`
-	PaymentAction     *types.PaymentAction     `json:"payment_action,omitempty"`
-	CheckoutInvoiceID *string                  `json:"checkout_invoice_id,omitempty"`
-	CheckoutPaymentID *string                  `json:"checkout_payment_id,omitempty"`
-	ExpiresAt         time.Time                `json:"expires_at"`
-	CompletedAt       *time.Time               `json:"completed_at,omitempty"`
-	CancelledAt       *time.Time               `json:"cancelled_at,omitempty"`
-	FailureReason     *string                  `json:"failure_reason,omitempty"`
+	ID                   string                      `json:"id"`
+	CheckoutStatus       types.CheckoutStatus        `json:"checkout_status"`
+	PaymentProvider      types.PaymentGatewayType    `json:"payment_provider"`
+	PaymentAction        *types.PaymentAction        `json:"payment_action,omitempty"`
+	CheckoutInvoiceID    *string                     `json:"checkout_invoice_id,omitempty"`
+	CheckoutPaymentID    *string                     `json:"checkout_payment_id,omitempty"`
+	ExpiresAt            time.Time                   `json:"expires_at"`
+	CompletedAt          *time.Time                  `json:"completed_at,omitempty"`
+	CancelledAt          *time.Time                  `json:"cancelled_at,omitempty"`
+	FailureReason        *string                     `json:"failure_reason,omitempty"`
+	EntityCreationResult *types.EntityCreationResult `json:"entity_creation_result,omitempty"`
 }
 
 type PortalTopUpWalletResponse struct {

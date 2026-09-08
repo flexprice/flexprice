@@ -683,6 +683,8 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 
 	// Handle purchased credits with invoice (pay-later / auto-complete, or pay-first checkout).
 	if req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced {
+		var superseded bool
+
 		// Opt-in checkout: force pending + DRAFT so credits apply only after payment.
 		if req.Checkout != nil {
 			existing, err := s.getAnyPendingCheckoutSession(ctx, w.CustomerID, walletID)
@@ -691,13 +693,16 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			}
 
 			if len(existing) > 0 {
-				return nil, ierr.NewError("a pending checkout session already exists for this wallet").
-					WithHint("Complete or cancel the existing checkout before starting another payment-gated top-up").
-					WithReportableDetails(map[string]any{
-						"wallet_id":           walletID,
-						"checkout_session_id": existing[0].ID,
-					}).
-					Mark(ierr.ErrAlreadyExists)
+				if req.Checkout.EntityCreationOptions.Policy() != types.OnExistingEntityPolicySupersede {
+					return s.blockedByPendingTopupSession(ctx, walletID, existing[0])
+				}
+
+				// nil reason -> the session settles as expired, not failed: a supersede is not an error.
+				checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
+				if err := checkoutSvc.CleanupCheckoutSession(ctx, existing[0].ID, nil); err != nil {
+					return nil, err
+				}
+				superseded = true
 			}
 		}
 
@@ -757,6 +762,15 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			})
 			if err != nil {
 				return nil, err
+			}
+
+			creationStatus := types.EntityCreationStatusCreated
+			if superseded {
+				creationStatus = types.EntityCreationStatusSuperseded
+			}
+			sessionResp.EntityCreationResult = &types.EntityCreationResult{
+				Status:   creationStatus,
+				EntityId: sessionResp.ID,
 			}
 
 			resp.CheckoutSession = sessionResp
@@ -823,6 +837,46 @@ func (s *walletService) derivedTopupIdempotencyKey(walletID string, req *dto.Top
 	})
 }
 
+// Nothing was created for this caller: the session, invoice and transaction on the
+// response all belong to the in-flight top-up, and status says so.
+func (s *walletService) blockedByPendingTopupSession(
+	ctx context.Context,
+	walletID string,
+	blocking *checkout.CheckoutSession,
+) (*dto.TopUpWalletResponse, error) {
+	s.Logger.Info(ctx, "top-up blocked by an in-flight checkout session",
+		"wallet_id", walletID,
+		"checkout_session_id", blocking.ID,
+	)
+
+	walletResp, err := s.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionResp := dto.ToCheckoutSessionResponse(blocking)
+	sessionResp.EntityCreationResult = &types.EntityCreationResult{
+		Status:   types.EntityCreationStatusFailedAlreadyExists,
+		EntityId: blocking.ID,
+	}
+
+	resp := &dto.TopUpWalletResponse{
+		Wallet:          walletResp,
+		InvoiceID:       blocking.CheckoutInvoiceID,
+		CheckoutSession: sessionResp,
+	}
+
+	if params := blocking.Configuration.ToCheckoutConfiguration().WalletTopupParams; params != nil && params.WalletTransactionID != "" {
+		tx, err := s.WalletRepo.GetTransactionByID(ctx, params.WalletTransactionID)
+		if err != nil {
+			return nil, err
+		}
+		resp.WalletTransaction = dto.FromWalletTransaction(tx)
+	}
+
+	return resp, nil
+}
+
 func (s *walletService) getAnyPendingCheckoutSession(ctx context.Context, customerID string, walletID string) ([]*checkout.CheckoutSession, error) {
 	pendingFilter := &types.CheckoutSessionFilter{
 		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
@@ -833,6 +887,9 @@ func (s *walletService) getAnyPendingCheckoutSession(ctx context.Context, custom
 			types.CheckoutStatusPending,
 		},
 		Configuration: &types.CheckoutConfigurationFilter{WalletID: walletID},
+		// A session past its expiry no longer blocks: the sweep that settles it runs
+		// asynchronously, and until it does the row would wedge the wallet forever.
+		ExpiresAtGT: lo.ToPtr(time.Now().UTC()),
 	}
 	pendingFilter.Limit = lo.ToPtr(1)
 
@@ -2304,7 +2361,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			return err
 		}
 
-
 		// Step 3: Validate operation
 		if err := s.validateWalletOperation(w, req); err != nil {
 			return err
@@ -2432,7 +2488,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-
 	// Log credit balance alert after wallet operation
 	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
 		// Don't fail the transaction if alert logging fails
@@ -2451,7 +2506,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			"customer_id", w.CustomerID,
 		)
 	}
-
 
 	return nil
 }
@@ -4051,6 +4105,27 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 // hasPendingAutoTopupInvoice returns true if there is already a FINALIZED, unpaid
 // auto-topup invoice for this customer. Used to prevent duplicate invoices while
 // waiting for the customer to pay.
+// Auto top-ups tag themselves in metadata, so anything pending without that tag is
+// a customer- or admin-initiated purchase.
+func (s *walletService) hasPendingManualTopupTransaction(ctx context.Context, walletID string) (bool, string, error) {
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = lo.ToPtr(walletID)
+	filter.TransactionStatus = lo.ToPtr(types.TransactionStatusPending)
+	filter.TransactionReason = lo.ToPtr(types.TransactionReasonPurchasedCreditInvoiced)
+
+	txs, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
+	if err != nil {
+		return false, "", err
+	}
+
+	for _, tx := range txs {
+		if tx.Metadata[types.WalletMetadataKeyAutoTopup] != "true" {
+			return true, tx.ID, nil
+		}
+	}
+	return false, "", nil
+}
+
 func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customerID string) (bool, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = customerID
@@ -4171,6 +4246,26 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 				)
 				return nil
 			}
+		}
+
+		// A manual top-up already in flight will raise the balance on its own; charging
+		// on top of it double-credits the customer. Keyed on the pending transaction
+		// rather than the checkout session so pay-later top-ups count too.
+		hasManual, manualTxID, err := s.hasPendingManualTopupTransaction(ctx, w.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to check for a pending manual top-up",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+			return err
+		}
+		if hasManual {
+			s.Logger.Info(ctx, "manual top-up in flight, skipping auto top-up",
+				"wallet_id", w.ID,
+				"wallet_transaction_id", manualTxID,
+				"auto_topup_threshold", *w.AutoTopup.Threshold,
+			)
+			return nil
 		}
 
 		lastAutoTopup, err := s.WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, w.ID)

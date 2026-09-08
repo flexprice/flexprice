@@ -52,18 +52,6 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 			return nil, err
 		}
 
-		// An abandoned session would otherwise lock the wallet until it expires, so
-		// hand back the one already in flight rather than a conflict the customer
-		// cannot act on.
-		if existing, err := s.pendingTopupSession(ctx, w.CustomerID, walletID); err != nil {
-			return nil, err
-		} else if existing != nil {
-			return &dto.PortalTopUpWalletResponse{
-				Wallet:          dto.FromWallet(w),
-				CheckoutSession: existing,
-			}, nil
-		}
-
 		collectionMethod := types.CollectionMethodSendInvoice
 		if req.Checkout.UseSavedMethod {
 			collectionMethod = types.CollectionMethodChargeAutomatically
@@ -81,9 +69,10 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 					CollectionMethod: collectionMethod,
 				},
 			},
-			RedirectionParams: req.Checkout.RedirectionParams,
-			IdempotencyKey:    idempotencyKey,
-			Metadata:          req.Checkout.Metadata,
+			RedirectionParams:     req.Checkout.RedirectionParams,
+			IdempotencyKey:        idempotencyKey,
+			Metadata:              req.Checkout.Metadata,
+			EntityCreationOptions: req.Checkout.EntityCreationOptions,
 		}
 	}
 
@@ -183,23 +172,6 @@ func (s *customerPortalService) resolveCheckoutProvider(
 			Mark(ierr.ErrInternal)
 	}
 	return provider, nil
-}
-
-func (s *customerPortalService) pendingTopupSession(
-	ctx context.Context,
-	customerID string,
-	walletID string,
-) (*dto.PortalCheckoutSessionResponse, error) {
-	walletSvc := NewWalletService(s.ServiceParams).(*walletService)
-	existing, err := walletSvc.getAnyPendingCheckoutSession(ctx, customerID, walletID)
-	if err != nil {
-		return nil, err
-	}
-	if len(existing) == 0 {
-		return nil, nil
-	}
-
-	return toPortalCheckoutSession(dto.ToCheckoutSessionResponse(existing[0])), nil
 }
 
 // validateTopupAmount rejects a credit amount that converts to less than the

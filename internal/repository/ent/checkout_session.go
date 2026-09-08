@@ -429,6 +429,9 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 	if f.ExpiresAtLT != nil {
 		query = query.Where(entCheckout.ExpiresAtLT(lo.FromPtr(f.ExpiresAtLT)))
 	}
+	if f.ExpiresAtGT != nil {
+		query = query.Where(entCheckout.ExpiresAtGT(lo.FromPtr(f.ExpiresAtGT)))
+	}
 	if len(f.CheckoutInvoiceIDs) > 0 {
 		query = query.Where(entCheckout.CheckoutInvoiceIDIn(f.CheckoutInvoiceIDs...))
 	}

@@ -2686,6 +2686,29 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_PendingWalletTxnBlock
 	s.Equal(0, s.countAutoTopupInvoices(), "pending wallet txn alone must block a new auto-topup invoice")
 }
 
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_ManualPendingTopupBlocks() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3)
+
+	manual := &wallet.Transaction{
+		ID:                "txn_pending_manual_topup",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, manual))
+
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices(), "a manual top-up in flight must block auto top-up")
+}
+
 func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_CooldownBlocksAfterCompletedTxn() {
 	ctx := s.GetContext()
 	balance := decimal.NewFromInt(3)

@@ -48,13 +48,17 @@ type RedirectionParams struct {
 type CheckoutParams struct {
 	PaymentParams
 	RedirectionParams
-	IdempotencyKey *string           `json:"idempotency_key,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	IdempotencyKey        *string                      `json:"idempotency_key,omitempty"`
+	Metadata              map[string]string            `json:"metadata,omitempty"`
+	EntityCreationOptions *types.EntityCreationOptions `json:"entity_creation_options,omitempty"`
 }
 
 func (p *CheckoutParams) Validate() error {
 	if p == nil {
 		return nil
+	}
+	if err := p.EntityCreationOptions.Validate(); err != nil {
+		return err
 	}
 	return p.PaymentParams.Validate()
 }
@@ -262,6 +266,8 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 type CheckoutSessionResponse struct {
 	*domainCheckout.CheckoutSession
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
+	// Describes the call that returned this session, not the session itself; never persisted.
+	EntityCreationResult *types.EntityCreationResult `json:"entity_creation_result,omitempty"`
 }
 
 // ListCheckoutSessionsResponse is the paginated list response.
