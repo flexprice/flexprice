@@ -419,6 +419,20 @@ func endDateBoundaryForMatching(periodEnd time.Time, billingPeriod types.Billing
 	}
 }
 
+// sameCadenceAsSubscription reports whether the line item bills on exactly the subscription's
+// cadence, treating an unset count as 1.
+func sameCadenceAsSubscription(item *subscription.SubscriptionLineItem, sub *subscription.Subscription) bool {
+	itemCount := item.BillingPeriodCount
+	if itemCount <= 0 {
+		itemCount = 1
+	}
+	subCount := sub.BillingPeriodCount
+	if subCount <= 0 {
+		subCount = 1
+	}
+	return item.BillingPeriod == sub.BillingPeriod && itemCount == subCount
+}
+
 // periodWindow is a half-open [Start, End) sub-range of an invoice period.
 type periodWindow struct {
 	Start time.Time
@@ -457,7 +471,7 @@ func splitInvoicePeriodByLineItemCadence(
 	// Covers month-based AND sub-month periods (DAILY/WEEKLY) uniformly.
 	// The fan-out path below relies on month math that doesn't apply to
 	// sub-month periods, so DAILY×N-on-DAILY×N must take this fast path.
-	if lineItem.BillingPeriod == sub.BillingPeriod && itemCount == subCount {
+	if sameCadenceAsSubscription(lineItem, sub) {
 		return []periodWindow{{Start: invoicePeriodStart, End: invoicePeriodEnd}}, nil
 	}
 
@@ -2353,8 +2367,10 @@ func (s *billingService) applyProrationToLineItem(
 		return originalAmount, nil
 	}
 
-	// Mixed billing periods and proration are mutually exclusive.
-	if sub.HasMixedBillingPeriods() {
+	// Proration is expressed against the subscription's own period, so it only applies to
+	// items that share that cadence. Others are already priced per window by the fan-out;
+	// one such item must not switch proration off for the rest of the subscription.
+	if !sameCadenceAsSubscription(item, sub) {
 		return originalAmount, nil
 	}
 

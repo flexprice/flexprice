@@ -166,19 +166,25 @@ func (s *Subscription) GetInvoicingCustomerID() string {
 	return s.CustomerID
 }
 
-// HasMixedBillingPeriods returns true when the subscription's line items have more
+// HasMixedBillingPeriods returns true when the subscription's recurring line items have more
 // than one distinct BillingPeriod. Safe to call with nil/empty LineItems (returns false).
 func (s *Subscription) HasMixedBillingPeriods() bool {
 	return hasMixedBillingPeriods(s.LineItems)
 }
 
 // hasMixedBillingPeriods is a standalone helper usable before the subscription is persisted.
+// ONETIME items are ignored: they are billed once on their own date and never renew, so a
+// setup fee alongside a monthly plan is not a mixed-cadence subscription.
 func hasMixedBillingPeriods(items []*SubscriptionLineItem) bool {
-	if len(items) <= 1 {
-		return false
-	}
-	first := items[0].BillingPeriod
-	for _, item := range items[1:] {
+	var first types.BillingPeriod
+	for _, item := range items {
+		if item.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+			continue
+		}
+		if first == "" {
+			first = item.BillingPeriod
+			continue
+		}
 		if item.BillingPeriod != first {
 			return true
 		}

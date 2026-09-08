@@ -33,6 +33,10 @@ func TestHasMixedBillingPeriods(t *testing.T) {
 		{"M_M_Q", []types.BillingPeriod{types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_QUARTER}, true, "Two same, one different"},
 		{"A_A", []types.BillingPeriod{types.BILLING_PERIOD_ANNUAL, types.BILLING_PERIOD_ANNUAL}, false, "All same"},
 		{"M_A", []types.BillingPeriod{types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_ANNUAL}, true, "Min and max"},
+		{"M_ONETIME", []types.BillingPeriod{types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_ONETIME}, false, "A setup fee does not make a subscription mixed-cadence"},
+		{"ONETIME_M_M", []types.BillingPeriod{types.BILLING_PERIOD_ONETIME, types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_MONTHLY}, false, "Leading one-time item is ignored"},
+		{"ONETIME_M_Q", []types.BillingPeriod{types.BILLING_PERIOD_ONETIME, types.BILLING_PERIOD_MONTHLY, types.BILLING_PERIOD_QUARTER}, true, "Recurring items still differ"},
+		{"ONETIME_only", []types.BillingPeriod{types.BILLING_PERIOD_ONETIME, types.BILLING_PERIOD_ONETIME}, false, "No recurring items"},
 	}
 
 	for _, tt := range tests {

@@ -309,3 +309,73 @@ func (s *MultiCadenceAddonMatrixSuite) TestAnniversaryCustomAnchorStub_PlanProra
 
 	s.equalMoney("93.33", s.planCharge(sc), "plan charge on an anchored stub period")
 }
+
+// --- Ratio denominator: window vs the line item's own period ----------------
+
+// A partial line item is charged as a fraction of its OWN billing period. These cases pin
+// when the invoice window and that period diverge, and that the amount tracks the period.
+func (s *MultiCadenceAddonMatrixSuite) TestRatioDenominator_WindowVsItemPeriod() {
+	cases := []struct {
+		name string
+		spec scenarioSpec
+		want string
+		why  string
+	}{
+		{
+			name: "same cadence, full window: window == item period",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
+				periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.February, 1),
+				anchor: d(2025, time.January, 1), planAmount: 100,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.January, 15),
+			},
+			want: "54.84",
+			why:  "17 of 31 days; window and month agree so nothing changes",
+		},
+		{
+			name: "same cadence, calendar stub: window shorter than the month",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_MONTHLY,
+				periodStart: d(2025, time.January, 20), periodEnd: d(2025, time.February, 1),
+				anchor: d(2025, time.February, 1), planAmount: 100,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.January, 25),
+			},
+			want: "22.58",
+			why:  "7 days of a month (31d), not 7 of the 12-day stub",
+		},
+		{
+			name: "multi cadence, single clamped window",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
+				periodStart: d(2025, time.September, 8), periodEnd: d(2025, time.October, 1),
+				anchor: d(2025, time.October, 1), planAmount: 300,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.September, 21),
+			},
+			want: "33.33",
+			why:  "fan-out collapses to one 23-day window; divisor is still the 30-day month",
+		},
+		{
+			name: "multi cadence, whole interior windows: ratio never applies",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
+				periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.April, 1),
+				anchor: d(2025, time.January, 1), planAmount: 300,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.February, 1),
+			},
+			want: "200",
+			why:  "addon covers Feb and Mar in full, so both windows bill at list price",
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			tc.spec.prorationBehavior = types.ProrationBehaviorNone
+			sc := s.build(tc.spec)
+			s.equalMoney(tc.want, s.atCreateAddonTotal(sc), tc.why)
+		})
+	}
+}
