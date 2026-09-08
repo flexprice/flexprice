@@ -921,16 +921,20 @@ func init() {
 	entitlementgrantDescMeasure := entitlementgrantFields[6].Descriptor()
 	// entitlementgrant.MeasureValidator is a validator for the "measure" field. It is called by the builders before save.
 	entitlementgrant.MeasureValidator = entitlementgrantDescMeasure.Validators[0].(func(string) error)
+	// entitlementgrantDescUnlimited is the schema descriptor for unlimited field.
+	entitlementgrantDescUnlimited := entitlementgrantFields[8].Descriptor()
+	// entitlementgrant.DefaultUnlimited holds the default value on creation for the unlimited field.
+	entitlementgrant.DefaultUnlimited = entitlementgrantDescUnlimited.Default.(bool)
 	// entitlementgrantDescUsage is the schema descriptor for usage field.
-	entitlementgrantDescUsage := entitlementgrantFields[8].Descriptor()
+	entitlementgrantDescUsage := entitlementgrantFields[9].Descriptor()
 	// entitlementgrant.DefaultUsage holds the default value on creation for the usage field.
 	entitlementgrant.DefaultUsage = entitlementgrantDescUsage.Default.(decimal.Decimal)
 	// entitlementgrantDescGrantStatus is the schema descriptor for grant_status field.
-	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
+	entitlementgrantDescGrantStatus := entitlementgrantFields[12].Descriptor()
 	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
 	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
 	// entitlementgrantDescMetadata is the schema descriptor for metadata field.
-	entitlementgrantDescMetadata := entitlementgrantFields[14].Descriptor()
+	entitlementgrantDescMetadata := entitlementgrantFields[15].Descriptor()
 	// entitlementgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	entitlementgrant.DefaultMetadata = entitlementgrantDescMetadata.Default.(types.Metadata)
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()

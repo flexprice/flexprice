@@ -1536,6 +1536,16 @@ type OverrideEntitlementRequest struct {
 
 	// ConfigValue is the config value for config features
 	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
+
+	// Grant config. Nil fields inherit from the parent entitlement, so an
+	// override that does not mention grants keeps the plan's allowance instead
+	// of silently downgrading the feature to a legacy entitlement.
+	GrantMeasure            *types.EntitlementGrantMeasure            `json:"grant_measure,omitempty"`
+	GrantDurationValue      *int                                      `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit       *types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
+	GrantAllocationBehavior *types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
+	GrantQuota              *decimal.Decimal                          `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode         *types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
 }
 
 // Validate validates the entitlement override request

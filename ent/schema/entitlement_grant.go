@@ -81,6 +81,12 @@ func (EntitlementGrant) Fields() []ent.Field {
 			}).
 			Immutable(),
 
+		// Unlimited windows track usage but never exhaust and never bill; quota is
+		// meaningless on them. A bool rather than a nullable quota keeps every
+		// existing reader of Quota unchanged.
+		field.Bool("unlimited").
+			Default(false),
+
 		field.Other("usage", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
