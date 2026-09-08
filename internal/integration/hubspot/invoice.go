@@ -40,6 +40,12 @@ func NewInvoiceSyncService(
 
 // SyncInvoiceToHubSpot syncs a FlexPrice invoice to HubSpot following the 6-step flow
 func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID string, hubspotContactID string) error {
+	if hubspotContactID == "" {
+		return ierr.NewError("HubSpot contact ID is required").
+			WithHint("Cannot sync invoice to HubSpot without a linked customer").
+			Mark(ierr.ErrNotFound)
+	}
+
 	// Check if invoice is already synced to avoid duplicates
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
@@ -225,8 +231,30 @@ func (s *InvoiceSyncService) updateInvoiceProperties(ctx context.Context, inv *i
 	return err
 }
 
+// GetHubSpotContactIDForInvoice resolves the HubSpot contact for the invoice's customer.
+// An empty or unmapped customer is not found — never fall back to another mapping.
+func (s *InvoiceSyncService) GetHubSpotContactIDForInvoice(ctx context.Context, invoiceID string) (string, error) {
+	inv, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return "", ierr.WithError(err).
+				WithHint("Failed to fetch invoice").
+				Mark(ierr.ErrInternal)
+		}
+		return "", err
+	}
+
+	return s.GetHubSpotContactID(ctx, inv.CustomerID)
+}
+
 // GetHubSpotContactID retrieves the HubSpot contact ID for a FlexPrice customer
 func (s *InvoiceSyncService) GetHubSpotContactID(ctx context.Context, customerID string) (string, error) {
+	if customerID == "" {
+		return "", ierr.NewError("HubSpot contact ID not found for customer").
+			WithHint("Customer ID is required to resolve a HubSpot contact").
+			Mark(ierr.ErrNotFound)
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		EntityID:      customerID,
@@ -235,9 +263,7 @@ func (s *InvoiceSyncService) GetHubSpotContactID(ctx context.Context, customerID
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Customer not synced to HubSpot").
-			Mark(ierr.ErrNotFound)
+		return "", err
 	}
 
 	if len(mappings) == 0 || mappings[0].ProviderEntityID == "" {
