@@ -27,7 +27,6 @@ type CostSheetUsageTrackingService interface {
 type costsheetUsageTrackingService struct {
 	ServiceParams
 	eventRepo           events.Repository
-	costUsageRepo       events.CostSheetUsageRepository
 	expressionEvaluator expression.Evaluator
 }
 
@@ -35,12 +34,10 @@ type costsheetUsageTrackingService struct {
 func NewCostSheetUsageTrackingService(
 	params ServiceParams,
 	eventRepo events.Repository,
-	costUsageRepo events.CostSheetUsageRepository,
 ) CostSheetUsageTrackingService {
 	ev := &costsheetUsageTrackingService{
 		ServiceParams:       params,
 		eventRepo:           eventRepo,
-		costUsageRepo:       costUsageRepo,
 		expressionEvaluator: expression.NewCELEvaluator(),
 	}
 	return ev

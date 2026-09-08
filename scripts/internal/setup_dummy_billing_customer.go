@@ -155,7 +155,6 @@ func SetupDummyBillingCustomer() error {
 	eventRepo := chRepo.NewEventRepository(chStore, appLogger)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, appLogger)
 	rawEventRepo := chRepo.NewRawEventRepository(chStore, appLogger)
-	costSheetUsageRepo := chRepo.NewCostSheetUsageRepository(chStore, appLogger)
 
 	kafkaProducer, err := kafka.NewProducer(cfg)
 	if err != nil {
@@ -208,7 +207,6 @@ func SetupDummyBillingCustomer() error {
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
-		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterRepo:                    meterRepo,
@@ -368,7 +366,7 @@ func SetupDummyBillingCustomer() error {
 				return fmt.Errorf("%s create event %d: %w", prefix, i+1, err)
 			}
 		}
-		log.Printf("%s Published %d events for event_name=%s\n", prefix, dummyBillingEventCount, m.EventName)  // #nosec G706 -- seed tooling, non-prod logging
+		log.Printf("%s Published %d events for event_name=%s\n", prefix, dummyBillingEventCount, m.EventName) // #nosec G706 -- seed tooling, non-prod logging
 	}
 
 	log.Printf("Done: %d customer(s), subscriptions, wallet top-ups, and events (ensure Kafka consumer is running for ClickHouse).\n", customerCount) // #nosec G706 -- seed tooling, non-prod logging
