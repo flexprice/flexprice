@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  auto_review:
+    enabled: true
+    # develop->main promotion PRs are skipped via .github/workflows/skip-coderabbit.yml
+    # (posts an `@coderabbitai ignore` command comment on open).
+    base_branches:
+      - main
