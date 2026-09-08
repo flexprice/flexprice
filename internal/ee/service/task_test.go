@@ -527,6 +527,9 @@ func (r *fakeImportResolver) ForPlatform(_ context.Context, purpose storage.Purp
 func (r *fakeImportResolver) ForConnection(context.Context, string) (storagetypes.Storage, error) {
 	return nil, nil
 }
+func (r *fakeImportResolver) ForConnectionExport(context.Context, string, string, string, string, bool) (storagetypes.Storage, error) {
+	return nil, nil
+}
 func (r *fakeImportResolver) Provider() storage.Provider { return storage.ProviderS3 }
 func (r *fakeImportResolver) BucketConfigFor(purpose storage.Purpose) (config.BucketConfig, error) {
 	if purpose != storage.PurposeImport {

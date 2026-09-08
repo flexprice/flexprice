@@ -146,7 +146,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.logger,
 	)
 
-	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.logger)
+	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.priceRepo, f.logger)
 
 	// Create invoice sync service first
 	invoiceSyncSvc := stripe.NewInvoiceSyncService(
@@ -687,6 +687,7 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.invoiceRepo,
 		f.priceRepo,
 		f.entityIntegrationMappingRepo,
+		f.paymentRepo,
 		f.logger,
 	)
 
@@ -1362,6 +1363,41 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
+// exportDestination carries the per-run destination from a scheduled task's
+// job_config. When set, it overrides the connection row's sync_config for
+// bucket/region/encryption — the connection then contributes only credentials
+// and the is_flexprice_managed flag. nil means resolve everything from the
+// connection (the ValidateConnection path).
+type exportDestination struct {
+	bucket     string
+	region     string
+	encryption string
+	gzip       bool
+}
+
+// GetStorageProviderExport builds storage for a scheduled export: credentials
+// and the managed flag from the connection, destination from the run's job_config.
+func (f *Factory) GetStorageProviderExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (storage.Storage, error) {
+	if connectionID == "" {
+		return nil, ierr.NewError("connection ID is required for storage").Mark(ierr.ErrValidation)
+	}
+	conn, err := f.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, err
+	}
+	dst := &exportDestination{bucket: bucket, region: region, encryption: encryption, gzip: gzip}
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		return f.buildS3Storage(ctx, conn, dst)
+	case types.SecretProviderGCS:
+		return f.buildGCSStorage(ctx, conn, dst)
+	default:
+		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
+			WithHint("Supported storage provider types: s3, gcs").
+			Mark(ierr.ErrValidation)
+	}
+}
+
 // Validates config before persisting.
 func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn == nil {
@@ -1371,9 +1407,9 @@ func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *con
 
 	switch conn.ProviderType {
 	case types.SecretProviderS3:
-		return f.buildS3Storage(ctx, conn)
+		return f.buildS3Storage(ctx, conn, nil)
 	case types.SecretProviderGCS:
-		return f.buildGCSStorage(ctx, conn)
+		return f.buildGCSStorage(ctx, conn, nil)
 	default:
 		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
 			WithHint("Supported storage provider types: s3, gcs").
@@ -1381,7 +1417,7 @@ func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *con
 	}
 }
 
-func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection, dst *exportDestination) (storage.Storage, error) {
 	jobConfig := conn.GetSyncConfig().Storage
 	if jobConfig == nil {
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
@@ -1451,18 +1487,35 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		}
 	}
 
+	// Destination comes from the run's job_config (dst) when this is an export;
+	// the ValidateConnection path passes nil and falls back to the connection row.
+	// A BYOB connection runs many scheduled tasks with different region/prefix, so
+	// the per-run job_config is authoritative — the connection carries only keys.
+	bucket, region := jobConfig.Bucket, jobConfig.Region
+	encryption := string(jobConfig.Encryption)
+	gzip := jobConfig.Compression == types.S3CompressionTypeGzip
+	if dst != nil {
+		bucket, region, encryption, gzip = dst.bucket, dst.region, dst.encryption, dst.gzip
+	}
+
+	if bucket == "" || region == "" {
+		return nil, ierr.NewError("S3 export is missing bucket or region").
+			WithHintf("connection %s: job_config (or sync_config.s3) must set bucket and region", conn.ID).
+			Mark(ierr.ErrValidation)
+	}
+
 	return s3backend.New(ctx, &s3backend.Config{
-		Bucket:             jobConfig.Bucket,
-		Region:             jobConfig.Region,
-		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
-		ServerSideEncrypt:  string(jobConfig.Encryption),
+		Bucket:             bucket,
+		Region:             region,
+		CompressionGzip:    gzip,
+		ServerSideEncrypt:  encryption,
 		AWSAccessKeyID:     accessKey,
 		AWSSecretAccessKey: secretKey,
 		AWSSessionToken:    sessionToken,
 	}, f.logger)
 }
 
-func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection, _ *exportDestination) (storage.Storage, error) {
 	jobConfig := conn.GetSyncConfig().Storage
 	if jobConfig == nil {
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)

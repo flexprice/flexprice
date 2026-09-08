@@ -465,6 +465,7 @@ func TestSyncInvoiceToZoho_MarksPaidWhenFlexpriceAlreadyPaid(t *testing.T) {
 				customerRepo: &fakeSyncCustomerRepo{},
 				invoiceRepo:  &fakeSyncInvoiceRepo{inv: inv},
 				mappingRepo:  mappingRepo,
+				paymentRepo:  &fakePaymentRepo{},
 				logger:       logger.NewNoopLogger(),
 			}
 

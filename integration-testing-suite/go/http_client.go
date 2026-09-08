@@ -18,6 +18,7 @@ func newHTTPClient(insecure bool) *http.Client {
 	c := &http.Client{Timeout: 30 * time.Second}
 	if insecure {
 		c.Transport = &http.Transport{
+			// nosemgrep: problem-based-packs.insecure-transport.go-stdlib.bypass-tls-verification.bypass-tls-verification -- opt-in test-suite flag for preprod certs, never prod
 			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true}, //nolint:gosec // opt-in via insecure flag
 		}
 	}

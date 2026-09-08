@@ -57,32 +57,100 @@ type EntitySyncConfig struct {
 	Outbound bool `json:"outbound"` // Outbound from FlexPrice to external provider
 }
 
-// InvoiceSyncSettings controls how invoice line items are transformed during outbound sync.
+// InvoiceSyncSettings controls how invoices are transformed during outbound sync.
 type InvoiceSyncSettings struct {
 	// NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
 	// For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
 	// qty=3, rate=$100. Empty string means no normalization (keep original).
 	NormalizeFixedTo BillingPeriod `json:"normalize_fixed_to,omitempty"`
 
-	// ServicePeriodCustomFields names the Zoho custom fields that receive the
-	// invoice's service start and end dates.
+	// Embedded rather than nested so the provider-specific settings stay inline in the
+	// same JSON object they have always been stored in.
+	ZohoInvoiceSyncSettings
+}
+
+// ZohoInvoiceSyncSettings holds the outbound invoice settings that map onto Zoho Books API
+// concepts rather than to anything generic.
+type ZohoInvoiceSyncSettings struct {
+	// Zoho custom fields that receive the invoice's service start and end dates.
 	ServicePeriodCustomFields *ServicePeriodCustomFields `json:"service_period_custom_fields,omitempty"`
 
-	// MetadataCustomFields copies metadata values onto Zoho invoice custom fields
-	// verbatim.
+	// Copies metadata values onto Zoho invoice custom fields verbatim.
 	MetadataCustomFields []MetadataCustomField `json:"metadata_custom_fields,omitempty"`
 
-	// SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval
-	// flow before recording payment. Zoho rejects payments on draft invoices, and merchants
-	// configure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for
-	// that rule to fire, then pay.
+	// Fixed values written to Zoho invoice custom fields on every sync, independent of
+	// any metadata source.
+	GlobalCustomFields []GlobalCustomField `json:"global_custom_fields,omitempty"`
+
+	// Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval
+	// rule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.
 	SubmitForApproval bool `json:"submit_for_approval,omitempty"`
+
+	// Zoho payment modes are merchant-editable free strings with no id, so this is passed
+	// through verbatim. Empty means DefaultZohoPaymentMode.
+	PaymentMode string `json:"payment_mode,omitempty"`
+
+	// Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
+	// Undeposited Funds default.a
+	DepositToAccountID string `json:"deposit_to_account_id,omitempty"`
 }
 
 // IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the
 // merchant's Zoho Books approval flow before payment is recorded against them.
 func (s *InvoiceSyncSettings) IsSubmitForApprovalEnabled() bool {
 	return s != nil && s.SubmitForApproval
+}
+
+func (s *InvoiceSyncSettings) ZohoPaymentMode() string {
+	if s == nil {
+		return DefaultZohoPaymentMode
+	}
+	if mode := strings.TrimSpace(s.PaymentMode); mode != "" {
+		return mode
+	}
+	return DefaultZohoPaymentMode
+}
+
+func (s *InvoiceSyncSettings) ZohoDepositToAccountID() string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.DepositToAccountID)
+}
+
+// The payment mode is deliberately not checked against Zoho's built-in list: merchants edit
+// that list and add their own modes.
+func (s *InvoiceSyncSettings) ValidateZohoPaymentSettings() error {
+	if s == nil {
+		return nil
+	}
+
+	if mode := strings.TrimSpace(s.PaymentMode); len(mode) > maxZohoPaymentModeLen {
+		return ierr.NewError("zoho payment mode is too long").
+			WithHint(fmt.Sprintf("payment_mode must be at most %d characters", maxZohoPaymentModeLen)).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Zoho entity ids are numeric, so rejecting anything else catches the likely
+	// misconfiguration - pasting the account name - at save time instead of during mark-paid.
+	accountID := strings.TrimSpace(s.DepositToAccountID)
+	if accountID == "" {
+		return nil
+	}
+	if len(accountID) > maxZohoAccountIDLen {
+		return ierr.NewError("zoho deposit to account id is too long").
+			WithHint(fmt.Sprintf("deposit_to_account_id must be at most %d characters", maxZohoAccountIDLen)).
+			Mark(ierr.ErrValidation)
+	}
+	for _, r := range accountID {
+		if r < '0' || r > '9' {
+			return ierr.NewError("invalid zoho deposit to account id").
+				WithHint("deposit_to_account_id must be the numeric Zoho chart-of-accounts id, not the account name").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 type MetadataCustomFieldSource string
@@ -92,6 +160,11 @@ const (
 	// custom fields per module than this.
 	MaxMetadataCustomFields = 50
 	maxCustomFieldRefLen    = 255
+
+	// Zoho's built-in catch-all payment mode.
+	DefaultZohoPaymentMode = "others"
+	maxZohoPaymentModeLen  = 100
+	maxZohoAccountIDLen    = 30
 )
 
 const (
@@ -142,37 +215,84 @@ func (m MetadataCustomField) Validate() error {
 	return nil
 }
 
-// Two mappings may not write to the same Zoho field, and neither may claim a field the
-// service period already uses.
-func (s *InvoiceSyncSettings) ValidateMetadataCustomFields() error {
-	if s == nil || len(s.MetadataCustomFields) == 0 {
+type GlobalCustomField struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+}
+
+func (g GlobalCustomField) Validate() error {
+	field := strings.TrimSpace(g.Field)
+	if field == "" {
+		return ierr.NewError("global custom field target is required").
+			WithHint("Provide the Zoho custom field API name or ID to write to").
+			Mark(ierr.ErrValidation)
+	}
+	if len(field) > maxCustomFieldRefLen {
+		return ierr.NewError("global custom field target is too long").
+			WithHint(fmt.Sprintf("field must be at most %d characters", maxCustomFieldRefLen)).
+			Mark(ierr.ErrValidation)
+	}
+	if strings.TrimSpace(g.Value) == "" {
+		return ierr.NewError("global custom field value is required").
+			WithHint("Provide the value to write, or drop the mapping").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// All three custom field families write into one Zoho field namespace, where a second write
+// silently overwrites the first, so they are validated together against a shared field set.
+func (s *InvoiceSyncSettings) ValidateCustomFields() error {
+	if s == nil {
 		return nil
 	}
 
-	if len(s.MetadataCustomFields) > MaxMetadataCustomFields {
-		return ierr.NewError("too many metadata custom field mappings").
-			WithHint(fmt.Sprintf("At most %d metadata custom fields may be mapped", MaxMetadataCustomFields)).
+	if len(s.MetadataCustomFields)+len(s.GlobalCustomFields) > MaxMetadataCustomFields {
+		return ierr.NewError("too many custom field mappings").
+			WithHint(fmt.Sprintf("At most %d custom fields may be mapped", MaxMetadataCustomFields)).
 			Mark(ierr.ErrValidation)
 	}
 
-	seen := make(map[string]struct{}, len(s.MetadataCustomFields)+2)
-	if s.ServicePeriodCustomFields.IsConfigured() {
-		seen[s.ServicePeriodCustomFields.StartFieldID] = struct{}{}
-		seen[s.ServicePeriodCustomFields.EndFieldID] = struct{}{}
-	}
+	seen := make(map[string]struct{}, len(s.MetadataCustomFields)+len(s.GlobalCustomFields)+2)
 
-	for _, m := range s.MetadataCustomFields {
-		if err := m.Validate(); err != nil {
-			return err
-		}
-
-		field := strings.TrimSpace(m.Field)
+	claim := func(field string) error {
+		field = strings.TrimSpace(field)
 		if _, dup := seen[field]; dup {
 			return ierr.NewError("duplicate zoho custom field mapping").
 				WithHint(fmt.Sprintf("Zoho custom field %q is mapped more than once", field)).
 				Mark(ierr.ErrValidation)
 		}
 		seen[field] = struct{}{}
+		return nil
+	}
+
+	// Claimed the same way as the other families so a whitespace variant cannot slip past
+	// the duplicate check and silently overwrite the field it collides with.
+	if s.ServicePeriodCustomFields.IsConfigured() {
+		if err := claim(s.ServicePeriodCustomFields.StartFieldID); err != nil {
+			return err
+		}
+		if err := claim(s.ServicePeriodCustomFields.EndFieldID); err != nil {
+			return err
+		}
+	}
+
+	for _, g := range s.GlobalCustomFields {
+		if err := g.Validate(); err != nil {
+			return err
+		}
+		if err := claim(g.Field); err != nil {
+			return err
+		}
+	}
+
+	for _, m := range s.MetadataCustomFields {
+		if err := m.Validate(); err != nil {
+			return err
+		}
+		if err := claim(m.Field); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -304,7 +424,10 @@ func (s *SyncConfig) Validate() error {
 		if err := s.InvoiceSyncSettings.ServicePeriodCustomFields.Validate(); err != nil {
 			return err
 		}
-		if err := s.InvoiceSyncSettings.ValidateMetadataCustomFields(); err != nil {
+		if err := s.InvoiceSyncSettings.ValidateCustomFields(); err != nil {
+			return err
+		}
+		if err := s.InvoiceSyncSettings.ValidateZohoPaymentSettings(); err != nil {
 			return err
 		}
 	}
