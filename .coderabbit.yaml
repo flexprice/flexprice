@@ -1,9 +1,11 @@
-# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 language: en-US
 reviews:
   auto_review:
     enabled: true
-    # develop->main promotion PRs are skipped via .github/workflows/skip-coderabbit.yml
-    # (posts an `@coderabbitai ignore` command comment on open).
+    # base_branches defaults to the default branch (develop) only, so
+    # develop->main promotion PRs are not auto-reviewed. The
+    # skip-coderabbit workflow posts `@coderabbitai ignore` as a
+    # belt-and-suspenders guard for any manual review trigger.
     base_branches:
-      - main
+      - develop
