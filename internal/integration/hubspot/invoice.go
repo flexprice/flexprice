@@ -263,9 +263,7 @@ func (s *InvoiceSyncService) GetHubSpotContactID(ctx context.Context, customerID
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Customer not synced to HubSpot").
-			Mark(ierr.ErrNotFound)
+		return "", err
 	}
 
 	if len(mappings) == 0 || mappings[0].ProviderEntityID == "" {

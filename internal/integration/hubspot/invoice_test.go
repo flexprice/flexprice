@@ -15,9 +15,13 @@ import (
 type fakeInvoiceMappingRepo struct {
 	entityintegrationmapping.Repository
 	mappings []*entityintegrationmapping.EntityIntegrationMapping
+	listErr  error
 }
 
 func (f *fakeInvoiceMappingRepo) List(_ context.Context, filter *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	var out []*entityintegrationmapping.EntityIntegrationMapping
 	for _, m := range f.mappings {
 		if filter == nil {
@@ -119,6 +123,18 @@ func TestGetHubSpotContactID_LinkedCustomerReturnsMappedID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "hs_contact_linked", contactID)
+}
+
+func TestGetHubSpotContactID_ListFailureIsNotNotFound(t *testing.T) {
+	listErr := ierr.NewError("mapping store unavailable").Mark(ierr.ErrInternal)
+	svc := newInvoiceSyncServiceForTest(t, &fakeInvoiceMappingRepo{listErr: listErr}, nil)
+
+	contactID, err := svc.GetHubSpotContactID(context.Background(), "cust_linked")
+
+	require.Error(t, err)
+	assert.False(t, ierr.IsNotFound(err), "transient List errors must stay retryable, not CustomerNotLinked")
+	assert.True(t, ierr.IsInternal(err))
+	assert.Empty(t, contactID)
 }
 
 func TestGetHubSpotContactIDForInvoice_EmptyInvoiceCustomerDoesNotReturnLastLinked(t *testing.T) {
