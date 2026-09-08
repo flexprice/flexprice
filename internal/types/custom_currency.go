@@ -109,6 +109,13 @@ func (c *CustomCurrencyConfig) Validate() error {
 				WithHintf("Custom currency codes are case-insensitive; %q is defined more than once", code).
 				Mark(ierr.ErrValidation)
 		}
+		// Every currency validator downstream requires a 3-character code, so a longer one
+		// would configure a currency nothing could ever be created in.
+		if len(code) != 3 {
+			return ierr.NewErrorf("custom currency code %q must be 3 characters", code).
+				WithHintf("Custom currency codes are 3 characters, for example \"fpc\"").
+				Mark(ierr.ErrValidation)
+		}
 		if code == defaultCode {
 			return ierr.NewErrorf("default_fiat_currency %q cannot also be a custom currency code", defaultCode).
 				WithHintf("default_fiat_currency %q cannot also be a custom currency code", defaultCode).
