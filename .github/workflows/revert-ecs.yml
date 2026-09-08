@@ -1,0 +1,192 @@
+name: Revert prod ECS (self ap-south-1)
+
+# Standalone, deploy-only prod ECS revert. Redeploys a PRE-BUILT GHCR image
+# (digest-pinned) to every self production ECS target — NO build, NO migration.
+# It reuses ONLY the deploy-ecs-service composite (reads the live task-def, swaps
+# the app container image, re-registers, force-deploys), never `build` or
+# `run-ecs-migration`, so no-build + no-migration is by construction.
+#
+# Triggered manually (workflow_dispatch) or cross-repo from infra revert.yml via a
+# GitHub App token. deploy.yml (the forward pipeline) is intentionally untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Full GHCR pull ref: ghcr.io/flexprice/flexprice@sha256:<64hex>'
+        required: true
+      dry_run:
+        description: 'Dry run — print the task-def plan only, no register/deploy'
+        type: boolean
+        default: true
+
+concurrency:
+  group: revert-ecs
+  cancel-in-progress: false
+
+# Least privilege at the top; only the deploy jobs get id-token (OIDC to AWS).
+permissions:
+  contents: read
+
+env:
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  # Self ECS runs GHCR-only (no ECR). The composite matches the app container by
+  # `startswith(ecr_prefix) OR startswith(ghcr_prefix)`, and ecr_repo_prefix is a
+  # required input — so pass a sentinel that matches NO image (never a prefix of a
+  # real ref, and NOT empty: startswith("") is true for every container and would
+  # swap sidecars too). Only ghcr_repo_prefix does the matching.
+  ECR_REPO_PREFIX_UNUSED: "no-ecr::self-is-ghcr-only"
+
+jobs:
+  # Fail closed on a malformed pull ref before any target is touched.
+  validate:
+    name: Validate image ref
+    runs-on: self-hosted
+    outputs:
+      targets: ${{ steps.config.outputs.targets }}
+    steps:
+      - name: Validate image + resolve targets
+        id: config
+        env:
+          IMAGE: ${{ inputs.image }}
+          PROD_TARGETS: ${{ vars.PROD_DEPLOY_TARGETS }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$IMAGE" | grep -Eq '^ghcr\.io/flexprice/flexprice@sha256:[0-9a-f]{64}$'; then
+            echo "::error::image must match ^ghcr.io/flexprice/flexprice@sha256:[0-9a-f]{64}\$"
+            exit 1
+          fi
+          {
+            echo "targets<<TARGETS_EOF"
+            echo "$PROD_TARGETS"
+            echo "TARGETS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # Single manual approval gate before any prod ECS rollout. Dry runs bypass it
+  # (nothing is registered/deployed anyway).
+  approval-gate:
+    name: Approve production revert
+    needs: [validate]
+    if: ${{ inputs.dry_run != true }}
+    runs-on: self-hosted
+    environment: prod-approval
+    steps:
+      - name: Production revert approved
+        run: echo "Production ECS revert approved — deploying api, consumer, worker to all targets."
+
+  deploy-api:
+    name: Revert API (${{ strategy.job-index }})
+    needs: [validate, approval-gate]
+    if: >-
+      ${{ always() &&
+          needs.validate.result == 'success' &&
+          (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
+    runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.validate.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Deploy ECS API service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.api_service }}
+          image: ${{ inputs.image }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
+          dry_run: ${{ inputs.dry_run }}
+
+  deploy-consumer:
+    name: Revert Consumer (${{ strategy.job-index }})
+    needs: [validate, approval-gate]
+    if: >-
+      ${{ always() &&
+          needs.validate.result == 'success' &&
+          (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
+    runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.validate.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Deploy ECS Consumer service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.consumer_service }}
+          image: ${{ inputs.image }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
+          dry_run: ${{ inputs.dry_run }}
+
+  deploy-worker:
+    name: Revert Worker (${{ strategy.job-index }})
+    needs: [validate, approval-gate]
+    if: >-
+      ${{ always() &&
+          needs.validate.result == 'success' &&
+          (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
+    runs-on: self-hosted
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.validate.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Deploy ECS Worker service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.worker_service }}
+          image: ${{ inputs.image }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
+          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
+          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
+          dry_run: ${{ inputs.dry_run }}
