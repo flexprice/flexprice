@@ -29,9 +29,13 @@ permissions:
   contents: read
 
 env:
-  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  # Self ECS runs GHCR-only (no ECR). The composite matches the app container by
+  # `startswith(ecr_prefix) OR startswith(ghcr_prefix)`, and ecr_repo_prefix is a
+  # required input — so pass a sentinel that matches NO image (never a prefix of a
+  # real ref, and NOT empty: startswith("") is true for every container and would
+  # swap sidecars too). Only ghcr_repo_prefix does the matching.
+  ECR_REPO_PREFIX_UNUSED: "no-ecr::self-is-ghcr-only"
 
 jobs:
   # Fail closed on a malformed pull ref before any target is touched.
@@ -101,7 +105,7 @@ jobs:
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.api_service }}
           image: ${{ inputs.image }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
           ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
           ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ inputs.dry_run }}
@@ -137,7 +141,7 @@ jobs:
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.consumer_service }}
           image: ${{ inputs.image }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
           ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
           ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ inputs.dry_run }}
@@ -173,7 +177,7 @@ jobs:
           region: ${{ matrix.target.region }}
           service_name: ${{ matrix.target.worker_service }}
           image: ${{ inputs.image }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          ecr_repo_prefix: ${{ env.ECR_REPO_PREFIX_UNUSED }}
           ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
           ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ inputs.dry_run }}
