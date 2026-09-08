@@ -2133,6 +2133,12 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
+	// Built before the cancellation mutates the subscription. The immediate-cancellation key is
+	// derived from the current period precisely because effectiveDate is time.Now(), and
+	// updateSubscriptionForCancellation now closes CurrentPeriodEnd at that same effectiveDate —
+	// deriving the key afterwards would make it differ on every retry and could double-credit.
+	prorationCreditKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
+
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
 
@@ -2244,8 +2250,7 @@ func (s *subscriptionService) CancelSubscription(
 		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
 		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
 			walletService := NewWalletService(s.ServiceParams)
-			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
-			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey)
+			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, prorationCreditKey)
 			if err != nil {
 				return err
 			}
@@ -6293,6 +6298,11 @@ func (s *subscriptionService) determineEffectiveDate(
 		if customDate != nil && customDate.Before(now) {
 			return customDate.UTC(), nil
 		}
+		// A subscription that has not started yet ends at its start, never before it:
+		// an earlier end date would persist a row whose end precedes its own period.
+		if now.Before(subscription.CurrentPeriodStart) {
+			return subscription.CurrentPeriodStart.UTC(), nil
+		}
 		return now, nil
 
 	case types.CancellationTypeEndOfPeriod:
@@ -6417,6 +6427,14 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		subscription.CancelAt = &effectiveDate
 		subscription.CancelAtPeriodEnd = false
 		subscription.EndDate = &effectiveDate
+		// Close the open period at the cancellation, as the scheduled_date branch already does.
+		// A cancelled subscription must never report a period running past its end date: should
+		// anything later flip it back to active, the billing cron is otherwise handed a period
+		// it cannot split into valid sub-periods.
+		if !effectiveDate.Before(subscription.CurrentPeriodStart) &&
+			effectiveDate.Before(subscription.CurrentPeriodEnd) {
+			subscription.CurrentPeriodEnd = effectiveDate
+		}
 
 	case types.CancellationTypeEndOfPeriod:
 		// Don't change status immediately — actual cancellation runs when the schedule fires.
