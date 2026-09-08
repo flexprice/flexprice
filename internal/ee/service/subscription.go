@@ -5060,6 +5060,10 @@ func (s *subscriptionService) handleSubscriptionAddons(
 			addonReq.StartDate = &subscription.StartDate
 		}
 
+		// The opening invoice bills these line items for the whole period, so settling a
+		// proration here as well would charge the addon twice.
+		addonReq.ProrationBehavior = types.ProrationBehaviorNone
+
 		if _, err := s.AttachAddon(ctx, subscription, lo.ToPtr(addonReq), nil); err != nil {
 			return err
 		}
