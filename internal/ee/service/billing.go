@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -138,6 +139,7 @@ func calculateBucketedMeterCost(
 		Quantity: totalQuantity,
 	}
 }
+
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
 	params *dto.CalculateFixedChargesParams,
@@ -262,7 +264,7 @@ func (s *billingService) CalculateFixedCharges(
 					// The divisor is one full period of THIS line item, not the window, so a short window
 					// (e.g. a calendar stub) cannot inflate the fraction charged for a longer-cadence price.
 					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-						Div(decimal.NewFromFloat(s.fullPeriodDuration(ctx, item, w.Start, sub.Timezone, windowDuration).Seconds()))
+						Div(decimal.NewFromFloat(fullPeriodDuration(ctx, s.Logger, item, w.Start, sub.Timezone, windowDuration).Seconds()))
 					wAmount = wAmount.Mul(ratio)
 					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
 				} else {
@@ -543,8 +545,9 @@ func splitInvoicePeriodByLineItemCadence(
 // fullPeriodDuration returns the length of one complete billing period of this line item
 // starting at windowStart. Falls back to fallback when the date math fails, and never returns
 // less than fallback so a malformed cadence cannot push a proration ratio above 1.
-func (s *billingService) fullPeriodDuration(
+func fullPeriodDuration(
 	ctx context.Context,
+	log *logger.Logger,
 	item *subscription.SubscriptionLineItem,
 	windowStart time.Time,
 	timezone string,
@@ -563,7 +566,7 @@ func (s *billingService) fullPeriodDuration(
 		Timezone:           timezone,
 	})
 	if err != nil {
-		s.Logger.Info(ctx, "failed to derive line item period length, using invoice window",
+		log.Info(ctx, "failed to derive line item period length, using invoice window",
 			"error", err,
 			"line_item_id", item.ID,
 			"billing_period", item.BillingPeriod)

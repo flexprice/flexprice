@@ -117,29 +117,48 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			continue
 		}
 
-		params, skip := s.buildProrationParams(sub, entry, req, customerTimezone, billed)
-		if skip {
-			continue
-		}
-
-		result, err := prorationSvc.CalculateProration(ctx, params)
+		// A line item is priced against its own cadence, so a monthly addon on a quarterly
+		// subscription is quoted as one partial month plus the whole months that follow —
+		// the same lines the opening invoice would have raised. Same-cadence items yield a
+		// single window equal to the subscription period, which is the previous behaviour.
+		windows, err := splitInvoicePeriodByLineItemCadence(sub.CurrentPeriodStart, sub.CurrentPeriodEnd, item, sub)
 		if err != nil {
 			return nil, err
 		}
-		if result == nil {
-			continue
-		}
 
-		summary.Results = append(summary.Results, *result)
+		originalPaid, creditsIssued := creditBasis(item, p, billed)
 
-		if result.NetAmount.GreaterThan(decimal.Zero) {
-			lineItem := s.buildChargeLineItem(sub, entry, result.NetAmount, req.EffectiveDate, p)
-			summary.ChargeLineItems = append(summary.ChargeLineItems, lineItem)
-			summary.TotalChargeAmount = summary.TotalChargeAmount.Add(result.NetAmount)
-		} else if result.NetAmount.LessThan(decimal.Zero) {
-			lineItem := s.buildChargeLineItem(sub, entry, result.NetAmount, req.EffectiveDate, p)
-			summary.CreditLineItems = append(summary.CreditLineItems, lineItem)
-			summary.TotalCreditAmount = summary.TotalCreditAmount.Add(result.NetAmount.Abs())
+		for _, w := range windows {
+			if !w.End.After(req.EffectiveDate) {
+				continue
+			}
+
+			params, skip := s.buildProrationParams(ctx, sub, entry, req, customerTimezone, w, originalPaid, creditsIssued)
+			if skip {
+				continue
+			}
+
+			result, err := prorationSvc.CalculateProration(ctx, params)
+			if err != nil {
+				return nil, err
+			}
+			if result == nil {
+				continue
+			}
+
+			summary.Results = append(summary.Results, *result)
+
+			if result.NetAmount.GreaterThan(decimal.Zero) {
+				lineItem := s.buildChargeLineItem(sub, entry, result.NetAmount, params.ProrationDate, w.End, p)
+				summary.ChargeLineItems = append(summary.ChargeLineItems, lineItem)
+				summary.TotalChargeAmount = summary.TotalChargeAmount.Add(result.NetAmount)
+			} else if result.NetAmount.LessThan(decimal.Zero) {
+				lineItem := s.buildChargeLineItem(sub, entry, result.NetAmount, params.ProrationDate, w.End, p)
+				summary.CreditLineItems = append(summary.CreditLineItems, lineItem)
+				summary.TotalCreditAmount = summary.TotalCreditAmount.Add(result.NetAmount.Abs())
+				// Later windows may only credit what this line item has not been credited yet.
+				creditsIssued = creditsIssued.Add(result.NetAmount.Abs())
+			}
 		}
 	}
 
@@ -219,23 +238,40 @@ func (s *lineItemProrationService) creditBasisForInvoiceLineItems(
 }
 
 func (s *lineItemProrationService) buildProrationParams(
+	ctx context.Context,
 	sub *subscription.Subscription,
 	entry LineItemProrationEntry,
 	req LineItemProrationRequest,
 	customerTimezone string,
-	billed map[string]*invoice.BilledAmounts,
+	window periodWindow,
+	originalPaid decimal.Decimal,
+	creditsIssued decimal.Decimal,
 ) (proration.ProrationParams, bool) {
 	item := entry.LineItem
 	p := entry.Price
-	periodEnd := sub.CurrentPeriodEnd.Add(-time.Second)
+	periodEnd := window.End.Add(-time.Second)
+
+	// Windows that start after the change are charged or credited in full.
+	prorationDate := req.EffectiveDate
+	if window.Start.After(prorationDate) {
+		prorationDate = window.Start
+	}
+
+	// The fraction is of one whole period of this line item. A window clipped short by a
+	// calendar stub keeps the full period as its divisor, so the quote matches what the
+	// invoice would charge for the same days.
+	windowDuration := window.End.Sub(window.Start)
+	periodStart := window.End.Add(-fullPeriodDuration(
+		ctx, s.params.Logger, item, window.Start, customerTimezone, windowDuration,
+	))
 
 	base := proration.ProrationParams{
 		SubscriptionID:     sub.ID,
 		LineItemID:         item.ID,
 		PlanPayInAdvance:   p.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
+		CurrentPeriodStart: periodStart,
 		CurrentPeriodEnd:   periodEnd,
-		ProrationDate:      req.EffectiveDate,
+		ProrationDate:      prorationDate,
 		ProrationBehavior:  req.Behavior,
 		ProrationStrategy:  types.StrategySecondBased,
 		Currency:           sub.Currency,
@@ -258,7 +294,7 @@ func (s *lineItemProrationService) buildProrationParams(
 		base.CancellationType = types.CancellationTypeImmediate
 		base.CancellationReason = req.Reason
 		base.RefundEligible = true
-		base.OriginalAmountPaid, base.PreviousCreditsIssued = creditBasis(item, p, billed)
+		base.OriginalAmountPaid, base.PreviousCreditsIssued = originalPaid, creditsIssued
 
 	default:
 		return proration.ProrationParams{}, true
@@ -272,10 +308,10 @@ func (s *lineItemProrationService) buildChargeLineItem(
 	entry LineItemProrationEntry,
 	amount decimal.Decimal,
 	effectiveDate time.Time,
+	periodEnd time.Time,
 	p *price.Price,
 ) dto.CreateInvoiceLineItemRequest {
 	item := entry.LineItem
-	periodEnd := sub.CurrentPeriodEnd
 	priceID := item.PriceID
 	priceType := string(p.Type)
 	displayName := item.DisplayName

@@ -379,3 +379,18 @@ func (s *MultiCadenceAddonMatrixSuite) TestRatioDenominator_WindowVsItemPeriod()
 		})
 	}
 }
+
+// A stub period shorter than the addon's own month: at-create and attach-later must agree,
+// and both must charge a fraction of the month rather than of the stub.
+func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_Parity() {
+	sc := s.build(scenarioSpec{
+		cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
+		periodStart: d(2025, time.September, 8), periodEnd: d(2025, time.October, 1),
+		anchor: d(2025, time.October, 1), prorationBehavior: types.ProrationBehaviorNone,
+		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+		addonStart: d(2025, time.September, 21),
+	})
+
+	s.equalMoney("33.33", s.atCreateAddonTotal(sc), "at-create addon total")
+	s.equalMoney("33.33", s.attachLaterAddonTotal(sc), "attach-later addon total")
+}
