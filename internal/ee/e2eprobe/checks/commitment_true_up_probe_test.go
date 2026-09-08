@@ -47,8 +47,8 @@ func TestCommitmentTrueUpProbe_OverLeg(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	// commitment ($5) + overage ($2 × 1.5) + base fee ($19.99) = $27.99.
-	total := "27.99"
+	// commitment ($5) + overage ($0.50 × 1.5) + base fee ($19.99) = $25.74.
+	total := "25.74"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{Total: &total},
 	}
@@ -58,8 +58,8 @@ func TestCommitmentTrueUpProbe_OverLeg(t *testing.T) {
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("over-leg Run() unexpected error: %v", err)
 	}
-	if len(fc.events.ingested) != 700 {
-		t.Errorf("over-leg ingested = %d, want 700", len(fc.events.ingested))
+	if len(fc.events.ingested) != 550 {
+		t.Errorf("over-leg ingested = %d, want 550", len(fc.events.ingested))
 	}
 }
 
@@ -93,7 +93,7 @@ func TestCommitmentTrueUpProbe_OverLegWrongTotalFails(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	// Total should be $8 with overage; return $7 (naive usage without 1.5× multiplier).
+	// Total should be commitment+overage+base; return raw usage without 1.5×.
 	total := "7.00"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{Total: &total},
