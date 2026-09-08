@@ -11,14 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - run: |
-          body=$(gh pr view "$PR" --json body --jq '.body')
-          if printf '%s' "$body" | grep -qF '@coderabbitai ignore'; then
-            echo "marker already present, skipping"
+          if gh pr view "$PR" --json comments \
+               --jq '.comments[].body' | grep -qF '@coderabbitai ignore'; then
+            echo "ignore command already posted, skipping"
             exit 0
           fi
-          printf '%s\n\n@coderabbitai ignore\n' "$body" | gh pr edit "$PR" --body-file -
+          gh pr comment "$PR" --body '@coderabbitai ignore'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
