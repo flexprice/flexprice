@@ -36,6 +36,10 @@ type RazorpayClient interface {
 	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
 	// Returns the first matching order or ierr.ErrNotFound if none exist.
 	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
+	// FetchOrder retrieves an order by ID; the response has no payment id.
+	FetchOrder(ctx context.Context, orderID string) (map[string]interface{}, error)
+	// FetchOrderPayments retrieves the payments made against an order.
+	FetchOrderPayments(ctx context.Context, orderID string) ([]map[string]interface{}, error)
 	// RefundPayment issues a refund for a captured payment (POST /v1/payments/{id}/refund).
 	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
 	RefundPayment(ctx context.Context, paymentID string, amountPaise int64, idempotencyKey string) (map[string]interface{}, error)
@@ -543,6 +547,52 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 	}
 
 	return order, nil
+}
+
+// FetchOrder retrieves an order by ID. The response carries its status
+// ("created" | "attempted" | "paid") but not the payment id — use FetchOrderPayments.
+func (c *Client) FetchOrder(ctx context.Context, orderID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	order, err := rc.Order.Fetch(orderID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay order", "error", err, "order_id", orderID)
+		return nil, ierr.NewError("failed to fetch order from Razorpay").
+			WithHint("Unable to retrieve order from Razorpay").
+			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return order, nil
+}
+
+// FetchOrderPayments retrieves the payments made against an order, to recover the
+// pay_xxx when a retry took the existing-order branch and never saw it.
+func (c *Client) FetchOrderPayments(ctx context.Context, orderID string) ([]map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Order.Payments(orderID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch payments for Razorpay order", "error", err, "order_id", orderID)
+		return nil, ierr.NewError("failed to fetch payments for order").
+			WithHint("Unable to retrieve order payments from Razorpay").
+			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, _ := result["items"].([]interface{})
+	payments := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		if pm, ok := item.(map[string]interface{}); ok {
+			payments = append(payments, pm)
+		}
+	}
+	return payments, nil
 }
 
 // RefundPayment issues a refund for a captured Razorpay payment. POST

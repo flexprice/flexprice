@@ -7,6 +7,7 @@ import (
 	cockroachErrors "github.com/cockroachdb/errors"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func validAddAddonRef() AddAddonRef {
@@ -159,4 +160,52 @@ func TestCheckoutAction_Validate_AddAddon(t *testing.T) {
 	assert.NotEmpty(t, hints)
 	assert.Contains(t, hints[0], "add_addon",
 		"the hardcoded allowed-values hint must list every CheckoutAction constant")
+}
+
+// A caller that knows only the payment id must not erase the redirect action and
+// provider handle recorded at link creation — that is the whole reason completion
+// builds on the stored value instead of overwriting it.
+func TestCheckoutProviderResultBuilder_OverlayKeepsWhatTheCallerDoesNotKnow(t *testing.T) {
+	expires := time.Now().UTC()
+	stored := &CheckoutProviderResult{
+		NextAction:        &PaymentAction{Type: PaymentActionTypePaymentLink, URL: "https://rzp.io/x"},
+		ProviderSessionID: "plink_1",
+		ExpiresAt:         &expires,
+		ProviderMetadata:  map[string]string{"created_by": "link"},
+	}
+
+	got := NewCheckoutProviderResultFrom(stored).
+		Overlay(&CheckoutProviderResult{ProviderPaymentIntentID: "pay_1"}).
+		Build()
+
+	require.NotNil(t, got)
+	assert.Equal(t, "pay_1", got.ProviderPaymentIntentID, "the fragment is applied")
+	assert.Equal(t, "plink_1", got.ProviderSessionID, "and the rest survives")
+	require.NotNil(t, got.NextAction)
+	assert.Equal(t, "https://rzp.io/x", got.NextAction.URL)
+	assert.Equal(t, &expires, got.ExpiresAt)
+	assert.Equal(t, "link", got.ProviderMetadata["created_by"])
+}
+
+// The built value is persisted, so it must not alias the caller's map.
+func TestCheckoutProviderResultBuilder_DoesNotAliasTheBase(t *testing.T) {
+	stored := &CheckoutProviderResult{ProviderMetadata: map[string]string{"k": "v"}}
+
+	got := NewCheckoutProviderResultFrom(stored).
+		Overlay(&CheckoutProviderResult{ProviderMetadata: map[string]string{"k2": "v2"}}).
+		Build()
+
+	assert.Equal(t, map[string]string{"k": "v"}, stored.ProviderMetadata, "the base is untouched")
+	assert.Equal(t, map[string]string{"k": "v", "k2": "v2"}, got.ProviderMetadata)
+}
+
+func TestCheckoutProviderResultBuilder_NilHandling(t *testing.T) {
+	assert.NotNil(t, NewCheckoutProviderResultFrom(nil).Build(), "a nil base starts empty")
+
+	stored := &CheckoutProviderResult{ProviderSessionID: "plink_1"}
+	got := NewCheckoutProviderResultFrom(stored).Overlay(nil).Build()
+	assert.Equal(t, "plink_1", got.ProviderSessionID, "a nil overlay changes nothing")
+
+	var b *CheckoutProviderResultBuilder
+	assert.Nil(t, b.Build())
 }

@@ -48,6 +48,18 @@ type PortalCheckoutSessionResponse struct {
 	CompletedAt       *time.Time               `json:"completed_at,omitempty"`
 	CancelledAt       *time.Time               `json:"cancelled_at,omitempty"`
 	FailureReason     *string                  `json:"failure_reason,omitempty"`
+
+	// Terminal reports whether the session has finished. Poll until it is true
+	// rather than hardcoding the status set.
+	Terminal bool `json:"terminal"`
+
+	// NextPollAfterMs is how long to wait before reading again. Zero means stop.
+	NextPollAfterMs int64 `json:"next_poll_after_ms"`
+
+	// Stale reports that this response is stored state that was not checked against
+	// the payment provider on this request — the read was debounced, or the gateway
+	// did not answer. Show "still checking" rather than presenting it as final.
+	Stale bool `json:"stale"`
 }
 
 type PortalTopUpWalletResponse struct {

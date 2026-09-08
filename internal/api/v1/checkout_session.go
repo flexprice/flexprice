@@ -59,7 +59,7 @@ func (h *CheckoutSessionHandler) Create(c *gin.Context) {
 // @Router /checkout/sessions/{id} [get]
 func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 	id := c.Param("id")
-	resp, err := h.service.Get(c.Request.Context(), id)
+	resp, err := h.service.GetAndReconcile(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return

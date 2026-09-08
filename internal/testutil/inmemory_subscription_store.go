@@ -188,11 +188,22 @@ func (s *InMemorySubscriptionStore) Get(ctx context.Context, id string) (*subscr
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	// Attach line items if they exist
+	// Hand back a copy. The real repository returns a fresh row per read, and callers
+	// mutate what they read — activateDraftSubscription writes straight to it — so
+	// returning the stored pointer races every concurrent reader. Attaching line items
+	// below is itself such a write.
+	subCopy := *sub
 	if items, ok := s.lineItems[id]; ok {
-		sub.LineItems = items
+		subCopy.LineItems = append([]*subscription.SubscriptionLineItem(nil), items...)
 	}
-	return sub, nil
+	if sub.Metadata != nil {
+		m := make(map[string]string, len(sub.Metadata))
+		for k, v := range sub.Metadata {
+			m[k] = v
+		}
+		subCopy.Metadata = m
+	}
+	return &subCopy, nil
 }
 
 // GetForUpdate matches Get; in-memory store has no row locks.
@@ -412,10 +423,12 @@ func (s *InMemorySubscriptionStore) SetLineItemStore(store *InMemorySubscription
 // When lineItemStore is set, line items come from SubscriptionLineItemRepo only (mirrors DB + supports Update).
 // Otherwise returns the batch from CreateWithLineItems.
 func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
+	// Get already returns a copy, so assigning LineItems below is safe.
 	sub, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if s.lineItemStore != nil {
 		filter := types.NewNoLimitSubscriptionLineItemFilter()
 		filter.SubscriptionIDs = []string{id}

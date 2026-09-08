@@ -1,6 +1,8 @@
 package razorpay
 
 import (
+	"time"
+
 	"github.com/shopspring/decimal"
 )
 
@@ -77,6 +79,9 @@ type CreatePaymentLinkRequest struct {
 	CancelURL  string // Not used by Razorpay (only SuccessURL is used as callback_url)
 	Metadata   map[string]string
 	PaymentID  string
+	// ExpiresAt, when set, is sent as expire_by so the link stops accepting new
+	// payments at a known time. Razorpay's minimum is 15 minutes from now.
+	ExpiresAt *time.Time
 }
 
 // RazorpayPaymentLinkResponse represents the response after creating a payment link
@@ -89,6 +94,7 @@ type RazorpayPaymentLinkResponse struct {
 	CreatedAt             int64           // Unix timestamp
 	PaymentID             string          // FlexPrice payment ID
 	IsRazorpayInvoiceLink bool            // Whether the payment link is a Razorpay invoice link
+	ExpiresAt             *time.Time      // expire_by echoed back by Razorpay, when present
 }
 
 // RazorpayInvoiceSyncRequest represents a request to sync FlexPrice invoice to Razorpay

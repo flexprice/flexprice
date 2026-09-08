@@ -16,12 +16,20 @@ const (
 )
 
 // ToFlexpricePaymentStatus maps a Razorpay payment status to a FlexPrice PaymentStatus.
+// "created" and "authorized" are in flight rather than outcomes, so they return an
+// empty status with a nil error to signal "still pending, no transition" — matching the
+// payment link, invoice and order mappers below. Anything genuinely unrecognised is an
+// error, so a status Razorpay adds later cannot be silently read as pending.
 func (s RazorpayPaymentStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
 	switch s {
 	case RazorpayPaymentStatusCaptured:
 		return types.PaymentStatusSucceeded, nil
+	case RazorpayPaymentStatusRefunded:
+		return types.PaymentStatusRefunded, nil
 	case RazorpayPaymentStatusFailed:
 		return types.PaymentStatusFailed, nil
+	case RazorpayPaymentStatusCreated, RazorpayPaymentStatusAuthorized:
+		return "", nil
 	default:
 		return "", ierr.NewError("unmapped razorpay payment status").
 			WithReportableDetails(map[string]interface{}{
@@ -60,6 +68,68 @@ func (s RazorpayPaymentLinkStatus) ToFlexpricePaymentStatus() (types.PaymentStat
 		return "", ierr.NewError("unmapped razorpay payment link status").
 			WithReportableDetails(map[string]interface{}{
 				"razorpay_payment_link_status": s,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+}
+
+// RazorpayInvoiceStatus is Razorpay's invoice (inv_xxx) status enum. Checkout uses an
+// invoice as the mandate-registration link, so this is the lifecycle a
+// charge_automatically checkout without a saved token sits in.
+type RazorpayInvoiceStatus string
+
+const (
+	RazorpayInvoiceStatusDraft         RazorpayInvoiceStatus = "draft"
+	RazorpayInvoiceStatusIssued        RazorpayInvoiceStatus = "issued"
+	RazorpayInvoiceStatusPartiallyPaid RazorpayInvoiceStatus = "partially_paid"
+	RazorpayInvoiceStatusPaid          RazorpayInvoiceStatus = "paid"
+	RazorpayInvoiceStatusCancelled     RazorpayInvoiceStatus = "cancelled"
+	RazorpayInvoiceStatusExpired       RazorpayInvoiceStatus = "expired"
+	RazorpayInvoiceStatusDeleted       RazorpayInvoiceStatus = "deleted"
+)
+
+// ToFlexpricePaymentStatus maps a Razorpay invoice status to a FlexPrice one.
+// Non-terminal states return an empty status and nil error: "still pending".
+func (s RazorpayInvoiceStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
+	switch s {
+	case RazorpayInvoiceStatusPaid:
+		return types.PaymentStatusSucceeded, nil
+	case RazorpayInvoiceStatusCancelled, RazorpayInvoiceStatusExpired, RazorpayInvoiceStatusDeleted:
+		return types.PaymentStatusFailed, nil
+	case RazorpayInvoiceStatusDraft, RazorpayInvoiceStatusIssued, RazorpayInvoiceStatusPartiallyPaid:
+		return "", nil
+	default:
+		return "", ierr.NewError("unmapped razorpay invoice status").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_invoice_status": s,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+}
+
+// RazorpayOrderStatus is Razorpay's order (order_xxx) status enum. An order is the
+// idempotency container for a saved-token charge; "attempted" means submitted but not
+// captured, so it is not yet an outcome.
+type RazorpayOrderStatus string
+
+const (
+	RazorpayOrderStatusCreated   RazorpayOrderStatus = "created"
+	RazorpayOrderStatusAttempted RazorpayOrderStatus = "attempted"
+	RazorpayOrderStatusPaid      RazorpayOrderStatus = "paid"
+)
+
+// ToFlexpricePaymentStatus maps a Razorpay order status to a FlexPrice one.
+// Non-terminal states return an empty status and nil error: "still pending".
+func (s RazorpayOrderStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
+	switch s {
+	case RazorpayOrderStatusPaid:
+		return types.PaymentStatusSucceeded, nil
+	case RazorpayOrderStatusCreated, RazorpayOrderStatusAttempted:
+		return "", nil
+	default:
+		return "", ierr.NewError("unmapped razorpay order status").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_order_status": s,
 			}).
 			Mark(ierr.ErrInvalidOperation)
 	}
