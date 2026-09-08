@@ -89,6 +89,7 @@ type scenarioSpec struct {
 	name              string
 	cycle             types.BillingCycle
 	subPeriod         types.BillingPeriod
+	subStart          time.Time // defaults to periodStart; set to model a renewal period
 	periodStart       time.Time
 	periodEnd         time.Time
 	anchor            time.Time
@@ -117,9 +118,13 @@ func (s *MultiCadenceAddonMatrixSuite) build(spec scenarioSpec) *scenario {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, planPrice))
 
+	subStart := spec.subStart
+	if subStart.IsZero() {
+		subStart = spec.periodStart
+	}
 	sub := &subscription.Subscription{
 		ID: "sub_" + id, PlanID: pl.ID, CustomerID: cust.ID,
-		StartDate: spec.periodStart, BillingAnchor: spec.anchor,
+		StartDate: subStart, BillingAnchor: spec.anchor,
 		CurrentPeriodStart: spec.periodStart, CurrentPeriodEnd: spec.periodEnd,
 		Currency: "usd", BillingPeriod: spec.subPeriod, BillingPeriodCount: 1,
 		BillingCycle: spec.cycle, SubscriptionStatus: types.SubscriptionStatusActive,
@@ -393,4 +398,72 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_Parity() {
 
 	s.equalMoney("33.33", s.atCreateAddonTotal(sc), "at-create addon total")
 	s.equalMoney("33.33", s.attachLaterAddonTotal(sc), "attach-later addon total")
+}
+
+// --- Whole periods are never prorated --------------------------------------
+
+// The divisor is widened only for a first period cut short by the anchor. These cases must
+// keep charging list price, including the month-end anchor where the period is 28 days but
+// still a whole month.
+func (s *MultiCadenceAddonMatrixSuite) TestWholePeriod_ChargesListPrice() {
+	cases := []struct {
+		name string
+		spec scenarioSpec
+		want string
+	}{
+		{
+			name: "anniversary, anchor on the start date",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
+				periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.February, 1),
+				anchor: d(2025, time.January, 1), planAmount: 100,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.January, 1),
+			},
+			want: "100",
+		},
+		{
+			name: "month-end anchor: 28-day February is a whole month",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
+				periodStart: d(2025, time.January, 31), periodEnd: d(2025, time.February, 28),
+				anchor: d(2025, time.January, 31), planAmount: 100,
+				addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
+				addonStart: d(2025, time.January, 31),
+			},
+			want: "100",
+		},
+		{
+			name: "calendar renewal period",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
+				subStart:    d(2025, time.February, 15),
+				periodStart: d(2025, time.April, 1), periodEnd: d(2025, time.July, 1),
+				anchor: d(2025, time.April, 1), planAmount: 300,
+				addonPeriod: types.BILLING_PERIOD_QUARTER, addonAmount: 300,
+				addonStart: d(2025, time.February, 15),
+			},
+			want: "300",
+		},
+		{
+			name: "renewal period with a line item added at its start",
+			spec: scenarioSpec{
+				cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
+				subStart:    d(2025, time.January, 1),
+				periodStart: d(2025, time.April, 1), periodEnd: d(2025, time.July, 1),
+				anchor: d(2025, time.January, 1), planAmount: 300,
+				addonPeriod: types.BILLING_PERIOD_QUARTER, addonAmount: 300,
+				addonStart: d(2025, time.April, 1),
+			},
+			want: "300",
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			tc.spec.prorationBehavior = types.ProrationBehaviorCreateProrations
+			sc := s.build(tc.spec)
+			s.equalMoney(tc.want, s.atCreateAddonTotal(sc), "whole period must bill at list price")
+		})
+	}
 }
