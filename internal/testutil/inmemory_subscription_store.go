@@ -192,18 +192,26 @@ func (s *InMemorySubscriptionStore) Get(ctx context.Context, id string) (*subscr
 	// mutate what they read — activateDraftSubscription writes straight to it — so
 	// returning the stored pointer races every concurrent reader. Attaching line items
 	// below is itself such a write.
-	subCopy := *sub
+	subCopy := copySubscription(sub)
 	if items, ok := s.lineItems[id]; ok {
 		subCopy.LineItems = append([]*subscription.SubscriptionLineItem(nil), items...)
 	}
-	if sub.Metadata != nil {
-		m := make(map[string]string, len(sub.Metadata))
-		for k, v := range sub.Metadata {
-			m[k] = v
-		}
-		subCopy.Metadata = m
+	return subCopy, nil
+}
+
+// copySubscription returns a read-safe copy: value fields plus the metadata map callers write through.
+func copySubscription(sub *subscription.Subscription) *subscription.Subscription {
+	if sub == nil {
+		return nil
 	}
-	return &subCopy, nil
+	out := *sub
+	if sub.Metadata != nil {
+		out.Metadata = make(map[string]string, len(sub.Metadata))
+		for k, v := range sub.Metadata {
+			out.Metadata[k] = v
+		}
+	}
+	return &out
 }
 
 // GetForUpdate matches Get; in-memory store has no row locks.
@@ -223,7 +231,11 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 	// SetLineItemStore), source from it so line items added via the
 	// SubscriptionLineItemRepo are visible here too. Falls back to the
 	// initial-batch map populated by CreateWithLineItems.
-	for _, sub := range subs {
+	for i, sub := range subs {
+		// Same copy-on-read contract as Get; attaching line items below is a write.
+		sub = copySubscription(sub)
+		subs[i] = sub
+
 		if s.lineItemStore != nil {
 			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 			liFilter.SubscriptionIDs = []string{sub.ID}

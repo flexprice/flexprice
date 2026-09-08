@@ -707,8 +707,6 @@ func (s *subscriptionChangeService) executeChange(
 
 	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
 	// Calculating proration would produce a ghost adjustment — skip it entirely.
-	// Capture this BEFORE CancelSubscription runs, because the in-place mutation of the
-	// subscription struct inside CancelSubscription would otherwise overwrite the status.
 	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
 
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
@@ -719,13 +717,6 @@ func (s *subscriptionChangeService) executeChange(
 	if isTrialing {
 		cancelInvoicePolicy = types.CancelImmediatelyInvoicePolicySkip
 	}
-
-	// Immediate cancellation closes CurrentPeriodEnd at the effective date on the persisted row,
-	// and does so in place on this struct. Everything below prorates the period that just ended,
-	// so it needs the period as it was before the cancellation — restore it on the local copy.
-	periodStartBeforeCancel := currentSub.CurrentPeriodStart
-	periodEndBeforeCancel := currentSub.CurrentPeriodEnd
-
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
 		CancellationType:               types.CancellationTypeImmediate,
@@ -737,8 +728,6 @@ func (s *subscriptionChangeService) executeChange(
 	if err != nil {
 		return nil, err
 	}
-	currentSub.CurrentPeriodStart = periodStartBeforeCancel
-	currentSub.CurrentPeriodEnd = periodEndBeforeCancel
 
 	// For immediate plan changes with create_prorations, we net the old subscription's proration
 	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
