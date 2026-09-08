@@ -24,15 +24,23 @@ import (
 //   - Odd runs (cursor%2 == 1): under-commitment (100 events × $0.01 = $1.00).
 //     Preview total must be at least commitment + base ($5 + $19.99 = $24.99).
 //     True-up bumps usage up to the commitment.
-//   - Even runs (cursor%2 == 0): over-commitment (700 events × $0.01 = $7.00).
+//   - Even runs (cursor%2 == 0): over-commitment (550 events × $0.01 = $5.50).
 //     Preview total must equal commitment + (usage - commitment) × 1.5 + base
-//     = $5 + $2 × 1.5 + $19.99 = $27.99 (epsilon $0.01).
+//     = $5 + $0.50 × 1.5 + $19.99 = $25.74 (epsilon $0.01).
 
 // CommitmentEventName is the entitlement-free seed meter this probe bills
 // against. Every other metered seed feature carries a 100-unit monthly
 // entitlement, which silently absorbs the first $1.00 of usage and makes
 // exact preview totals unassertable.
 const CommitmentEventName = "e2eprobe_sum_commit"
+
+// Over-leg size and expected commitment-adjusted usage. Keep these together:
+// expected = commitment + (n×$0.01 − commitment) × 1.5.
+const (
+	commitmentOverEventCount    = 550
+	commitmentOverExpectedUsage = 5.75
+	commitmentUsagePollTimeout  = 8 * time.Minute
+)
 
 type CommitmentTrueUpProbe struct {
 	client e2eprobe.Client
@@ -114,14 +122,13 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 	// expectedUsage is the COMMITMENT-ADJUSTED usage amount the subscription
 	// usage API reports once every event has landed — not the raw
 	// units × price total. Over the commitment the API already applies the
-	// 1.5x overage factor ($5 committed + $2 overage × 1.5 = $8.00), so
-	// polling for the raw $7.00 returns while ~10% of the events are still
-	// draining and the preview below is then short by that remainder.
+	// 1.5x overage factor ($5 committed + $0.50 overage × 1.5 = $5.75), so
+	// polling for the raw $5.50 returns while events are still draining.
 	n := 100
 	expectedUsage := 1.00
 	if overLeg {
-		n = 700
-		expectedUsage = 8.00
+		n = commitmentOverEventCount
+		expectedUsage = commitmentOverExpectedUsage
 	}
 	for i := 0; i < n; i++ {
 		if _, err := p.client.Events().Ingest(ctx, types.IngestEventRequest{
@@ -154,7 +161,7 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 }
 
 func (p *CommitmentTrueUpProbe) pollSubUsage(ctx context.Context, subID, ext string, expectedAmount float64) error {
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(commitmentUsagePollTimeout)
 	usageEpsilon := 0.005
 	var lastErr error
 	var lastAmount float64
@@ -217,8 +224,8 @@ func (p *CommitmentTrueUpProbe) assertPreview(inv *types.InvoiceResponse, overLe
 	}
 
 	// Over leg: total ≈ commitment + (usage_past_commitment × 1.5) + base
-	//         = $5 + $2×1.5 + $19.99 = $27.99.
-	expected := decimal.NewFromFloat(8.00).Add(baseFee)
+	//         = $5 + $0.50×1.5 + $19.99 = $25.74.
+	expected := decimal.NewFromFloat(commitmentOverExpectedUsage).Add(baseFee)
 	if total.Sub(expected).Abs().GreaterThan(epsilon) {
 		return e2eprobe.Errorf(map[string]string{
 			"step": "assert_commitment_over", "external_customer_id": ext, "subscription_id": subID,
