@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -402,6 +403,108 @@ func applyOpeningInvoiceAdjustmentToLineItems(
 		return item
 	})
 	return adjusted, creditsToAdjust.Sub(remaining)
+}
+
+// lineItemMergeKey identifies invoice line items that are the same charge billed
+// across consecutive sub-windows of one invoice period.
+//
+// SubscriptionLineItemID alone is not enough: one line item can emit several rows
+// within a single window (commitment vs overage), which must not merge together.
+type lineItemMergeKey struct {
+	subscriptionLineItemID string
+	priceID                string
+	meterID                string
+	displayName            string
+	priceUnit              string
+	isOverage              string
+}
+
+func newLineItemMergeKey(item dto.CreateInvoiceLineItemRequest) lineItemMergeKey {
+	return lineItemMergeKey{
+		subscriptionLineItemID: lo.FromPtr(item.SubscriptionLineItemID),
+		priceID:                lo.FromPtr(item.PriceID),
+		meterID:                lo.FromPtr(item.MeterID),
+		displayName:            lo.FromPtr(item.DisplayName),
+		priceUnit:              lo.FromPtr(item.PriceUnit),
+		isOverage:              item.Metadata["is_overage"],
+	}
+}
+
+// mergeLineItemsByBillingPeriod collapses the sub-window rows of each charge into one
+// row spanning them. Member amounts are already rounded, so the total is unchanged.
+// Rows without a subscription line item id (plan-level overage) pass through as-is.
+func mergeLineItemsByBillingPeriod(items []dto.CreateInvoiceLineItemRequest) []dto.CreateInvoiceLineItemRequest {
+	if len(items) < 2 {
+		return items
+	}
+
+	merged := make([]dto.CreateInvoiceLineItemRequest, 0, len(items))
+	indexByKey := make(map[lineItemMergeKey]int, len(items))
+
+	for _, item := range items {
+		if lo.FromPtr(item.SubscriptionLineItemID) == "" {
+			merged = append(merged, item)
+			continue
+		}
+
+		key := newLineItemMergeKey(item)
+		idx, seen := indexByKey[key]
+		if !seen {
+			indexByKey[key] = len(merged)
+			merged = append(merged, item)
+			continue
+		}
+
+		merged[idx] = mergeIntoLineItem(merged[idx], item)
+	}
+
+	return merged
+}
+
+// mergeIntoLineItem folds a later window of the same charge into target.
+func mergeIntoLineItem(target, addition dto.CreateInvoiceLineItemRequest) dto.CreateInvoiceLineItemRequest {
+	target.Amount = target.Amount.Add(addition.Amount)
+
+	// A fixed charge repeats the same quantity every window (5 seats each month),
+	// so summing it would report 15 seats for a 5-seat subscription.
+	if isUsageLineItem(target) {
+		target.Quantity = target.Quantity.Add(addition.Quantity)
+		if target.AdjustedEntitlementQuantity != nil || addition.AdjustedEntitlementQuantity != nil {
+			target.AdjustedEntitlementQuantity = lo.ToPtr(
+				lo.FromPtr(target.AdjustedEntitlementQuantity).Add(lo.FromPtr(addition.AdjustedEntitlementQuantity)))
+		}
+	}
+
+	// PriceUnitAmount is the line's total converted into the price unit currency,
+	// not a per-unit rate, so it tracks Amount.
+	if target.PriceUnitAmount != nil || addition.PriceUnitAmount != nil {
+		target.PriceUnitAmount = lo.ToPtr(lo.FromPtr(target.PriceUnitAmount).Add(lo.FromPtr(addition.PriceUnitAmount)))
+	}
+
+	target.PeriodStart = types.EarliestOfPtr(target.PeriodStart, addition.PeriodStart)
+	target.PeriodEnd = types.LatestOfPtr(target.PeriodEnd, addition.PeriodEnd)
+
+	return target
+}
+
+func isUsageLineItem(item dto.CreateInvoiceLineItemRequest) bool {
+	return strings.EqualFold(lo.FromPtr(item.PriceType), string(types.PRICE_TYPE_USAGE))
+}
+
+// applyLineItemGrouping merges per-charge-period rows when the subscription opts in.
+// TotalAmount is left alone: the merge only redistributes already-rounded amounts.
+func applyLineItemGrouping(
+	sub *subscription.Subscription,
+	result *dto.BillingCalculationResult,
+) *dto.BillingCalculationResult {
+	if result == nil || sub == nil || !sub.LineItemGrouping.MergesIntoBillingPeriod() {
+		return result
+	}
+
+	merged := *result
+	merged.FixedCharges = mergeLineItemsByBillingPeriod(result.FixedCharges)
+	merged.UsageCharges = mergeLineItemsByBillingPeriod(result.UsageCharges)
+	return &merged
 }
 
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that
@@ -2264,6 +2367,10 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			UsageCharges: make([]dto.CreateInvoiceLineItemRequest, 0),
 		}
 	}
+
+	// Must run before coupon selection below, which keys off the set of price IDs
+	// on the invoice — a set the merge preserves.
+	result = applyLineItemGrouping(sub, result)
 
 	// Apply Coupons if any - both subscription level and line item level.
 	// Selection mechanics (fetch active associations + split sub/line + price mapping) are shared

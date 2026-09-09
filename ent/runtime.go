@@ -2000,16 +2000,20 @@ func init() {
 	subscription.DefaultProrationBehavior = types.ProrationBehavior(subscriptionDescProrationBehavior.Default.(string))
 	// subscription.ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	subscription.ProrationBehaviorValidator = subscriptionDescProrationBehavior.Validators[0].(func(string) error)
+	// subscriptionDescLineItemGrouping is the schema descriptor for line_item_grouping field.
+	subscriptionDescLineItemGrouping := subscriptionFields[32].Descriptor()
+	// subscription.DefaultLineItemGrouping holds the default value on creation for the line_item_grouping field.
+	subscription.DefaultLineItemGrouping = types.LineItemGrouping(subscriptionDescLineItemGrouping.Default.(string))
 	// subscriptionDescEnableTrueUp is the schema descriptor for enable_true_up field.
-	subscriptionDescEnableTrueUp := subscriptionFields[32].Descriptor()
+	subscriptionDescEnableTrueUp := subscriptionFields[33].Descriptor()
 	// subscription.DefaultEnableTrueUp holds the default value on creation for the enable_true_up field.
 	subscription.DefaultEnableTrueUp = subscriptionDescEnableTrueUp.Default.(bool)
 	// subscriptionDescSubscriptionType is the schema descriptor for subscription_type field.
-	subscriptionDescSubscriptionType := subscriptionFields[36].Descriptor()
+	subscriptionDescSubscriptionType := subscriptionFields[37].Descriptor()
 	// subscription.DefaultSubscriptionType holds the default value on creation for the subscription_type field.
 	subscription.DefaultSubscriptionType = types.SubscriptionType(subscriptionDescSubscriptionType.Default.(string))
 	// subscriptionDescSyncedPriceSequence is the schema descriptor for synced_price_sequence field.
-	subscriptionDescSyncedPriceSequence := subscriptionFields[38].Descriptor()
+	subscriptionDescSyncedPriceSequence := subscriptionFields[39].Descriptor()
 	// subscription.DefaultSyncedPriceSequence holds the default value on creation for the synced_price_sequence field.
 	subscription.DefaultSyncedPriceSequence = subscriptionDescSyncedPriceSequence.Default.(int64)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
