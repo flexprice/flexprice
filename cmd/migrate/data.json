@@ -161,6 +161,10 @@
             "description": "Fired when a subscription is paused"
         },
         {
+            "name": "subscription.plan_changed",
+            "description": "Fired when a subscription plan changes in place (id and billing anchor are preserved; not cancelled then created)"
+        },
+        {
             "name": "subscription.renewal.due",
             "description": "Fired when a subscription is 2400 hours from period end"
         },
