@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -465,21 +464,21 @@ func mergeLineItemsByBillingPeriod(items []dto.CreateInvoiceLineItemRequest) []d
 func mergeIntoLineItem(target, addition dto.CreateInvoiceLineItemRequest) dto.CreateInvoiceLineItemRequest {
 	target.Amount = target.Amount.Add(addition.Amount)
 
-	// A fixed charge repeats the same quantity every window (5 seats each month),
-	// so summing it would report 15 seats for a 5-seat subscription.
-	if isUsageLineItem(target) {
-		target.Quantity = target.Quantity.Add(addition.Quantity)
-		if target.AdjustedEntitlementQuantity != nil || addition.AdjustedEntitlementQuantity != nil {
-			target.AdjustedEntitlementQuantity = lo.ToPtr(
-				lo.FromPtr(target.AdjustedEntitlementQuantity).Add(lo.FromPtr(addition.AdjustedEntitlementQuantity)))
-		}
-	}
+	// Summed for fixed charges too, so amount / quantity stays the unit price:
+	// 5 seats over 3 months is 15 seat-months at $20, not 5 seats at $60.
+	target.Quantity = target.Quantity.Add(addition.Quantity)
+
+	target.AdjustedEntitlementQuantity = types.AddDecimalPtr(target.AdjustedEntitlementQuantity, addition.AdjustedEntitlementQuantity)
 
 	// PriceUnitAmount is the line's total converted into the price unit currency,
 	// not a per-unit rate, so it tracks Amount.
-	if target.PriceUnitAmount != nil || addition.PriceUnitAmount != nil {
-		target.PriceUnitAmount = lo.ToPtr(lo.FromPtr(target.PriceUnitAmount).Add(lo.FromPtr(addition.PriceUnitAmount)))
-	}
+	target.PriceUnitAmount = types.AddDecimalPtr(target.PriceUnitAmount, addition.PriceUnitAmount)
+
+	// Every other per-window money field, or the later windows' values are lost.
+	target.PrepaidCreditsApplied = types.AddDecimalPtr(target.PrepaidCreditsApplied, addition.PrepaidCreditsApplied)
+	target.LineItemDiscount = types.AddDecimalPtr(target.LineItemDiscount, addition.LineItemDiscount)
+	target.InvoiceLevelDiscount = types.AddDecimalPtr(target.InvoiceLevelDiscount, addition.InvoiceLevelDiscount)
+	target.CommitmentInfo = mergeCommitmentInfo(target.CommitmentInfo, addition.CommitmentInfo)
 
 	target.PeriodStart = types.EarliestOfPtr(target.PeriodStart, addition.PeriodStart)
 	target.PeriodEnd = types.LatestOfPtr(target.PeriodEnd, addition.PeriodEnd)
@@ -487,8 +486,23 @@ func mergeIntoLineItem(target, addition dto.CreateInvoiceLineItemRequest) dto.Cr
 	return target
 }
 
-func isUsageLineItem(item dto.CreateInvoiceLineItemRequest) bool {
-	return strings.EqualFold(lo.FromPtr(item.PriceType), string(types.PRICE_TYPE_USAGE))
+// mergeCommitmentInfo sums the computed amounts across windows. The remaining
+// fields are configuration echoed from the subscription line item — identical on
+// every window — so they carry over from the first. Returns a new value: the
+// inputs belong to the caller's line items.
+func mergeCommitmentInfo(target, addition *types.CommitmentInfo) *types.CommitmentInfo {
+	if target == nil {
+		return addition
+	}
+	if addition == nil {
+		return target
+	}
+
+	merged := *target
+	merged.ComputedCommitmentUtilizedAmount = target.ComputedCommitmentUtilizedAmount.Add(addition.ComputedCommitmentUtilizedAmount)
+	merged.ComputedOverageAmount = target.ComputedOverageAmount.Add(addition.ComputedOverageAmount)
+	merged.ComputedTrueUpAmount = target.ComputedTrueUpAmount.Add(addition.ComputedTrueUpAmount)
+	return &merged
 }
 
 // applyLineItemGrouping merges per-charge-period rows when the subscription opts in.

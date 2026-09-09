@@ -1324,10 +1324,13 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToE
 		name          string
 		grouping      types.LineItemGrouping
 		wantLineItems int
+		// Quantity on each emitted row. A merged row carries the sum, so
+		// amount / quantity still reads as the $100 monthly unit price.
+		wantQuantityEach string
 	}{
-		{"per charge period bills each month", types.LineItemGroupingPerChargePeriod, 3},
-		{"per billing period bills the quarter once", types.LineItemGroupingPerBillingPeriod, 1},
-		{"omitted keeps the per charge period default", types.LineItemGrouping(""), 3},
+		{"per charge period bills each month", types.LineItemGroupingPerChargePeriod, 3, "1"},
+		{"per billing period bills the quarter once", types.LineItemGroupingPerBillingPeriod, 1, "3"},
+		{"omitted keeps the per charge period default", types.LineItemGrouping(""), 3, "1"},
 	}
 
 	for i, tt := range tests {
@@ -1354,9 +1357,17 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToE
 			inv, err := s.GetStores().InvoiceRepo.Get(ctx, invoices[0].ID)
 			s.Require().NoError(err)
 
-			s.Len(inv.LineItems, tt.wantLineItems)
+			s.Require().Len(inv.LineItems, tt.wantLineItems)
 			s.True(inv.AmountDue.Equal(decimal.NewFromInt(300)),
 				"invoice total = %s, want 300 under either grouping", inv.AmountDue)
+
+			wantQty := decimal.RequireFromString(tt.wantQuantityEach)
+			for _, li := range inv.LineItems {
+				s.True(li.Quantity.Equal(wantQty), "line item quantity = %s, want %s", li.Quantity, wantQty)
+				unitPrice := li.Amount.Div(li.Quantity)
+				s.True(unitPrice.Equal(decimal.NewFromInt(100)),
+					"amount/quantity = %s, want the 100 monthly unit price", unitPrice)
+			}
 		})
 	}
 }
