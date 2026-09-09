@@ -116,7 +116,7 @@ var checkDefaultIntervals = map[string]time.Duration{
 	"CANCEL_CUSTOMER_FLOW":                30 * time.Minute,
 	"SUBSCRIPTION_MODIFICATION_FLOW":      20 * time.Minute,
 	"BUCKETED_METER_PROBE":                12 * time.Minute,
-	"COMMITMENT_TRUE_UP_PROBE":            15 * time.Minute,
+	"COMMITMENT_TRUE_UP_PROBE":            17 * time.Minute,
 	"ENTITLEMENT_ENFORCEMENT_PROBE":       8 * time.Minute,
 	"TAX_APPLICATION_PROBE":               15 * time.Minute,
 	"COUPON_APPLICATION_PROBE":            15 * time.Minute,

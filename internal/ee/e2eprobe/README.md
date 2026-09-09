@@ -146,7 +146,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | listener | low-wallet-alert-listener | webhook | Asserts low-balance webhook payloads and tracks per-wallet, per-alert-type receipts |
 | probe | low-balance-alert-probe | 5m | Actively drives the canary wallet across its low-balance threshold and asserts the webhook lands within 2m (Slack-pages on absence) |
 | probe | bucketed-meter-probe | 12m | Backdated events → GetUsageAnalytics per-bucket assertion (rotates over 15MIN/HOUR/DAY bucketed features) |
-| scenario | commitment-true-up-probe | 15m | Ephemeral sub w/ $5 commitment → preview → assert true-up (under leg) or overage math (over leg) |
+| scenario | commitment-true-up-probe | 17m | Ephemeral sub w/ $5 commitment → preview → assert true-up (under leg) or overage math (over leg) |
 | scenario | entitlement-enforcement-probe | 8m | Ephemeral sub → ingest 150 events past soft-limit(100) → usage-summary assertion |
 | scenario | tax-application-probe | 15m | Ephemeral sub + tax association → preview → assert `preview.Taxes` includes the seed rate and 10% math |
 | scenario | coupon-application-probe | 15m | Ephemeral sub w/ SubscriptionCoupons → preview → assert `preview.CouponApplications` references the seed coupon |

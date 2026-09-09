@@ -239,10 +239,7 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
 			entCheckout.StatusEQ(string(types.StatusPublished)),
-			entCheckout.CheckoutStatusIn(
-				types.CheckoutStatusInitiated,
-				types.CheckoutStatusPending,
-			),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		First(ctx)
 	if err != nil {
@@ -303,7 +300,7 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 			entCheckout.ID(sessionID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.CheckoutStatusIn(types.CheckoutStatusPending, types.CheckoutStatusInitiated),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		SetCheckoutStatus(types.CheckoutStatusCompleted).
 		SetCompletedAt(completedAt).
@@ -333,10 +330,7 @@ func (r *checkoutSessionRepository) ListExpiredCheckoutSessions(ctx context.Cont
 	query := r.client.Reader(ctx).CheckoutSession.Query().
 		Where(
 			entCheckout.StatusNotIn(string(types.StatusDeleted)),
-			entCheckout.CheckoutStatusIn(
-				types.CheckoutStatusInitiated,
-				types.CheckoutStatusPending,
-			),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 			entCheckout.ExpiresAtLT(effectiveDate),
 		).
 		Order(ent.Asc(entCheckout.FieldExpiresAt)).

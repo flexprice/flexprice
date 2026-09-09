@@ -10,6 +10,13 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
+func TestWalletDebitVerification_DefaultLandedPollCoversStagingBacklog(t *testing.T) {
+	v := NewWalletDebitVerification(nil, nil, "run-1", WalletDebitOpts{EventCount: 10})
+	if v.opts.LandedPollTimeout != 5*time.Minute {
+		t.Fatalf("LandedPollTimeout = %s, want 5m (staging consumer ~1.5 events/s)", v.opts.LandedPollTimeout)
+	}
+}
+
 func TestWalletDebitVerification_NoPreFundedCustomers(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
@@ -99,9 +106,9 @@ func TestWalletDebitVerification_Phase1TopUpFailure(t *testing.T) {
 	reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c0"}})
 
 	v := NewWalletDebitVerification(fc, reg, "run-1", WalletDebitOpts{
-		TopUpAmount:  "5.00",
-		EventCount:   5,
-		EventAmount:  "1.00",
+		TopUpAmount:          "5.00",
+		EventCount:           5,
+		EventAmount:          "1.00",
 		AnalyticsPollTimeout: 50 * time.Millisecond,
 	})
 	err := v.Run(context.Background())

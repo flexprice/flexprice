@@ -707,8 +707,6 @@ func (s *subscriptionChangeService) executeChange(
 
 	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
 	// Calculating proration would produce a ghost adjustment — skip it entirely.
-	// Capture this BEFORE CancelSubscription runs, because the in-place mutation of the
-	// subscription struct inside CancelSubscription would otherwise overwrite the status.
 	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
 
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).

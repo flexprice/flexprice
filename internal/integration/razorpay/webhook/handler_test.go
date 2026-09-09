@@ -10,7 +10,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
-	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -237,7 +236,7 @@ func (s *WebhookCheckoutBranchingSuite) makeEvent(paymentLinkID, razorpayPayment
 
 func (s *WebhookCheckoutBranchingSuite) TestPendingSession_Completes() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
 	}
 
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
@@ -249,7 +248,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_Completes() {
 
 func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
 
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
@@ -265,7 +264,7 @@ func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
 	// payment_link.cancelled/expired marks the session Failed, not Expired
 	// (Expired is set only by the cleanup cron).
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed,
 	}
 
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
@@ -279,7 +278,7 @@ func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
 
 func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCompleted},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCompleted,
 	}
 
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
@@ -299,7 +298,7 @@ func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
@@ -314,7 +313,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refun
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed,
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
@@ -339,7 +338,7 @@ func (s *WebhookCheckoutBranchingSuite) makeFailedEvent() *RazorpayWebhookEvent 
 
 func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
 	}
 }
 
@@ -393,7 +392,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkPayment_SealsPa
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonPendingSession_SealsPayment() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired},
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
 

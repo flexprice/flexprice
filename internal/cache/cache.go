@@ -105,8 +105,11 @@ const (
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
-	PrefixPublishedConnections   = "published_connections:"
-	PrefixMeterFeature           = "meter:feature:v1:"
+	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
+	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
+	PrefixCheckoutPollLock     = "checkout:poll:"
+	PrefixPublishedConnections = "published_connections:"
+	PrefixMeterFeature         = "meter:feature:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

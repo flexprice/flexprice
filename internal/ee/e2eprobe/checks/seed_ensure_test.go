@@ -185,6 +185,30 @@ func TestSeedEnsure(t *testing.T) {
 	}
 }
 
+func TestSeedEnsure_MultiCadenceQuarterlySendsIncludePriceIds(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	s := NewSeedEnsure(fc, reg, "run-1", nil)
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	var quarterly *types.CreateSubscriptionRequest
+	for i := range fc.subs.created {
+		req := &fc.subs.created[i]
+		if req.BillingPeriod == types.BillingPeriodQuarterly {
+			quarterly = req
+			break
+		}
+	}
+	if quarterly == nil {
+		t.Fatal("expected a quarterly multi-cadence sub create")
+	}
+	if len(quarterly.IncludePriceIds) == 0 {
+		t.Fatal("quarterly sub create must send include_price_ids; monthly-only plan is rejected without the opt-in")
+	}
+}
+
 func TestSeedEnsure_BucketedFeaturesProvisioned(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
