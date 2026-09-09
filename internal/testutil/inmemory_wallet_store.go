@@ -256,8 +256,9 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 			return false
 		}
 
-		// Check expiry date
-		if t.ExpiryDate != nil && t.ExpiryDate.Before(time.Now().UTC()) {
+		// Check expiry date against the caller's time reference (mirrors the ent
+		// repository's expiry_date >= time_reference predicate)
+		if t.ExpiryDate != nil && t.ExpiryDate.Before(timeReference) {
 			return false
 		}
 
