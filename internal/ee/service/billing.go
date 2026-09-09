@@ -469,15 +469,20 @@ func mergeIntoLineItem(target, addition dto.CreateInvoiceLineItemRequest) dto.Cr
 	// so summing it would report 15 seats for a 5-seat subscription.
 	if isUsageLineItem(target) {
 		target.Quantity = target.Quantity.Add(addition.Quantity)
-		target.AdjustedEntitlementQuantity = addDecimalPtr(target.AdjustedEntitlementQuantity, addition.AdjustedEntitlementQuantity)
+		if target.AdjustedEntitlementQuantity != nil || addition.AdjustedEntitlementQuantity != nil {
+			target.AdjustedEntitlementQuantity = lo.ToPtr(
+				lo.FromPtr(target.AdjustedEntitlementQuantity).Add(lo.FromPtr(addition.AdjustedEntitlementQuantity)))
+		}
 	}
 
-	if target.PriceUnitAmount != nil && addition.PriceUnitAmount != nil {
-		target.PriceUnitAmount = lo.ToPtr(target.PriceUnitAmount.Add(*addition.PriceUnitAmount))
+	// PriceUnitAmount is the line's total converted into the price unit currency,
+	// not a per-unit rate, so it tracks Amount.
+	if target.PriceUnitAmount != nil || addition.PriceUnitAmount != nil {
+		target.PriceUnitAmount = lo.ToPtr(lo.FromPtr(target.PriceUnitAmount).Add(lo.FromPtr(addition.PriceUnitAmount)))
 	}
 
-	target.PeriodStart = earlierTime(target.PeriodStart, addition.PeriodStart)
-	target.PeriodEnd = laterTime(target.PeriodEnd, addition.PeriodEnd)
+	target.PeriodStart = earliestTimePtr(target.PeriodStart, addition.PeriodStart)
+	target.PeriodEnd = latestTimePtr(target.PeriodEnd, addition.PeriodEnd)
 
 	return target
 }
@@ -486,34 +491,19 @@ func isUsageLineItem(item dto.CreateInvoiceLineItemRequest) bool {
 	return strings.EqualFold(lo.FromPtr(item.PriceType), string(types.PRICE_TYPE_USAGE))
 }
 
-func addDecimalPtr(a, b *decimal.Decimal) *decimal.Decimal {
-	if a == nil {
-		return b
+// Nil-guarding wrappers over earliestOf/latestOf, which take values.
+func earliestTimePtr(a, b *time.Time) *time.Time {
+	if a == nil || b == nil {
+		return lo.CoalesceOrEmpty(a, b)
 	}
-	if b == nil {
-		return a
-	}
-	return lo.ToPtr(a.Add(*b))
+	return lo.ToPtr(earliestOf(*a, *b))
 }
 
-func earlierTime(a, b *time.Time) *time.Time {
-	if a == nil {
-		return b
+func latestTimePtr(a, b *time.Time) *time.Time {
+	if a == nil || b == nil {
+		return lo.CoalesceOrEmpty(a, b)
 	}
-	if b == nil || !b.Before(*a) {
-		return a
-	}
-	return b
-}
-
-func laterTime(a, b *time.Time) *time.Time {
-	if a == nil {
-		return b
-	}
-	if b == nil || !b.After(*a) {
-		return a
-	}
-	return b
+	return lo.ToPtr(latestOf(*a, *b))
 }
 
 // applyLineItemGrouping merges per-charge-period rows when the subscription opts in.

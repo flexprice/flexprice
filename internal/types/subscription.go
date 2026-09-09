@@ -206,11 +206,11 @@ func (c CollectionMethod) Validate() error {
 type LineItemGrouping string
 
 const (
-	// LINE_ITEM_GROUPING_PER_CHARGE_PERIOD - one line item per charge period (monthly price on a quarterly sub bills as 3 rows)
-	LINE_ITEM_GROUPING_PER_CHARGE_PERIOD LineItemGrouping = "PER_CHARGE_PERIOD"
+	// LineItemGroupingPerChargePeriod - one line item per charge period (monthly price on a quarterly sub bills as 3 rows)
+	LineItemGroupingPerChargePeriod LineItemGrouping = "per_charge_period"
 
-	// LINE_ITEM_GROUPING_PER_BILLING_PERIOD - those rows collapsed into one spanning the billing period
-	LINE_ITEM_GROUPING_PER_BILLING_PERIOD LineItemGrouping = "PER_BILLING_PERIOD"
+	// LineItemGroupingPerBillingPeriod - those rows collapsed into one spanning the billing period
+	LineItemGroupingPerBillingPeriod LineItemGrouping = "per_billing_period"
 )
 
 func (g LineItemGrouping) String() string {
@@ -219,8 +219,8 @@ func (g LineItemGrouping) String() string {
 
 func (g LineItemGrouping) Validate() error {
 	allowed := []LineItemGrouping{
-		LINE_ITEM_GROUPING_PER_CHARGE_PERIOD,
-		LINE_ITEM_GROUPING_PER_BILLING_PERIOD,
+		LineItemGroupingPerChargePeriod,
+		LineItemGroupingPerBillingPeriod,
 	}
 
 	if g != "" && !lo.Contains(allowed, g) {
@@ -238,13 +238,13 @@ func (g LineItemGrouping) Validate() error {
 // Default resolves an unset value to the fan-out behavior that predates this setting.
 func (g LineItemGrouping) Default() LineItemGrouping {
 	if g == "" {
-		return LINE_ITEM_GROUPING_PER_CHARGE_PERIOD
+		return LineItemGroupingPerChargePeriod
 	}
 	return g
 }
 
 func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
-	return g.Default() == LINE_ITEM_GROUPING_PER_BILLING_PERIOD
+	return g.Default() == LineItemGroupingPerBillingPeriod
 }
 
 // PaymentTerms represents net payment terms (e.g. "30 NET" = payment due in 30 days).

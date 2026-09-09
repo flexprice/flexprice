@@ -363,8 +363,8 @@ func TestCreateSubscriptionRequestValidate_LineItemGrouping(t *testing.T) {
 		wantErr  bool
 	}{
 		{"omitted is valid", types.LineItemGrouping(""), false},
-		{"per charge period", types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, false},
-		{"per billing period", types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD, false},
+		{"per charge period", types.LineItemGroupingPerChargePeriod, false},
+		{"per billing period", types.LineItemGroupingPerBillingPeriod, false},
 		{"unknown rejected", types.LineItemGrouping("PER_FORTNIGHT"), true},
 	}
 	for _, tc := range tests {
@@ -384,12 +384,12 @@ func TestCreateSubscriptionRequestValidate_LineItemGrouping(t *testing.T) {
 
 func TestCreateSubscriptionRequestToSubscription_CarriesLineItemGrouping(t *testing.T) {
 	req := baseCreateSubscriptionRequest()
-	req.LineItemGrouping = types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD
+	req.LineItemGrouping = types.LineItemGroupingPerBillingPeriod
 
 	sub := req.ToSubscription(context.Background())
 
-	if sub.LineItemGrouping != types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD {
-		t.Errorf("LineItemGrouping = %q, want %q", sub.LineItemGrouping, types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD)
+	if sub.LineItemGrouping != types.LineItemGroupingPerBillingPeriod {
+		t.Errorf("LineItemGrouping = %q, want %q", sub.LineItemGrouping, types.LineItemGroupingPerBillingPeriod)
 	}
 }
 
@@ -398,7 +398,7 @@ func TestCreateSubscriptionRequestToSubscription_DefaultsLineItemGrouping(t *tes
 
 	sub := req.ToSubscription(context.Background())
 
-	if sub.LineItemGrouping != types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD {
-		t.Errorf("LineItemGrouping = %q, want %q when omitted", sub.LineItemGrouping, types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD)
+	if sub.LineItemGrouping != types.LineItemGroupingPerChargePeriod {
+		t.Errorf("LineItemGrouping = %q, want %q when omitted", sub.LineItemGrouping, types.LineItemGroupingPerChargePeriod)
 	}
 }

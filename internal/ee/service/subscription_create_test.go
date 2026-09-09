@@ -1317,7 +1317,7 @@ func (s *SubscriptionServiceSuite) seedMonthlyPriceQuarterlyGroupingPlan(planID 
 }
 
 // End to end: create a QUARTERLY subscription carrying a MONTHLY $100 charge, then read the
-// invoice it raises. PER_CHARGE_PERIOD bills 3 monthly line items, PER_BILLING_PERIOD bills 1
+// invoice it raises. per_charge_period bills 3 monthly line items, per_billing_period bills 1
 // covering the quarter, and the invoice total is $300 either way.
 func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToEnd() {
 	tests := []struct {
@@ -1325,8 +1325,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemGroupingEndToE
 		grouping      types.LineItemGrouping
 		wantLineItems int
 	}{
-		{"per charge period bills each month", types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, 3},
-		{"per billing period bills the quarter once", types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD, 1},
+		{"per charge period bills each month", types.LineItemGroupingPerChargePeriod, 3},
+		{"per billing period bills the quarter once", types.LineItemGroupingPerBillingPeriod, 1},
 		{"omitted keeps the per charge period default", types.LineItemGrouping(""), 3},
 	}
 

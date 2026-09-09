@@ -172,7 +172,7 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default(string(types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD)).
+			Default(string(types.LineItemGroupingPerChargePeriod)).
 			GoType(types.LineItemGrouping("")).
 			Comment("Whether a charge shorter than the billing period bills as one line item per charge period or one per billing period"),
 		field.Bool("enable_true_up").

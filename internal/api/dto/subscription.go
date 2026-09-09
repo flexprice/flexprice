@@ -551,8 +551,8 @@ type CreateSubscriptionRequest struct {
 	// ProrationBehavior: create_prorations or none (default). Ignored for anniversary billing.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// LineItemGrouping: PER_CHARGE_PERIOD (default) bills a monthly price on a quarterly
-	// sub as 3 line items, PER_BILLING_PERIOD as 1. Same total either way.
+	// LineItemGrouping: per_charge_period (default) bills a monthly price on a quarterly
+	// sub as 3 line items, per_billing_period as 1. Same total either way.
 	LineItemGrouping types.LineItemGrouping `json:"line_item_grouping,omitempty"`
 	Timezone         string                 `json:"timezone" validate:"omitempty,timezone"`
 	// BillingAnchor overrides the derived anchor for anniversary billing. For monthly billing,

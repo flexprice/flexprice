@@ -1985,7 +1985,7 @@ var (
 		{Name: "gateway_payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
-		{Name: "line_item_grouping", Type: field.TypeString, Default: "PER_CHARGE_PERIOD", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "line_item_grouping", Type: field.TypeString, Default: "per_charge_period", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "enable_true_up", Type: field.TypeBool, Default: false},
 		{Name: "parent_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "payment_terms", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},

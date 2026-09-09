@@ -5797,7 +5797,7 @@ func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_SingleWindowUnch
 }
 
 // A monthly fixed + monthly usage charge on a quarterly sub: 3 line items each under
-// PER_CHARGE_PERIOD, 1 each under PER_BILLING_PERIOD, same total either way.
+// per_charge_period, 1 each under per_billing_period, same total either way.
 func (s *BillingServiceSuite) TestApplyLineItemGrouping_LineItemCountByGrouping() {
 	tests := []struct {
 		name      string
@@ -5805,8 +5805,8 @@ func (s *BillingServiceSuite) TestApplyLineItemGrouping_LineItemCountByGrouping(
 		wantFixed int
 		wantUsage int
 	}{
-		{"per charge period fans out", types.LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, 3, 3},
-		{"per billing period collapses", types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD, 1, 1},
+		{"per charge period fans out", types.LineItemGroupingPerChargePeriod, 3, 3},
+		{"per billing period collapses", types.LineItemGroupingPerBillingPeriod, 1, 1},
 		{"unset defaults to fan out", types.LineItemGrouping(""), 3, 3},
 	}
 
@@ -5826,13 +5826,13 @@ func (s *BillingServiceSuite) TestApplyLineItemGrouping_LineItemCountByGrouping(
 }
 
 func (s *BillingServiceSuite) TestApplyLineItemGrouping_NilResultIsSafe() {
-	s.Nil(applyLineItemGrouping(groupingQuarterlySub(types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD), nil))
+	s.Nil(applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), nil))
 }
 
 func (s *BillingServiceSuite) TestApplyLineItemGrouping_DoesNotMutateInput() {
 	result := groupingMonthlyChargesAcrossQuarter()
 
-	_ = applyLineItemGrouping(groupingQuarterlySub(types.LINE_ITEM_GROUPING_PER_BILLING_PERIOD), result)
+	_ = applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), result)
 
 	s.Len(result.FixedCharges, 3, "caller's result was mutated")
 	s.Len(result.UsageCharges, 3, "caller's result was mutated")

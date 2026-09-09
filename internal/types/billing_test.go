@@ -380,8 +380,8 @@ func TestLineItemGroupingValidate(t *testing.T) {
 		value   LineItemGrouping
 		wantErr bool
 	}{
-		{"per_charge_period", LINE_ITEM_GROUPING_PER_CHARGE_PERIOD, false},
-		{"per_billing_period", LINE_ITEM_GROUPING_PER_BILLING_PERIOD, false},
+		{"per_charge_period", LineItemGroupingPerChargePeriod, false},
+		{"per_billing_period", LineItemGroupingPerBillingPeriod, false},
 		{"empty_is_allowed_and_defaults", LineItemGrouping(""), false},
 		{"unknown", LineItemGrouping("WEEKLY_ISH"), true},
 	}
@@ -399,19 +399,19 @@ func TestLineItemGroupingValidate(t *testing.T) {
 }
 
 func TestLineItemGroupingDefaultPreservesExistingBehavior(t *testing.T) {
-	if got := LineItemGrouping("").Default(); got != LINE_ITEM_GROUPING_PER_CHARGE_PERIOD {
-		t.Errorf("Default() = %q, want %q (unset must keep per-charge-period fan-out)", got, LINE_ITEM_GROUPING_PER_CHARGE_PERIOD)
+	if got := LineItemGrouping("").Default(); got != LineItemGroupingPerChargePeriod {
+		t.Errorf("Default() = %q, want %q (unset must keep per-charge-period fan-out)", got, LineItemGroupingPerChargePeriod)
 	}
-	if got := LINE_ITEM_GROUPING_PER_BILLING_PERIOD.Default(); got != LINE_ITEM_GROUPING_PER_BILLING_PERIOD {
+	if got := LineItemGroupingPerBillingPeriod.Default(); got != LineItemGroupingPerBillingPeriod {
 		t.Errorf("Default() = %q, want it to preserve an explicit value", got)
 	}
 }
 
 func TestLineItemGroupingMergesPerBillingPeriod(t *testing.T) {
-	if LINE_ITEM_GROUPING_PER_CHARGE_PERIOD.MergesIntoBillingPeriod() {
+	if LineItemGroupingPerChargePeriod.MergesIntoBillingPeriod() {
 		t.Error("per-charge-period must not merge")
 	}
-	if !LINE_ITEM_GROUPING_PER_BILLING_PERIOD.MergesIntoBillingPeriod() {
+	if !LineItemGroupingPerBillingPeriod.MergesIntoBillingPeriod() {
 		t.Error("per-billing-period must merge")
 	}
 	if LineItemGrouping("").MergesIntoBillingPeriod() {

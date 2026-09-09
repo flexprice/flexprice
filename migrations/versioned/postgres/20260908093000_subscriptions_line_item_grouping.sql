@@ -6,13 +6,13 @@
 -- NOT NULL with a constant default: catalog-only in Postgres 11+, no table
 -- rewrite regardless of row count. Lane A.
 --
--- The default is PER_CHARGE_PERIOD, which is the fan-out behavior that predates
+-- The default is per_charge_period, which is the fan-out behavior that predates
 -- this column, so existing subscriptions keep their current invoice shape.
 SET lock_timeout = '3s';
 SET statement_timeout = '30s';
 
 ALTER TABLE subscriptions
-  ADD COLUMN IF NOT EXISTS line_item_grouping character varying(50) NOT NULL DEFAULT 'PER_CHARGE_PERIOD';
+  ADD COLUMN IF NOT EXISTS line_item_grouping character varying(50) NOT NULL DEFAULT 'per_charge_period';
 
 -- migrate:down
 SET lock_timeout = '3s';
