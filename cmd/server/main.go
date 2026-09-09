@@ -138,7 +138,6 @@ func main() {
 			// Repositories
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
-			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
