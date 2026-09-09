@@ -292,6 +292,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				Description:       fmt.Sprintf("Amount applied as credit adjustment to invoice %s from wallet %s", inv.ID, walletID),
 				TransactionReason: types.TransactionReasonCreditAdjustment,
 				IdempotencyKey:    idempotencyKey,
+				InvoiceID:         lo.ToPtr(inv.ID),
 				Metadata: types.Metadata{
 					"invoice_id":      inv.ID,
 					"customer_id":     inv.CustomerID,

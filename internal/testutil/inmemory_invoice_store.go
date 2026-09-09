@@ -504,6 +504,11 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by currency
+	if f.Currency != "" && inv.Currency != f.Currency {
+		return false
+	}
+
 	// Filter by invoice status — mirrors repository default: when no explicit status
 	// filter is set, exclude SKIPPED invoices (zero-dollar drafts with no financial data).
 	if len(f.InvoiceStatus) > 0 {
@@ -556,6 +561,20 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	// Filter by period_start_gte (periodStart >= value)
 	if f.PeriodStartGTE != nil {
 		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+
+	// Filter by period_start_lte (periodStart <= value)
+	if f.PeriodStartLTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.After(*f.PeriodStartLTE) {
+			return false
+		}
+	}
+
+	// Filter by period_end_gte (periodEnd >= value)
+	if f.PeriodEndGTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {
 			return false
 		}
 	}
