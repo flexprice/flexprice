@@ -167,6 +167,72 @@ IAM) and read/write data. If your workflows include AWS side-effects
 If you don't run workflows that touch AWS, this role can be empty — but
 keep it created so the ServiceAccount annotation points at *something*.
 
+### `flexprice-adot-collector`
+
+The ADOT (AWS OpenTelemetry) collector needs:
+- X-Ray to export trace segments and sampling metadata.
+- CloudWatch Logs to emit structured logs and EMF metrics.
+
+**Note**: `awsemf` writes metrics to CloudWatch Logs (EMF) — this is why
+there is no `cloudwatch:PutMetricData`.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "XRayWrite",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords",
+        "xray:GetSamplingRules",
+        "xray:GetSamplingTargets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchLogsAndEMF",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": [
+        "arn:aws:logs:*:<ACCOUNT_ID>:log-group:/flexprice/otel/*",
+        "arn:aws:logs:*:<ACCOUNT_ID>:log-group:/flexprice/otel/*:*",
+        "arn:aws:logs:*:<ACCOUNT_ID>:log-group:/flexprice/adot-test/*",
+        "arn:aws:logs:*:<ACCOUNT_ID>:log-group:/flexprice/adot-test/*:*"
+      ]
+    }
+  ]
+}
+```
+
+Trust policy for `system:serviceaccount:flexprice:flexprice-adot-collector`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Federated": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE"
+    },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub": "system:serviceaccount:flexprice:flexprice-adot-collector",
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud": "sts.amazonaws.com"
+      }
+    }
+  }]
+}
+```
+
 ## Wiring into the chart
 
 ```yaml
