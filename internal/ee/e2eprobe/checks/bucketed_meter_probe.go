@@ -14,11 +14,13 @@ import (
 
 // BucketedMeterProbe asserts that events ingested with backdated timestamps
 // across N consecutive bucket boundaries aggregate into exactly N buckets
-// with the expected per-bucket value. Rotates across the three bucketed
-// seed features on each run so all bucket sizes get coverage.
+// with the expected per-bucket value. Rotates across the bucketed seed
+// features on each run so all bucket sizes get coverage.
 //
 // The probe uses persistent cust #0 (already receiving ingest traffic) and
-// unique event_ids to prevent double-counting across retries.
+// unique event_ids to prevent double-counting across retries. Events are
+// never stamped before the subscription (or matching line item) start;
+// if three complete windows do not fit, the run soft-skips.
 type BucketedMeterProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
@@ -65,15 +67,34 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 		return nil
 	}
 	customerExt := seeds.PersistentCustomerIDs[0]
-
-	// Compute 3 backdated timestamps aligned to bucket boundaries in UTC.
-	now := time.Now().UTC()
-	aligned := now.Truncate(spec.duration)
-	ts := []time.Time{
-		aligned.Add(-3 * spec.duration),
-		aligned.Add(-2 * spec.duration),
-		aligned.Add(-1 * spec.duration),
+	if len(seeds.PersistentSubIDs) == 0 {
+		return nil
 	}
+
+	now := time.Now().UTC()
+	activeFrom, err := p.subscriptionActiveFrom(ctx, seeds.PersistentSubIDs[0], seeds.MeterIDs[spec.eventName])
+	if err != nil {
+		if isNotFound(err) {
+			return nil
+		}
+		return e2eprobe.Errorf(map[string]string{
+			"step":            "get_sub",
+			"subscription_id": seeds.PersistentSubIDs[0],
+			"event_name":      spec.eventName,
+		}, "get persistent sub: %w", err)
+	}
+	buckets := backdatedBuckets(now, spec.duration, activeFrom)
+	if len(buckets) == 0 {
+		if p.lg != nil {
+			p.lg.Info(ctx, "bucketed-meter-probe: skip, subscription too young for window",
+				"event_name", spec.eventName,
+				"window_size", string(spec.window),
+				"active_from", activeFrom.Format(time.RFC3339),
+			)
+		}
+		return nil
+	}
+
 	values := []int{10, 20, 30}
 
 	// The bucket-aligned timestamp repeats for every Run inside the same
@@ -82,7 +103,8 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 	// without its own events ever landing.
 	nonce := now.UnixNano()
 	eventIDs := make([]string, 3)
-	for i, t := range ts {
+	for i, bucket := range buckets {
+		t := eventTimeInBucket(bucket, activeFrom)
 		evID := fmt.Sprintf("e2eprobe-bkt-%s-%d-%d-%d", spec.eventName, t.UnixNano(), i, nonce)
 		eventIDs[i] = evID
 		tsStr := t.Format(time.RFC3339Nano)
@@ -108,12 +130,12 @@ func (p *BucketedMeterProbe) Run(ctx context.Context) error {
 	}
 
 	// Verify raw ingestion first — separates ingest failures from aggregation lag.
-	if err := p.pollRawEvents(ctx, spec, customerExt, featID, eventIDs, ts[0]); err != nil {
+	if err := p.pollRawEvents(ctx, spec, customerExt, featID, eventIDs, buckets[0]); err != nil {
 		return err
 	}
 
 	// Poll analytics until every seeded bucket boundary is visible.
-	if err := p.pollAnalytics(ctx, spec, customerExt, featID, ts, now); err != nil {
+	if err := p.pollAnalytics(ctx, spec, customerExt, featID, buckets, now); err != nil {
 		return err
 	}
 	return nil
@@ -281,4 +303,61 @@ func formatBuckets(ts []time.Time) string {
 		out = append(out, t.UTC().Format(time.RFC3339))
 	}
 	return strings.Join(out, ",")
+}
+
+const bucketedProbeWindows = 3
+
+// backdatedBuckets returns the last 3 complete window starts before now.
+// A window is usable only if it overlaps [activeFrom, now): events before
+// the subscription/line-item start are dropped by analytics. Nil means skip.
+func backdatedBuckets(now time.Time, window time.Duration, activeFrom time.Time) []time.Time {
+	if window <= 0 {
+		return nil
+	}
+	aligned := now.UTC().Truncate(window)
+	out := make([]time.Time, 0, bucketedProbeWindows)
+	for i := bucketedProbeWindows; i >= 1; i-- {
+		start := aligned.Add(-time.Duration(i) * window)
+		if !activeFrom.IsZero() && !start.Add(window).After(activeFrom.UTC()) {
+			return nil
+		}
+		out = append(out, start)
+	}
+	return out
+}
+
+func eventTimeInBucket(bucketStart, activeFrom time.Time) time.Time {
+	if !activeFrom.IsZero() && activeFrom.UTC().After(bucketStart.UTC()) {
+		return activeFrom.UTC()
+	}
+	return bucketStart.UTC()
+}
+
+func (p *BucketedMeterProbe) subscriptionActiveFrom(ctx context.Context, subID, meterID string) (time.Time, error) {
+	resp, err := p.client.Subscriptions().Get(ctx, subID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if resp == nil || resp.GetSubscriptionResponse() == nil {
+		return time.Time{}, nil
+	}
+	sub := resp.GetSubscriptionResponse()
+	var from time.Time
+	if sub.StartDate != nil && !sub.StartDate.IsZero() {
+		from = sub.StartDate.UTC()
+	} else if sub.CreatedAt != nil {
+		from = sub.CreatedAt.UTC()
+	}
+	if meterID == "" {
+		return from, nil
+	}
+	for _, li := range sub.LineItems {
+		if li.MeterID == nil || *li.MeterID != meterID || li.StartDate == nil {
+			continue
+		}
+		if li.StartDate.After(from) {
+			from = li.StartDate.UTC()
+		}
+	}
+	return from, nil
 }

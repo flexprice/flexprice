@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 // inMemoryUsageAnalyticsGetter is a test double for UsageAnalyticsGetter.
 type inMemoryUsageAnalyticsGetter struct {
 	responses map[string]*dto.GetUsageAnalyticsResponse
+	requests  []*dto.GetUsageAnalyticsRequest
 }
 
 func newInMemoryUsageAnalyticsGetter() *inMemoryUsageAnalyticsGetter {
@@ -32,6 +34,7 @@ func (m *inMemoryUsageAnalyticsGetter) set(externalCustomerID string, resp *dto.
 }
 
 func (m *inMemoryUsageAnalyticsGetter) GetDetailedUsageAnalytics(_ context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	m.requests = append(m.requests, req)
 	if resp, ok := m.responses[req.ExternalCustomerID]; ok {
 		return resp, nil
 	}
@@ -540,5 +543,32 @@ func TestGetDistinctCustomerIDsWithCommitmentTrueUp_BucketLevel(t *testing.T) {
 				t.Errorf("customer included = %v, want %v (ids=%v)", included, tc.wantInclude, ids)
 			}
 		})
+	}
+}
+
+// TestUsageAnalyticsExport_DoesNotGroupBySource guards the export's cost
+// correctness: analytics skips commitment on source-fanned rows, and forcing it
+// on multi-counts the true-up once per source.
+func TestUsageAnalyticsExport_DoesNotGroupBySource(t *testing.T) {
+	env := newUsageAnalyticsTestEnv(t)
+	c := env.addCustomer(t, "cust-gb", "ext-gb", "GroupBy Corp", nil)
+	env.addCommitmentTrueUpLineItem(t, c.ID)
+
+	if _, _, err := env.exporter.PrepareData(env.ctx, env.req); err != nil {
+		t.Fatalf("PrepareData: %v", err)
+	}
+
+	if len(env.analyticsGetter.requests) == 0 {
+		t.Fatal("expected at least one analytics request")
+	}
+	for _, req := range env.analyticsGetter.requests {
+		if req.ForceApplyCommitment {
+			t.Error("export must not set ForceApplyCommitment")
+		}
+		for _, g := range req.GroupBy {
+			if g == "source" || strings.HasPrefix(g, "properties.") {
+				t.Fatalf("export must not group by %q; group_by=%v", g, req.GroupBy)
+			}
+		}
 	}
 }
