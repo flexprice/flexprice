@@ -66,6 +66,12 @@ func TransformBentoToEvent(payload string, tenantID, environmentID string) (*eve
 		}
 	}
 
+	// Sanitize before anything reads the map: the derived fields below look up
+	// promptTokens, numCharacters, channels and friends by exact key, so a padded
+	// key in the payload would silently skip billablePromptTokens and
+	// billable_value even though the stored property itself came out trimmed.
+	properties = events.SanitizeProperties(properties)
+
 	// Compute resolved names
 	resolvedProviderName := ""
 	if input.ProviderName != "" {

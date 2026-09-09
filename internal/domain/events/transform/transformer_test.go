@@ -430,3 +430,27 @@ func TestTransformBentoBatch(t *testing.T) {
 		assert.Equal(t, "800", e.Properties["billablePromptTokens"])
 	}
 }
+
+// Padded keys in the Bento payload must be trimmed before the derived fields are
+// computed. Sanitizing only at the end produced trimmed stored properties while
+// silently skipping billablePromptTokens, the model suffix and billable_value.
+func TestTransformBentoToEvent_SanitizesBeforeDerivedFields(t *testing.T) {
+	fields := validBase()
+	fields["data"] = map[string]interface{}{
+		" modelName":          "gpt-4.1",
+		"promptTokens ":       "100",
+		" cachedPromptTokens": "30",
+		"numCharacters ":      "50",
+		" channels":           "2",
+	}
+
+	event, err := TransformBentoToEvent(buildPayload(t, fields), testTenantID, testEnvironmentID)
+	require.NoError(t, err)
+	require.NotNil(t, event)
+
+	assert.Equal(t, "gpt-4.1", event.Properties["modelName"], "padded key not trimmed")
+	assert.Equal(t, "70", event.Properties["billablePromptTokens"], "derived from padded promptTokens")
+	assert.Equal(t, "characters", event.Properties["billable_unit"], "derived from padded numCharacters")
+	assert.Equal(t, "100.000000", event.Properties["billable_value"], "numCharacters * channels")
+	assert.Contains(t, event.EventName, "-gpt-4.1", "model suffix derived from padded modelName")
+}
