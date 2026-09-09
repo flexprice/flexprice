@@ -485,6 +485,20 @@ func (su *SubscriptionUpdate) SetNillableTimezone(s *string) *SubscriptionUpdate
 	return su
 }
 
+// SetLineItemGrouping sets the "line_item_grouping" field.
+func (su *SubscriptionUpdate) SetLineItemGrouping(tig types.LineItemGrouping) *SubscriptionUpdate {
+	su.mutation.SetLineItemGrouping(tig)
+	return su
+}
+
+// SetNillableLineItemGrouping sets the "line_item_grouping" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableLineItemGrouping(tig *types.LineItemGrouping) *SubscriptionUpdate {
+	if tig != nil {
+		su.SetLineItemGrouping(*tig)
+	}
+	return su
+}
+
 // SetEnableTrueUp sets the "enable_true_up" field.
 func (su *SubscriptionUpdate) SetEnableTrueUp(b bool) *SubscriptionUpdate {
 	su.mutation.SetEnableTrueUp(b)
@@ -950,6 +964,11 @@ func (su *SubscriptionUpdate) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
+	if v, ok := su.mutation.LineItemGrouping(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
+		}
+	}
 	if v, ok := su.mutation.PaymentTerms(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
@@ -1103,6 +1122,9 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := su.mutation.LineItemGrouping(); ok {
+		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
 	}
 	if value, ok := su.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
@@ -1945,6 +1967,20 @@ func (suo *SubscriptionUpdateOne) SetNillableTimezone(s *string) *SubscriptionUp
 	return suo
 }
 
+// SetLineItemGrouping sets the "line_item_grouping" field.
+func (suo *SubscriptionUpdateOne) SetLineItemGrouping(tig types.LineItemGrouping) *SubscriptionUpdateOne {
+	suo.mutation.SetLineItemGrouping(tig)
+	return suo
+}
+
+// SetNillableLineItemGrouping sets the "line_item_grouping" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableLineItemGrouping(tig *types.LineItemGrouping) *SubscriptionUpdateOne {
+	if tig != nil {
+		suo.SetLineItemGrouping(*tig)
+	}
+	return suo
+}
+
 // SetEnableTrueUp sets the "enable_true_up" field.
 func (suo *SubscriptionUpdateOne) SetEnableTrueUp(b bool) *SubscriptionUpdateOne {
 	suo.mutation.SetEnableTrueUp(b)
@@ -2423,6 +2459,11 @@ func (suo *SubscriptionUpdateOne) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
+	if v, ok := suo.mutation.LineItemGrouping(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
+		}
+	}
 	if v, ok := suo.mutation.PaymentTerms(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
@@ -2593,6 +2634,9 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.LineItemGrouping(); ok {
+		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)

@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -352,5 +353,52 @@ func TestCreateSubscriptionRequestValidate_IncludePriceIDs(t *testing.T) {
 				t.Fatalf("expected no error, got: %v", err)
 			}
 		})
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_LineItemGrouping(t *testing.T) {
+	tests := []struct {
+		name     string
+		grouping types.LineItemGrouping
+		wantErr  bool
+	}{
+		{"omitted is valid", types.LineItemGrouping(""), false},
+		{"per charge period", types.LineItemGroupingPerChargePeriod, false},
+		{"per billing period", types.LineItemGroupingPerBillingPeriod, false},
+		{"unknown rejected", types.LineItemGrouping("PER_FORTNIGHT"), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.LineItemGrouping = tc.grouping
+			err := req.Validate()
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected validation error for %q, got nil", tc.grouping)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected no error for %q, got: %v", tc.grouping, err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestToSubscription_CarriesLineItemGrouping(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+	req.LineItemGrouping = types.LineItemGroupingPerBillingPeriod
+
+	sub := req.ToSubscription(context.Background())
+
+	if sub.LineItemGrouping != types.LineItemGroupingPerBillingPeriod {
+		t.Errorf("LineItemGrouping = %q, want %q", sub.LineItemGrouping, types.LineItemGroupingPerBillingPeriod)
+	}
+}
+
+func TestCreateSubscriptionRequestToSubscription_DefaultsLineItemGrouping(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+
+	sub := req.ToSubscription(context.Background())
+
+	if sub.LineItemGrouping != types.LineItemGroupingPerChargePeriod {
+		t.Errorf("LineItemGrouping = %q, want %q when omitted", sub.LineItemGrouping, types.LineItemGroupingPerChargePeriod)
 	}
 }

@@ -506,6 +506,20 @@ func (sc *SubscriptionCreate) SetNillableProrationBehavior(tb *types.ProrationBe
 	return sc
 }
 
+// SetLineItemGrouping sets the "line_item_grouping" field.
+func (sc *SubscriptionCreate) SetLineItemGrouping(tig types.LineItemGrouping) *SubscriptionCreate {
+	sc.mutation.SetLineItemGrouping(tig)
+	return sc
+}
+
+// SetNillableLineItemGrouping sets the "line_item_grouping" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableLineItemGrouping(tig *types.LineItemGrouping) *SubscriptionCreate {
+	if tig != nil {
+		sc.SetLineItemGrouping(*tig)
+	}
+	return sc
+}
+
 // SetEnableTrueUp sets the "enable_true_up" field.
 func (sc *SubscriptionCreate) SetEnableTrueUp(b bool) *SubscriptionCreate {
 	sc.mutation.SetEnableTrueUp(b)
@@ -831,6 +845,10 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultProrationBehavior
 		sc.mutation.SetProrationBehavior(v)
 	}
+	if _, ok := sc.mutation.LineItemGrouping(); !ok {
+		v := subscription.DefaultLineItemGrouping
+		sc.mutation.SetLineItemGrouping(v)
+	}
 	if _, ok := sc.mutation.EnableTrueUp(); !ok {
 		v := subscription.DefaultEnableTrueUp
 		sc.mutation.SetEnableTrueUp(v)
@@ -979,6 +997,14 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.ProrationBehavior(); ok {
 		if err := subscription.ProrationBehaviorValidator(string(v)); err != nil {
 			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.LineItemGrouping(); !ok {
+		return &ValidationError{Name: "line_item_grouping", err: errors.New(`ent: missing required field "Subscription.line_item_grouping"`)}
+	}
+	if v, ok := sc.mutation.LineItemGrouping(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
 		}
 	}
 	if _, ok := sc.mutation.EnableTrueUp(); !ok {
@@ -1186,6 +1212,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
 		_node.ProrationBehavior = value
+	}
+	if value, ok := sc.mutation.LineItemGrouping(); ok {
+		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
+		_node.LineItemGrouping = value
 	}
 	if value, ok := sc.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)

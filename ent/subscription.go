@@ -97,6 +97,8 @@ type Subscription struct {
 	Timezone string `json:"timezone,omitempty"`
 	// ProrationBehavior holds the value of the "proration_behavior" field.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	// Whether a charge shorter than the billing period bills as one line item per charge period or one per billing period
+	LineItemGrouping types.LineItemGrouping `json:"line_item_grouping,omitempty"`
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up,omitempty"`
 	// Customer ID to use for invoicing (can differ from the subscription customer)
@@ -227,7 +229,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion, subscription.FieldSyncedPriceSequence:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID, subscription.FieldParentSubscriptionID, subscription.FieldPaymentTerms, subscription.FieldSubscriptionType:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldTimezone, subscription.FieldProrationBehavior, subscription.FieldLineItemGrouping, subscription.FieldInvoicingCustomerID, subscription.FieldParentSubscriptionID, subscription.FieldPaymentTerms, subscription.FieldSubscriptionType:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -491,6 +493,12 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.ProrationBehavior = types.ProrationBehavior(value.String)
 			}
+		case subscription.FieldLineItemGrouping:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field line_item_grouping", values[i])
+			} else if value.Valid {
+				s.LineItemGrouping = types.LineItemGrouping(value.String)
+			}
 		case subscription.FieldEnableTrueUp:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field enable_true_up", values[i])
@@ -744,6 +752,9 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("proration_behavior=")
 	builder.WriteString(fmt.Sprintf("%v", s.ProrationBehavior))
+	builder.WriteString(", ")
+	builder.WriteString("line_item_grouping=")
+	builder.WriteString(fmt.Sprintf("%v", s.LineItemGrouping))
 	builder.WriteString(", ")
 	builder.WriteString("enable_true_up=")
 	builder.WriteString(fmt.Sprintf("%v", s.EnableTrueUp))

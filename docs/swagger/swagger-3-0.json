@@ -9565,6 +9565,140 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/subscriptions/schedules": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List all subscription schedules",
+        "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
+        "operationId": "listAllSubscriptionSchedules",
+        "parameters": [
+          {
+            "name": "pending_only",
+            "in": "query",
+            "description": "Filter to pending schedules only",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "description": "Filter by subscription ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit results",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Offset for pagination",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPendingSchedulesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/schedules/{schedule_id}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription schedule",
+        "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
+        "operationId": "getSubscriptionSchedule",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "description": "Schedule ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionScheduleResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/schedules/{schedule_id}/cancel": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Cancel subscription schedule",
+        "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
+        "operationId": "cancelSubscriptionSchedule",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "description": "Schedule ID (optional if using request body)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Cancel request (optional if using path parameter)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelScheduleRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelScheduleResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/subscriptions/search": {
       "post": {
         "tags": [
@@ -10728,6 +10862,39 @@
         ],
         "x-scope": "read",
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/subscriptions/{id}/schedules": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List subscription schedules",
+        "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
+        "operationId": "listSubscriptionSchedules",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPendingSchedulesResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/subscriptions/{id}/v2": {
@@ -13372,173 +13539,6 @@
         "x-codegen-request-body-name": "request"
       }
     },
-    "/subscriptions/schedules": {
-      "get": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "List all subscription schedules",
-        "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
-        "operationId": "listAllSubscriptionSchedules",
-        "parameters": [
-          {
-            "name": "pending_only",
-            "in": "query",
-            "description": "Filter to pending schedules only",
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "subscription_id",
-            "in": "query",
-            "description": "Filter by subscription ID",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Limit results",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Offset for pagination",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetPendingSchedulesResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/subscriptions/schedules/{schedule_id}": {
-      "get": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "Get subscription schedule",
-        "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
-        "operationId": "getSubscriptionSchedule",
-        "parameters": [
-          {
-            "name": "schedule_id",
-            "in": "path",
-            "description": "Schedule ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionScheduleResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/subscriptions/schedules/{schedule_id}/cancel": {
-      "post": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "Cancel subscription schedule",
-        "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
-        "operationId": "cancelSubscriptionSchedule",
-        "parameters": [
-          {
-            "name": "schedule_id",
-            "in": "path",
-            "description": "Schedule ID (optional if using request body)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Cancel request (optional if using path parameter)",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CancelScheduleRequest"
-              }
-            }
-          },
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelScheduleResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-codegen-request-body-name": "request"
-      }
-    },
-    "/subscriptions/{id}/schedules": {
-      "get": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "List subscription schedules",
-        "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
-        "operationId": "listSubscriptionSchedules",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Subscription ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetPendingSchedulesResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/wallets": {
       "post": {
         "tags": [
@@ -15693,20 +15693,6 @@
   },
   "components": {
     "schemas": {
-      "ListAddonsResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AddonResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/types.PaginationResponse"
-          }
-        }
-      },
       "ListAddonAssociationsResponse": {
         "type": "object",
         "properties": {
@@ -15714,6 +15700,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AddonAssociationResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListAddonsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AddonResponse"
             }
           },
           "pagination": {
@@ -15999,77 +15999,6 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
-          }
-        }
-      },
-      "checkout.JSONBCheckoutConfiguration": {
-        "type": "object",
-        "properties": {
-          "add_addon_params": {
-            "$ref": "#/components/schemas/types.AddAddonParams"
-          },
-          "create_subscription_params": {
-            "$ref": "#/components/schemas/types.CreateSubscriptionParams"
-          },
-          "modify_subscription_params": {
-            "$ref": "#/components/schemas/types.ModifySubscriptionParams"
-          },
-          "wallet_topup_params": {
-            "$ref": "#/components/schemas/types.WalletTopupParams"
-          }
-        }
-      },
-      "checkout.JSONBCheckoutPaymentProviderConfig": {
-        "type": "object",
-        "properties": {
-          "collection_method": {
-            "$ref": "#/components/schemas/types.CollectionMethod"
-          },
-          "customer_not_present": {
-            "type": "boolean",
-            "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up)."
-          },
-          "max_mandate_limit": {
-            "type": "string"
-          },
-          "payment_method": {
-            "$ref": "#/components/schemas/types.PaymentMethodType"
-          }
-        }
-      },
-      "checkout.JSONBCheckoutProviderResult": {
-        "type": "object",
-        "properties": {
-          "expires_at": {
-            "type": "string",
-            "description": "ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,\nexecuteCheckoutAction tightens the session expiry to match.",
-            "format": "date-time"
-          },
-          "next_action": {
-            "$ref": "#/components/schemas/types.PaymentAction"
-          },
-          "provider_metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "ProviderMetadata holds provider-specific data not needed for business logic."
-          },
-          "provider_payment_intent_id": {
-            "type": "string",
-            "description": "ProviderPaymentIntentID is the provider-side charge/intent ID.\nStripe returns this at link creation (pi_xxx); others populate it from the webhook payload."
-          },
-          "provider_session_id": {
-            "type": "string",
-            "description": "ProviderSessionID is stored in EntityIntegrationMapping at link creation.\n  Stripe:   Checkout Session ID  (cs_xxx)\n  Razorpay: Payment Link ID      (plink_xxx)\n  Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)\n  Moyasar:  Payment ID"
-          }
-        }
-      },
-      "checkout.JSONBCheckoutResult": {
-        "type": "object",
-        "properties": {
-          "create_subscription_result": {
-            "$ref": "#/components/schemas/types.CreateSubscriptionResult"
           }
         }
       },
@@ -17195,32 +17124,13 @@
       },
       "ChangedInvoiceStatus": {
         "type": "string",
-        "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED | VOIDED",
         "enum": [
           "preview",
-          "issued",
-          "INITIATED",
-          "PENDING",
-          "PROCESSING",
-          "SUCCEEDED",
-          "OVERPAID",
-          "FAILED",
-          "REFUNDED",
-          "PARTIALLY_REFUNDED",
-          "VOIDED"
+          "issued"
         ],
         "x-enum-varnames": [
           "ChangedInvoiceStatusPreview",
-          "ChangedInvoiceStatusWalletIssued",
-          "ChangedInvoiceStatusInitiated",
-          "ChangedInvoiceStatusPending",
-          "ChangedInvoiceStatusProcessing",
-          "ChangedInvoiceStatusSucceeded",
-          "ChangedInvoiceStatusOverpaid",
-          "ChangedInvoiceStatusFailed",
-          "ChangedInvoiceStatusRefunded",
-          "ChangedInvoiceStatusPartiallyRefunded",
-          "ChangedInvoiceStatusVoided"
+          "ChangedInvoiceStatusWalletIssued"
         ]
       },
       "ChangedLineItem": {
@@ -17351,6 +17261,20 @@
           }
         }
       },
+      "CheckoutPaymentBlock": {
+        "type": "object",
+        "properties": {
+          "gateway": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
+          }
+        }
+      },
       "CheckoutSessionResponse": {
         "type": "object",
         "properties": {
@@ -17365,8 +17289,7 @@
             "format": "date-time"
           },
           "checkout_invoice_id": {
-            "type": "string",
-            "description": "CheckoutInvoiceID and CheckoutPaymentID are set once the apply step\ncreates the corresponding Flexprice entities (completed sessions only)."
+            "type": "string"
           },
           "checkout_payment_id": {
             "type": "string"
@@ -17378,30 +17301,19 @@
             "type": "string",
             "format": "date-time"
           },
-          "configuration": {
-            "$ref": "#/components/schemas/checkout.JSONBCheckoutConfiguration"
-          },
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
-          "created_by": {
-            "type": "string"
-          },
           "customer_id": {
-            "type": "string"
-          },
-          "environment_id": {
             "type": "string"
           },
           "expires_at": {
             "type": "string",
-            "description": "ExpiresAt is required. A Temporal timer fires at this time for any\nsession still in initiated|pending, marking it expired. The caller\nmust create a new session after expiry (expire-and-restart model).",
             "format": "date-time"
           },
           "failure_reason": {
-            "type": "string",
-            "description": "FailureReason is a human-readable string set on failed sessions."
+            "type": "string"
           },
           "failure_url": {
             "type": "string"
@@ -17410,11 +17322,17 @@
             "type": "string"
           },
           "idempotency_key": {
-            "type": "string",
-            "description": "IdempotencyKey is caller-supplied. It is unique only while the session\nis active (initiated|pending). The same key may be reused once the\nsession reaches a terminal state (completed|failed|expired)."
+            "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "next_poll_after_ms": {
+            "type": "integer",
+            "description": "NextPollAfterMs is how long a client should wait before reading again.\nZero means stop \u2014 either the session is terminal, or this response did not\ncome from a polling read."
+          },
+          "payment": {
+            "$ref": "#/components/schemas/CheckoutPaymentBlock"
           },
           "payment_action": {
             "$ref": "#/components/schemas/types.PaymentAction"
@@ -17422,31 +17340,20 @@
           "payment_provider": {
             "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
           },
-          "payment_provider_config": {
-            "$ref": "#/components/schemas/checkout.JSONBCheckoutPaymentProviderConfig"
-          },
-          "provider_result": {
-            "$ref": "#/components/schemas/checkout.JSONBCheckoutProviderResult"
-          },
-          "result": {
-            "$ref": "#/components/schemas/checkout.JSONBCheckoutResult"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
+          "stale": {
+            "type": "boolean",
+            "description": "Stale reports that this response is stored state that was not checked against\nthe payment provider on this request \u2014 the read was debounced, or the gateway\ndid not answer. A UI should say \"still checking\" rather than presenting a\nstale answer as fact."
           },
           "success_url": {
-            "type": "string",
-            "description": "Redirect URLs sent to the payment provider. The provider redirects the\nuser browser to the appropriate URL after the payment flow completes."
-          },
-          "tenant_id": {
             "type": "string"
+          },
+          "terminal": {
+            "type": "boolean",
+            "description": "Terminal reports whether the session has finished. Clients poll until this is\ntrue rather than hardcoding the status set, which would go stale if a status\nis ever added."
           },
           "updated_at": {
             "type": "string",
             "format": "date-time"
-          },
-          "updated_by": {
-            "type": "string"
           }
         }
       },
@@ -19380,6 +19287,9 @@
               }
             },
             "description": "Deprecated: use SubscriptionCoupons instead."
+          },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
           },
           "line_items": {
             "type": "array",
@@ -21735,6 +21645,9 @@
           "currency": {
             "type": "string"
           },
+          "custom_currency": {
+            "$ref": "#/components/schemas/types.CustomCurrencyLineItem"
+          },
           "customer_id": {
             "type": "string"
           },
@@ -21991,6 +21904,9 @@
           "currency": {
             "type": "string",
             "description": "currency is the three-letter ISO currency code (e.g., USD, EUR, GBP) that applies to all monetary amounts on this invoice"
+          },
+          "custom_currency": {
+            "$ref": "#/components/schemas/types.CustomCurrency"
           },
           "customer": {
             "$ref": "#/components/schemas/CustomerResponse"
@@ -24590,6 +24506,9 @@
           "latest_invoice": {
             "$ref": "#/components/schemas/InvoiceResponse"
           },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
+          },
           "line_items": {
             "type": "array",
             "items": {
@@ -24810,6 +24729,9 @@
           "invoicing_customer_id": {
             "type": "string",
             "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)"
+          },
+          "line_item_grouping": {
+            "$ref": "#/components/schemas/types.LineItemGrouping"
           },
           "line_items": {
             "type": "array",
@@ -25928,6 +25850,10 @@
           },
           "gateway_payment_id": {
             "type": "string"
+          },
+          "gateway_tracking_id": {
+            "type": "string",
+            "description": "GatewayTrackingID is the pre-payment handle at the gateway \u2014 link, hosted page,\ninvoice or order \u2014 recorded at checkout creation so the payment can be reconciled."
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
@@ -27520,6 +27446,9 @@
           "currency": {
             "type": "string"
           },
+          "custom_currency": {
+            "$ref": "#/components/schemas/types.CustomCurrencyLineItem"
+          },
           "customer_id": {
             "type": "string"
           },
@@ -29069,21 +28998,6 @@
         },
         "x-speakeasy-name-override": "CreateSubscriptionParams"
       },
-      "types.CreateSubscriptionResult": {
-        "type": "object",
-        "properties": {
-          "invoice_id": {
-            "type": "string"
-          },
-          "payment_id": {
-            "type": "string"
-          },
-          "subscription_id": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "CreateSubscriptionResult"
-      },
       "types.CreditBreakdown": {
         "type": "object",
         "properties": {
@@ -29236,6 +29150,55 @@
           "CreditNoteTypeRefund"
         ],
         "x-speakeasy-name-override": "CreditNoteType"
+      },
+      "types.CustomCurrency": {
+        "type": "object",
+        "properties": {
+          "amount_due": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "rate": {
+            "type": "string",
+            "description": "fiat per 1 unit of Code; the live factor while draft, frozen at finalization"
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "total": {
+            "type": "string"
+          },
+          "total_discount": {
+            "type": "string"
+          },
+          "total_prepaid_credits_applied": {
+            "type": "string"
+          },
+          "total_tax": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CustomCurrency"
+      },
+      "types.CustomCurrencyLineItem": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "invoice_level_discount": {
+            "type": "string"
+          },
+          "line_item_discount": {
+            "type": "string"
+          },
+          "prepaid_credits_applied": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CustomCurrencyLineItem"
       },
       "types.CustomerFilter": {
         "type": "object",
@@ -29810,6 +29773,18 @@
         ],
         "x-speakeasy-name-override": "FilterOperatorType"
       },
+      "types.GlobalCustomField": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "GlobalCustomField"
+      },
       "types.GroupEntityType": {
         "type": "string",
         "enum": [
@@ -30102,9 +30077,20 @@
       "types.InvoiceSyncSettings": {
         "type": "object",
         "properties": {
+          "deposit_to_account_id": {
+            "type": "string",
+            "description": "Zoho chart-of-accounts id (\"Deposit To\"). Empty omits account_id, leaving Zoho's\nUndeposited Funds default.a"
+          },
+          "global_custom_fields": {
+            "type": "array",
+            "description": "Fixed values written to Zoho invoice custom fields on every sync, independent of\nany metadata source.",
+            "items": {
+              "$ref": "#/components/schemas/types.GlobalCustomField"
+            }
+          },
           "metadata_custom_fields": {
             "type": "array",
-            "description": "MetadataCustomFields copies metadata values onto Zoho invoice custom fields\nverbatim.",
+            "description": "Copies metadata values onto Zoho invoice custom fields verbatim.",
             "items": {
               "$ref": "#/components/schemas/types.MetadataCustomField"
             }
@@ -30112,12 +30098,16 @@
           "normalize_fixed_to": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "payment_mode": {
+            "type": "string",
+            "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode."
+          },
           "service_period_custom_fields": {
             "$ref": "#/components/schemas/types.ServicePeriodCustomFields"
           },
           "submit_for_approval": {
             "type": "boolean",
-            "description": "SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval\nflow before recording payment. Zoho rejects payments on draft invoices, and merchants\nconfigure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for\nthat rule to fire, then pay."
+            "description": "Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval\nrule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay."
           }
         },
         "x-speakeasy-name-override": "InvoiceSyncSettings"
@@ -30135,6 +30125,18 @@
           "InvoiceTypeCredit"
         ],
         "x-speakeasy-name-override": "InvoiceType"
+      },
+      "types.LineItemGrouping": {
+        "type": "string",
+        "enum": [
+          "per_charge_period",
+          "per_billing_period"
+        ],
+        "x-enum-varnames": [
+          "LineItemGroupingPerChargePeriod",
+          "LineItemGroupingPerBillingPeriod"
+        ],
+        "x-speakeasy-name-override": "LineItemGrouping"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",

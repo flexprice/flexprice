@@ -2924,3 +2924,160 @@ func (s *InvoiceServiceSuite) TestProjectCustomCurrencyConvertsPrepaidCredits() 
 	s.True(item.CustomCurrency.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)),
 		"the denomination keeps the original")
 }
+
+func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_MapsReferencePointToBillingReason() {
+	ctx := s.GetContext()
+	periodStart := s.testData.subscription.CurrentPeriodStart
+	periodEnd := s.testData.subscription.CurrentPeriodEnd
+
+	tests := []struct {
+		name       string
+		ref        types.InvoiceReferencePoint
+		wantReason types.InvoiceBillingReason
+	}{
+		{"period start is an opening invoice", types.ReferencePointPeriodStart, types.InvoiceBillingReasonSubscriptionCreate},
+		{"period end is a cycle invoice", types.ReferencePointPeriodEnd, types.InvoiceBillingReasonSubscriptionCycle},
+		{"cancel is proration", types.ReferencePointCancel, types.InvoiceBillingReasonProration},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.invoiceRepo.Clear()
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, s.testData.subscription.ID, periodStart, periodEnd, tt.ref)
+			s.Require().NoError(err)
+			s.Equal(string(tt.wantReason), draft.BillingReason)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartComputeUsesCurrentPeriod() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+
+	fixedPrice := &price.Price{
+		ID:                 "price_fixed_advance_opening",
+		Amount:             decimal.NewFromInt(4500),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, fixedPrice))
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_opening_period_start",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          s.testData.now,
+		CurrentPeriodStart: s.testData.now,
+		CurrentPeriodEnd:   s.testData.now.AddDate(0, 1, 0),
+		BillingAnchor:      s.testData.now,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	lineItems := []*subscription.SubscriptionLineItem{{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:  sub.ID,
+		CustomerID:      sub.CustomerID,
+		EntityID:        s.testData.plan.ID,
+		EntityType:      types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName: s.testData.plan.Name,
+		PriceID:         fixedPrice.ID,
+		PriceType:       fixedPrice.Type,
+		DisplayName:     "Lite Standard",
+		Quantity:        decimal.NewFromInt(1),
+		Currency:        sub.Currency,
+		BillingPeriod:   sub.BillingPeriod,
+		InvoiceCadence:  types.InvoiceCadenceAdvance,
+		StartDate:       sub.StartDate,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.ReferencePointPeriodStart)
+	s.Require().NoError(err)
+
+	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.Require().NoError(err)
+	s.False(skipped, "a fixed advance charge must produce a computed invoice")
+
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(inv.LineItems)
+	s.Require().NotNil(inv.PeriodStart)
+	s.Require().NotNil(inv.PeriodEnd)
+	for _, li := range inv.LineItems {
+		s.Require().NotNil(li.PeriodStart)
+		s.Require().NotNil(li.PeriodEnd)
+		s.True(li.PeriodStart.Equal(*inv.PeriodStart),
+			"opening-invoice line period_start %s must match invoice period_start %s", li.PeriodStart, *inv.PeriodStart)
+		s.True(li.PeriodEnd.Equal(*inv.PeriodEnd),
+			"opening-invoice line period_end %s must match invoice period_end %s", li.PeriodEnd, *inv.PeriodEnd)
+	}
+}
+
+func (s *InvoiceServiceSuite) seedInvoiceConfigDelay(seconds int) {
+	svc := NewSettingsService(s.service.(*invoiceService).ServiceParams).(*settingsService)
+	cfg, err := GetSetting[types.InvoiceConfig](svc, s.GetContext(), types.SettingKeyInvoiceConfig)
+	s.Require().NoError(err)
+	cfg.FinalizationDelaySeconds = seconds
+	s.Require().NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyInvoiceConfig, cfg))
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDrafts() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceConfigDelay(0)
+
+	draft, err := s.service.CreateDraftInvoiceForSubscription(
+		ctx,
+		s.testData.subscription.ID,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+		types.ReferencePointPeriodStart,
+	)
+	s.Require().NoError(err)
+
+	computedAt := time.Now().UTC().Add(-time.Hour)
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	inv.LastComputedAt = &computedAt
+	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.False(due, "opening invoices must wait for payment, not the finalize cron")
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDue() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.seedInvoiceConfigDelay(0)
+
+	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
+	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(
+		ctx, s.testData.subscription.ID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
+	)
+	s.Require().NoError(err)
+
+	computedAt := periodEnd.Add(time.Hour)
+	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	inv.LastComputedAt = &computedAt
+	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.True(due, "a computed cycle draft whose period has ended should finalize")
+}

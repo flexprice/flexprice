@@ -92,6 +92,8 @@ const (
 	FieldTimezone = "timezone"
 	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
 	FieldProrationBehavior = "proration_behavior"
+	// FieldLineItemGrouping holds the string denoting the line_item_grouping field in the database.
+	FieldLineItemGrouping = "line_item_grouping"
 	// FieldEnableTrueUp holds the string denoting the enable_true_up field in the database.
 	FieldEnableTrueUp = "enable_true_up"
 	// FieldInvoicingCustomerID holds the string denoting the invoicing_customer_id field in the database.
@@ -223,6 +225,7 @@ var Columns = []string{
 	FieldGatewayPaymentMethodID,
 	FieldTimezone,
 	FieldProrationBehavior,
+	FieldLineItemGrouping,
 	FieldEnableTrueUp,
 	FieldInvoicingCustomerID,
 	FieldParentSubscriptionID,
@@ -299,6 +302,8 @@ var (
 	DefaultProrationBehavior types.ProrationBehavior
 	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	ProrationBehaviorValidator func(string) error
+	// DefaultLineItemGrouping holds the default value on creation for the "line_item_grouping" field.
+	DefaultLineItemGrouping types.LineItemGrouping
 	// DefaultEnableTrueUp holds the default value on creation for the "enable_true_up" field.
 	DefaultEnableTrueUp bool
 	// DefaultSubscriptionType holds the default value on creation for the "subscription_type" field.
@@ -498,6 +503,11 @@ func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
 // ByProrationBehavior orders the results by the proration_behavior field.
 func ByProrationBehavior(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProrationBehavior, opts...).ToFunc()
+}
+
+// ByLineItemGrouping orders the results by the line_item_grouping field.
+func ByLineItemGrouping(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLineItemGrouping, opts...).ToFunc()
 }
 
 // ByEnableTrueUp orders the results by the enable_true_up field.

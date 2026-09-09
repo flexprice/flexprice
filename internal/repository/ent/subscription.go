@@ -88,6 +88,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetEnvironmentID(sub.EnvironmentID).
 		SetTimezone(sub.Timezone).
 		SetProrationBehavior(sub.ProrationBehavior).
+		SetLineItemGrouping(sub.LineItemGrouping.Default()).
 		SetVersion(1).
 		SetMetadata(sub.Metadata).
 		SetPaymentBehavior(types.PaymentBehavior(sub.PaymentBehavior)).
@@ -247,6 +248,12 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(sub.Metadata)
+
+	// Only set when populated: callers that build a partial subscription for
+	// update must not silently reset the tenant's grouping choice.
+	if sub.LineItemGrouping != "" {
+		query.SetLineItemGrouping(sub.LineItemGrouping)
+	}
 
 	// Handle nullable payment_terms - explicitly clear if nil
 	if sub.PaymentTerms != nil {

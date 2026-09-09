@@ -5651,3 +5651,258 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	s.True(decimal.NewFromFloat(6.00).Equal(result.TotalAmount),
 		"total: $1+$2+$3 = $6.00, got %s", result.TotalAmount)
 }
+
+var (
+	groupingQ1Start = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	groupingFebStar = time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	groupingMarStar = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	groupingQ1End   = time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+)
+
+func groupingLine(sliID, priceID, displayName string, priceType types.PriceType, amount, qty string, start, end time.Time) dto.CreateInvoiceLineItemRequest {
+	return dto.CreateInvoiceLineItemRequest{
+		SubscriptionLineItemID: lo.ToPtr(sliID),
+		PriceID:                lo.ToPtr(priceID),
+		PriceType:              lo.ToPtr(string(priceType)),
+		DisplayName:            lo.ToPtr(displayName),
+		Amount:                 decimal.RequireFromString(amount),
+		Quantity:               decimal.RequireFromString(qty),
+		PeriodStart:            lo.ToPtr(start),
+		PeriodEnd:              lo.ToPtr(end),
+	}
+}
+
+func groupingSumAmounts(items []dto.CreateInvoiceLineItemRequest) decimal.Decimal {
+	total := decimal.Zero
+	for _, i := range items {
+		total = total.Add(i.Amount)
+	}
+	return total
+}
+
+func groupingQuarterlySub(g types.LineItemGrouping) *subscription.Subscription {
+	return &subscription.Subscription{
+		ID:                 "sub_q",
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		LineItemGrouping:   g,
+	}
+}
+
+func groupingMonthlyChargesAcrossQuarter() *dto.BillingCalculationResult {
+	return &dto.BillingCalculationResult{
+		FixedCharges: []dto.CreateInvoiceLineItemRequest{
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingFebStar),
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingFebStar, groupingMarStar),
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingMarStar, groupingQ1End),
+		},
+		UsageCharges: []dto.CreateInvoiceLineItemRequest{
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30", "300", groupingFebStar, groupingMarStar),
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "5", "50", groupingMarStar, groupingQ1End),
+		},
+		TotalAmount: decimal.RequireFromString("345"),
+		Currency:    "usd",
+	}
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_UsageSumsQuantity() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30", "300", groupingFebStar, groupingMarStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "5", "50", groupingMarStar, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("45")), "amount = %s, want 45", got[0].Amount)
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("450")), "quantity = %s, want 450 (usage quantities sum)", got[0].Quantity)
+	s.Equal(groupingQ1Start, *got[0].PeriodStart)
+	s.Equal(groupingQ1End, *got[0].PeriodEnd)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_PreservesTotal() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10.01", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30.02", "300", groupingFebStar, groupingMarStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "99.99", "5", groupingQ1Start, groupingFebStar),
+	}
+	want := groupingSumAmounts(in)
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.True(groupingSumAmounts(got).Equal(want), "total after merge = %s, want %s (merge must be presentational)", groupingSumAmounts(got), want)
+}
+
+// Quantity sums for fixed charges too, so amount / quantity stays the unit price:
+// 5 seats billed for 3 months at $20 is 15 seat-months, not 5 seats at $60.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_FixedSumsQuantity() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingFebStar, groupingMarStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingMarStar, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("300")), "amount = %s, want 300", got[0].Amount)
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("15")), "quantity = %s, want 15 (3 windows x 5 seats)", got[0].Quantity)
+
+	unitPrice := got[0].Amount.Div(got[0].Quantity)
+	s.True(unitPrice.Equal(decimal.RequireFromString("20")), "amount/quantity = %s, want the $20 unit price", unitPrice)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_KeepsOverageSeparate() {
+	commitment := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+	overage := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "4", "40", groupingQ1Start, groupingFebStar)
+	overage.Metadata = types.Metadata{"is_overage": "true"}
+
+	got := mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{commitment, overage})
+
+	s.Len(got, 2, "commitment and overage must stay separate")
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_DistinctLineItemsStaySeparate() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_storage", "price_storage", "Storage", types.PRICE_TYPE_USAGE, "20", "200", groupingQ1Start, groupingFebStar),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Len(got, 2)
+}
+
+// Plan-level cumulative overage carries no line item id and a fresh price id per window.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_LeavesUnkeyedRowsUntouched() {
+	a := groupingLine("", "price_gen_1", "Plan Overage", types.PRICE_TYPE_FIXED, "10", "1", groupingQ1Start, groupingFebStar)
+	a.SubscriptionLineItemID = nil
+	b := groupingLine("", "price_gen_2", "Plan Overage", types.PRICE_TYPE_FIXED, "20", "2", groupingFebStar, groupingMarStar)
+	b.SubscriptionLineItemID = nil
+
+	got := mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{a, b})
+
+	s.Len(got, 2)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_SingleWindowUnchanged() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("100")))
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("5")))
+}
+
+// A monthly fixed + monthly usage charge on a quarterly sub: 3 line items each under
+// per_charge_period, 1 each under per_billing_period, same total either way.
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_LineItemCountByGrouping() {
+	tests := []struct {
+		name      string
+		grouping  types.LineItemGrouping
+		wantFixed int
+		wantUsage int
+	}{
+		{"per charge period fans out", types.LineItemGroupingPerChargePeriod, 3, 3},
+		{"per billing period collapses", types.LineItemGroupingPerBillingPeriod, 1, 1},
+		{"unset defaults to fan out", types.LineItemGrouping(""), 3, 3},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			got := applyLineItemGrouping(groupingQuarterlySub(tt.grouping), groupingMonthlyChargesAcrossQuarter())
+
+			s.Len(got.FixedCharges, tt.wantFixed)
+			s.Len(got.UsageCharges, tt.wantUsage)
+
+			wantTotal := decimal.RequireFromString("345")
+			s.True(got.TotalAmount.Equal(wantTotal), "total = %s, want %s unchanged", got.TotalAmount, wantTotal)
+			lineSum := groupingSumAmounts(append(got.FixedCharges, got.UsageCharges...))
+			s.True(lineSum.Equal(wantTotal), "line item sum %s no longer reconciles with total %s", lineSum, wantTotal)
+		})
+	}
+}
+
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_NilResultIsSafe() {
+	s.Nil(applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), nil))
+}
+
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_DoesNotMutateInput() {
+	result := groupingMonthlyChargesAcrossQuarter()
+
+	_ = applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), result)
+
+	s.Len(result.FixedCharges, 3, "caller's result was mutated")
+	s.Len(result.UsageCharges, 3, "caller's result was mutated")
+}
+
+// Every monetary field on a line item is per-window and must survive the merge.
+// Taking only the first window's values silently drops the rest.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_SumsAllMonetaryFields() {
+	window := func(utilized, overage, trueUp, prepaid, lineDisc, invDisc string) dto.CreateInvoiceLineItemRequest {
+		li := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+		li.CommitmentInfo = &types.CommitmentInfo{
+			Type:                             types.COMMITMENT_TYPE_AMOUNT,
+			Amount:                           decimal.RequireFromString("500"),
+			OverageFactor:                    lo.ToPtr(decimal.RequireFromString("2")),
+			TrueUpEnabled:                    true,
+			ComputedCommitmentUtilizedAmount: decimal.RequireFromString(utilized),
+			ComputedOverageAmount:            decimal.RequireFromString(overage),
+			ComputedTrueUpAmount:             decimal.RequireFromString(trueUp),
+		}
+		li.PrepaidCreditsApplied = lo.ToPtr(decimal.RequireFromString(prepaid))
+		li.LineItemDiscount = lo.ToPtr(decimal.RequireFromString(lineDisc))
+		li.InvoiceLevelDiscount = lo.ToPtr(decimal.RequireFromString(invDisc))
+		return li
+	}
+
+	in := []dto.CreateInvoiceLineItemRequest{
+		window("100", "10", "1", "3", "0.50", "0.25"),
+		window("200", "20", "2", "4", "1.50", "0.75"),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+	s.Require().Len(got, 1)
+	m := got[0]
+
+	s.Require().NotNil(m.CommitmentInfo)
+	s.True(m.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(decimal.RequireFromString("300")),
+		"utilized = %s, want 300", m.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+	s.True(m.CommitmentInfo.ComputedOverageAmount.Equal(decimal.RequireFromString("30")),
+		"overage = %s, want 30", m.CommitmentInfo.ComputedOverageAmount)
+	s.True(m.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.RequireFromString("3")),
+		"true-up = %s, want 3", m.CommitmentInfo.ComputedTrueUpAmount)
+
+	// Configuration echoed from the subscription line item is identical on every
+	// window, so it carries over rather than accumulating.
+	s.Equal(types.COMMITMENT_TYPE_AMOUNT, m.CommitmentInfo.Type)
+	s.True(m.CommitmentInfo.Amount.Equal(decimal.RequireFromString("500")),
+		"commitment amount = %s, want 500 (config, not summed)", m.CommitmentInfo.Amount)
+	s.True(m.CommitmentInfo.TrueUpEnabled)
+
+	s.True(lo.FromPtr(m.PrepaidCreditsApplied).Equal(decimal.RequireFromString("7")),
+		"prepaid credits = %s, want 7", lo.FromPtr(m.PrepaidCreditsApplied))
+	s.True(lo.FromPtr(m.LineItemDiscount).Equal(decimal.RequireFromString("2")),
+		"line item discount = %s, want 2", lo.FromPtr(m.LineItemDiscount))
+	s.True(lo.FromPtr(m.InvoiceLevelDiscount).Equal(decimal.RequireFromString("1")),
+		"invoice level discount = %s, want 1", lo.FromPtr(m.InvoiceLevelDiscount))
+}
+
+// The merge must not write through the pointer the caller still holds.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_DoesNotMutateSourceCommitmentInfo() {
+	first := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+	first.CommitmentInfo = &types.CommitmentInfo{ComputedOverageAmount: decimal.RequireFromString("10")}
+	second := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingFebStar, groupingMarStar)
+	second.CommitmentInfo = &types.CommitmentInfo{ComputedOverageAmount: decimal.RequireFromString("20")}
+
+	_ = mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{first, second})
+
+	s.True(first.CommitmentInfo.ComputedOverageAmount.Equal(decimal.RequireFromString("10")),
+		"source commitment info was mutated: %s", first.CommitmentInfo.ComputedOverageAmount)
+}

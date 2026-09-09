@@ -64,11 +64,11 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger          *logger.Logger
-	Config          *config.Configuration
-	DB              postgres.IClient
-	PDFGenerator    pdf.Generator
-	TracingSvc      *tracing.Service
+	Logger        *logger.Logger
+	Config        *config.Configuration
+	DB            postgres.IClient
+	PDFGenerator  pdf.Generator
+	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
@@ -77,7 +77,6 @@ type ServiceParams struct {
 	AuthRepo                     auth.Repository
 	UserRepo                     user.Repository
 	EventRepo                    events.Repository
-	CostSheetUsageRepo           events.CostSheetUsageRepository
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
@@ -166,7 +165,6 @@ func NewServiceParams(
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
-	costSheetUsageRepo events.CostSheetUsageRepository,
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
@@ -237,7 +235,6 @@ func NewServiceParams(
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
-		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
