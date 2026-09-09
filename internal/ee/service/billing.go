@@ -481,29 +481,14 @@ func mergeIntoLineItem(target, addition dto.CreateInvoiceLineItemRequest) dto.Cr
 		target.PriceUnitAmount = lo.ToPtr(lo.FromPtr(target.PriceUnitAmount).Add(lo.FromPtr(addition.PriceUnitAmount)))
 	}
 
-	target.PeriodStart = earliestTimePtr(target.PeriodStart, addition.PeriodStart)
-	target.PeriodEnd = latestTimePtr(target.PeriodEnd, addition.PeriodEnd)
+	target.PeriodStart = types.EarliestOfPtr(target.PeriodStart, addition.PeriodStart)
+	target.PeriodEnd = types.LatestOfPtr(target.PeriodEnd, addition.PeriodEnd)
 
 	return target
 }
 
 func isUsageLineItem(item dto.CreateInvoiceLineItemRequest) bool {
 	return strings.EqualFold(lo.FromPtr(item.PriceType), string(types.PRICE_TYPE_USAGE))
-}
-
-// Nil-guarding wrappers over earliestOf/latestOf, which take values.
-func earliestTimePtr(a, b *time.Time) *time.Time {
-	if a == nil || b == nil {
-		return lo.CoalesceOrEmpty(a, b)
-	}
-	return lo.ToPtr(earliestOf(*a, *b))
-}
-
-func latestTimePtr(a, b *time.Time) *time.Time {
-	if a == nil || b == nil {
-		return lo.CoalesceOrEmpty(a, b)
-	}
-	return lo.ToPtr(latestOf(*a, *b))
 }
 
 // applyLineItemGrouping merges per-charge-period rows when the subscription opts in.

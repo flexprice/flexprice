@@ -94,7 +94,7 @@ func (s *entitlementGrantService) CloseEntitlementGrants(
 
 		// The change owns the boundary, so a future-dated one hands the successor its quota
 		// when the change is actually live rather than now.
-		boundary := earliestOf(latestOf(closeAt, lastComputed), g.ValidTo)
+		boundary := types.EarliestOf(types.LatestOf(closeAt, lastComputed), g.ValidTo)
 
 		// Leaves usage, grant_status and last_computed_at alone: last_computed_at < valid_to
 		// is what keeps a closed row in the evaluator's unfinalized set for its final
@@ -635,8 +635,8 @@ func (s *entitlementGrantService) computeGrantWindow(
 
 	// A slot whose configs only became live mid-cycle starts there, not at the cycle
 	// start: backdating it would hand the window usage recorded before it existed.
-	coveredUntil := latestOf(latestOf(lastWindowEnd, cycleStart), candidate.startDate)
-	searchUntil := earliestOf(at, cycleEnd)
+	coveredUntil := types.LatestOf(types.LatestOf(lastWindowEnd, cycleStart), candidate.startDate)
+	searchUntil := types.EarliestOf(at, cycleEnd)
 
 	s.Logger.Debug(ctx, "computing grant window",
 		"coveredUntil", coveredUntil,
@@ -702,7 +702,7 @@ func (s *entitlementGrantService) computeGrantWindow(
 				}
 				bucket = next
 			}
-			validFrom = latestOf(bucket, coveredUntil)
+			validFrom = types.LatestOf(bucket, coveredUntil)
 		}
 	}
 
@@ -758,20 +758,6 @@ func (s *entitlementGrantService) earliestUncoveredUsage(
 
 	s.Logger.Debug(ctx, "computing grant window: earliest un-covered usage timestamp", "timestamp", timestamp)
 	return timestamp, nil
-}
-
-func latestOf(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	}
-	return b
-}
-
-func earliestOf(a, b time.Time) time.Time {
-	if a.Before(b) {
-		return a
-	}
-	return b
 }
 
 // validateEntitlementGrantShape enforces grant-config rules that need the

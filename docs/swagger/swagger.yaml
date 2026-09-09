@@ -1,5 +1,14 @@
 basePath: /v1
 definitions:
+  ListAddonAssociationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/AddonAssociationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListAddonsResponse:
     properties:
       items:
@@ -189,68 +198,6 @@ definitions:
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  checkout.JSONBCheckoutConfiguration:
-    properties:
-      add_addon_params:
-        $ref: '#/definitions/types.AddAddonParams'
-      create_subscription_params:
-        $ref: '#/definitions/types.CreateSubscriptionParams'
-      modify_subscription_params:
-        $ref: '#/definitions/types.ModifySubscriptionParams'
-      wallet_topup_params:
-        $ref: '#/definitions/types.WalletTopupParams'
-    type: object
-  checkout.JSONBCheckoutPaymentProviderConfig:
-    properties:
-      collection_method:
-        $ref: '#/definitions/types.CollectionMethod'
-      customer_not_present:
-        description: |-
-          CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means
-          the customer is present, so a missed auto-charge may fall back to a hosted
-          authorization link. Set true only from merchant-initiated paths (auto top-up).
-        type: boolean
-      max_mandate_limit:
-        type: string
-      payment_method:
-        $ref: '#/definitions/types.PaymentMethodType'
-    type: object
-  checkout.JSONBCheckoutProviderResult:
-    properties:
-      expires_at:
-        description: |-
-          ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,
-          executeCheckoutAction tightens the session expiry to match.
-        type: string
-      next_action:
-        allOf:
-        - $ref: '#/definitions/types.PaymentAction'
-        description: NextAction is what the customer must do to complete payment.
-      provider_metadata:
-        additionalProperties:
-          type: string
-        description: ProviderMetadata holds provider-specific data not needed for
-          business logic.
-        type: object
-      provider_payment_intent_id:
-        description: |-
-          ProviderPaymentIntentID is the provider-side charge/intent ID.
-          Stripe returns this at link creation (pi_xxx); others populate it from the webhook payload.
-        type: string
-      provider_session_id:
-        description: |-
-          ProviderSessionID is stored in EntityIntegrationMapping at link creation.
-            Stripe:   Checkout Session ID  (cs_xxx)
-            Razorpay: Payment Link ID      (plink_xxx)
-            Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)
-            Moyasar:  Payment ID
-        type: string
-    type: object
-  checkout.JSONBCheckoutResult:
-    properties:
-      create_subscription_result:
-        $ref: '#/definitions/types.CreateSubscriptionResult'
     type: object
   costsheet.Filter:
     properties:
@@ -1023,6 +970,18 @@ definitions:
         - $ref: '#/definitions/ChangedInvoiceStatus'
         description: Status is preview (dry-run), issued (wallet credit applied),
           or a PaymentStatus string for real invoices.
+        enum:
+        - preview
+        - issued
+        - INITIATED
+        - PENDING
+        - PROCESSING
+        - SUCCEEDED
+        - OVERPAID
+        - FAILED
+        - REFUNDED
+        - PARTIALLY_REFUNDED
+        - VOIDED
       wallet_transaction:
         allOf:
         - $ref: '#/definitions/WalletTransactionResponse'
@@ -1039,8 +998,6 @@ definitions:
     - ChangedInvoiceActionCreated
     - ChangedInvoiceActionWalletCredit
   ChangedInvoiceStatus:
-    description: preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED |
-      OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED
     enum:
     - preview
     - issued
@@ -1137,108 +1094,77 @@ definitions:
     required:
     - payment_provider
     type: object
+  CheckoutPaymentBlock:
+    properties:
+      gateway:
+        type: string
+      id:
+        type: string
+      status:
+        $ref: '#/definitions/types.PaymentStatus'
+    type: object
   CheckoutSessionResponse:
     properties:
       action:
-        allOf:
-        - $ref: '#/definitions/types.CheckoutAction'
-        description: |-
-          Action is the billing operation this session will perform.
-          Immutable after creation; determines which sub-struct inside
-          Configuration is populated.
+        $ref: '#/definitions/types.CheckoutAction'
       cancel_url:
         type: string
       cancelled_at:
         type: string
       checkout_invoice_id:
-        description: |-
-          CheckoutInvoiceID and CheckoutPaymentID are set once the apply step
-          creates the corresponding Flexprice entities (completed sessions only).
         type: string
       checkout_payment_id:
         type: string
       checkout_status:
-        allOf:
-        - $ref: '#/definitions/types.CheckoutStatus'
-        description: |-
-          CheckoutStatus tracks the session lifecycle. Starts at "initiated"
-          when the session row is inserted; advances to "pending" once the
-          provider call succeeds; settles to completed/failed/expired.
+        $ref: '#/definitions/types.CheckoutStatus'
       completed_at:
         type: string
-      configuration:
-        allOf:
-        - $ref: '#/definitions/checkout.JSONBCheckoutConfiguration'
-        description: |-
-          Configuration holds the immutable caller inputs set at creation time.
-          Only the sub-struct matching Action is populated; the others are nil.
       created_at:
-        type: string
-      created_by:
         type: string
       customer_id:
         type: string
-      environment_id:
-        type: string
       expires_at:
-        description: |-
-          ExpiresAt is required. A Temporal timer fires at this time for any
-          session still in initiated|pending, marking it expired. The caller
-          must create a new session after expiry (expire-and-restart model).
         type: string
       failure_reason:
-        description: FailureReason is a human-readable string set on failed sessions.
         type: string
       failure_url:
         type: string
       id:
         type: string
       idempotency_key:
-        description: |-
-          IdempotencyKey is caller-supplied. It is unique only while the session
-          is active (initiated|pending). The same key may be reused once the
-          session reaches a terminal state (completed|failed|expired).
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      next_poll_after_ms:
+        description: |-
+          NextPollAfterMs is how long a client should wait before reading again.
+          Zero means stop — either the session is terminal, or this response did not
+          come from a polling read.
+        type: integer
+      payment:
+        allOf:
+        - $ref: '#/definitions/CheckoutPaymentBlock'
+        description: Payment is the payment this session is waiting on, when one exists.
       payment_action:
         $ref: '#/definitions/types.PaymentAction'
       payment_provider:
-        allOf:
-        - $ref: '#/definitions/types.CheckoutPaymentProvider'
-        description: PaymentProvider is required and immutable after creation.
-      payment_provider_config:
-        allOf:
-        - $ref: '#/definitions/checkout.JSONBCheckoutPaymentProviderConfig'
+        $ref: '#/definitions/types.CheckoutPaymentProvider'
+      stale:
         description: |-
-          PaymentProviderConfig holds provider-specific payment configuration
-          (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
-          Nil if not set on the request.
-      provider_result:
-        allOf:
-        - $ref: '#/definitions/checkout.JSONBCheckoutProviderResult'
-        description: |-
-          ProviderResult holds the external provider response (session URL,
-          payment intent ID, etc.). Set after the provider call in the create
-          step. Source of truth for deriving PaymentActions in API responses.
-      result:
-        allOf:
-        - $ref: '#/definitions/checkout.JSONBCheckoutResult'
-        description: |-
-          Result holds the Flexprice entity IDs created during the apply step.
-          Nil until the session reaches completed status.
-      status:
-        $ref: '#/definitions/types.Status'
+          Stale reports that this response is stored state that was not checked against
+          the payment provider on this request — the read was debounced, or the gateway
+          did not answer. A UI should say "still checking" rather than presenting a
+          stale answer as fact.
+        type: boolean
       success_url:
+        type: string
+      terminal:
         description: |-
-          Redirect URLs sent to the payment provider. The provider redirects the
-          user browser to the appropriate URL after the payment flow completes.
-        type: string
-      tenant_id:
-        type: string
+          Terminal reports whether the session has finished. Clients poll until this is
+          true rather than hardcoding the status set, which would go stale if a status
+          is ever added.
+        type: boolean
       updated_at:
-        type: string
-      updated_by:
         type: string
     type: object
   CloneEnvironmentRequest:
@@ -2767,8 +2693,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.LineItemGrouping'
         description: |-
-          LineItemGrouping: PER_CHARGE_PERIOD (default) bills a monthly price on a quarterly
-          sub as 3 line items, PER_BILLING_PERIOD as 1. Same total either way.
+          LineItemGrouping: per_charge_period (default) bills a monthly price on a quarterly
+          sub as 3 line items, per_billing_period as 1. Same total either way.
       line_items:
         description: LineItems are extra (non-plan) line items added at creation.
         items:
@@ -4555,6 +4481,12 @@ definitions:
         type: string
       currency:
         type: string
+      custom_currency:
+        allOf:
+        - $ref: '#/definitions/types.CustomCurrencyLineItem'
+        description: |-
+          custom_currency holds this line item's amounts in the tenant's custom currency.
+          The fields above are fiat projections of it; nil for fiat invoices.
       customer_id:
         type: string
       display_name:
@@ -4752,6 +4684,11 @@ definitions:
         description: currency is the three-letter ISO currency code (e.g., USD, EUR,
           GBP) that applies to all monetary amounts on this invoice
         type: string
+      custom_currency:
+        allOf:
+        - $ref: '#/definitions/types.CustomCurrency'
+        description: custom_currency is the custom-currency equivalent; Currency itself
+          is always fiat
       customer:
         allOf:
         - $ref: '#/definitions/CustomerResponse'
@@ -7782,6 +7719,11 @@ definitions:
         type: string
       gateway_payment_id:
         type: string
+      gateway_tracking_id:
+        description: |-
+          GatewayTrackingID is the pre-payment handle at the gateway — link, hosted page,
+          invoice or order — recorded at checkout creation so the payment can be reconciled.
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       payment_gateway:
@@ -8946,6 +8888,12 @@ definitions:
         type: string
       currency:
         type: string
+      custom_currency:
+        allOf:
+        - $ref: '#/definitions/types.CustomCurrencyLineItem'
+        description: |-
+          custom_currency holds this line item's amounts in the tenant's custom currency.
+          The fields above are fiat projections of it; nil for fiat invoices.
       customer_id:
         type: string
       display_name:
@@ -10093,15 +10041,6 @@ definitions:
       subscription_id:
         type: string
     type: object
-  types.CreateSubscriptionResult:
-    properties:
-      invoice_id:
-        type: string
-      payment_id:
-        type: string
-      subscription_id:
-        type: string
-    type: object
   types.CreditBreakdown:
     properties:
       free:
@@ -10214,6 +10153,38 @@ definitions:
     x-enum-varnames:
     - CreditNoteTypeAdjustment
     - CreditNoteTypeRefund
+  types.CustomCurrency:
+    properties:
+      amount_due:
+        type: string
+      code:
+        type: string
+      rate:
+        description: fiat per 1 unit of Code; the live factor while draft, frozen
+          at finalization
+        type: string
+      subtotal:
+        type: string
+      total:
+        type: string
+      total_discount:
+        type: string
+      total_prepaid_credits_applied:
+        type: string
+      total_tax:
+        type: string
+    type: object
+  types.CustomCurrencyLineItem:
+    properties:
+      amount:
+        type: string
+      invoice_level_discount:
+        type: string
+      line_item_discount:
+        type: string
+      prepaid_credits_applied:
+        type: string
+    type: object
   types.CustomerFilter:
     properties:
       customer_ids:
@@ -10617,6 +10588,13 @@ definitions:
     - NOT_IN
     - BEFORE
     - AFTER
+  types.GlobalCustomField:
+    properties:
+      field:
+        type: string
+      value:
+        type: string
+    type: object
   types.GroupEntityType:
     enum:
     - price
@@ -10853,10 +10831,20 @@ definitions:
     - InvoiceStatusSkipped
   types.InvoiceSyncSettings:
     properties:
-      metadata_custom_fields:
+      deposit_to_account_id:
         description: |-
-          MetadataCustomFields copies metadata values onto Zoho invoice custom fields
-          verbatim.
+          Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
+          Undeposited Funds default.a
+        type: string
+      global_custom_fields:
+        description: |-
+          Fixed values written to Zoho invoice custom fields on every sync, independent of
+          any metadata source.
+        items:
+          $ref: '#/definitions/types.GlobalCustomField'
+        type: array
+      metadata_custom_fields:
+        description: Copies metadata values onto Zoho invoice custom fields verbatim.
         items:
           $ref: '#/definitions/types.MetadataCustomField'
         type: array
@@ -10867,18 +10855,20 @@ definitions:
           NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
           For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
           qty=3, rate=$100. Empty string means no normalization (keep original).
+      payment_mode:
+        description: |-
+          Zoho payment modes are merchant-editable free strings with no id, so this is passed
+          through verbatim. Empty means DefaultZohoPaymentMode.
+        type: string
       service_period_custom_fields:
         allOf:
         - $ref: '#/definitions/types.ServicePeriodCustomFields'
-        description: |-
-          ServicePeriodCustomFields names the Zoho custom fields that receive the
-          invoice's service start and end dates.
+        description: Zoho custom fields that receive the invoice's service start and
+          end dates.
       submit_for_approval:
         description: |-
-          SubmitForApproval submits the synced invoice into the merchant's Zoho Books approval
-          flow before recording payment. Zoho rejects payments on draft invoices, and merchants
-          configure a Zoho auto-approval rule for FlexPrice-sent invoices, so we submit, wait for
-          that rule to fire, then pay.
+          Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval
+          rule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.
         type: boolean
     type: object
   types.InvoiceType:
@@ -10893,12 +10883,12 @@ definitions:
     - InvoiceTypeCredit
   types.LineItemGrouping:
     enum:
-    - PER_CHARGE_PERIOD
-    - PER_BILLING_PERIOD
+    - per_charge_period
+    - per_billing_period
     type: string
     x-enum-varnames:
-    - LINE_ITEM_GROUPING_PER_CHARGE_PERIOD
-    - LINE_ITEM_GROUPING_PER_BILLING_PERIOD
+    - LineItemGroupingPerChargePeriod
+    - LineItemGroupingPerBillingPeriod
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -13166,6 +13156,8 @@ definitions:
       end_date:
         type: string
       id:
+        type: string
+      invoicing_customer_id:
         type: string
       line_items:
         items:
@@ -18612,9 +18604,7 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/AddonAssociationResponse'
-            type: array
+            $ref: '#/definitions/ListAddonAssociationsResponse'
         "400":
           description: Invalid request
           schema:
@@ -19068,6 +19058,29 @@ paths:
       tags:
       - Subscriptions
       x-scope: read
+  /subscriptions/{id}/schedules:
+    get:
+      consumes:
+      - application/json
+      description: Use when listing scheduled changes for a subscription (e.g. upcoming
+        plan change or renewal). Returns all schedules for that subscription.
+      operationId: listSubscriptionSchedules
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/GetPendingSchedulesResponse'
+      summary: List subscription schedules
+      tags:
+      - Subscriptions
   /subscriptions/{id}/v2:
     get:
       description: Use when you need a subscription with related data (line items,
@@ -19286,6 +19299,90 @@ paths:
       tags:
       - Subscriptions
       x-scope: read
+  /subscriptions/schedules:
+    get:
+      consumes:
+      - application/json
+      description: Use when listing or searching scheduled changes across subscriptions
+        (e.g. admin view). Returns schedules with optional filtering.
+      operationId: listAllSubscriptionSchedules
+      parameters:
+      - description: Filter to pending schedules only
+        in: query
+        name: pending_only
+        type: boolean
+      - description: Filter by subscription ID
+        in: query
+        name: subscription_id
+        type: string
+      - description: Limit results
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/GetPendingSchedulesResponse'
+      summary: List all subscription schedules
+      tags:
+      - Subscriptions
+  /subscriptions/schedules/{schedule_id}:
+    get:
+      consumes:
+      - application/json
+      description: Use when you need to load a single scheduled change (e.g. to show
+        when a plan change or renewal takes effect).
+      operationId: getSubscriptionSchedule
+      parameters:
+      - description: Schedule ID
+        in: path
+        name: schedule_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SubscriptionScheduleResponse'
+      summary: Get subscription schedule
+      tags:
+      - Subscriptions
+  /subscriptions/schedules/{schedule_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Use when cancelling a scheduled change (e.g. customer changed mind).
+        Identify by schedule ID in path or by subscription ID + schedule type in body.
+      operationId: cancelSubscriptionSchedule
+      parameters:
+      - description: Schedule ID (optional if using request body)
+        in: path
+        name: schedule_id
+        type: string
+      - description: Cancel request (optional if using path parameter)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/CancelScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CancelScheduleResponse'
+      summary: Cancel subscription schedule
+      tags:
+      - Subscriptions
   /subscriptions/search:
     post:
       consumes:
@@ -20778,113 +20875,6 @@ paths:
       summary: Query users
       tags:
       - Users
-  /v1/subscription-schedules:
-    get:
-      consumes:
-      - application/json
-      description: Use when listing or searching scheduled changes across subscriptions
-        (e.g. admin view). Returns schedules with optional filtering.
-      operationId: listAllSubscriptionSchedules
-      parameters:
-      - description: Filter to pending schedules only
-        in: query
-        name: pending_only
-        type: boolean
-      - description: Filter by subscription ID
-        in: query
-        name: subscription_id
-        type: string
-      - description: Limit results
-        in: query
-        name: limit
-        type: integer
-      - description: Offset for pagination
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/GetPendingSchedulesResponse'
-      summary: List all subscription schedules
-      tags:
-      - Subscriptions
-  /v1/subscription-schedules/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Use when you need to load a single scheduled change (e.g. to show
-        when a plan change or renewal takes effect).
-      operationId: getSubscriptionSchedule
-      parameters:
-      - description: Schedule ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/SubscriptionScheduleResponse'
-      summary: Get subscription schedule
-      tags:
-      - Subscriptions
-  /v1/subscriptions/{subscription_id}/schedules:
-    get:
-      consumes:
-      - application/json
-      description: Use when listing scheduled changes for a subscription (e.g. upcoming
-        plan change or renewal). Returns all schedules for that subscription.
-      operationId: listSubscriptionSchedules
-      parameters:
-      - description: Subscription ID
-        in: path
-        name: subscription_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/GetPendingSchedulesResponse'
-      summary: List subscription schedules
-      tags:
-      - Subscriptions
-  /v1/subscriptions/schedules/{schedule_id}/cancel:
-    post:
-      consumes:
-      - application/json
-      description: Use when cancelling a scheduled change (e.g. customer changed mind).
-        Identify by schedule ID in path or by subscription ID + schedule type in body.
-      operationId: cancelSubscriptionSchedule
-      parameters:
-      - description: Schedule ID (optional if using request body)
-        in: path
-        name: schedule_id
-        type: string
-      - description: Cancel request (optional if using path parameter)
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/CancelScheduleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/CancelScheduleResponse'
-      summary: Cancel subscription schedule
-      tags:
-      - Subscriptions
   /wallets:
     post:
       consumes:
