@@ -1033,6 +1033,21 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_GroupedChi
 	s.Require().NotNil(inv, "the gated create must have priced a draft invoice before opening a session")
 	s.True(inv.AmountDue.Equal(decimal.NewFromInt(110)),
 		"the locked amount must cover parent (50) + two seats (30 each), got %s", inv.AmountDue)
+
+	full, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCreate), full.BillingReason)
+	s.Require().NotNil(full.PeriodStart)
+	s.Require().NotNil(full.PeriodEnd)
+	s.Require().NotEmpty(full.LineItems)
+	for _, li := range full.LineItems {
+		s.Require().NotNil(li.PeriodStart)
+		s.Require().NotNil(li.PeriodEnd)
+		s.True(li.PeriodStart.Equal(*full.PeriodStart),
+			"checkout opening line period_start %s must match invoice %s", li.PeriodStart, *full.PeriodStart)
+		s.True(li.PeriodEnd.Equal(*full.PeriodEnd),
+			"checkout opening line period_end %s must match invoice %s", li.PeriodEnd, *full.PeriodEnd)
+	}
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_GroupedChildrenAreCreatedDraft() {

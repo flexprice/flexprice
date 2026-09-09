@@ -402,6 +402,13 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	}
 	billingPeriodStr := string(sub.BillingPeriod)
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
+	billingReason := types.InvoiceBillingReasonSubscriptionCycle
+	switch referencePoint {
+	case types.ReferencePointPeriodStart:
+		billingReason = types.InvoiceBillingReasonSubscriptionCreate
+	case types.ReferencePointCancel:
+		billingReason = types.InvoiceBillingReasonProration
+	}
 	req := dto.CreateDraftInvoiceRequest{
 		CustomerID:     invoicingCustomerID,
 		SubscriptionID: lo.ToPtr(sub.ID),
@@ -410,10 +417,7 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 		BillingPeriod:  &billingPeriodStr,
 		PeriodStart:    &periodStart,
 		PeriodEnd:      &periodEnd,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionCycle,
-	}
-	if referencePoint == types.ReferencePointCancel {
-		req.BillingReason = types.InvoiceBillingReasonProration
+		BillingReason:  billingReason,
 	}
 	req.SubscriptionCustomerID = &sub.CustomerID
 	return s.CreateEmptyDraftInvoice(ctx, req)
@@ -1176,6 +1180,11 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 
 	// Only finalize invoices that have been computed (LastComputedAt set by ComputeInvoice)
 	if inv.LastComputedAt == nil {
+		return false, nil
+	}
+
+	// Opening invoices stay draft until payment (checkout) or ProcessDraftInvoice.
+	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCreate) {
 		return false, nil
 	}
 
