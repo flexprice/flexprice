@@ -7,7 +7,7 @@
 # Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
 # Go version must be >= the `go` directive in go.mod or `go mod download`
 # hard-fails. Bump this whenever that directive moves.
-FROM --platform=$BUILDPLATFORM golang:1.25.13-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # MySQL, SQLite), and importing it would pull all of that into go.mod for every
 # build. Built in its own throwaway module so the app's go.mod/go.sum are
 # untouched, and pinned -- Go verifies the checksum against sum.golang.org.
-FROM --platform=$BUILDPLATFORM golang:1.25.13-alpine AS dbmate
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS dbmate
 ARG TARGETARCH
 ARG DBMATE_VERSION=v2.35.0
 RUN apk add --no-cache git
@@ -52,10 +52,10 @@ RUN go mod init flexprice.local/dbmate-build && \
       -o /out/dbmate github.com/amacneil/dbmate/v2
 
 # Typst stage
-FROM ghcr.io/typst/typst:v0.13.1 AS typst
+FROM ghcr.io/typst/typst:0.15.1 AS typst
 
 # Final stage
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk --no-cache add ca-certificates tzdata && \
     addgroup -S app && adduser -S -G app app
 
