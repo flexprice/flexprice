@@ -702,10 +702,8 @@ func TestSyncInvoice_AlreadySynced(t *testing.T) {
 	assert.False(t, mockClient.createSubscriptionChargeCalled, "CreateSubscriptionCharge must NOT be called when invoice is already mapped")
 }
 
-// TestSyncInvoice_UseCatalogPrices verifies that SyncInvoice creates a catalog price whose Name
-// matches the line item's DisplayName, and that CreateSubscriptionCharge receives a
-// SubscriptionChargeItemFromCatalog referencing that catalog price ID.
-func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
+// Invoice charges must bill a non-catalog price on the existing catalog product.
+func TestSyncInvoice_UsesNonCatalogPrices(t *testing.T) {
 	ctx := buildTestContext()
 
 	const invoiceID = "inv_catalog_price_test"
@@ -714,11 +712,9 @@ func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
 	const priceID = "pri_fp_abc"
 	const paddleProductID = "pro_paddle_abc"
 	const paddleSubID = "sub_paddle_abc"
-	const catalogPriceID = "pri_catalog_001"
 	const displayName = "Acme Pro Seat"
 	const chargeTxnID = "txn_charge_001"
 
-	var capturedPriceReqName string
 	var capturedChargeItems []paddlesdk.CreateSubscriptionChargeItems
 
 	// Build a collection with one charge transaction for the ListTransactions call.
@@ -737,13 +733,9 @@ func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
 	require.NoError(t, txnCollection.UnmarshalJSON(listTxnJSON))
 
 	mockClient := &mockPaddleClient{
-		createPriceFn: func(_ context.Context, req *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
-			if req.Name != nil {
-				capturedPriceReqName = *req.Name
-			}
-			assert.Equal(t, "10000", req.UnitPrice.Amount) // 100 USD in cents (types.ToSmallestUnit)
-			assert.Nil(t, req.BillingCycle)                // no billing cycle = one-time price
-			return &paddlesdk.Price{ID: catalogPriceID}, nil
+		createPriceFn: func(_ context.Context, _ *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
+			t.Fatal("CreatePrice must not be called for invoice charges")
+			return nil, nil
 		},
 		createSubscriptionChargeFn: func(_ context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
 			capturedChargeItems = req.Items
@@ -810,18 +802,125 @@ func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
 	assert.Equal(t, chargeTxnID, resp.PaddleTransactionID)
 	assert.False(t, resp.AlreadySynced)
 
-	// CreatePrice must have been called with the line item's display name.
-	assert.Equal(t, displayName, capturedPriceReqName,
-		"CreatePrice Name must match the invoice line item DisplayName")
-
-	// CreateSubscriptionCharge must have been called with a catalog-price item referencing the returned price ID.
-	require.NotEmpty(t, capturedChargeItems, "CreateSubscriptionCharge must receive at least one item")
-	// The item should be a SubscriptionChargeItemFromCatalog — unwrap and check the price ID.
-	// paddlesdk encodes the type in the value field; we check via JSON marshaling.
+	// paddlesdk encodes the union member inline, so assert on the marshaled item.
+	require.Len(t, capturedChargeItems, 1, "CreateSubscriptionCharge must receive exactly one item")
 	itemJSON, marshalErr := json.Marshal(capturedChargeItems[0])
 	require.NoError(t, marshalErr)
-	assert.Contains(t, string(itemJSON), catalogPriceID,
-		"CreateSubscriptionCharge item must reference the catalog price ID returned by CreatePrice")
+	assert.Contains(t, string(itemJSON), paddleProductID,
+		"non-catalog price must attach to the existing catalog product")
+	assert.Contains(t, string(itemJSON), `"10000"`, "unit price must be the line amount in cents")
+	assert.Contains(t, string(itemJSON), displayName, "price name must match the line item DisplayName")
+	assert.NotContains(t, string(itemJSON), `"price_id"`, "must not reference a catalog price")
+}
+
+// TestSyncInvoice_NettedProrationChargesAmountDue verifies that a plan-change invoice
+// with a charge line and a unused-time credit is sent to Paddle as one non-catalog price
+// at AmountDue, not the gross charge with the credit zeroed.
+func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
+	ctx := buildTestContext()
+
+	const invoiceID = "inv_netted_proration"
+	const subID = "sub_netted_proration"
+	const customerID = "cust_netted_proration"
+	const chargePriceID = "pri_fp_starter"
+	const creditPriceID = "pri_fp_team"
+	const paddleProductID = "pro_paddle_starter"
+	const paddleSubID = "sub_paddle_netted"
+	const chargeTxnID = "txn_netted_001"
+
+	var capturedChargeItems []paddlesdk.CreateSubscriptionChargeItems
+
+	listTxnJSON := []byte(`{
+		"data": [{"id": "` + chargeTxnID + `", "origin": "subscription_charge"}],
+		"meta": {
+			"pagination": {
+				"next_url": "",
+				"per_page": 1,
+				"has_more": false,
+				"estimated_total": 1
+			}
+		}
+	}`)
+	txnCollection := &paddlesdk.Collection[*paddlesdk.Transaction]{}
+	require.NoError(t, txnCollection.UnmarshalJSON(listTxnJSON))
+
+	mockClient := &mockPaddleClient{
+		createPriceFn: func(_ context.Context, _ *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
+			t.Fatal("CreatePrice must not be called for invoice charges")
+			return nil, nil
+		},
+		createSubscriptionChargeFn: func(_ context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
+			capturedChargeItems = req.Items
+			return &paddlesdk.Subscription{ID: paddleSubID}, nil
+		},
+		listTransactionsFn: func(_ context.Context, _ *paddlesdk.ListTransactionsRequest) (*paddlesdk.Collection[*paddlesdk.Transaction], error) {
+			return txnCollection, nil
+		},
+		getTransactionFn: func(_ context.Context, txnID string) (*paddlesdk.Transaction, error) {
+			return &paddlesdk.Transaction{ID: txnID}, nil
+		},
+	}
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	invoiceStore := testutil.NewInMemoryInvoiceStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	chargeName := "Team Starter"
+	creditName := "Team"
+	chargePID := chargePriceID
+	creditPID := creditPriceID
+	inv := &invoice.Invoice{
+		ID:             invoiceID,
+		CustomerID:     customerID,
+		SubscriptionID: func() *string { s := subID; return &s }(),
+		Currency:       "USD",
+		AmountDue:      decimal.RequireFromString("1397.68"),
+		Total:          decimal.RequireFromString("1397.68"),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				PriceID:     &chargePID,
+				DisplayName: &chargeName,
+				Amount:      decimal.RequireFromString("1996.68"),
+				Currency:    "USD",
+			},
+			{
+				PriceID:     &creditPID,
+				DisplayName: &creditName,
+				Amount:      decimal.RequireFromString("-599.00"),
+				Currency:    "USD",
+			},
+		},
+	}
+	require.NoError(t, invoiceStore.Create(ctx, inv))
+
+	sub := &subscription.Subscription{
+		ID:            subID,
+		CustomerID:    customerID,
+		Currency:      "usd",
+		BillingPeriod: "month",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	seedMapping(ctx, t, mappingStore, chargePriceID, types.IntegrationEntityTypePrice, paddleProductID, nil)
+	seedMapping(ctx, t, mappingStore, creditPriceID, types.IntegrationEntityTypePrice, "pro_paddle_team", nil)
+	seedMapping(ctx, t, mappingStore, subID, types.IntegrationEntityTypeSubscription, paddleSubID, nil)
+
+	svc := buildTestSyncService(mockClient, mappingStore, testutil.NewInMemoryCustomerStore(), invoiceStore, subStore, testutil.NewInMemoryConnectionStore())
+
+	resp, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
+	require.NoError(t, err)
+	assert.Equal(t, chargeTxnID, resp.PaddleTransactionID)
+
+	require.Len(t, capturedChargeItems, 1, "must charge one item at the net, not one per line")
+	itemJSON, marshalErr := json.Marshal(capturedChargeItems[0])
+	require.NoError(t, marshalErr)
+	assert.Contains(t, string(itemJSON), `"139768"`, "unit price must be AmountDue in cents")
+	assert.NotContains(t, string(itemJSON), `"199668"`, "must not charge the gross amount")
+	assert.NotContains(t, string(itemJSON), `"price_id"`, "must not reference a catalog price")
 }
 
 // TestEnsureBulkProductSynced_AlreadyMapped verifies that when a price→Paddle product mapping
