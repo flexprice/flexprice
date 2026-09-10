@@ -47,7 +47,7 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 		cust0 := seeds.PersistentCustomerIDs[0]
 		inv, err := p.latestInvoice(ctx, cust0)
 		if err != nil {
-			return e2eprobe.Errorf(map[string]string{"step": "query_invoice_cust0", "external_customer_id": cust0}, "query invoice: %w", err)
+			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 		}
 		if inv != nil {
 			if !invoiceHasTaxRate(inv, seeds.SharedTaxRateID, seeds.SharedTaxRateCode) {
@@ -61,7 +61,7 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 		cust1 := seeds.PersistentCustomerIDs[1]
 		inv, err := p.latestInvoice(ctx, cust1)
 		if err != nil {
-			return e2eprobe.Errorf(map[string]string{"step": "query_invoice_cust1", "external_customer_id": cust1}, "query invoice: %w", err)
+			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust1", "external_customer_id": cust1}, "load invoice: %w", err)
 		}
 		if inv != nil {
 			if !invoiceHasCoupon(inv, seeds.SharedCouponID) {
@@ -74,8 +74,10 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 
 func (p *persistentBillingInvariantsProbe) latestInvoice(ctx context.Context, extID string) (*types.InvoiceResponse, error) {
 	limit := int64(1)
+	invType := types.InvoiceTypeSubscription
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
+		InvoiceType:        &invType,
 		Limit:              &limit,
 	})
 	if err != nil {
@@ -84,8 +86,20 @@ func (p *persistentBillingInvariantsProbe) latestInvoice(ctx context.Context, ex
 	if resp.ListInvoicesResponse == nil || len(resp.ListInvoicesResponse.Items) == 0 {
 		return nil, nil // no invoice yet — soft skip at caller
 	}
-	inv := resp.ListInvoicesResponse.Items[0]
-	return &inv, nil
+	listed := resp.ListInvoicesResponse.Items[0]
+	if listed.ID == nil || *listed.ID == "" {
+		return nil, nil
+	}
+
+	// Search/list never expands tax_applied; only GET attaches Taxes.
+	got, err := p.client.Invoices().Get(ctx, *listed.ID)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil || got.InvoiceResponse == nil {
+		return nil, nil
+	}
+	return got.InvoiceResponse, nil
 }
 
 func invoiceHasTaxRate(inv *types.InvoiceResponse, taxRateID, taxRateCode string) bool {

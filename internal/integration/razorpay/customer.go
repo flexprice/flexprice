@@ -186,7 +186,6 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 	s.logger.Info(ctx, "creating customer in Razorpay",
 		"customer_id", flexpriceCustomer.ID)
 
-	// Create customer in Razorpay using wrapper function
 	razorpayCustomer, err := s.client.CreateCustomer(ctx, customerData)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create customer in Razorpay",
