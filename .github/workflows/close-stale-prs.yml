@@ -23,6 +23,7 @@ jobs:
       - name: Close PRs with no updates for 15+ days (excluding drafts)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
