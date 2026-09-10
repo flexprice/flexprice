@@ -261,7 +261,10 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 			Mark(ierr.ErrInternal)
 	}
 
-	customerData = applyCustomerCreateIdempotency(customerData)
+	if customerData == nil {
+		customerData = map[string]interface{}{}
+	}
+	customerData["fail_existing"] = "0"
 
 	razorpayCustomer, err := razorpayClient.Customer.Create(customerData, nil)
 	if err != nil {
