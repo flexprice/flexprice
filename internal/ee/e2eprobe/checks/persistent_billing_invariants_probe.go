@@ -94,6 +94,7 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder) (*types.InvoiceResponse, error) {
 	invType := types.InvoiceTypeSubscription
 	limit := int64(1)
+	invType := types.InvoiceTypeSubscription
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
 		InvoiceType:        &invType,
@@ -106,8 +107,20 @@ func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Conte
 	if resp.ListInvoicesResponse == nil || len(resp.ListInvoicesResponse.Items) == 0 {
 		return nil, nil
 	}
-	inv := resp.ListInvoicesResponse.Items[0]
-	return &inv, nil
+	listed := resp.ListInvoicesResponse.Items[0]
+	if listed.ID == nil || *listed.ID == "" {
+		return nil, nil
+	}
+
+	// Search/list never expands tax_applied; only GET attaches Taxes.
+	got, err := p.client.Invoices().Get(ctx, *listed.ID)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil || got.InvoiceResponse == nil {
+		return nil, nil
+	}
+	return got.InvoiceResponse, nil
 }
 
 func (p *persistentBillingInvariantsProbe) invoiceWithTaxes(ctx context.Context, inv types.InvoiceResponse) (*types.InvoiceResponse, error) {

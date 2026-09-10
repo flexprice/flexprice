@@ -628,20 +628,6 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 		ListInvoicesResponse: &types.ListInvoicesResponse{Items: applyInvoiceQuery(f.invoices, filter)},
 	}, nil
 }
-
-// applyInvoiceQuery treats invoices as newest-first (server default created_at desc).
-func applyInvoiceQuery(invoices []types.InvoiceResponse, filter types.InvoiceFilter) []types.InvoiceResponse {
-	items := append([]types.InvoiceResponse(nil), invoices...)
-	if filter.Order != nil && *filter.Order == types.InvoiceFilterOrderAsc {
-		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
-			items[i], items[j] = items[j], items[i]
-		}
-	}
-	if filter.Limit != nil && *filter.Limit > 0 && int(*filter.Limit) < len(items) {
-		items = items[:*filter.Limit]
-	}
-	return items
-}
 func (f *fakeInvoices) Get(_ context.Context, id string) (*dtos.GetInvoiceResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
