@@ -1563,6 +1563,8 @@ type InvoiceVoidRequest struct {
 	// metadata will only add/override the values of key-value pairs provided in this request.
 	// for a complete override of metadata field, refer update invoice (PUT /invoices) endpoint
 	Metadata types.Metadata `json:"metadata,omitempty"`
+
+	InvoiceStateChangeSource
 }
 
 func (r *InvoiceVoidRequest) Validate() error {
