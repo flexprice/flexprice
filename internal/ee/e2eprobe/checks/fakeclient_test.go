@@ -603,6 +603,8 @@ type fakeInvoices struct {
 	queries    int
 	queryErr   error
 	invoices   []types.InvoiceResponse
+	getByID    map[string]types.InvoiceResponse
+	getErr     error
 	lastFilter types.InvoiceFilter
 	// Preview support
 	previewResp   *dtos.GetInvoicePreviewResponse // default response
@@ -626,7 +628,24 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 		ListInvoicesResponse: &types.ListInvoicesResponse{Items: f.invoices},
 	}, nil
 }
-func (f *fakeInvoices) Get(_ context.Context, _ string) (*dtos.GetInvoiceResponse, error) {
+func (f *fakeInvoices) Get(_ context.Context, id string) (*dtos.GetInvoiceResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.getByID != nil {
+		if inv, ok := f.getByID[id]; ok {
+			cp := inv
+			return &dtos.GetInvoiceResponse{InvoiceResponse: &cp}, nil
+		}
+	}
+	for i := range f.invoices {
+		if f.invoices[i].ID != nil && *f.invoices[i].ID == id {
+			inv := f.invoices[i]
+			return &dtos.GetInvoiceResponse{InvoiceResponse: &inv}, nil
+		}
+	}
 	return &dtos.GetInvoiceResponse{}, nil
 }
 func (f *fakeInvoices) GetPreview(_ context.Context, req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error) {

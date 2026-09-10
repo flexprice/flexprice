@@ -1219,10 +1219,15 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 	c.Request = c.Request.WithContext(ctx)
 
-	// Get Paddle integration
 	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Paddle integration", "error", err)
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "Paddle connection not configured, ignoring webhook",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+		h.logger.Error(ctx, "failed to get Paddle integration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
 		handled = true
 		return
