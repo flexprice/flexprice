@@ -150,7 +150,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | entitlement-enforcement-probe | 8m | Ephemeral sub → ingest 150 events past soft-limit(100) → usage-summary assertion |
 | scenario | tax-application-probe | 15m | Ephemeral sub + tax association → preview → assert `preview.Taxes` includes the seed rate and 10% math |
 | scenario | coupon-application-probe | 15m | Ephemeral sub w/ SubscriptionCoupons → preview → assert `preview.CouponApplications` references the seed coupon |
-| probe | persistent-billing-invariants-probe | 30m | Cycle invoices for pers cust #0/#1 → assert tax on latest + coupon on any invoice (ONCE cadence) |
+| probe | persistent-billing-invariants-probe | 30m | Cycle invoices for pers cust #0/#1 → assert tax on latest + coupon on oldest (ONCE cadence) |
 | scenario | entitlement-grant-additive-probe | 15m | Ephemeral sub inheriting plan additive grant → ingest 200 events → assert usage summary populates |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers (Phase 2) and orphan tax associations (Phase 3) and deletes them |
 

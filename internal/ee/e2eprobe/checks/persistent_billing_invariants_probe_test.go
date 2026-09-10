@@ -154,6 +154,41 @@ func TestPersistentBillingInvariantsProbe_OnceCadenceOlderInvoiceHasCoupon(t *te
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("ONCE coupon on an older invoice must pass; got %v", err)
 	}
+	if fc.invoices.lastFilter.Order == nil || *fc.invoices.lastFilter.Order != sdktypes.InvoiceFilterOrderAsc {
+		t.Fatalf("coupon query must use order=asc, got %v", fc.invoices.lastFilter.Order)
+	}
+	if fc.invoices.lastFilter.Limit == nil || *fc.invoices.lastFilter.Limit != 1 {
+		t.Fatalf("coupon query must use limit=1, got %v", fc.invoices.lastFilter.Limit)
+	}
+}
+
+func TestPersistentBillingInvariantsProbe_OnceCadenceOldestBeyondNewest50(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	seeds := pbiSeeds()
+	seeds.PersistentSubIDs = []string{"sub_0", "sub_1"}
+	reg.LoadSeeds(seeds)
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	couponID := "coupon_1"
+	subID := "sub_1"
+	fc.couponAssociations.resp = &sdkdtos.ListCouponAssociationsResponse{
+		ListCouponAssociationsResponse: &sdktypes.ListCouponAssociationsResponse{
+			Items: []sdktypes.CouponAssociationResponse{{CouponID: &couponID, SubscriptionID: &subID}},
+		},
+	}
+
+	trID := "taxrate_1"
+	const n = 51
+	invoices := make([]sdktypes.InvoiceResponse, n)
+	invoices[0] = sdktypes.InvoiceResponse{Taxes: []sdktypes.TaxAppliedResponse{{TaxRateID: &trID}}}
+	invoices[n-1] = sdktypes.InvoiceResponse{CouponApplications: []sdktypes.CouponApplicationResponse{{CouponID: &couponID}}}
+	fc.invoices.invoices = invoices
+
+	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("ONCE coupon on the oldest invoice (beyond newest 50) must pass; got %v", err)
+	}
 }
 
 func TestPersistentBillingInvariantsProbe_NoCouponAssociationSoftSkip(t *testing.T) {

@@ -19,9 +19,9 @@ import (
 //
 // The shared coupon is ONCE cadence, so only the first cycle invoice carries
 // it. Asserting the latest invoice would false-alarm after the coupon is
-// consumed; the coupon check therefore scans subscription invoices. Tax
-// still applies every cycle, so we assert it on the latest invoice — fetched
-// by ID because list responses omit the taxes expansion.
+// consumed; the coupon check therefore loads the oldest subscription invoice
+// (created_at asc, limit 1). Tax still applies every cycle, so we assert it
+// on the latest invoice — fetched by ID because list responses omit taxes.
 //
 // Soft-skips when the seed hasn't run, when persistent customers haven't
 // been provisioned, when no invoice exists yet, or when cust #1's sub was
@@ -53,12 +53,12 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	// broken GetTaxRates list forced create-only idempotency in the seed).
 	if seeds.SharedTaxRateID != "" || seeds.SharedTaxRateCode != "" {
 		cust0 := seeds.PersistentCustomerIDs[0]
-		invoices, err := p.subscriptionInvoices(ctx, cust0)
+		listed, err := p.subscriptionInvoice(ctx, cust0, types.InvoiceFilterOrderDesc)
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 		}
-		if len(invoices) > 0 {
-			inv, err := p.invoiceWithTaxes(ctx, invoices[0])
+		if listed != nil {
+			inv, err := p.invoiceWithTaxes(ctx, *listed)
 			if err != nil {
 				return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 			}
@@ -68,15 +68,16 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 		}
 	}
 
-	// Persistent cust #1 → coupon invariant. Scan, don't require latest:
-	// ONCE cadence consumes the coupon on the first cycle invoice.
+	// Persistent cust #1 → coupon invariant. ONCE cadence applies only on
+	// the first cycle invoice, so query the oldest subscription invoice
+	// (created_at asc, limit 1) rather than scanning newest-N.
 	if seeds.SharedCouponID != "" {
 		cust1 := seeds.PersistentCustomerIDs[1]
-		invoices, err := p.subscriptionInvoices(ctx, cust1)
+		inv, err := p.subscriptionInvoice(ctx, cust1, types.InvoiceFilterOrderAsc)
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust1", "external_customer_id": cust1}, "load invoice: %w", err)
 		}
-		if len(invoices) > 0 && !invoicesHaveCoupon(invoices, seeds.SharedCouponID) {
+		if inv != nil && !invoiceHasCoupon(inv, seeds.SharedCouponID) {
 			attached, err := p.couponAssociated(ctx, seeds)
 			if err != nil {
 				return e2eprobe.Errorf(map[string]string{"step": "list_coupon_associations", "external_customer_id": cust1, "coupon_id": seeds.SharedCouponID}, "list coupon associations: %w", err)
@@ -84,29 +85,29 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 			if !attached {
 				return nil
 			}
-			return e2eprobe.Errorf(map[string]string{"step": "assert_coupon_present_cust1", "external_customer_id": cust1, "coupon_id": seeds.SharedCouponID}, "no subscription invoice for cust #1 includes coupon %s", seeds.SharedCouponID)
+			return e2eprobe.Errorf(map[string]string{"step": "assert_coupon_present_cust1", "external_customer_id": cust1, "coupon_id": seeds.SharedCouponID}, "first subscription invoice for cust #1 does not include coupon %s", seeds.SharedCouponID)
 		}
 	}
 	return nil
 }
 
-const subscriptionInvoiceLookback = int64(50)
-
-func (p *persistentBillingInvariantsProbe) subscriptionInvoices(ctx context.Context, extID string) ([]types.InvoiceResponse, error) {
+func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder) (*types.InvoiceResponse, error) {
 	invType := types.InvoiceTypeSubscription
-	limit := subscriptionInvoiceLookback
+	limit := int64(1)
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
 		InvoiceType:        &invType,
 		Limit:              &limit,
+		Order:              &order,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if resp.ListInvoicesResponse == nil {
+	if resp.ListInvoicesResponse == nil || len(resp.ListInvoicesResponse.Items) == 0 {
 		return nil, nil
 	}
-	return resp.ListInvoicesResponse.Items, nil
+	inv := resp.ListInvoicesResponse.Items[0]
+	return &inv, nil
 }
 
 func (p *persistentBillingInvariantsProbe) invoiceWithTaxes(ctx context.Context, inv types.InvoiceResponse) (*types.InvoiceResponse, error) {
@@ -151,15 +152,6 @@ func invoiceHasTaxRate(inv *types.InvoiceResponse, taxRateID, taxRateCode string
 			return true
 		}
 		if taxRateCode != "" && tx.TaxRate != nil && tx.TaxRate.Code != nil && *tx.TaxRate.Code == taxRateCode {
-			return true
-		}
-	}
-	return false
-}
-
-func invoicesHaveCoupon(invoices []types.InvoiceResponse, couponID string) bool {
-	for i := range invoices {
-		if invoiceHasCoupon(&invoices[i], couponID) {
 			return true
 		}
 	}
