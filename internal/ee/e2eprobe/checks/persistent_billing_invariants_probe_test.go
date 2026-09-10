@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/logger"
 	itypes "github.com/flexprice/flexprice/internal/types"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -105,8 +106,18 @@ func TestPersistentBillingInvariantsProbe_MissingTaxFails(t *testing.T) {
 func TestPersistentBillingInvariantsProbe_MissingCouponFails(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
-	reg.LoadSeeds(pbiSeeds())
+	seeds := pbiSeeds()
+	seeds.PersistentSubIDs = []string{"sub_0", "sub_1"}
+	reg.LoadSeeds(seeds)
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	couponID := "coupon_1"
+	subID := "sub_1"
+	fc.couponAssociations.resp = &sdkdtos.ListCouponAssociationsResponse{
+		ListCouponAssociationsResponse: &sdktypes.ListCouponAssociationsResponse{
+			Items: []sdktypes.CouponAssociationResponse{{CouponID: &couponID, SubscriptionID: &subID}},
+		},
+	}
 
 	// Invoice has tax but NOT the coupon — expected step=assert_coupon_present_cust1.
 	invID := "inv_1"
@@ -116,8 +127,86 @@ func TestPersistentBillingInvariantsProbe_MissingCouponFails(t *testing.T) {
 	}
 
 	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
-	if err := p.Run(context.Background()); err == nil {
+	err := p.Run(context.Background())
+	if err == nil {
 		t.Fatalf("expected error when invoice missing coupon, got nil")
+	}
+	attrs := e2eprobe.AttributesFrom(err)
+	if attrs == nil || attrs["step"] != "assert_coupon_present_cust1" {
+		t.Fatalf("expected step=assert_coupon_present_cust1, got %v", attrs)
+	}
+}
+
+func TestPersistentBillingInvariantsProbe_OnceCadenceOlderInvoiceHasCoupon(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(pbiSeeds())
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	trID := "taxrate_1"
+	couponID := "coupon_1"
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
+		{Taxes: []sdktypes.TaxAppliedResponse{{TaxRateID: &trID}}},
+		{CouponApplications: []sdktypes.CouponApplicationResponse{{CouponID: &couponID}}},
+	}
+
+	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("ONCE coupon on an older invoice must pass; got %v", err)
+	}
+	if fc.invoices.lastFilter.Order == nil || *fc.invoices.lastFilter.Order != sdktypes.InvoiceFilterOrderAsc {
+		t.Fatalf("coupon query must use order=asc, got %v", fc.invoices.lastFilter.Order)
+	}
+	if fc.invoices.lastFilter.Limit == nil || *fc.invoices.lastFilter.Limit != 1 {
+		t.Fatalf("coupon query must use limit=1, got %v", fc.invoices.lastFilter.Limit)
+	}
+}
+
+func TestPersistentBillingInvariantsProbe_OnceCadenceOldestBeyondNewest50(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	seeds := pbiSeeds()
+	seeds.PersistentSubIDs = []string{"sub_0", "sub_1"}
+	reg.LoadSeeds(seeds)
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	couponID := "coupon_1"
+	subID := "sub_1"
+	fc.couponAssociations.resp = &sdkdtos.ListCouponAssociationsResponse{
+		ListCouponAssociationsResponse: &sdktypes.ListCouponAssociationsResponse{
+			Items: []sdktypes.CouponAssociationResponse{{CouponID: &couponID, SubscriptionID: &subID}},
+		},
+	}
+
+	trID := "taxrate_1"
+	const n = 51
+	invoices := make([]sdktypes.InvoiceResponse, n)
+	invoices[0] = sdktypes.InvoiceResponse{Taxes: []sdktypes.TaxAppliedResponse{{TaxRateID: &trID}}}
+	invoices[n-1] = sdktypes.InvoiceResponse{CouponApplications: []sdktypes.CouponApplicationResponse{{CouponID: &couponID}}}
+	fc.invoices.invoices = invoices
+
+	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("ONCE coupon on the oldest invoice (beyond newest 50) must pass; got %v", err)
+	}
+}
+
+func TestPersistentBillingInvariantsProbe_NoCouponAssociationSoftSkip(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	seeds := pbiSeeds()
+	seeds.PersistentSubIDs = []string{"sub_0", "sub_1"}
+	reg.LoadSeeds(seeds)
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	trID := "taxrate_1"
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
+		{Taxes: []sdktypes.TaxAppliedResponse{{TaxRateID: &trID}}},
+	}
+
+	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("no coupon association on the persistent sub must soft-skip; got %v", err)
 	}
 }
 
