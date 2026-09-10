@@ -108,6 +108,11 @@ func NewInvoiceService(params ServiceParams) InvoiceService {
 }
 
 func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+	if req.Checkout != nil {
+		if err := req.ValidateForCheckout(); err != nil {
+			return nil, err
+		}
+	}
 
 	// Validate coupons
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
@@ -144,6 +149,10 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 		return nil, err
 	}
 	req.PreparedTaxRates = preparedTaxRates
+
+	if req.Checkout != nil {
+		return s.createPayGatedOneOffInvoice(ctx, req)
+	}
 
 	// Delegate to CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
 	resp, err := s.CreateInvoice(ctx, req)
@@ -4173,24 +4182,6 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		"subscription_id", *invoice.SubscriptionID)
 
 	return nil
-}
-
-// generateProrationInvoiceDescription creates a description for proration invoices
-func (s *invoiceService) generateProrationInvoiceDescription(cancellationType, cancellationReason string, totalAmount decimal.Decimal) string {
-	if totalAmount.IsNegative() {
-		// Credit invoice
-		switch cancellationType {
-		case "immediate":
-			return fmt.Sprintf("Credit for unused time - immediate cancellation (%s)", cancellationReason)
-		case "specific_date":
-			return fmt.Sprintf("Credit for unused time - scheduled cancellation (%s)", cancellationReason)
-		default:
-			return fmt.Sprintf("Cancellation credit (%s)", cancellationReason)
-		}
-	} else {
-		// Charge invoice (rare for cancellations, but possible)
-		return fmt.Sprintf("Proration charges - cancellation (%s)", cancellationReason)
-	}
 }
 
 // CalculateUsageBreakdown provides flexible usage breakdown with custom grouping
