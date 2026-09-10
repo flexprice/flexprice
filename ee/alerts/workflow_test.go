@@ -1,16 +1,24 @@
-package workflows
+//go:build ee
+
+package alerts
 
 import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/stretchr/testify/require"
+	"go.temporal.io/sdk/testsuite"
 )
 
-// ponytail: single assert-based check for the workflow. The workflow body itself
-// just orchestrates a prep activity + two conditional evaluation activities — the
-// real logic lives in the service package and is covered there. What can only
-// break here is the input contract (validation) and the workflow-name constant
-// that the SDK dispatches by string.
+func TestUsageAlertWorkflow_ValidatesInput(t *testing.T) {
+	ts := &testsuite.WorkflowTestSuite{}
+	env := ts.NewTestWorkflowEnvironment()
+
+	env.ExecuteWorkflow(UsageAlertWorkflow, models.UsageAlertWorkflowInput{})
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.Error(t, env.GetWorkflowError())
+}
 
 func TestUsageAlertWorkflowInput_Validate(t *testing.T) {
 	cases := []struct {
@@ -36,12 +44,10 @@ func TestUsageAlertWorkflowInput_Validate(t *testing.T) {
 	}
 }
 
+// The workflow function name must equal the string constant registered under
+// (registration.go / ee/alerts register.go). Renaming the func without
+// updating the constant breaks Temporal task routing at runtime.
 func TestUsageAlertWorkflowConstantsInSync(t *testing.T) {
-	// The workflow function name must equal the string constant that
-	// registration.go registers under and that types.TemporalUsageAlertWorkflow
-	// dispatches by. If someone renames the func without updating the constant
-	// the Temporal SDK will fail to route tasks at runtime — this check catches
-	// that at compile+test time.
 	if WorkflowUsageAlert != "UsageAlertWorkflow" {
 		t.Fatalf("WorkflowUsageAlert changed unexpectedly: %s", WorkflowUsageAlert)
 	}

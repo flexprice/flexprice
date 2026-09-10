@@ -1,3 +1,5 @@
+//go:build ee
+
 package alerts
 
 import (

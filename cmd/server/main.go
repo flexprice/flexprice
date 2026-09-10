@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
-	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -313,6 +312,9 @@ func main() {
 		),
 	)
 	opts = append(opts, fx.StartTimeout(3*time.Minute))
+
+	// Enterprise features, if built with -tags ee. Empty in a community build.
+	opts = append(opts, eeOptions()...)
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -435,7 +437,6 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
-		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }
@@ -444,6 +445,7 @@ func provideRouter(
 	handlers api.Handlers,
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	params service.ServiceParams,
 	secretService service.SecretService,
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
@@ -456,6 +458,7 @@ func provideRouter(
 		handlers,
 		cfg,
 		logger,
+		params,
 		secretService,
 		envAccessService,
 		rbacService,

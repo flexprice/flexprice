@@ -25,6 +25,18 @@ jobs:
   build-and-publish:
     name: Build, scan, publish multi-arch image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: ee
+            build_tags: ee
+            image_suffix: ""        # ghcr.io/<owner>/flexprice
+            license: LicenseRef-Flexprice-Commercial
+          - variant: oss
+            build_tags: ""
+            image_suffix: "-oss"    # ghcr.io/<owner>/flexprice-oss
+            license: AGPL-3.0-only
     steps:
       # Audits runner egress; job holds GHCR_PUBLISH_TOKEN.
       - name: Harden runner
@@ -56,6 +68,13 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "semver=${TAG#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve image name
+        id: image
+        env:
+          BASE_NAME: ${{ env.IMAGE_NAME }}
+          SUFFIX: ${{ matrix.image_suffix }}
+        run: echo "name=${BASE_NAME}${SUFFIX}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
@@ -86,20 +105,49 @@ jobs:
           push: true
           provenance: true
           sbom: true
+          build-args: |
+            BUILD_TAGS=${{ matrix.build_tags }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.semver }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.tag.outputs.semver }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.tag.outputs.semver }}
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=${{ matrix.license }}
+
+      # Guard: the license label must match the build variant. Derived from
+      # build_tags (the source of truth for what compiled in), so a matrix edit
+      # that sets build_tags without the matching license fails here rather than
+      # publishing a mislabeled image. ee → commercial; anything else → AGPL.
+      - name: Verify license label matches build
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          BUILD_TAGS: ${{ matrix.build_tags }}
+        run: |
+          set -euo pipefail
+          if [ "$BUILD_TAGS" = "ee" ]; then
+            EXPECTED="LicenseRef-Flexprice-Commercial"
+          else
+            EXPECTED="AGPL-3.0-only"
+          fi
+          # Extract the whole labels map as JSON and read the key with jq, so a
+          # missing label yields empty (a clean mismatch) instead of a Go-template
+          # nil-index crash.
+          ACTUAL=$(docker buildx imagetools inspect "$IMAGE_REF" \
+            --format '{{ json .Image.Config.Labels }}' \
+            | jq -r '."org.opencontainers.image.licenses" // ""')
+          echo "build_tags='$BUILD_TAGS' expected='$EXPECTED' actual='$ACTUAL'"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::license label '$ACTUAL' does not match build variant (expected '$EXPECTED')"
+            exit 1
+          fi
 
       # Scan by digest, not the mutable tag, so Trivy scans the exact image cosign signs.
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
@@ -108,7 +156,7 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -118,7 +166,7 @@ jobs:
       # Signs the scanned digest, not a mutable tag.
       - name: Sign image (keyless)
         env:
-          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMG: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMG}@${DIGEST}"
 
@@ -126,7 +174,7 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest }}
-          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMG: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
         run: |
           {
             echo "## App Image Published"

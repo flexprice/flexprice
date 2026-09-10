@@ -1,3 +1,5 @@
+//go:build ee
+
 // Package saml implements SAML 2.0 single sign-on so a self-managed customer
 // can authenticate dashboard users against their own identity provider.
 //
