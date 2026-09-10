@@ -41,7 +41,7 @@ type InvoiceService interface {
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error)
-	FinalizeInvoice(ctx context.Context, id string) error
+	FinalizeInvoice(ctx context.Context, id string, req dto.FinalizeInvoiceRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
@@ -370,7 +370,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	if shouldFinalize {
-		if err := s.FinalizeInvoice(ctx, draft.ID); err != nil {
+		if err := s.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}); err != nil {
 			return nil, err
 		}
 	}
@@ -1009,7 +1009,7 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 	}, nil
 }
 
-func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string) error {
+func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto.FinalizeInvoiceRequest) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
@@ -3786,7 +3786,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 
 	// Finalize the invoice if requested
 	if finalize {
-		if err := s.FinalizeInvoice(ctx, id); err != nil {
+		if err := s.FinalizeInvoice(ctx, id, dto.FinalizeInvoiceRequest{}); err != nil {
 			s.Logger.Error(ctx, "failed to finalize invoice after recalculation",
 				"error", err,
 				"invoice_id", id)

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -154,7 +155,7 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_FinalizeNoDoubleTax(
 	taxAfterApply := updated.TotalTax
 	s.True(decimal.NewFromInt(10).Equal(taxAfterApply), "expected tax 10 after apply, got %s", taxAfterApply)
 
-	err = s.service.FinalizeInvoice(ctx, inv.ID)
+	err = s.service.FinalizeInvoice(ctx, inv.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 
 	afterFinalize, err := s.invoiceRepo.Get(ctx, inv.ID)

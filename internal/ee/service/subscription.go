@@ -577,7 +577,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			if !skipped {
 				invSvc := NewInvoiceService(s.ServiceParams)
 
-				if err := invSvc.FinalizeInvoice(ctx, invResp.ID); err != nil {
+				if err := invSvc.FinalizeInvoice(ctx, invResp.ID, dto.FinalizeInvoiceRequest{}); err != nil {
 					s.archiveDraftCheckoutSubscription(ctx, response.ID)
 					return nil, err
 				}

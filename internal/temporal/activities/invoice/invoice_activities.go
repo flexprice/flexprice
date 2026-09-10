@@ -3,6 +3,7 @@ package invoice
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -152,7 +153,7 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true, Skipped: true}, nil
 	}
 
-	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
+	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID, dto.FinalizeInvoiceRequest{}); err != nil {
 		// Business-condition failures (insufficient balance, invoice not in draft) are
 		// marked ErrInvalidOperation and won't clear by the time Temporal's activity
 		// RetryPolicy expires (currently 3 attempts, up to 5-min backoff). Wrap as

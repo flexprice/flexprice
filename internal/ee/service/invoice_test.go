@@ -623,7 +623,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := s.service.FinalizeInvoice(s.GetContext(), tt.id)
+			err := s.service.FinalizeInvoice(s.GetContext(), tt.id, dto.FinalizeInvoiceRequest{})
 			if tt.wantErr {
 				s.Error(err)
 				return
@@ -895,7 +895,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 		return ev.EventName
 	}), types.WebhookEventInvoiceUpdateFinalized)
 
-	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID)
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 
 	var finalized *types.WebhookEvent
@@ -934,7 +934,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 	}
 	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftSubscriptionInvoice))
 
-	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID)
+	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 	var finalized *types.WebhookEvent
 	for _, ev := range rec.events {
@@ -2447,7 +2447,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_FreezesRateAndProjectsLedger()
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2472,7 +2472,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_LineItemsAreFiatOverCustomLedg
 
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2504,7 +2504,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_ReprojectsLineItemsAtFrozenRat
 	draft.InvoiceType = types.InvoiceTypeSubscription
 	draft.BillingPeriod = lo.ToPtr(string(types.BILLING_PERIOD_MONTHLY))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2528,7 +2528,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_MissingConversionFactorFails()
 	draft := s.customCurrencyDraft("xyz", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
 
-	err := s.service.FinalizeInvoice(s.GetContext(), draft.ID)
+	err := s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{})
 	s.Error(err)
 	s.Contains(err.Error(), "conversion factor")
 }
@@ -2539,7 +2539,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_FrozenRateSurvivesConfigEdit()
 
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	cfg := types.CustomCurrencyConfig{
 		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
@@ -2577,7 +2577,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_TinyCustomAmountRoundsToZeroFi
 	draft.ProjectCustomCurrency()
 	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2603,7 +2603,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_NoCustomCurrencyStaysNil() {
 	}
 	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
