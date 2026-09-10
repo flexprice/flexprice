@@ -62,6 +62,13 @@ func TestFormatPeriodDescription(t *testing.T) {
 			end:      nil,
 			want:     "BBNow",
 		},
+		{
+			name:     "zero-width one-time period stays on the billing date",
+			fallback: "Mandate Registration",
+			start:    tPtr("2026-09-17T00:00:00Z"),
+			end:      tPtr("2026-09-17T00:00:00Z"),
+			want:     "Mandate Registration\n(2026-09-17 - 2026-09-17)",
+		},
 	}
 
 	for _, tt := range tests {
@@ -73,8 +80,10 @@ func TestFormatPeriodDescription(t *testing.T) {
 
 // period_end is exclusive in FlexPrice; the invoice must show the inclusive last day.
 func TestInclusiveEnd(t *testing.T) {
-	assert.Equal(t, "2026-04-30", inclusiveEnd(tPtr("2026-05-01T00:00:00Z")).Format(zohoAPIDateFormat))
-	assert.Equal(t, "2026-12-31", inclusiveEnd(tPtr("2027-01-01T00:00:00Z")).Format(zohoAPIDateFormat))
+	assert.Equal(t, "2026-04-30", inclusiveEnd(tPtr("2026-04-01T00:00:00Z"), tPtr("2026-05-01T00:00:00Z")).Format(zohoAPIDateFormat))
+	assert.Equal(t, "2026-12-31", inclusiveEnd(tPtr("2026-12-01T00:00:00Z"), tPtr("2027-01-01T00:00:00Z")).Format(zohoAPIDateFormat))
+	assert.Equal(t, "2026-09-17", inclusiveEnd(tPtr("2026-09-17T00:00:00Z"), tPtr("2026-09-17T00:00:00Z")).Format(zohoAPIDateFormat),
+		"one-time PeriodStart == PeriodEnd must not walk to the previous day")
 }
 
 func TestServicePeriodCustomFields(t *testing.T) {

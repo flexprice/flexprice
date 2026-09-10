@@ -509,16 +509,21 @@ func formatPeriodDescription(fallback string, start, end *time.Time) string {
 	if start == nil || end == nil {
 		return fallback
 	}
+	last := inclusiveEnd(start, end)
 	if fallback != "" {
-		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), inclusiveEnd(end).Format("2006-01-02"))
+		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), last.Format("2006-01-02"))
 	}
-	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), inclusiveEnd(end).Format("2006-01-02"))
+	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), last.Format("2006-01-02"))
 }
 
 // inclusiveEnd converts FlexPrice's exclusive period end into the inclusive last
-// day a tax invoice displays: a period ending 2026-05-01T00:00 reads as 30/04/2026.
-func inclusiveEnd(end *time.Time) time.Time {
-	return end.Add(-time.Nanosecond)
+// day a tax invoice displays. A zero-width period (one-time start == end) stays on start.
+func inclusiveEnd(start, end *time.Time) time.Time {
+	last := end.Add(-time.Nanosecond)
+	if start != nil && last.Before(*start) {
+		return *start
+	}
+	return last
 }
 
 func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *time.Time) []CustomField {
@@ -531,7 +536,7 @@ func servicePeriodCustomFields(settings *types.InvoiceSyncSettings, start, end *
 
 	return []CustomField{
 		NewCustomField(settings.ServicePeriodCustomFields.StartFieldID, start.Format(zohoAPIDateFormat)),
-		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(end).Format(zohoAPIDateFormat)),
+		NewCustomField(settings.ServicePeriodCustomFields.EndFieldID, inclusiveEnd(start, end).Format(zohoAPIDateFormat)),
 	}
 }
 
