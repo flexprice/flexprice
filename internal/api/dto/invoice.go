@@ -29,6 +29,21 @@ type InvoiceLineItemCoupon struct {
 	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
+// InvoiceStateChangeSource identifies the caller of a guarded invoice state change.
+// The checkout session that owns an invoice must be able to finalize or void it while the
+// session is still pending; every other caller is held off until the session is terminal.
+//
+// json:"-" — these requests are bound directly from client JSON, and the caller identity
+// must never be settable over the wire; it is only ever set server-side.
+type InvoiceStateChangeSource struct {
+	CheckoutSessionID string `json:"-"`
+}
+
+// FinalizeInvoiceRequest carries caller identity for the finalization guard.
+type FinalizeInvoiceRequest struct {
+	InvoiceStateChangeSource
+}
+
 // CreateInvoiceRequest represents the request payload for creating a new invoice
 type CreateInvoiceRequest struct {
 	// invoice_number is an optional human-readable identifier for the invoice
@@ -127,6 +142,10 @@ type CreateInvoiceRequest struct {
 	// Kafka + Temporal vendor-sync pipeline. Only honored by CreateOneOffInvoice.
 	// Best-effort: sync failures do not fail invoice creation.
 	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
+
+	// checkout, when present, gates this invoice behind a hosted payment session: the invoice
+	// is created DRAFT and finalizes only when the payment webhook lands. One-off invoices only.
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
@@ -392,6 +411,78 @@ type ProrationLineItem struct {
 
 	// is_credit indicates if this is a credit (true) or charge (false)
 	IsCredit bool `json:"is_credit"`
+}
+
+// ValidateForCheckout validates the payment-gated variant of POST /invoices. Called
+// explicitly from CreateOneOffInvoice: Validate() is not wired into that path.
+func (r *CreateInvoiceRequest) ValidateForCheckout() error {
+	if err := r.Checkout.Validate(); err != nil {
+		return err
+	}
+
+	if r.InvoiceType == "" {
+		r.InvoiceType = types.InvoiceTypeOneOff
+	}
+	if r.InvoiceType != types.InvoiceTypeOneOff {
+		return ierr.NewError("invoice_type must be ONE_OFF when checkout is provided").
+			WithHint("Payment-gated checkout is only supported for one-off invoices").
+			WithReportableDetails(map[string]any{"invoice_type": r.InvoiceType}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.InvoiceStatus != nil {
+		return ierr.NewError("invoice_status is not supported when checkout is provided").
+			WithHint("A gated invoice is created as DRAFT and finalized on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.PaymentStatus != nil {
+		return ierr.NewError("payment_status is not supported when checkout is provided").
+			WithHint("Payment status is set by the checkout session on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.AmountPaid != nil {
+		return ierr.NewError("amount_paid is not supported when checkout is provided").
+			WithHint("Amount paid is recorded by the checkout session on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.TotalPrepaidApplied != nil {
+		return ierr.NewError("total_prepaid_applied is not supported when checkout is provided").
+			WithHint("Prepaid credits are applied while computing the gated draft").
+			Mark(ierr.ErrValidation)
+	}
+	if r.SubscriptionID != nil {
+		return ierr.NewError("subscription_id is not supported when checkout is provided").
+			WithHint("Payment-gated checkout is only supported for one-off invoices").
+			Mark(ierr.ErrValidation)
+	}
+	if r.ForceSyncInvoice {
+		return ierr.NewError("force_sync_invoice is not supported when checkout is provided").
+			WithHint("A gated invoice syncs to vendors after it is finalized on payment").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.LineItems) == 0 {
+		return ierr.NewError("line_items is required when checkout is provided").
+			WithHint("Provide at least one line item to charge for").
+			Mark(ierr.ErrValidation)
+	}
+	if !r.AmountDue.IsPositive() {
+		return ierr.NewError("amount_due must be greater than zero when checkout is provided").
+			WithHint("Checkout requires a non-zero invoice").
+			WithReportableDetails(map[string]any{"amount_due": r.AmountDue.String()}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// A past due_date makes GetCustomerInvoiceSummary fire invoice.payment.overdue against
+	// a draft the customer has not had a chance to pay yet.
+	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+		return ierr.NewError("due_date must be in the future when checkout is provided").
+			WithHint("A gated invoice cannot be overdue before its payment link expires").
+			WithReportableDetails(map[string]any{"due_date": r.DueDate}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 func (r *CreateInvoiceRequest) Validate() error {
@@ -1119,6 +1210,9 @@ type InvoiceResponse struct {
 
 	// coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)
 	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
+
+	// checkout_session is the payment session gating this invoice, when it was created with checkout
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
@@ -1211,6 +1305,12 @@ func (r *InvoiceResponse) WithLineItems(lineItems []*InvoiceLineItemResponse) *I
 // WithSubscription adds subscription information to the invoice response
 func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceResponse {
 	r.Subscription = sub
+	return r
+}
+
+// WithCheckoutSession adds the gating checkout session to the invoice response
+func (r *InvoiceResponse) WithCheckoutSession(session *CheckoutSessionResponse) *InvoiceResponse {
+	r.CheckoutSession = session
 	return r
 }
 
