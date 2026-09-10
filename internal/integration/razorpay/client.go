@@ -242,6 +242,15 @@ func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, err
 	return conn, nil
 }
 
+func applyCustomerCreateIdempotency(customerData map[string]interface{}) map[string]interface{} {
+	if customerData == nil {
+		customerData = map[string]interface{}{}
+	}
+	
+	customerData["fail_existing"] = "0"
+	return customerData
+}
+
 // CreateCustomer creates a customer in Razorpay
 func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]interface{}) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
@@ -252,10 +261,7 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 			Mark(ierr.ErrInternal)
 	}
 
-	if customerData == nil {
-		customerData = map[string]interface{}{}
-	}
-	customerData["fail_existing"] = "0"
+	customerData = applyCustomerCreateIdempotency(customerData)
 
 	razorpayCustomer, err := razorpayClient.Customer.Create(customerData, nil)
 	if err != nil {
