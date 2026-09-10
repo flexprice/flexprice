@@ -3218,6 +3218,106 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 		}
 	})
 
+	s.Run("TestCancelSubscriptionWithFutureStartAddon", func() {
+		ctx := s.GetContext()
+		subService := s.service.(*subscriptionService)
+
+		subWithAddon := &subscription.Subscription{
+			ID:                 "sub_cancel_future_start_addon",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, subWithAddon, subWithAddon.LineItems))
+
+		addonID := "addon_cancel_future_start"
+		a := &addon.Addon{
+			ID:        addonID,
+			LookupKey: addonID,
+			Name:      "Future-start addon",
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(subService.AddonRepo.Create(ctx, a))
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+			ID:                 "price_addon_cancel_future_start",
+			Amount:             decimal.Zero,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:           addonID,
+			Type:               types.PRICE_TYPE_USAGE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			InvoiceCadence:     types.InvoiceCadenceArrear,
+			MeterID:            s.testData.meters.apiCalls.ID,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}))
+
+		attachAt := time.Now().UTC()
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: subWithAddon.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &attachAt,
+			},
+		})
+		s.NoError(err)
+
+		// Association is already active; line item start is still in the future
+		// (catalog price start / trial end).
+		liFilterPre := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilterPre.SubscriptionIDs = []string{subWithAddon.ID}
+		liFilterPre.EntityIDs = []string{addonID}
+		liFilterPre.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+		preItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilterPre)
+		s.NoError(err)
+		s.NotEmpty(preItems)
+		futureStart := attachAt.Add(7 * 24 * time.Hour)
+		for _, li := range preItems {
+			li.StartDate = futureStart
+			s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
+		}
+
+		resp, err := s.service.CancelSubscription(ctx, subWithAddon.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_cancel_future_start_addon",
+		})
+		s.Require().NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, resp.Status)
+
+		aaFilter := types.NewNoLimitAddonAssociationFilter()
+		aaFilter.EntityIDs = []string{subWithAddon.ID}
+		aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+		associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+		s.NoError(err)
+		s.NotEmpty(associations)
+		for _, aa := range associations {
+			s.Equal(types.AddonStatusCancelled, aa.AddonStatus)
+			s.NotNil(aa.EndDate)
+		}
+
+		liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilter.SubscriptionIDs = []string{subWithAddon.ID}
+		liFilter.EntityIDs = []string{addonID}
+		liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+		lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+		s.NoError(err)
+		s.NotEmpty(lineItems)
+		for _, li := range lineItems {
+			s.False(li.EndDate.IsZero(), "unstarted addon line item must still be closed")
+			s.False(li.EndDate.Before(li.StartDate), "end_date must not precede start_date")
+		}
+	})
+
 	s.Run("TestCancelAtPeriodEnd", func() {
 		// Create an active subscription for period end cancel test
 		periodEndSub := &subscription.Subscription{
