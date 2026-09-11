@@ -84,7 +84,14 @@ func (h *LicensingHandler) IssueToken(c *gin.Context) {
 		customer = tr.Name
 	}
 
-	token, err := h.signer.Mint(tenantID, customer, isAdmin, sessionExp)
+	// issued-by uuid identifies the minting user. For staff (admin) we send
+	// EMPTY so the UI renders "Flexprice" instead of a staff user's id.
+	issuedBy := types.GetUserID(ctx)
+	if isAdmin {
+		issuedBy = ""
+	}
+
+	token, err := h.signer.Mint(tenantID, issuedBy, customer, isAdmin, sessionExp)
 	if err != nil {
 		c.Error(err)
 		return
