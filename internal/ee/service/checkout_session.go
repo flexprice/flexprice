@@ -236,10 +236,10 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 	return s.cleanupCheckoutSession(ctx, session, reason)
 }
 
-// voidCheckoutInvoiceIfHoldingFunds voids a gated invoice holding customer value before it is
+// voidCheckoutInvoiceIfPartiallyPaid voids a gated invoice holding customer value before it is
 // archived: compute applies prepaid credits ahead of payment and archiving never returns
 // them. Best-effort — cleanup archives the invoice either way.
-func (s *checkoutSessionService) voidCheckoutInvoiceIfHoldingFunds(ctx context.Context, session *domainCheckout.CheckoutSession, invoiceID string) {
+func (s *checkoutSessionService) voidCheckoutInvoiceIfPartiallyPaid(ctx context.Context, session *domainCheckout.CheckoutSession, invoiceID string) {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to load checkout invoice for void", "error", err, "invoice_id", invoiceID)
@@ -343,8 +343,9 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 			s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", *session.CheckoutPaymentID, "error", err)
 		}
 	}
+
 	if session.CheckoutInvoiceID != nil && *session.CheckoutInvoiceID != "" {
-		s.voidCheckoutInvoiceIfHoldingFunds(ctx, session, *session.CheckoutInvoiceID)
+		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, *session.CheckoutInvoiceID)
 		if err := s.InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID); err != nil {
 			s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", *session.CheckoutInvoiceID, "error", err)
 		}
@@ -616,7 +617,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
 		// Compute already debited prepaid credits; archiving alone would not return them.
-		s.voidCheckoutInvoiceIfHoldingFunds(ctx, session, draftInvoiceID)
+		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
 		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
 				"invoice_id", draftInvoiceID,

@@ -50,9 +50,8 @@ func NewCheckoutSessionSource(sessionID string) InvoiceStateChangeSource {
 	}
 }
 
-// CheckoutSessionID is empty unless the caller is the checkout session itself.
-func (i *InvoiceStateChangeSource) CheckoutSessionID() string {
-	if i == nil || i.sourceType != InvoiceStateChangeSourceCheckoutSession {
+func (i *InvoiceStateChangeSource) SourceID() string {
+	if i == nil {
 		return ""
 	}
 
@@ -62,6 +61,14 @@ func (i *InvoiceStateChangeSource) CheckoutSessionID() string {
 // FinalizeInvoiceRequest carries caller identity for the finalization guard.
 type FinalizeInvoiceRequest struct {
 	InvoiceStateChangeSource
+}
+
+func (r *FinalizeInvoiceRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
 }
 
 // CreateInvoiceRequest represents the request payload for creating a new invoice
@@ -366,6 +373,14 @@ type InvoiceComputeRequest struct {
 	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
 	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+}
+
+func (r *InvoiceComputeRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
 }
 
 // ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
@@ -1603,6 +1618,14 @@ type InvoiceVoidRequest struct {
 	Metadata types.Metadata `json:"metadata,omitempty"`
 
 	InvoiceStateChangeSource
+}
+
+func (r *InvoiceVoidRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
 }
 
 func (r *InvoiceVoidRequest) Validate() error {

@@ -75,6 +75,21 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 	return &session, nil
 }
 
+func (s *InMemoryCheckoutSessionStore) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
+	sessions, err := s.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CheckoutInvoiceIDs: []string{invoiceID},
+		CheckoutStatuses:   types.ActiveCheckoutStatuses(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+	return sessions[0], nil
+}
+
 func (s *InMemoryCheckoutSessionStore) Update(ctx context.Context, session *domainCheckout.CheckoutSession) error {
 	return s.InMemoryStore.Update(ctx, session.ID, session)
 }

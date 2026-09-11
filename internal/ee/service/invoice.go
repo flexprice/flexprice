@@ -449,16 +449,11 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return nil, false, err
 	}
 
-	// req is nil on the subscription path, which never owns a session.
-	var callerSessionID string
-	if req != nil {
-		callerSessionID = req.CheckoutSessionID()
-	}
-	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, callerSessionID)
+	gatedSession, ownedByCaller, err := s.isInvoiceGatedOnCheckout(ctx, inv, req.SourceID())
 	if err != nil {
 		return nil, false, err
 	}
-	if gating != nil && !ownedByCaller {
+	if gatedSession != nil && !ownedByCaller {
 		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
 	}
 
@@ -548,6 +543,14 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		inv, lockErr = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if lockErr != nil {
 			return lockErr
+		}
+
+		gatedSession, sessionOwned, lockErr := s.isInvoiceGatedOnCheckout(txCtx, inv, req.SourceID())
+		if lockErr != nil {
+			return lockErr
+		}
+		if gatedSession != nil && !sessionOwned {
+			return errInvoiceCheckoutGated(invoiceID, "recompute")
 		}
 
 		if inv.IsManuallyEdited {
@@ -1029,22 +1032,22 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, req.CheckoutSessionID())
+	gatedSession, ownedByCaller, err := s.isInvoiceGatedOnCheckout(ctx, inv, req.SourceID())
 	if err != nil {
 		return err
 	}
-	if gating != nil && !ownedByCaller {
+	if gatedSession != nil && !ownedByCaller {
 		return errInvoiceCheckoutGated(id, "finalize")
 	}
 
-	if err := s.performFinalizeInvoiceActions(ctx, inv); err != nil {
+	if err := s.performFinalizeInvoiceActions(ctx, inv, req.SourceID()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv *invoice.Invoice) error {
+func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv *invoice.Invoice, callerSessionID string) error {
 	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
 		// No-op: skipped invoices are not finalized
 		return nil
@@ -1059,6 +1062,15 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err != nil {
 			return err
 		}
+
+		gatedSession, sessionOwned, err := s.isInvoiceGatedOnCheckout(txCtx, lockedInv, callerSessionID)
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil && !sessionOwned {
+			return errInvoiceCheckoutGated(inv.ID, "finalize")
+		}
+
 		// Re-check status after acquiring lock
 		if lockedInv.InvoiceStatus != types.InvoiceStatusDraft {
 			return ierr.NewError("invoice is not in draft status").WithHint("invoice was finalized concurrently").Mark(ierr.ErrValidation)
@@ -1225,11 +1237,11 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 
 	// A draft under an open checkout is the customer's to pay, not the cron's to finalize.
 	// Completion finalizes it; expiry voids it.
-	gating, _, err := s.checkoutGate(ctx, inv, "")
+	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, inv, "")
 	if err != nil {
 		return false, err
 	}
-	if gating != nil {
+	if gatedSession != nil {
 		return false, nil
 	}
 
@@ -1388,30 +1400,24 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		return nil, err
 	}
 
-	inv, err := s.InvoiceRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, req.CheckoutSessionID())
-	if err != nil {
-		return nil, err
-	}
-	if gating != nil && !ownedByCaller {
-		return nil, errInvoiceCheckoutGated(id, "void")
-	}
-
-	if err := validateInvoiceVoidable(inv); err != nil {
-		return nil, err
-	}
-
-	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+	var inv *invoice.Invoice
+	err := s.DB.WithTx(ctx, func(tx context.Context) error {
 		// Re-read under a row lock so a concurrent refund cannot make RefundedAmount
 		// stale between the pre-check and the refund calculation below.
+		var err error
 		inv, err = s.InvoiceRepo.GetForUpdate(tx, id)
 		if err != nil {
 			return err
 		}
+
+		gatedSession, ownedByCaller, err := s.isInvoiceGatedOnCheckout(tx, inv, req.SourceID())
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil && !ownedByCaller {
+			return errInvoiceCheckoutGated(id, "void")
+		}
+
 		if err := validateInvoiceVoidable(inv); err != nil {
 			return err
 		}
@@ -1510,7 +1516,7 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 	}
 
 	// try to finalize the invoice
-	if err := s.performFinalizeInvoiceActions(ctx, inv); err != nil {
+	if err := s.performFinalizeInvoiceActions(ctx, inv, ""); err != nil {
 		return err
 	}
 
@@ -1917,89 +1923,96 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv 
 }
 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
-	inv, err := s.InvoiceRepo.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	gating, _, err := s.checkoutGate(ctx, inv, "")
-	if err != nil {
-		return err
-	}
-	if gating != nil {
-		return errInvoiceCheckoutGated(id, "update the payment status of")
-	}
-
-	// Validate the invoice status
-	allowedInvoiceStatuses := []types.InvoiceStatus{
-		types.InvoiceStatusDraft,
-		types.InvoiceStatusFinalized,
-	}
-	if !lo.Contains(allowedInvoiceStatuses, inv.InvoiceStatus) {
-		return ierr.NewError("invoice status is not allowed").
-			WithHintf("invoice status - %s is not allowed", inv.InvoiceStatus).
-			WithReportableDetails(map[string]any{
-				"allowed_statuses": allowedInvoiceStatuses,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate that there shouldnt be any payments for this invoice (for manual updates)
-	paymentService := NewPaymentService(s.ServiceParams)
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationID = lo.ToPtr(id)
-	filter.Status = lo.ToPtr(types.StatusPublished)
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.Limit = lo.ToPtr(1)
-	payments, err := paymentService.ListPayments(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	if len(payments.Items) > 0 {
-		return ierr.NewError("invoice has active payment records").
-			WithHint("Manual payment status updates are disabled for payment-based invoices.").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Validate the payment status transition
-	if err := s.validatePaymentStatusTransition(inv.PaymentStatus, status); err != nil {
-		return err
-	}
-
-	// Validate the request amount
-	if amount != nil && amount.IsNegative() {
-		return ierr.NewError("amount must be non-negative").
-			WithHint("amount must be non-negative").
-			Mark(ierr.ErrValidation)
-	}
-
-	now := time.Now().UTC()
-	inv.PaymentStatus = status
-
-	switch status {
-	case types.PaymentStatusPending:
-		if amount != nil {
-			inv.AmountPaid = *amount
-			inv.AmountRemaining = inv.AmountDue.Sub(*amount)
+	var inv *invoice.Invoice
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, id)
+		if err != nil {
+			return err
 		}
-	case types.PaymentStatusSucceeded:
-		inv.AmountPaid = inv.AmountDue
-		inv.AmountRemaining = decimal.Zero
-		inv.PaidAt = &now
-	case types.PaymentStatusFailed:
-		inv.AmountPaid = decimal.Zero
-		inv.AmountRemaining = inv.AmountDue
-		inv.PaidAt = nil
-	}
 
-	// Validate the final state
-	if err := inv.Validate(); err != nil {
-		return err
-	}
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, inv, "")
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil {
+			return errInvoiceCheckoutGated(id, "update the payment status of")
+		}
 
-	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+		// Validate the invoice status
+		allowedInvoiceStatuses := []types.InvoiceStatus{
+			types.InvoiceStatusDraft,
+			types.InvoiceStatusFinalized,
+		}
+		if !lo.Contains(allowedInvoiceStatuses, inv.InvoiceStatus) {
+			return ierr.NewError("invoice status is not allowed").
+				WithHintf("invoice status - %s is not allowed", inv.InvoiceStatus).
+				WithReportableDetails(map[string]any{
+					"allowed_statuses": allowedInvoiceStatuses,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate that there shouldnt be any payments for this invoice (for manual updates)
+		paymentService := NewPaymentService(s.ServiceParams)
+		filter := types.NewNoLimitPaymentFilter()
+		filter.DestinationID = lo.ToPtr(id)
+		filter.Status = lo.ToPtr(types.StatusPublished)
+		filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusSucceeded))
+		filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+		filter.Limit = lo.ToPtr(1)
+		payments, err := paymentService.ListPayments(ctx, filter)
+		if err != nil {
+			return err
+		}
+
+		if len(payments.Items) > 0 {
+			return ierr.NewError("invoice has active payment records").
+				WithHint("Manual payment status updates are disabled for payment-based invoices.").
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Validate the payment status transition
+		if err := s.validatePaymentStatusTransition(inv.PaymentStatus, status); err != nil {
+			return err
+		}
+
+		// Validate the request amount
+		if amount != nil && amount.IsNegative() {
+			return ierr.NewError("amount must be non-negative").
+				WithHint("amount must be non-negative").
+				Mark(ierr.ErrValidation)
+		}
+
+		now := time.Now().UTC()
+		inv.PaymentStatus = status
+
+		switch status {
+		case types.PaymentStatusPending:
+			if amount != nil {
+				inv.AmountPaid = *amount
+				inv.AmountRemaining = inv.AmountDue.Sub(*amount)
+			}
+		case types.PaymentStatusSucceeded:
+			inv.AmountPaid = inv.AmountDue
+			inv.AmountRemaining = decimal.Zero
+			inv.PaidAt = &now
+		case types.PaymentStatusFailed:
+			inv.AmountPaid = decimal.Zero
+			inv.AmountRemaining = inv.AmountDue
+			inv.PaidAt = nil
+		}
+
+		// Validate the final state
+		if err := inv.Validate(); err != nil {
+			return err
+		}
+
+		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 
@@ -4076,11 +4089,11 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		if err != nil {
 			return nil, err
 		}
-		gating, _, err := s.checkoutGate(ctx, current, "")
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, current, "")
 		if err != nil {
 			return nil, err
 		}
-		if gating != nil {
+		if gatedSession != nil {
 			return nil, errInvoiceCheckoutGated(id, "re-apply discounts on")
 		}
 	}
@@ -4097,6 +4110,15 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		}
 		if err := rejectVoidedInvoiceEdit(locked); err != nil {
 			return err
+		}
+		if req.ApplyDiscount {
+			gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, locked, "")
+			if err != nil {
+				return err
+			}
+			if gatedSession != nil {
+				return errInvoiceCheckoutGated(id, "re-apply discounts on")
+			}
 		}
 		if locked.InvoiceStatus == types.InvoiceStatusFinalized && req.ApplyDiscount {
 			draft, err := s.voidAndRecreateDraftForEdit(txCtx, locked)

@@ -354,7 +354,7 @@ func (s *InvoiceServiceSuite) TestGatedInvoice_IsFinalizationDueSkipsWhileSessio
 	// Completion finalized it, so it is no longer a draft — the guard no longer applies.
 	domainInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 	s.Require().NoError(err)
-	gating, _, err := s.service.(*invoiceService).checkoutGate(ctx, domainInv, "")
+	gating, _, err := s.service.(*invoiceService).isInvoiceGatedOnCheckout(ctx, domainInv, "")
 	s.Require().NoError(err)
 	s.Nil(gating, "a completed session must stop gating")
 }
