@@ -9,4 +9,4 @@
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_type varchar NULL;
 
 -- migrate:down
-ALTER TABLE invoices DROP COLUMN source_type;
+ALTER TABLE invoices DROP COLUMN IF EXISTS source_type;
