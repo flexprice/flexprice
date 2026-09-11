@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
+	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -94,6 +95,9 @@ func main() {
 
 			// RBAC
 			rbac.NewRBACService,
+
+			// Licensing (Heimdall token mint + JWKS signer)
+			licensing.NewSigner,
 
 			// Monitoring
 			tracing.NewService,
@@ -382,6 +386,7 @@ func provideHandlers(
 	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
+	licensingSigner *licensing.Signer,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
@@ -437,6 +442,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
+		Licensing:                v1.NewLicensingHandler(licensingSigner, logger),
 	}
 }
 
