@@ -335,6 +335,10 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 
 // This wrapper delegates to the draft-first flow. Invoice number is assigned during FinalizeInvoice.
 func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Delegate to draft-first flow
 	draftReq := req.ToDraftRequest()
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)

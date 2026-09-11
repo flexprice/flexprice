@@ -398,6 +398,7 @@ func buildLineItemProrationChargeInvoiceRequest(
 		BillingPeriod:  &billingPeriod,
 		LineItems:      summary.ChargeLineItems,
 		IdempotencyKey: &idempotencyKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Subscription update"),
 	}
 }
 

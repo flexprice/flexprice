@@ -737,16 +737,8 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 		return err
 	}
 
-	// Allow negative amounts for credit invoices (credits to customers)
-	if r.Amount.IsNegative() && invoiceType != types.InvoiceTypeCredit {
-		return ierr.NewError("amount must be non-negative for non-credit invoices").
-			WithHint("Amount cannot be negative for non-credit invoices").
-			WithReportableDetails(map[string]any{
-				"amount":       r.Amount.String(),
-				"invoice_type": invoiceType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
+	// Amount may be negative on any invoice type: a credit line offsets charges on the same
+	// document (plan change, multi-addon). Non-negativity is enforced on the invoice aggregates.
 
 	if r.Quantity.IsNegative() {
 		return ierr.NewError("quantity must be non-negative").
