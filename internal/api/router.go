@@ -139,8 +139,8 @@ func NewRouter(
 	router.GET("/health", handlers.Health.Health)
 	router.POST("/health", handlers.Health.Health)
 
-	// Heimdall licensing JWKS. Root-level (not /v1) and outside any auth
-	// group: Heimdall fetches this unauthenticated, same as any other
+	// licensing service JWKS. Root-level (not /v1) and outside any auth
+	// group: the licensing service fetches this unauthenticated, same as any other
 	// well-known key discovery endpoint.
 	router.GET("/.well-known/licensing-jwks.json", handlers.Licensing.JWKS)
 
@@ -192,7 +192,7 @@ func NewRouter(
 			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}
 
-		// Heimdall licensing token mint — short-lived, capped at the caller's
+		// licensing token mint — short-lived, capped at the caller's
 		// own session expiry.
 		v1Private.GET("/licensing-token", handlers.Licensing.IssueToken)
 

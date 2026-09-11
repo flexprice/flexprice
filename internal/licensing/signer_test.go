@@ -48,7 +48,7 @@ func TestMint_ClaimsAndExpCapping(t *testing.T) {
 
 	claims := parsed.Claims.(*TokenClaims)
 	require.Equal(t, "flexprice-backend", claims.Issuer)
-	require.Equal(t, jwt.ClaimStrings{"heimdall-mint"}, claims.Audience)
+	require.Equal(t, jwt.ClaimStrings{"licensing-mint"}, claims.Audience)
 	require.Equal(t, "tenant_123", claims.TenantID)
 	require.Equal(t, "us-east", claims.Region)
 	require.True(t, claims.IsAdmin)

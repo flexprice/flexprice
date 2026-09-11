@@ -1,5 +1,5 @@
-// Package licensing mints short-lived Heimdall licensing tokens and publishes
-// the backend's public key as a JWKS so Heimdall can verify them without ever
+// Package licensing mints short-lived licensing tokens and publishes
+// the backend's public key as a JWKS so the licensing service can verify them without ever
 // holding the flexprice user-auth secret.
 package licensing
 
@@ -14,10 +14,10 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// TokenClaims are the claims minted into a Heimdall licensing token.
+// TokenClaims are the claims minted into a licensing token.
 type TokenClaims struct {
 	TenantID string `json:"tenant_id"`
-	UserID   string `json:"user_id"` // the minting user (Heimdall stores the uuid, no PII)
+	UserID   string `json:"user_id"` // the minting user (the licensing service stores the uuid, no PII)
 	Region   string `json:"region"`
 	IsAdmin  bool   `json:"is_admin"`
 	Customer string `json:"customer,omitempty"` // tenant/org display name
@@ -65,7 +65,7 @@ func NewSigner(cfg *config.Configuration) (*Signer, error) {
 
 	return &Signer{
 		// kid rotates monthly so a key can be retired without invalidating
-		// tokens minted seconds ago — Heimdall's JWKS fetch just needs to see
+		// tokens minted seconds ago — the licensing service's JWKS fetch just needs to see
 		// the new kid before the old one drops off.
 		kid:        kidFor(region, time.Now()),
 		region:     region,
@@ -101,7 +101,7 @@ func (s *Signer) Mint(tenantID, userID, customer string, isAdmin bool, sessionEx
 		Customer: customer,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
-			Audience:  jwt.ClaimStrings{"heimdall-mint"},
+			Audience:  jwt.ClaimStrings{"licensing-mint"},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
 		},
@@ -119,7 +119,7 @@ func (s *Signer) Mint(tenantID, userID, customer string, isAdmin bool, sessionEx
 	return signed, nil
 }
 
-// JWK is the OKP/Ed25519 JSON Web Key shape Heimdall expects.
+// JWK is the OKP/Ed25519 JSON Web Key shape the licensing service expects.
 type JWK struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv"`

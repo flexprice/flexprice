@@ -146,7 +146,7 @@ func TestIssueToken_ClaimsMatchSessionAndTenant(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "flexprice-backend", claims.Issuer)
-	require.Equal(t, jwt.ClaimStrings{"heimdall-mint"}, claims.Audience)
+	require.Equal(t, jwt.ClaimStrings{"licensing-mint"}, claims.Audience)
 	require.Equal(t, "tenant_abc", claims.TenantID)
 	require.Equal(t, "us-east", claims.Region)
 	require.True(t, claims.IsAdmin)
