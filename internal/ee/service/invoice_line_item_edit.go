@@ -33,17 +33,6 @@ func (s *invoiceService) recalculateTotalsFromLineItems(inv *invoice.Invoice, li
 }
 
 func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error) {
-	current, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return nil, err
-	}
-	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, current, "")
-	if err != nil {
-		return nil, err
-	}
-	if gatedSession != nil {
-		return nil, errInvoiceCheckoutGated(invoiceID, "edit line items on")
-	}
 
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -52,7 +41,7 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 	var lockedInv *invoice.Invoice
 	var publishedLineItems []*invoice.InvoiceLineItem
 
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
 			return err
@@ -142,17 +131,6 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 }
 
 func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, req dto.AddBulkLineItemRequest) (*dto.InvoiceResponse, error) {
-	current, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return nil, err
-	}
-	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, current, "")
-	if err != nil {
-		return nil, err
-	}
-	if gatedSession != nil {
-		return nil, errInvoiceCheckoutGated(invoiceID, "add line items to")
-	}
 
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -161,7 +139,7 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 	var lockedInv *invoice.Invoice
 	var publishedLineItems []*invoice.InvoiceLineItem
 
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
 			return err
@@ -224,17 +202,6 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 }
 
 func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID string, req dto.RemoveBulkLineItemRequest) (*dto.InvoiceResponse, error) {
-	current, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return nil, err
-	}
-	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, current, "")
-	if err != nil {
-		return nil, err
-	}
-	if gatedSession != nil {
-		return nil, errInvoiceCheckoutGated(invoiceID, "remove line items from")
-	}
 
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -243,7 +210,7 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 	var lockedInv *invoice.Invoice
 	var publishedLineItems []*invoice.InvoiceLineItem
 
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
 			return err

@@ -449,14 +449,6 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return nil, false, err
 	}
 
-	gatedSession, ownedByCaller, err := s.isInvoiceGatedOnCheckout(ctx, inv, req.SourceID())
-	if err != nil {
-		return nil, false, err
-	}
-	if gatedSession != nil && !ownedByCaller {
-		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
-	}
-
 	// Early return for finalized/voided — no lock needed, these are immutable.
 	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusSkipped {
 		return inv, false, nil
@@ -1030,14 +1022,6 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
-	}
-
-	gatedSession, ownedByCaller, err := s.isInvoiceGatedOnCheckout(ctx, inv, req.SourceID())
-	if err != nil {
-		return err
-	}
-	if gatedSession != nil && !ownedByCaller {
-		return errInvoiceCheckoutGated(id, "finalize")
 	}
 
 	if err := s.performFinalizeInvoiceActions(ctx, inv, req.SourceID()); err != nil {
@@ -4084,21 +4068,6 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		return nil, err
 	}
 
-	// Only apply_discount moves the amount; metadata-only updates (vendor sync) stay allowed.
-	if req.ApplyDiscount {
-		current, err := s.InvoiceRepo.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, current, "")
-		if err != nil {
-			return nil, err
-		}
-		if gatedSession != nil {
-			return nil, errInvoiceCheckoutGated(id, "re-apply discounts on")
-		}
-	}
-
 	// Finalized + apply_discount runs void-and-recreate and the update lands on the copy.
 	var updatedInv *invoice.Invoice
 	recreated := false
@@ -4112,6 +4081,7 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 		if err := rejectVoidedInvoiceEdit(locked); err != nil {
 			return err
 		}
+		// Only apply_discount moves the amount; metadata-only updates (vendor sync) stay allowed.
 		if req.ApplyDiscount {
 			gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, locked, "")
 			if err != nil {
