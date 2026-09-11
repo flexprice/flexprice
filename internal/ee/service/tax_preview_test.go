@@ -1231,18 +1231,15 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_SubscriptionAssociationsKeepTh
 		"each association keeps its own behavior — collapsing to a bare rate list would lose this")
 }
 
-// a subscription-level row with a null tax_behavior should not exist (creation
-// always stamps one). If one is found anyway it is logged as an anomaly and falls back to the
-// same currency default every other unstamped resolution uses, rather than a value special to
-// this branch.
-func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFallsBackToCurrencyDefault() {
+// Unstamped subscription associations (pre-inc/exc rows) resolve exclusive at
+// invoice time, including INR — create-time currency defaults are not reapplied here.
+func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorDefaultsToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
-		want     types.TaxBehavior
 	}{
-		{name: "USD falls back to exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "INR falls back to inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
+		{name: "USD", currency: "usd"},
+		{name: "INR", currency: "inr"},
 	}
 
 	for _, tt := range tests {
@@ -1250,7 +1247,7 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFal
 			cust := s.newCustomer(types.TaxTreatmentTaxable)
 			sub := s.newSubscription(cust.ID, tt.currency)
 			rate := s.persistedRate("null_behavior_"+tt.currency, 10)
-			s.association(rate.ID, sub.ID, nil) // written directly: CreateTaxAssociation would never produce this
+			s.association(rate.ID, sub.ID, nil)
 
 			resolved, err := s.svc.PrepareTaxRatesForInvoice(s.GetContext(), dto.CreateInvoiceRequest{
 				CustomerID:     cust.ID,
@@ -1260,7 +1257,7 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFal
 
 			s.Require().NoError(err)
 			s.Require().Len(resolved.GetRates(), 1)
-			s.Equal(tt.want, resolved.GetRates()[0].TaxBehavior)
+			s.Equal(types.TaxBehaviorExclusive, resolved.GetRates()[0].TaxBehavior)
 		})
 	}
 }

@@ -3954,8 +3954,8 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 		prepared, err := taxService.PrepareTaxRatesForInvoice(ctx, dto.CreateInvoiceRequest{
 			SubscriptionID: inv.SubscriptionID,
 			CustomerID:     inv.CustomerID,
-			// An unstamped association defaults its behavior from this. Omit it and they all
-			// resolve against an empty currency, which silently means inclusive.
+			// Currency is used when the request carries rate overrides or raw tax_rate IDs.
+			// Unstamped subscription associations resolve exclusive and do not use this.
 			Currency: inv.Currency,
 		})
 		if err != nil {

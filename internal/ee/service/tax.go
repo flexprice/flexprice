@@ -1059,15 +1059,14 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 			taxRateIDs[i] = association.TaxRateID
 			behavior := lo.FromPtr(association.TaxBehavior)
 			if behavior == "" {
-				// Creation always stamps one, so a null here should not happen. Fall back to
-				// the same currency default every other unstamped resolution uses.
-				behavior = types.DefaultTaxBehaviorForCurrency(req.Currency)
-				s.Logger.Error(ctx, "subscription tax association missing tax_behavior, defaulting from currency",
-					"error", "tax_behavior is null on a subscription-level association",
+				// Pre-inc/exc rows were never stamped; exclusive is what those invoices charged.
+				// Do not use the currency default here — that would flip INR (and any
+				// non-USD/CAD) to inclusive on the next invoice. Create-time stamping is unchanged.
+				behavior = types.TaxBehaviorExclusive
+				s.Logger.Info(ctx, "unstamped subscription tax association defaulted to exclusive",
 					"tax_association_id", association.ID,
 					"tax_rate_id", association.TaxRateID,
-					"currency", req.Currency,
-					"resolved_behavior", behavior)
+					"currency", req.Currency)
 			}
 			behaviorByRateID[association.TaxRateID] = behavior
 		}
