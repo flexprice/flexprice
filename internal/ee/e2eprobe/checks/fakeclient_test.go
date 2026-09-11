@@ -603,6 +603,8 @@ type fakeInvoices struct {
 	queries    int
 	queryErr   error
 	invoices   []types.InvoiceResponse
+	getByID    map[string]types.InvoiceResponse
+	getErr     error
 	lastFilter types.InvoiceFilter
 	// Preview support
 	previewResp   *dtos.GetInvoicePreviewResponse // default response
@@ -623,10 +625,41 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 		return &dtos.QueryInvoiceResponse{}, nil
 	}
 	return &dtos.QueryInvoiceResponse{
-		ListInvoicesResponse: &types.ListInvoicesResponse{Items: f.invoices},
+		ListInvoicesResponse: &types.ListInvoicesResponse{Items: applyInvoiceQuery(f.invoices, filter)},
 	}, nil
 }
-func (f *fakeInvoices) Get(_ context.Context, _ string) (*dtos.GetInvoiceResponse, error) {
+
+// applyInvoiceQuery treats invoices as newest-first (server default created_at desc).
+func applyInvoiceQuery(invoices []types.InvoiceResponse, filter types.InvoiceFilter) []types.InvoiceResponse {
+	items := append([]types.InvoiceResponse(nil), invoices...)
+	if filter.Order != nil && *filter.Order == types.InvoiceFilterOrderAsc {
+		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+			items[i], items[j] = items[j], items[i]
+		}
+	}
+	if filter.Limit != nil && *filter.Limit > 0 && int(*filter.Limit) < len(items) {
+		items = items[:*filter.Limit]
+	}
+	return items
+}
+func (f *fakeInvoices) Get(_ context.Context, id string) (*dtos.GetInvoiceResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.getByID != nil {
+		if inv, ok := f.getByID[id]; ok {
+			cp := inv
+			return &dtos.GetInvoiceResponse{InvoiceResponse: &cp}, nil
+		}
+	}
+	for i := range f.invoices {
+		if f.invoices[i].ID != nil && *f.invoices[i].ID == id {
+			inv := f.invoices[i]
+			return &dtos.GetInvoiceResponse{InvoiceResponse: &inv}, nil
+		}
+	}
 	return &dtos.GetInvoiceResponse{}, nil
 }
 func (f *fakeInvoices) GetPreview(_ context.Context, req types.GetPreviewInvoiceRequest) (*dtos.GetInvoicePreviewResponse, error) {

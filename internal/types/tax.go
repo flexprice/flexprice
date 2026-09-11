@@ -2,7 +2,6 @@ package types
 
 import (
 	"slices"
-	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
@@ -88,22 +87,7 @@ type TaxBehaviorSource string
 const (
 	// TaxBehaviorSourceExplicit means the request stated the behavior.
 	TaxBehaviorSourceExplicit TaxBehaviorSource = "explicit"
-	// TaxBehaviorSourceCurrencyDefault means the request said nothing and the behavior came
-	// from the subscription currency.
-	TaxBehaviorSourceCurrencyDefault TaxBehaviorSource = "currency_default"
+	// TaxBehaviorSourceDefault means the request said nothing and the behavior fell back
+	// to the default.
+	TaxBehaviorSourceDefault TaxBehaviorSource = "default"
 )
-
-// ExclusiveTaxCurrencies lists currencies whose default tax behavior is exclusive when
-// an association is created without an explicit behavior. Everything else defaults to
-// inclusive. Compiled-in convention — no UI, no API, no per-tenant override.
-var ExclusiveTaxCurrencies = []string{"USD", "CAD"}
-
-// DefaultTaxBehaviorForCurrency resolves the tax behavior for a subscription-level tax
-// association that was not given an explicit behavior. Used only at subscription-association
-// creation time — never re-resolved later.
-func DefaultTaxBehaviorForCurrency(currency string) TaxBehavior {
-	if slices.Contains(ExclusiveTaxCurrencies, strings.ToUpper(currency)) {
-		return TaxBehaviorExclusive
-	}
-	return TaxBehaviorInclusive
-}

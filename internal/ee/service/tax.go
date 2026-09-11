@@ -988,7 +988,7 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 			if override.TaxBehavior != nil {
 				behaviorByCode[override.TaxRateCode] = *override.TaxBehavior
 			} else {
-				behaviorByCode[override.TaxRateCode] = types.DefaultTaxBehaviorForCurrency(override.Currency)
+				behaviorByCode[override.TaxRateCode] = types.TaxBehaviorExclusive
 			}
 		}
 
@@ -1011,10 +1011,10 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 	}
 
 	if len(req.TaxRates) > 0 {
-		// Raw rate IDs carry no association and no behavior, so only the invoice currency is
-		// left to resolve against. Known gap: the tenant/customer hierarchy is not consulted
-		// here — pass tax_rate_overrides instead, which take an explicit behavior.
-		behavior := types.DefaultTaxBehaviorForCurrency(req.Currency)
+		// Raw rate IDs carry no association and no explicit behavior, so they default to
+		// exclusive. Known gap: the tenant/customer hierarchy is not consulted here — pass
+		// tax_rate_overrides instead, which take an explicit behavior.
+		behavior := types.TaxBehaviorExclusive
 		resolved := make([]*dto.TaxRateWithBehavior, 0, len(req.TaxRates))
 		for _, taxRateID := range req.TaxRates {
 			taxRate, err := s.GetTaxRate(ctx, taxRateID)
@@ -1060,9 +1060,9 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 			behavior := lo.FromPtr(association.TaxBehavior)
 			if behavior == "" {
 				// Creation always stamps one, so a null here should not happen. Fall back to
-				// the same currency default every other unstamped resolution uses.
-				behavior = types.DefaultTaxBehaviorForCurrency(req.Currency)
-				s.Logger.Error(ctx, "subscription tax association missing tax_behavior, defaulting from currency",
+				// the same default every other unstamped resolution uses.
+				behavior = types.TaxBehaviorExclusive
+				s.Logger.Error(ctx, "subscription tax association missing tax_behavior, defaulting to exclusive",
 					"error", "tax_behavior is null on a subscription-level association",
 					"tax_association_id", association.ID,
 					"tax_rate_id", association.TaxRateID,
@@ -1328,15 +1328,15 @@ func (s *taxService) buildRateLines(ctx context.Context, inv *invoice.Invoice, t
 func (s *taxService) resolveEffectiveTaxBehavior(ctx context.Context, req *dto.CreateTaxAssociationRequest, taxRate *taxrate.TaxRate, sub *subscription.Subscription) (*types.TaxBehavior, error) {
 	behavior := req.TaxBehavior
 
-	// sub is nil for tenant/customer-level associations: they span several currencies, so
-	// there is no single default to resolve from. They keep whatever the request gave —
-	// including nothing — and are resolved when copied down to a subscription.
+	// sub is nil for tenant/customer-level associations. They keep whatever the request gave
+	// including nothing, and are resolved to the same default when copied down
+	// to a subscription.
 	if sub != nil {
 		resolvedBehavior := lo.FromPtr(req.TaxBehavior)
 		source := types.TaxBehaviorSourceExplicit
 		if req.TaxBehavior == nil {
-			resolvedBehavior = types.DefaultTaxBehaviorForCurrency(sub.Currency)
-			source = types.TaxBehaviorSourceCurrencyDefault
+			resolvedBehavior = types.TaxBehaviorExclusive
+			source = types.TaxBehaviorSourceDefault
 		}
 
 		behavior = &resolvedBehavior
