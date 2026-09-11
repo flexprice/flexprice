@@ -133,6 +133,7 @@ func (CheckoutSession) Indexes() []ent.Index {
 		// this must not be a scan of the full session history. Partial, so the index only
 		// holds sessions still in flight.
 		index.Fields("tenant_id", "environment_id", "checkout_invoice_id").
+			Unique().
 			StorageKey("idx_checkout_session_invoice_active").
 			Annotations(entsql.IndexWhere(
 				"((checkout_invoice_id IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))")),

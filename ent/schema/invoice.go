@@ -236,6 +236,7 @@ func (Invoice) Fields() []ent.Field {
 		field.String("source_type").
 			GoType(types.InvoiceSourceType("")).
 			Optional().
+			Immutable().
 			Comment("How this invoice was created; 'checkout' marks one owned by a hosted checkout session"),
 
 		field.Bool("is_manually_edited").

@@ -280,7 +280,7 @@ var (
 			},
 			{
 				Name:    "idx_checkout_session_invoice_active",
-				Unique:  false,
+				Unique:  true,
 				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((checkout_invoice_id IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))",

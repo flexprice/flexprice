@@ -572,7 +572,6 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
-		SetSourceType(inv.SourceType).
 		SetNillableInvoiceNumber(inv.InvoiceNumber).
 		SetNillableBillingSequence(inv.BillingSequence).
 		SetUpdatedAt(time.Now()).
