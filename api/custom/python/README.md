@@ -29,7 +29,7 @@ Runnable samples are in the `examples/` directory.
 | `FLEXPRICE_API_KEY` | Yes | API key |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
-**Integration tests** in [api/tests/python/test_sdk.py](../tests/python/test_sdk.py) use a different env shape; see [api/tests/README.md](../tests/README.md).
+**Integration tests** in [api/tests/python/test_sdk.py](../../tests/python/test_sdk.py) use a different env shape; see [api/tests/README.md](../../tests/README.md).
 
 ## Quick start
 
@@ -194,4 +194,4 @@ def handle_webhook(raw_body: str) -> None:
 
 - [FlexPrice API documentation](https://docs.flexprice.io)
 - [Python SDK examples](examples/) in this repo
-- [SDK integration tests](../tests/README.md) — different `FLEXPRICE_API_HOST` shape for automated tests
+- [SDK integration tests](../../tests/README.md) — different `FLEXPRICE_API_HOST` shape for automated tests

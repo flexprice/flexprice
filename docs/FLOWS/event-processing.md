@@ -3,13 +3,13 @@
 ## Trigger
 
 1. Authenticated ingestion via **`POST /v1/events`** (+ bulk/query variants gated by RBAC `'event':'write'` in router grouping).
-2. Internal republish/transform jobs (staging-oriented topics referenced in [`internal/config/config.yaml`](internal/config/config.yaml)).
+2. Internal republish/transform jobs (staging-oriented topics referenced in [`internal/config/config.yaml`](../../internal/config/config.yaml)).
 
 ## Execution path — produce
 
 1. `EventsHandler` (see `internal/api/v1/events*.go`) calls **`EventService`**.
 2. Service validates metering payload and persists or stages according to architectural branch.
-3. **`publisher.EventPublisher.Publish`** (see [`internal/publisher/event_publisher.go`](internal/publisher/event_publisher.go)):
+3. **`publisher.EventPublisher.Publish`** (see [`internal/publisher/event_publisher.go`](../../internal/publisher/event_publisher.go)):
    - `PublishToKafka` path → `kafka.EventPublisher`.
    - Optional Dynamo publication when configured (`PublishToDynamoDB` / ALL mode—both must succeed-ish policy encoded in publisher).
 
