@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	eeservice "github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -102,6 +103,9 @@ func newLicensingRequest(t *testing.T, tenantID string, isAdmin bool, bearer str
 	ctx := req.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, "user_test")
+	// Minting requires a tenant super-admin; the middleware would put roles in
+	// context, so mirror that here.
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
 	// isAdmin is now derived from the user's email domain (via userRepo), not
 	// from roles; kept in the signature for call-site clarity.
 	_ = isAdmin
@@ -168,6 +172,25 @@ func TestIssueToken_NoSessionRejected(t *testing.T) {
 	// this unit test), so the observable contract here is that the handler
 	// records a failure and never reaches the success response.
 	require.NotEmpty(t, c.Errors)
+}
+
+func TestIssueToken_NonSuperAdminRejected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := setupLicensingHandler(t, makeLicensingSeed(t))
+
+	bearer := sessionBearerToken(t, time.Now().Add(time.Minute))
+	w, c := newLicensingRequest(t, "tenant_abc", false, bearer)
+	// Strip the super-admin role the helper sets: a plain tenant member.
+	c.Request = c.Request.WithContext(
+		context.WithValue(c.Request.Context(), types.CtxRoles, []string{}))
+
+	h.IssueToken(c)
+
+	// c.Error defers HTTP status to ErrorHandler middleware (not wired here);
+	// the observable contract is a recorded permission error and no token body.
+	require.NotEmpty(t, c.Errors)
+	require.True(t, ierr.IsPermissionDenied(c.Errors.Last().Err))
+	require.Empty(t, w.Body.String())
 }
 
 func TestJWKS_ServesMatchingPublicKey(t *testing.T) {

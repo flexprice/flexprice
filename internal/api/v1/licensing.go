@@ -59,6 +59,16 @@ func (h *LicensingHandler) IssueToken(c *gin.Context) {
 		return
 	}
 
+	// Only a tenant super-admin may mint licenses. A licensing token is the
+	// browser's only path to Heimdall's mint endpoint, so gating it here gates
+	// minting for the whole tenant — non-admin members get 403 and no token.
+	if !types.IsSuperAdminUser(ctx) {
+		c.Error(ierr.NewError("only a tenant super-admin may mint licenses").
+			WithHint("You do not have permission to generate a license").
+			Mark(ierr.ErrPermissionDenied))
+		return
+	}
+
 	sessionExp, err := sessionExpiryFromRequest(c)
 	if err != nil {
 		c.Error(err)
