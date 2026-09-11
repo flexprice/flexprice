@@ -642,7 +642,6 @@ func applyInvoiceQuery(invoices []types.InvoiceResponse, filter types.InvoiceFil
 	}
 	return items
 }
-
 func (f *fakeInvoices) Get(_ context.Context, id string) (*dtos.GetInvoiceResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

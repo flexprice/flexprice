@@ -106,20 +106,8 @@ func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Conte
 	if resp.ListInvoicesResponse == nil || len(resp.ListInvoicesResponse.Items) == 0 {
 		return nil, nil
 	}
-	listed := resp.ListInvoicesResponse.Items[0]
-	if listed.ID == nil || *listed.ID == "" {
-		return nil, nil
-	}
-
-	// Search/list never expands tax_applied; only GET attaches Taxes.
-	got, err := p.client.Invoices().Get(ctx, *listed.ID)
-	if err != nil {
-		return nil, err
-	}
-	if got == nil || got.InvoiceResponse == nil {
-		return nil, nil
-	}
-	return got.InvoiceResponse, nil
+	inv := resp.ListInvoicesResponse.Items[0]
+	return &inv, nil
 }
 
 func (p *persistentBillingInvariantsProbe) invoiceWithTaxes(ctx context.Context, inv types.InvoiceResponse) (*types.InvoiceResponse, error) {
