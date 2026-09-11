@@ -29,14 +29,23 @@ type InvoiceLineItemCoupon struct {
 	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
-// InvoiceStateChangeSource identifies the caller of a guarded invoice state change.
-// The checkout session that owns an invoice must be able to finalize or void it while the
-// session is still pending; every other caller is held off until the session is terminal.
-//
-// json:"-" — these requests are bound directly from client JSON, and the caller identity
-// must never be settable over the wire; it is only ever set server-side.
+// InvoiceStateChangeSource identifies the caller of a guarded invoice state change, so the
+// checkout session owning an invoice can act on it while every other caller is held off.
+// Unexported and json:"-" — the caller identity is only ever set server-side.
 type InvoiceStateChangeSource struct {
-	CheckoutSessionID string `json:"-"`
+	checkoutSessionID string `json:"-"`
+}
+
+func NewInvoiceStateChangeSource(checkoutSessionID string) InvoiceStateChangeSource {
+	return InvoiceStateChangeSource{checkoutSessionID: checkoutSessionID}
+}
+
+func (i *InvoiceStateChangeSource) CheckoutSessionID() string {
+	if i == nil {
+		return ""
+	}
+
+	return i.checkoutSessionID
 }
 
 // FinalizeInvoiceRequest carries caller identity for the finalization guard.
@@ -143,8 +152,8 @@ type CreateInvoiceRequest struct {
 	// Best-effort: sync failures do not fail invoice creation.
 	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 
-	// checkout, when present, gates this invoice behind a hosted payment session: the invoice
-	// is created DRAFT and finalizes only when the payment webhook lands. One-off invoices only.
+	// checkout gates this invoice behind a hosted payment session: created DRAFT, finalized
+	// only when the payment webhook lands. One-off invoices only.
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 }
 
@@ -323,6 +332,8 @@ type InvoiceComputeRequest struct {
 	// json:"-" — this request is also bound directly from client JSON (POST /invoices/{id}/compute).
 	PreparedTaxRates *InvoiceTaxRates `json:"-"`
 
+	InvoiceStateChangeSource
+
 	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
 	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
 	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
@@ -414,7 +425,7 @@ type ProrationLineItem struct {
 }
 
 // ValidateForCheckout validates the payment-gated variant of POST /invoices. Called
-// explicitly from CreateOneOffInvoice: Validate() is not wired into that path.
+// explicitly from CreateOneOffInvoice — Validate() is not wired into that path.
 func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 	if err := r.Checkout.Validate(); err != nil {
 		return err
@@ -473,8 +484,7 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// A past due_date makes GetCustomerInvoiceSummary fire invoice.payment.overdue against
-	// a draft the customer has not had a chance to pay yet.
+	// A past due_date fires invoice.payment.overdue against a draft nobody could pay yet.
 	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
 		return ierr.NewError("due_date must be in the future when checkout is provided").
 			WithHint("A gated invoice cannot be overdue before its payment link expires").

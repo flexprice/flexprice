@@ -215,7 +215,18 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	return dto.NewPaymentResponse(p), nil
 }
 
-func (s *paymentService) validateInvoicePaymentEligibility(_ context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) error {
+func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) error {
+	// A gated draft already has a live payment link; a second payment here would double-charge
+	// and settle the invoice outside FinalizeInvoice, leaving it finalized with no number.
+	invSvc := NewInvoiceService(s.ServiceParams).(*invoiceService)
+	gating, err := invSvc.activeCheckoutSessionForInvoice(ctx, invoice.ID)
+	if err != nil {
+		return err
+	}
+	if gating != nil {
+		return errInvoiceCheckoutGated(invoice.ID, "pay")
+	}
+
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		return ierr.NewError("invoice is already paid").

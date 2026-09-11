@@ -192,9 +192,6 @@ func (s *checkoutSessionService) resolveCheckoutProvider(
 	ctx context.Context,
 	provider types.CheckoutPaymentProvider,
 ) (interfaces.CheckoutProvider, error) {
-	if s.checkoutProviderFor != nil {
-		return s.checkoutProviderFor(ctx, provider)
-	}
 	return s.IntegrationFactory.GetCheckoutProvider(
 		ctx,
 		provider,

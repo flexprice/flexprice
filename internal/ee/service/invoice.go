@@ -441,6 +441,14 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 // Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
 // OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
+	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID)
+	if err != nil {
+		return nil, false, err
+	}
+	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
+	}
+
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
@@ -1010,6 +1018,14 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 }
 
 func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto.FinalizeInvoiceRequest) error {
+	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
+	if err != nil {
+		return err
+	}
+	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+		return errInvoiceCheckoutGated(id, "finalize")
+	}
+
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
@@ -1201,6 +1217,14 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 		return false, nil
 	}
 
+	// A draft under an open checkout is the customer's to pay, not the cron's to finalize.
+	// Completion finalizes it; expiry voids it.
+	if activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID); err != nil {
+		return false, err
+	} else if activeSession != nil {
+		return false, nil
+	}
+
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
 	if err != nil {
@@ -1352,9 +1376,16 @@ func validateInvoiceVoidable(inv *invoice.Invoice) error {
 }
 
 func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error) {
-
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+		return nil, errInvoiceCheckoutGated(id, "void")
 	}
 
 	inv, err := s.InvoiceRepo.Get(ctx, id)
@@ -1878,6 +1909,14 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv 
 }
 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
+	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
+	if err != nil {
+		return err
+	}
+	if activeSession != nil && activeSession.GetID() != "" {
+		return errInvoiceCheckoutGated(id, "update the payment status of")
+	}
+
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err

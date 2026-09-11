@@ -208,3 +208,27 @@ func (s *WalletServiceSuite) TestVoidInvoice_FailsPendingPurchasedCreditTransact
 	s.Require().NoError(err)
 	s.True(balanceBefore.Equal(w.CreditBalance), "voiding an unpaid top-up must be balance-neutral")
 }
+
+// The Step-5 void-before-archive must not disturb wallet_topup cleanup: nothing is
+// funded on an unpaid top-up draft, so the void is skipped and the purchased-credit
+// transaction is failed exactly once (not again via VoidInvoice's own handling).
+func (s *WalletServiceSuite) TestCleanupCheckoutSession_TopupDraftNotVoided() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	txID, session := s.seedPayFirstTopupSession("cleanup-no-void", decimal.NewFromInt(250), nil)
+	invoiceID := *session.CheckoutInvoiceID
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, invoiceID)
+	s.Require().NoError(err)
+	s.NotEqual(types.InvoiceStatusVoided, inv.InvoiceStatus,
+		"an unfunded draft must be archived without a void")
+	s.True(inv.RefundedAmount.IsZero(), "nothing was funded, so nothing may be refunded")
+
+	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
+	s.Require().NoError(err)
+	s.Equal(types.TransactionStatusFailed, tx.TxStatus)
+}

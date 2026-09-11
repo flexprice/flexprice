@@ -94,6 +94,7 @@ func TestLineItemEdit(t *testing.T) {
 func (s *LineItemEditSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.service = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
 		Logger:              s.GetLogger(),
 		Config:              s.GetConfig(),
 		DB:                  s.GetDB(),
@@ -703,6 +704,7 @@ func TestInvoiceModification(t *testing.T) {
 func (s *InvoiceModificationServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.service = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
 		Logger:              s.GetLogger(),
 		Config:              s.GetConfig(),
 		DB:                  s.GetDB(),

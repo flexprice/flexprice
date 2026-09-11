@@ -146,6 +146,8 @@ func (s *InvoiceServiceSuite) setupService() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		CheckoutSessionRepo:          s.GetStores().CheckoutSessionRepo,
+		RefundRepo:                   s.GetStores().RefundRepo,
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 }
@@ -1113,26 +1115,27 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatusWithPayments() {
 			setupPayment: func() string {
 				// Create a payment record for the test invoice
 				paymentService := NewPaymentService(ServiceParams{
-					Logger:           s.GetLogger(),
-					Config:           s.GetConfig(),
-					DB:               s.GetDB(),
-					SubRepo:          s.GetStores().SubscriptionRepo,
-					PlanRepo:         s.GetStores().PlanRepo,
-					PriceRepo:        s.GetStores().PriceRepo,
-					EventRepo:        s.eventRepo,
-					MeterRepo:        s.GetStores().MeterRepo,
-					CustomerRepo:     s.GetStores().CustomerRepo,
-					InvoiceRepo:      s.invoiceRepo,
-					EntitlementRepo:  s.GetStores().EntitlementRepo,
-					EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-					FeatureRepo:      s.GetStores().FeatureRepo,
-					TenantRepo:       s.GetStores().TenantRepo,
-					UserRepo:         s.GetStores().UserRepo,
-					AuthRepo:         s.GetStores().AuthRepo,
-					WalletRepo:       s.GetStores().WalletRepo,
-					PaymentRepo:      s.GetStores().PaymentRepo,
-					EventPublisher:   s.GetPublisher(),
-					WebhookPublisher: s.GetWebhookPublisher(),
+					Logger:              s.GetLogger(),
+					Config:              s.GetConfig(),
+					DB:                  s.GetDB(),
+					CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+					SubRepo:             s.GetStores().SubscriptionRepo,
+					PlanRepo:            s.GetStores().PlanRepo,
+					PriceRepo:           s.GetStores().PriceRepo,
+					EventRepo:           s.eventRepo,
+					MeterRepo:           s.GetStores().MeterRepo,
+					CustomerRepo:        s.GetStores().CustomerRepo,
+					InvoiceRepo:         s.invoiceRepo,
+					EntitlementRepo:     s.GetStores().EntitlementRepo,
+					EnvironmentRepo:     s.GetStores().EnvironmentRepo,
+					FeatureRepo:         s.GetStores().FeatureRepo,
+					TenantRepo:          s.GetStores().TenantRepo,
+					UserRepo:            s.GetStores().UserRepo,
+					AuthRepo:            s.GetStores().AuthRepo,
+					WalletRepo:          s.GetStores().WalletRepo,
+					PaymentRepo:         s.GetStores().PaymentRepo,
+					EventPublisher:      s.GetPublisher(),
+					WebhookPublisher:    s.GetWebhookPublisher(),
 				})
 
 				// Create a payment record and process it to succeeded status
@@ -1610,6 +1613,7 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	// Create wallet service
 	walletService := NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      s.GetStores().CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),

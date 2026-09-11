@@ -19,10 +19,6 @@ type CheckoutSessionService = interfaces.CheckoutSessionService
 
 type checkoutSessionService struct {
 	ServiceParams
-
-	// checkoutProviderFor resolves a session's provider adapter. Nil in production,
-	// where the integration factory is used; set in tests, which have no live gateway.
-	checkoutProviderFor func(context.Context, types.CheckoutPaymentProvider) (interfaces.CheckoutProvider, error)
 }
 
 func NewCheckoutSessionService(params ServiceParams) interfaces.CheckoutSessionService {
@@ -240,10 +236,9 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 	return s.cleanupCheckoutSession(ctx, session, reason)
 }
 
-// voidCheckoutInvoiceIfFunded voids a gated invoice that already holds customer value
-// before it is archived. Compute applies prepaid credits ahead of payment, and archiving
-// alone never returns them; VoidInvoice does the refund and the RefundedAmount bookkeeping.
-// Best-effort: cleanup archives the invoice either way.
+// voidCheckoutInvoiceIfFunded voids a gated invoice holding customer value before it is
+// archived: compute applies prepaid credits ahead of payment and archiving never returns
+// them. Best-effort — cleanup archives the invoice either way.
 func (s *checkoutSessionService) voidCheckoutInvoiceIfFunded(ctx context.Context, session *domainCheckout.CheckoutSession, invoiceID string) {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -255,7 +250,7 @@ func (s *checkoutSessionService) voidCheckoutInvoiceIfFunded(ctx context.Context
 		return
 	}
 
-	// Nothing funded: a void would only add a VOIDED row and a webhook for no benefit.
+	// Nothing funded — a void would only add a VOIDED row and a webhook.
 	unreturned := inv.AmountPaid.Add(inv.TotalPrepaidCreditsApplied).Sub(inv.RefundedAmount)
 	if !unreturned.IsPositive() {
 		return
@@ -266,7 +261,7 @@ func (s *checkoutSessionService) voidCheckoutInvoiceIfFunded(ctx context.Context
 			"void_reason":         "checkout_session_expired",
 			"checkout_session_id": session.ID,
 		},
-		InvoiceStateChangeSource: dto.InvoiceStateChangeSource{CheckoutSessionID: session.ID},
+		InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource(session.ID),
 	}); err != nil {
 		s.Logger.Error(ctx, "failed to void funded checkout invoice",
 			"error", err, "invoice_id", invoiceID, "session_id", session.ID)

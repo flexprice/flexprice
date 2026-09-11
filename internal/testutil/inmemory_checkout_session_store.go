@@ -114,6 +114,36 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 			return false
 		}
 	}
+	if len(filter.CheckoutInvoiceIDs) > 0 {
+		if session.CheckoutInvoiceID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutInvoiceIDs {
+			if *session.CheckoutInvoiceID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.CheckoutPaymentIDs) > 0 {
+		if session.CheckoutPaymentID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutPaymentIDs {
+			if *session.CheckoutPaymentID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
 	if len(filter.Actions) > 0 {
 		found := false
 		for _, a := range filter.Actions {

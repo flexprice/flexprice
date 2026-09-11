@@ -41,11 +41,11 @@ func TestFilterValidPricesForSubscription_IncludeIDsSemantics(t *testing.T) {
 	// Plan prices: one exact-cadence (quarterly), one divisor (monthly), one
 	// currency-mismatch, one ONETIME, one non-divisor (annual, on a quarterly sub).
 	prices := []*dto.PriceResponse{
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),      // exact match to sub
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),      // divisor (fan-out)
-		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1),      // divisor #2
-		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),      // always compatible
-		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),       // non-divisor for quarter
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1), // exact match to sub
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1), // divisor (fan-out)
+		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1), // divisor #2
+		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1), // always compatible
+		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),  // non-divisor for quarter
 	}
 	// Currency mismatch — should always be dropped regardless of includeIDs.
 	badCurrency := mkPrice("bc", types.BILLING_PERIOD_QUARTER, 1)
@@ -153,8 +153,8 @@ func TestFilterAddonPricesForSubscription_PreservesCompatSemantics(t *testing.T)
 	// Regression guard: addon path must keep divisor-compat acceptance so
 	// pre-existing addon tests (monthly-on-annual, etc.) still work.
 	prices := []*dto.PriceResponse{
-		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),  // divisor of annual
-		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),  // divisor of annual
+		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),   // divisor of annual
+		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),   // divisor of annual
 		mkPrice("h1", types.BILLING_PERIOD_HALF_YEAR, 1), // divisor of annual
 		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),
 	}

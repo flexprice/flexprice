@@ -2163,6 +2163,12 @@ definitions:
         - $ref: '#/definitions/types.InvoiceBillingReason'
         description: billing_reason indicates why this invoice was created (subscription_cycle,
           manual, etc.)
+      checkout:
+        allOf:
+        - $ref: '#/definitions/CheckoutParams'
+        description: |-
+          checkout, when present, gates this invoice behind a hosted payment session: the invoice
+          is created DRAFT and finalizes only when the payment webhook lands. One-off invoices only.
       coupons:
         description: coupons
         items:
@@ -4670,6 +4676,11 @@ definitions:
         description: billing_sequence is the sequential number indicating the billing
           cycle for subscription invoices
         type: integer
+      checkout_session:
+        allOf:
+        - $ref: '#/definitions/CheckoutSessionResponse'
+        description: checkout_session is the payment session gating this invoice,
+          when it was created with checkout
       coupon_applications:
         description: coupon_applications contains the coupon applications associated
           with this invoice (overrides embedded field)
@@ -9871,12 +9882,14 @@ definitions:
     - modify_subscription
     - wallet_topup
     - add_addon
+    - pay_invoice
     type: string
     x-enum-varnames:
     - CheckoutActionCreateSubscription
     - CheckoutActionModifySubscription
     - CheckoutActionWalletTopup
     - CheckoutActionAddAddon
+    - CheckoutActionPayInvoice
   types.CheckoutConfiguration:
     properties:
       add_addon_params:
@@ -9885,6 +9898,8 @@ definitions:
         $ref: '#/definitions/types.CreateSubscriptionParams'
       modify_subscription_params:
         $ref: '#/definitions/types.ModifySubscriptionParams'
+      pay_invoice_params:
+        $ref: '#/definitions/types.PayInvoiceParams'
       wallet_topup_params:
         $ref: '#/definitions/types.WalletTopupParams'
     type: object
@@ -10978,6 +10993,13 @@ definitions:
     - PauseStatusScheduled
     - PauseStatusCompleted
     - PauseStatusCancelled
+  types.PayInvoiceParams:
+    properties:
+      invoice_id:
+        type: string
+    required:
+    - invoice_id
+    type: object
   types.PaymentAction:
     properties:
       type:
@@ -16404,8 +16426,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when creating a manual or one-off invoice (e.g. custom charge
-        or non-recurring billing). Invoice is created in draft; finalize when ready.
+      description: |-
+        Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.
+        Pass a `checkout` object to gate the invoice behind a hosted payment session: the invoice stays DRAFT with no invoice number, and the response carries `checkout_session.payment_action.url` for the customer to pay. It finalizes only when the payment webhook lands; if the session expires the invoice is voided and archived. Poll `GET /checkout/sessions/{id}` until `terminal` is true. One-off invoices only.
       operationId: createInvoice
       parameters:
       - description: Invoice details

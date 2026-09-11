@@ -291,7 +291,7 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 }
 
 // completePayInvoiceCheckout finalizes the gated one-off invoice and settles its payment.
-// Nothing to replay: line items, coupons, credits and taxes were computed at creation.
+// Nothing to replay — everything was computed at creation.
 func (s *checkoutSessionService) completePayInvoiceCheckout(
 	ctx context.Context,
 	session *domainCheckout.CheckoutSession,
@@ -483,7 +483,7 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	}
 	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
 		if err := invSvc.FinalizeInvoice(ctx, invoiceID, dto.FinalizeInvoiceRequest{
-			InvoiceStateChangeSource: dto.InvoiceStateChangeSource{CheckoutSessionID: sessionID},
+			InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource(sessionID),
 		}); err != nil {
 			return err
 		}
