@@ -84,12 +84,11 @@ func (h *LicensingHandler) IssueToken(c *gin.Context) {
 		customer = tr.Name
 	}
 
-	// issued-by uuid identifies the minting user. For staff (admin) we send
-	// EMPTY so the UI renders "Flexprice" instead of a staff user's id.
+	// issued-by uuid identifies the minting user, sent for everyone (incl.
+	// staff) so Heimdall keeps a real audit trail. The is_admin flag rides
+	// alongside; Heimdall blanks issued_by in FE responses when it is set, so
+	// a staff uuid is stored but never shown.
 	issuedBy := types.GetUserID(ctx)
-	if isAdmin {
-		issuedBy = ""
-	}
 
 	token, err := h.signer.Mint(tenantID, issuedBy, customer, isAdmin, sessionExp)
 	if err != nil {
