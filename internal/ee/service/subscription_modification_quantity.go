@@ -942,6 +942,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		BillingPeriod:  &billingPeriod,
 		LineItems:      lineItems,
 		IdempotencyKey: &idempKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 	}
 }
 
@@ -1090,6 +1091,7 @@ func buildProrationChargeInvoiceRequest(
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
 		IdempotencyKey: &idempKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
 				PriceID:         &priceID,

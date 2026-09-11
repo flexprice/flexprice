@@ -763,6 +763,7 @@ func TestSyncInvoice_UsesNonCatalogPrices(t *testing.T) {
 		CustomerID:     customerID,
 		SubscriptionID: func() *string { s := subID; return &s }(),
 		Currency:       "USD",
+		AmountDue:      decimal.NewFromInt(100),
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoice.InvoiceLineItem{
@@ -829,6 +830,7 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 	const chargeTxnID = "txn_netted_001"
 
 	var capturedChargeItems []paddlesdk.CreateSubscriptionChargeItems
+	var capturedProductNames []string
 
 	listTxnJSON := []byte(`{
 		"data": [{"id": "` + chargeTxnID + `", "origin": "subscription_charge"}],
@@ -848,6 +850,10 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 		createPriceFn: func(_ context.Context, _ *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
 			t.Fatal("CreatePrice must not be called for invoice charges")
 			return nil, nil
+		},
+		createProductFn: func(_ context.Context, req *paddlesdk.CreateProductRequest) (*paddlesdk.Product, error) {
+			capturedProductNames = append(capturedProductNames, req.Name)
+			return &paddlesdk.Product{ID: paddleProductID}, nil
 		},
 		createSubscriptionChargeFn: func(_ context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
 			capturedChargeItems = req.Items
@@ -876,6 +882,7 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 		Currency:       "USD",
 		AmountDue:      decimal.RequireFromString("1397.68"),
 		Total:          decimal.RequireFromString("1397.68"),
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Upgrade: Team → Team Starter"),
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoice.InvoiceLineItem{
@@ -905,7 +912,7 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 	}
 	require.NoError(t, subStore.Create(ctx, sub))
 
-	seedMapping(ctx, t, mappingStore, chargePriceID, types.IntegrationEntityTypePrice, paddleProductID, nil)
+	// chargePriceID is intentionally unmapped so product creation is exercised.
 	seedMapping(ctx, t, mappingStore, creditPriceID, types.IntegrationEntityTypePrice, "pro_paddle_team", nil)
 	seedMapping(ctx, t, mappingStore, subID, types.IntegrationEntityTypeSubscription, paddleSubID, nil)
 
@@ -921,6 +928,11 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 	assert.Contains(t, string(itemJSON), `"139768"`, "unit price must be AmountDue in cents")
 	assert.NotContains(t, string(itemJSON), `"199668"`, "must not charge the gross amount")
 	assert.NotContains(t, string(itemJSON), `"price_id"`, "must not reference a catalog price")
+	assert.Contains(t, string(itemJSON), "Upgrade: Team → Team Starter",
+		"clubbed charge must carry the invoice collection display name")
+
+	assert.Equal(t, []string{"Team Starter"}, capturedProductNames,
+		"the catalog product must keep the SKU name, not the invoice label")
 }
 
 // TestEnsureBulkProductSynced_AlreadyMapped verifies that when a price→Paddle product mapping

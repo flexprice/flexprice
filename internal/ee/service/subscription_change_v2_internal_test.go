@@ -158,3 +158,36 @@ func TestCreditBasis(t *testing.T) {
 		assert.True(t, credits.IsZero())
 	})
 }
+
+func TestPlanChangeInvoiceRequest_SetsCollapsedInvoiceDisplayName(t *testing.T) {
+	tests := []struct {
+		name       string
+		fromPlan   string
+		toPlan     string
+		changeType types.SubscriptionChangeType
+		want       string
+	}{
+		{name: "upgrade", fromPlan: "Team", toPlan: "Team Starter", changeType: types.SubscriptionChangeTypeUpgrade, want: "Upgrade: Team → Team Starter"},
+		{name: "downgrade", fromPlan: "Team Starter", toPlan: "Team", changeType: types.SubscriptionChangeTypeDowngrade, want: "Downgrade: Team Starter → Team"},
+		{name: "lateral", fromPlan: "A", toPlan: "B", changeType: types.SubscriptionChangeTypeLateral, want: "Plan change: A → B"},
+		{name: "missing plan names", changeType: types.SubscriptionChangeTypeLateral, want: "Plan change: Plan → Plan"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &planChangeRequest{
+				currentSub: &subscription.Subscription{ID: "sub_1", CustomerID: "cust_1", Currency: "usd"},
+				updatedSub: &subscription.Subscription{
+					BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+					CurrentPeriodEnd: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC),
+				},
+				fromPlan:    &plan.Plan{Name: tt.fromPlan},
+				toPlan:      &plan.Plan{Name: tt.toPlan},
+				effectiveAt: time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC),
+				changeType:  tt.changeType,
+			}
+
+			req := planChangeInvoiceRequest(r, &LineItemProrationSummary{})
+			assert.Equal(t, tt.want, types.CollapsedInvoiceDisplayName(req.Metadata))
+		})
+	}
+}

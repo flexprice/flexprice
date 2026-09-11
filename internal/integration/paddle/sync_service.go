@@ -609,7 +609,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	// Paddle catalog prices cannot be negative, so unused-time credits cannot be
 	// sent as their own items. Charge the net AmountDue when it differs from the
 	// positive lines (plan-change invoices); otherwise itemise as today.
-	syncable := paddleChargeLineItems(flexInvoice)
+	syncable, collapsed := paddleChargeLineItems(flexInvoice)
 	productItems := make([]EnsureBulkProductSyncedItem, len(syncable))
 	for i, li := range syncable {
 		priceID := lo.FromPtr(li.PriceID)
@@ -655,7 +655,10 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 				Mark(ierr.ErrValidation)
 		}
 		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
-		displayName := lo.FromPtrOr(li.DisplayName, priceID)
+		displayName := truncatePaddlePriceName(lo.FromPtrOr(li.DisplayName, priceID))
+		if collapsed {
+			displayName = paddleCollapsedInvoiceDisplayName(flexInvoice, displayName)
+		}
 
 		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
 			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
@@ -1223,10 +1226,12 @@ func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.Invoi
 	return out
 }
 
-func paddleChargeLineItems(inv *invoice.Invoice) []*invoice.InvoiceLineItem {
+// The second return reports whether the lines were clubbed into a single amount due item,
+// in which case the charge is labelled for the whole invoice rather than the first line.
+func paddleChargeLineItems(inv *invoice.Invoice) ([]*invoice.InvoiceLineItem, bool) {
 	positive := syncableInvoiceLineItems(inv.LineItems)
 	if len(positive) == 0 || !inv.AmountDue.IsPositive() {
-		return positive
+		return nil, false
 	}
 
 	sum := decimal.Zero
@@ -1234,12 +1239,37 @@ func paddleChargeLineItems(inv *invoice.Invoice) []*invoice.InvoiceLineItem {
 		sum = sum.Add(li.Amount)
 	}
 	if sum.Equal(inv.AmountDue) {
-		return positive
+		return positive, false
 	}
 
 	collapsed := *positive[0]
 	collapsed.Amount = inv.AmountDue
-	return []*invoice.InvoiceLineItem{&collapsed}
+	return []*invoice.InvoiceLineItem{&collapsed}, true
+}
+
+// Paddle price names are customer-visible; keep them short enough for invoice display.
+const paddlePriceNameMaxRunes = 50
+
+func truncatePaddlePriceName(name string) string {
+	name = strings.TrimSpace(name)
+	r := []rune(name)
+	if len(r) <= paddlePriceNameMaxRunes {
+		return name
+	}
+
+	return string(r[:paddlePriceNameMaxRunes])
+}
+
+// Only an explicit label replaces the line name: lines also collapse on ordinary taxed
+// invoices, where the line's own name is still the right thing to show the customer.
+func paddleCollapsedInvoiceDisplayName(inv *invoice.Invoice, fallback string) string {
+	if inv != nil {
+		if name := types.CollapsedInvoiceDisplayName(inv.Metadata); name != "" {
+			return truncatePaddlePriceName(name)
+		}
+	}
+
+	return truncatePaddlePriceName(fallback)
 }
 
 // mapToUpdateCustomerAddressRequest maps Paddle AddressNotification to Flexprice UpdateCustomerRequest.

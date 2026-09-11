@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -1310,6 +1312,25 @@ func planChangeInvoiceRequest(r *planChangeRequest, quote *LineItemProrationSumm
 		BillingPeriod:  &billingPeriod,
 		LineItems:      lineItems,
 		IdempotencyKey: &idempotencyKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, planChangeCollapsedInvoiceDisplayName(r)),
+	}
+}
+
+func planChangeCollapsedInvoiceDisplayName(r *planChangeRequest) string {
+	from, to := "Plan", "Plan"
+	if r.fromPlan != nil && strings.TrimSpace(r.fromPlan.Name) != "" {
+		from = strings.TrimSpace(r.fromPlan.Name)
+	}
+	if r.toPlan != nil && strings.TrimSpace(r.toPlan.Name) != "" {
+		to = strings.TrimSpace(r.toPlan.Name)
+	}
+	switch r.changeType {
+	case types.SubscriptionChangeTypeUpgrade:
+		return fmt.Sprintf("Upgrade: %s → %s", from, to)
+	case types.SubscriptionChangeTypeDowngrade:
+		return fmt.Sprintf("Downgrade: %s → %s", from, to)
+	default:
+		return fmt.Sprintf("Plan change: %s → %s", from, to)
 	}
 }
 
