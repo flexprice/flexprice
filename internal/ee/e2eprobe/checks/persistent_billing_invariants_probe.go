@@ -94,7 +94,6 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder) (*types.InvoiceResponse, error) {
 	invType := types.InvoiceTypeSubscription
 	limit := int64(1)
-	invType := types.InvoiceTypeSubscription
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
 		InvoiceType:        &invType,
