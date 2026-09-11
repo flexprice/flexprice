@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
+	eeservice "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -19,6 +21,17 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
 )
+
+// fakeTenantService returns a fixed tenant name (embeds the interface so only
+// GetTenantByID needs an implementation).
+type fakeTenantService struct {
+	eeservice.TenantService
+	name string
+}
+
+func (f fakeTenantService) GetTenantByID(_ context.Context, id string) (*dto.TenantResponse, error) {
+	return &dto.TenantResponse{ID: id, Name: f.name}, nil
+}
 
 // fakeUserRepo returns a fixed user email for is_admin domain checks.
 type fakeUserRepo struct{ email string }
@@ -58,7 +71,7 @@ func setupLicensingHandlerWithEmail(t *testing.T, seed, email string) *Licensing
 	signer, err := licensing.NewSigner(cfg)
 	require.NoError(t, err)
 
-	return NewLicensingHandler(signer, fakeUserRepo{email: email}, log)
+	return NewLicensingHandler(signer, fakeUserRepo{email: email}, fakeTenantService{name: "Acme Corp"}, log)
 }
 
 // sessionBearerToken builds a JWT carrying only an "exp" claim, mirroring what

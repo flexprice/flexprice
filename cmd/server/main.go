@@ -443,7 +443,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Licensing:                v1.NewLicensingHandler(licensingSigner, userRepo, logger),
+		Licensing:                v1.NewLicensingHandler(licensingSigner, userRepo, tenantService, logger),
 	}
 }
 

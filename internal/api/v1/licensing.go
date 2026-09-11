@@ -6,6 +6,7 @@ import (
 	"time"
 
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
+	eeservice "github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -21,13 +22,14 @@ const staffEmailDomain = "@flexprice.io"
 // LicensingHandler mints Heimdall licensing tokens and publishes the backend's
 // public key as a JWKS. See internal/licensing for the signing logic.
 type LicensingHandler struct {
-	signer   *licensing.Signer
-	userRepo domainUser.Repository
-	log      *logger.Logger
+	signer        *licensing.Signer
+	userRepo      domainUser.Repository
+	tenantService eeservice.TenantService
+	log           *logger.Logger
 }
 
-func NewLicensingHandler(signer *licensing.Signer, userRepo domainUser.Repository, log *logger.Logger) *LicensingHandler {
-	return &LicensingHandler{signer: signer, userRepo: userRepo, log: log}
+func NewLicensingHandler(signer *licensing.Signer, userRepo domainUser.Repository, tenantService eeservice.TenantService, log *logger.Logger) *LicensingHandler {
+	return &LicensingHandler{signer: signer, userRepo: userRepo, tenantService: tenantService, log: log}
 }
 
 type licensingTokenResponse struct {
@@ -74,7 +76,15 @@ func (h *LicensingHandler) IssueToken(c *gin.Context) {
 		isAdmin = strings.HasSuffix(strings.ToLower(u.Email), staffEmailDomain)
 	}
 
-	token, err := h.signer.Mint(tenantID, isAdmin, sessionExp)
+	// customer = the caller's org/tenant display name, carried into the token so
+	// Heimdall can stamp it on community licenses. For admin mints on another
+	// tenant, Heimdall uses a request-supplied customer instead.
+	customer := ""
+	if tr, err := h.tenantService.GetTenantByID(ctx, tenantID); err == nil && tr != nil {
+		customer = tr.Name
+	}
+
+	token, err := h.signer.Mint(tenantID, customer, isAdmin, sessionExp)
 	if err != nil {
 		c.Error(err)
 		return

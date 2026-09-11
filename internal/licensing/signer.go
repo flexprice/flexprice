@@ -19,6 +19,7 @@ type TokenClaims struct {
 	TenantID string `json:"tenant_id"`
 	Region   string `json:"region"`
 	IsAdmin  bool   `json:"is_admin"`
+	Customer string `json:"customer,omitempty"` // tenant/org display name
 	jwt.RegisteredClaims
 }
 
@@ -80,7 +81,7 @@ func kidFor(region string, t time.Time) string {
 // Mint signs a licensing token for the given tenant/admin status, capping exp
 // at the caller-supplied session expiry (the token must never outlive the
 // user's own session).
-func (s *Signer) Mint(tenantID string, isAdmin bool, sessionExp time.Time) (string, error) {
+func (s *Signer) Mint(tenantID, customer string, isAdmin bool, sessionExp time.Time) (string, error) {
 	now := time.Now()
 	exp := sessionExp
 	// A session with no/expired exp mints nothing rather than defaulting to a
@@ -95,6 +96,7 @@ func (s *Signer) Mint(tenantID string, isAdmin bool, sessionExp time.Time) (stri
 		TenantID: tenantID,
 		Region:   s.region,
 		IsAdmin:  isAdmin,
+		Customer: customer,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			Audience:  jwt.ClaimStrings{"heimdall-mint"},
