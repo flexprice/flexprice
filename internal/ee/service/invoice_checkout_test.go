@@ -487,3 +487,99 @@ func (s *InvoiceServiceSuite) TestPayInvoiceCheckout_ExpiryRefundsPrepaidCredits
 	s.Equal(types.InvoiceStatusVoided, inv.InvoiceStatus)
 	s.Equal(types.StatusDeleted, inv.Status)
 }
+
+// ── Amount-mutating edits are gated too ──────────────────────────────────────
+
+// A live link was created at the old amount, so anything that moves what the customer
+// owes must be refused while the session is open.
+func (s *InvoiceServiceSuite) TestGatedInvoice_AmountMutatingEditsRejected() {
+	inv, _ := s.seedGatedInvoice()
+	ctx := s.GetContext()
+
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(lineItems)
+
+	s.Run("add_line_items", func() {
+		_, err := s.service.AddBulkLineItem(ctx, inv.ID, dto.AddBulkLineItemRequest{
+			Items: []dto.AddLineItemRequest{{
+				DisplayName: "Sneaky extra",
+				Amount:      decimal.NewFromInt(50),
+				Quantity:    decimal.NewFromInt(1),
+			}},
+		})
+		s.Require().Error(err)
+		s.Contains(err.Error(), "gated by an active checkout session")
+	})
+
+	s.Run("remove_line_items", func() {
+		_, err := s.service.RemoveBulkLineItem(ctx, inv.ID, dto.RemoveBulkLineItemRequest{
+			LineItemIDs: []string{lineItems[0].ID},
+		})
+		s.Require().Error(err)
+		s.Contains(err.Error(), "gated by an active checkout session")
+	})
+
+	s.Run("modify_invoice", func() {
+		_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+			Type: dto.InvoiceModifyTypeLineItem,
+			LineItemParams: &dto.InvoiceModifyLineItemParams{
+				Action:      dto.InvoiceModifyLineItemActionRemove,
+				LineItemIDs: []string{lineItems[0].ID},
+			},
+		})
+		s.Require().Error(err)
+		s.Contains(err.Error(), "gated by an active checkout session")
+	})
+
+	s.Run("apply_discount", func() {
+		_, err := s.service.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{ApplyDiscount: true})
+		s.Require().Error(err)
+		s.Contains(err.Error(), "gated by an active checkout session")
+	})
+
+	// Vendor sync writes metadata on gated invoices; blocking that would break it.
+	s.Run("metadata_only_still_allowed", func() {
+		_, err := s.service.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{
+			Metadata: &types.Metadata{"razorpay_payment_url": "https://rzp.io/x"},
+		})
+		s.Require().NoError(err)
+	})
+
+	after, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.True(after.AmountDue.Equal(inv.AmountDue), "amount must be untouched, got %s", after.AmountDue)
+}
+
+// Session create can fail after compute has already debited prepaid credits (duplicate
+// checkout idempotency key). Archiving the draft alone would burn them.
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_Checkout_SessionCreateFailureRefundsCredits() {
+	s.stubCheckoutProvider()
+	ctx := s.GetContext()
+	walletID, seeded := s.seedPrepaidWallet(decimal.NewFromInt(30))
+
+	idempKey := "gated-session-create-conflict"
+	blocking := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      s.testData.customer.ID,
+		Action:          types.CheckoutActionPayInvoice,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		IdempotencyKey:  &idempKey,
+		ExpiresAt:       time.Now().UTC().Add(time.Hour),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, blocking))
+
+	req := s.gatedUsageInvoiceRequest(decimal.NewFromInt(100))
+	req.Checkout.IdempotencyKey = &idempKey
+
+	_, err := s.service.CreateOneOffInvoice(ctx, req)
+	s.Require().Error(err, "duplicate checkout idempotency key must fail session create")
+
+	restored, err := s.GetStores().WalletRepo.GetWalletByID(ctx, walletID)
+	s.Require().NoError(err)
+	s.True(restored.CreditBalance.Equal(seeded),
+		"credits debited at compute must be returned: started %s, ended %s", seeded, restored.CreditBalance)
+}

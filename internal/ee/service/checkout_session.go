@@ -615,6 +615,8 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	session.CheckoutInvoiceID = lo.ToPtr(draftInvoiceID)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		// Compute already debited prepaid credits; archiving alone would not return them.
+		s.voidCheckoutInvoiceIfFunded(ctx, session, draftInvoiceID)
 		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
 				"invoice_id", draftInvoiceID,

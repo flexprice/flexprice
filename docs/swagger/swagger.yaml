@@ -2167,8 +2167,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/CheckoutParams'
         description: |-
-          checkout, when present, gates this invoice behind a hosted payment session: the invoice
-          is created DRAFT and finalizes only when the payment webhook lands. One-off invoices only.
+          checkout gates this invoice behind a hosted payment session: created DRAFT, finalized
+          only when the payment webhook lands. One-off invoices only.
       coupons:
         description: coupons
         items:

@@ -16443,7 +16443,7 @@ const docTemplate = `{
                     ]
                 },
                 "checkout": {
-                    "description": "checkout, when present, gates this invoice behind a hosted payment session: the invoice\nis created DRAFT and finalizes only when the payment webhook lands. One-off invoices only.",
+                    "description": "checkout gates this invoice behind a hosted payment session: created DRAFT, finalized\nonly when the payment webhook lands. One-off invoices only.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/CheckoutParams"

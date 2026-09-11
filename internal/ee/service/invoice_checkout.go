@@ -109,6 +109,20 @@ func (s *invoiceService) activeCheckoutSessionForInvoice(ctx context.Context, in
 	return sessions[0], nil
 }
 
+// rejectGatedInvoiceEdit blocks an edit that changes what the customer owes while a
+// checkout session holds a payment link created at the old amount. No checkout path edits
+// an invoice, so the owning session is never admitted here.
+func (s *invoiceService) rejectGatedInvoiceEdit(ctx context.Context, invoiceID, operation string) error {
+	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+	if activeSession != nil {
+		return errInvoiceCheckoutGated(invoiceID, operation)
+	}
+	return nil
+}
+
 // errInvoiceCheckoutGated rejects a manual state change while a checkout session owns the
 // invoice: acting mid-session strands a live payment link over an unpayable invoice.
 func errInvoiceCheckoutGated(invoiceID, operation string) error {

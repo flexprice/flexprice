@@ -450,7 +450,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	if req != nil {
 		callerSessionID = req.CheckoutSessionID()
 	}
-	if activeSession.GetID() != callerSessionID {
+	if activeSession != nil && activeSession.GetID() != callerSessionID {
 		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
 	}
 
@@ -1027,7 +1027,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	if err != nil {
 		return err
 	}
-	if activeSession.GetID() != req.CheckoutSessionID() {
+	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
 		return errInvoiceCheckoutGated(id, "finalize")
 	}
 
@@ -1389,7 +1389,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	if err != nil {
 		return nil, err
 	}
-	if activeSession.GetID() != req.CheckoutSessionID() {
+	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
 		return nil, errInvoiceCheckoutGated(id, "void")
 	}
 
@@ -4065,6 +4065,13 @@ func applyTaxResultToInvoice(inv *invoice.Invoice, result *TaxCalculationResult)
 func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Only apply_discount moves the amount; metadata-only updates (vendor sync) stay allowed.
+	if req.ApplyDiscount {
+		if err := s.rejectGatedInvoiceEdit(ctx, id, "re-apply discounts on"); err != nil {
+			return nil, err
+		}
 	}
 
 	// Finalized + apply_discount runs void-and-recreate and the update lands on the copy.
