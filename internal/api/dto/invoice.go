@@ -29,23 +29,34 @@ type InvoiceLineItemCoupon struct {
 	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
-// InvoiceStateChangeSource identifies the caller of a guarded invoice state change, so the
-// checkout session owning an invoice can act on it while every other caller is held off.
-// Unexported and json:"-" — the caller identity is only ever set server-side.
+// InvoiceStateChangeSourceType names the kind of caller behind a guarded state change.
+type InvoiceStateChangeSourceType string
+
+const (
+	InvoiceStateChangeSourceCheckoutSession InvoiceStateChangeSourceType = "checkout_session"
+)
+
+// InvoiceStateChangeSource identifies the caller of a guarded state change, so the session
+// owning an invoice can act on it. Unexported and json:"-" — server-set only.
 type InvoiceStateChangeSource struct {
-	checkoutSessionID string `json:"-"`
+	sourceType InvoiceStateChangeSourceType
+	sourceID   string
 }
 
-func NewInvoiceStateChangeSource(checkoutSessionID string) InvoiceStateChangeSource {
-	return InvoiceStateChangeSource{checkoutSessionID: checkoutSessionID}
+func NewCheckoutSessionSource(sessionID string) InvoiceStateChangeSource {
+	return InvoiceStateChangeSource{
+		sourceType: InvoiceStateChangeSourceCheckoutSession,
+		sourceID:   sessionID,
+	}
 }
 
+// CheckoutSessionID is empty unless the caller is the checkout session itself.
 func (i *InvoiceStateChangeSource) CheckoutSessionID() string {
-	if i == nil {
+	if i == nil || i.sourceType != InvoiceStateChangeSourceCheckoutSession {
 		return ""
 	}
 
-	return i.checkoutSessionID
+	return i.sourceID
 }
 
 // FinalizeInvoiceRequest carries caller identity for the finalization guard.
@@ -155,6 +166,9 @@ type CreateInvoiceRequest struct {
 	// checkout gates this invoice behind a hosted payment session: created DRAFT, finalized
 	// only when the payment webhook lands. One-off invoices only.
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
+
+	// SourceType is server-set only; a caller must not be able to claim provenance.
+	SourceType types.InvoiceSourceType `json:"-"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
@@ -175,6 +189,7 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 		IdempotencyKey: r.IdempotencyKey,
 		InvoicePDFURL:  r.InvoicePDFURL,
 		IssueDate:      r.IssueDate,
+		SourceType:     r.SourceType,
 	}
 }
 
@@ -231,6 +246,18 @@ type CreateDraftInvoiceRequest struct {
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
 	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
+	// SourceType is server-set only; a caller must not be able to claim provenance.
+	SourceType types.InvoiceSourceType `json:"-"`
+}
+
+// CreateSubscriptionDraftInvoiceRequest is the input for CreateDraftInvoiceForSubscription.
+type CreateSubscriptionDraftInvoiceRequest struct {
+	SubscriptionID string
+	PeriodStart    time.Time
+	PeriodEnd      time.Time
+	ReferencePoint types.InvoiceReferencePoint
+	// SourceType stamps provenance on the draft; empty for ordinary billing.
+	SourceType types.InvoiceSourceType
 }
 
 // Validate validates the draft invoice creation request.
@@ -305,6 +332,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		BillingPeriod:          r.BillingPeriod,
 		PeriodEnd:              r.PeriodEnd,
 		BillingReason:          string(r.BillingReason),
+		SourceType:             r.SourceType,
 		Metadata:               r.Metadata,
 		InvoicePDFURL:          r.InvoicePDFURL,
 		InvoiceStatus:          types.InvoiceStatusDraft,

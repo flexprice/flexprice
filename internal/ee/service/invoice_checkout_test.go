@@ -322,17 +322,17 @@ func (s *InvoiceServiceSuite) TestGatedInvoice_OwningSessionIsAdmitted() {
 	ctx := s.GetContext()
 
 	_, _, err := s.service.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{
-		InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource("cs_someone_else"),
+		InvoiceStateChangeSource: dto.NewCheckoutSessionSource("cs_someone_else"),
 	})
 	s.Require().Error(err, "a different session must still be blocked")
 	s.Contains(err.Error(), "gated by an active checkout session")
 
 	s.Require().NoError(s.service.FinalizeInvoice(ctx, inv.ID, dto.FinalizeInvoiceRequest{
-		InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource(sessionID),
+		InvoiceStateChangeSource: dto.NewCheckoutSessionSource(sessionID),
 	}), "the owning session must be admitted")
 
 	_, err = s.service.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{
-		InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource(sessionID),
+		InvoiceStateChangeSource: dto.NewCheckoutSessionSource(sessionID),
 	})
 	s.Require().NoError(err, "the owning session must be admitted")
 }
@@ -352,7 +352,9 @@ func (s *InvoiceServiceSuite) TestGatedInvoice_IsFinalizationDueSkipsWhileSessio
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, inv.CheckoutSession.ID, &types.CheckoutProviderResult{}))
 
 	// Completion finalized it, so it is no longer a draft — the guard no longer applies.
-	gating, err := s.service.(*invoiceService).activeCheckoutSessionForInvoice(ctx, inv.ID)
+	domainInv, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	gating, _, err := s.service.(*invoiceService).checkoutGate(ctx, domainInv, "")
 	s.Require().NoError(err)
 	s.Nil(gating, "a completed session must stop gating")
 }

@@ -2947,7 +2947,7 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_MapsReferenc
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.invoiceRepo.Clear()
-			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, s.testData.subscription.ID, periodStart, periodEnd, tt.ref)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: tt.ref})
 			s.Require().NoError(err)
 			s.Equal(string(tt.wantReason), draft.BillingReason)
 		})
@@ -3008,7 +3008,7 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartC
 	}}
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
 
-	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.ReferencePointPeriodStart)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: sub.ID, PeriodStart: sub.CurrentPeriodStart, PeriodEnd: sub.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
 
 	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
@@ -3043,13 +3043,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDraft
 	s.invoiceRepo.Clear()
 	s.seedInvoiceConfigDelay(0)
 
-	draft, err := s.service.CreateDraftInvoiceForSubscription(
-		ctx,
-		s.testData.subscription.ID,
-		s.testData.subscription.CurrentPeriodStart,
-		s.testData.subscription.CurrentPeriodEnd,
-		types.ReferencePointPeriodStart,
-	)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: s.testData.subscription.CurrentPeriodStart, PeriodEnd: s.testData.subscription.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
 
 	computedAt := time.Now().UTC().Add(-time.Hour)
@@ -3070,9 +3064,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 
 	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
 	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
-	draft, err := s.service.CreateDraftInvoiceForSubscription(
-		ctx, s.testData.subscription.ID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
-	)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
 	s.Require().NoError(err)
 
 	computedAt := periodEnd.Add(time.Hour)

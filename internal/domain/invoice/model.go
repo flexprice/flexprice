@@ -140,6 +140,9 @@ type Invoice struct {
 	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
 
+	// source_type is immutable provenance; "checkout" is what the invoice guards key off.
+	SourceType types.InvoiceSourceType `json:"source_type,omitempty"`
+
 	// is_manually_edited is true once a user has manually added, edited, or removed a line item on this draft invoice.
 	// Once set, automated recomputation of this invoice's line items must no-op rather than overwrite the manual edit.
 	IsManuallyEdited bool `json:"is_manually_edited"`
@@ -217,6 +220,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Version:                    e.Version,
 		EnvironmentID:              e.EnvironmentID,
 		RecalculatedInvoiceID:      e.RecalculatedInvoiceID,
+		SourceType:                 e.SourceType,
 		IsManuallyEdited:           e.IsManuallyEdited,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,

@@ -5,23 +5,26 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// startCheckoutOnOneOffInvoice creates the one-off invoice as a computed DRAFT and opens a
-// hosted checkout session over it. It finalizes only when the payment webhook lands.
+// startCheckoutOnOneOffInvoice creates the invoice as a computed DRAFT behind a checkout
+// session. It finalizes only when the payment webhook lands.
 func (s *invoiceService) startCheckoutOnOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+	req.SourceType = types.InvoiceSourceTypeCheckout
+
 	draft, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
 	if err != nil {
 		return nil, err
 	}
 
 	// A repeated idempotency key returns the same draft; a second session over it would
-	// collide on CreatePaymentForCheckout's {checkout_invoice_id, gateway} key.
-	existing, err := s.activeCheckoutSessionForInvoice(ctx, draft.ID)
+	// collide on the payment's {checkout_invoice_id, gateway} key.
+	existing, _, err := s.checkoutGate(ctx, &draft.Invoice, "")
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +45,7 @@ func (s *invoiceService) startCheckoutOnOneOffInvoice(ctx context.Context, req d
 			Mark(ierr.ErrValidation)
 	}
 
-	// Credits are debited at compute, so the void is what returns them.
+	// Credits are debited at compute; the void is what returns them.
 	if inv.AmountDue.LessThanOrEqual(decimal.Zero) {
 		if _, err := s.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{}); err != nil {
 			s.Logger.Error(ctx, "failed to void fully-credited gated invoice",
@@ -72,7 +75,7 @@ func (s *invoiceService) startCheckoutOnOneOffInvoice(ctx context.Context, req d
 	return s.gatedInvoiceResponse(ctx, inv.ID, sessionResp)
 }
 
-// gatedInvoiceResponse re-reads the invoice so taxes, customer and line items are populated.
+// gatedInvoiceResponse re-reads so taxes, customer and line items are populated.
 func (s *invoiceService) gatedInvoiceResponse(ctx context.Context, invoiceID string, session *dto.CheckoutSessionResponse) (*dto.InvoiceResponse, error) {
 	resp, err := s.GetInvoice(ctx, invoiceID)
 	if err != nil {
@@ -89,42 +92,35 @@ func (s *invoiceService) archiveGatedDraft(ctx context.Context, invoiceID string
 	}
 }
 
-// activeCheckoutSessionForInvoice returns the session gating this invoice, or nil.
-// At most one is active per invoice.
-func (s *invoiceService) activeCheckoutSessionForInvoice(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
+// checkoutGate reports the session gating this invoice and whether it is the caller's own.
+// source_type short-circuits the query for invoices no checkout created. Callers admit the
+// owning session: it finalizes and voids while still non-terminal.
+func (s *invoiceService) checkoutGate(ctx context.Context, inv *invoice.Invoice, callerSessionID string) (*domainCheckout.CheckoutSession, bool, error) {
+	if inv == nil || inv.SourceType != types.InvoiceSourceTypeCheckout {
+		return nil, false, nil
+	}
+
 	filter := types.NewNoLimitQueryFilter()
 	filter.Limit = lo.ToPtr(1)
 
 	sessions, err := s.CheckoutSessionRepo.List(ctx, &types.CheckoutSessionFilter{
 		QueryFilter:        filter,
-		CheckoutInvoiceIDs: []string{invoiceID},
+		CheckoutInvoiceIDs: []string{inv.ID},
 		CheckoutStatuses:   types.ActiveCheckoutStatuses(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(sessions) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
-	return sessions[0], nil
+
+	gating := sessions[0]
+	return gating, gating.ID == callerSessionID, nil
 }
 
-// rejectGatedInvoiceEdit blocks an edit that changes what the customer owes while a
-// checkout session holds a payment link created at the old amount. No checkout path edits
-// an invoice, so the owning session is never admitted here.
-func (s *invoiceService) rejectGatedInvoiceEdit(ctx context.Context, invoiceID, operation string) error {
-	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID)
-	if err != nil {
-		return err
-	}
-	if activeSession != nil {
-		return errInvoiceCheckoutGated(invoiceID, operation)
-	}
-	return nil
-}
-
-// errInvoiceCheckoutGated rejects a manual state change while a checkout session owns the
-// invoice: acting mid-session strands a live payment link over an unpayable invoice.
+// errInvoiceCheckoutGated: acting mid-session strands a live payment link over an
+// invoice the customer can no longer pay.
 func errInvoiceCheckoutGated(invoiceID, operation string) error {
 	return ierr.NewError("invoice is gated by an active checkout session").
 		WithHintf("Cancel the checkout session before you %s this invoice", operation).

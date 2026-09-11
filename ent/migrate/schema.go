@@ -279,6 +279,14 @@ var (
 				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[8]},
 			},
 			{
+				Name:    "idx_checkout_session_invoice_active",
+				Unique:  false,
+				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((checkout_invoice_id IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))",
+				},
+			},
+			{
 				Name:    "idx_checkout_session_expiry",
 				Unique:  false,
 				Columns: []*schema.Column{CheckoutSessionsColumns[22]},
@@ -1232,6 +1240,7 @@ var (
 		{Name: "total_prepaid_credits_applied", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "recalculated_invoice_id", Type: field.TypeString, Nullable: true},
+		{Name: "source_type", Type: field.TypeString, Nullable: true},
 		{Name: "is_manually_edited", Type: field.TypeBool, Default: false},
 		{Name: "tax_exemption_reason_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}

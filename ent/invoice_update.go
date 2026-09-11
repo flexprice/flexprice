@@ -614,6 +614,26 @@ func (iu *InvoiceUpdate) ClearRecalculatedInvoiceID() *InvoiceUpdate {
 	return iu
 }
 
+// SetSourceType sets the "source_type" field.
+func (iu *InvoiceUpdate) SetSourceType(tst types.InvoiceSourceType) *InvoiceUpdate {
+	iu.mutation.SetSourceType(tst)
+	return iu
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableSourceType(tst *types.InvoiceSourceType) *InvoiceUpdate {
+	if tst != nil {
+		iu.SetSourceType(*tst)
+	}
+	return iu
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (iu *InvoiceUpdate) ClearSourceType() *InvoiceUpdate {
+	iu.mutation.ClearSourceType()
+	return iu
+}
+
 // SetIsManuallyEdited sets the "is_manually_edited" field.
 func (iu *InvoiceUpdate) SetIsManuallyEdited(b bool) *InvoiceUpdate {
 	iu.mutation.SetIsManuallyEdited(b)
@@ -961,6 +981,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
+	}
+	if value, ok := iu.mutation.SourceType(); ok {
+		_spec.SetField(invoice.FieldSourceType, field.TypeString, value)
+	}
+	if iu.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoice.FieldSourceType, field.TypeString)
 	}
 	if value, ok := iu.mutation.IsManuallyEdited(); ok {
 		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)
@@ -1663,6 +1689,26 @@ func (iuo *InvoiceUpdateOne) ClearRecalculatedInvoiceID() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetSourceType sets the "source_type" field.
+func (iuo *InvoiceUpdateOne) SetSourceType(tst types.InvoiceSourceType) *InvoiceUpdateOne {
+	iuo.mutation.SetSourceType(tst)
+	return iuo
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableSourceType(tst *types.InvoiceSourceType) *InvoiceUpdateOne {
+	if tst != nil {
+		iuo.SetSourceType(*tst)
+	}
+	return iuo
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (iuo *InvoiceUpdateOne) ClearSourceType() *InvoiceUpdateOne {
+	iuo.mutation.ClearSourceType()
+	return iuo
+}
+
 // SetIsManuallyEdited sets the "is_manually_edited" field.
 func (iuo *InvoiceUpdateOne) SetIsManuallyEdited(b bool) *InvoiceUpdateOne {
 	iuo.mutation.SetIsManuallyEdited(b)
@@ -2040,6 +2086,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
+	}
+	if value, ok := iuo.mutation.SourceType(); ok {
+		_spec.SetField(invoice.FieldSourceType, field.TypeString, value)
+	}
+	if iuo.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoice.FieldSourceType, field.TypeString)
 	}
 	if value, ok := iuo.mutation.IsManuallyEdited(); ok {
 		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)

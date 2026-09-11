@@ -7513,7 +7513,12 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 // Always returns a draft; ComputeInvoice later assigns number or marks SKIPPED. Delegates to invoice service.
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
 	invoiceService := NewInvoiceService(s.ServiceParams)
-	return invoiceService.CreateDraftInvoiceForSubscription(ctx, subscriptionID, period.Start, period.End, types.ReferencePointPeriodEnd)
+	return invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subscriptionID,
+		PeriodStart:    period.Start,
+		PeriodEnd:      period.End,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 }
 
 // subscriptionOriginalState holds the original subscription state before cancellation

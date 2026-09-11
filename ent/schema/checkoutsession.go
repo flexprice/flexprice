@@ -129,6 +129,13 @@ func (CheckoutSession) Indexes() []ent.Index {
 		// Customer history lookup
 		index.Fields("tenant_id", "environment_id", "customer_id").
 			StorageKey("idx_checkout_session_customer"),
+		// Invoice gate lookup: every ComputeInvoice / FinalizeInvoice / VoidInvoice asks
+		// whether a live session owns the invoice, so this must not be a scan. Partial, so
+		// the index only ever holds sessions still in flight.
+		index.Fields("tenant_id", "environment_id", "checkout_invoice_id").
+			StorageKey("idx_checkout_session_invoice_active").
+			Annotations(entsql.IndexWhere(
+				"((checkout_invoice_id IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))")),
 		// Expiry sweep (Temporal timer is primary; this is a backstop)
 		index.Fields("expires_at").
 			StorageKey("idx_checkout_session_expiry").

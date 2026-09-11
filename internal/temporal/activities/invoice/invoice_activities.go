@@ -102,9 +102,12 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 	}
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
-	draft, err := invoiceService.CreateDraftInvoiceForSubscription(
-		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
-	)
+	draft, err := invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: input.SubscriptionID,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 	if err != nil {
 		if input.SkipIfAlreadyInvoiced && ierr.IsAlreadyExists(err) {
 			s.logger.Info(ctx, "current period already invoiced, skipping (SkipIfAlreadyInvoiced=true)",

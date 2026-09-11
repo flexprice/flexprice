@@ -45,7 +45,7 @@ type InvoiceService interface {
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
-	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
+	CreateDraftInvoiceForSubscription(ctx context.Context, req dto.CreateSubscriptionDraftInvoiceRequest) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -404,32 +404,33 @@ func (s *invoiceService) CreateComputedDraftInvoice(ctx context.Context, req dto
 
 // CreateDraftInvoiceForSubscription creates a zero-dollar draft invoice without line items for a subscription period.
 // No invoice number is assigned. Use ComputeInvoice to populate line items and FinalizeInvoice to assign the number.
-func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error) {
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, req dto.CreateSubscriptionDraftInvoiceRequest) (*dto.InvoiceResponse, error) {
+	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
 	billingPeriodStr := string(sub.BillingPeriod)
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	billingReason := types.InvoiceBillingReasonSubscriptionCycle
-	switch referencePoint {
+	switch req.ReferencePoint {
 	case types.ReferencePointPeriodStart:
 		billingReason = types.InvoiceBillingReasonSubscriptionCreate
 	case types.ReferencePointCancel:
 		billingReason = types.InvoiceBillingReasonProration
 	}
-	req := dto.CreateDraftInvoiceRequest{
+	draftReq := dto.CreateDraftInvoiceRequest{
 		CustomerID:     invoicingCustomerID,
 		SubscriptionID: lo.ToPtr(sub.ID),
 		InvoiceType:    types.InvoiceTypeSubscription,
 		Currency:       sub.Currency,
 		BillingPeriod:  &billingPeriodStr,
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
+		PeriodStart:    &req.PeriodStart,
+		PeriodEnd:      &req.PeriodEnd,
 		BillingReason:  billingReason,
+		SourceType:     req.SourceType,
 	}
-	req.SubscriptionCustomerID = &sub.CustomerID
-	return s.CreateEmptyDraftInvoice(ctx, req)
+	draftReq.SubscriptionCustomerID = &sub.CustomerID
+	return s.CreateEmptyDraftInvoice(ctx, draftReq)
 }
 
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
@@ -441,24 +442,24 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 // Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
 // OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
-	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID)
-	if err != nil {
-		return nil, false, err
-	}
-	// req is nil on the subscription path, which never owns a session.
-	var callerSessionID string
-	if req != nil {
-		callerSessionID = req.CheckoutSessionID()
-	}
-	if activeSession != nil && activeSession.GetID() != callerSessionID {
-		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
-	}
-
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return nil, false, err
+	}
+
+	// req is nil on the subscription path, which never owns a session.
+	var callerSessionID string
+	if req != nil {
+		callerSessionID = req.CheckoutSessionID()
+	}
+	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, callerSessionID)
+	if err != nil {
+		return nil, false, err
+	}
+	if gating != nil && !ownedByCaller {
+		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
 	}
 
 	// Early return for finalized/voided — no lock needed, these are immutable.
@@ -1023,17 +1024,17 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 }
 
 func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto.FinalizeInvoiceRequest) error {
-	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
-	if err != nil {
-		return err
-	}
-	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
-		return errInvoiceCheckoutGated(id, "finalize")
-	}
-
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, req.CheckoutSessionID())
+	if err != nil {
+		return err
+	}
+	if gating != nil && !ownedByCaller {
+		return errInvoiceCheckoutGated(id, "finalize")
 	}
 
 	if err := s.performFinalizeInvoiceActions(ctx, inv); err != nil {
@@ -1224,9 +1225,11 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 
 	// A draft under an open checkout is the customer's to pay, not the cron's to finalize.
 	// Completion finalizes it; expiry voids it.
-	if activeSession, err := s.activeCheckoutSessionForInvoice(ctx, invoiceID); err != nil {
+	gating, _, err := s.checkoutGate(ctx, inv, "")
+	if err != nil {
 		return false, err
-	} else if activeSession != nil {
+	}
+	if gating != nil {
 		return false, nil
 	}
 
@@ -1385,17 +1388,17 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		return nil, err
 	}
 
-	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
-		return nil, errInvoiceCheckoutGated(id, "void")
-	}
-
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	gating, ownedByCaller, err := s.checkoutGate(ctx, inv, req.CheckoutSessionID())
+	if err != nil {
+		return nil, err
+	}
+	if gating != nil && !ownedByCaller {
+		return nil, errInvoiceCheckoutGated(id, "void")
 	}
 
 	if err := validateInvoiceVoidable(inv); err != nil {
@@ -1914,17 +1917,17 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv 
 }
 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
-	activeSession, err := s.activeCheckoutSessionForInvoice(ctx, id)
-	if err != nil {
-		return err
-	}
-	if activeSession.GetID() != "" {
-		return errInvoiceCheckoutGated(id, "update the payment status of")
-	}
-
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	gating, _, err := s.checkoutGate(ctx, inv, "")
+	if err != nil {
+		return err
+	}
+	if gating != nil {
+		return errInvoiceCheckoutGated(id, "update the payment status of")
 	}
 
 	// Validate the invoice status
@@ -4069,8 +4072,16 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 
 	// Only apply_discount moves the amount; metadata-only updates (vendor sync) stay allowed.
 	if req.ApplyDiscount {
-		if err := s.rejectGatedInvoiceEdit(ctx, id, "re-apply discounts on"); err != nil {
+		current, err := s.InvoiceRepo.Get(ctx, id)
+		if err != nil {
 			return nil, err
+		}
+		gating, _, err := s.checkoutGate(ctx, current, "")
+		if err != nil {
+			return nil, err
+		}
+		if gating != nil {
+			return nil, errInvoiceCheckoutGated(id, "re-apply discounts on")
 		}
 	}
 

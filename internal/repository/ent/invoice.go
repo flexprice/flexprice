@@ -66,6 +66,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
+		SetSourceType(inv.SourceType).
 		SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
 		SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
 		SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
@@ -176,6 +177,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetTotalTax(inv.TotalTax).
 			SetNillableTaxExemptionReasonCode(inv.TaxExemptionReasonCode).
 			SetAmountRemaining(inv.AmountRemaining).
+			SetSourceType(inv.SourceType).
 			SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
 			SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
 			SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
@@ -570,6 +572,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
+		SetSourceType(inv.SourceType).
 		SetNillableInvoiceNumber(inv.InvoiceNumber).
 		SetNillableBillingSequence(inv.BillingSequence).
 		SetUpdatedAt(time.Now()).

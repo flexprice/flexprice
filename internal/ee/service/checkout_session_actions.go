@@ -483,7 +483,7 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	}
 	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
 		if err := invSvc.FinalizeInvoice(ctx, invoiceID, dto.FinalizeInvoiceRequest{
-			InvoiceStateChangeSource: dto.NewInvoiceStateChangeSource(sessionID),
+			InvoiceStateChangeSource: dto.NewCheckoutSessionSource(sessionID),
 		}); err != nil {
 			return err
 		}

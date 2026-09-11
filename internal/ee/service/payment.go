@@ -219,7 +219,7 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 	// A gated draft already has a live payment link; a second payment here would double-charge
 	// and settle the invoice outside FinalizeInvoice, leaving it finalized with no number.
 	invSvc := NewInvoiceService(s.ServiceParams).(*invoiceService)
-	gating, err := invSvc.activeCheckoutSessionForInvoice(ctx, invoice.ID)
+	gating, _, err := invSvc.checkoutGate(ctx, invoice, "")
 	if err != nil {
 		return err
 	}
