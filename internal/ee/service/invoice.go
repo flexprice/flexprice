@@ -1925,7 +1925,8 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
 	var inv *invoice.Invoice
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, id)
+		var err error
+		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, id)
 		if err != nil {
 			return err
 		}
