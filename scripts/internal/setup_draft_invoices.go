@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -179,13 +180,12 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 			continue
 		}
 
-		invoiceResp, err := invoiceSvc.CreateDraftInvoiceForSubscription(
-			ctx,
-			subID,
-			periodStart,
-			periodEnd,
-			types.ReferencePointPeriodEnd,
-		)
+		invoiceResp, err := invoiceSvc.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+			SubscriptionID: subID,
+			PeriodStart:    periodStart,
+			PeriodEnd:      periodEnd,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		})
 		if err != nil {
 			log.Printf("  ERROR: failed to create/get draft invoice for %s: %v\n", subID, err)
 			totalSubsErrored++
