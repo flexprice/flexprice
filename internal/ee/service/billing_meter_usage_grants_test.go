@@ -134,9 +134,9 @@ func TestAdjustMeterUsageGrants_QuantityLane_SumOfOverages(t *testing.T) {
 	li := linItem(false, false)
 	c := charge(flatPrice(0.5))
 	grants := []*entitlementgrant.EntitlementGrant{
-		makeGrant(100, 40, types.EntitlementGrantMeasureQuantity),   // no overage
-		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),  // overage 150
-		makeGrant(50, 60, types.EntitlementGrantMeasureQuantity),    // overage 10
+		makeGrant(100, 40, types.EntitlementGrantMeasureQuantity),  // no overage
+		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity), // overage 150
+		makeGrant(50, 60, types.EntitlementGrantMeasureQuantity),   // overage 10
 	}
 
 	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil)

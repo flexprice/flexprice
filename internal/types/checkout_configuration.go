@@ -13,6 +13,7 @@ type CheckoutConfiguration struct {
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
+	PayInvoiceParams         *PayInvoiceParams         `json:"pay_invoice_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -48,6 +49,13 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.AddAddonParams.Validate()
+	case CheckoutActionPayInvoice:
+		if c.PayInvoiceParams == nil {
+			return ierr.NewError("pay_invoice_params is required for pay_invoice action").
+				WithHint("Provide pay_invoice_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.PayInvoiceParams.Validate()
 	}
 	return nil
 }
@@ -229,6 +237,20 @@ func (p *AddAddonParams) Validate() error {
 type WalletTopupParams struct {
 	WalletID            string `json:"wallet_id" validate:"required"`
 	WalletTransactionID string `json:"wallet_transaction_id,omitempty"`
+}
+
+// PayInvoiceParams is persisted on checkout sessions for payment-gated one-off invoices.
+// InvoiceID duplicates session.CheckoutInvoiceID so completion can cross-check the two.
+type PayInvoiceParams struct {
+	InvoiceID string `json:"invoice_id" validate:"required"`
+}
+
+func (p *PayInvoiceParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("pay_invoice_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	return validator.ValidateRequest(p)
 }
 
 func (p *WalletTopupParams) Validate() error {

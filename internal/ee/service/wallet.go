@@ -1125,6 +1125,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		var skipped bool
 		if isPayFirst {
 			// Pay-first: leave DRAFT until checkout complete finalizes + reconciles.
+			invReq.SourceType = types.InvoiceSourceTypeCheckout
 			inv, skipped, err = invoiceService.CreateComputedDraftInvoice(ctx, invReq)
 			if err != nil {
 				return ierr.WithError(err).

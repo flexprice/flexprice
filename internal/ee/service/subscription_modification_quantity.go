@@ -885,6 +885,7 @@ func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
 	}
 
 	req := buildAggregatedProrationChargeInvoiceRequest(sub, items)
+	req.SourceType = types.InvoiceSourceTypeCheckout
 
 	invoiceSvc := NewInvoiceService(s.serviceParams)
 	inv, skipped, err := invoiceSvc.CreateComputedDraftInvoice(ctx, req)
@@ -986,7 +987,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 				).
 				Mark(ierr.ErrValidation)
 		}
-		
+
 		return &dto.ChangedInvoice{
 			ID:      latest.ID,
 			Action:  dto.ChangedInvoiceActionCreated,

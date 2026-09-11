@@ -75,6 +75,21 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 	return &session, nil
 }
 
+func (s *InMemoryCheckoutSessionStore) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
+	sessions, err := s.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CheckoutInvoiceIDs: []string{invoiceID},
+		CheckoutStatuses:   types.ActiveCheckoutStatuses(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+	return sessions[0], nil
+}
+
 func (s *InMemoryCheckoutSessionStore) Update(ctx context.Context, session *domainCheckout.CheckoutSession) error {
 	return s.InMemoryStore.Update(ctx, session.ID, session)
 }
@@ -106,6 +121,36 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 		found := false
 		for _, st := range filter.CheckoutStatuses {
 			if session.CheckoutStatus == st {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.CheckoutInvoiceIDs) > 0 {
+		if session.CheckoutInvoiceID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutInvoiceIDs {
+			if *session.CheckoutInvoiceID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.CheckoutPaymentIDs) > 0 {
+		if session.CheckoutPaymentID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutPaymentIDs {
+			if *session.CheckoutPaymentID == id {
 				found = true
 				break
 			}

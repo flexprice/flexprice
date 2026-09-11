@@ -962,6 +962,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
 	}
+	if iu.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoice.FieldSourceType, field.TypeString)
+	}
 	if value, ok := iu.mutation.IsManuallyEdited(); ok {
 		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)
 	}
@@ -2040,6 +2043,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
+	}
+	if iuo.mutation.SourceTypeCleared() {
+		_spec.ClearField(invoice.FieldSourceType, field.TypeString)
 	}
 	if value, ok := iuo.mutation.IsManuallyEdited(); ok {
 		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)

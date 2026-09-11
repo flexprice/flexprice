@@ -51,6 +51,7 @@ func (s *SubscriptionThresholdBillingTestSuite) TearDownTest() {
 
 func (s *SubscriptionThresholdBillingTestSuite) setupService() {
 	s.service = NewSubscriptionService(ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),

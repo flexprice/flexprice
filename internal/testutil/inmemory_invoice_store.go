@@ -130,6 +130,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		LastComputedAt:             inv.LastComputedAt,
+		SourceType:                 inv.SourceType,
 		IsManuallyEdited:           inv.IsManuallyEdited,
 		BaseModel:                  inv.BaseModel,
 	}

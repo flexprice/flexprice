@@ -118,12 +118,8 @@ func (s *CheckoutPollSuite) SetupTest() {
 	}
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
-	s.svc = &checkoutSessionService{
-		ServiceParams: s.buildParams(),
-		checkoutProviderFor: func(context.Context, types.CheckoutPaymentProvider) (interfaces.CheckoutProvider, error) {
-			return s.provider, nil
-		},
-	}
+	s.GetIntegrationFactory().SetCheckoutProvider(s.provider)
+	s.svc = NewCheckoutSessionService(s.buildParams()).(*checkoutSessionService)
 }
 
 func (s *CheckoutPollSuite) buildParams() ServiceParams {
@@ -336,6 +332,7 @@ func (s *CheckoutPollSuite) TestTerminalSession_MakesNoProviderCall() {
 	} {
 		s.Run(string(status), func() {
 			s.provider = &fakeCheckoutProvider{}
+			s.GetIntegrationFactory().SetCheckoutProvider(s.provider)
 			session := s.seedSession(status, "plink_001", "")
 
 			stale := s.svc.refreshSessionFromGateway(s.GetContext(), session).stale

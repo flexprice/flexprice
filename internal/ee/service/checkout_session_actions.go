@@ -280,12 +280,34 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 		return s.completeWalletTopupCheckout(ctx, session, providerResult)
 	case types.CheckoutActionAddAddon:
 		return s.completeAddAddonCheckout(ctx, session, providerResult)
+	case types.CheckoutActionPayInvoice:
+		return s.completePayInvoiceCheckout(ctx, session, providerResult)
 	default:
 		return ierr.NewError("unsupported checkout action for completion").
 			WithHint("No completion handler for this action type").
 			WithReportableDetails(map[string]any{"action": session.Action}).
 			Mark(ierr.ErrValidation)
 	}
+}
+
+// completePayInvoiceCheckout finalizes the gated one-off invoice and settles its payment.
+// Nothing to replay — everything was computed at creation.
+func (s *checkoutSessionService) completePayInvoiceCheckout(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	providerResult *types.CheckoutProviderResult,
+) error {
+	if err := dto.ValidateCheckoutSessionForCompletion(session); err != nil {
+		return err
+	}
+
+	return s.finalizeCheckoutInvoiceAndPayment(
+		ctx,
+		session.ID,
+		*session.CheckoutInvoiceID,
+		*session.CheckoutPaymentID,
+		providerResult,
+	)
 }
 
 // completeModifySubscriptionCheckout applies the saved quantity-change request (C), then
@@ -314,7 +336,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 		return err
 	}
 
-	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceID, paymentID, providerResult); err != nil {
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, invoiceID, paymentID, providerResult); err != nil {
 		return err
 	}
 
@@ -344,7 +366,7 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 		return err
 	}
 
-	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceID, paymentID, providerResult); err != nil {
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, invoiceID, paymentID, providerResult); err != nil {
 		return err
 	}
 
@@ -385,6 +407,7 @@ func (s *checkoutSessionService) completeWalletTopupCheckout(
 
 	return s.finalizeCheckoutInvoiceAndPayment(
 		ctx,
+		session.ID,
 		*session.CheckoutInvoiceID,
 		*session.CheckoutPaymentID,
 		providerResult,
@@ -427,7 +450,7 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceId, paymentId, providerResult); err != nil {
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, invoiceId, paymentId, providerResult); err != nil {
 		return err
 	}
 
@@ -448,6 +471,7 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 // marks the checkout payment SUCCEEDED, and reconciles invoice payment status.
 func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	ctx context.Context,
+	sessionID string,
 	invoiceID string,
 	paymentID string,
 	providerResult *types.CheckoutProviderResult,
@@ -458,7 +482,9 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 		return err
 	}
 	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
-		if err := invSvc.FinalizeInvoice(ctx, invoiceID); err != nil {
+		if err := invSvc.FinalizeInvoice(ctx, invoiceID, dto.FinalizeInvoiceRequest{
+			InvoiceStateChangeSource: dto.NewCheckoutSessionSource(sessionID),
+		}); err != nil {
 			return err
 		}
 	}

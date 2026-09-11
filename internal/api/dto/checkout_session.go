@@ -96,6 +96,13 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// pay_invoice sessions are created only via one-off invoice creation (pay-first).
+	if r.Action == types.CheckoutActionPayInvoice {
+		return ierr.NewError("pay_invoice is not supported via create checkout session").
+			WithHint("Use POST /invoices with a checkout object instead").
+			Mark(ierr.ErrValidation)
+	}
+
 	if cfg := r.Configuration.CreateSubscriptionParams; cfg != nil && cfg.SubscriptionID != "" {
 		return ierr.NewError("subscription_id is not supported via create checkout session").
 			WithHint("Use POST /subscriptions with a checkout object to gate an existing draft subscription").
@@ -252,6 +259,21 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 				Mark(ierr.ErrValidation)
 		}
 		return cfg.AddAddonParams.Validate()
+	case types.CheckoutActionPayInvoice:
+		if cfg.PayInvoiceParams == nil {
+			return ierr.NewError("session has no pay_invoice_params").
+				WithHint("checkout session must have pay_invoice_params before it can be completed").
+				Mark(ierr.ErrValidation)
+		}
+		if err := cfg.PayInvoiceParams.Validate(); err != nil {
+			return err
+		}
+		if cfg.PayInvoiceParams.InvoiceID != *session.CheckoutInvoiceID {
+			return ierr.NewError("pay_invoice_params.invoice_id does not match checkout_invoice_id").
+				WithHint("checkout session invoice does not match the invoice it was created for").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 	default:
 		return nil
 	}

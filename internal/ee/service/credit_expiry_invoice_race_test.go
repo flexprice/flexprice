@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"testing"
 	"time"
 
@@ -469,7 +470,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestTwoWorkflows_FinalizationConsumesGran
 	s.Equal(types.CreditExpirySkipReasonActiveInvoice, held.SkipReason)
 
 	// --- finalize workflow: credits are applied here ---
-	s.Require().NoError(s.invoiceService.FinalizeInvoice(s.GetContext(), inv.ID))
+	s.Require().NoError(s.invoiceService.FinalizeInvoice(s.GetContext(), inv.ID, dto.FinalizeInvoiceRequest{}))
 
 	finalized, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
 	s.Require().NoError(err)

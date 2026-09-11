@@ -577,7 +577,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			if !skipped {
 				invSvc := NewInvoiceService(s.ServiceParams)
 
-				if err := invSvc.FinalizeInvoice(ctx, invResp.ID); err != nil {
+				if err := invSvc.FinalizeInvoice(ctx, invResp.ID, dto.FinalizeInvoiceRequest{}); err != nil {
 					s.archiveDraftCheckoutSubscription(ctx, response.ID)
 					return nil, err
 				}
@@ -7517,7 +7517,12 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 // Always returns a draft; ComputeInvoice later assigns number or marks SKIPPED. Delegates to invoice service.
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
 	invoiceService := NewInvoiceService(s.ServiceParams)
-	return invoiceService.CreateDraftInvoiceForSubscription(ctx, subscriptionID, period.Start, period.End, types.ReferencePointPeriodEnd)
+	return invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subscriptionID,
+		PeriodStart:    period.Start,
+		PeriodEnd:      period.End,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 }
 
 // subscriptionOriginalState holds the original subscription state before cancellation

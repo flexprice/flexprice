@@ -32848,6 +32848,7 @@ type InvoiceMutation struct {
 	total_prepaid_credits_applied *decimal.Decimal
 	idempotency_key               *string
 	recalculated_invoice_id       *string
+	source_type                   *types.InvoiceSourceType
 	is_manually_edited            *bool
 	tax_exemption_reason_code     *types.TaxExemptionReasonCode
 	clearedFields                 map[string]struct{}
@@ -34945,6 +34946,55 @@ func (m *InvoiceMutation) ResetRecalculatedInvoiceID() {
 	delete(m.clearedFields, invoice.FieldRecalculatedInvoiceID)
 }
 
+// SetSourceType sets the "source_type" field.
+func (m *InvoiceMutation) SetSourceType(tst types.InvoiceSourceType) {
+	m.source_type = &tst
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *InvoiceMutation) SourceType() (r types.InvoiceSourceType, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldSourceType(ctx context.Context) (v types.InvoiceSourceType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (m *InvoiceMutation) ClearSourceType() {
+	m.source_type = nil
+	m.clearedFields[invoice.FieldSourceType] = struct{}{}
+}
+
+// SourceTypeCleared returns if the "source_type" field was cleared in this mutation.
+func (m *InvoiceMutation) SourceTypeCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldSourceType]
+	return ok
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *InvoiceMutation) ResetSourceType() {
+	m.source_type = nil
+	delete(m.clearedFields, invoice.FieldSourceType)
+}
+
 // SetIsManuallyEdited sets the "is_manually_edited" field.
 func (m *InvoiceMutation) SetIsManuallyEdited(b bool) {
 	m.is_manually_edited = &b
@@ -35172,7 +35222,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 45)
+	fields := make([]string, 0, 46)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -35302,6 +35352,9 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.recalculated_invoice_id != nil {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
+	if m.source_type != nil {
+		fields = append(fields, invoice.FieldSourceType)
+	}
 	if m.is_manually_edited != nil {
 		fields = append(fields, invoice.FieldIsManuallyEdited)
 	}
@@ -35402,6 +35455,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.IdempotencyKey()
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.RecalculatedInvoiceID()
+	case invoice.FieldSourceType:
+		return m.SourceType()
 	case invoice.FieldIsManuallyEdited:
 		return m.IsManuallyEdited()
 	case invoice.FieldTaxExemptionReasonCode:
@@ -35501,6 +35556,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIdempotencyKey(ctx)
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.OldRecalculatedInvoiceID(ctx)
+	case invoice.FieldSourceType:
+		return m.OldSourceType(ctx)
 	case invoice.FieldIsManuallyEdited:
 		return m.OldIsManuallyEdited(ctx)
 	case invoice.FieldTaxExemptionReasonCode:
@@ -35815,6 +35872,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRecalculatedInvoiceID(v)
 		return nil
+	case invoice.FieldSourceType:
+		v, ok := value.(types.InvoiceSourceType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
+		return nil
 	case invoice.FieldIsManuallyEdited:
 		v, ok := value.(bool)
 		if !ok {
@@ -35976,6 +36040,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldRecalculatedInvoiceID) {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
+	if m.FieldCleared(invoice.FieldSourceType) {
+		fields = append(fields, invoice.FieldSourceType)
+	}
 	if m.FieldCleared(invoice.FieldTaxExemptionReasonCode) {
 		fields = append(fields, invoice.FieldTaxExemptionReasonCode)
 	}
@@ -36082,6 +36149,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ClearRecalculatedInvoiceID()
+		return nil
+	case invoice.FieldSourceType:
+		m.ClearSourceType()
 		return nil
 	case invoice.FieldTaxExemptionReasonCode:
 		m.ClearTaxExemptionReasonCode()
@@ -36222,6 +36292,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ResetRecalculatedInvoiceID()
+		return nil
+	case invoice.FieldSourceType:
+		m.ResetSourceType()
 		return nil
 	case invoice.FieldIsManuallyEdited:
 		m.ResetIsManuallyEdited()

@@ -45,6 +45,13 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 		if err != nil {
 			return err
 		}
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, inv, "")
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil {
+			return errInvoiceCheckoutGated(invoiceID, "edit line items on")
+		}
 		if inv.InvoiceStatus != types.InvoiceStatusDraft {
 			return ierr.NewError("invoice is not in draft status").
 				WithHint("invoice must be in draft status to be edited").
@@ -135,6 +142,13 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 		if err != nil {
 			return err
 		}
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, inv, "")
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil {
+			return errInvoiceCheckoutGated(invoiceID, "add line items to")
+		}
 		if inv.InvoiceStatus != types.InvoiceStatusDraft {
 			return ierr.NewError("invoice is not in draft status").
 				WithHint("invoice must be in draft status to be edited").
@@ -197,6 +211,13 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
 			return err
+		}
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, inv, "")
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil {
+			return errInvoiceCheckoutGated(invoiceID, "remove line items from")
 		}
 		if inv.InvoiceStatus != types.InvoiceStatusDraft {
 			return ierr.NewError("invoice is not in draft status").

@@ -122,6 +122,7 @@ func (s *WalletServiceSuite) setupService() {
 	s.service = NewWalletService(s.buildServiceParams())
 	stores := s.GetStores()
 	s.subsService = NewSubscriptionService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -2426,6 +2427,7 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
 	s.service = NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -2754,6 +2756,7 @@ func (s *WalletAutoTopupDirectSuite) SetupTest() {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
 	s.service = NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -2850,9 +2853,10 @@ func (s *WalletAutoTopupDirectSuite) TestDirect_NoCooldown_BurstsUntilAboveThres
 	ctx := s.GetContext()
 	// balance 5, threshold 50, amount 10 → nested re-eval should credit until > 50
 	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
-		Logger:        s.GetLogger(),
-		AlertLogsRepo: s.GetStores().AlertLogsRepo,
-		SettingsRepo:  s.GetStores().SettingsRepo,
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+		Logger:              s.GetLogger(),
+		AlertLogsRepo:       s.GetStores().AlertLogsRepo,
+		SettingsRepo:        s.GetStores().SettingsRepo,
 	}), "")
 	s.NoError(err)
 
@@ -2893,9 +2897,10 @@ func (s *WalletAutoTopupDirectSuite) TestDirect_WithCooldown_OneShotPerWindow() 
 	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
 
 	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
-		Logger:        s.GetLogger(),
-		AlertLogsRepo: s.GetStores().AlertLogsRepo,
-		SettingsRepo:  s.GetStores().SettingsRepo,
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+		Logger:              s.GetLogger(),
+		AlertLogsRepo:       s.GetStores().AlertLogsRepo,
+		SettingsRepo:        s.GetStores().SettingsRepo,
 	}), "")
 	s.NoError(err)
 
@@ -2951,6 +2956,7 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
 	s.service = NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),

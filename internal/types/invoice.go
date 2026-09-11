@@ -198,6 +198,29 @@ func (s InvoiceStatus) Validate() error {
 	return nil
 }
 
+// InvoiceSourceType is immutable provenance: how the invoice came into being.
+type InvoiceSourceType string
+
+const (
+	// InvoiceSourceTypeCheckout lets the invoice guards skip the session lookup for
+	// everything a checkout did not create.
+	InvoiceSourceTypeCheckout InvoiceSourceType = "checkout"
+)
+
+func (s InvoiceSourceType) String() string { return string(s) }
+
+func (s InvoiceSourceType) Validate() error {
+	allowed := []InvoiceSourceType{InvoiceSourceTypeCheckout}
+	if s != "" && !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid invoice source type").
+			WithHint("Allowed values: checkout").
+			WithReportableDetails(map[string]any{"allowed_values": allowed}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // InvoiceBillingReason indicates why an invoice was generated. It drives diverging
 // behavior throughout the compute → finalize → payment pipeline — see each constant
 // for which flows it affects.

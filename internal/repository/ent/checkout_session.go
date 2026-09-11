@@ -256,6 +256,34 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 	return fromEntCheckout(e), nil
 }
 
+func (r *checkoutSessionRepository) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
+	span := StartRepositorySpan(ctx, "checkout_session", "get_by_checkout_invoice_id", map[string]interface{}{
+		"invoice_id": invoiceID,
+	})
+	defer FinishSpan(span)
+
+	e, err := r.client.Reader(ctx).CheckoutSession.Query().
+		Where(
+			entCheckout.CheckoutInvoiceIDEQ(invoiceID),
+			entCheckout.TenantID(types.GetTenantID(ctx)),
+			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.StatusEQ(string(types.StatusPublished)),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
+		).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			SetSpanSuccess(span)
+			return nil, nil
+		}
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("get checkout session by invoice failed").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return fromEntCheckout(e), nil
+}
+
 func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error {
 	r.log.Debug(ctx, "deleting checkout session", "id", id)
 
