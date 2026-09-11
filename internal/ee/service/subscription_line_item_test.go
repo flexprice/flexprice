@@ -134,6 +134,7 @@ func (s *SubscriptionLineItemServiceSuite) TearDownTest() {
 
 func (s *SubscriptionLineItemServiceSuite) setupService() {
 	s.service = NewSubscriptionService(ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),

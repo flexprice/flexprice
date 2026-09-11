@@ -545,7 +545,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_InvoiceFailure
 	s.Require().NotEqual(types.PaymentStatusSucceeded, before.PaymentStatus)
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	err = checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, "cs_test", "inv_does_not_exist", paymentID,
+	err = checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, "inv_does_not_exist", paymentID,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_never_collected"})
 	s.Require().Error(err, "an unresolvable invoice must abort before the payment is touched")
 
@@ -571,7 +571,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_FinalizeSettle
 	paymentID := *session.CheckoutPaymentID
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, "cs_test", draft.ID, paymentID,
+	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, draft.ID, paymentID,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_order_001"}))
 
 	settled, err := s.GetStores().PaymentRepo.Get(ctx, paymentID)
@@ -602,11 +602,11 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_FinalizeIsRepl
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
 	res := &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_replay_001"}
 
-	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, "cs_test", draft.ID, paymentID, res))
+	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, draft.ID, paymentID, res))
 	first, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 
-	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, "cs_test", draft.ID, paymentID, res))
+	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, draft.ID, paymentID, res))
 	again, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 

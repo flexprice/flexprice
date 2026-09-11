@@ -11,9 +11,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// createPayGatedOneOffInvoice creates the one-off invoice as a computed DRAFT and opens a
+// startCheckoutOnOneOffInvoice creates the one-off invoice as a computed DRAFT and opens a
 // hosted checkout session over it. It finalizes only when the payment webhook lands.
-func (s *invoiceService) createPayGatedOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+func (s *invoiceService) startCheckoutOnOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
 	draft, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
 	if err != nil {
 		return nil, err
@@ -21,16 +21,12 @@ func (s *invoiceService) createPayGatedOneOffInvoice(ctx context.Context, req dt
 
 	// A repeated idempotency key returns the same draft; a second session over it would
 	// collide on CreatePaymentForCheckout's {checkout_invoice_id, gateway} key.
-	existing, err := s.CheckoutSessionRepo.List(ctx, &types.CheckoutSessionFilter{
-		QueryFilter:        types.NewNoLimitQueryFilter(),
-		CheckoutInvoiceIDs: []string{draft.ID},
-		CheckoutStatuses:   types.ActiveCheckoutStatuses(),
-	})
+	existing, err := s.activeCheckoutSessionForInvoice(ctx, draft.ID)
 	if err != nil {
 		return nil, err
 	}
-	if len(existing) > 0 {
-		return s.gatedInvoiceResponse(ctx, draft.ID, dto.ToCheckoutSessionResponse(existing[0]))
+	if existing != nil {
+		return s.gatedInvoiceResponse(ctx, draft.ID, dto.ToCheckoutSessionResponse(existing))
 	}
 
 	computeReq := req.ToComputeRequest()

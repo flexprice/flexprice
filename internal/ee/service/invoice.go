@@ -151,7 +151,7 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	req.PreparedTaxRates = preparedTaxRates
 
 	if req.Checkout != nil {
-		return s.createPayGatedOneOffInvoice(ctx, req)
+		return s.startCheckoutOnOneOffInvoice(ctx, req)
 	}
 
 	// Delegate to CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
@@ -445,7 +445,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	if err != nil {
 		return nil, false, err
 	}
-	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+	// req is nil on the subscription path, which never owns a session.
+	var callerSessionID string
+	if req != nil {
+		callerSessionID = req.CheckoutSessionID()
+	}
+	if activeSession.GetID() != callerSessionID {
 		return nil, false, errInvoiceCheckoutGated(invoiceID, "recompute")
 	}
 
@@ -1022,7 +1027,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	if err != nil {
 		return err
 	}
-	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+	if activeSession.GetID() != req.CheckoutSessionID() {
 		return errInvoiceCheckoutGated(id, "finalize")
 	}
 
@@ -1384,7 +1389,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	if err != nil {
 		return nil, err
 	}
-	if activeSession != nil && activeSession.GetID() != req.CheckoutSessionID() {
+	if activeSession.GetID() != req.CheckoutSessionID() {
 		return nil, errInvoiceCheckoutGated(id, "void")
 	}
 
@@ -1913,7 +1918,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	if err != nil {
 		return err
 	}
-	if activeSession != nil && activeSession.GetID() != "" {
+	if activeSession.GetID() != "" {
 		return errInvoiceCheckoutGated(id, "update the payment status of")
 	}
 
