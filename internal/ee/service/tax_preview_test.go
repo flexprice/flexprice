@@ -1122,18 +1122,15 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_OverridesWinOverSubscriptionAs
 	s.Equal(types.TaxBehaviorInclusive, resolved.GetRates()[0].TaxBehavior)
 }
 
-// an override with no explicit behavior falls back to the currency default, resolved
-// against the override's own currency.
-func (s *TaxCalculationSuite) TestPrepareTaxRates_OverrideWithoutBehaviorUsesCurrencyDefault() {
+// an override with no explicit behavior defaults to exclusive, regardless of currency.
+func (s *TaxCalculationSuite) TestPrepareTaxRates_OverrideWithoutBehaviorDefaultsToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
-		{name: "USD is in the exclusive list", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "CAD is in the exclusive list", currency: "cad", want: types.TaxBehaviorExclusive},
-		{name: "INR is not, so it defaults inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
-		{name: "EUR is not, so it defaults inclusive", currency: "eur", want: types.TaxBehaviorInclusive},
+		{name: "USD defaults exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
+		{name: "INR defaults exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1233,16 +1230,16 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_SubscriptionAssociationsKeepTh
 
 // a subscription-level row with a null tax_behavior should not exist (creation
 // always stamps one). If one is found anyway it is logged as an anomaly and falls back to the
-// same currency default every other unstamped resolution uses, rather than a value special to
+// same default every other unstamped resolution uses, rather than a value special to
 // this branch.
-func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFallsBackToCurrencyDefault() {
+func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFallsBackToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
 		{name: "USD falls back to exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "INR falls back to inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
+		{name: "INR falls back to exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1367,17 +1364,16 @@ func (s *TaxCalculationSuite) TestInvoiceTaxRates_NilReceiverIsSafe() {
 // / / CreateTaxAssociation
 // =============================================================================
 
-// a subscription-level association with no explicit behavior is stamped from the
-// subscription's currency, at creation, once.
-func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefaultsFromCurrency() {
+// a subscription-level association with no explicit behavior is stamped exclusive at
+// creation, once, regardless of currency.
+func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefaultsToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
-		{name: "USD is in the exclusive list", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "CAD is in the exclusive list", currency: "cad", want: types.TaxBehaviorExclusive},
-		{name: "INR is not, so it defaults inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
+		{name: "USD defaults exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
+		{name: "INR defaults exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1401,16 +1397,16 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefau
 	}
 }
 
-// An explicit behavior on the request wins over the currency default, in both directions —
-// including the case where it contradicts what the currency would have chosen.
+// An explicit behavior on the request wins over the default, in both directions —
+// including the case where it contradicts what the default would have chosen.
 func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExplicitBehaviorOverridesCurrencyDefault() {
 	tests := []struct {
 		name     string
 		currency string
 		explicit types.TaxBehavior
 	}{
-		{name: "inclusive on USD, against the currency default", currency: "usd", explicit: types.TaxBehaviorInclusive},
-		{name: "exclusive on INR, against the currency default", currency: "inr", explicit: types.TaxBehaviorExclusive},
+		{name: "inclusive on USD, against the default", currency: "usd", explicit: types.TaxBehaviorInclusive},
+		{name: "exclusive on INR, against the default", currency: "inr", explicit: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1495,8 +1491,8 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExemptCustomerSubscriptio
 	}{
 		{name: "explicit inclusive", currency: "usd", behavior: lo.ToPtr(types.TaxBehaviorInclusive)},
 		{name: "explicit exclusive", currency: "usd", behavior: lo.ToPtr(types.TaxBehaviorExclusive)},
-		{name: "currency default resolving to exclusive", currency: "usd"},
-		{name: "currency default resolving to inclusive", currency: "inr"},
+		{name: "no explicit behavior, USD", currency: "usd"},
+		{name: "no explicit behavior, INR", currency: "inr"},
 	}
 
 	for _, tt := range tests {
@@ -1546,8 +1542,7 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExemptCustomerLevelTempla
 
 // an inclusive rate above 100% would mean the tax exceeds the tax-free price it is
 // derived from. The extraction still computes, so this is rejected as a configuration error
-// rather than because the math fails. Checked against the behavior that will actually be
-// stored, so a rate that resolves to inclusive from the currency default is caught too.
+// rather than because the math fails.
 func (s *TaxCalculationSuite) TestCreateTaxAssociation_InclusiveRateAboveHundredPercentIsRejected() {
 	tests := []struct {
 		name       string
@@ -1560,11 +1555,6 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_InclusiveRateAboveHundred
 		{
 			name: "explicitly inclusive at 150%", currency: "usd",
 			behavior: lo.ToPtr(types.TaxBehaviorInclusive), percentage: 150, wantErr: true,
-		},
-		{
-			name: "inclusive via the currency default at 150%", currency: "inr",
-			percentage: 150, wantErr: true,
-			why: "INR resolves to inclusive with no explicit behavior — checking before the stamp would miss this",
 		},
 		{
 			name: "explicitly exclusive at 150%", currency: "usd",
@@ -1849,7 +1839,7 @@ func (s *TaxCalculationSuite) TestLinkTaxRatesToEntity_StampsEachOverride() {
 		EntityID:   sub.ID,
 		TaxRateOverrides: []*dto.TaxRateOverride{
 			{TaxRateCode: first.Code, Currency: "inr", AutoApply: true},
-			{TaxRateCode: second.Code, Currency: "inr", AutoApply: true, TaxBehavior: lo.ToPtr(types.TaxBehaviorExclusive)},
+			{TaxRateCode: second.Code, Currency: "inr", AutoApply: true, TaxBehavior: lo.ToPtr(types.TaxBehaviorInclusive)},
 		},
 	})
 	s.Require().NoError(err)
@@ -1866,8 +1856,8 @@ func (s *TaxCalculationSuite) TestLinkTaxRatesToEntity_StampsEachOverride() {
 	for _, r := range resolved.GetRates() {
 		behaviorByID[r.ID] = r.TaxBehavior
 	}
-	s.Equal(types.TaxBehaviorInclusive, behaviorByID[first.ID], "no explicit behavior on an INR subscription defaults inclusive")
-	s.Equal(types.TaxBehaviorExclusive, behaviorByID[second.ID], "the explicit behavior is kept")
+	s.Equal(types.TaxBehaviorExclusive, behaviorByID[first.ID], "no explicit behavior defaults exclusive")
+	s.Equal(types.TaxBehaviorInclusive, behaviorByID[second.ID], "the explicit behavior is kept")
 }
 
 // through the batch path: linking to an exempt customer's subscription is skipped,

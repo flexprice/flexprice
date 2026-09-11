@@ -5631,13 +5631,17 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		"entity_ids_filter", addonIDList,
 		"line_items_found", len(allLineItems))
 
-	deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: &effectiveDate}
 	terminated := 0
 	for _, lineItem := range allLineItems {
 		if !lineItem.EndDate.IsZero() {
 			continue
 		}
 
+		termFrom := effectiveDate
+		if lineItem.StartDate.After(effectiveDate) {
+			termFrom = lineItem.StartDate
+		}
+		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: &termFrom}
 		if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 			logger.Error(ctx, "failed to terminate addon line item",
 				"line_item_id", lineItem.ID,
