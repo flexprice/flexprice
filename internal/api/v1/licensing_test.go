@@ -61,10 +61,22 @@ func setupLicensingHandler(t *testing.T, seed string) *LicensingHandler {
 }
 
 func setupLicensingHandlerWithEmail(t *testing.T, seed, email string) *LicensingHandler {
+	return setupLicensingHandlerFull(t, seed, email, false)
+}
+
+// setupLicensingHandlerFull is the full constructor; trustEmailDomain mirrors
+// cfg.Licensing.TrustEmailDomainForStaff so tests can exercise the is_admin
+// gate both opted in and (default) opted out.
+func setupLicensingHandlerFull(t *testing.T, seed, email string, trustEmailDomain bool) *LicensingHandler {
 	t.Helper()
 	cfg := &config.Configuration{
-		Logging:   config.LoggingConfig{Level: types.LogLevelInfo},
-		Licensing: config.LicensingConfig{SigningKeySeed: seed, Region: "us-east"},
+		Logging: config.LoggingConfig{Level: types.LogLevelInfo},
+		Auth:    config.AuthConfig{APIKey: config.APIKeyConfig{Header: "x-api-key"}},
+		Licensing: config.LicensingConfig{
+			SigningKeySeed:           seed,
+			Region:                   "us-east",
+			TrustEmailDomainForStaff: trustEmailDomain,
+		},
 	}
 	log, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
@@ -72,7 +84,7 @@ func setupLicensingHandlerWithEmail(t *testing.T, seed, email string) *Licensing
 	signer, err := licensing.NewSigner(cfg)
 	require.NoError(t, err)
 
-	return NewLicensingHandler(signer, fakeUserRepo{email: email}, fakeTenantService{name: "Acme Corp"}, log)
+	return NewLicensingHandler(cfg, signer, fakeUserRepo{email: email}, fakeTenantService{name: "Acme Corp"}, log)
 }
 
 // sessionBearerToken builds a JWT carrying only an "exp" claim, mirroring what
@@ -115,8 +127,8 @@ func newLicensingRequest(t *testing.T, tenantID string, isAdmin bool, bearer str
 
 func TestIssueToken_ClaimsMatchSessionAndTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	// staff email -> is_admin true
-	h := setupLicensingHandlerWithEmail(t, makeLicensingSeed(t), "someone@flexprice.io")
+	// staff email + TrustEmailDomainForStaff opted in -> is_admin true
+	h := setupLicensingHandlerFull(t, makeLicensingSeed(t), "someone@flexprice.io", true)
 
 	sessionExp := time.Now().Add(15 * time.Minute).Truncate(time.Second)
 	bearer := sessionBearerToken(t, sessionExp)
@@ -145,6 +157,30 @@ func TestIssueToken_ClaimsMatchSessionAndTenant(t *testing.T) {
 func TestIssueToken_NonStaffGetsIsAdminFalse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := setupLicensingHandler(t, makeLicensingSeed(t))
+
+	bearer := sessionBearerToken(t, time.Now().Add(time.Minute))
+	w, c := newLicensingRequest(t, "tenant_abc", false, bearer)
+
+	h.IssueToken(c)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var body licensingTokenResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+
+	claims := &licensing.TokenClaims{}
+	_, _, err := jwt.NewParser().ParseUnverified(body.Token, claims)
+	require.NoError(t, err)
+	require.False(t, claims.IsAdmin)
+}
+
+// TestIssueToken_StaffEmailWithoutTrustFlagGetsIsAdminFalse proves the
+// is_admin elevation stays off by default: a @flexprice.io email alone must
+// not grant staff powers unless the deployment explicitly opts in via
+// cfg.Licensing.TrustEmailDomainForStaff, since the user model carries no
+// IdP-verified-email signal and self-serve email is spoofable.
+func TestIssueToken_StaffEmailWithoutTrustFlagGetsIsAdminFalse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := setupLicensingHandlerFull(t, makeLicensingSeed(t), "someone@flexprice.io", false)
 
 	bearer := sessionBearerToken(t, time.Now().Add(time.Minute))
 	w, c := newLicensingRequest(t, "tenant_abc", false, bearer)
@@ -190,6 +226,31 @@ func TestIssueToken_NonSuperAdminRejected(t *testing.T) {
 	// the observable contract is a recorded permission error and no token body.
 	require.NotEmpty(t, c.Errors)
 	require.True(t, ierr.IsPermissionDenied(c.Errors.Last().Err))
+	require.Empty(t, w.Body.String())
+}
+
+// TestIssueToken_APIKeyCallerWithForgedExpRejected proves a caller that
+// authenticated via API key (config super-admin key or a DB-backed secret)
+// cannot mint a licensing token by attaching a crafted, unverified bearer JWT
+// with a far-future exp. AuthenticateMiddleware never verifies that bearer
+// for an API-key request, so trusting its "exp" would let the caller forge an
+// arbitrarily long-lived license.
+func TestIssueToken_APIKeyCallerWithForgedExpRejected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := setupLicensingHandler(t, makeLicensingSeed(t))
+
+	forgedExp := time.Now().Add(10 * 365 * 24 * time.Hour) // 10 years
+	bearer := sessionBearerToken(t, forgedExp)
+	w, c := newLicensingRequest(t, "tenant_abc", false, bearer)
+	// Mirror an API-key-authenticated request: the configured API-key header
+	// is present alongside the crafted Authorization bearer.
+	c.Request.Header.Set("x-api-key", "some-super-admin-config-key")
+
+	h.IssueToken(c)
+
+	require.NotEmpty(t, c.Errors)
+	require.True(t, ierr.IsPermissionDenied(c.Errors.Last().Err))
+	require.Empty(t, w.Body.String())
 	require.Empty(t, w.Body.String())
 }
 

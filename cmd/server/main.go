@@ -96,7 +96,7 @@ func main() {
 			// RBAC
 			rbac.NewRBACService,
 
-			// Licensing (Heimdall token mint + JWKS signer)
+			// Licensing (licensing token mint + JWKS signer)
 			licensing.NewSigner,
 
 			// Monitoring
@@ -443,7 +443,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Licensing:                v1.NewLicensingHandler(licensingSigner, userRepo, tenantService, logger),
+		Licensing:                v1.NewLicensingHandler(cfg, licensingSigner, userRepo, tenantService, logger),
 	}
 }
 
