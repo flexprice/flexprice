@@ -33,7 +33,6 @@ func (s *invoiceService) recalculateTotalsFromLineItems(inv *invoice.Invoice, li
 }
 
 func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error) {
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -131,7 +130,6 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 }
 
 func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, req dto.AddBulkLineItemRequest) (*dto.InvoiceResponse, error) {
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -202,7 +200,6 @@ func (s *invoiceService) AddBulkLineItem(ctx context.Context, invoiceID string, 
 }
 
 func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID string, req dto.RemoveBulkLineItemRequest) (*dto.InvoiceResponse, error) {
-
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
