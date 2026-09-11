@@ -129,9 +129,9 @@ func (CheckoutSession) Indexes() []ent.Index {
 		// Customer history lookup
 		index.Fields("tenant_id", "environment_id", "customer_id").
 			StorageKey("idx_checkout_session_customer"),
-		// Invoice gate lookup: every ComputeInvoice / FinalizeInvoice / VoidInvoice asks
-		// whether a live session owns the invoice, so this must not be a scan. Partial, so
-		// the index only ever holds sessions still in flight.
+		// Invoice gate lookup: the guards ask whether a live session owns an invoice, so
+		// this must not be a scan of the full session history. Partial, so the index only
+		// holds sessions still in flight.
 		index.Fields("tenant_id", "environment_id", "checkout_invoice_id").
 			StorageKey("idx_checkout_session_invoice_active").
 			Annotations(entsql.IndexWhere(

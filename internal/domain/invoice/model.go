@@ -140,7 +140,6 @@ type Invoice struct {
 	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
 
-	// source_type is immutable provenance; "checkout" is what the invoice guards key off.
 	SourceType types.InvoiceSourceType `json:"source_type,omitempty"`
 
 	// is_manually_edited is true once a user has manually added, edited, or removed a line item on this draft invoice.

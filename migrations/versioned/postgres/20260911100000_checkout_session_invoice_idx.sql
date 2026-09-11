@@ -1,11 +1,8 @@
 -- migrate:up transaction:false
--- Backs the invoice checkout gate: FinalizeInvoice, VoidInvoice, ComputeInvoice,
--- UpdatePaymentStatus, the line-item edits and IsFinalizationDue all ask whether a live
--- session owns an invoice, so this runs on every subscription invoice computed. Without
--- an index that is a sequential scan of checkout_sessions.
---
--- Partial on the active statuses, so the index only ever holds sessions still in flight
--- (minutes each) rather than the full history.
+-- Backs the invoice checkout gate: the guards ask whether a live session owns an invoice.
+-- checkout_sessions keeps terminal rows forever, so without this the lookup is a scan of
+-- the full history. Partial on the active statuses, so the index only ever holds sessions
+-- still in flight rather than everything ever created.
 --
 -- statement_timeout must be 0 on the connection — a build killed by a timeout
 -- leaves an INVALID index behind. Deliberately no IF NOT EXISTS, so a retry
