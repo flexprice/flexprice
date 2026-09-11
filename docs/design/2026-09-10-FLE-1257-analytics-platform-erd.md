@@ -61,6 +61,7 @@ A reader who has *not* followed the design discussion. Section 2 gives the backg
 3. **Analytics is downstream-only.** Derived, read-only; the billing/invoicing path never reads it.
 4. **Nothing tenant-authored becomes a database object.** Saved views are JSON in Postgres; tenants never cause DDL or submit SQL.
 5. **Product analytics shows usage; money comes only from the revenue table.** Never approximate money as `usage × rate` in the product-analytics path — it ignores tiers/allowances and is wrong.
+6. **ClickHouse is optional; revenue analytics runs on Postgres alone.** `revenue_facts` and everything it joins to live in Postgres, so a tenant with no metered usage still gets full revenue analytics. ClickHouse is required only for usage/product analytics.
 
 ---
 
@@ -68,46 +69,43 @@ A reader who has *not* followed the design discussion. Section 2 gives the backg
 
 ```mermaid
 flowchart LR
-  subgraph SRC[Sources]
-    PG[(Postgres OLTP<br/>subs, prices, entitlements,<br/>commitments, invoices,<br/>invoice_line_items,<br/>wallet_transactions)]
-    EV[Usage events]
+  subgraph PG[Postgres  •  source of truth + revenue store]
+    SRC[subs, prices, entitlements, commitments,<br/>invoices, invoice_line_items, wallet_transactions]
+    RF[revenue_facts<br/>DERIVED, daily]
   end
 
-  subgraph CHB[ClickHouse-B  •  analytics replica]
+  subgraph CH[ClickHouse  •  OPTIONAL — only with metered usage]
     MU[meter_usage<br/>usage facts]
-    SYN[synced tables raw:<br/>invoice, invoice_line_item,<br/>wallet_transactions, entities]
-    RF[revenue_facts<br/>DERIVED]
   end
 
+  EV[Usage events] --> MU
   ENG[Billing Preview Engine<br/>non-mutating]
   ROLL[Rollup workflow<br/>watermarked]
   SRV[Serving layer<br/>view JSON to SQL + RLS]
 
-  PG -- PeerDB CDC, near real-time --> SYN
-  EV --> MU
-  MU --> ENG
-  SYN --> ENG
+  SRC --> ENG
+  MU -. metered usage only .-> ENG
   ENG --> ROLL
-  MU --> ROLL
+  MU -. usage curve .-> ROLL
   ROLL --> RF
 
-  MU --> SRV
-  SYN --> SRV
   RF --> SRV
+  SRC --> SRV
+  MU -. usage / product analytics .-> SRV
   SRV --> API[Views API + Saved Views]
   SRV --> EXP[Warehouse export]
 ```
 
-- **Postgres → ClickHouse-B (CH-B)** via **PeerDB** CDC, near real-time — copies operational tables (subscriptions, prices, entitlements, commitments, **invoices**, **invoice line items**, **wallet_transactions**) into CH-B **as raw tables**. They serve as structural dimensions, the reconciliation anchor, and ledger sources.
-- **`meter_usage`** — existing aggregated usage facts; the product-analytics substrate.
-- **`revenue_facts`** — the new **derived** table produced by the rollup (§6–7).
-- **Serving layer** — turns a saved view into parameterized SQL, injects tenant isolation, reads whichever table the metric needs, and feeds exports.
+- **`revenue_facts` lives in Postgres.** Revenue exists even for tenants with no usage events or metered features (fixed fees, commitments, one-off invoices), so revenue analytics must **not** depend on ClickHouse. The table is **small by construction** (subscriptions × prices × days), well within Postgres's reach, and it joins natively to the invoice/entity tables that already live in Postgres — no cross-store hop for structural revenue.
+- **ClickHouse is optional.** It holds `meter_usage` (aggregated usage) and powers **product/usage analytics**. Tenants who don't use metered features never need it; a read replica can isolate the analytics read path when it *is* used.
+- **`revenue_facts`** — the new **derived** table produced by the rollup (§6–7), in Postgres.
+- **Serving layer** — turns a saved view into parameterized SQL, injects tenant isolation, and routes by metric: **revenue → Postgres**, **usage → ClickHouse** (when present). Custom-dimension revenue (money × usage share) is the one cross-store case, and it applies only when ClickHouse is in use (§9.2).
 
 Everything is scoped by `tenant_id` + `environment_id`; every query filters on both.
 
 ### 4.1 Data model (ERD)
 
-`revenue_facts` is the one **derived** table; every other entity is a **raw PeerDB-synced** copy of a Postgres table (or the existing `meter_usage`). Relationships below are the join keys the serving/rollup layers use — `revenue_facts` is intentionally denormalized (it stores ids, not FKs) so these are logical joins, not enforced constraints.
+`revenue_facts` (**Postgres**) is the one **derived** table; the entities it joins to — `invoice`, `invoice_line_item`, `subscription`, `price`, `customer`, `wallet_transaction` — are **native Postgres** source tables, and `meter_usage` is the **ClickHouse** usage store (optional). Relationships below are the join keys the serving/rollup layers use — `revenue_facts` is intentionally denormalized (it stores ids, not FKs) so these are logical joins, not enforced constraints.
 
 ```mermaid
 erDiagram
@@ -158,7 +156,7 @@ erDiagram
         string  invoice_id           "draft id, stable through finalize"
         string  invoice_line_item_id
         date    lock_adjusted_day     "recognition day under period lock"
-        uint64  version              "ReplacingMergeTree"
+        bigint  version              "optimistic version (upsert/append)"
     }
 
     METER_USAGE {
@@ -213,7 +211,7 @@ The flexible lens, largely **reusing existing infrastructure**: `meter_usage` pl
 Added on top:
 - **Saved views** (§9) — reusable, shareable slices as JSON.
 - **Runtime "adjusted usage."** "Billable vs. included usage" or "overage units" are computed **at query time** from the *current* entitlement/price config — **never stored**, because that config is versioned and a stored copy would go stale.
-- **Non-usage series.** Wallet transactions, credit grants, and price-change history are PeerDB-synced tables queried through the same view machinery (filtered lists, running totals).
+- **Non-usage series.** Wallet transactions, credit grants, and price-change history are native Postgres tables queried through the same view machinery (filtered lists, running totals) — no ClickHouse required.
 
 **Hard rule:** product-analytics views never render money as `usage × rate`. Money comes from `revenue_facts`.
 
@@ -243,61 +241,72 @@ Two correctness requirements from the engine investigation:
 
 Usage / fixed / true-up come from the billing engine and reconcile to the invoice. **Breakage** — recognizing previously-deferred revenue when prepaid credits expire unused — is derivable from `wallet_transactions` (`type=DEBIT`, `reason=CREDIT_EXPIRED`), is a **recognition-era** concept, and does not tie to any invoice. v1 only needs the `revenue_source` slot so these can be added later without a schema change.
 
-**Why `revenue_source`, and not `price_type`?** For price-derived rows, `revenue_source ∈ {usage, fixed}` carries the same fact as a price's `price_type`, so we keep only `revenue_source` (the "kind of revenue") and drop `price_type` — the underlying price's nature is a join to the synced `price` table if ever needed. The two only *diverge* for true-up: a `commitment_trueup` row sits on a **usage** price but is a different kind of revenue.
+**Why `revenue_source`, and not `price_type`?** For price-derived rows, `revenue_source ∈ {usage, fixed}` carries the same fact as a price's `price_type`, so we keep only `revenue_source` (the "kind of revenue") and drop `price_type` — the underlying price's nature is a join to the `price` table if ever needed. The two only *diverge* for true-up: a `commitment_trueup` row sits on a **usage** price but is a different kind of revenue.
 
 **Why `commitment_trueup` must be its own row (not folded into usage).** A minimum-commitment true-up is revenue *not caused by usage* — it is the floor that applies when usage falls short. If we left it inside the usage line's amount and then daily-decomposed that line (§6.5), the entire true-up would land on the **last day** (that is when the floor engages) and falsely read as "usage earned on day 30." Emitting it as a separate `period_only` row dated at `period_end` keeps every usage day honest and lets finance answer "how much revenue was floor vs. actual usage." So it is required for correctness, not just labeling.
 
 ### 6.3 Schema
 
-One row per **`(tenant, environment, subscription, price, day, revenue_source)`**. Daily grain enables fine-grained exports and future recognition. Money is decomposed into **columns on `usage` rows**; `fixed`/`trueup`/etc. are their own rows carrying just `net_amount`. Usage is measured **gross** (billable + allowance) so the allowance shows as a visible credit. **Tax and prepaid are excluded** (§6.6, §6.7).
+A **Postgres** table (§4 — keeps ClickHouse optional). One row per **`(tenant, environment, subscription, price, day, revenue_source)`**. Daily grain enables fine-grained exports and future recognition. Money is decomposed into **columns on `usage` rows**; `fixed`/`trueup`/etc. are their own rows carrying just `net_amount`. Usage is measured **gross** (billable + allowance) so the allowance shows as a visible credit. **Tax and prepaid are excluded** (§6.6, §6.7).
 
 ```sql
 CREATE TABLE revenue_facts (
-    tenant_id            LowCardinality(String),
-    environment_id       LowCardinality(String),
-    customer_id          String,
-    subscription_id      String,                  -- the LINE ITEM's subscription (child in grouped invoicing)
-    sub_line_item_id     String,
-    price_id             String,                  -- versioned; amendments create new ids
-    meter_id             LowCardinality(String),  -- '' for fixed / non-usage rows
-    aggregation_type     LowCardinality(String),  -- drives decomposability (§6.5); '' for non-usage rows
-    revenue_source       Enum8('usage'=1,'fixed'=2,'commitment_trueup'=3,'credit_breakage'=4,'manual_adjustment'=5),
-    -- NOTE: no price_type column — revenue_source subsumes the usage/fixed split; the
-    -- underlying price's nature is available by joining price_id to the synced price table.
+    id                   TEXT        NOT NULL,        -- surrogate id
+    tenant_id            TEXT        NOT NULL,
+    environment_id       TEXT        NOT NULL,
+    customer_id          TEXT        NOT NULL,
+    subscription_id      TEXT        NOT NULL,        -- the LINE ITEM's subscription (child in grouped invoicing)
+    sub_line_item_id     TEXT,
+    price_id             TEXT,                        -- versioned; amendments create new ids
+    meter_id             TEXT,                        -- NULL for fixed / non-usage rows
+    aggregation_type     TEXT,                        -- drives decomposability (§6.5); NULL for non-usage
+    revenue_source       TEXT        NOT NULL,        -- usage|fixed|commitment_trueup|credit_breakage|manual_adjustment
+    -- NOTE: no price_type column — revenue_source subsumes usage/fixed; join price_id to `price` for its nature.
 
     -- time
-    period_start         Date,
-    period_end           Date,
-    day                  Date,                     -- grain (billing/booking day for non-usage rows)
-    service_start        Date,                     -- recognition-ready: the charge's service window
-    service_end          Date,
-    recognition_method   LowCardinality(String),   -- recognition-ready: 'point_in_time'|'ratable'|'usage' ('' in v1)
+    period_start         DATE        NOT NULL,
+    period_end           DATE        NOT NULL,
+    day                  DATE        NOT NULL,        -- grain + partition key (billing/booking day for non-usage rows)
+    service_start        DATE,                        -- recognition-ready: the charge's service window
+    service_end          DATE,
+    recognition_method   TEXT,                        -- recognition-ready: 'point_in_time'|'ratable'|'usage' (NULL in v1)
 
-    -- decomposition (usage rows only), GROSS basis, EXCLUDES tax & prepaid
-    usage_at_list_rate   Decimal(38,9),  -- (billable_qty + entitlement_qty) x list/effective rate
-    tier_delta           Decimal(38,9),  -- graduated only: engine Amount - gross_qty x tier1_rate; else 0
-    entitlement_credit   Decimal(38,9),  -- entitlement_qty x list rate  (>=0, subtracted)
-    line_discount        Decimal(38,9),  -- coupon on this line           (>=0, subtracted)
-    invoice_discount     Decimal(38,9),  -- invoice-level discount, allocated to line (>=0, subtracted)
-    net_amount           Decimal(38,9),  -- billed revenue for this row (excl tax, excl prepaid)
+    -- decomposition (usage rows), GROSS basis, EXCLUDES tax & prepaid
+    usage_at_list_rate   NUMERIC(38,9) NOT NULL DEFAULT 0,  -- (billable_qty + entitlement_qty) x list/effective rate
+    tier_delta           NUMERIC(38,9) NOT NULL DEFAULT 0,  -- graduated only: engine Amount - gross_qty x tier1_rate
+    entitlement_credit   NUMERIC(38,9) NOT NULL DEFAULT 0,  -- entitlement_qty x list rate (subtracted)
+    line_discount        NUMERIC(38,9) NOT NULL DEFAULT 0,
+    invoice_discount     NUMERIC(38,9) NOT NULL DEFAULT 0,
+    net_amount           NUMERIC(38,9) NOT NULL,            -- billed revenue for this row (excl tax, excl prepaid)
 
-    billable_qty         Decimal(38,9),  -- net of allowance
-    entitlement_qty      Decimal(38,9),
-    decomposition_mode   Enum8('marginal'=1, 'period_only'=2),  -- §6.5
+    billable_qty         NUMERIC(38,9) NOT NULL DEFAULT 0,  -- net of allowance
+    entitlement_qty      NUMERIC(38,9) NOT NULL DEFAULT 0,
+    decomposition_mode   TEXT        NOT NULL,        -- 'marginal' | 'period_only'  (§6.5)
 
     -- lifecycle / audit
-    currency             LowCardinality(String),
-    status               Enum8('PROVISIONAL'=1, 'FINAL'=2, 'REVERTED'=3),
-    is_revert            UInt8,           -- append-only correction model (§8)
-    invoice_id           String,          -- draft id once a draft exists; stable through finalize
-    invoice_line_item_id String,          -- the specific line item, for exact reconciliation
-    lock_adjusted_day    Date,            -- recognition day given accounting-period lock (§8)
-    computed_at          DateTime64(3),
-    version              UInt64
-) ENGINE = ReplacingMergeTree(version)
-PARTITION BY toYYYYMM(day)
-ORDER BY (tenant_id, environment_id, subscription_id, price_id, day, revenue_source, is_revert);
+    currency             TEXT        NOT NULL,
+    status               TEXT        NOT NULL,        -- 'PROVISIONAL' | 'FINAL' | 'REVERTED'  (§8)
+    is_revert            BOOLEAN     NOT NULL DEFAULT false,
+    invoice_id           TEXT,                        -- draft id once a draft exists; stable through finalize
+    invoice_line_item_id TEXT,                        -- the specific line item, for exact reconciliation
+    lock_adjusted_day    DATE,                        -- recognition day given accounting-period lock (§8)
+    computed_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    version              BIGINT      NOT NULL DEFAULT 1,
+    PRIMARY KEY (day, id)                            -- day first: it is the partition key
+) PARTITION BY RANGE (day);
+-- monthly partitions (revenue_facts_2026_09, …) created ahead of time by a maintenance job.
+
+-- Exactly one LIVE provisional row per grain -> ON CONFLICT upsert during open-period churn (§8).
+CREATE UNIQUE INDEX revenue_facts_provisional_grain ON revenue_facts
+    (tenant_id, environment_id, subscription_id, price_id, day, revenue_source)
+    WHERE status = 'PROVISIONAL';
+-- FINAL / REVERTED rows are append-only (no unique constraint) so corrections can be added.
+
+CREATE INDEX revenue_facts_read    ON revenue_facts (tenant_id, environment_id, day, revenue_source);
+CREATE INDEX revenue_facts_invoice ON revenue_facts (tenant_id, environment_id, invoice_id);
 ```
+
+**Small by construction.** Rows ≈ `active subscriptions × prices-per-sub × days-in-open-period × sources`. Closed periods stop churning, monthly partitions keep the hot set bounded, and there are no per-event rows here — so this is a comfortable Postgres workload, not a ClickHouse-scale one.
 
 **Decomposition-field rationale (reviewed):**
 - `usage_at_list_rate` + `tier_delta` — kept as two fields because the `list` policy (efficiency comparison) needs list rate and graduated pricing needs the delta. Collapsing them would lose list-vs-effective visibility that finance uses.
@@ -401,7 +410,7 @@ Explicitly **safe** (not on the list): package/`ceil` (monotonic, only lumpy), a
 
 ### 6.6 Tax is excluded from `revenue_facts`
 
-Tax in Flexprice is computed **at the invoice level** (one `tax_applied` row per tax rate; no per-line-item tax), and under ASC 606 collected tax is a **liability, not revenue**. So `revenue_facts` carries **tax-excluded** revenue and has **no tax column**. Tax lives at invoice grain in the synced `invoice` table (`TotalTax`) and reconciles separately. If a tenant ever wants "tax by dimension," it can only be a **read-time estimated allocation** of invoice tax by line share (flagged estimated) — the system does not compute per-line tax, so we will not fabricate it as authoritative.
+Tax in Flexprice is computed **at the invoice level** (one `tax_applied` row per tax rate; no per-line-item tax), and under ASC 606 collected tax is a **liability, not revenue**. So `revenue_facts` carries **tax-excluded** revenue and has **no tax column**. Tax lives at invoice grain in the Postgres `invoice` table (`TotalTax`) and reconciles separately. If a tenant ever wants "tax by dimension," it can only be a **read-time estimated allocation** of invoice tax by line share (flagged estimated) — the system does not compute per-line tax, so we will not fabricate it as authoritative.
 
 ### 6.7 Prepaid credits are excluded (ASC 606-aligned)
 
@@ -417,7 +426,7 @@ sequenceDiagram
     participant WM as Watermark (Postgres)
     participant RJ as Rollup job (Temporal)
     participant EN as Billing Preview Engine
-    participant RF as revenue_facts (CH-B)
+    participant RF as revenue_facts (Postgres)
 
     WM->>RJ: dirty subscriptions (usage moved / period close / amendment)
     loop each dirty subscription
@@ -427,17 +436,17 @@ sequenceDiagram
         RJ->>RJ: usage rows -> marginal (else period_only);<br/>fixed / true-up -> own rows
         RJ->>RJ: assert per-row + Σ net == line-item / invoice revenue
         alt period still open
-            RJ->>RF: upsert (version++)
+            RJ->>RF: INSERT ... ON CONFLICT (provisional grain) DO UPDATE, version++
         else finalized / accounting-locked
-            RJ->>RF: append REVERTED row(s) + fresh rows
+            RJ->>RF: INSERT REVERTED row(s) + fresh FINAL rows
         end
     end
 ```
 
 - **Dirty-subscription set** — from a usage watermark plus period-close and amendment events; only subscriptions that moved are rebuilt.
-- **Whole-open-period recompute** — tiers/allowances/commitments are period-cumulative; cheap because it reads aggregated `meter_usage`, not raw events.
+- **Whole-open-period recompute** — tiers/allowances/commitments are period-cumulative. For metered charges the engine reads aggregated `meter_usage` from ClickHouse; for fixed/commitment charges no ClickHouse is needed at all.
 - **Cadence** — watermark-driven; a modest default (e.g. hourly) for open periods, tunable. `FINAL` periods are never recomputed, only corrected (§8). A configurable **grace window** (~3 days, à la Orb) keeps a period `PROVISIONAL` while late usage settles.
-- **Isolation** — separate ClickHouse role/quota so a backfill can't starve the tenant read path.
+- **Isolation** — rollup writes go to Postgres; its `meter_usage` reads (when metered) can use a ClickHouse read replica so a backfill can't starve the tenant read path.
 - **Engine dependency to build** — a preview entry point returning cumulative charge as-of an arbitrary in-period date, ideally all day-checkpoints in one pass (Q2).
 
 ---
@@ -449,7 +458,7 @@ Two **independent** locks:
 ```mermaid
 stateDiagram-v2
     [*] --> PROVISIONAL: period opens
-    PROVISIONAL --> PROVISIONAL: rebuild (ReplacingMergeTree, version++)
+    PROVISIONAL --> PROVISIONAL: rebuild (upsert in place, version++)
     PROVISIONAL --> FINAL: invoice finalized + reconcile assert
     FINAL --> REVERTED: correction — append REVERTED (negatives)
     REVERTED --> FINAL: fresh FINAL rows (new version)
@@ -468,9 +477,9 @@ stateDiagram-v2
 1. **Invoice finalization** (per subscription-period): billed amounts become legally fixed. Rows flip `PROVISIONAL → FINAL`, get `invoice_id`/`invoice_line_item_id`, and we assert reconciliation.
 2. **Accounting-period lock** (ASC 606 finance close, per calendar period across all subscriptions): once a month is closed, its recognized numbers are frozen.
 
-**Storage by lock state:**
-- **Open / provisional** → `ReplacingMergeTree(version)`: recompute freely, last version wins, high churn, nobody depends on it yet.
-- **Finalized or accounting-locked** → **append-only, corrected via reverts.** There is **no `AMENDED` state.** A correction appends **`REVERTED`** rows (the exact negatives of what's being corrected, `is_revert=1`) plus fresh `FINAL` rows with a new `version`. Summing all rows is self-correcting (original + its `REVERTED` twin = 0). Closed accounting periods are never mutated in place.
+**Storage by lock state** (Postgres):
+- **Open / provisional** → **upsert in place.** The partial unique index on the grain (`WHERE status='PROVISIONAL'`, §6.3) makes each rebuild an `INSERT … ON CONFLICT … DO UPDATE` that bumps `version` — one live provisional row per grain, high churn, nobody depends on it yet.
+- **Finalized or accounting-locked** → **append-only, corrected via reverts.** These rows carry no unique constraint, so there is **no `AMENDED` state**: a correction `INSERT`s **`REVERTED`** rows (the exact negatives of what's being corrected, `is_revert=true`) plus fresh `FINAL` rows with a new `version`. Summing all rows is self-correcting (original + its `REVERTED` twin = 0). Closed accounting periods are never mutated in place.
 
 **`lock_adjusted_day`** is the day a row is *recognized* given lock posture: it equals `day` when the period is open, and shifts to the **first day of the next open period** when the real period is closed — a "catch-up" so a closed month is never rewritten. Reports key on `lock_adjusted_day`; analytics/attribution key on `day`.
 
@@ -478,7 +487,7 @@ stateDiagram-v2
 
 ## 9. Serving layer (a translator, not a compiler)
 
-A **saved view is a JSON row in Postgres**, immutable and versioned. It creates nothing in ClickHouse.
+A **saved view is a JSON row in Postgres**, immutable and versioned. It creates no schema objects in either store.
 
 ```json
 {
@@ -504,19 +513,20 @@ A **saved view is a JSON row in Postgres**, immutable and versioned. It creates 
 flowchart LR
   V[View JSON + variables] --> T1[resolve & type-check variables]
   T1 --> T2[inject tenant + env RLS]
-  T2 --> T3{metric to table}
-  T3 -- usage --> MU[meter_usage query builder]
-  T3 -- revenue --> RF[revenue_facts SQL<br/>+ allocation join]
-  T3 -- ledger --> SY[synced table SQL]
-  MU --> BIND[bind vars as CH query params]
-  RF --> BIND
-  SY --> BIND
-  BIND --> EX[execute on CH-B] --> SH[shape to columns + rows]
+  T2 --> T3{route by metric}
+  T3 -- revenue --> RF[revenue_facts SQL<br/>Postgres]
+  T3 -- ledger --> SY[Postgres source-table SQL]
+  T3 -- usage --> MU[meter_usage query builder<br/>ClickHouse, optional]
+  RF --> PG[bind params, execute on Postgres]
+  SY --> PG
+  MU --> CH[bind params, execute on ClickHouse]
+  PG --> SH[shape to columns + rows]
+  CH --> SH
 ```
 
 - **Shapes (v1):** `timeseries`, `breakdown`, `single_value`, `drilldown`. (`pivot`, `distribution` later.)
-- **Variables** bind as **ClickHouse query parameters**, never string interpolation. Optional filters with no value are dropped from `WHERE`. Dimension-position variables are allowed only against a per-tenant registered-property allowlist.
-- **Custom dimensions** are aggregated **at read time** (`JSONExtract` over `meter_usage`; an allocation join for revenue).
+- **Variables** bind as **query parameters** on the target store (Postgres for revenue/ledger, ClickHouse for usage), never string interpolation. Optional filters with no value are dropped from `WHERE`. Dimension-position variables are allowed only against a per-tenant registered-property allowlist.
+- **Custom dimensions** are aggregated **at read time**: for usage, `JSONExtract` over `meter_usage` (ClickHouse); for revenue, the money comes from `revenue_facts` (Postgres) allocated by the dimension's usage share from `meter_usage` — the one **cross-store** path, available only when ClickHouse is in use.
 - **Allocation presets** (custom-dimension revenue only): `billed` (default; aggregate-level components as their own rows so every line is defensible) and `amortized` (aggregate effects spread by usage share). Allocate per price, then sum. A third, `list` (usage at list rate only), is an opt-in for efficiency comparisons; it deliberately does **not** reconcile and returns `reconciles_to_invoice: false`.
 - **Authoritative vs. estimated:** a revenue query returns stored authoritative rows (`marginal` + `period_only`). A daily-shape chart over `period_only` items uses read-time `estimated` allocation, labeled and never summed into an authoritative total.
 
@@ -531,9 +541,9 @@ flowchart LR
 | `time` | `range` (often a `{{variable}}`) + `grain` (`day`/`week`/`month`). | `grain` sets the time bucket for `timeseries`. |
 | `sort`, `limit` | Ordering and top-N. | Drives "top 10 customers by revenue". |
 | `allocation_policy` | Only for **custom-dimension revenue** — `billed` / `amortized` / `list` (§9 bullets). | Ignored for usage metrics and structural revenue breakdowns. |
-| `variables` | Typed placeholders (`date_range`, `string`, `string_list`, `number`, `enum`, `boolean`) bound at query time. | Bound as **ClickHouse query parameters**, never string-interpolated. |
+| `variables` | Typed placeholders (`date_range`, `string`, `string_list`, `number`, `enum`, `boolean`) bound at query time. | Bound as **query parameters** on the target store, never string-interpolated. |
 
-**Group-by resolution.** A **structural** dimension resolves by joining `price_id`/`meter_id`/`customer_id` to the PeerDB-synced entity tables in CH-B (e.g. `feature_id` via the meter→feature relation). A **custom** dimension (e.g. `region`) resolves via `JSONExtractString(properties, 'region')` on `meter_usage` **at read time** — no pre-declaration, but it must pass the registered-property allowlist to become a legal group-by.
+**Group-by resolution.** A **structural** dimension resolves by joining `price_id`/`meter_id`/`customer_id`/`plan_id` to the entity tables. For **revenue**, those entity tables are the **native Postgres** tables `revenue_facts` already sits beside — a plain SQL join. For **usage**, a **custom** dimension (e.g. `region`) resolves via `JSONExtractString(properties, 'region')` on `meter_usage` in ClickHouse **at read time** — no pre-declaration, but it must pass the registered-property allowlist to become a legal group-by.
 
 ### 9.2 What powers a view — and where "runtime adjustments" apply
 
@@ -542,18 +552,19 @@ The metric decides the source table. This is the crux of your question, and the 
 | Metric kind | Powered by | Adjustments |
 |---|---|---|
 | **Usage** (`usage_quantity`, `event_count`, `billable_usage`, `overage_units`) | **`meter_usage`** via the existing query builder | "Adjusted" usage (`billable_usage`, `overage_units`) is computed **at runtime** by applying the *current* entitlement/price config to the raw usage — never stored, so it can't go stale. |
-| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_credit`, …) | **`revenue_facts`** (pre-computed) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue additionally does a read-time **allocation join** to `meter_usage` for the dimension's usage share. |
-| **Ledger** (credit top-ups, balance, price-change history) | **synced tables** (`wallet_transactions`, …) | Simple filters/sums; no pricing. |
+| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_credit`, …) | **`revenue_facts`** (Postgres, pre-computed) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue additionally does a read-time **allocation join** to `meter_usage` (ClickHouse) for the dimension's usage share. |
+| **Ledger** (credit top-ups, balance, price-change history) | **native Postgres tables** (`wallet_transactions`, …) | Simple filters/sums; no pricing. |
 
-So: **usage views** *are* powered by `meter_usage` with runtime-computed adjustment fields — exactly as you said. But **revenue views** are powered by `revenue_facts`, precisely because revenue can't be safely recomputed from usage at read time. A view that mixes a usage metric and a revenue metric runs two sub-queries (one per source) and joins the results in the serving layer.
+So: **usage views** are powered by ClickHouse `meter_usage` with runtime-computed adjustment fields — exactly as you said. **Revenue and ledger views** are powered by **Postgres** (`revenue_facts` + native source tables), so they work with **no ClickHouse at all**. A view that mixes a usage metric and a revenue metric runs two sub-queries — one per store — and joins the results in the serving layer; that is also the only place a cross-store hop occurs.
 
 ---
 
 ## 10. Warehouse export
 
 Daily grain makes tenant-side BI viable. Export surface:
-- **Derived:** `revenue_facts` (and, later, the recognition table).
-- **Raw (PeerDB-synced):** `invoice`, `invoice_line_item`, entities, `wallet_transactions` — reconciliation anchor and structural dimensions.
+- **Derived:** `revenue_facts` from Postgres (and, later, the recognition table).
+- **Raw (native Postgres):** `invoice`, `invoice_line_item`, entities, `wallet_transactions` — reconciliation anchor and structural dimensions.
+- **Usage (ClickHouse, when present):** `meter_usage` for tenants doing usage BI.
 
 Export is a fast-follow on `revenue_facts`, hedging the risk that a full in-app builder is more than some tenants need. Mechanism (snapshot vs. incremental by `updated_at`/`version`; destinations) is deferred; the common pattern is a first full snapshot then daily incrementals.
 
@@ -627,7 +638,7 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 
 **Q3 — Multi-period commitment prior-base.** For an annual commitment billed monthly, month N needs cumulative consumption from months 1..N-1; the engine reads it only from *finalized* invoices and degrades silently otherwise. *Why it matters:* the rollup produces provisional numbers before finalization, exactly when the engine's source is incomplete. *Resolved by:* fixing the fields of a rollup-maintained cumulative prior-base (sum of usage-line base; overage lines ÷ overage factor; true-up excluded), where it's stored, and the rule gating true-up to the final period.
 
-**Q4 — PeerDB sync coverage and latency.** The design assumes `invoice`, `invoice_line_item`, `wallet_transactions`, and entities are in CH-B with low lag. *Why it matters:* structural breakdowns and ledger views join these; the reconciliation anchor is the synced invoice. *Resolved by:* confirming which tables PeerDB replicates into CH-B, observed lag, and failure/backfill behavior.
+**Q4 — ClickHouse read isolation and entity enrichment for usage views.** Revenue/ledger run on Postgres, but usage/product analytics reads `meter_usage` in ClickHouse. *Why it matters:* under load, analytical scans shouldn't degrade ingestion or the tenant read path, and structural dimensions for *usage* (feature/plan names) live in Postgres. *Resolved by:* deciding whether usage reads hit a ClickHouse read replica, and whether usage-side entity names are joined in the Go serving layer (as today) or need a lightweight entity copy in ClickHouse.
 
 **Q5 — Allocation basis for `period_only` daily shape.** Rendering a daily shape for a non-decomposable item allocates the period total proportionally, proposed as that day's usage share. *Why it matters:* for volume tiers and `LATEST`/`AVG` meters this is defensible but not unique; even-spread may read better for some. *Resolved by:* picking a default and checking it against real volume-tier and `LATEST` examples; decide if it's per-aggregation-type.
 
@@ -651,7 +662,7 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 - **Billed vs. recognized revenue** — invoiced vs. earned; ASC 606 governs recognition timing.
 - **Deferred revenue** — money received but not yet earned (a liability); prepaid credits are deferred until consumed.
 - **Breakage** — deferred revenue recognized when prepaid credits expire unused.
-- **PeerDB / CH-B** — the CDC pipeline replicating Postgres into the ClickHouse analytics replica this platform reads.
+- **ClickHouse (optional)** — the usage store holding `meter_usage`; required only for usage/product analytics. Revenue analytics runs on Postgres alone.
 
 ## Appendix B — Codebase anchors
 
@@ -664,4 +675,4 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 - Usage engine (build on): `internal/repository/clickhouse/meter_usage_query_builder.go`, `aggregators.go`; table `migrations/clickhouse/000007_create_meter_usage.sql`; ingestion clamp `meter_usage_tracking.go:493`.
 - Price math: `internal/ee/service/price.go:1088-1239`, bucketed max `1065-1084`; `internal/domain/price/model.go:275-360`.
 - Monthly persistence (no analytics precompute exists): `invoice.go:430-618,2112`.
-- Analytics-lake feed (usage → CH-B): `internal/ee/analytics/meter_usage_sink_publisher.go` (`cfg.Analytics`).
+- Analytics-lake feed (usage → ClickHouse): `internal/ee/analytics/meter_usage_sink_publisher.go` (`cfg.Analytics`).
