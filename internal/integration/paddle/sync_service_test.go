@@ -1460,3 +1460,50 @@ func TestSyncInvoice_NothingOwedIsANoOp(t *testing.T) {
 		})
 	}
 }
+
+// The no-op branch must not swallow the opposite case: money is owed but no line item can
+// carry it to Paddle, which is a genuine failure worth surfacing.
+func TestSyncInvoice_AmountDueWithNoChargeableLineFails(t *testing.T) {
+	ctx := buildTestContext()
+	const invoiceID = "inv_due_no_lines"
+	const subID = "sub_due_no_lines"
+
+	mockClient := &mockPaddleClient{
+		createSubscriptionChargeFn: func(_ context.Context, _ *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
+			t.Fatal("CreateSubscriptionCharge must not be called without a chargeable line")
+			return nil, nil
+		},
+	}
+
+	invoiceStore := testutil.NewInMemoryInvoiceStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	// A positive amount is owed, but the line item has no PriceID so it cannot be charged.
+	require.NoError(t, invoiceStore.Create(ctx, &invoice.Invoice{
+		ID:             invoiceID,
+		CustomerID:     "cust_due_no_lines",
+		SubscriptionID: func() *string { s := subID; return &s }(),
+		Currency:       "USD",
+		AmountDue:      decimal.NewFromInt(100),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{DisplayName: func() *string { s := "Unmapped"; return &s }(), Amount: decimal.NewFromInt(100), Currency: "USD"},
+		},
+	}))
+	require.NoError(t, subStore.Create(ctx, &subscription.Subscription{
+		ID:            subID,
+		CustomerID:    "cust_due_no_lines",
+		Currency:      "usd",
+		BillingPeriod: "month",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	svc := buildTestSyncService(mockClient, testutil.NewInMemoryEntityIntegrationMappingStore(),
+		testutil.NewInMemoryCustomerStore(), invoiceStore, subStore, testutil.NewInMemoryConnectionStore())
+
+	_, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
+	require.Error(t, err, "money owed with nothing chargeable must still fail")
+	assert.Contains(t, err.Error(), "no syncable line items")
+}
