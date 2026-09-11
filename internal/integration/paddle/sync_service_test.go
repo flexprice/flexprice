@@ -1372,3 +1372,91 @@ func TestProcessSubscriptionActivatedWebhook_TrialingSubNoOp(t *testing.T) {
 	require.Len(t, resp.Items, 1, "mapping must be created even for non-incomplete subscriptions")
 	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
 }
+
+// An invoice settled in full by credits or discounts owes nothing: Paddle must not be charged,
+// no product may be created, and the sync must succeed rather than fail the workflow forever.
+func TestSyncInvoice_NothingOwedIsANoOp(t *testing.T) {
+	tests := []struct {
+		name      string
+		amountDue decimal.Decimal
+		lineItems func(chargePID, creditPID *string) []*invoice.InvoiceLineItem
+	}{
+		{
+			name:      "credits cancel the charges out",
+			amountDue: decimal.Zero,
+			lineItems: func(chargePID, creditPID *string) []*invoice.InvoiceLineItem {
+				return []*invoice.InvoiceLineItem{
+					{PriceID: chargePID, DisplayName: func() *string { s := "Pro"; return &s }(), Amount: decimal.NewFromInt(100), Currency: "USD"},
+					{PriceID: creditPID, DisplayName: func() *string { s := "Basic"; return &s }(), Amount: decimal.NewFromInt(-100), Currency: "USD"},
+				}
+			},
+		},
+		{
+			name:      "a full discount settles the invoice",
+			amountDue: decimal.Zero,
+			lineItems: func(chargePID, _ *string) []*invoice.InvoiceLineItem {
+				return []*invoice.InvoiceLineItem{
+					{PriceID: chargePID, DisplayName: func() *string { s := "Pro"; return &s }(), Amount: decimal.NewFromInt(100), Currency: "USD"},
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := buildTestContext()
+			const invoiceID = "inv_nothing_owed"
+			const subID = "sub_nothing_owed"
+			chargePID, creditPID := "pri_charge", "pri_credit"
+
+			mockClient := &mockPaddleClient{
+				createSubscriptionChargeFn: func(_ context.Context, _ *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
+					t.Fatal("CreateSubscriptionCharge must not be called when nothing is owed")
+					return nil, nil
+				},
+				createProductFn: func(_ context.Context, _ *paddlesdk.CreateProductRequest) (*paddlesdk.Product, error) {
+					t.Fatal("CreateProduct must not be called when nothing is owed")
+					return nil, nil
+				},
+			}
+
+			mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+			invoiceStore := testutil.NewInMemoryInvoiceStore()
+			subStore := testutil.NewInMemorySubscriptionStore()
+
+			require.NoError(t, invoiceStore.Create(ctx, &invoice.Invoice{
+				ID:             invoiceID,
+				CustomerID:     "cust_nothing_owed",
+				SubscriptionID: func() *string { s := subID; return &s }(),
+				Currency:       "USD",
+				AmountDue:      tt.amountDue,
+				EnvironmentID:  types.GetEnvironmentID(ctx),
+				BaseModel:      types.GetDefaultBaseModel(ctx),
+				LineItems:      tt.lineItems(&chargePID, &creditPID),
+			}))
+			require.NoError(t, subStore.Create(ctx, &subscription.Subscription{
+				ID:            subID,
+				CustomerID:    "cust_nothing_owed",
+				Currency:      "usd",
+				BillingPeriod: "month",
+				EnvironmentID: types.GetEnvironmentID(ctx),
+				BaseModel:     types.GetDefaultBaseModel(ctx),
+			}))
+
+			svc := buildTestSyncService(mockClient, mappingStore, testutil.NewInMemoryCustomerStore(),
+				invoiceStore, subStore, testutil.NewInMemoryConnectionStore())
+
+			resp, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
+			require.NoError(t, err, "nothing owed is a no-op, not a sync failure")
+			require.NotNil(t, resp)
+			assert.Empty(t, resp.PaddleTransactionID, "no Paddle transaction should exist")
+
+			mappings, listErr := mappingStore.List(ctx, &types.EntityIntegrationMappingFilter{
+				EntityID:   invoiceID,
+				EntityType: types.IntegrationEntityTypeInvoice,
+			})
+			require.NoError(t, listErr)
+			assert.Empty(t, mappings, "must not map the invoice to a transaction that does not exist")
+		})
+	}
+}

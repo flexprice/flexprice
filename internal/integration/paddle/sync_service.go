@@ -610,6 +610,25 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	// sent as their own items. Charge the net AmountDue when it differs from the
 	// positive lines (plan-change invoices); otherwise itemise as today.
 	syncable, collapsed := paddleChargeLineItems(flexInvoice)
+
+	// Credits, discounts or prepaid credits can settle an invoice in full. Nothing is owed, so
+	// there is no charge to raise and no product worth creating — a no-op, not a failure.
+	if !flexInvoice.AmountDue.IsPositive() {
+		s.logger.Info(ctx, "invoice has nothing to collect, skipping Paddle charge",
+			"invoice_id", flexInvoice.ID,
+			"amount_due", flexInvoice.AmountDue.String())
+		return &SyncInvoiceResponse{}, nil
+	}
+	if len(syncable) == 0 {
+		return nil, ierr.NewError("invoice has no syncable line items").
+			WithHint("Invoice amount is due but no line item can be charged to Paddle").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": flexInvoice.ID,
+				"amount_due": flexInvoice.AmountDue.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	productItems := make([]EnsureBulkProductSyncedItem, len(syncable))
 	for i, li := range syncable {
 		priceID := lo.FromPtr(li.PriceID)
