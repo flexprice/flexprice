@@ -208,6 +208,13 @@ type CheckoutSession struct {
 	types.BaseModel
 }
 
+func (s *CheckoutSession) GetID() string {
+	if s == nil {
+		return ""
+	}
+	return s.ID
+}
+
 // Validate checks that the session has all required fields and that enum values are valid.
 func (s *CheckoutSession) Validate() error {
 	if s.CustomerID == "" {

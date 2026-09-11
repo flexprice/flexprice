@@ -58,6 +58,7 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
+		CheckoutSessionRepo:        st.CheckoutSessionRepo,
 		SubRepo:                    st.SubscriptionRepo,
 		SubscriptionLineItemRepo:   st.SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      st.SubscriptionPhaseRepo,

@@ -77,6 +77,10 @@ type Factory struct {
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
 	lifecycle      *payments.PaymentLifecycle
+
+	// checkoutProvider, when set, is returned by GetCheckoutProvider instead of
+	// constructing a live adapter. Tests use this; production never sets it.
+	checkoutProvider interfaces.CheckoutProvider
 }
 
 // NewFactory creates a new integration factory
@@ -1589,9 +1593,18 @@ func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGa
 	}
 }
 
+// SetCheckoutProvider overrides GetCheckoutProvider with a fixed adapter.
+// Tests use this when no live gateway connection exists. Production never calls it.
+func (f *Factory) SetCheckoutProvider(provider interfaces.CheckoutProvider) {
+	f.checkoutProvider = provider
+}
+
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
 // Returns ErrValidation for providers that do not support hosted checkout.
 func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
+	if f.checkoutProvider != nil {
+		return f.checkoutProvider, nil
+	}
 	switch provider {
 	case types.CheckoutPaymentProviderRazorpay:
 		i, err := f.GetRazorpayIntegration(ctx)

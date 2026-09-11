@@ -106,6 +106,8 @@ type Invoice struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// ID of the replacement invoice created when this invoice was recalculated after voiding
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+	// How this invoice was created; 'checkout' marks one owned by a hosted checkout session
+	SourceType types.InvoiceSourceType `json:"source_type,omitempty"`
 	// True once a user has manually added, edited, or removed a line item on this draft invoice
 	IsManuallyEdited bool `json:"is_manually_edited,omitempty"`
 	// Why no tax was charged; null only when tax was actually charged
@@ -160,7 +162,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldTaxExemptionReasonCode:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldSourceType, invoice.FieldTaxExemptionReasonCode:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldIssueDate, invoice.FieldLastComputedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -466,6 +468,12 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.RecalculatedInvoiceID = new(string)
 				*i.RecalculatedInvoiceID = value.String
 			}
+		case invoice.FieldSourceType:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_type", values[j])
+			} else if value.Valid {
+				i.SourceType = types.InvoiceSourceType(value.String)
+			}
 		case invoice.FieldIsManuallyEdited:
 			if value, ok := values[j].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_manually_edited", values[j])
@@ -691,6 +699,9 @@ func (i *Invoice) String() string {
 		builder.WriteString("recalculated_invoice_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("source_type=")
+	builder.WriteString(fmt.Sprintf("%v", i.SourceType))
 	builder.WriteString(", ")
 	builder.WriteString("is_manually_edited=")
 	builder.WriteString(fmt.Sprintf("%v", i.IsManuallyEdited))

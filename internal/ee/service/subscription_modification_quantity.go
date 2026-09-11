@@ -885,6 +885,7 @@ func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
 	}
 
 	req := buildAggregatedProrationChargeInvoiceRequest(sub, items)
+	req.SourceType = types.InvoiceSourceTypeCheckout
 
 	invoiceSvc := NewInvoiceService(s.serviceParams)
 	inv, skipped, err := invoiceSvc.CreateComputedDraftInvoice(ctx, req)
@@ -942,6 +943,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		BillingPeriod:  &billingPeriod,
 		LineItems:      lineItems,
 		IdempotencyKey: &idempKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 	}
 }
 
@@ -985,7 +987,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 				).
 				Mark(ierr.ErrValidation)
 		}
-		
+
 		return &dto.ChangedInvoice{
 			ID:      latest.ID,
 			Action:  dto.ChangedInvoiceActionCreated,
@@ -1090,6 +1092,7 @@ func buildProrationChargeInvoiceRequest(
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
 		IdempotencyKey: &idempKey,
+		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
 				PriceID:         &priceID,

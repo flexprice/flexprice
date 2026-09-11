@@ -63,6 +63,7 @@ const (
 	CheckoutActionModifySubscription CheckoutAction = "modify_subscription"
 	CheckoutActionWalletTopup        CheckoutAction = "wallet_topup"
 	CheckoutActionAddAddon           CheckoutAction = "add_addon"
+	CheckoutActionPayInvoice         CheckoutAction = "pay_invoice"
 )
 
 func (a CheckoutAction) String() string { return string(a) }
@@ -73,10 +74,11 @@ func (a CheckoutAction) Validate() error {
 		CheckoutActionModifySubscription,
 		CheckoutActionWalletTopup,
 		CheckoutActionAddAddon,
+		CheckoutActionPayInvoice,
 	}
 	if a != "" && !lo.Contains(allowed, a) {
 		return ierr.NewError("invalid checkout action").
-			WithHint("Allowed values: create_subscription, modify_subscription, wallet_topup, add_addon").
+			WithHint("Allowed values: create_subscription, modify_subscription, wallet_topup, add_addon, pay_invoice").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}

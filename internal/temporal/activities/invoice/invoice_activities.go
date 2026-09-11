@@ -3,6 +3,7 @@ package invoice
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -101,9 +102,12 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 	}
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
-	draft, err := invoiceService.CreateDraftInvoiceForSubscription(
-		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
-	)
+	draft, err := invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: input.SubscriptionID,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 	if err != nil {
 		if input.SkipIfAlreadyInvoiced && ierr.IsAlreadyExists(err) {
 			s.logger.Info(ctx, "current period already invoiced, skipping (SkipIfAlreadyInvoiced=true)",
@@ -152,7 +156,7 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true, Skipped: true}, nil
 	}
 
-	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
+	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID, dto.FinalizeInvoiceRequest{}); err != nil {
 		// Business-condition failures (insufficient balance, invoice not in draft) are
 		// marked ErrInvalidOperation and won't clear by the time Temporal's activity
 		// RetryPolicy expires (currently 3 attempts, up to 5-min backoff). Wrap as

@@ -51,7 +51,7 @@ Runnable samples are in the `examples/` directory.
 | `FLEXPRICE_API_KEY` | Yes | API key |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
-**Integration tests** in [api/tests/ts/test_sdk.ts](../tests/ts/test_sdk.ts) use a different env shape; see [api/tests/README.md](../tests/README.md).
+**Integration tests** in [api/tests/ts/test_sdk.ts](../../tests/ts/test_sdk.ts) use a different env shape; see [api/tests/README.md](../../tests/README.md).
 
 ## Quick start
 
@@ -228,4 +228,4 @@ function handleWebhook(rawBody: string): void {
 
 - [FlexPrice API documentation](https://docs.flexprice.io)
 - [TypeScript SDK examples](examples/) in this repo
-- [SDK integration tests](../tests/README.md) — different `FLEXPRICE_API_HOST` shape for automated tests
+- [SDK integration tests](../../tests/README.md) — different `FLEXPRICE_API_HOST` shape for automated tests

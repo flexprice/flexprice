@@ -42,6 +42,7 @@ func (s *SubscriptionChangeServiceTestSuite) TearDownTest() {
 
 func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 	serviceParams := ServiceParams{
+		CheckoutSessionRepo:          s.GetStores().CheckoutSessionRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),

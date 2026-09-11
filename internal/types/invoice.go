@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -27,6 +28,34 @@ const (
 	// in a grouped-invoicing scenario.
 	InvoiceLineItemMetadataKeyChildCustomerID InvoiceLineItemMetadataKey = "child_customer_id"
 )
+
+// InvoiceMetadataKey represents well-known metadata keys on invoices.
+type InvoiceMetadataKey = string
+
+const (
+	// InvoiceMetadataKeyCollapsedInvoiceDisplayName is the customer-facing label to use when a
+	// collector clubs the invoice lines into a single amount due item.
+	InvoiceMetadataKeyCollapsedInvoiceDisplayName InvoiceMetadataKey = "collapsed_invoice_display_name"
+)
+
+func CollapsedInvoiceDisplayName(md Metadata) string {
+	if md == nil {
+		return ""
+	}
+	return strings.TrimSpace(md[InvoiceMetadataKeyCollapsedInvoiceDisplayName])
+}
+
+func WithCollapsedInvoiceDisplayName(md Metadata, name string) Metadata {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return md
+	}
+	if md == nil {
+		md = Metadata{}
+	}
+	md[InvoiceMetadataKeyCollapsedInvoiceDisplayName] = name
+	return md
+}
 
 // InvoiceCadence defines when an invoice is generated relative to the billing period
 // ARREAR: Invoice generated at the end of the billing period (after service delivery)
@@ -166,6 +195,29 @@ func (s InvoiceStatus) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
+	return nil
+}
+
+// InvoiceSourceType is immutable provenance: how the invoice came into being.
+type InvoiceSourceType string
+
+const (
+	// InvoiceSourceTypeCheckout lets the invoice guards skip the session lookup for
+	// everything a checkout did not create.
+	InvoiceSourceTypeCheckout InvoiceSourceType = "checkout"
+)
+
+func (s InvoiceSourceType) String() string { return string(s) }
+
+func (s InvoiceSourceType) Validate() error {
+	allowed := []InvoiceSourceType{InvoiceSourceTypeCheckout}
+	if s != "" && !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid invoice source type").
+			WithHint("Allowed values: checkout").
+			WithReportableDetails(map[string]any{"allowed_values": allowed}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 

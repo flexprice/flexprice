@@ -276,6 +276,12 @@ func RecalculatedInvoiceID(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldRecalculatedInvoiceID, v))
 }
 
+// SourceType applies equality check predicate on the "source_type" field. It's identical to SourceTypeEQ.
+func SourceType(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldSourceType, vc))
+}
+
 // IsManuallyEdited applies equality check predicate on the "is_manually_edited" field. It's identical to IsManuallyEditedEQ.
 func IsManuallyEdited(v bool) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldIsManuallyEdited, v))
@@ -2776,6 +2782,100 @@ func RecalculatedInvoiceIDEqualFold(v string) predicate.Invoice {
 // RecalculatedInvoiceIDContainsFold applies the ContainsFold predicate on the "recalculated_invoice_id" field.
 func RecalculatedInvoiceIDContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldRecalculatedInvoiceID, v))
+}
+
+// SourceTypeEQ applies the EQ predicate on the "source_type" field.
+func SourceTypeEQ(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldSourceType, vc))
+}
+
+// SourceTypeNEQ applies the NEQ predicate on the "source_type" field.
+func SourceTypeNEQ(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldNEQ(FieldSourceType, vc))
+}
+
+// SourceTypeIn applies the In predicate on the "source_type" field.
+func SourceTypeIn(vs ...types.InvoiceSourceType) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldIn(FieldSourceType, v...))
+}
+
+// SourceTypeNotIn applies the NotIn predicate on the "source_type" field.
+func SourceTypeNotIn(vs ...types.InvoiceSourceType) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldNotIn(FieldSourceType, v...))
+}
+
+// SourceTypeGT applies the GT predicate on the "source_type" field.
+func SourceTypeGT(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGT(FieldSourceType, vc))
+}
+
+// SourceTypeGTE applies the GTE predicate on the "source_type" field.
+func SourceTypeGTE(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGTE(FieldSourceType, vc))
+}
+
+// SourceTypeLT applies the LT predicate on the "source_type" field.
+func SourceTypeLT(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLT(FieldSourceType, vc))
+}
+
+// SourceTypeLTE applies the LTE predicate on the "source_type" field.
+func SourceTypeLTE(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLTE(FieldSourceType, vc))
+}
+
+// SourceTypeContains applies the Contains predicate on the "source_type" field.
+func SourceTypeContains(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContains(FieldSourceType, vc))
+}
+
+// SourceTypeHasPrefix applies the HasPrefix predicate on the "source_type" field.
+func SourceTypeHasPrefix(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasPrefix(FieldSourceType, vc))
+}
+
+// SourceTypeHasSuffix applies the HasSuffix predicate on the "source_type" field.
+func SourceTypeHasSuffix(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasSuffix(FieldSourceType, vc))
+}
+
+// SourceTypeIsNil applies the IsNil predicate on the "source_type" field.
+func SourceTypeIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldSourceType))
+}
+
+// SourceTypeNotNil applies the NotNil predicate on the "source_type" field.
+func SourceTypeNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldSourceType))
+}
+
+// SourceTypeEqualFold applies the EqualFold predicate on the "source_type" field.
+func SourceTypeEqualFold(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEqualFold(FieldSourceType, vc))
+}
+
+// SourceTypeContainsFold applies the ContainsFold predicate on the "source_type" field.
+func SourceTypeContainsFold(v types.InvoiceSourceType) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContainsFold(FieldSourceType, vc))
 }
 
 // IsManuallyEditedEQ applies the EQ predicate on the "is_manually_edited" field.

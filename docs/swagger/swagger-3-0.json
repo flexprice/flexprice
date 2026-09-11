@@ -5516,7 +5516,7 @@
           "Invoices"
         ],
         "summary": "Create one-off invoice",
-        "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.",
+        "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.\nPass a `checkout` object to gate the invoice behind a hosted payment session: the invoice stays DRAFT with no invoice number, and the response carries `checkout_session.payment_action.url` for the customer to pay. It finalizes only when the payment webhook lands; if the session expires the invoice is voided and archived. Poll `GET /checkout/sessions/{id}` until `terminal` is true. One-off invoices only.",
         "operationId": "createInvoice",
         "requestBody": {
           "description": "Invoice details",
@@ -18652,6 +18652,9 @@
           "billing_reason": {
             "$ref": "#/components/schemas/types.InvoiceBillingReason"
           },
+          "checkout": {
+            "$ref": "#/components/schemas/CheckoutParams"
+          },
           "coupons": {
             "type": "array",
             "description": "coupons",
@@ -21886,6 +21889,9 @@
           "billing_sequence": {
             "type": "integer",
             "description": "billing_sequence is the sequential number indicating the billing cycle for subscription invoices"
+          },
+          "checkout_session": {
+            "$ref": "#/components/schemas/CheckoutSessionResponse"
           },
           "coupon_applications": {
             "type": "array",
@@ -28746,13 +28752,15 @@
           "create_subscription",
           "modify_subscription",
           "wallet_topup",
-          "add_addon"
+          "add_addon",
+          "pay_invoice"
         ],
         "x-enum-varnames": [
           "CheckoutActionCreateSubscription",
           "CheckoutActionModifySubscription",
           "CheckoutActionWalletTopup",
-          "CheckoutActionAddAddon"
+          "CheckoutActionAddAddon",
+          "CheckoutActionPayInvoice"
         ],
         "x-speakeasy-name-override": "CheckoutAction"
       },
@@ -28767,6 +28775,9 @@
           },
           "modify_subscription_params": {
             "$ref": "#/components/schemas/types.ModifySubscriptionParams"
+          },
+          "pay_invoice_params": {
+            "$ref": "#/components/schemas/types.PayInvoiceParams"
           },
           "wallet_topup_params": {
             "$ref": "#/components/schemas/types.WalletTopupParams"
@@ -30276,6 +30287,18 @@
           "PauseStatusCancelled"
         ],
         "x-speakeasy-name-override": "PauseStatus"
+      },
+      "types.PayInvoiceParams": {
+        "required": [
+          "invoice_id"
+        ],
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PayInvoiceParams"
       },
       "types.PaymentAction": {
         "type": "object",

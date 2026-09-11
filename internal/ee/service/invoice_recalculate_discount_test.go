@@ -46,6 +46,7 @@ func (s *RecalculateDiscountOnInvoiceSuite) GetContext() context.Context {
 
 func (s *RecalculateDiscountOnInvoiceSuite) setupService() {
 	s.service = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),

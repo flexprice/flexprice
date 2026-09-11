@@ -4577,7 +4577,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.",
+                "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.\nPass a ` + "`" + `checkout` + "`" + ` object to gate the invoice behind a hosted payment session: the invoice stays DRAFT with no invoice number, and the response carries ` + "`" + `checkout_session.payment_action.url` + "`" + ` for the customer to pay. It finalizes only when the payment webhook lands; if the session expires the invoice is voided and archived. Poll ` + "`" + `GET /checkout/sessions/{id}` + "`" + ` until ` + "`" + `terminal` + "`" + ` is true. One-off invoices only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -16442,6 +16442,14 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "checkout": {
+                    "description": "checkout gates this invoice behind a hosted payment session: created DRAFT, finalized\nonly when the payment webhook lands. One-off invoices only.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CheckoutParams"
+                        }
+                    ]
+                },
                 "coupons": {
                     "description": "coupons",
                     "type": "array",
@@ -19797,6 +19805,14 @@ const docTemplate = `{
                 "billing_sequence": {
                     "description": "billing_sequence is the sequential number indicating the billing cycle for subscription invoices",
                     "type": "integer"
+                },
+                "checkout_session": {
+                    "description": "checkout_session is the payment session gating this invoice, when it was created with checkout",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    ]
                 },
                 "coupon_applications": {
                     "description": "coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)",
@@ -26989,13 +27005,15 @@ const docTemplate = `{
                 "create_subscription",
                 "modify_subscription",
                 "wallet_topup",
-                "add_addon"
+                "add_addon",
+                "pay_invoice"
             ],
             "x-enum-varnames": [
                 "CheckoutActionCreateSubscription",
                 "CheckoutActionModifySubscription",
                 "CheckoutActionWalletTopup",
-                "CheckoutActionAddAddon"
+                "CheckoutActionAddAddon",
+                "CheckoutActionPayInvoice"
             ]
         },
         "types.CheckoutConfiguration": {
@@ -27009,6 +27027,9 @@ const docTemplate = `{
                 },
                 "modify_subscription_params": {
                     "$ref": "#/definitions/types.ModifySubscriptionParams"
+                },
+                "pay_invoice_params": {
+                    "$ref": "#/definitions/types.PayInvoiceParams"
                 },
                 "wallet_topup_params": {
                     "$ref": "#/definitions/types.WalletTopupParams"
@@ -28461,6 +28482,17 @@ const docTemplate = `{
                 "PauseStatusCompleted",
                 "PauseStatusCancelled"
             ]
+        },
+        "types.PayInvoiceParams": {
+            "type": "object",
+            "required": [
+                "invoice_id"
+            ],
+            "properties": {
+                "invoice_id": {
+                    "type": "string"
+                }
+            }
         },
         "types.PaymentAction": {
             "type": "object",

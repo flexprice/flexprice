@@ -2974,6 +2974,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemWithBuckets_Ma
 // Helper function to create invoice service for testing
 func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 	return NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
@@ -6981,6 +6982,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithBucketedMaxAggr
 func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 	// Create billing service
 	billingService := NewBillingService(ServiceParams{
+		CheckoutSessionRepo:      s.GetStores().CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),

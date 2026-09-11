@@ -146,6 +146,8 @@ func (s *InvoiceServiceSuite) setupService() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		CheckoutSessionRepo:          s.GetStores().CheckoutSessionRepo,
+		RefundRepo:                   s.GetStores().RefundRepo,
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 }
@@ -623,7 +625,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := s.service.FinalizeInvoice(s.GetContext(), tt.id)
+			err := s.service.FinalizeInvoice(s.GetContext(), tt.id, dto.FinalizeInvoiceRequest{})
 			if tt.wantErr {
 				s.Error(err)
 				return
@@ -895,7 +897,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 		return ev.EventName
 	}), types.WebhookEventInvoiceUpdateFinalized)
 
-	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID)
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 
 	var finalized *types.WebhookEvent
@@ -934,7 +936,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 	}
 	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftSubscriptionInvoice))
 
-	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID)
+	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 	var finalized *types.WebhookEvent
 	for _, ev := range rec.events {
@@ -1113,26 +1115,27 @@ func (s *InvoiceServiceSuite) TestUpdatePaymentStatusWithPayments() {
 			setupPayment: func() string {
 				// Create a payment record for the test invoice
 				paymentService := NewPaymentService(ServiceParams{
-					Logger:           s.GetLogger(),
-					Config:           s.GetConfig(),
-					DB:               s.GetDB(),
-					SubRepo:          s.GetStores().SubscriptionRepo,
-					PlanRepo:         s.GetStores().PlanRepo,
-					PriceRepo:        s.GetStores().PriceRepo,
-					EventRepo:        s.eventRepo,
-					MeterRepo:        s.GetStores().MeterRepo,
-					CustomerRepo:     s.GetStores().CustomerRepo,
-					InvoiceRepo:      s.invoiceRepo,
-					EntitlementRepo:  s.GetStores().EntitlementRepo,
-					EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-					FeatureRepo:      s.GetStores().FeatureRepo,
-					TenantRepo:       s.GetStores().TenantRepo,
-					UserRepo:         s.GetStores().UserRepo,
-					AuthRepo:         s.GetStores().AuthRepo,
-					WalletRepo:       s.GetStores().WalletRepo,
-					PaymentRepo:      s.GetStores().PaymentRepo,
-					EventPublisher:   s.GetPublisher(),
-					WebhookPublisher: s.GetWebhookPublisher(),
+					Logger:              s.GetLogger(),
+					Config:              s.GetConfig(),
+					DB:                  s.GetDB(),
+					CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+					SubRepo:             s.GetStores().SubscriptionRepo,
+					PlanRepo:            s.GetStores().PlanRepo,
+					PriceRepo:           s.GetStores().PriceRepo,
+					EventRepo:           s.eventRepo,
+					MeterRepo:           s.GetStores().MeterRepo,
+					CustomerRepo:        s.GetStores().CustomerRepo,
+					InvoiceRepo:         s.invoiceRepo,
+					EntitlementRepo:     s.GetStores().EntitlementRepo,
+					EnvironmentRepo:     s.GetStores().EnvironmentRepo,
+					FeatureRepo:         s.GetStores().FeatureRepo,
+					TenantRepo:          s.GetStores().TenantRepo,
+					UserRepo:            s.GetStores().UserRepo,
+					AuthRepo:            s.GetStores().AuthRepo,
+					WalletRepo:          s.GetStores().WalletRepo,
+					PaymentRepo:         s.GetStores().PaymentRepo,
+					EventPublisher:      s.GetPublisher(),
+					WebhookPublisher:    s.GetWebhookPublisher(),
 				})
 
 				// Create a payment record and process it to succeeded status
@@ -1610,6 +1613,7 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	// Create wallet service
 	walletService := NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      s.GetStores().CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -2447,7 +2451,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_FreezesRateAndProjectsLedger()
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2472,7 +2476,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_LineItemsAreFiatOverCustomLedg
 
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2504,7 +2508,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_ReprojectsLineItemsAtFrozenRat
 	draft.InvoiceType = types.InvoiceTypeSubscription
 	draft.BillingPeriod = lo.ToPtr(string(types.BILLING_PERIOD_MONTHLY))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2528,7 +2532,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_MissingConversionFactorFails()
 	draft := s.customCurrencyDraft("xyz", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
 
-	err := s.service.FinalizeInvoice(s.GetContext(), draft.ID)
+	err := s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{})
 	s.Error(err)
 	s.Contains(err.Error(), "conversion factor")
 }
@@ -2539,7 +2543,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_FrozenRateSurvivesConfigEdit()
 
 	draft := s.customCurrencyDraft("mac", decimal.NewFromFloat(0.1))
 	s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), draft))
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	cfg := types.CustomCurrencyConfig{
 		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
@@ -2577,7 +2581,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_TinyCustomAmountRoundsToZeroFi
 	draft.ProjectCustomCurrency()
 	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2603,7 +2607,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_NoCustomCurrencyStaysNil() {
 	}
 	s.NoError(s.invoiceRepo.Create(s.GetContext(), draft))
 
-	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID))
+	s.NoError(s.service.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
 
 	inv, err := s.invoiceRepo.Get(s.GetContext(), draft.ID)
 	s.NoError(err)
@@ -2943,7 +2947,7 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_MapsReferenc
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.invoiceRepo.Clear()
-			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, s.testData.subscription.ID, periodStart, periodEnd, tt.ref)
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: tt.ref})
 			s.Require().NoError(err)
 			s.Equal(string(tt.wantReason), draft.BillingReason)
 		})
@@ -3004,7 +3008,7 @@ func (s *InvoiceServiceSuite) TestCreateDraftInvoiceForSubscription_PeriodStartC
 	}}
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
 
-	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.ReferencePointPeriodStart)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: sub.ID, PeriodStart: sub.CurrentPeriodStart, PeriodEnd: sub.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
 
 	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
@@ -3039,13 +3043,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_SkipsSubscriptionCreateDraft
 	s.invoiceRepo.Clear()
 	s.seedInvoiceConfigDelay(0)
 
-	draft, err := s.service.CreateDraftInvoiceForSubscription(
-		ctx,
-		s.testData.subscription.ID,
-		s.testData.subscription.CurrentPeriodStart,
-		s.testData.subscription.CurrentPeriodEnd,
-		types.ReferencePointPeriodStart,
-	)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: s.testData.subscription.CurrentPeriodStart, PeriodEnd: s.testData.subscription.CurrentPeriodEnd, ReferencePoint: types.ReferencePointPeriodStart})
 	s.Require().NoError(err)
 
 	computedAt := time.Now().UTC().Add(-time.Hour)
@@ -3066,9 +3064,7 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 
 	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
 	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
-	draft, err := s.service.CreateDraftInvoiceForSubscription(
-		ctx, s.testData.subscription.ID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
-	)
+	draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
 	s.Require().NoError(err)
 
 	computedAt := periodEnd.Add(time.Hour)

@@ -30,6 +30,10 @@ type Repository interface {
 	// Returns ierr.ErrNotFound if no active session exists.
 	GetByIdempotencyKey(ctx context.Context, key string) (*CheckoutSession, error)
 
+	// GetByCheckoutInvoiceID returns the active (initiated|pending) session gating the
+	// invoice, or nil when none is.
+	GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*CheckoutSession, error)
+
 	// Delete soft-deletes a checkout session by setting status to archived.
 	Delete(ctx context.Context, id string) error
 

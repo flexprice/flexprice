@@ -293,6 +293,7 @@ func (s *subscriptionService) createAddonProrationDraftInvoice(
 		params.getEffectiveDate(),
 		params.prorationIdempotencyKey(),
 	)
+	req.SourceType = types.InvoiceSourceTypeCheckout
 
 	inv, skipped, err := NewInvoiceService(s.ServiceParams).CreateComputedDraftInvoice(ctx, req)
 	if err != nil {

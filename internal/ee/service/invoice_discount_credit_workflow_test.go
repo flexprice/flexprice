@@ -51,6 +51,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) GetContext() context.Context {
 func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 	stores := s.GetStores()
 	s.invoiceService = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:   stores.CheckoutSessionRepo,
 		Logger:                s.GetLogger(),
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
@@ -68,6 +69,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 	})
 
 	s.couponApplicationService = NewCouponApplicationService(ServiceParams{
+		CheckoutSessionRepo:   stores.CheckoutSessionRepo,
 		Logger:                s.GetLogger(),
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
@@ -81,6 +83,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 
 	pubsub := testutil.NewInMemoryPubSub()
 	s.creditAdjustmentService = NewCreditAdjustmentService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -103,6 +106,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 	})
 
 	s.walletService = NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),

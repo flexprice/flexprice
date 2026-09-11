@@ -19,10 +19,6 @@ type CheckoutSessionService = interfaces.CheckoutSessionService
 
 type checkoutSessionService struct {
 	ServiceParams
-
-	// checkoutProviderFor resolves a session's provider adapter. Nil in production,
-	// where the integration factory is used; set in tests, which have no live gateway.
-	checkoutProviderFor func(context.Context, types.CheckoutPaymentProvider) (interfaces.CheckoutProvider, error)
 }
 
 func NewCheckoutSessionService(params ServiceParams) interfaces.CheckoutSessionService {
@@ -240,6 +236,38 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 	return s.cleanupCheckoutSession(ctx, session, reason)
 }
 
+// voidCheckoutInvoiceIfPartiallyPaid voids a gated invoice holding customer value before it is
+// archived: compute applies prepaid credits ahead of payment and archiving never returns
+// them. Best-effort — cleanup archives the invoice either way.
+func (s *checkoutSessionService) voidCheckoutInvoiceIfPartiallyPaid(ctx context.Context, session *domainCheckout.CheckoutSession, invoiceID string) {
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load checkout invoice for void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+
+	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return
+	}
+
+	// Nothing funded — a void would only add a VOIDED row and a webhook.
+	unreturned := inv.AmountPaid.Add(inv.TotalPrepaidCreditsApplied).Sub(inv.RefundedAmount)
+	if !unreturned.IsPositive() {
+		return
+	}
+
+	if _, err := NewInvoiceService(s.ServiceParams).VoidInvoice(ctx, invoiceID, dto.InvoiceVoidRequest{
+		Metadata: types.Metadata{
+			"void_reason":         "checkout_session_expired",
+			"checkout_session_id": session.ID,
+		},
+		InvoiceStateChangeSource: dto.NewCheckoutSessionSource(session.ID),
+	}); err != nil {
+		s.Logger.Error(ctx, "failed to void funded checkout invoice",
+			"error", err, "invoice_id", invoiceID, "session_id", session.ID)
+	}
+}
+
 func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
 	// Guard: already in a terminal state — idempotent no-op.
 	if session.CheckoutStatus.IsTerminal() {
@@ -315,7 +343,9 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 			s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", *session.CheckoutPaymentID, "error", err)
 		}
 	}
+
 	if session.CheckoutInvoiceID != nil && *session.CheckoutInvoiceID != "" {
+		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, *session.CheckoutInvoiceID)
 		if err := s.InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID); err != nil {
 			s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", *session.CheckoutInvoiceID, "error", err)
 		}
@@ -511,13 +541,13 @@ func buildCheckoutDraftInvoice(
 	subResp *dto.SubscriptionResponse,
 ) (*dto.InvoiceResponse, bool, error) {
 	invSvc := NewInvoiceService(params)
-	invResp, err := invSvc.CreateDraftInvoiceForSubscription(
-		ctx,
-		subResp.ID,
-		subResp.CurrentPeriodStart,
-		subResp.CurrentPeriodEnd,
-		types.ReferencePointPeriodStart,
-	)
+	invResp, err := invSvc.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subResp.ID,
+		PeriodStart:    subResp.CurrentPeriodStart,
+		PeriodEnd:      subResp.CurrentPeriodEnd,
+		ReferencePoint: types.ReferencePointPeriodStart,
+		SourceType:     types.InvoiceSourceTypeCheckout,
+	})
 	if err != nil {
 		return nil, false, err
 	}
@@ -586,6 +616,8 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	session.CheckoutInvoiceID = lo.ToPtr(draftInvoiceID)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		// Compute already debited prepaid credits; archiving alone would not return them.
+		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
 		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
 				"invoice_id", draftInvoiceID,

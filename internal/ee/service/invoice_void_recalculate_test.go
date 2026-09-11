@@ -61,6 +61,7 @@ func (s *InvoiceVoidRecalculateSuite) setupService() {
 
 	stores := s.GetStores()
 	s.service = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -343,6 +344,7 @@ func (s *InvoiceVoidRecalculateSuite) refundRows(invoiceID string) []*refund.Ref
 
 func (s *InvoiceVoidRecalculateSuite) walletsByCustomer() []*dto.WalletResponse {
 	svc := NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      s.GetStores().CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
