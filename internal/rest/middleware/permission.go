@@ -13,13 +13,15 @@ import (
 type PermissionMiddleware struct {
 	rbacService *rbac.RBACService
 	logger      *logger.Logger
+	readOnly    bool
 }
 
 // NewPermissionMiddleware creates a new permission middleware instance
-func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logger) *PermissionMiddleware {
+func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logger, readOnly bool) *PermissionMiddleware {
 	return &PermissionMiddleware{
 		rbacService: rbacService,
 		logger:      logger,
+		readOnly:    readOnly,
 	}
 }
 
@@ -56,6 +58,17 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
+
+		// DB write freeze (cutover): reject writes before any RBAC/tenant
+		// check runs, since none of that matters if writes are impossible.
+		if pm.readOnly && action == types.ActionWrite {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":       "read_only",
+				"message":     "database is read-only (cutover in progress)",
+				"retry_after": 30,
+			})
+			return
+		}
 
 		// Suspended tenants are blocked from all write operations. Checked first
 		// so a suspended tenant hears about the suspension rather than a narrower
