@@ -6,7 +6,7 @@
 --
 -- Immutable once set. Nothing clears it when the session goes terminal; whether a session
 -- is still active is answered by checkout_sessions, which is the source of truth.
-ALTER TABLE invoices ADD COLUMN source_type varchar NULL;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_type varchar NULL;
 
 -- migrate:down
 ALTER TABLE invoices DROP COLUMN source_type;
