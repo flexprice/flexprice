@@ -387,6 +387,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	licensingSigner *licensing.Signer,
+	userRepo user.Repository,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
@@ -442,7 +443,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Licensing:                v1.NewLicensingHandler(licensingSigner, logger),
+		Licensing:                v1.NewLicensingHandler(licensingSigner, userRepo, logger),
 	}
 }
 

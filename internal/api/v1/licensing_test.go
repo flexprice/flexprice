@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -18,6 +19,21 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
 )
+
+// fakeUserRepo returns a fixed user email for is_admin domain checks.
+type fakeUserRepo struct{ email string }
+
+func (f fakeUserRepo) GetByID(_ context.Context, id string) (*domainUser.User, error) {
+	return &domainUser.User{ID: id, Email: f.email}, nil
+}
+func (fakeUserRepo) Create(context.Context, *domainUser.User) error               { return nil }
+func (fakeUserRepo) GetByEmail(context.Context, string) (*domainUser.User, error) { return nil, nil }
+func (fakeUserRepo) Update(context.Context, *domainUser.User) error               { return nil }
+func (fakeUserRepo) UpdateRoles(context.Context, string, []string) error          { return nil }
+func (fakeUserRepo) Delete(context.Context, string) error                         { return nil }
+func (fakeUserRepo) ListByFilter(context.Context, *types.UserFilter) ([]*domainUser.User, int64, error) {
+	return nil, 0, nil
+}
 
 func makeLicensingSeed(t *testing.T) string {
 	t.Helper()
@@ -27,6 +43,10 @@ func makeLicensingSeed(t *testing.T) string {
 }
 
 func setupLicensingHandler(t *testing.T, seed string) *LicensingHandler {
+	return setupLicensingHandlerWithEmail(t, seed, "user@acme.com")
+}
+
+func setupLicensingHandlerWithEmail(t *testing.T, seed, email string) *LicensingHandler {
 	t.Helper()
 	cfg := &config.Configuration{
 		Logging:   config.LoggingConfig{Level: types.LogLevelInfo},
@@ -38,7 +58,7 @@ func setupLicensingHandler(t *testing.T, seed string) *LicensingHandler {
 	signer, err := licensing.NewSigner(cfg)
 	require.NoError(t, err)
 
-	return NewLicensingHandler(signer, log)
+	return NewLicensingHandler(signer, fakeUserRepo{email: email}, log)
 }
 
 // sessionBearerToken builds a JWT carrying only an "exp" claim, mirroring what
@@ -68,18 +88,18 @@ func newLicensingRequest(t *testing.T, tenantID string, isAdmin bool, bearer str
 
 	ctx := req.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	roles := []string{}
-	if isAdmin {
-		roles = []string{types.RoleSuperAdmin.String()}
-	}
-	ctx = context.WithValue(ctx, types.CtxRoles, roles)
+	ctx = context.WithValue(ctx, types.CtxUserID, "user_test")
+	// isAdmin is now derived from the user's email domain (via userRepo), not
+	// from roles; kept in the signature for call-site clarity.
+	_ = isAdmin
 	c.Request = req.WithContext(ctx)
 	return w, c
 }
 
 func TestIssueToken_ClaimsMatchSessionAndTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := setupLicensingHandler(t, makeLicensingSeed(t))
+	// staff email -> is_admin true
+	h := setupLicensingHandlerWithEmail(t, makeLicensingSeed(t), "someone@flexprice.io")
 
 	sessionExp := time.Now().Add(15 * time.Minute).Truncate(time.Second)
 	bearer := sessionBearerToken(t, sessionExp)

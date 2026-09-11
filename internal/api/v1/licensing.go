@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/licensing"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -13,15 +14,20 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
+// staffEmailDomain gates is_admin: only Flexprice staff (verified @flexprice.io
+// email) may mint enterprise / other-tenant licenses.
+const staffEmailDomain = "@flexprice.io"
+
 // LicensingHandler mints Heimdall licensing tokens and publishes the backend's
 // public key as a JWKS. See internal/licensing for the signing logic.
 type LicensingHandler struct {
-	signer *licensing.Signer
-	log    *logger.Logger
+	signer   *licensing.Signer
+	userRepo domainUser.Repository
+	log      *logger.Logger
 }
 
-func NewLicensingHandler(signer *licensing.Signer, log *logger.Logger) *LicensingHandler {
-	return &LicensingHandler{signer: signer, log: log}
+func NewLicensingHandler(signer *licensing.Signer, userRepo domainUser.Repository, log *logger.Logger) *LicensingHandler {
+	return &LicensingHandler{signer: signer, userRepo: userRepo, log: log}
 }
 
 type licensingTokenResponse struct {
@@ -57,7 +63,16 @@ func (h *LicensingHandler) IssueToken(c *gin.Context) {
 		return
 	}
 
-	isAdmin := types.IsSuperAdminUser(ctx)
+	// is_admin means Flexprice STAFF (us), not tenant owner — every user is
+	// super-admin of their own tenant, so that check is wrong here. Gate on a
+	// @flexprice.io email instead.
+	// SECURITY: trustworthy only when the email is IdP-verified (Supabase/SSO).
+	// Under the self-serve flexprice provider email is unverified and therefore
+	// spoofable — do not rely on this for staff auth in that mode.
+	isAdmin := false
+	if u, err := h.userRepo.GetByID(ctx, types.GetUserID(ctx)); err == nil && u != nil {
+		isAdmin = strings.HasSuffix(strings.ToLower(u.Email), staffEmailDomain)
+	}
 
 	token, err := h.signer.Mint(tenantID, isAdmin, sessionExp)
 	if err != nil {
