@@ -74,7 +74,7 @@ func newTestRouter(t *testing.T, tenantID string, svc *mockTenantService) *gin.E
 	t.Helper()
 
 	log := newTestLogger(t)
-	permMW := NewPermissionMiddleware(newPermissiveRBACService(t), log)
+	permMW := NewPermissionMiddleware(newPermissiveRBACService(t), log, false)
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -147,7 +147,7 @@ func newRBACServiceWithRoles(t *testing.T, rolesJSON string) *rbac.RBACService {
 func newRBACRouter(t *testing.T, rbacSvc *rbac.RBACService, tenantStatus types.TenantInternalStatus, userType string, roles []string) *gin.Engine {
 	t.Helper()
 	log := newTestLogger(t)
-	permMW := NewPermissionMiddleware(rbacSvc, log)
+	permMW := NewPermissionMiddleware(rbacSvc, log, false)
 	svc := &mockTenantService{status: tenantStatus}
 
 	gin.SetMode(gin.TestMode)

@@ -61,6 +61,8 @@ func (s *EventServiceSuite) TearDownTest() {
 	s.publisher.Clear()
 }
 
+// Write-freeze invariant: CreateEvent has no Postgres writer dependency —
+// only Kafka publish below proves ingestion survives a PG write-freeze.
 func (s *EventServiceSuite) TestCreateEvent() {
 	testCases := []struct {
 		name          string

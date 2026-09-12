@@ -23,6 +23,7 @@ func TestAutoBindEnvCategories(t *testing.T) {
 	t.Setenv("FLEXPRICE_KAFKA_TLS_CA_CERT_FILE", "/etc/kafka-ca/ca.crt")  // no default tag
 	t.Setenv("FLEXPRICE_KAFKA_TLS_SERVER_NAME", "broker.internal")        // no default tag
 	t.Setenv("FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP", "gmk-dualwrite") // pointer struct field
+	t.Setenv("FLEXPRICE_POSTGRES_READONLY", "true")                       // write-freeze flag
 
 	cfg, err := NewConfig()
 	if err != nil {
@@ -45,9 +46,23 @@ func TestAutoBindEnvCategories(t *testing.T) {
 		{"kafka.tls_ca_cert_file", cfg.Kafka.TLSCACertFile, "/etc/kafka-ca/ca.crt"},
 		{"kafka.tls_server_name", cfg.Kafka.TLSServerName, "broker.internal"},
 	}
+
+	boolCases := []struct {
+		name string
+		got  bool
+		want bool
+	}{
+		{"postgres.readonly", cfg.Postgres.ReadOnly, true},
+	}
 	for _, c := range cases {
 		if c.got != c.want {
 			t.Errorf("%s = %q, want %q (env override not honored)", c.name, c.got, c.want)
+		}
+	}
+
+	for _, c := range boolCases {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v (env override not honored)", c.name, c.got, c.want)
 		}
 	}
 

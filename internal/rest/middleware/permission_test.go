@@ -34,7 +34,34 @@ func newPermissionTestRouter(t *testing.T, rbacSvc *rbac.RBACService, userType s
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t))
+	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t), false)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		ctx := c.Request.Context()
+		if userType != "" {
+			ctx = context.WithValue(ctx, types.CtxUserType, userType)
+		}
+		if roles != nil {
+			ctx = context.WithValue(ctx, types.CtxRoles, roles)
+		}
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+	r.POST("/customers", pm.RequirePermission(entity, action), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"created": true})
+	})
+
+	return r
+}
+
+// newPermissionTestRouterReadOnly mirrors newPermissionTestRouter but lets the
+// test control the middleware's readOnly flag, for TestRequirePermissionReadOnly.
+func newPermissionTestRouterReadOnly(t *testing.T, rbacSvc *rbac.RBACService, userType string, roles []string, entity types.Entity, action types.Action, readOnly bool) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t), readOnly)
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
@@ -78,7 +105,7 @@ const superAdminRolesJSON = `{
 func newSuperAdminRouter(t *testing.T, tenantStatus types.TenantInternalStatus, userType string, roles []string) *gin.Engine {
 	t.Helper()
 	log := newTestLogger(t)
-	pm := NewPermissionMiddleware(newRBACServiceWithRoles(t, superAdminRolesJSON), log)
+	pm := NewPermissionMiddleware(newRBACServiceWithRoles(t, superAdminRolesJSON), log, false)
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -271,7 +298,7 @@ func newPortalSessionTestRouter(t *testing.T, rbacSvc *rbac.RBACService, userTyp
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t))
+	pm := NewPermissionMiddleware(rbacSvc, newTestLogger(t), false)
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
@@ -340,6 +367,61 @@ func TestPortalSession_AllowsWriter(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "a writer principal must still be able to create a portal session")
 	assert.Contains(t, w.Body.String(), "portal-jwt", "the session token must be returned on the allowed path")
+}
+
+// TestRequirePermissionReadOnly pins the 503 gate added for the DB write
+// freeze: a write route must be refused before RBAC runs when readOnly is
+// set, a read route must pass the gate, and the gate must be a no-op when
+// readOnly is false.
+func TestRequirePermissionReadOnly(t *testing.T) {
+	rbacSvc := realRBACService(t)
+
+	cases := []struct {
+		name     string
+		entity   types.Entity
+		action   types.Action
+		roles    []string
+		readOnly bool
+		want     int
+	}{
+		{
+			// The gate must fire BEFORE RBAC: a caller lacking customer:write
+			// still gets 503, not 403 — proving read-only precedes the role
+			// check. A regression that ran RBAC first would return 403 here.
+			name:     "write under readOnly, caller lacks write perm -> 503 (not 403)",
+			entity:   types.EntityCustomer,
+			action:   types.ActionWrite,
+			roles:    []string{types.RoleAllReader.String()},
+			readOnly: true,
+			want:     http.StatusServiceUnavailable,
+		},
+		{
+			name:     "read under readOnly -> passes gate (200)",
+			entity:   types.EntityCustomer,
+			action:   types.ActionRead,
+			roles:    []string{types.RoleSuperAdmin.String()},
+			readOnly: true,
+			want:     http.StatusOK,
+		},
+		{
+			name:     "write with readOnly=false -> passes gate (200)",
+			entity:   types.EntityCustomer,
+			action:   types.ActionWrite,
+			roles:    []string{types.RoleSuperAdmin.String()},
+			readOnly: false,
+			want:     http.StatusOK,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := newPermissionTestRouterReadOnly(t, rbacSvc, string(types.UserTypeUser),
+				tc.roles, tc.entity, tc.action, tc.readOnly)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/customers", nil))
+			assert.Equal(t, tc.want, w.Code, tc.name)
+		})
+	}
 }
 
 // TestPortalSession_AllowsSuperAdmin confirms a super_admin principal (wildcard
