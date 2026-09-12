@@ -193,12 +193,40 @@ a failed connection still exits 0 and hashes the empty string —
 
 | Gate | Runs in | Catches |
 |---|---|---|
+| `migrate-check-lint` | both, **advisory in CI** | a migration that takes a lock it should not |
 | ent codegen current | CI | a schema edit without `make generate-ent` — first, because a stale `ent/` makes every later gate read the wrong schema and pass |
 | `migrate-check-sync` | both | a schema change that shipped without a migration |
 | `migrate-check-checksum` | both | edits to a shipped migration, and migrations missing from `.hashes` |
 | `migrate-check-order` | both | parallel branches merging out of timestamp order |
 | replay from zero | CI | the set does not apply to an empty database |
 | `migrate-check-clickhouse` | neither — disabled | multi-statement ClickHouse files |
+
+## Lock safety
+
+`make migrate-check-lint` runs [squawk](https://squawkhq.com) over migrations this
+branch **adds** — not the whole directory. The baseline is a 3,700-line `pg_dump`
+of production reporting 1,363 findings, all describing history rather than a
+decision anyone is making now; linting it would train everyone to ignore the
+output.
+
+It catches the things that take a lock you did not intend: a `CREATE INDEX` without
+`CONCURRENTLY`, a `DROP INDEX` without it, a constraint added without `NOT VALID`,
+a `NOT NULL` column added to a populated table, a rename.
+
+Advisory in CI for now — it reports and does not fail the build. It **does** fail
+locally, so it is enforceable today; flip the CI step once a few weeks of real PRs
+confirm the rule set is tuned.
+
+Seven rules are disabled in `.squawk.toml`, each for a reason recorded inline.
+Three are worth knowing about:
+
+- **`require-lock-timeout` / `require-statement-timeout`** — set on the connection
+  by `scripts/migrations/apply.sh`, not in the file, because a `transaction:false`
+  file may hold exactly one statement. Squawk cannot see the connection.
+- **`prefer-robust-stmts`** — wants `IF NOT EXISTS` everywhere. For
+  `CREATE INDEX CONCURRENTLY` that is actively wrong: it silently skips an INVALID
+  index left by a failed build. Good advice for `ADD COLUMN`, so disabling it is a
+  real loss, but the rule cannot be scoped per statement type.
 
 `.hashes` is authoritative and is not rewritten by the check. Adding a migration
 means recording it deliberately:
