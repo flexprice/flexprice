@@ -120,6 +120,8 @@ func (h *MeterHandler) UpdateMeter(c *gin.Context) {
 		return
 	}
 
+	req.Sanitize()
+
 	if len(req.Filters) == 0 {
 		c.Error(ierr.NewError("filters cannot be empty").
 			WithHint("At least one filter must be provided").
