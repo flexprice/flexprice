@@ -128,8 +128,14 @@ func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, 
 			Mark(ierr.ErrValidation)
 	}
 
-	// For daily and weekly periods, we can use simple addition
+	// For one-time, daily, and weekly periods, we can use simple addition.
 	switch period {
+	case BILLING_PERIOD_ONETIME:
+		nextDate := currentPeriodStart.AddDate(0, 0, 1)
+		if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
+			return *subscriptionEndDate, nil
+		}
+		return nextDate, nil
 	case BILLING_PERIOD_DAILY:
 		// Use the anchor's time component (hour, min, sec) for calendar-aligned billing
 		// For calendar billing, anchor is at 00:00:00, so next date will be at midnight
