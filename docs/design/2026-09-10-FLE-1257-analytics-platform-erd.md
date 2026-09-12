@@ -61,7 +61,7 @@ A reader who has *not* followed the design discussion. Section 2 gives the backg
 3. **Analytics is downstream-only.** Derived, read-only; the billing/invoicing path never reads it.
 4. **Nothing tenant-authored becomes a database object.** Saved views are JSON in Postgres; tenants never cause DDL or submit SQL.
 5. **Product analytics shows usage; money comes only from the revenue table.** Never approximate money as `usage × rate` in the product-analytics path — it ignores tiers/allowances and is wrong.
-6. **ClickHouse is optional; revenue analytics runs on Postgres alone.** `revenue_facts` and everything it joins to live in Postgres, so a tenant with no metered usage still gets full revenue analytics. ClickHouse is required only for usage/product analytics.
+6. **Revenue's system of record is Postgres; analytics is served from ClickHouse (B).** `revenue_facts` is authored in Postgres by the rollup, so revenue is computed and durable **without any ClickHouse dependency** — a tenant with no usage/metered features still gets full revenue data. Postgres (incl. `revenue_facts`) is then synced into the **ClickHouse (B)** analytics replica, and **all** analytics queries — usage *and* revenue — are served from CH (B), so there is one uniform read store and no cross-store joins. The `revenue_facts` primary can later move from Postgres to **ClickHouse (A)** without touching the serving layer, since CH (A) also syncs to CH (B).
 
 ---
 
@@ -69,43 +69,39 @@ A reader who has *not* followed the design discussion. Section 2 gives the backg
 
 ```mermaid
 flowchart LR
-  subgraph PG[Postgres  •  source of truth + revenue store]
-    SRC[subs, prices, entitlements, commitments,<br/>invoices, invoice_line_items, wallet_transactions]
-    RF[revenue_facts<br/>DERIVED, daily]
+  subgraph PG[Postgres  •  system of record]
+    SRC[subs · prices · entitlements · commitments<br/>invoices · invoice_line_items · wallet_transactions]
+    RF[revenue_facts  DERIVED, daily<br/>primary today; movable to ClickHouse A later]
   end
 
-  subgraph CH[ClickHouse  •  OPTIONAL — only with metered usage]
-    MU[meter_usage<br/>usage facts]
+  EV[Usage events] --> MU[ClickHouse A · meter_usage]
+
+  subgraph CHB[ClickHouse B  •  analytics serving replica]
+    Q[meter_usage + revenue_facts + entities<br/>all synced here — serves every query]
   end
 
-  EV[Usage events] --> MU
-  ENG[Billing Preview Engine<br/>non-mutating]
-  ROLL[Rollup workflow<br/>watermarked]
-  SRV[Serving layer<br/>view JSON to SQL + RLS]
-
-  SRC --> ENG
-  MU -. metered usage only .-> ENG
-  ENG --> ROLL
-  MU -. usage curve .-> ROLL
+  SRC --> ENG[Billing Preview Engine · non-mutating]
+  MU -. metered usage + cumulative curve .-> ENG
+  ENG --> ROLL[Rollup workflow · watermarked]
   ROLL --> RF
+  PG == PeerDB CDC ==> CHB
+  MU == sync ==> CHB
 
-  RF --> SRV
-  SRC --> SRV
-  MU -. usage / product analytics .-> SRV
+  CHB --> SRV[Serving layer · view JSON to SQL + RLS]
   SRV --> API[Views API + Saved Views]
   SRV --> EXP[Warehouse export]
 ```
 
-- **`revenue_facts` lives in Postgres.** Revenue exists even for tenants with no usage events or metered features (fixed fees, commitments, one-off invoices), so revenue analytics must **not** depend on ClickHouse. The table is **small by construction** (subscriptions × prices × days), well within Postgres's reach, and it joins natively to the invoice/entity tables that already live in Postgres — no cross-store hop for structural revenue.
-- **ClickHouse is optional.** It holds `meter_usage` (aggregated usage) and powers **product/usage analytics**. Tenants who don't use metered features never need it; a read replica can isolate the analytics read path when it *is* used.
-- **`revenue_facts`** — the new **derived** table produced by the rollup (§6–7), in Postgres.
-- **Serving layer** — turns a saved view into parameterized SQL, injects tenant isolation, and routes by metric: **revenue → Postgres**, **usage → ClickHouse** (when present). Custom-dimension revenue (money × usage share) is the one cross-store case, and it applies only when ClickHouse is in use (§9.2).
+- **Postgres is the system of record for `revenue_facts`.** The rollup (§6–7) writes it in Postgres, so revenue is computed and durable with **no ClickHouse dependency** — a tenant with no metered usage still gets full revenue data. It is **small by construction** (subscriptions × prices × days).
+- **ClickHouse (B) is the uniform serving replica.** Postgres — `revenue_facts`, invoices, entities — syncs to CH (B) via **PeerDB**; `meter_usage` (from ClickHouse A) syncs there too. **All** analytics queries, usage *and* revenue, are served from CH (B). One read store ⇒ no cross-store joins.
+- **Movable primary.** The `revenue_facts` primary can later move from Postgres to ClickHouse (A); since CH (A) also syncs to CH (B), the serving layer is unaffected.
+- **Serving layer** — turns a saved view into parameterized SQL over CH (B), injects tenant isolation, and feeds the API and exports.
 
 Everything is scoped by `tenant_id` + `environment_id`; every query filters on both.
 
 ### 4.1 Data model (ERD)
 
-`revenue_facts` (**Postgres**) is the one **derived** table; the entities it joins to — `invoice`, `invoice_line_item`, `subscription`, `price`, `customer`, `wallet_transaction` — are **native Postgres** source tables, and `meter_usage` is the **ClickHouse** usage store (optional). Relationships below are the join keys the serving/rollup layers use — `revenue_facts` is intentionally denormalized (it stores ids, not FKs) so these are logical joins, not enforced constraints.
+`revenue_facts` is the one **derived** table. Its **system of record is Postgres** (authored by the rollup); it — with the invoice/entity/wallet source tables — is synced into **ClickHouse (B)**, the analytics replica that **serves all queries**. `meter_usage` is the ClickHouse usage store. Relationships below are the join keys the serving/rollup layers use — `revenue_facts` is intentionally denormalized (it stores ids, not FKs) so these are logical joins, not enforced constraints.
 
 ```mermaid
 erDiagram
@@ -211,7 +207,7 @@ The flexible lens, largely **reusing existing infrastructure**: `meter_usage` pl
 Added on top:
 - **Saved views** (§9) — reusable, shareable slices as JSON.
 - **Runtime "adjusted usage."** "Billable vs. included usage" or "overage units" are computed **at query time** from the *current* entitlement/price config — **never stored**, because that config is versioned and a stored copy would go stale.
-- **Non-usage series.** Wallet transactions, credit grants, and price-change history are native Postgres tables queried through the same view machinery (filtered lists, running totals) — no ClickHouse required.
+- **Non-usage series.** Wallet transactions, credit grants, and price-change history are Postgres source tables, synced to CH (B) and queried there through the same view machinery (filtered lists, running totals).
 
 **Hard rule:** product-analytics views never render money as `usage × rate`. Money comes from `revenue_facts`.
 
@@ -247,7 +243,7 @@ Usage / fixed / true-up come from the billing engine and reconcile to the invoic
 
 ### 6.3 Schema
 
-A **Postgres** table (§4 — keeps ClickHouse optional). One row per **`(tenant, environment, subscription, price, day, revenue_source)`**. Daily grain enables fine-grained exports and future recognition. Money is decomposed into **columns on `usage` rows**; `fixed`/`trueup`/etc. are their own rows carrying just `net_amount`. Usage is measured **gross** (billable + allowance) so the allowance shows as a visible credit. **Tax and prepaid are excluded** (§6.6, §6.7).
+The **authoring / system-of-record** table is **Postgres** (§4); it is synced to ClickHouse (B) for serving, and its primary can later move to ClickHouse (A). The DDL below is the Postgres authoring schema. One row per **`(tenant, environment, subscription, price, day, revenue_source)`**. Daily grain enables fine-grained exports and future recognition. Money is decomposed into **columns on `usage` rows**; `fixed`/`trueup`/etc. are their own rows carrying just `net_amount`. Usage is measured **gross** (billable + allowance) so the allowance shows as a visible credit. **Tax and prepaid are excluded** (§6.6, §6.7).
 
 ```sql
 CREATE TABLE revenue_facts (
@@ -446,7 +442,8 @@ sequenceDiagram
 - **Dirty-subscription set** — from a usage watermark plus period-close and amendment events; only subscriptions that moved are rebuilt.
 - **Whole-open-period recompute** — tiers/allowances/commitments are period-cumulative. For metered charges the engine reads aggregated `meter_usage` from ClickHouse; for fixed/commitment charges no ClickHouse is needed at all.
 - **Cadence** — watermark-driven; a modest default (e.g. hourly) for open periods, tunable. `FINAL` periods are never recomputed, only corrected (§8). A configurable **grace window** (~3 days, à la Orb) keeps a period `PROVISIONAL` while late usage settles.
-- **Isolation** — rollup writes go to Postgres; its `meter_usage` reads (when metered) can use a ClickHouse read replica so a backfill can't starve the tenant read path.
+- **Sync to the serving replica** — after the rollup writes Postgres, **PeerDB** replicates `revenue_facts` (and the source tables) into **ClickHouse (B)**, where the serving layer (§9) reads. Writes and reads are thus separated: the rollup never touches the read path, and serving never touches Postgres.
+- **Isolation** — rollup writes go to Postgres; its `meter_usage` reads (when metered) use ClickHouse. A backfill storm can't starve the tenant read path because reads hit CH (B), a different store from the Postgres write target.
 - **Engine dependency to build** — a preview entry point returning cumulative charge as-of an arbitrary in-period date, ideally all day-checkpoints in one pass (Q2).
 
 ---
@@ -513,20 +510,21 @@ A **saved view is a JSON row in Postgres**, immutable and versioned. It creates 
 flowchart LR
   V[View JSON + variables] --> T1[resolve & type-check variables]
   T1 --> T2[inject tenant + env RLS]
-  T2 --> T3{route by metric}
-  T3 -- revenue --> RF[revenue_facts SQL<br/>Postgres]
-  T3 -- ledger --> SY[Postgres source-table SQL]
-  T3 -- usage --> MU[meter_usage query builder<br/>ClickHouse, optional]
-  RF --> PG[bind params, execute on Postgres]
-  SY --> PG
-  MU --> CH[bind params, execute on ClickHouse]
-  PG --> SH[shape to columns + rows]
-  CH --> SH
+  T2 --> T3{metric to source table}
+  T3 -- usage --> MU[meter_usage]
+  T3 -- revenue --> RF[revenue_facts]
+  T3 -- ledger --> WT[wallet_transactions, ...]
+  MU --> BIND[bind params, execute on ClickHouse B]
+  RF --> BIND
+  WT --> BIND
+  BIND --> SH[shape to columns + rows]
 ```
 
+**Everything is served from ClickHouse (B)** — `meter_usage`, `revenue_facts`, and the synced source tables all live there, so the serving layer executes every query against a single store.
+
 - **Shapes (v1):** `timeseries`, `breakdown`, `single_value`, `drilldown`. (`pivot`, `distribution` later.)
-- **Variables** bind as **query parameters** on the target store (Postgres for revenue/ledger, ClickHouse for usage), never string interpolation. Optional filters with no value are dropped from `WHERE`. Dimension-position variables are allowed only against a per-tenant registered-property allowlist.
-- **Custom dimensions** are aggregated **at read time**: for usage, `JSONExtract` over `meter_usage` (ClickHouse); for revenue, the money comes from `revenue_facts` (Postgres) allocated by the dimension's usage share from `meter_usage` — the one **cross-store** path, available only when ClickHouse is in use.
+- **Variables** bind as **ClickHouse query parameters** (never string interpolation). Optional filters with no value are dropped from `WHERE`. Dimension-position variables are allowed only against a per-tenant registered-property allowlist.
+- **Custom dimensions** are aggregated **at read time**: usage via `JSONExtract` over `meter_usage`; custom-dimension **revenue** joins `revenue_facts` (money) to `meter_usage` (usage share) — and because both are in CH (B), this is a **single-store join**, not a cross-store hop.
 - **Allocation presets** (custom-dimension revenue only): `billed` (default; aggregate-level components as their own rows so every line is defensible) and `amortized` (aggregate effects spread by usage share). Allocate per price, then sum. A third, `list` (usage at list rate only), is an opt-in for efficiency comparisons; it deliberately does **not** reconcile and returns `reconciles_to_invoice: false`.
 - **Authoritative vs. estimated:** a revenue query returns stored authoritative rows (`marginal` + `period_only`). A daily-shape chart over `period_only` items uses read-time `estimated` allocation, labeled and never summed into an authoritative total.
 
@@ -543,28 +541,28 @@ flowchart LR
 | `allocation_policy` | Only for **custom-dimension revenue** — `billed` / `amortized` / `list` (§9 bullets). | Ignored for usage metrics and structural revenue breakdowns. |
 | `variables` | Typed placeholders (`date_range`, `string`, `string_list`, `number`, `enum`, `boolean`) bound at query time. | Bound as **query parameters** on the target store, never string-interpolated. |
 
-**Group-by resolution.** A **structural** dimension resolves by joining `price_id`/`meter_id`/`customer_id`/`plan_id` to the entity tables. For **revenue**, those entity tables are the **native Postgres** tables `revenue_facts` already sits beside — a plain SQL join. For **usage**, a **custom** dimension (e.g. `region`) resolves via `JSONExtractString(properties, 'region')` on `meter_usage` in ClickHouse **at read time** — no pre-declaration, but it must pass the registered-property allowlist to become a legal group-by.
+**Group-by resolution.** A **structural** dimension resolves by joining `price_id`/`meter_id`/`customer_id`/`plan_id` to the entity tables synced into CH (B) — a single-store join. A **custom** dimension (e.g. `region`) resolves via `JSONExtractString(properties, 'region')` on `meter_usage` in CH (B) **at read time** — no pre-declaration, but it must pass the registered-property allowlist to become a legal group-by.
 
 ### 9.2 What powers a view — and where "runtime adjustments" apply
 
-The metric decides the source table. This is the crux of your question, and the split is deliberate:
+The metric decides which **source table** the view reads — all of them served from ClickHouse (B):
 
-| Metric kind | Powered by | Adjustments |
+| Metric kind | Source table (in CH B) | Adjustments |
 |---|---|---|
-| **Usage** (`usage_quantity`, `event_count`, `billable_usage`, `overage_units`) | **`meter_usage`** via the existing query builder | "Adjusted" usage (`billable_usage`, `overage_units`) is computed **at runtime** by applying the *current* entitlement/price config to the raw usage — never stored, so it can't go stale. |
-| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_credit`, …) | **`revenue_facts`** (Postgres, pre-computed) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue additionally does a read-time **allocation join** to `meter_usage` (ClickHouse) for the dimension's usage share. |
-| **Ledger** (credit top-ups, balance, price-change history) | **native Postgres tables** (`wallet_transactions`, …) | Simple filters/sums; no pricing. |
+| **Usage** (`usage_quantity`, `event_count`, `billable_usage`, `overage_units`) | `meter_usage` | "Adjusted" usage (`billable_usage`, `overage_units`) is computed **at runtime** by applying the *current* entitlement/price config to the raw usage — never stored, so it can't go stale. |
+| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_credit`, …) | `revenue_facts` (authored in Postgres, synced to CH B) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue joins `meter_usage` for the usage share — a single-store join in CH (B). |
+| **Ledger** (credit top-ups, balance, price-change history) | `wallet_transactions`, … (synced to CH B) | Simple filters/sums; no pricing. |
 
-So: **usage views** are powered by ClickHouse `meter_usage` with runtime-computed adjustment fields — exactly as you said. **Revenue and ledger views** are powered by **Postgres** (`revenue_facts` + native source tables), so they work with **no ClickHouse at all**. A view that mixes a usage metric and a revenue metric runs two sub-queries — one per store — and joins the results in the serving layer; that is also the only place a cross-store hop occurs.
+So every view — usage, revenue, or ledger — executes against CH (B). The money still originates from `revenue_facts` (authored in Postgres, never recomputed as `usage × rate`); serving just reads the synced copy. A view that mixes a usage metric and a revenue metric is a single-store join in CH (B), not a cross-store hop.
 
 ---
 
 ## 10. Warehouse export
 
-Daily grain makes tenant-side BI viable. Export surface:
-- **Derived:** `revenue_facts` from Postgres (and, later, the recognition table).
-- **Raw (native Postgres):** `invoice`, `invoice_line_item`, entities, `wallet_transactions` — reconciliation anchor and structural dimensions.
-- **Usage (ClickHouse, when present):** `meter_usage` for tenants doing usage BI.
+Daily grain makes tenant-side BI viable. Export surface (all resident in CH (B), the serving replica):
+- **Derived:** `revenue_facts` (and, later, the recognition table).
+- **Raw (synced):** `invoice`, `invoice_line_item`, entities, `wallet_transactions` — reconciliation anchor and structural dimensions.
+- **Usage:** `meter_usage` for tenants doing usage BI.
 
 Export is a fast-follow on `revenue_facts`, hedging the risk that a full in-app builder is more than some tenants need. Mechanism (snapshot vs. incremental by `updated_at`/`version`; destinations) is deferred; the common pattern is a first full snapshot then daily incrementals.
 
@@ -638,7 +636,7 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 
 **Q3 — Multi-period commitment prior-base.** For an annual commitment billed monthly, month N needs cumulative consumption from months 1..N-1; the engine reads it only from *finalized* invoices and degrades silently otherwise. *Why it matters:* the rollup produces provisional numbers before finalization, exactly when the engine's source is incomplete. *Resolved by:* fixing the fields of a rollup-maintained cumulative prior-base (sum of usage-line base; overage lines ÷ overage factor; true-up excluded), where it's stored, and the rule gating true-up to the final period.
 
-**Q4 — ClickHouse read isolation and entity enrichment for usage views.** Revenue/ledger run on Postgres, but usage/product analytics reads `meter_usage` in ClickHouse. *Why it matters:* under load, analytical scans shouldn't degrade ingestion or the tenant read path, and structural dimensions for *usage* (feature/plan names) live in Postgres. *Resolved by:* deciding whether usage reads hit a ClickHouse read replica, and whether usage-side entity names are joined in the Go serving layer (as today) or need a lightweight entity copy in ClickHouse.
+**Q4 — PeerDB sync coverage/latency into CH (B), and the CH (A) migration path.** All serving reads hit CH (B), fed by PeerDB from Postgres (`revenue_facts`, invoices, entities, wallet) plus `meter_usage` from CH (A). *Why it matters:* provisional revenue freshness and reconciliation timing depend on sync lag; and we've asserted the `revenue_facts` primary can later move Postgres → CH (A) without changing serving. *Resolved by:* confirming which tables PeerDB replicates into CH (B) and the observed lag; and sketching the CH (A) primary-migration (dual-write or cutover) so the "movable primary" claim is real, not aspirational.
 
 **Q5 — Allocation basis for `period_only` daily shape.** Rendering a daily shape for a non-decomposable item allocates the period total proportionally, proposed as that day's usage share. *Why it matters:* for volume tiers and `LATEST`/`AVG` meters this is defensible but not unique; even-spread may read better for some. *Resolved by:* picking a default and checking it against real volume-tier and `LATEST` examples; decide if it's per-aggregation-type.
 
@@ -662,7 +660,9 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 - **Billed vs. recognized revenue** — invoiced vs. earned; ASC 606 governs recognition timing.
 - **Deferred revenue** — money received but not yet earned (a liability); prepaid credits are deferred until consumed.
 - **Breakage** — deferred revenue recognized when prepaid credits expire unused.
-- **ClickHouse (optional)** — the usage store holding `meter_usage`; required only for usage/product analytics. Revenue analytics runs on Postgres alone.
+- **ClickHouse (A)** — the primary/operational ClickHouse holding `meter_usage` (usage facts); a future home for the `revenue_facts` primary.
+- **ClickHouse (B)** — the analytics **serving replica**; every analytics query reads here. Fed by CH (A) (usage) and by PeerDB from Postgres (`revenue_facts`, invoices, entities, wallet).
+- **PeerDB** — the CDC pipeline replicating Postgres tables (incl. the Postgres-authored `revenue_facts`) into ClickHouse (B).
 
 ## Appendix B — Codebase anchors
 
