@@ -104,6 +104,7 @@ func RegisterWorkflowsAndActivities(
 		nil, // temporal client not needed for boundary calculations
 		params.Logger,
 		params.Config,
+		params.StorageResolver,
 	)
 
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(

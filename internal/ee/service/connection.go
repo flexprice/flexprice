@@ -1101,6 +1101,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 		temporalService.GetGlobalTemporalClient(),
 		s.Logger,
 		s.Config,
+		s.StorageResolver,
 	)
 
 	// Scheduled tasks cleanup
