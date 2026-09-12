@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Purpose selects which Flexprice-owned bucket a request targets. Invoice PDFs
@@ -31,11 +32,11 @@ type Resolver interface {
 	ForPlatform(ctx context.Context, purpose Purpose) (Storage, error)
 	ForConnection(ctx context.Context, connectionID string) (Storage, error)
 	// ForConnectionExport resolves storage for a scheduled export run. The
-	// destination (bucket, region, prefix, encryption) comes from the run's
-	// job_config snapshot, not the connection row; the connection contributes
-	// only credentials. bucket is required here; region is required later for
-	// S3 only (managed GCS job_config has no region).
-	ForConnectionExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error)
+	// destination (bucket, region, prefix, encryption, endpoint) comes from the
+	// run's job_config snapshot, not the connection row; the connection
+	// contributes only credentials. bucket is required here; region is required
+	// later for S3 only (managed GCS job_config has no region).
+	ForConnectionExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (Storage, error)
 	Provider() Provider
 	// BucketConfigFor returns provider-specific bucket settings (prefix, presign
 	// expiry) for a purpose. Reading cfg.S3.* directly is what hardcoded the
@@ -49,8 +50,8 @@ type Resolver interface {
 type ConnectionStorageProvider interface {
 	GetStorageProvider(ctx context.Context, connectionID string) (Storage, error)
 	// GetStorageProviderExport builds storage for an export run: credentials from
-	// the connection, destination from the passed job_config values.
-	GetStorageProviderExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error)
+	// the connection, destination from the passed job_config.
+	GetStorageProviderExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (Storage, error)
 }
 
 type resolver struct {
@@ -133,18 +134,18 @@ func (r *resolver) ForConnection(ctx context.Context, connectionID string) (Stor
 	return r.connSvc.GetStorageProvider(ctx, connectionID)
 }
 
-func (r *resolver) ForConnectionExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error) {
+func (r *resolver) ForConnectionExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (Storage, error) {
 	if r.connSvc == nil {
 		return nil, ierr.NewError("connection storage is not configured").
 			WithHint("No connection storage provider was wired into the storage resolver").
 			Mark(ierr.ErrSystem)
 	}
-	if bucket == "" {
+	if dest == nil || dest.Bucket == "" {
 		return nil, ierr.NewError("export job_config is missing bucket").
 			WithHintf("scheduled task for connection %s has no bucket in its job_config", connectionID).
 			Mark(ierr.ErrValidation)
 	}
-	return r.connSvc.GetStorageProviderExport(ctx, connectionID, bucket, region, encryption, gzip)
+	return r.connSvc.GetStorageProviderExport(ctx, connectionID, dest)
 }
 
 // signerFor returns the GCS signing identity for a purpose (S3 signs with the
