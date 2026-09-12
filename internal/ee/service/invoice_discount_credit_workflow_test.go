@@ -64,6 +64,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		CouponApplicationRepo: stores.CouponApplicationRepo,
 		WalletRepo:            stores.WalletRepo,
 		SettingsRepo:          stores.SettingsRepo,
+		TaxAppliedRepo:        stores.TaxAppliedRepo,
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
 	})
@@ -94,6 +95,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		InvoiceRepo:              stores.InvoiceRepo,
 		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		SettingsRepo:             stores.SettingsRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
 		SubRepo:                  stores.SubscriptionRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
