@@ -33,8 +33,8 @@ type Resolver interface {
 	// ForConnectionExport resolves storage for a scheduled export run. The
 	// destination (bucket, region, prefix, encryption) comes from the run's
 	// job_config snapshot, not the connection row; the connection contributes
-	// only credentials. bucket/region are required and validated here so a bad
-	// job_config fails loud instead of reaching the SDK as an opaque endpoint error.
+	// only credentials. bucket is required here; region is required later for
+	// S3 only (managed GCS job_config has no region).
 	ForConnectionExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error)
 	Provider() Provider
 	// BucketConfigFor returns provider-specific bucket settings (prefix, presign
@@ -139,9 +139,9 @@ func (r *resolver) ForConnectionExport(ctx context.Context, connectionID, bucket
 			WithHint("No connection storage provider was wired into the storage resolver").
 			Mark(ierr.ErrSystem)
 	}
-	if bucket == "" || region == "" {
-		return nil, ierr.NewError("export job_config is missing bucket or region").
-			WithHintf("scheduled task for connection %s has no bucket/region in its job_config", connectionID).
+	if bucket == "" {
+		return nil, ierr.NewError("export job_config is missing bucket").
+			WithHintf("scheduled task for connection %s has no bucket in its job_config", connectionID).
 			Mark(ierr.ErrValidation)
 	}
 	return r.connSvc.GetStorageProviderExport(ctx, connectionID, bucket, region, encryption, gzip)

@@ -673,8 +673,98 @@ func TestFactory_GetStorageProviderExport_BYOB_UsesJobConfigDestination(t *testi
 	require.NotContains(t, got.FileURL("k.csv"), "test-bucket")
 }
 
+func seedS3ConnectionKeysOnly(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore, encSvc security.EncryptionService) *connection.Connection {
+	t.Helper()
+	accessKey, err := encSvc.Encrypt("AKIAFAKEACCESSKEY")
+	require.NoError(t, err)
+	secretKey, err := encSvc.Encrypt("fake-secret-access-key")
+	require.NoError(t, err)
+	conn := &connection.Connection{
+		ID:           "conn_s3_keys_only",
+		Name:         "Keys only",
+		ProviderType: types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{
+				AWSAccessKeyID:     accessKey,
+				AWSSecretAccessKey: secretKey,
+			},
+		},
+		SyncConfig:    nil,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+func TestFactory_GetStorageProviderExport_KeysOnly_UsesJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+	conn := seedS3ConnectionKeysOnly(ctx, t, connRepo, encSvc)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, "run-bucket", "ap-south-1", "AES256", false)
+	require.NoError(t, err)
+	require.Contains(t, got.FileURL("k.csv"), "run-bucket")
+}
+
+func TestFactory_GetStorageProviderForConnection_KeysOnly_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+	conn := seedS3ConnectionKeysOnly(ctx, t, connRepo, encSvc)
+
+	_, err := factory.GetStorageProviderForConnection(ctx, conn)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+}
+
+func TestFactory_GetStorageProviderExport_NoStorageNoKeys_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo)
+	conn := &connection.Connection{
+		ID:            "conn_s3_empty",
+		ProviderType:  types.SecretProviderS3,
+		SyncConfig:    nil,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.BaseModel{TenantID: types.GetTenantID(ctx), Status: types.StatusPublished},
+	}
+	require.NoError(t, connRepo.Create(ctx, conn))
+
+	_, err := factory.GetStorageProviderExport(ctx, conn.ID, "run-bucket", "ap-south-1", "AES256", false)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+}
+
 // A BYOB export whose job_config carries an empty bucket or region must fail loud
 // at construction rather than reaching the S3 SDK as "A region must be set".
+func TestFactory_GetStorageProviderExport_ManagedGCS_EmptyRegion_Succeeds(t *testing.T) {
+	stubAmbientGCPCredentials(t)
+
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "flexprice-managed-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, "flexprice-managed-bucket", "", "", false)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderGCS, got.Provider())
+}
+
 func TestFactory_GetStorageProviderExport_BYOB_EmptyDestination_ReturnsValidationError(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()

@@ -13,11 +13,13 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
-	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // ExportActivity handles the actual export operations
@@ -120,6 +122,9 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
+		if ierr.IsValidation(err) {
+			return nil, temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
+		}
 		return nil, err
 	}
 

@@ -344,18 +344,22 @@ func TestResolver_ForConnectionExport(t *testing.T) {
 		}}
 		_, err := r.ForConnectionExport(context.Background(), "conn_1", "", "us-east-1", "AES256", false)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing bucket or region")
+		assert.Contains(t, err.Error(), "missing bucket")
 		assert.False(t, called, "must not delegate when bucket empty")
 	})
 
-	t.Run("empty region fails loud before delegation", func(t *testing.T) {
+	t.Run("empty region delegates (managed GCS has no region)", func(t *testing.T) {
+		called := false
 		r := newTestResolver(t, ProviderS3, testConfig())
-		r.connSvc = &fakeConnStorageProvider{export: func(context.Context, string, string, string, string, bool) (Storage, error) {
+		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, _, bucket, region, _ string, _ bool) (Storage, error) {
+			called = true
+			assert.Equal(t, "gcs-bucket", bucket)
+			assert.Empty(t, region)
 			return nil, nil
 		}}
-		_, err := r.ForConnectionExport(context.Background(), "conn_1", "bucket", "", "AES256", false)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing bucket or region")
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", "gcs-bucket", "", "AES256", false)
+		require.NoError(t, err)
+		assert.True(t, called)
 	})
 
 	t.Run("delegates job_config destination through to provider", func(t *testing.T) {
