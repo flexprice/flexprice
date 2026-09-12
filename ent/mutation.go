@@ -25857,6 +25857,7 @@ type EntitlementGrantMutation struct {
 	scope_entity_id       *string
 	measure               *types.EntitlementGrantMeasure
 	quota                 *decimal.Decimal
+	unlimited             *bool
 	usage                 *decimal.Decimal
 	valid_from            *time.Time
 	valid_to              *time.Time
@@ -26517,6 +26518,42 @@ func (m *EntitlementGrantMutation) ResetQuota() {
 	m.quota = nil
 }
 
+// SetUnlimited sets the "unlimited" field.
+func (m *EntitlementGrantMutation) SetUnlimited(b bool) {
+	m.unlimited = &b
+}
+
+// Unlimited returns the value of the "unlimited" field in the mutation.
+func (m *EntitlementGrantMutation) Unlimited() (r bool, exists bool) {
+	v := m.unlimited
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUnlimited returns the old "unlimited" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldUnlimited(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUnlimited is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUnlimited requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUnlimited: %w", err)
+	}
+	return oldValue.Unlimited, nil
+}
+
+// ResetUnlimited resets all changes to the "unlimited" field.
+func (m *EntitlementGrantMutation) ResetUnlimited() {
+	m.unlimited = nil
+}
+
 // SetUsage sets the "usage" field.
 func (m *EntitlementGrantMutation) SetUsage(d decimal.Decimal) {
 	m.usage = &d
@@ -26842,7 +26879,7 @@ func (m *EntitlementGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementGrantMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlementgrant.FieldTenantID)
 	}
@@ -26884,6 +26921,9 @@ func (m *EntitlementGrantMutation) Fields() []string {
 	}
 	if m.quota != nil {
 		fields = append(fields, entitlementgrant.FieldQuota)
+	}
+	if m.unlimited != nil {
+		fields = append(fields, entitlementgrant.FieldUnlimited)
 	}
 	if m.usage != nil {
 		fields = append(fields, entitlementgrant.FieldUsage)
@@ -26942,6 +26982,8 @@ func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Measure()
 	case entitlementgrant.FieldQuota:
 		return m.Quota()
+	case entitlementgrant.FieldUnlimited:
+		return m.Unlimited()
 	case entitlementgrant.FieldUsage:
 		return m.Usage()
 	case entitlementgrant.FieldValidFrom:
@@ -26993,6 +27035,8 @@ func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (e
 		return m.OldMeasure(ctx)
 	case entitlementgrant.FieldQuota:
 		return m.OldQuota(ctx)
+	case entitlementgrant.FieldUnlimited:
+		return m.OldUnlimited(ctx)
 	case entitlementgrant.FieldUsage:
 		return m.OldUsage(ctx)
 	case entitlementgrant.FieldValidFrom:
@@ -27113,6 +27157,13 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetQuota(v)
+		return nil
+	case entitlementgrant.FieldUnlimited:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUnlimited(v)
 		return nil
 	case entitlementgrant.FieldUsage:
 		v, ok := value.(decimal.Decimal)
@@ -27292,6 +27343,9 @@ func (m *EntitlementGrantMutation) ResetField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuota:
 		m.ResetQuota()
+		return nil
+	case entitlementgrant.FieldUnlimited:
+		m.ResetUnlimited()
 		return nil
 	case entitlementgrant.FieldUsage:
 		m.ResetUsage()

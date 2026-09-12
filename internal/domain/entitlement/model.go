@@ -65,6 +65,12 @@ func (e *Entitlement) HasGrantConfig() bool {
 	return e.GrantQuota != nil || e.GrantDurationValue != nil || e.GrantMeasure != "" || e.GrantDurationUnit != ""
 }
 
+// IsUnlimitedGrant reports a grant config with no quota ceiling. Distinct from a
+// legacy unlimited entitlement (nil usage_limit, no grant config).
+func (e *Entitlement) IsUnlimitedGrant() bool {
+	return e != nil && e.HasGrantConfig() && e.GrantQuota == nil
+}
+
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
 	if e == nil {
 		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
@@ -260,7 +266,19 @@ func (e *Entitlement) validateGrantConfig() error {
 		}
 	}
 
-	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
+	// A nil quota means unlimited. It is only representable on a cycle-length
+	// window: an unlimited hourly allowance would open hundreds of rows a month
+	// to track a balance that can never run out.
+	if e.GrantQuota == nil {
+		if e.GrantDurationUnit != types.EntitlementGrantDurationUnitSubscriptionPeriod {
+			return ierr.NewError("unlimited allowances require grant_duration_unit=subscription_period").
+				WithHint("Leave grant_quota unset only for a cycle-length allowance; a recurring window needs a finite quota").
+				WithReportableDetails(map[string]interface{}{
+					"grant_duration_unit": e.GrantDurationUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if !e.GrantQuota.IsPositive() {
 		return ierr.NewError("grant_quota must be positive for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}

@@ -7076,6 +7076,24 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlementsForSubscripti
 		}
 	}
 
+	// Live allowance state. Read-only and best-effort: a failure here must not
+	// take down the entitlement response, which is still correct without it.
+	grantStates, err := NewEntitlementGrantService(s.ServiceParams).
+		GrantStateByFeature(ctx, sub, time.Now().UTC())
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load entitlement grant state, returning entitlements without it",
+			"error", err, "subscription_id", sub.ID)
+	} else {
+		for _, f := range aggregatedFeatures {
+			if f.Feature == nil {
+				continue
+			}
+			if state, ok := grantStates[f.Feature.ID]; ok && f.Entitlement != nil {
+				f.Entitlement.GrantState = state
+			}
+		}
+	}
+
 	// Build final response
 	response := &dto.SubscriptionEntitlementsResponse{
 		SubscriptionID: sub.ID,
@@ -7195,21 +7213,50 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 		// Get the parent entitlement (already validated above)
 		parentEnt := entitlementMap[override.EntitlementID]
 
-		// Create subscription-scoped entitlement with overrides
+		// Create subscription-scoped entitlement with overrides.
+		// Grant config is inherited: the override REPLACES the parent in the
+		// resolved set, so anything not copied here is lost for this
+		// subscription. Omitting the grant fields used to silently turn a
+		// grant-backed feature into a legacy one.
 		newEnt := &entitlement.Entitlement{
-			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
-			EntityType:          types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
-			EntityID:            sub.ID,
-			FeatureID:           parentEnt.FeatureID,
-			FeatureType:         parentEnt.FeatureType,
-			UsageResetPeriod:    parentEnt.UsageResetPeriod,
-			IsSoftLimit:         parentEnt.IsSoftLimit,
-			DisplayOrder:        parentEnt.DisplayOrder,
-			ParentEntitlementID: &parentEnt.ID,
-			StartDate:           &sub.StartDate, // Set start date to subscription start
-			EndDate:             nil,            // No end date - persists across billing periods
-			EnvironmentID:       parentEnt.EnvironmentID,
-			BaseModel:           types.GetDefaultBaseModel(ctx),
+			ID:                      types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
+			EntityType:              types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:                sub.ID,
+			FeatureID:               parentEnt.FeatureID,
+			FeatureType:             parentEnt.FeatureType,
+			UsageResetPeriod:        parentEnt.UsageResetPeriod,
+			IsSoftLimit:             parentEnt.IsSoftLimit,
+			DisplayOrder:            parentEnt.DisplayOrder,
+			ParentEntitlementID:     &parentEnt.ID,
+			StartDate:               &sub.StartDate, // Set start date to subscription start
+			EndDate:                 nil,            // No end date - persists across billing periods
+			EnvironmentID:           parentEnt.EnvironmentID,
+			GrantMeasure:            parentEnt.GrantMeasure,
+			GrantDurationValue:      parentEnt.GrantDurationValue,
+			GrantDurationUnit:       parentEnt.GrantDurationUnit,
+			GrantAllocationBehavior: parentEnt.GrantAllocationBehavior,
+			GrantQuota:              parentEnt.GrantQuota,
+			AggregationMode:         parentEnt.AggregationMode,
+			BaseModel:               types.GetDefaultBaseModel(ctx),
+		}
+
+		if override.GrantMeasure != nil {
+			newEnt.GrantMeasure = *override.GrantMeasure
+		}
+		if override.GrantDurationValue != nil {
+			newEnt.GrantDurationValue = override.GrantDurationValue
+		}
+		if override.GrantDurationUnit != nil {
+			newEnt.GrantDurationUnit = *override.GrantDurationUnit
+		}
+		if override.GrantAllocationBehavior != nil {
+			newEnt.GrantAllocationBehavior = *override.GrantAllocationBehavior
+		}
+		if override.GrantQuota != nil {
+			newEnt.GrantQuota = override.GrantQuota
+		}
+		if override.AggregationMode != nil {
+			newEnt.AggregationMode = *override.AggregationMode
 		}
 
 		// Apply overrides - ONLY these 3 fields can be overridden
@@ -7300,6 +7347,12 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			}
 		}
 
+		// Field coherence on the merged row: an override can move a quota or a
+		// duration into an invalid combination even though the parent was valid.
+		if err := newEnt.Validate(); err != nil {
+			return err
+		}
+
 		// Create the subscription-scoped entitlement
 		_, err := s.EntitlementRepo.Create(ctx, newEnt)
 		if err != nil {
@@ -7320,7 +7373,8 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			"feature_id", parentEnt.FeatureID,
 			"usage_limit_override", override.UsageLimit != nil,
 			"is_enabled_override", override.IsEnabled != nil,
-			"static_value_override", override.StaticValue != nil)
+			"static_value_override", override.StaticValue != nil,
+			"grant_config_inherited", newEnt.HasGrantConfig())
 	}
 
 	return nil

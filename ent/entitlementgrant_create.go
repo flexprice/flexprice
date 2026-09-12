@@ -162,6 +162,20 @@ func (egc *EntitlementGrantCreate) SetQuota(d decimal.Decimal) *EntitlementGrant
 	return egc
 }
 
+// SetUnlimited sets the "unlimited" field.
+func (egc *EntitlementGrantCreate) SetUnlimited(b bool) *EntitlementGrantCreate {
+	egc.mutation.SetUnlimited(b)
+	return egc
+}
+
+// SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
+func (egc *EntitlementGrantCreate) SetNillableUnlimited(b *bool) *EntitlementGrantCreate {
+	if b != nil {
+		egc.SetUnlimited(*b)
+	}
+	return egc
+}
+
 // SetUsage sets the "usage" field.
 func (egc *EntitlementGrantCreate) SetUsage(d decimal.Decimal) *EntitlementGrantCreate {
 	egc.mutation.SetUsage(d)
@@ -297,6 +311,10 @@ func (egc *EntitlementGrantCreate) defaults() {
 		v := entitlementgrant.DefaultScopeEntityType
 		egc.mutation.SetScopeEntityType(v)
 	}
+	if _, ok := egc.mutation.Unlimited(); !ok {
+		v := entitlementgrant.DefaultUnlimited
+		egc.mutation.SetUnlimited(v)
+	}
 	if _, ok := egc.mutation.Usage(); !ok {
 		v := entitlementgrant.DefaultUsage
 		egc.mutation.SetUsage(v)
@@ -380,6 +398,9 @@ func (egc *EntitlementGrantCreate) check() error {
 	}
 	if _, ok := egc.mutation.Quota(); !ok {
 		return &ValidationError{Name: "quota", err: errors.New(`ent: missing required field "EntitlementGrant.quota"`)}
+	}
+	if _, ok := egc.mutation.Unlimited(); !ok {
+		return &ValidationError{Name: "unlimited", err: errors.New(`ent: missing required field "EntitlementGrant.unlimited"`)}
 	}
 	if _, ok := egc.mutation.Usage(); !ok {
 		return &ValidationError{Name: "usage", err: errors.New(`ent: missing required field "EntitlementGrant.usage"`)}
@@ -488,6 +509,10 @@ func (egc *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.Cr
 	if value, ok := egc.mutation.Quota(); ok {
 		_spec.SetField(entitlementgrant.FieldQuota, field.TypeOther, value)
 		_node.Quota = value
+	}
+	if value, ok := egc.mutation.Unlimited(); ok {
+		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
+		_node.Unlimited = value
 	}
 	if value, ok := egc.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)

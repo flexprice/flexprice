@@ -170,6 +170,53 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsAmountLaneOnTieredP
 	s.Contains(err.Error(), "tiered")
 }
 
+func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsQuantityLaneOnTieredPrice() {
+	// grantPricingGuard declines to fold either lane on a tiered price, and a
+	// grant-based entitlement carries no usage_limit — so the legacy fallback
+	// would read nil as "unlimited" and bill nothing. Reject at create instead.
+	m := s.simpleMeter("meter-tier-qty")
+	f := s.simpleFeature("feat-tier-qty", m.ID)
+	p := &plan.Plan{ID: "plan-tier-qty", BaseModel: types.GetDefaultBaseModel(s.GetContext())}
+	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), p))
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), &price.Price{
+		ID:           "price-tier-qty",
+		Amount:       decimal.NewFromFloat(0.5),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_SLAB,
+		MeterID:      m.ID,
+		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(10)))
+	s.Error(err)
+	s.Contains(err.Error(), "tiered")
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_AcceptsFlatPriceQuantityLane() {
+	// Flat pricing on the quantity lane must still succeed — confirms the
+	// widened tiered guard is not over-broad.
+	m := s.simpleMeter("meter-flat-qty")
+	f := s.simpleFeature("feat-flat-qty", m.ID)
+	p := &plan.Plan{ID: "plan-flat-qty", BaseModel: types.GetDefaultBaseModel(s.GetContext())}
+	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), p))
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), &price.Price{
+		ID:           "price-flat-qty",
+		Amount:       decimal.NewFromFloat(0.01),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		MeterID:      m.ID,
+		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	resp, err := s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(10)))
+	s.NoError(err)
+	s.True(resp.Entitlement.HasGrantConfig())
+	s.Equal(types.EntitlementGrantMeasureQuantity, resp.Entitlement.GrantMeasure)
+}
+
 func (s *EntitlementGrantSuite) TestCreateEntitlement_AcceptsFlatPriceAmountLane() {
 	// Same feature/meter, flat pricing — must succeed. Confirms the guard
 	// isn't over-broad.
@@ -1878,4 +1925,131 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_WeekUnitStart_Value2_DSTF
 	s.True(ok)
 	s.True(from.Equal(time.Date(2026, 11, 2, 5, 0, 0, 0, time.UTC)),
 		"expected 2026-11-02T05:00Z (Mon 00:00 EST, DST-safe across multiple strides), got %s", from)
+}
+
+// M4 · subscription-scoped overrides must not silently drop grant config
+// -----------------------------------------------------------------------------
+
+// grantOverrideFixture returns a subscription plus the plan-level grant EC it
+// resolves to, ready for ProcessSubscriptionEntitlementOverrides.
+func (s *EntitlementGrantSuite) grantOverrideFixture(tag string) (*subscription.Subscription, *entitlement.Entitlement) {
+	_, sub, _ := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasure(tag))
+	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
+	s.Require().NoError(err)
+	s.Require().Len(ecs, 1)
+	return sub, ecs[0]
+}
+
+func (s *EntitlementGrantSuite) subScopedRows(sub *subscription.Subscription) []*entitlement.Entitlement {
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithEntityIDs([]string{sub.ID}).WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION)
+	rows, err := s.GetStores().EntitlementRepo.List(s.GetContext(), filter)
+	s.Require().NoError(err)
+	return rows
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionOverride_InheritsGrantConfig() {
+	sub, ec := s.grantOverrideFixture("quantity")
+	subSvc := NewSubscriptionService(s.buildServiceParams()).(*subscriptionService)
+
+	s.NoError(subSvc.ProcessSubscriptionEntitlementOverrides(s.GetContext(), sub, []dto.OverrideEntitlementRequest{
+		{EntitlementID: ec.ID, UsageLimit: lo.ToPtr(int64(50))},
+	}))
+
+	rows := s.subScopedRows(sub)
+	s.Require().Len(rows, 1)
+	// The override replaces the parent in the resolved set, so losing the grant
+	// config here would silently downgrade the feature to a legacy entitlement.
+	s.True(rows[0].HasGrantConfig(), "override must inherit the parent grant config")
+	s.Equal(ec.GrantMeasure, rows[0].GrantMeasure)
+	s.Equal(lo.FromPtr(ec.GrantQuota).String(), lo.FromPtr(rows[0].GrantQuota).String())
+	s.Equal(ec.GrantDurationUnit, rows[0].GrantDurationUnit)
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionOverride_OverridesGrantQuota() {
+	sub, ec := s.grantOverrideFixture("quantity")
+	subSvc := NewSubscriptionService(s.buildServiceParams()).(*subscriptionService)
+
+	s.NoError(subSvc.ProcessSubscriptionEntitlementOverrides(s.GetContext(), sub, []dto.OverrideEntitlementRequest{
+		{EntitlementID: ec.ID, GrantQuota: lo.ToPtr(decimal.NewFromInt(250))},
+	}))
+
+	rows := s.subScopedRows(sub)
+	s.Require().Len(rows, 1)
+	s.Equal("250", lo.FromPtr(rows[0].GrantQuota).String())
+	s.Equal(ec.GrantDurationUnit, rows[0].GrantDurationUnit, "untouched fields still inherit")
+}
+
+
+// M5 · unlimited allowances
+// -----------------------------------------------------------------------------
+
+func (s *EntitlementGrantSuite) unlimitedCreateRequest(featureID, planID string) dto.CreateEntitlementRequest {
+	req := s.grantCreateRequest(featureID, planID, types.EntitlementGrantMeasureQuantity, 1, decimal.NewFromInt(1))
+	req.GrantQuota = nil
+	req.GrantDurationValue = nil
+	req.GrantAllocationBehavior = ""
+	req.GrantDurationUnit = types.EntitlementGrantDurationUnitSubscriptionPeriod
+	return req
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_UnlimitedRequiresSubscriptionPeriod() {
+	m := s.simpleMeter("meter-unl-bad")
+	f := s.simpleFeature("feat-unl-bad", m.ID)
+	p := s.simplePlan("plan-unl-bad")
+
+	req := s.unlimitedCreateRequest(f.ID, p.ID)
+	req.GrantDurationUnit = types.EntitlementGrantDurationUnitHour
+	req.GrantDurationValue = lo.ToPtr(1)
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(), req)
+	s.Error(err)
+	s.Contains(err.Error(), "subscription_period")
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_UnlimitedAccepted() {
+	m := s.simpleMeter("meter-unl")
+	f := s.simpleFeature("feat-unl", m.ID)
+	p := s.simplePlan("plan-unl")
+
+	resp, err := s.entService.CreateEntitlement(s.GetContext(), s.unlimitedCreateRequest(f.ID, p.ID))
+	s.NoError(err)
+	s.True(resp.Entitlement.HasGrantConfig())
+	s.True(resp.Entitlement.IsUnlimitedGrant())
+	s.Nil(resp.Entitlement.GrantQuota)
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsMixingUnlimitedAndBounded() {
+	m := s.simpleMeter("meter-unl-mix")
+	f := s.simpleFeature("feat-unl-mix", m.ID)
+	p := s.simplePlan("plan-unl-mix")
+	p2 := s.simplePlan("plan-unl-mix-2")
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(), s.unlimitedCreateRequest(f.ID, p.ID))
+	s.NoError(err)
+
+	// A bounded sibling on the same feature would silently inherit the unlimited
+	// pool at fold time — the legacy wart this model removes.
+	_, err = s.entService.CreateEntitlement(s.GetContext(),
+		s.grantCreateRequest(f.ID, p2.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(100)))
+	s.Error(err)
+	s.Contains(err.Error(), "unlimited")
+}
+
+func (s *EntitlementGrantSuite) TestUnlimitedGrant_NeverExhaustsOrBills() {
+	g := &entitlementgrant.EntitlementGrant{
+		Unlimited: true,
+		Quota:     decimal.Zero,
+		Usage:     decimal.NewFromInt(1_000_000),
+	}
+	s.False(g.IsExhausted(), "unlimited window has no ceiling to cross")
+	s.True(g.Overage().IsZero(), "unlimited window never contributes overage")
+	s.True(g.Remaining().IsZero(), "remaining is meaningless; clients branch on Unlimited")
+
+	bounded := &entitlementgrant.EntitlementGrant{
+		Quota: decimal.NewFromInt(100),
+		Usage: decimal.NewFromInt(150),
+	}
+	s.True(bounded.IsExhausted())
+	s.Equal("50", bounded.Overage().String())
 }
