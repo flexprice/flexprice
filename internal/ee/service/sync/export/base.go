@@ -165,6 +165,9 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 
 	store, err := s.resolveExportStore(ctx, request)
 	if err != nil {
+		if ierr.IsValidation(err) {
+			return nil, err
+		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get storage provider from factory").
 			Mark(ierr.ErrHTTPClient)
