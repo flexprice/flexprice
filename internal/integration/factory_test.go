@@ -742,6 +742,29 @@ func TestFactory_GetStorageProviderExport_NoStorageNoKeys_ReturnsValidationError
 
 // A BYOB export whose job_config carries an empty bucket or region must fail loud
 // at construction rather than reaching the S3 SDK as "A region must be set".
+func TestFactory_GetStorageProviderExport_ManagedGCS_EmptyRegion_Succeeds(t *testing.T) {
+	stubAmbientGCPCredentials(t)
+
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "flexprice-managed-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, "flexprice-managed-bucket", "", "", false)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderGCS, got.Provider())
+}
+
 func TestFactory_GetStorageProviderExport_BYOB_EmptyDestination_ReturnsValidationError(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()
