@@ -144,15 +144,10 @@ func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) 
 	return s.executeExport(ctx, request, exporter)
 }
 
-// executeExport performs the common export workflow: validate -> prepare data -> upload to provider
 func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRequest, exporter Exporter) (*dto.ExportResponse, error) {
-	// Step 1: Prepare data (fetch + convert to CSV) - entity-specific logic
-	csvBytes, recordCount, err := exporter.PrepareData(ctx, request)
-	if err != nil {
-		return nil, err
-	}
+	ctx = types.SetTenantID(ctx, request.TenantID)
+	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
-	// Step 2: Get connection to determine provider type
 	conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -160,29 +155,40 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Add tenant and environment to context for connection lookup
-	ctx = types.SetTenantID(ctx, request.TenantID)
-	ctx = types.SetEnvironmentID(ctx, request.EnvID)
-
-	// Step 3: Route to appropriate provider based on connection type
 	switch conn.ProviderType {
 	case types.SecretProviderS3, types.SecretProviderGCS:
-		return s.uploadToStorage(ctx, request, exporter, csvBytes, recordCount)
 	default:
 		return nil, ierr.NewError("unsupported provider type").
 			WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
 			Mark(ierr.ErrValidation)
 	}
+
+	store, err := s.resolveExportStore(ctx, request)
+	if err != nil {
+		if ierr.IsValidation(err) {
+			return nil, err
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get storage provider from factory").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	csvBytes, recordCount, err := exporter.PrepareData(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.uploadToStorage(ctx, request, exporter, store, csvBytes, recordCount)
 }
 
-func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
+func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
 	if request.JobConfig == nil {
 		return nil, ierr.NewError("job configuration is required").
 			WithHint("job configuration must be provided for storage uploads").
 			Mark(ierr.ErrValidation)
 	}
 
-	store, err := s.storageResolver.ForConnectionExport(
+	return s.storageResolver.ForConnectionExport(
 		ctx,
 		request.ConnectionID,
 		request.JobConfig.Bucket,
@@ -190,12 +196,9 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 		string(request.JobConfig.Encryption),
 		request.JobConfig.Compression == types.S3CompressionTypeGzip,
 	)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get storage provider from factory").
-			Mark(ierr.ErrHTTPClient)
-	}
+}
 
+func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	startTimeStr := request.StartTime.Format("060102150405")
 	endTimeStr := request.EndTime.Format("060102150405")
 	filenamePrefix := exporter.GetFilenamePrefix()

@@ -1320,7 +1320,23 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
-	store, err := s.StorageResolver.ForConnection(ctx, scheduledTask.ConnectionID)
+	jobCfg, err := scheduledTask.GetS3JobConfig()
+	if err != nil {
+		return "", err
+	}
+	if jobCfg == nil {
+		return "", ierr.NewError("scheduled task has no job_config").
+			WithHint("Cannot generate download URL without job_config").
+			Mark(ierr.ErrValidation)
+	}
+	store, err := s.StorageResolver.ForConnectionExport(
+		ctx,
+		scheduledTask.ConnectionID,
+		jobCfg.Bucket,
+		jobCfg.Region,
+		string(jobCfg.Encryption),
+		jobCfg.Compression == types.S3CompressionTypeGzip,
+	)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get storage provider", "error", err)
 		return "", ierr.WithError(err).

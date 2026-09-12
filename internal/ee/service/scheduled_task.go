@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/storage"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
@@ -38,27 +39,29 @@ type ScheduledTaskService interface {
 }
 
 type scheduledTaskService struct {
-	repo           scheduledtask.Repository
-	connectionRepo connection.Repository
-	temporalClient temporalClient.TemporalClient
-	logger         *logger.Logger
-	config         *config.Configuration
+	repo            scheduledtask.Repository
+	connectionRepo  connection.Repository
+	temporalClient  temporalClient.TemporalClient
+	logger          *logger.Logger
+	config          *config.Configuration
+	storageResolver storage.Resolver
 }
 
-// NewScheduledTaskService creates a new scheduled task service
 func NewScheduledTaskService(
 	repo scheduledtask.Repository,
 	connectionRepo connection.Repository,
 	temporalClient temporalClient.TemporalClient,
 	logger *logger.Logger,
 	config *config.Configuration,
+	storageResolver storage.Resolver,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
-		repo:           repo,
-		connectionRepo: connectionRepo,
-		temporalClient: temporalClient,
-		logger:         logger,
-		config:         config,
+		repo:            repo,
+		connectionRepo:  connectionRepo,
+		temporalClient:  temporalClient,
+		logger:          logger,
+		config:          config,
+		storageResolver: storageResolver,
 	}
 }
 
@@ -206,6 +209,19 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 			return nil, err
 		}
 		jobConfig = req.JobConfig
+	}
+
+	if _, err := s.storageResolver.ForConnectionExport(
+		ctx,
+		req.ConnectionID,
+		jobConfig.Bucket,
+		jobConfig.Region,
+		string(jobConfig.Encryption),
+		jobConfig.Compression == types.S3CompressionTypeGzip,
+	); err != nil {
+		s.logger.Error(ctx, "export storage is not resolvable for scheduled task",
+			"error", err, "connection_id", req.ConnectionID)
+		return nil, err
 	}
 
 	// Generate task ID upfront

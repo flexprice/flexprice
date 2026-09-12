@@ -1424,7 +1424,10 @@ func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *con
 func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection, dst *exportDestination) (storage.Storage, error) {
 	jobConfig := conn.GetSyncConfig().Storage
 	if jobConfig == nil {
-		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+		if dst == nil || conn.EncryptedSecretData.S3 == nil {
+			return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+		}
+		jobConfig = &types.StorageExportConfig{}
 	}
 
 	// Credentials from platform config; bucket from row.
