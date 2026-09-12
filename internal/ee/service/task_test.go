@@ -527,7 +527,7 @@ func (r *fakeImportResolver) ForPlatform(_ context.Context, purpose storage.Purp
 func (r *fakeImportResolver) ForConnection(context.Context, string) (storagetypes.Storage, error) {
 	return nil, nil
 }
-func (r *fakeImportResolver) ForConnectionExport(context.Context, string, string, string, string, bool) (storagetypes.Storage, error) {
+func (r *fakeImportResolver) ForConnectionExport(context.Context, string, *types.S3JobConfig) (storagetypes.Storage, error) {
 	return nil, nil
 }
 func (r *fakeImportResolver) Provider() storage.Provider { return storage.ProviderS3 }

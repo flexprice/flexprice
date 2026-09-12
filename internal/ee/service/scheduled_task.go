@@ -211,14 +211,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		jobConfig = req.JobConfig
 	}
 
-	if _, err := s.storageResolver.ForConnectionExport(
-		ctx,
-		req.ConnectionID,
-		jobConfig.Bucket,
-		jobConfig.Region,
-		string(jobConfig.Encryption),
-		jobConfig.Compression == types.S3CompressionTypeGzip,
-	); err != nil {
+	if _, err := s.storageResolver.ForConnectionExport(ctx, req.ConnectionID, jobConfig); err != nil {
 		s.logger.Error(ctx, "export storage is not resolvable for scheduled task",
 			"error", err, "connection_id", req.ConnectionID)
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -317,20 +318,20 @@ func TestResolver_Imports_RejectsWhenDisabled(t *testing.T) {
 }
 
 type fakeConnStorageProvider struct {
-	export func(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error)
+	export func(ctx context.Context, connectionID string, dest *types.S3JobConfig) (Storage, error)
 }
 
 func (f *fakeConnStorageProvider) GetStorageProvider(context.Context, string) (Storage, error) {
 	return nil, nil
 }
-func (f *fakeConnStorageProvider) GetStorageProviderExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (Storage, error) {
-	return f.export(ctx, connectionID, bucket, region, encryption, gzip)
+func (f *fakeConnStorageProvider) GetStorageProviderExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (Storage, error) {
+	return f.export(ctx, connectionID, dest)
 }
 
 func TestResolver_ForConnectionExport(t *testing.T) {
 	t.Run("nil connSvc fails loud", func(t *testing.T) {
 		r := newTestResolver(t, ProviderS3, testConfig()) // connSvc left nil
-		_, err := r.ForConnectionExport(context.Background(), "conn_1", "bucket", "us-east-1", "AES256", false)
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", &types.S3JobConfig{Bucket: "bucket", Region: "us-east-1"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "connection storage is not configured")
 	})
@@ -338,11 +339,11 @@ func TestResolver_ForConnectionExport(t *testing.T) {
 	t.Run("empty bucket fails loud before delegation", func(t *testing.T) {
 		called := false
 		r := newTestResolver(t, ProviderS3, testConfig())
-		r.connSvc = &fakeConnStorageProvider{export: func(context.Context, string, string, string, string, bool) (Storage, error) {
+		r.connSvc = &fakeConnStorageProvider{export: func(context.Context, string, *types.S3JobConfig) (Storage, error) {
 			called = true
 			return nil, nil
 		}}
-		_, err := r.ForConnectionExport(context.Background(), "conn_1", "", "us-east-1", "AES256", false)
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", &types.S3JobConfig{Region: "us-east-1"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "missing bucket")
 		assert.False(t, called, "must not delegate when bucket empty")
@@ -351,34 +352,39 @@ func TestResolver_ForConnectionExport(t *testing.T) {
 	t.Run("empty region delegates (managed GCS has no region)", func(t *testing.T) {
 		called := false
 		r := newTestResolver(t, ProviderS3, testConfig())
-		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, _, bucket, region, _ string, _ bool) (Storage, error) {
+		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, _ string, dest *types.S3JobConfig) (Storage, error) {
 			called = true
-			assert.Equal(t, "gcs-bucket", bucket)
-			assert.Empty(t, region)
+			assert.Equal(t, "gcs-bucket", dest.Bucket)
+			assert.Empty(t, dest.Region)
 			return nil, nil
 		}}
-		_, err := r.ForConnectionExport(context.Background(), "conn_1", "gcs-bucket", "", "AES256", false)
+		_, err := r.ForConnectionExport(context.Background(), "conn_1", &types.S3JobConfig{Bucket: "gcs-bucket"})
 		require.NoError(t, err)
 		assert.True(t, called)
 	})
 
 	t.Run("delegates job_config destination through to provider", func(t *testing.T) {
-		var got struct {
-			connID, bucket, region, enc string
-			gzip                        bool
-		}
+		var got *types.S3JobConfig
+		var gotConn string
 		r := newTestResolver(t, ProviderS3, testConfig())
-		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, connID, bucket, region, enc string, gzip bool) (Storage, error) {
-			got.connID, got.bucket, got.region, got.enc, got.gzip = connID, bucket, region, enc, gzip
+		r.connSvc = &fakeConnStorageProvider{export: func(_ context.Context, connID string, dest *types.S3JobConfig) (Storage, error) {
+			gotConn, got = connID, dest
 			return nil, nil
 		}}
-		_, err := r.ForConnectionExport(context.Background(), "conn_9", "byob-bucket", "ap-south-1", "AES256", true)
+		dest := &types.S3JobConfig{
+			Bucket:       "byob-bucket",
+			Region:       "ap-south-1",
+			Encryption:   types.S3EncryptionTypeAES256,
+			Compression:  types.S3CompressionTypeGzip,
+			EndpointURL:  "https://blr1.kos.olakrutrimsvc.com",
+			UsePathStyle: true,
+		}
+		_, err := r.ForConnectionExport(context.Background(), "conn_9", dest)
 		require.NoError(t, err)
-		assert.Equal(t, "conn_9", got.connID)
-		assert.Equal(t, "byob-bucket", got.bucket)
-		assert.Equal(t, "ap-south-1", got.region)
-		assert.Equal(t, "AES256", got.enc)
-		assert.True(t, got.gzip)
+		assert.Equal(t, "conn_9", gotConn)
+		assert.Equal(t, dest, got)
+		assert.Equal(t, "https://blr1.kos.olakrutrimsvc.com", got.EndpointURL)
+		assert.True(t, got.UsePathStyle)
 	})
 }
 

@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/cache"
@@ -1369,27 +1370,39 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 
 // exportDestination carries the per-run destination from a scheduled task's
 // job_config. When set, it overrides the connection row's sync_config for
-// bucket/region/encryption — the connection then contributes only credentials
-// and the is_flexprice_managed flag. nil means resolve everything from the
-// connection (the ValidateConnection path).
+// bucket/region/encryption/endpoint — the connection then contributes only
+// credentials and the is_flexprice_managed flag. nil means resolve everything
+// from the connection (the ValidateConnection path).
 type exportDestination struct {
-	bucket     string
-	region     string
-	encryption string
-	gzip       bool
+	bucket       string
+	region       string
+	encryption   string
+	gzip         bool
+	endpointURL  string
+	usePathStyle bool
 }
 
 // GetStorageProviderExport builds storage for a scheduled export: credentials
 // and the managed flag from the connection, destination from the run's job_config.
-func (f *Factory) GetStorageProviderExport(ctx context.Context, connectionID, bucket, region, encryption string, gzip bool) (storage.Storage, error) {
+func (f *Factory) GetStorageProviderExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (storage.Storage, error) {
 	if connectionID == "" {
 		return nil, ierr.NewError("connection ID is required for storage").Mark(ierr.ErrValidation)
+	}
+	if dest == nil {
+		return nil, ierr.NewError("export job_config is required").Mark(ierr.ErrValidation)
 	}
 	conn, err := f.connectionRepo.Get(ctx, connectionID)
 	if err != nil {
 		return nil, err
 	}
-	dst := &exportDestination{bucket: bucket, region: region, encryption: encryption, gzip: gzip}
+	dst := &exportDestination{
+		bucket:       dest.Bucket,
+		region:       dest.Region,
+		encryption:   string(dest.Encryption),
+		gzip:         dest.Compression == types.S3CompressionTypeGzip,
+		endpointURL:  strings.TrimSpace(dest.EndpointURL),
+		usePathStyle: dest.UsePathStyle,
+	}
 	switch conn.ProviderType {
 	case types.SecretProviderS3:
 		return f.buildS3Storage(ctx, conn, dst)
@@ -1511,7 +1524,7 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 			Mark(ierr.ErrValidation)
 	}
 
-	return s3backend.New(ctx, &s3backend.Config{
+	s3Cfg := &s3backend.Config{
 		Bucket:             bucket,
 		Region:             region,
 		CompressionGzip:    gzip,
@@ -1519,7 +1532,13 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		AWSAccessKeyID:     accessKey,
 		AWSSecretAccessKey: secretKey,
 		AWSSessionToken:    sessionToken,
-	}, f.logger)
+	}
+	if dst != nil {
+		s3Cfg.EndpointURL = dst.endpointURL
+		s3Cfg.UsePathStyle = dst.usePathStyle
+	}
+
+	return s3backend.New(ctx, s3Cfg, f.logger)
 }
 
 func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection, _ *exportDestination) (storage.Storage, error) {

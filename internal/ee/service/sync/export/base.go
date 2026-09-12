@@ -188,14 +188,7 @@ func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.Exp
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.storageResolver.ForConnectionExport(
-		ctx,
-		request.ConnectionID,
-		request.JobConfig.Bucket,
-		request.JobConfig.Region,
-		string(request.JobConfig.Encryption),
-		request.JobConfig.Compression == types.S3CompressionTypeGzip,
-	)
+	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
 }
 
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
