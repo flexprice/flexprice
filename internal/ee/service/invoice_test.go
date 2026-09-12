@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -3080,4 +3082,140 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.True(due, "a computed cycle draft whose period has ended should finalize")
+}
+
+// A listed invoice must carry the same tax_summary the detail endpoint returns. The page's
+// taxes are loaded in one batched query, so a second invoice's rows must not leak into the first.
+func (s *InvoiceServiceSuite) TestListInvoicesReturnsTaxSummary() {
+	ctx := s.GetContext()
+
+	taxed := &invoice.Invoice{
+		ID:            "inv_taxed",
+		CustomerID:    s.testData.customer.ID,
+		Currency:      "usd",
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		AmountDue:     decimal.NewFromInt(110),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	untaxed := &invoice.Invoice{
+		ID:            "inv_untaxed",
+		CustomerID:    s.testData.customer.ID,
+		Currency:      "usd",
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		AmountDue:     decimal.NewFromInt(50),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.Create(ctx, taxed))
+	s.NoError(s.invoiceRepo.Create(ctx, untaxed))
+
+	applied := []*taxapplied.TaxApplied{
+		{
+			ID:            "taxapp_inc",
+			TaxRateID:     "taxrate_inc",
+			EntityType:    types.TaxRateEntityTypeInvoice,
+			EntityID:      taxed.ID,
+			TaxableAmount: decimal.NewFromInt(100),
+			TaxAmount:     decimal.RequireFromString("9.09"),
+			TaxBehavior:   types.TaxBehaviorInclusive,
+			Currency:      "usd",
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		},
+		{
+			ID:            "taxapp_exc",
+			TaxRateID:     "taxrate_exc",
+			EntityType:    types.TaxRateEntityTypeInvoice,
+			EntityID:      taxed.ID,
+			TaxableAmount: decimal.NewFromInt(100),
+			TaxAmount:     decimal.NewFromInt(10),
+			TaxBehavior:   types.TaxBehaviorExclusive,
+			Currency:      "usd",
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		},
+	}
+	for _, ta := range applied {
+		s.NoError(s.GetStores().TaxAppliedRepo.Create(ctx, ta))
+	}
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.InvoiceIDs = []string{taxed.ID, untaxed.ID}
+	result, err := s.service.ListInvoices(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(result.Items, 2)
+
+	byID := make(map[string]*dto.InvoiceResponse)
+	for _, inv := range result.Items {
+		byID[inv.ID] = inv
+	}
+
+	withTax := byID[taxed.ID]
+	s.Require().NotNil(withTax.TaxSummary, "a listed invoice must carry tax_summary, not only the detail endpoint")
+	s.True(decimal.RequireFromString("9.09").Equal(withTax.TaxSummary.TotalInclusiveTax))
+	s.True(decimal.NewFromInt(10).Equal(withTax.TaxSummary.TotalExclusiveTax))
+	s.True(decimal.RequireFromString("19.09").Equal(withTax.TaxSummary.TotalTax))
+	s.Len(withTax.Taxes, 2, "the applied rows ride along with the summary")
+
+	noTax := byID[untaxed.ID]
+	s.Require().NotNil(noTax.TaxSummary)
+	s.True(noTax.TaxSummary.TotalTax.IsZero(), "the other invoice's rows must not leak into this one")
+	s.Empty(noTax.Taxes)
+}
+
+// Every invoice on a page gets its own summary from its own rows. The page's taxes are
+// loaded in one query, so this pins that the grouping is per invoice and nothing is
+// truncated when several invoices each carry several rates.
+func (s *InvoiceServiceSuite) TestListInvoicesTaxSummaryIsPerInvoice() {
+	ctx := s.GetContext()
+
+	// invoice i gets (i+1) exclusive rates of 1 each, so its total tax is i+1.
+	const invoiceCount = 12
+	ids := make([]string, 0, invoiceCount)
+	for i := 0; i < invoiceCount; i++ {
+		id := fmt.Sprintf("inv_per_%02d", i)
+		ids = append(ids, id)
+		s.NoError(s.invoiceRepo.Create(ctx, &invoice.Invoice{
+			ID:            id,
+			CustomerID:    s.testData.customer.ID,
+			Currency:      "usd",
+			InvoiceStatus: types.InvoiceStatusFinalized,
+			PaymentStatus: types.PaymentStatusPending,
+			AmountDue:     decimal.NewFromInt(100),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}))
+
+		for r := 0; r <= i; r++ {
+			s.NoError(s.GetStores().TaxAppliedRepo.Create(ctx, &taxapplied.TaxApplied{
+				ID:            fmt.Sprintf("taxapp_per_%02d_%02d", i, r),
+				TaxRateID:     fmt.Sprintf("taxrate_%02d", r),
+				EntityType:    types.TaxRateEntityTypeInvoice,
+				EntityID:      id,
+				TaxableAmount: decimal.NewFromInt(100),
+				TaxAmount:     decimal.NewFromInt(1),
+				TaxBehavior:   types.TaxBehaviorExclusive,
+				Currency:      "usd",
+				BaseModel:     types.GetDefaultBaseModel(ctx),
+			}))
+		}
+	}
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.InvoiceIDs = ids
+	result, err := s.service.ListInvoices(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(result.Items, invoiceCount)
+
+	byID := make(map[string]*dto.InvoiceResponse)
+	for _, inv := range result.Items {
+		byID[inv.ID] = inv
+	}
+
+	for i, id := range ids {
+		inv := byID[id]
+		s.Require().NotNil(inv, "invoice %s missing from the page", id)
+		s.Require().NotNil(inv.TaxSummary, "invoice %s has no tax_summary", id)
+		s.Len(inv.Taxes, i+1, "invoice %s should carry exactly its own %d rows", id, i+1)
+		s.True(decimal.NewFromInt(int64(i+1)).Equal(inv.TaxSummary.TotalExclusiveTax),
+			"invoice %s: want exclusive %d, got %s", id, i+1, inv.TaxSummary.TotalExclusiveTax)
+	}
 }
