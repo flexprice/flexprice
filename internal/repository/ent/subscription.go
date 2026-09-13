@@ -1020,6 +1020,7 @@ func (r *subscriptionRepository) GetPause(ctx context.Context, id string) (*doma
 		Where(
 			subscriptionpause.ID(id),
 			subscriptionpause.TenantID(types.GetTenantID(ctx)),
+			subscriptionpause.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscriptionpause.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
@@ -1056,6 +1057,7 @@ func (r *subscriptionRepository) UpdatePause(ctx context.Context, pause *domainS
 		Where(
 			subscriptionpause.ID(pause.ID),
 			subscriptionpause.TenantID(types.GetTenantID(ctx)),
+			subscriptionpause.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscriptionpause.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
