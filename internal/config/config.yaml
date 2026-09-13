@@ -6,7 +6,7 @@ server:
 
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
-  secret: "super_secret"
+  secret: "dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET"
   # SAML single sign-on. Per-tenant identity provider details live in the
   # tenant's saml_config setting, not here.
   saml:

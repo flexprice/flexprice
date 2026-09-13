@@ -452,7 +452,11 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	defer FinishSpan(span)
 
 	err := r.client.Writer(ctx).Wallet.Update().
-		Where(wallet.ID(walletID)).
+		Where(
+			wallet.ID(walletID),
+			wallet.TenantID(types.GetTenantID(ctx)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).

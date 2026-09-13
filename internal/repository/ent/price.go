@@ -699,7 +699,12 @@ func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*do
 	client := r.client.Reader(ctx)
 
 	prices, err := client.Price.Query().
-		Where(price.EntityID(planID), price.Status(string(types.StatusPublished))).
+		Where(
+			price.EntityID(planID),
+			price.Status(string(types.StatusPublished)),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -756,7 +761,11 @@ func (r *priceRepository) GetByGroupIDs(ctx context.Context, groupIDs []string) 
 	client := r.client.Reader(ctx)
 
 	prices, err := client.Price.Query().
-		Where(price.GroupIDIn(groupIDs...)).
+		Where(
+			price.GroupIDIn(groupIDs...),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).

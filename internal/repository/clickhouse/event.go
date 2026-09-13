@@ -446,16 +446,16 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 		WithAggregation(ctx, params.AggregationType, params.PropertyName).
 		WithFilterGroups(ctx, params.FilterGroups)
 
-	query, queryParams := qb.Build()
+	query, queryArgs := qb.Build()
 
 	r.logger.Debug(ctx, "executing filter groups query",
 		"aggregation_type", params.AggregationType,
 		"event_name", params.UsageParams.EventName,
 		"filter_groups", len(params.FilterGroups),
 		"query", query,
-		"params", queryParams)
+		"args", queryArgs)
 
-	rows, err := r.store.GetConn().Query(ctx, query, queryParams)
+	rows, err := r.store.GetConn().Query(ctx, query, queryArgs...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
