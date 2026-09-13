@@ -1862,31 +1862,9 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 		existing.Metadata = *req.Metadata
 	}
 	if req.AutoTopup != nil {
-		// Preserve existing fields so ent validator still gets required values
-		current := existing.AutoTopup
-		if current == nil {
-			current = &types.AutoTopup{}
-		}
-		if req.AutoTopup.Enabled != nil {
-			current.Enabled = req.AutoTopup.Enabled
-		}
-		if req.AutoTopup.Threshold != nil {
-			current.Threshold = req.AutoTopup.Threshold
-		}
-		if req.AutoTopup.Amount != nil {
-			current.Amount = req.AutoTopup.Amount
-		}
-		if req.AutoTopup.Invoicing != nil {
-			current.Invoicing = req.AutoTopup.Invoicing
-		}
-		if req.AutoTopup.Cooldown != nil {
-			if req.AutoTopup.Cooldown.IsEmpty() {
-				current.Cooldown = nil
-			} else {
-				current.Cooldown = req.AutoTopup.Cooldown
-			}
-		}
-		existing.AutoTopup = current
+		existing.AutoTopup = types.NewAutoTopupBuilder(existing.AutoTopup).
+			WithAutoTopup(req.AutoTopup).
+			Build()
 	}
 	if req.Config != nil {
 		existing.Config = *req.Config

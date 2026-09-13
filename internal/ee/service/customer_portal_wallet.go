@@ -126,13 +126,7 @@ func (s *customerPortalService) UpdateAutoTopup(ctx context.Context, walletID st
 
 	// Invoicing is pinned, never taken from the request: it selects the transaction
 	// reason and so decides whether credits are paid for at all.
-	autoTopup := &types.AutoTopup{
-		Enabled:   lo.ToPtr(req.Enabled),
-		Threshold: req.Threshold,
-		Amount:    req.Amount,
-		Invoicing: lo.ToPtr(true),
-		Cooldown:  req.Cooldown,
-	}
+	autoTopup := types.NewAutoTopup(req.Enabled, req.Threshold, req.Amount, true, req.Cooldown)
 
 	if req.Enabled {
 		if req.Amount == nil || req.Threshold == nil {
