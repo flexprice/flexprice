@@ -66,6 +66,7 @@ type Handlers struct {
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
+	Licensing                *v1.LicensingHandler
 
 	// Enterprise handlers
 	SAML *saml.Handler
@@ -138,6 +139,11 @@ func NewRouter(
 	router.GET("/health", handlers.Health.Health)
 	router.POST("/health", handlers.Health.Health)
 
+	// licensing service JWKS. Root-level (not /v1) and outside any auth
+	// group: the licensing service fetches this unauthenticated, same as any other
+	// well-known key discovery endpoint.
+	router.GET("/.well-known/licensing-jwks.json", handlers.Licensing.JWKS)
+
 	// Public routes
 	public := router.Group("/", middleware.GuestAuthenticateMiddleware)
 
@@ -185,6 +191,10 @@ func NewRouter(
 			user.POST("/search", read(types.EntityUser, types.ActionRead), handlers.User.QueryUsers)
 			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}
+
+		// licensing token mint — short-lived, capped at the caller's
+		// own session expiry.
+		v1Private.GET("/licensing-token", handlers.Licensing.IssueToken)
 
 		environment := v1Private.Group("/environments")
 		{

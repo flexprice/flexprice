@@ -64,6 +64,7 @@ type Configuration struct {
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
 	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
 	OAuth                  OAuthConfig                  `mapstructure:"oauth" validate:"required"`
+	Licensing              LicensingConfig              `mapstructure:"licensing" validate:"omitempty"`
 	WalletBalanceAlert     WalletBalanceAlertConfig     `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
@@ -1413,4 +1414,27 @@ type OAuthConfig struct {
 	// Base redirect URI - provider-specific paths may be appended
 	// Example: "https://admin-dev.flexprice.io/tools/integrations/oauth/callback"
 	RedirectURI string `mapstructure:"redirect_uri" validate:"required,url"`
+}
+
+// LicensingConfig holds the backend's Ed25519 signing material for minting
+// short-lived licensing tokens that the licensing service verifies via the published JWKS.
+//
+// ponytail: dev-only seed-from-env signer. Prod should load the private key
+// from KMS instead of a config value; swap SigningKeySeed for a KMS signer
+// when that lands, the mint/JWKS code shouldn't need to change.
+type LicensingConfig struct {
+	// SigningKeySeed is the base64-encoded 32-byte Ed25519 seed. Empty disables
+	// the licensing endpoints (dev/deployments that don't run the licensing service).
+	SigningKeySeed string `mapstructure:"signing_key_seed" validate:"omitempty"`
+	// Region tags the signing key (kid + claim) so the licensing service can route a token
+	// to the right regional public key when multiple backends exist.
+	Region string `mapstructure:"region" validate:"omitempty" default:"default"`
+	// Issuer is the "iss" claim on minted tokens.
+	Issuer string `mapstructure:"issuer" validate:"omitempty" default:"flexprice-backend"`
+	// TrustEmailDomainForStaff opts into granting is_admin (Flexprice staff)
+	// based on a @flexprice.io email suffix. Off by default: the user model
+	// carries no IdP-verified-email signal, so under the self-serve flexprice
+	// auth provider this suffix is user-controlled and spoofable. Only enable
+	// where the deployment's auth provider guarantees verified email.
+	TrustEmailDomainForStaff bool `mapstructure:"trust_email_domain_for_staff" validate:"omitempty" default:"false"`
 }
