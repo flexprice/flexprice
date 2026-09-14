@@ -85,5 +85,6 @@ func toPortalCheckoutSession(resp *dto.CheckoutSessionResponse) *dto.PortalCheck
 		CompletedAt:       resp.CompletedAt,
 		CancelledAt:       resp.CancelledAt,
 		FailureReason:     resp.FailureReason,
+		EntityCreationResult: resp.EntityCreationResult,
 	}
 }
