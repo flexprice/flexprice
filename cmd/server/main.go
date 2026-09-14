@@ -712,10 +712,10 @@ func startRouter(
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info(ctx, "stopping message router")
-			err := router.Close()
-			// Release any in-flight batch-to-bulk handlers after the router stops.
+			// Drain the batcher first: releases in-flight handlers before
+			// router.Close() waits on them, avoiding a shutdown deadlock.
 			eventConsumptionSvc.CloseBatcher()
-			return err
+			return router.Close()
 		},
 	})
 }

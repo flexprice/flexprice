@@ -827,9 +827,10 @@ type EventProcessingConfig struct {
 
 	// BatchToBulk consumes the events topic and re-publishes to topic_bulk,
 	// committing offsets only after publish (loss-safe).
-	BatchToBulk      bool `mapstructure:"batch_to_bulk" default:"false"`
-	BatchFlushSize   int  `mapstructure:"batch_flush_size" default:"500"`
-	BatchFlushMillis int  `mapstructure:"batch_flush_millis" default:"200"`
+	BatchToBulk    bool `mapstructure:"batch_to_bulk" default:"false"`
+	BatchFlushSize int  `mapstructure:"batch_flush_size" default:"500"`
+	// Throughput ceiling: partitions / flush_millis.
+	BatchFlushMillis int `mapstructure:"batch_flush_millis" default:"50"`
 }
 
 type EventProcessingLazyConfig struct {

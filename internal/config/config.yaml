@@ -482,7 +482,8 @@ event_processing:
   # Re-publish the events topic to topic_bulk, batching before publish (loss-safe).
   batch_to_bulk: false
   batch_flush_size: 500
-  batch_flush_millis: 200
+  # Throughput ceiling: partitions / flush_millis.
+  batch_flush_millis: 50
 
 event_processing_lazy:
   enabled: true

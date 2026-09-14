@@ -400,6 +400,10 @@ func (s *eventConsumptionService) expandWithBillingEvent(event *events.Event) []
 		return []*events.Event{event}
 	}
 
+	// Deterministic id from source event id: redelivery mints the same id so
+	// ClickHouse ReplacingMergeTree dedup collapses it instead of overbilling.
+	billingID := "tenant_event_" + event.ID
+
 	billingEvent := events.NewEvent(
 		"tenant_event", // Standardized event name for billing
 		s.Config.Billing.TenantID,
@@ -412,7 +416,7 @@ func (s *eventConsumptionService) expandWithBillingEvent(event *events.Event) []
 			"source":              event.Source,
 		},
 		time.Now(),
-		"", // Generate new ID
+		billingID,
 		"", // Customer ID will be looked up by external ID
 		"system",
 		s.Config.Billing.EnvironmentID,
@@ -440,6 +444,7 @@ func (s *eventConsumptionService) RegisterHandlerBatchToBulk(
 		cfg.EventProcessing.BatchFlushSize,
 		cfg.EventProcessing.BatchFlushMillis,
 		s.EventPublisher.PublishBatch,
+		s.Logger,
 	)
 
 	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
@@ -476,6 +481,9 @@ func (s *eventConsumptionService) processMessageBatchToBulk(ctx context.Context,
 		return err
 	}
 
+	// Publish/transport errors returned raw so Watermill Retry retries them.
+	// A sustained (>2min) broker outage will DLQ; acceptable at-least-once,
+	// since DLQ replay is idempotent (deterministic billing id + dedup).
 	return s.bulkBatcher.Enqueue(ctx, s.expandWithBillingEvent(&event))
 }
 
@@ -512,30 +520,8 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		"timestamp", event.Timestamp,
 	)
 
-	// Prepare events to insert
-	eventsToInsert := []*events.Event{&event}
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
+	// Same deterministic billing id as the consumer paths: redelivery dedups.
+	eventsToInsert := s.expandWithBillingEvent(&event)
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
