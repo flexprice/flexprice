@@ -206,6 +206,21 @@ test-coverage: install-typst
 	$(call run-go-test,-race -coverprofile=coverage.out ./internal/... ./cmd/server)
 	go tool cover -html=coverage.out -o coverage.html
 
+.PHONY: build-ee test-ee docker-build-ee
+
+# Enterprise build (in-repo ee/, tag-gated).
+build-ee:
+	go build -tags ee ./cmd/server ./internal/... ./ee/...
+
+# Enterprise tests.
+test-ee: install-typst
+	$(call run-go-test,-tags ee ./ee/... ./cmd/server/... ./internal/...)
+
+# Enterprise image. ee/ is in-repo and always in build context; the tag alone
+# decides inclusion, so no .dockerignore manipulation is needed.
+docker-build-ee:
+	docker build --build-arg BUILD_TAGS=ee -t $${IMAGE:-flexprice} .
+
 # Database related targets
 .PHONY: init-db migrate-postgres migrate-clickhouse seed-db migrate-ent
 

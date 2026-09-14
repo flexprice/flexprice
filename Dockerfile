@@ -22,9 +22,12 @@ COPY . .
 ARG TARGETARCH
 ENV CGO_ENABLED=0 \
     GOOS=linux
+# Enterprise build tag. Empty by default → community (flexprice-oss) image.
+# Pass ee to include enterprise features (ee/ is in-repo, always in context).
+ARG BUILD_TAGS=""
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
+    GOARCH=$TARGETARCH go build -tags "$BUILD_TAGS" -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate
 
 # dbmate stage
@@ -56,6 +59,7 @@ FROM ghcr.io/typst/typst:v0.13.1 AS typst
 
 # Final stage
 FROM alpine:3.20
+LABEL org.opencontainers.image.source="https://github.com/flexprice/flexprice"
 RUN apk --no-cache add ca-certificates tzdata && \
     addgroup -S app && adduser -S -G app app
 
@@ -70,6 +74,11 @@ COPY --from=builder /app/assets/email-templates ./assets/email-templates
 COPY --from=typst /bin/typst /usr/local/bin/
 # `./migrate postgres up` execs this; keep it on PATH.
 COPY --from=dbmate /out/dbmate /usr/local/bin/dbmate
+# License texts shipped in the image. The AGPL LICENSE governs the community
+# build; the enterprise LICENSE additionally governs the -tags ee build (see the
+# org.opencontainers.image.licenses label for which applies to this image).
+COPY --from=builder /app/LICENSE ./LICENSE
+COPY --from=builder /app/internal/ee/LICENSE ./LICENSE.enterprise
 RUN chown -R app:app /app
 
 ENV TZ=UTC

@@ -124,12 +124,17 @@ jobs:
           file: Dockerfile
           platforms: ${{ steps.image-tag.outputs.platforms }}
           push: true
+          # The flexprice image is the enterprise build (EE features compiled in),
+          # matching pre-boundary behavior. The community image is flexprice-oss,
+          # published separately by publish-app-image.yml.
+          build-args: |
+            BUILD_TAGS=ee
           tags: ${{ steps.image-tag.outputs.ghcr_tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=LicenseRef-Flexprice-Commercial
           provenance: false
           # Shared layer cache in GHCR (both AWS + GCP self-hosted runners reach it).
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache

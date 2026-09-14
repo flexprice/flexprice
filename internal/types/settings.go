@@ -39,27 +39,37 @@ const (
 	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
 )
 
+// coreSettingKeys is the closed set of keys the community build ships.
+var coreSettingKeys = []SettingKey{
+	SettingKeyInvoiceConfig,
+	SettingKeySubscriptionConfig,
+	SettingKeyInvoicePDFConfig,
+	SettingKeyTenantConfig,
+	SettingKeyCustomerOnboarding,
+	SettingKeyWalletBalanceAlertConfig,
+	SettingKeySubscriptionAlertConfig,
+	SettingKeyEntitlementAlertConfig,
+	SettingKeyPrepareProcessedEvents,
+	SettingKeyCustomAnalytics,
+	SettingKeyCustomerPortalConfig,
+	SettingKeyEventIngestionFilter,
+	SettingKeyBonusCreditsTopupConfig,
+	SettingKeyPaymentMandateLimits,
+	SettingKeyDraftInvoiceRecomputeConfig,
+	SettingKeySAMLConfig,
+	SettingKeyWalletTopupConfig,
+	SettingKeyCustomCurrencyConfig,
+}
+
 func (s *SettingKey) Validate() error {
 
-	allowedKeys := []SettingKey{
-		SettingKeyInvoiceConfig,
-		SettingKeySubscriptionConfig,
-		SettingKeyInvoicePDFConfig,
-		SettingKeyTenantConfig,
-		SettingKeyCustomerOnboarding,
-		SettingKeyWalletBalanceAlertConfig,
-		SettingKeySubscriptionAlertConfig,
-		SettingKeyEntitlementAlertConfig,
-		SettingKeyPrepareProcessedEvents,
-		SettingKeyCustomAnalytics,
-		SettingKeyCustomerPortalConfig,
-		SettingKeyEventIngestionFilter,
-		SettingKeyBonusCreditsTopupConfig,
-		SettingKeyPaymentMandateLimits,
-		SettingKeyDraftInvoiceRecomputeConfig,
-		SettingKeySAMLConfig,
-		SettingKeyWalletTopupConfig,
-		SettingKeyCustomCurrencyConfig,
+	allowedKeys := coreSettingKeys
+
+	// An enterprise build registers additional keys via RegisterEESetting; a
+	// community build's registry is empty, so this only widens acceptance under
+	// -tags ee.
+	if _, ok := LookupEESetting(*s); ok {
+		return nil
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
