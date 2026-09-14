@@ -7,6 +7,11 @@
  */
 export * from "./sdk/models/index.js";
 export {
+  FlexPrice,
+  type FlexPriceOptions,
+  type FlexPriceSecurity,
+} from "./sdk/flexprice.js";
+export {
   CustomerPortal,
   createCustomerPortal,
   getCustomerDashboardData,
