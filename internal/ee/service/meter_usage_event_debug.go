@@ -14,6 +14,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const eventLookupMaxVersions = 50
+
 // nanoUSDMultiplier scales a per-unit cost to the nano-USD unit that
 // HuggingFace expects. Kept as a package-level var to avoid re-parsing on
 // every request.
@@ -22,27 +24,27 @@ var nanoUSDMultiplier = decimal.NewFromInt(1_000_000_000)
 // DebugEvent powers GET /events/:id (event debugger UI).
 // Reads meter_usage instead of the removed feature_usage table.
 func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error) {
-	event, err := s.EventRepo.GetEventByID(ctx, eventID)
+	rawEvents, err := s.EventRepo.ListEventsByID(ctx, eventID, eventLookupMaxVersions)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from events table").
 			Mark(ierr.ErrDatabase)
 	}
+	if len(rawEvents) == 0 {
+		return nil, ierr.NewError("event not found").
+			WithHint("Event not found in events table").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": eventID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
 
+	event := rawEvents[0]
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
 	response := &dto.GetEventByIDResponse{
-		Event: &dto.Event{
-			ID:                 event.ID,
-			EventName:          event.EventName,
-			ExternalCustomerID: event.ExternalCustomerID,
-			CustomerID:         event.CustomerID,
-			Timestamp:          event.Timestamp,
-			Properties:         event.Properties,
-			Source:             event.Source,
-			EnvironmentID:      event.EnvironmentID,
-		},
+		Event: eventToDTO(event),
 	}
 
 	meterUsage, err := s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, eventID)
@@ -51,6 +53,8 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 			WithHint("Failed to get event from meter_usage table").
 			Mark(ierr.ErrDatabase)
 	}
+
+	response.Events = eventsToDTOs(rawEvents)
 
 	if meterUsage != nil {
 		processed, err := s.fanOutMeterUsageToLineItems(ctx, meterUsage)
@@ -70,6 +74,28 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 		response.Status = types.EventProcessingStatusTypeFailed
 	}
 	return response, nil
+}
+
+func eventToDTO(event *events.Event) *dto.Event {
+	return &dto.Event{
+		ID:                 event.ID,
+		EventName:          event.EventName,
+		ExternalCustomerID: event.ExternalCustomerID,
+		CustomerID:         event.CustomerID,
+		Timestamp:          event.Timestamp,
+		IngestedAt:         event.IngestedAt,
+		Properties:         event.Properties,
+		Source:             event.Source,
+		EnvironmentID:      event.EnvironmentID,
+	}
+}
+
+func eventsToDTOs(rawEvents []*events.Event) []*dto.Event {
+	out := make([]*dto.Event, 0, len(rawEvents))
+	for _, ev := range rawEvents {
+		out = append(out, eventToDTO(ev))
+	}
+	return out
 }
 
 // fanOutMeterUsageToLineItems turns one meter_usage row into per-line-item

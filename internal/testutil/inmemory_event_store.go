@@ -17,8 +17,9 @@ import (
 )
 
 type InMemoryEventStore struct {
-	mu     sync.RWMutex
-	events map[string]*events.Event
+	mu       sync.RWMutex
+	events   map[string]*events.Event
+	versions []*events.Event
 }
 
 func NewInMemoryEventStore() *InMemoryEventStore {
@@ -37,6 +38,7 @@ func (s *InMemoryEventStore) InsertEvent(ctx context.Context, event *events.Even
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.events[event.ID] = event
+	s.versions = append(s.versions, event)
 	return nil
 }
 
@@ -45,6 +47,7 @@ func (s *InMemoryEventStore) BulkInsertEvents(ctx context.Context, events []*eve
 	defer s.mu.Unlock()
 	for _, event := range events {
 		s.events[event.ID] = event
+		s.versions = append(s.versions, event)
 	}
 	return nil
 }
@@ -77,6 +80,43 @@ func (s *InMemoryEventStore) GetEventByID(ctx context.Context, eventID string) (
 	}
 
 	return event, nil
+}
+
+func (s *InMemoryEventStore) ListEventsByID(ctx context.Context, eventID string, limit int) ([]*events.Event, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	matched := make([]*events.Event, 0)
+	for _, event := range s.versions {
+		if event.ID != eventID {
+			continue
+		}
+		if event.TenantID != tenantID {
+			continue
+		}
+		if event.EnvironmentID != environmentID {
+			continue
+		}
+		matched = append(matched, event)
+	}
+
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].IngestedAt.Equal(matched[j].IngestedAt) {
+			return matched[i].Timestamp.After(matched[j].Timestamp)
+		}
+		return matched[i].IngestedAt.After(matched[j].IngestedAt)
+	})
+
+	if limit <= 0 {
+		limit = 50
+	}
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+	return matched, nil
 }
 
 func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageParams) (*events.AggregationResult, error) {
@@ -760,6 +800,7 @@ func (s *InMemoryEventStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.events = make(map[string]*events.Event)
+	s.versions = nil
 }
 
 func (s *InMemoryEventStore) FindUnprocessedEvents(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
@@ -853,3 +894,5 @@ func (s *InMemoryEventStore) getWindowStart(t time.Time, windowSize types.Window
 		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
 	}
 }
+
+var _ events.Repository = (*InMemoryEventStore)(nil)

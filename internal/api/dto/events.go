@@ -219,6 +219,7 @@ type Event struct {
 	CustomerID         string                 `json:"customer_id"`
 	EventName          string                 `json:"event_name"`
 	Timestamp          time.Time              `json:"timestamp"`
+	IngestedAt         time.Time              `json:"ingested_at,omitempty"`
 	Properties         map[string]interface{} `json:"properties"`
 	Source             string                 `json:"source"`
 	EnvironmentID      string                 `json:"environment_id"`
@@ -534,6 +535,7 @@ type GetHuggingFaceBillingDataResponse struct {
 
 type GetEventByIDResponse struct {
 	Event           *Event                          `json:"event"`
+	Events          []*Event                        `json:"events,omitempty"`
 	Status          types.EventProcessingStatusType `json:"status"`
 	ProcessedEvents []*FeatureUsageInfo             `json:"processed_events,omitempty"`
 	DebugTracker    *DebugTracker                   `json:"debug_tracker,omitempty"`

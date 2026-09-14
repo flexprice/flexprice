@@ -15,6 +15,8 @@ type Repository interface {
 	GetUsageWithFilters(ctx context.Context, params *UsageWithFiltersParams) ([]*AggregationResult, error)
 	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 	GetEventByID(ctx context.Context, eventID string) (*Event, error)
+	// ListEventsByID returns unmerged events-table rows for the id, newest ingested_at first.
+	ListEventsByID(ctx context.Context, eventID string, limit int) ([]*Event, error)
 	FindUnprocessedEvents(ctx context.Context, params *FindUnprocessedEventsParams) ([]*Event, error)
 	GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error)
 	GetDistinctExternalCustomerIDs(ctx context.Context, startTime, endTime time.Time) ([]string, error)

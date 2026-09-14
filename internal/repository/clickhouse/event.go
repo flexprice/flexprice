@@ -1146,6 +1146,97 @@ func (r *EventRepository) GetEventByID(ctx context.Context, eventID string) (*ev
 	return &event, nil
 }
 
+func (r *EventRepository) ListEventsByID(ctx context.Context, eventID string, limit int) ([]*events.Event, error) {
+	span := StartRepositorySpan(ctx, "event", "list_events_by_id", map[string]interface{}{
+		"event_id": eventID,
+		"limit":    limit,
+	})
+	defer FinishSpan(span)
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `
+		SELECT
+			id,
+			external_customer_id,
+			customer_id,
+			tenant_id,
+			event_name,
+			timestamp,
+			source,
+			properties,
+			environment_id,
+			ingested_at
+		FROM events
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND id = ?
+		ORDER BY ingested_at DESC
+		LIMIT ?
+	`
+	args := []interface{}{
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		eventID,
+		limit,
+	}
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list events by ID").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": eventID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	out := make([]*events.Event, 0)
+	for rows.Next() {
+		var event events.Event
+		var propertiesJSON string
+		if err := rows.Scan(
+			&event.ID,
+			&event.ExternalCustomerID,
+			&event.CustomerID,
+			&event.TenantID,
+			&event.EventName,
+			&event.Timestamp,
+			&event.Source,
+			&propertiesJSON,
+			&event.EnvironmentID,
+			&event.IngestedAt,
+		); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan event").
+				Mark(ierr.ErrDatabase)
+		}
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to unmarshal event properties").
+					Mark(ierr.ErrValidation)
+			}
+		}
+		out = append(out, &event)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate events").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return out, nil
+}
+
 // GetDistinctEventNames retrieves distinct event names for the given external customer IDs
 func (r *EventRepository) GetDistinctExternalCustomerIDs(ctx context.Context, startTime, endTime time.Time) ([]string, error) {
 	span := StartRepositorySpan(ctx, "event", "get_distinct_external_customer_ids", map[string]interface{}{
