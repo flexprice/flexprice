@@ -14,6 +14,9 @@ import (
 // errBatcherClosed is returned by Enqueue after Close.
 var errBatcherClosed = errors.New("event batcher is closed")
 
+// publishTimeout bounds one flush so a stalled destination cannot hang shutdown.
+const publishTimeout = 30 * time.Second
+
 // batchItem is one Kafka message's events plus a barrier channel that the
 // collector releases with the publish result.
 type batchItem struct {
@@ -146,7 +149,11 @@ func (b *eventBatcher) publishRecovered(all []*events.Event) (err error) {
 			}
 		}
 	}()
-	return b.publish(context.Background(), all)
+	// Bound the publish so a stalled destination (e.g. DynamoDB with no client
+	// timeout) cannot hang the collector or block shutdown indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), publishTimeout)
+	defer cancel()
+	return b.publish(ctx, all)
 }
 
 // Close stops the collector, flushes pending items, and makes later Enqueue fail.
