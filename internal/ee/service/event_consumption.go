@@ -400,8 +400,8 @@ func (s *eventConsumptionService) expandWithBillingEvent(event *events.Event) []
 		return []*events.Event{event}
 	}
 
-	// Deterministic id from source event id: redelivery mints the same id so
-	// ClickHouse ReplacingMergeTree dedup collapses it instead of overbilling.
+	// Deterministic id AND timestamp from source event: the ClickHouse dedup key
+	// is (tenant, env, timestamp, id), so both must be stable or redelivery overbills.
 	billingID := "tenant_event_" + event.ID
 
 	billingEvent := events.NewEvent(
@@ -415,7 +415,7 @@ func (s *eventConsumptionService) expandWithBillingEvent(event *events.Event) []
 			"tenant_id":           event.TenantID,
 			"source":              event.Source,
 		},
-		time.Now(),
+		event.Timestamp,
 		billingID,
 		"", // Customer ID will be looked up by external ID
 		"system",
@@ -437,6 +437,13 @@ func (s *eventConsumptionService) RegisterHandlerBatchToBulk(
 
 	if !cfg.EventProcessing.BatchToBulk {
 		s.Logger.Info(context.Background(), "batch-to-bulk handler skipped, flag disabled")
+		return
+	}
+
+	// Empty topic_bulk would ack source events while PublishBatch fails: stall, not loss.
+	if cfg.Kafka.TopicBulk == "" {
+		s.Logger.Fatal(context.Background(), "batch_to_bulk enabled but kafka.topic_bulk is empty",
+			"error", "kafka.topic_bulk must be set when event_processing.batch_to_bulk is true")
 		return
 	}
 

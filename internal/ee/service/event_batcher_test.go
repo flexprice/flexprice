@@ -241,7 +241,7 @@ func TestExpandWithBillingEvent_DeterministicID(t *testing.T) {
 		},
 	}
 
-	src := &events.Event{ID: "event_abc123", TenantID: "t1", EventName: "api_call"}
+	src := &events.Event{ID: "event_abc123", TenantID: "t1", EventName: "api_call", Timestamp: time.Unix(1700000000, 0).UTC()}
 
 	first := s.expandWithBillingEvent(src)
 	second := s.expandWithBillingEvent(src)
@@ -254,5 +254,12 @@ func TestExpandWithBillingEvent_DeterministicID(t *testing.T) {
 	}
 	if first[1].ID != "tenant_event_"+src.ID {
 		t.Fatalf("billing id not deterministic from source: %q", first[1].ID)
+	}
+	// Dedup key is (tenant, env, timestamp, id): timestamp must also be stable.
+	if !first[1].Timestamp.Equal(src.Timestamp) {
+		t.Fatalf("billing timestamp not from source: got %v want %v", first[1].Timestamp, src.Timestamp)
+	}
+	if !first[1].Timestamp.Equal(second[1].Timestamp) {
+		t.Fatalf("billing timestamp not stable across redelivery: %v vs %v", first[1].Timestamp, second[1].Timestamp)
 	}
 }
