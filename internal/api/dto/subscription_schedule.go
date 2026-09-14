@@ -1,12 +1,12 @@
 package dto
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // SubscriptionScheduleResponse represents a subscription schedule
@@ -132,42 +132,33 @@ func SubscriptionScheduleResponseFromDomain(s *subscription.SubscriptionSchedule
 		v2Config, err := s.GetPlanChangeV2Config()
 		switch {
 		case err == nil && v2Config.IsV2():
-			response.Configuration = structToMap(v2Config)
+			if m, err := utils.ToMap(v2Config); err == nil {
+				response.Configuration = m
+			}
 			if s.ExecutionResult != nil {
 				if result, err := s.GetPlanChangeV2Result(); err == nil {
-					response.ExecutionResult = structToMap(result)
+					if m, err := utils.ToMap(result); err == nil {
+						response.ExecutionResult = m
+					}
 				}
 			}
 		default:
 			if config, err := s.GetPlanChangeConfig(); err == nil {
-				response.Configuration = structToMap(config)
+				if m, err := utils.ToMap(config); err == nil {
+					response.Configuration = m
+				}
 			}
 			if s.ExecutionResult != nil {
 				if result, err := s.GetPlanChangeResult(); err == nil {
-					response.ExecutionResult = structToMap(result)
+					if m, err := utils.ToMap(result); err == nil {
+						response.ExecutionResult = m
+					}
 				}
 			}
 		}
 	}
 
 	return response
-}
-
-// structToMap marshals a typed schedule config/result into an open map so the
-// OpenAPI spec renders additionalProperties (keys survive SDK schema parsing).
-func structToMap(v interface{}) map[string]interface{} {
-	if v == nil {
-		return nil
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil
-	}
-	return m
 }
 
 // SubscriptionScheduleListResponseFromDomain converts a list of domain schedules to DTOs
