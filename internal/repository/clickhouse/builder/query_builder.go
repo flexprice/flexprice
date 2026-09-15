@@ -12,18 +12,18 @@ import (
 
 type QueryBuilder struct {
 	baseQuery    string
+	baseArgs     []interface{}
 	filterQuery  string
+	filterArgs   []interface{}
 	matchedQuery string
 	finalQuery   string
-	args         map[string]interface{}
+	aggArgs      []interface{}
 	filterGroups []events.FilterGroup
 	params       *events.UsageParams
 }
 
 func NewQueryBuilder() *QueryBuilder {
-	return &QueryBuilder{
-		args: make(map[string]interface{}),
-	}
+	return &QueryBuilder{}
 }
 
 // getDeduplicationKey returns the columns used for deduplication
@@ -32,48 +32,54 @@ func (qb *QueryBuilder) getDeduplicationKey() string {
 }
 
 func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.UsageParams) *QueryBuilder {
-	conditions := []string{
-		fmt.Sprintf("event_name = '%s'", params.EventName),
-	}
+	conditions := []string{"event_name = ?"}
+	qb.baseArgs = append(qb.baseArgs, params.EventName)
 
 	tenantID := types.GetTenantID(ctx)
 	if tenantID != "" {
-		conditions = append(conditions, fmt.Sprintf("tenant_id = '%s'", tenantID))
+		conditions = append(conditions, "tenant_id = ?")
+		qb.baseArgs = append(qb.baseArgs, tenantID)
 	}
 
 	// Add environment_id filter if present in context
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID != "" {
-		conditions = append(conditions, fmt.Sprintf("environment_id = '%s'", environmentID))
+		conditions = append(conditions, "environment_id = ?")
+		qb.baseArgs = append(qb.baseArgs, environmentID)
 	}
 
 	conditions = append(conditions, parseTimeConditions(params)...)
 
 	if params.ExternalCustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("external_customer_id = '%s'", params.ExternalCustomerID))
+		conditions = append(conditions, "external_customer_id = ?")
+		qb.baseArgs = append(qb.baseArgs, params.ExternalCustomerID)
 	}
 	if params.CustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("customer_id = '%s'", params.CustomerID))
+		conditions = append(conditions, "customer_id = ?")
+		qb.baseArgs = append(qb.baseArgs, params.CustomerID)
 	}
 
 	if params.Filters != nil {
 		for property, values := range params.Filters {
-			if len(values) > 0 {
-				var condition string
-				if len(values) == 1 {
-					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
-				} else {
-					quotedValues := make([]string, len(values))
-					for i, v := range values {
-						quotedValues[i] = fmt.Sprintf("'%s'", v)
-					}
-					condition = fmt.Sprintf(
-						"JSONExtractString(properties, '%s') IN (%s)",
-						property,
-						strings.Join(quotedValues, ","),
-					)
+			if len(values) == 0 {
+				continue
+			}
+			if len(values) == 1 {
+				conditions = append(conditions, "JSONExtractString(properties, ?) = ?")
+				qb.baseArgs = append(qb.baseArgs, property, values[0])
+			} else {
+				placeholders := make([]string, len(values))
+				for i := range values {
+					placeholders[i] = "?"
 				}
-				conditions = append(conditions, condition)
+				conditions = append(conditions, fmt.Sprintf(
+					"JSONExtractString(properties, ?) IN (%s)",
+					strings.Join(placeholders, ","),
+				))
+				qb.baseArgs = append(qb.baseArgs, property)
+				for _, v := range values {
+					qb.baseArgs = append(qb.baseArgs, v)
+				}
 			}
 		}
 	}
@@ -100,42 +106,46 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 	var filterConditions []string
 	for _, group := range groups {
 		var conditions []string
+		var groupArgs []interface{}
 		for property, values := range group.Filters {
 			if len(values) == 0 {
 				continue
 			}
-			var condition string
 			if len(values) == 1 {
-				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+				conditions = append(conditions, "JSONExtractString(properties, ?) = ?")
+				groupArgs = append(groupArgs, property, values[0])
 			} else {
-				quotedValues := make([]string, len(values))
-				for i, v := range values {
-					quotedValues[i] = fmt.Sprintf("'%s'", v)
+				placeholders := make([]string, len(values))
+				for i := range values {
+					placeholders[i] = "?"
 				}
-				condition = fmt.Sprintf(
-					"JSONExtractString(properties, '%s') IN (%s)",
-					property,
-					strings.Join(quotedValues, ","),
-				)
+				conditions = append(conditions, fmt.Sprintf(
+					"JSONExtractString(properties, ?) IN (%s)",
+					strings.Join(placeholders, ","),
+				))
+				groupArgs = append(groupArgs, property)
+				for _, v := range values {
+					groupArgs = append(groupArgs, v)
+				}
 			}
-			conditions = append(conditions, condition)
 		}
 
 		// Only add the filter group if it has conditions
 		if len(conditions) > 0 {
 			filterConditions = append(filterConditions, fmt.Sprintf(
-				"('%s', %d, (%s))",
-				group.ID,
+				"(?, %d, (%s))",
 				group.Priority,
 				strings.Join(conditions, " AND "),
 			))
+			qb.filterArgs = append(qb.filterArgs, group.ID)
+			qb.filterArgs = append(qb.filterArgs, groupArgs...)
 		} else {
 			// For empty filter groups, use a constant true condition
 			filterConditions = append(filterConditions, fmt.Sprintf(
-				"('%s', %d, 1)",
-				group.ID,
+				"(?, %d, 1)",
 				group.Priority,
 			))
+			qb.filterArgs = append(qb.filterArgs, group.ID)
 		}
 	}
 
@@ -184,11 +194,14 @@ func (qb *QueryBuilder) WithAggregation(ctx context.Context, aggType types.Aggre
 	case types.AggregationCount:
 		aggClause = "COUNT(*)"
 	case types.AggregationSum:
-		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = "SUM(CAST(JSONExtractString(properties, ?) AS Float64))"
+		qb.aggArgs = append(qb.aggArgs, propertyName)
 	case types.AggregationAvg:
-		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = "AVG(CAST(JSONExtractString(properties, ?) AS Float64))"
+		qb.aggArgs = append(qb.aggArgs, propertyName)
 	case types.AggregationCountUnique:
-		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, '%s'))", propertyName)
+		aggClause = "COUNT(DISTINCT JSONExtractString(properties, ?))"
+		qb.aggArgs = append(qb.aggArgs, propertyName)
 	}
 
 	qb.finalQuery = fmt.Sprintf("SELECT best_match_group as filter_group_id, %s as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group", aggClause)
@@ -196,7 +209,11 @@ func (qb *QueryBuilder) WithAggregation(ctx context.Context, aggType types.Aggre
 	return qb
 }
 
-func (qb *QueryBuilder) Build() (string, map[string]interface{}) {
+// Build returns the query text and its bind args, in the same left-to-right
+// order the `?` placeholders appear in the text: base_events, then
+// filter_matches, then the final aggregation SELECT (matched_events/
+// best_matches carry no dynamic values).
+func (qb *QueryBuilder) Build() (string, []interface{}) {
 	var ctes []string
 
 	// Add base query without WITH
@@ -222,7 +239,12 @@ func (qb *QueryBuilder) Build() (string, map[string]interface{}) {
 	// Combine CTEs with final query
 	query := fmt.Sprintf("WITH %s\n%s", ctePart, qb.finalQuery)
 
-	return query, qb.args
+	args := make([]interface{}, 0, len(qb.baseArgs)+len(qb.filterArgs)+len(qb.aggArgs))
+	args = append(args, qb.baseArgs...)
+	args = append(args, qb.filterArgs...)
+	args = append(args, qb.aggArgs...)
+
+	return query, args
 }
 
 // parseTimeConditions builds timestamp WHERE fragments with an explicit `'UTC'` third
