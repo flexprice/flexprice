@@ -707,7 +707,7 @@ func (s *subscriptionService) persistAddonDetach(ctx context.Context, params *ad
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
 		return creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
 			SubscriptionID: association.EntityID,
-			AddonID:        lo.ToPtr(association.AddonID),
+			AddonIDs:       []string{association.AddonID},
 			EffectiveDate:  lo.ToPtr(params.getEffectiveDate()),
 		})
 	}); err != nil {

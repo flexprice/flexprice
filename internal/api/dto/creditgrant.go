@@ -523,9 +523,9 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 type CancelFutureSubscriptionGrantsRequest struct {
 	SubscriptionID string     `json:"subscription_id" binding:"required"`
 	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
-	// AddonID, when set, scopes cancellation to grants materialized from this addon
+	// AddonIDs, when set, scopes cancellation to grants materialized from these addons
 	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
-	AddonID *string `json:"addon_id,omitempty"`
+	AddonIDs []string `json:"addon_ids,omitempty"`
 	// PlanID, when set, scopes cancellation to grants materialized from this plan
 	// (via plan_id provenance), so a plan swap leaves addon-sourced grants alone.
 	PlanID *string `json:"plan_id,omitempty"`

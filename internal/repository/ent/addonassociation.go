@@ -18,6 +18,8 @@ import (
 	"github.com/lib/pq"
 )
 
+const addonAssociationBatchSize = 1000
+
 type addonAssociationRepository struct {
 	client     postgres.IClient
 	log        *logger.Logger
@@ -373,6 +375,220 @@ func (r *addonAssociationRepository) Delete(ctx context.Context, id string) erro
 	return nil
 }
 
+func (r *addonAssociationRepository) CreateBulk(ctx context.Context, associations []*domainAddonAssociation.AddonAssociation) error {
+	if len(associations) == 0 {
+		return nil
+	}
+
+	span := StartRepositorySpan(ctx, "addon_association", "create_bulk", map[string]interface{}{
+		"count": len(associations),
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+
+	bulk := make([]*ent.AddonAssociationCreate, len(associations))
+	for i, a := range associations {
+		if a.EnvironmentID == "" {
+			a.EnvironmentID = types.GetEnvironmentID(ctx)
+		}
+
+		bulk[i] = client.AddonAssociation.Create().
+			SetID(a.ID).
+			SetTenantID(types.GetTenantID(ctx)).
+			SetEnvironmentID(a.EnvironmentID).
+			SetEntityID(a.EntityID).
+			SetEntityType(string(a.EntityType)).
+			SetAddonID(a.AddonID).
+			SetNillableStartDate(a.StartDate).
+			SetNillableEndDate(a.EndDate).
+			SetAddonStatus(string(a.AddonStatus)).
+			SetCancellationReason(a.CancellationReason).
+			SetNillableCancelledAt(a.CancelledAt).
+			SetMetadata(a.Metadata).
+			SetStatus(string(a.Status)).
+			SetCreatedBy(types.GetUserID(ctx)).
+			SetUpdatedBy(types.GetUserID(ctx)).
+			SetCreatedAt(a.CreatedAt).
+			SetUpdatedAt(a.UpdatedAt)
+	}
+
+	for i := 0; i < len(bulk); i += addonAssociationBatchSize {
+		end := min(i+addonAssociationBatchSize, len(bulk))
+
+		if _, err := client.AddonAssociation.CreateBulk(bulk[i:end]...).Save(ctx); err != nil {
+			SetSpanError(span, err)
+			if ent.IsConstraintError(err) {
+				return ierr.WithError(err).
+					WithHint("An addon association with the same entity ID, environment ID and addon ID already exists").
+					WithReportableDetails(map[string]any{
+						"count":       len(associations),
+						"batch_start": i,
+						"batch_end":   end,
+					}).
+					Mark(ierr.ErrAlreadyExists)
+			}
+			return ierr.WithError(err).
+				WithHint("Failed to create addon associations in bulk").
+				WithReportableDetails(map[string]any{
+					"count":       len(associations),
+					"batch_start": i,
+					"batch_end":   end,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *addonAssociationRepository) CancelBulk(ctx context.Context, ids []string, effectiveAt time.Time, reason string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	span := StartRepositorySpan(ctx, "addon_association", "cancel_bulk", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	update := r.client.Writer(ctx).AddonAssociation.Update().
+		Where(
+			addonassociation.IDIn(ids...),
+			addonassociation.TenantID(types.GetTenantID(ctx)),
+			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetEndDate(effectiveAt).
+		SetCancelledAt(effectiveAt).
+		SetAddonStatus(string(types.AddonStatusCancelled)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	if reason != "" {
+		update = update.SetCancellationReason(reason)
+	}
+
+	if _, err := update.Save(ctx); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to cancel addon associations in bulk").
+			WithReportableDetails(map[string]any{"addon_association_ids": ids}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, id := range ids {
+		r.DeleteCache(ctx, id)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *addonAssociationRepository) ActivateBulk(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	span := StartRepositorySpan(ctx, "addon_association", "activate_bulk", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	update := r.client.Writer(ctx).AddonAssociation.Update().
+		Where(
+			addonassociation.IDIn(ids...),
+			addonassociation.TenantID(types.GetTenantID(ctx)),
+			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetAddonStatus(string(types.AddonStatusActive)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	if _, err := update.Save(ctx); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to activate addon associations in bulk").
+			WithReportableDetails(map[string]any{"addon_association_ids": ids}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, id := range ids {
+		r.DeleteCache(ctx, id)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *addonAssociationRepository) DeleteBulk(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	span := StartRepositorySpan(ctx, "addon_association", "delete_bulk", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	update := r.client.Writer(ctx).AddonAssociation.Update().
+		Where(
+			addonassociation.IDIn(ids...),
+			addonassociation.TenantID(types.GetTenantID(ctx)),
+			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	if _, err := update.Save(ctx); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to archive addon associations in bulk").
+			WithReportableDetails(map[string]any{"addon_association_ids": ids}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, id := range ids {
+		r.DeleteCache(ctx, id)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *addonAssociationRepository) GetByIDs(ctx context.Context, ids []string) ([]*domainAddonAssociation.AddonAssociation, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	span := StartRepositorySpan(ctx, "addon_association", "get_by_ids", map[string]interface{}{
+		"count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+
+	associations, err := client.AddonAssociation.Query().
+		Where(
+			addonassociation.IDIn(ids...),
+			addonassociation.TenantID(types.GetTenantID(ctx)),
+			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get addon associations").
+			WithReportableDetails(map[string]any{"addon_association_ids": ids}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainAddonAssociation.FromEntList(associations), nil
+}
+
 // AddonAssociationQuery type alias for better readability
 type AddonAssociationQuery = *ent.AddonAssociationQuery
 
@@ -426,6 +642,10 @@ func (o AddonAssociationQueryOptions) applyEntityQueryOptions(ctx context.Contex
 	var err error
 	if f == nil {
 		return query, nil
+	}
+
+	if len(f.AssociationIDs) > 0 {
+		query = query.Where(addonassociation.IDIn(f.AssociationIDs...))
 	}
 
 	// Apply addon IDs filter if specified

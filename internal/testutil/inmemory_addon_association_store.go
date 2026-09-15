@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -106,6 +107,71 @@ func (s *InMemoryAddonAssociationStore) Delete(ctx context.Context, id string) e
 	return s.InMemoryStore.Update(ctx, id, assoc)
 }
 
+func (s *InMemoryAddonAssociationStore) CreateBulk(ctx context.Context, associations []*addonassociation.AddonAssociation) error {
+	for _, aa := range associations {
+		if err := s.Create(ctx, aa); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *InMemoryAddonAssociationStore) CancelBulk(ctx context.Context, ids []string, effectiveAt time.Time, reason string) error {
+	return s.mutateEach(ctx, ids, func(aa *addonassociation.AddonAssociation) {
+		aa.EndDate = lo.ToPtr(effectiveAt)
+		aa.CancelledAt = lo.ToPtr(effectiveAt)
+		aa.AddonStatus = types.AddonStatusCancelled
+		if reason != "" {
+			aa.CancellationReason = reason
+		}
+	})
+}
+
+func (s *InMemoryAddonAssociationStore) ActivateBulk(ctx context.Context, ids []string) error {
+	return s.mutateEach(ctx, ids, func(aa *addonassociation.AddonAssociation) {
+		aa.AddonStatus = types.AddonStatusActive
+	})
+}
+
+func (s *InMemoryAddonAssociationStore) DeleteBulk(ctx context.Context, ids []string) error {
+	return s.mutateEach(ctx, ids, func(aa *addonassociation.AddonAssociation) {
+		aa.Status = types.StatusArchived
+	})
+}
+
+// mutateEach skips unknown ids, matching the ent repositories' predicate updates.
+func (s *InMemoryAddonAssociationStore) mutateEach(
+	ctx context.Context,
+	ids []string,
+	mutate func(*addonassociation.AddonAssociation),
+) error {
+	for _, id := range ids {
+		aa, err := s.InMemoryStore.Get(ctx, id)
+		if err != nil {
+			continue
+		}
+
+		updated := copyAddonAssociation(aa)
+		mutate(updated)
+		if err := s.InMemoryStore.Update(ctx, id, updated); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *InMemoryAddonAssociationStore) GetByIDs(ctx context.Context, ids []string) ([]*addonassociation.AddonAssociation, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	filter := types.NewNoLimitAddonAssociationFilter()
+	filter.Status = nil
+	filter.AssociationIDs = ids
+
+	return s.List(ctx, filter)
+}
+
 func (s *InMemoryAddonAssociationStore) List(ctx context.Context, filter *types.AddonAssociationFilter) ([]*addonassociation.AddonAssociation, error) {
 	if filter == nil {
 		filter = types.NewAddonAssociationFilter()
@@ -145,6 +211,12 @@ func addonAssociationFilterFn(ctx context.Context, aa *addonassociation.AddonAss
 	}
 
 	// Check specific filters
+	if len(f.AssociationIDs) > 0 {
+		if !lo.Contains(f.AssociationIDs, aa.ID) {
+			return false
+		}
+	}
+
 	if len(f.AddonIDs) > 0 {
 		if !lo.Contains(f.AddonIDs, aa.AddonID) {
 			return false

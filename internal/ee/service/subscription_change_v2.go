@@ -739,7 +739,7 @@ func (s *subscriptionService) applyDroppedAddons(ctx context.Context, r *planCha
 		// attachments of the same addon cannot be cancelled independently.
 		if err := NewCreditGrantService(s.ServiceParams).CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
 			SubscriptionID: r.currentSub.ID,
-			AddonID:        lo.ToPtr(association.AddonID),
+			AddonIDs:       []string{association.AddonID},
 			EffectiveDate:  lo.ToPtr(r.effectiveAt),
 		}); err != nil {
 			return err

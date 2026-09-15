@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -2614,4 +2615,76 @@ func (s *CreditGrantServiceTestSuite) TestGetCreditGrantsByAddon() {
 		s.Equal(types.CreditGrantScopeAddon, cg.Scope)
 		s.Equal(a.ID, lo.FromPtr(cg.AddonID))
 	}
+}
+
+func (s *CreditGrantServiceTestSuite) seedSubscriptionGrant(name, addonID string) string {
+	ctx := s.GetContext()
+	cg := &creditgrant.CreditGrant{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
+		Name:           name,
+		Scope:          types.CreditGrantScopeSubscription,
+		SubscriptionID: &s.testData.subscription.ID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		StartDate:      lo.ToPtr(s.testData.now),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	if addonID != "" {
+		cg.AddonID = lo.ToPtr(addonID)
+	} else {
+		cg.PlanID = lo.ToPtr(s.testData.plan.ID)
+	}
+
+	_, err := s.GetStores().CreditGrantRepo.Create(ctx, cg)
+	s.Require().NoError(err)
+	return cg.ID
+}
+
+func (s *CreditGrantServiceTestSuite) grantEndDate(id string) *time.Time {
+	g, err := s.GetStores().CreditGrantRepo.Get(s.GetContext(), id)
+	s.Require().NoError(err)
+	return g.EndDate
+}
+
+func (s *CreditGrantServiceTestSuite) TestCancelFutureSubscriptionGrants_ScopedByAddonIDs() {
+	fromA := s.seedSubscriptionGrant("addon a credits", "addon_a")
+	fromB := s.seedSubscriptionGrant("addon b credits", "addon_b")
+	fromC := s.seedSubscriptionGrant("addon c credits", "addon_c")
+	fromPlan := s.seedSubscriptionGrant("plan credits", "")
+
+	effectiveDate := s.testData.now.Add(time.Hour)
+	err := s.creditGrantService.CancelFutureSubscriptionGrants(s.GetContext(), dto.CancelFutureSubscriptionGrantsRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddonIDs:       []string{"addon_a", "addon_b"},
+		EffectiveDate:  &effectiveDate,
+	})
+	s.NoError(err)
+
+	s.Require().NotNil(s.grantEndDate(fromA))
+	s.True(s.grantEndDate(fromA).Equal(effectiveDate))
+	s.Require().NotNil(s.grantEndDate(fromB))
+	s.True(s.grantEndDate(fromB).Equal(effectiveDate))
+
+	s.Nil(s.grantEndDate(fromC), "an unnamed addon's grants are untouched")
+	s.Nil(s.grantEndDate(fromPlan), "plan-sourced grants are untouched")
+}
+
+func (s *CreditGrantServiceTestSuite) TestCancelFutureSubscriptionGrants_EmptyAddonIDsCancelsEverything() {
+	fromAddon := s.seedSubscriptionGrant("addon credits", "addon_a")
+	fromPlan := s.seedSubscriptionGrant("plan credits", "")
+
+	effectiveDate := s.testData.now.Add(time.Hour)
+	err := s.creditGrantService.CancelFutureSubscriptionGrants(s.GetContext(), dto.CancelFutureSubscriptionGrantsRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddonIDs:       []string{},
+		EffectiveDate:  &effectiveDate,
+	})
+	s.NoError(err)
+
+	s.NotNil(s.grantEndDate(fromAddon))
+	s.NotNil(s.grantEndDate(fromPlan))
 }
