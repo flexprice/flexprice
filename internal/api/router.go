@@ -121,7 +121,7 @@ func NewRouter(
 	router.Use(middleware.PyroscopeMiddleware(cfg)) // Add Pyroscope middleware
 
 	// Initialize permission middleware
-	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
+	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger, cfg.Postgres.ReadOnly)
 	write := permissionMW.RequirePermission       // shorthand used on every write route
 	read := permissionMW.RequirePermission        // shorthand used on read routes that opt in to an RBAC gate
 	superAdminOnly := middleware.SuperAdminOnly() // shorthand used on routes accessible only to super_admin users
