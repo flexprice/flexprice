@@ -3,15 +3,18 @@ package service
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -38,6 +41,7 @@ func (s *EntitlementServiceSuite) setupService() {
 		EntitlementRepo:      stores.EntitlementRepo,
 		EntitlementGrantRepo: stores.EntitlementGrantRepo,
 		PlanRepo:             stores.PlanRepo,
+		SubRepo:              stores.SubscriptionRepo,
 		FeatureRepo:          stores.FeatureRepo,
 		MeterRepo:            testutil.NewInMemoryMeterStore(),
 		WebhookPublisher:     s.GetWebhookPublisher(),
@@ -1190,4 +1194,95 @@ func (s *EntitlementServiceSuite) TestListEntitlements_NoLimitFilterIsNotTruncat
 
 	// The caller's filter must not be mutated into a limited one.
 	s.True(filter.IsUnlimited(), "ListEntitlements must not clobber a no-limit filter")
+}
+
+// Grant coherence is about ECs that land in the same resolved set. An override
+// replaces its parent rather than sitting beside it, and two customers' overrides
+// never meet — so neither may block a customer from going unlimited.
+func (s *EntitlementServiceSuite) TestGrantSiblingCoherenceIgnoresUnrelatedScopes() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:          "meter-coherence",
+		Name:        "Coherence Meter",
+		EventName:   "api_calls",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.service.(*entitlementService).MeterRepo.(*testutil.InMemoryMeterStore).CreateMeter(ctx, m))
+
+	f := &feature.Feature{
+		ID:        "feat-coherence",
+		Name:      "Coherence Feature",
+		Type:      types.FeatureTypeMetered,
+		MeterID:   m.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+
+	p := &plan.Plan{ID: "plan-coherence", Name: "Coherence Plan", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, p))
+
+	newSub := func(id string) string {
+		s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, &subscription.Subscription{
+			ID:                 id,
+			PlanID:             p.ID,
+			CustomerID:         "cust-coherence",
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			Currency:           "usd",
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			StartDate:          time.Now().UTC(),
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}))
+		return id
+	}
+
+	// The plan hands everyone a bounded hourly allowance.
+	parent, err := s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		EntityType:              types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:                p.ID,
+		FeatureID:               f.ID,
+		FeatureType:             types.FeatureTypeMetered,
+		IsEnabled:               true,
+		GrantMeasure:            types.EntitlementGrantMeasureQuantity,
+		GrantQuota:              lo.ToPtr(decimal.NewFromInt(5000)),
+		GrantDurationValue:      lo.ToPtr(1),
+		GrantDurationUnit:       types.EntitlementGrantDurationUnitHour,
+		GrantAllocationBehavior: types.EntitlementGrantAllocationBehaviorFirstUsage,
+		AggregationMode:         types.EntitlementAggregationModeAdditive,
+	})
+	s.NoError(err)
+
+	override := func(subID string, req dto.CreateEntitlementRequest) dto.CreateEntitlementRequest {
+		req.EntityType = types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
+		req.EntityID = subID
+		req.FeatureID = f.ID
+		req.FeatureType = types.FeatureTypeMetered
+		req.IsEnabled = true
+		req.ParentEntitlementID = lo.ToPtr(parent.ID)
+		req.GrantMeasure = types.EntitlementGrantMeasureQuantity
+		req.AggregationMode = types.EntitlementAggregationModeAdditive
+		return req
+	}
+
+	s.Run("one customer may go unlimited while the plan stays bounded", func() {
+		got, err := s.service.CreateEntitlement(ctx, override(newSub("sub-coherence-1"), dto.CreateEntitlementRequest{
+			GrantUnlimited:    true,
+			GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		}))
+		s.NoError(err)
+		s.True(got.IsUnlimitedGrant())
+	})
+
+	s.Run("another customer may keep a bounded allowance alongside it", func() {
+		got, err := s.service.CreateEntitlement(ctx, override(newSub("sub-coherence-2"), dto.CreateEntitlementRequest{
+			GrantQuota:              lo.ToPtr(decimal.NewFromInt(250)),
+			GrantDurationValue:      lo.ToPtr(1),
+			GrantDurationUnit:       types.EntitlementGrantDurationUnitHour,
+			GrantAllocationBehavior: types.EntitlementGrantAllocationBehaviorFirstUsage,
+		}))
+		s.NoError(err)
+		s.Equal("250", got.GrantQuota.String())
+	})
 }

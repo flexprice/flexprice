@@ -2557,9 +2557,32 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 
 	aggregationMode := types.EntitlementAggregationModeAdditive
 
+	// Grant config summary. Additive contributors are validated to share measure
+	// and duration, so the first grant EC describes the whole pool; parallel
+	// features expose their per-bucket detail through Buckets.
+	var grantMeasure types.EntitlementGrantMeasure
+	var grantDurationValue *int
+	var grantDurationUnit types.EntitlementGrantDurationUnit
+	grantQuota := decimal.Zero
+	hasGrantConfig := false
+	grantUnlimited := false
+
 	for _, e := range entitlements {
 		if !e.IsEnabled {
 			continue
+		}
+
+		if e.HasGrantConfig() {
+			if !hasGrantConfig {
+				hasGrantConfig = true
+				grantMeasure = e.GrantMeasure
+				grantDurationValue = e.GrantDurationValue
+				grantDurationUnit = e.GrantDurationUnit
+			}
+			if e.IsUnlimitedGrant() {
+				grantUnlimited = true
+			}
+			grantQuota = grantQuota.Add(lo.FromPtr(e.GrantQuota))
 		}
 
 		if e.AggregationMode == types.EntitlementAggregationModeParallel {
@@ -2601,6 +2624,17 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 		IsSoftLimit:      isSoftLimit,
 		UsageResetPeriod: usageResetPeriod,
 		AggregationMode:  aggregationMode,
+	}
+
+	if hasGrantConfig {
+		out.GrantMeasure = grantMeasure
+		out.GrantDurationValue = grantDurationValue
+		out.GrantDurationUnit = grantDurationUnit
+		out.GrantUnlimited = grantUnlimited
+		// An unlimited pool has no ceiling to report, however many contributors it has.
+		if !grantUnlimited {
+			out.GrantQuota = &grantQuota
+		}
 	}
 
 	if aggregationMode == types.EntitlementAggregationModeParallel {
@@ -2918,6 +2952,8 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		SubscriptionID: subscriptions[0].ID,
 	})
 
+	s.attachGrantState(ctx, aggregatedFeatures, subscriptions)
+
 	// Build final response
 	response := &dto.CustomerEntitlementsResponse{
 		CustomerID:    customerID,
@@ -2926,6 +2962,59 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 	}
 
 	return response, nil
+}
+
+// attachGrantState folds each subscription's live grant state onto the matching
+// feature. A customer with two subscriptions on one feature genuinely holds two
+// windows, so `current` concatenates rather than merging — summing them would
+// imply a shared pool that does not exist. Best-effort: the entitlement response
+// is still correct without it.
+func (s *billingService) attachGrantState(
+	ctx context.Context,
+	features []*dto.AggregatedFeature,
+	subscriptions []*subscription.Subscription,
+) {
+	grantSvc := NewEntitlementGrantService(s.ServiceParams)
+	at := time.Now().UTC()
+
+	byFeature := make(map[string]*dto.GrantState)
+	for _, sub := range subscriptions {
+		if sub == nil || sub.SubscriptionType == types.SubscriptionTypeInherited {
+			continue
+		}
+		states, err := grantSvc.GrantStateByFeature(ctx, sub, at)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to load entitlement grant state for subscription, skipping",
+				"error", err, "subscription_id", sub.ID)
+			continue
+		}
+		for featureID, state := range states {
+			existing, ok := byFeature[featureID]
+			if !ok {
+				byFeature[featureID] = state
+				continue
+			}
+			existing.Windows = append(existing.Windows, state.Windows...)
+			if state.CycleTotals != nil {
+				if existing.CycleTotals == nil {
+					existing.CycleTotals = &dto.GrantCycleTotals{}
+				}
+				existing.CycleTotals.Windows += state.CycleTotals.Windows
+				existing.CycleTotals.TotalQuota = existing.CycleTotals.TotalQuota.Add(state.CycleTotals.TotalQuota)
+				existing.CycleTotals.TotalUsage = existing.CycleTotals.TotalUsage.Add(state.CycleTotals.TotalUsage)
+				existing.CycleTotals.TotalOverage = existing.CycleTotals.TotalOverage.Add(state.CycleTotals.TotalOverage)
+			}
+		}
+	}
+
+	for _, f := range features {
+		if f == nil || f.Feature == nil {
+			continue
+		}
+		if state, ok := byFeature[f.Feature.ID]; ok && f.Entitlement != nil {
+			f.Entitlement.GrantState = state
+		}
+	}
 }
 
 func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error) {
@@ -3279,16 +3368,81 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		usage := usageByFeature[featureID]
 		nextUsageResetAt := featureNextUsageResetAtMap[featureID]
 
+		// A grant-backed entitlement carries no usage_limit, so reading it alone
+		// reports every allowance as unlimited. The grant quota is per window
+		// ("1,000 per hour"); the cadence is not expressible in this summary, but a
+		// real ceiling beats a wrong "unlimited".
+		totalLimit := feature.Entitlement.UsageLimit
+		isUnlimited := feature.Entitlement.UsageLimit == nil
+		if feature.Entitlement.GrantUnlimited {
+			totalLimit = nil
+			isUnlimited = true
+		} else if feature.Entitlement.GrantQuota != nil {
+			quota := feature.Entitlement.GrantQuota.IntPart()
+			totalLimit = &quota
+			isUnlimited = false
+		}
+
+		// Usage for a grant-backed feature is the OPEN WINDOW's usage, not the
+		// cycle's: the quota above is per window, so pairing it with cycle usage
+		// would compare two different periods. The accumulation loop above also
+		// skips these features entirely — it keys off usage_reset_period, which a
+		// grant config does not set — so without this they report zero.
+		//
+		// Across several windows: quotas sum (separate subscriptions each grant
+		// their own), but usage is the max rather than the sum, because every
+		// window meters the same customer's event stream.
+		if gs := feature.Entitlement.GrantState; gs != nil {
+			grantUsage, grantQuota := decimal.Zero, decimal.Zero
+			anyUnlimited := false
+			haveFigures := false
+
+			active := lo.Filter(gs.Windows, func(w *dto.GrantWindowState, _ int) bool { return w != nil && w.IsActive })
+			if len(active) > 0 {
+				// A window is open: report it, so usage and quota describe the same period.
+				for _, w := range active {
+					if w.Unlimited {
+						anyUnlimited = true
+					}
+					if w.Usage.GreaterThan(grantUsage) {
+						grantUsage = w.Usage
+					}
+					grantQuota = grantQuota.Add(w.Quota)
+				}
+				haveFigures = true
+			} else if gs.CycleTotals != nil && gs.CycleTotals.Windows > 0 {
+				// Between windows there is no live allowance, but the cycle still has
+				// usage. Fall back to cycle totals so both halves of the ratio cover the
+				// same span rather than reporting zero against a per-window quota.
+				grantUsage = gs.CycleTotals.TotalUsage
+				grantQuota = gs.CycleTotals.TotalQuota
+				haveFigures = true
+			}
+
+			if haveFigures {
+				usage = grantUsage
+				if anyUnlimited {
+					totalLimit = nil
+					isUnlimited = true
+				} else if grantQuota.IsPositive() {
+					q := grantQuota.IntPart()
+					totalLimit = &q
+					isUnlimited = false
+				}
+			}
+		}
+
 		featureSummary := &dto.FeatureUsageSummary{
 			Feature:          feature.Feature,
-			TotalLimit:       feature.Entitlement.UsageLimit,
-			IsUnlimited:      feature.Entitlement.UsageLimit == nil,
+			TotalLimit:       totalLimit,
+			IsUnlimited:      isUnlimited,
 			CurrentUsage:     usage,
-			UsagePercent:     s.getUsagePercent(usage, feature.Entitlement.UsageLimit),
+			UsagePercent:     s.getUsagePercent(usage, totalLimit),
 			IsEnabled:        feature.Entitlement.IsEnabled,
 			IsSoftLimit:      feature.Entitlement.IsSoftLimit,
 			Sources:          feature.Sources,
 			NextUsageResetAt: nextUsageResetAt,
+			GrantState:       feature.Entitlement.GrantState,
 		}
 
 		resp.Features = append(resp.Features, featureSummary)

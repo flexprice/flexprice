@@ -128,16 +128,33 @@ func TestEntitlementGrantDurationUnit_Validate(t *testing.T) {
 }
 
 func TestEntitlementGrantStatus_Validate(t *testing.T) {
-	for _, s := range []EntitlementGrantStatus{EntitlementGrantStatusActive, EntitlementGrantStatusExhausted, ""} {
+	for _, s := range []EntitlementGrantStatus{
+		EntitlementGrantStatusActive,
+		EntitlementGrantStatusExhausted,
+		EntitlementGrantStatusSuperseded,
+		"",
+	} {
 		if err := s.Validate(); err != nil {
 			t.Fatalf("%q should validate, got %v", s, err)
 		}
 	}
 	// Expiry is derived from valid_to, never stored — 'expired' is not a status.
-	for _, s := range []EntitlementGrantStatus{"expired", "superseded", "bogus"} {
+	for _, s := range []EntitlementGrantStatus{"expired", "bogus"} {
 		if err := s.Validate(); err == nil {
 			t.Fatalf("%q should be rejected", s)
 		}
+	}
+}
+
+func TestEntitlementGrantStatus_IsBillable(t *testing.T) {
+	// Exhausted windows are where overage comes from, so only a replaced one is out.
+	for _, s := range []EntitlementGrantStatus{EntitlementGrantStatusActive, EntitlementGrantStatusExhausted, ""} {
+		if !s.IsBillable() {
+			t.Fatalf("%q should be billable", s)
+		}
+	}
+	if EntitlementGrantStatusSuperseded.IsBillable() {
+		t.Fatalf("a replaced window must not bill")
 	}
 }
 

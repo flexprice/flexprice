@@ -37,11 +37,30 @@ type CreateEntitlementRequest struct {
 	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	// GrantUnlimited asks for an allowance with no ceiling. Explicit rather than
+	// inferred from an absent grant_quota, so a dropped field or a typo'd key
+	// cannot silently provision a feature that never bills.
+	GrantUnlimited bool `json:"grant_unlimited,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// An absent quota alongside grant config would otherwise provision a feature
+	// that never bills — too easy to reach from a dropped field or a typo'd key.
+	// Unlimited has to be asked for.
+	hasGrantConfig := r.GrantQuota != nil || r.GrantDurationValue != nil || r.GrantMeasure != "" || r.GrantDurationUnit != ""
+	if hasGrantConfig && r.GrantQuota == nil && !r.GrantUnlimited {
+		return ierr.NewError("grant_quota is required unless the allowance is unlimited").
+			WithHint("Set grant_quota, or send grant_unlimited: true for an allowance with no ceiling").
+			Mark(ierr.ErrValidation)
+	}
+	if r.GrantUnlimited && r.GrantQuota != nil {
+		return ierr.NewError("grant_quota cannot be set on an unlimited allowance").
+			WithHint("Remove grant_quota, or drop grant_unlimited").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.FeatureID == "" {
@@ -145,14 +164,21 @@ type UpdateEntitlementRequest struct {
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
 
 	// Grant config — nil fields leave the current value alone.
-	// ClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement).
-	ClearGrantConfig        *bool                                     `json:"clear_grant_config,omitempty"`
+	//
+	// Deprecated: use grant_unlimited to remove a ceiling. This flag only remains
+	// for the "back to a legacy usage_limit" case, which metered entitlements are
+	// moving off entirely.
+	ClearGrantConfig        *bool                                     `json:"clear_grant_config,omitempty" swaggerignore:"true"`
 	GrantMeasure            *types.EntitlementGrantMeasure            `json:"grant_measure,omitempty"`
 	GrantDurationValue      *int                                      `json:"grant_duration_value,omitempty"`
 	GrantDurationUnit       *types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
 	GrantAllocationBehavior *types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	GrantQuota              *decimal.Decimal                          `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         *types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	// GrantUnlimited=true clears the ceiling; false restores a bounded allowance
+	// and requires grant_quota in the same request. Without this an existing quota
+	// could never be unset, since a nil GrantQuota means "leave alone".
+	GrantUnlimited *bool `json:"grant_unlimited,omitempty"`
 }
 
 // Validate validates the update entitlement request

@@ -98,6 +98,16 @@ func (s *subscriptionService) resolveGrantProration(
 			continue
 		}
 
+		// An unlimited pool has no quota to prorate, and summing nil quotas would
+		// make it look like a zero-delta bounded feature — which then gets its live
+		// window closed with no successor written. Leave those windows alone.
+		if lo.SomeBy(featureECs, func(ec *entitlement.Entitlement) bool { return ec.IsUnlimitedGrant() }) {
+			s.Logger.Info(ctx, "skipping entitlement grant proration; allowance is unlimited",
+				"subscription_id", sub.ID,
+				"feature_id", featureID)
+			continue
+		}
+
 		originalQuota := decimal.Zero
 		for _, ec := range featureECs {
 			originalQuota = originalQuota.Add(lo.FromPtr(ec.GrantQuota))
@@ -297,7 +307,10 @@ func (s *subscriptionService) handleGrantsForRemovedECs(
 		// quota — which the grant model rejects. Leaving the spent window open keeps the
 		// slot covered, so the tick cannot re-derive a fresh allowance from the surviving
 		// configs and hand back quota the pool already consumed.
-		if pooled.Remaining().IsZero() {
+		// Remaining() is also zero for an unlimited window, which is not "spent" —
+		// keeping it open would leave the customer with unlimited, zero-billed usage
+		// on a feature whose allowance was just removed.
+		if !pooled.Unlimited && pooled.Remaining().IsZero() {
 			s.Logger.Info(ctx, "keeping the spent entitlement grant window open; nothing to carry forward",
 				"subscription_id", sub.ID,
 				"grant_id", pooled.ID,

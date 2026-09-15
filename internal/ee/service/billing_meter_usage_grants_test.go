@@ -452,3 +452,89 @@ func TestAdjustMeterUsageGrants_AllUnderQuota_ZerosBillable(t *testing.T) {
 		t.Fatalf("under-quota grants should zero the charge, got amount=%v qty=%v", c.Amount, c.Quantity)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Superseded windows: an entitlement edit replaced them with a successor that
+// re-measures the same period, so folding them would bill those units twice.
+// ---------------------------------------------------------------------------
+
+// Snapshot lane: one EC, overages sum — the replaced window must contribute none.
+func TestAdjustMeterUsageGrants_SnapshotLane_SupersededWindowDoesNotBill(t *testing.T) {
+	bs := newTestBillingService()
+	li := linItem(false, false)
+	c := charge(flatPrice(0.5))
+
+	replaced := makeGrant(100, 250, types.EntitlementGrantMeasureQuantity) // would be 150 over
+	replaced.ID = "eg_replaced"
+	replaced.GrantStatus = types.EntitlementGrantStatusSuperseded
+
+	successor := makeGrant(500, 600, types.EntitlementGrantMeasureQuantity) // 100 over
+	successor.ID = "eg_successor"
+
+	res, applied, err := bs.adjustMeterUsageGrants(
+		context.Background(), li, c, []*entitlementgrant.EntitlementGrant{replaced, successor},
+		newTestPriceService(), nil, nil, nil)
+	if err != nil || !applied {
+		t.Fatalf("applied=%v err=%v; want applied with no error", applied, err)
+	}
+	if want := decimal.NewFromInt(100); !res.Overage.Equal(want) {
+		t.Fatalf("Overage = %s; want %s (the replaced window's 150 must not bill)", res.Overage, want)
+	}
+}
+
+// Interval lane: overage is measured inside merged [quota_crossed_at, valid_to)
+// ranges. A replaced window must contribute no range. Two live ECs keep the fold on
+// this lane — filtering down to one would hand it to the snapshot lane instead.
+func TestAdjustMeterUsageGrants_IntervalLane_SupersededWindowContributesNoRange(t *testing.T) {
+	bs, m := newMergedWindowBillingService(t, []struct {
+		at  time.Time
+		qty int64
+	}{
+		{unionT0.Add(30 * time.Minute), 7},  // inside the replaced window only
+		{unionT0.Add(90 * time.Minute), 5},  // inside the first live window
+		{unionT0.Add(150 * time.Minute), 3}, // inside the second live window
+	})
+	li := linItem(false, false)
+	c := charge(flatPrice(1))
+
+	replaced := makeCrossedGrant("ec_a", 10, 20, unionT0, unionT0.Add(time.Hour), unionT0)
+	replaced.GrantStatus = types.EntitlementGrantStatusSuperseded
+
+	grants := []*entitlementgrant.EntitlementGrant{
+		replaced,
+		makeCrossedGrant("ec_b", 10, 20, unionT0.Add(time.Hour), unionT0.Add(2*time.Hour), unionT0.Add(time.Hour)),
+		makeCrossedGrant("ec_c", 10, 20, unionT0.Add(2*time.Hour), unionT0.Add(3*time.Hour), unionT0.Add(2*time.Hour)),
+	}
+
+	res, applied, err := bs.adjustMeterUsageGrants(
+		context.Background(), li, c, grants, newTestPriceService(), m, nil, []string{"cust_ext"})
+	if err != nil || !applied {
+		t.Fatalf("applied=%v err=%v; want applied with no error", applied, err)
+	}
+	// 5 + 3 from the live ranges. The 7 inside the replaced window is re-measured by
+	// its successor and must not be charged here.
+	if want := decimal.NewFromInt(8); !res.Overage.Equal(want) {
+		t.Fatalf("Overage = %s; want %s", res.Overage, want)
+	}
+}
+
+// Every window replaced: nothing to fold, and the line item is left alone rather
+// than billed at zero.
+func TestAdjustMeterUsageGrants_AllWindowsSuperseded_NotApplied(t *testing.T) {
+	bs := newTestBillingService()
+	li := linItem(false, false)
+	c := charge(flatPrice(0.5))
+
+	only := makeGrant(100, 250, types.EntitlementGrantMeasureQuantity)
+	only.GrantStatus = types.EntitlementGrantStatusSuperseded
+
+	_, applied, err := bs.adjustMeterUsageGrants(
+		context.Background(), li, c, []*entitlementgrant.EntitlementGrant{only},
+		newTestPriceService(), nil, nil, nil)
+	if err != nil {
+		t.Fatalf("err = %v; want nil", err)
+	}
+	if applied {
+		t.Fatalf("applied = true; want false when every window was replaced")
+	}
+}

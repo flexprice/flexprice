@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // EntitlementService defines the interface for entitlement operations
@@ -30,6 +31,12 @@ type EntitlementService interface {
 	GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error)
 	GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error)
 	GetAddonEntitlements(ctx context.Context, addonID string) (*dto.ListEntitlementsResponse, error)
+
+	// ValidateGrantShape runs the meter and price rules on an entitlement,
+	// resolving the feature's meter itself. Exposed so paths that build an
+	// entitlement outside CreateEntitlement — subscription overrides — enforce
+	// the same rules rather than only field coherence.
+	ValidateGrantShape(ctx context.Context, e *entitlement.Entitlement) error
 }
 
 type entitlementService struct {
@@ -176,6 +183,10 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 
 	result, err := s.EntitlementRepo.Create(ctx, e)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.takeOverGrantWindowsFromParent(ctx, result); err != nil {
 		return nil, err
 	}
 
@@ -661,6 +672,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		return nil, err
 	}
 
+	priorQuota := existing.GrantQuota
+	priorUnlimited := existing.IsUnlimitedGrant()
+
 	// Update fields if provided
 	if req.IsEnabled != nil {
 		existing.IsEnabled = *req.IsEnabled
@@ -687,8 +701,14 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		existing.ConfigValue = req.ConfigValue
 	}
 
-	// Grant fields: nil = leave alone; ClearGrantConfig wipes the whole config.
+	// Grant fields: nil = leave alone.
+	//
+	// Deprecated: ClearGrantConfig is honoured for existing callers but is on its
+	// way out — logged so we can see whether anyone still relies on it.
 	if req.ClearGrantConfig != nil && *req.ClearGrantConfig {
+		s.Logger.Info(ctx, "deprecated clear_grant_config used on entitlement update",
+			"entitlement_id", id,
+			"feature_id", existing.FeatureID)
 		existing.GrantMeasure = ""
 		existing.GrantDurationValue = nil
 		existing.GrantDurationUnit = ""
@@ -711,15 +731,43 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if req.GrantQuota != nil {
 		existing.GrantQuota = req.GrantQuota
 	}
+	// A nil GrantQuota means "leave alone", so removing a ceiling needs its own
+	// signal; validateGrantConfig still requires subscription_period for it.
+	if req.GrantUnlimited != nil {
+		if *req.GrantUnlimited {
+			existing.GrantQuota = nil
+		} else if req.GrantQuota == nil {
+			return nil, ierr.NewError("grant_quota is required when turning off an unlimited allowance").
+				WithHint("Send the quota this allowance should be capped at").
+				Mark(ierr.ErrValidation)
+		}
+	}
 	if req.AggregationMode != nil {
 		existing.AggregationMode = *req.AggregationMode
+	}
+
+	// A cycle-length window has no duration value and no anchor, and neither field
+	// can be nulled by omission (nil means "leave alone"). Clearing them here is
+	// what makes it possible to move an existing hourly allowance onto the cycle.
+	if existing.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		existing.GrantDurationValue = nil
+		existing.GrantAllocationBehavior = ""
 	}
 
 	if err := existing.Validate(); err != nil {
 		return nil, err
 	}
 
-	if existing.HasGrantConfig() && existing.FeatureType == types.FeatureTypeMetered {
+	// Only re-check the meter and price rules when the request actually touches
+	// the grant config. Rows created before a rule was tightened would otherwise
+	// fail every unrelated update — toggling is_enabled on a pre-existing
+	// quantity grant whose meter has a tiered price would return 400.
+	touchesGrantConfig := req.GrantMeasure != nil || req.GrantQuota != nil ||
+		req.GrantDurationValue != nil || req.GrantDurationUnit != nil ||
+		req.GrantAllocationBehavior != nil || req.AggregationMode != nil ||
+		req.GrantUnlimited != nil || (req.ClearGrantConfig != nil && *req.ClearGrantConfig)
+
+	if touchesGrantConfig && existing.HasGrantConfig() && existing.FeatureType == types.FeatureTypeMetered {
 		featureRow, err := s.FeatureRepo.Get(ctx, existing.FeatureID)
 		if err != nil {
 			return nil, err
@@ -738,6 +786,10 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		return nil, err
 	}
 
+	if err := s.resettleGrantWindows(ctx, result, priorQuota, priorUnlimited); err != nil {
+		return nil, err
+	}
+
 	response := &dto.EntitlementResponse{Entitlement: result}
 
 	// TODO: !REMOVE after migration
@@ -751,8 +803,122 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	return response, nil
 }
 
+// resettleGrantWindows re-issues a customer's live windows when an edit moved the
+// allowance. Subscription-scoped rows only — re-cutting on a plan edit would rewrite the
+// live window of every subscriber at once — and only on the amount, since a cadence or
+// stacking change reshapes windows rather than repricing one.
+func (s *entitlementService) resettleGrantWindows(
+	ctx context.Context,
+	e *entitlement.Entitlement,
+	priorQuota *decimal.Decimal,
+	priorUnlimited bool,
+) error {
+	if e == nil || e.EntityType != types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION || !e.HasGrantConfig() {
+		return nil
+	}
+	if s.EntitlementGrantRepo == nil {
+		return nil
+	}
+
+	unlimited := e.IsUnlimitedGrant()
+	if unlimited == priorUnlimited && quotaUnchanged(priorQuota, e.GrantQuota) {
+		return nil
+	}
+
+	return s.handOverGrantWindows(ctx, e.EntityID, e.ID, SupersedeTarget{
+		Quota:     e.GrantQuota,
+		Unlimited: unlimited,
+	})
+}
+
+// handOverGrantWindows re-issues whatever is live on fromConfigID at the allowance in
+// target, landing on the same slot for an edit or on target.EntitlementConfigID when the
+// rule changes hands.
+func (s *entitlementService) handOverGrantWindows(
+	ctx context.Context,
+	subscriptionID, fromConfigID string,
+	target SupersedeTarget,
+) error {
+	at := time.Now().UTC()
+	filter := types.NewNoLimitEntitlementGrantFilter().
+		WithSubscriptionIDs(subscriptionID).
+		WithEntitlementConfigIDs(fromConfigID)
+	filter.WithLiveOnly(at)
+
+	live, err := s.EntitlementGrantRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if len(live) == 0 {
+		return nil
+	}
+
+	_, err = NewEntitlementGrantService(s.ServiceParams).
+		SupersedeEntitlementGrants(ctx, live, at, target)
+	return err
+}
+
+// takeOverGrantWindowsFromParent runs on a first override: the plan's rule leaves the
+// customer's resolved set, so the window it owns hands over to the override's slot.
+func (s *entitlementService) takeOverGrantWindowsFromParent(ctx context.Context, e *entitlement.Entitlement) error {
+	if e == nil || e.EntityType != types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION || !e.HasGrantConfig() {
+		return nil
+	}
+	if s.EntitlementGrantRepo == nil || lo.FromPtr(e.ParentEntitlementID) == "" {
+		return nil
+	}
+
+	return s.handOverGrantWindows(ctx, e.EntityID, *e.ParentEntitlementID, SupersedeTarget{
+		EntitlementConfigID: e.ID,
+		Quota:               e.GrantQuota,
+		Unlimited:           e.IsUnlimitedGrant(),
+	})
+}
+
+// handBackGrantWindowsToParent is the mirror, for reset to default.
+func (s *entitlementService) handBackGrantWindowsToParent(ctx context.Context, e *entitlement.Entitlement) error {
+	if e == nil || e.EntityType != types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION || !e.HasGrantConfig() {
+		return nil
+	}
+	if s.EntitlementGrantRepo == nil || lo.FromPtr(e.ParentEntitlementID) == "" {
+		return nil
+	}
+
+	parent, err := s.EntitlementRepo.Get(ctx, *e.ParentEntitlementID)
+	if err != nil {
+		return err
+	}
+	// A legacy parent has no allowance to hand the window to; it runs out instead.
+	if !parent.HasGrantConfig() {
+		return nil
+	}
+
+	return s.handOverGrantWindows(ctx, e.EntityID, e.ID, SupersedeTarget{
+		EntitlementConfigID: parent.ID,
+		Quota:               parent.GrantQuota,
+		Unlimited:           parent.IsUnlimitedGrant(),
+	})
+}
+
+func quotaUnchanged(a, b *decimal.Decimal) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
+}
+
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
+	// Read before the delete: the row says whose window this was and which rule takes over.
+	existing, err := s.EntitlementRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
 	if err := s.EntitlementRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	if err := s.handBackGrantWindowsToParent(ctx, existing); err != nil {
 		return err
 	}
 

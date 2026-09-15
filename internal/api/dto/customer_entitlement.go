@@ -47,6 +47,52 @@ type AggregatedFeature struct {
 	Sources     []*EntitlementSource   `json:"sources"`
 }
 
+// GrantState is the runtime half of a grant-backed entitlement: what the
+// customer has left right now, and what the cycle has accumulated.
+type GrantState struct {
+	// Windows is every window overlapping the current billing period, closed ones
+	// included, oldest first — the per-window ledger behind CycleTotals. The
+	// live balance is the entry (or entries, for parallel features) with
+	// IsActive=true; there is at most one per bucket, and none between windows.
+	Windows []*GrantWindowState `json:"windows"`
+	// CycleTotals covers every window overlapping the current billing period,
+	// closed ones included, so the overage figure matches what billing will fold.
+	CycleTotals *GrantCycleTotals `json:"cycle_totals,omitempty"`
+}
+
+// GrantWindowState is one materialized grant window.
+type GrantWindowState struct {
+	GrantID       string `json:"grant_id"`
+	EntitlementID string `json:"entitlement_id"`
+	// Measure is quantity (meter units) or amount (currency) — the unit for
+	// every figure below.
+	Measure types.EntitlementGrantMeasure `json:"measure"`
+	// Unlimited windows track usage but have no ceiling: quota and remaining are
+	// meaningless and a client must render "unlimited", not a number.
+	Unlimited bool                         `json:"unlimited"`
+	Quota     decimal.Decimal              `json:"quota" swaggertype:"string"`
+	Usage     decimal.Decimal              `json:"usage" swaggertype:"string"`
+	Remaining decimal.Decimal              `json:"remaining" swaggertype:"string"`
+	ValidFrom time.Time                    `json:"valid_from"`
+	ValidTo   time.Time                    `json:"valid_to"`
+	Status    types.EntitlementGrantStatus `json:"status"`
+	// IsActive means the window is open right now — evaluated against the
+	// server's clock so clients need not compare timestamps themselves.
+	IsActive bool `json:"is_active"`
+	// LastComputedAt is the freshness watermark. Usage is a snapshot refreshed
+	// by a debounced background pass, so a client must render this rather than
+	// implying the number is live.
+	LastComputedAt *time.Time `json:"last_computed_at,omitempty"`
+}
+
+// GrantCycleTotals summarises every window in the current billing period.
+type GrantCycleTotals struct {
+	Windows      int             `json:"windows"`
+	TotalQuota   decimal.Decimal `json:"total_quota" swaggertype:"string"`
+	TotalUsage   decimal.Decimal `json:"total_usage" swaggertype:"string"`
+	TotalOverage decimal.Decimal `json:"total_overage" swaggertype:"string"`
+}
+
 // AggregatedEntitlement contains the final calculated entitlement values.
 //
 // For parallel aggregation, Buckets carries the per-entitlement view — each
@@ -60,6 +106,23 @@ type AggregatedEntitlement struct {
 	ConfigValues     []map[string]any                  `json:"config_values,omitempty"`
 	AggregationMode  types.EntitlementAggregationMode  `json:"aggregation_mode,omitempty"`
 	Buckets          []*AggregatedEntitlementBucket    `json:"buckets,omitempty"`
+
+	// Grant config summary, so a client can render the promise ("1,000 calls per
+	// day") before any window has opened. UsageLimit stays populated for legacy
+	// display but is meaningless on a grant-backed feature.
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	// GrantUnlimited distinguishes "grant-based with no ceiling" from "no grant
+	// config at all"; both leave GrantQuota nil.
+	GrantUnlimited bool `json:"grant_unlimited,omitempty"`
+
+	// GrantState is the runtime half of the config above: the windows this
+	// allowance has materialized. Nil when the feature carries no grant config,
+	// and its Windows are empty when none has opened yet — different facts that
+	// a client must render differently.
+	GrantState *GrantState `json:"grant_state,omitempty"`
 }
 
 // AggregatedEntitlementBucket is one independent budget within a parallel feature.
@@ -153,4 +216,7 @@ type FeatureUsageSummary struct {
 	IsSoftLimit      bool                 `json:"is_soft_limit"`
 	NextUsageResetAt *time.Time           `json:"next_usage_reset_at"`
 	Sources          []*EntitlementSource `json:"sources"`
+	// GrantState carries the per-window ledger for grant-backed features, so a
+	// client can break a cycle total down into the windows that produced it.
+	GrantState *GrantState `json:"grant_state,omitempty"`
 }

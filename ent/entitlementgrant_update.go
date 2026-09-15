@@ -70,6 +70,20 @@ func (egu *EntitlementGrantUpdate) ClearUpdatedBy() *EntitlementGrantUpdate {
 	return egu
 }
 
+// SetUnlimited sets the "unlimited" field.
+func (egu *EntitlementGrantUpdate) SetUnlimited(b bool) *EntitlementGrantUpdate {
+	egu.mutation.SetUnlimited(b)
+	return egu
+}
+
+// SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
+func (egu *EntitlementGrantUpdate) SetNillableUnlimited(b *bool) *EntitlementGrantUpdate {
+	if b != nil {
+		egu.SetUnlimited(*b)
+	}
+	return egu
+}
+
 // SetUsage sets the "usage" field.
 func (egu *EntitlementGrantUpdate) SetUsage(d decimal.Decimal) *EntitlementGrantUpdate {
 	egu.mutation.SetUsage(d)
@@ -232,6 +246,9 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if egu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := egu.mutation.Unlimited(); ok {
+		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
+	}
 	if value, ok := egu.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
@@ -316,6 +333,20 @@ func (eguo *EntitlementGrantUpdateOne) SetNillableUpdatedBy(s *string) *Entitlem
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (eguo *EntitlementGrantUpdateOne) ClearUpdatedBy() *EntitlementGrantUpdateOne {
 	eguo.mutation.ClearUpdatedBy()
+	return eguo
+}
+
+// SetUnlimited sets the "unlimited" field.
+func (eguo *EntitlementGrantUpdateOne) SetUnlimited(b bool) *EntitlementGrantUpdateOne {
+	eguo.mutation.SetUnlimited(b)
+	return eguo
+}
+
+// SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
+func (eguo *EntitlementGrantUpdateOne) SetNillableUnlimited(b *bool) *EntitlementGrantUpdateOne {
+	if b != nil {
+		eguo.SetUnlimited(*b)
+	}
 	return eguo
 }
 
@@ -510,6 +541,9 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	}
 	if eguo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := eguo.mutation.Unlimited(); ok {
+		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
 	}
 	if value, ok := eguo.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
