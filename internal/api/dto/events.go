@@ -398,7 +398,8 @@ type UsageAnalyticItem struct {
 	FeatureName          string                             `json:"name,omitempty"`
 	EventName            string                             `json:"event_name,omitempty"`
 	Source               string                             `json:"source,omitempty"`
-	Sources              []string                           `json:"sources,omitempty"` // List of sources when not grouping by source
+	Sources              []string                           `json:"sources,omitempty"`              // List of sources when not grouping by source
+	ExternalCustomerID   string                             `json:"external_customer_id,omitempty"` // Populated only when "external_customer_id" is a group_by dimension
 	Unit                 string                             `json:"unit,omitempty"`
 	UnitPlural           string                             `json:"unit_plural,omitempty"`
 	AggregationType      types.AggregationType              `json:"aggregation_type,omitempty"`

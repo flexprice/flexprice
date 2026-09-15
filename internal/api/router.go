@@ -66,6 +66,7 @@ type Handlers struct {
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
+	Analytics                *v1.AnalyticsHandler
 
 	// Enterprise handlers
 	SAML *saml.Handler
@@ -226,6 +227,14 @@ func NewRouter(
 			meterUsage.POST("/query", handlers.MeterUsage.QueryUsage)
 			meterUsage.POST("/analytics", handlers.MeterUsage.GetAnalytics)
 			meterUsage.POST("/detailed-analytics", handlers.MeterUsage.GetDetailedAnalytics)
+		}
+
+		// Analytics query + view endpoints
+		analytics := v1Private.Group("/analytics")
+		{
+			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
+			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
+			analytics.POST("/views/:id/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryView)
 		}
 
 		meters := v1Private.Group("/meters")

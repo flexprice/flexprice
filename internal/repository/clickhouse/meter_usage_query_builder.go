@@ -570,6 +570,11 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedGroupByColumns(params *events.Met
 			result.Columns = append(result.Columns, "source")
 			result.Aliases = append(result.Aliases, "source")
 			result.FieldMapping["source"] = "source"
+		case groupBy == "external_customer_id":
+			// Real, indexed column on meter_usage — select/group directly, no JSONExtract.
+			result.Columns = append(result.Columns, "external_customer_id")
+			result.Aliases = append(result.Aliases, "external_customer_id")
+			result.FieldMapping["external_customer_id"] = "external_customer_id"
 		case strings.HasPrefix(groupBy, "properties."):
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
 			if propertyName == "" || !validMeterUsageGroupByPattern.MatchString(propertyName) {
@@ -581,7 +586,7 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedGroupByColumns(params *events.Met
 			result.Aliases = append(result.Aliases, fmt.Sprintf("%s AS %s", jsonExpr, alias))
 			result.FieldMapping[groupBy] = alias
 		default:
-			return nil, fmt.Errorf("invalid group_by value: %s (allowed: meter_id, source, properties.<field>)", groupBy)
+			return nil, fmt.Errorf("invalid group_by value: %s (allowed: meter_id, source, external_customer_id, properties.<field>)", groupBy)
 		}
 	}
 
@@ -605,14 +610,31 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 	// Start with the base WHERE from the detailed params
 	where, args := qb.BuildDetailedWhereClause(params)
 
-	// Narrow to this specific group
-	if result.MeterID != "" {
+	// Narrow to this specific group. A structural dimension is constrained
+	// whenever it was in the aggregate query's GROUP BY (keyed off
+	// groupByResult, not result.X != ""), so a group whose value is empty —
+	// e.g. events with no external_customer_id — still gets its predicate. Using
+	// result.X != "" would drop the predicate for an empty group, letting the
+	// points query sum every value while the aggregate row holds only the empty
+	// group.
+	grouped := func(field string) bool {
+		if groupByResult == nil {
+			return false
+		}
+		_, ok := groupByResult.FieldMapping[field]
+		return ok
+	}
+	if grouped("meter_id") {
 		where += " AND meter_id = ?"
 		args = append(args, result.MeterID)
 	}
-	if result.Source != "" {
+	if grouped("source") {
 		where += " AND source = ?"
 		args = append(args, result.Source)
+	}
+	if grouped("external_customer_id") {
+		where += " AND external_customer_id = ?"
+		args = append(args, result.ExternalCustomerID)
 	}
 	for propName, propValue := range result.Properties {
 		if propValue != "" {

@@ -199,6 +199,106 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  analytics.Filter:
+    properties:
+      field:
+        type: string
+      op:
+        allOf:
+        - $ref: '#/definitions/types.FilterOperatorType'
+        enum:
+        - eq
+        - in
+      optional:
+        type: boolean
+      value:
+        items:
+          type: string
+        type: array
+    type: object
+  analytics.SortSpec:
+    properties:
+      dir:
+        $ref: '#/definitions/types.SortDirection'
+      field:
+        type: string
+    type: object
+  analytics.TimeSpecRaw:
+    properties:
+      grain:
+        $ref: '#/definitions/types.Grain'
+      range:
+        type: string
+    type: object
+  analytics.Variable:
+    properties:
+      default:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      required:
+        type: boolean
+      type:
+        allOf:
+        - $ref: '#/definitions/types.VariableType'
+        enum:
+        - date_range
+        - string
+        - string_list
+        - number
+        - enum
+        - boolean
+    required:
+    - type
+    type: object
+  analytics.ViewDefinition:
+    properties:
+      dimensions:
+        items:
+          type: string
+        type: array
+      filters:
+        items:
+          $ref: '#/definitions/analytics.Filter'
+        type: array
+      limit:
+        type: integer
+      metrics:
+        items:
+          $ref: '#/definitions/types.Metric'
+          enum:
+          - usage_quantity
+          - event_count
+        minItems: 1
+        type: array
+      name:
+        type: string
+      shape:
+        allOf:
+        - $ref: '#/definitions/types.Shape'
+        enum:
+        - timeseries
+        - breakdown
+      sort:
+        items:
+          $ref: '#/definitions/analytics.SortSpec'
+        type: array
+      time:
+        allOf:
+        - $ref: '#/definitions/analytics.TimeSpecRaw'
+        description: |-
+          Time is optional: an omitted range defaults to last_7_days (see
+          resolveTime), so it is intentionally not marked required.
+      variables:
+        items:
+          $ref: '#/definitions/analytics.Variable'
+        type: array
+    required:
+    - metrics
+    - shape
+    type: object
   costsheet.Filter:
     properties:
       costsheetIDs:
@@ -747,6 +847,50 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  AnalyticsColumn:
+    properties:
+      currency:
+        type: string
+      name:
+        type: string
+      role:
+        $ref: '#/definitions/types.ColumnRole'
+      type:
+        $ref: '#/definitions/types.ColumnType'
+    type: object
+  AnalyticsQueryMeta:
+    properties:
+      query_source:
+        type: string
+    type: object
+  AnalyticsQueryRequest:
+    properties:
+      definition:
+        $ref: '#/definitions/analytics.ViewDefinition'
+      variables:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+    required:
+    - definition
+    type: object
+  AnalyticsQueryResult:
+    properties:
+      columns:
+        items:
+          $ref: '#/definitions/AnalyticsColumn'
+        type: array
+      meta:
+        $ref: '#/definitions/AnalyticsQueryMeta'
+      rows:
+        items:
+          items:
+            type: string
+          type: array
+        type: array
     type: object
   AttributedToCustomerResult:
     properties:
@@ -2909,6 +3053,16 @@ definitions:
         $ref: '#/definitions/TenantResponse'
       type:
         $ref: '#/definitions/types.UserType'
+    type: object
+  CreateViewRequest:
+    properties:
+      definition:
+        $ref: '#/definitions/analytics.ViewDefinition'
+      name:
+        type: string
+    required:
+    - definition
+    - name
     type: object
   CreateWalletRequest:
     properties:
@@ -8098,6 +8252,9 @@ definitions:
         type: integer
       event_name:
         type: string
+      external_customer_id:
+        description: Populated only when "external_customer_id" is a group_by dimension
+        type: string
       feature:
         allOf:
         - $ref: '#/definitions/Feature'
@@ -8315,6 +8472,26 @@ definitions:
         $ref: '#/definitions/TenantResponse'
       type:
         $ref: '#/definitions/types.UserType'
+    type: object
+  ViewQueryRequest:
+    properties:
+      variables:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+    type: object
+  ViewResponse:
+    properties:
+      definition:
+        $ref: '#/definitions/analytics.ViewDefinition'
+      id:
+        type: string
+      name:
+        type: string
+      version:
+        type: integer
     type: object
   WalletBalanceResponse:
     properties:
@@ -9954,6 +10131,24 @@ definitions:
     x-enum-varnames:
     - CollectionMethodChargeAutomatically
     - CollectionMethodSendInvoice
+  types.ColumnRole:
+    enum:
+    - dimension
+    - metric
+    type: string
+    x-enum-varnames:
+    - ColumnRoleDimension
+    - ColumnRoleMetric
+  types.ColumnType:
+    enum:
+    - string
+    - decimal
+    - datetime
+    type: string
+    x-enum-varnames:
+    - ColumnTypeString
+    - ColumnTypeDecimal
+    - ColumnTypeDatetime
   types.CommitmentInfo:
     properties:
       amount:
@@ -10616,6 +10811,18 @@ definitions:
       value:
         type: string
     type: object
+  types.Grain:
+    enum:
+    - hour
+    - day
+    - week
+    - month
+    type: string
+    x-enum-varnames:
+    - GrainHour
+    - GrainDay
+    - GrainWeek
+    - GrainMonth
   types.GroupEntityType:
     enum:
     - price
@@ -10946,6 +11153,14 @@ definitions:
     x-enum-varnames:
     - MetadataCustomFieldSourceCustomer
     - MetadataCustomFieldSourceInvoice
+  types.Metric:
+    enum:
+    - usage_quantity
+    - event_count
+    type: string
+    x-enum-varnames:
+    - MetricUsageQuantity
+    - MetricEventCount
   types.ModifySubscriptionLineItem:
     properties:
       effective_date:
@@ -11584,6 +11799,14 @@ definitions:
       start_field_id:
         type: string
     type: object
+  types.Shape:
+    enum:
+    - timeseries
+    - breakdown
+    type: string
+    x-enum-varnames:
+    - ShapeTimeseries
+    - ShapeBreakdown
   types.SortCondition:
     properties:
       direction:
@@ -12223,6 +12446,22 @@ definitions:
     x-enum-varnames:
     - UserTypeUser
     - UserTypeServiceAccount
+  types.VariableType:
+    enum:
+    - date_range
+    - string
+    - string_list
+    - number
+    - enum
+    - boolean
+    type: string
+    x-enum-varnames:
+    - VariableTypeDateRange
+    - VariableTypeString
+    - VariableTypeStringList
+    - VariableTypeNumber
+    - VariableTypeEnum
+    - VariableTypeBoolean
   types.WalletConfig:
     properties:
       allowed_price_types:
@@ -13917,6 +14156,118 @@ paths:
       summary: Query alert settings
       tags:
       - AlertSettings
+      x-scope: read
+  /analytics/query:
+    post:
+      consumes:
+      - application/json
+      description: Resolves the given view definition against the supplied variables
+        and executes it.
+      operationId: queryAnalytics
+      parameters:
+      - description: Analytics query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/AnalyticsQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AnalyticsQueryResult'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Run an ad-hoc analytics query
+      tags:
+      - Analytics
+      x-scope: read
+  /analytics/views:
+    post:
+      consumes:
+      - application/json
+      description: Persists a named view definition that can later be queried by ID.
+      operationId: createAnalyticsView
+      parameters:
+      - description: View request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreateViewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ViewResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create an analytics view
+      tags:
+      - Analytics
+  /analytics/views/{id}/query:
+    post:
+      consumes:
+      - application/json
+      description: Resolves the view's definition against the supplied variables and
+        executes it.
+      operationId: queryAnalyticsView
+      parameters:
+      - description: View ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: View query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ViewQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AnalyticsQueryResult'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: View not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query an analytics view
+      tags:
+      - Analytics
       x-scope: read
   /checkout/sessions:
     post:

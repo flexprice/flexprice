@@ -191,6 +191,7 @@ func main() {
 			repository.NewWorkflowExecutionRepository,
 			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
+			repository.NewAnalyticsViewRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -287,6 +288,7 @@ func main() {
 			service.NewDashboardService,
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
+			service.NewAnalyticsService,
 		),
 	)
 
@@ -382,6 +384,7 @@ func provideHandlers(
 	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
+	analyticsService service.AnalyticsService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
@@ -437,6 +440,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
+		Analytics:                v1.NewAnalyticsHandler(analyticsService, logger),
 	}
 }
 

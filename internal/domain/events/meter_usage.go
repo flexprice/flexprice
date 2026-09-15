@@ -93,7 +93,7 @@ type MeterUsageDetailedAnalyticsParams struct {
 	FeatureIDs       []string
 	StartTime        time.Time
 	EndTime          time.Time
-	GroupBy          []string            // "source", "meter_id", "properties.<field>"
+	GroupBy          []string            // "source", "meter_id", "external_customer_id", "properties.<field>"
 	PropertyFilters  map[string][]string // e.g. {"model": ["gpt-4", "gpt-3.5"]}
 	Sources          []string
 	AggregationTypes []types.AggregationType // SUM, MAX, LATEST, COUNT_UNIQUE, COUNT
@@ -123,16 +123,18 @@ type MeterUsageDetailedAnalyticsParams struct {
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination
 type MeterUsageDetailedResult struct {
-	MeterID          string
-	Source           string
-	Sources          []string          // populated when source is NOT in group_by
-	Properties       map[string]string // property group-by values
-	TotalUsage       decimal.Decimal
-	MaxUsage         decimal.Decimal
-	LatestUsage      decimal.Decimal
-	CountUniqueUsage uint64
-	EventCount       uint64
-	Points           []MeterUsageDetailedPoint
+	MeterID string
+	Source  string
+	Sources []string // populated when source is NOT in group_by
+	// ExternalCustomerID is populated only when "external_customer_id" is in group_by.
+	ExternalCustomerID string
+	Properties         map[string]string // property group-by values
+	TotalUsage         decimal.Decimal
+	MaxUsage           decimal.Decimal
+	LatestUsage        decimal.Decimal
+	CountUniqueUsage   uint64
+	EventCount         uint64
+	Points             []MeterUsageDetailedPoint
 }
 
 // MeterUsageDetailedPoint is a single time-bucketed data point with all aggregation values

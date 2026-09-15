@@ -166,6 +166,33 @@ var (
 			},
 		},
 	}
+	// AnalyticsViewsColumns holds the columns for the "analytics_views" table.
+	AnalyticsViewsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "definition", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AnalyticsViewsTable holds the schema information for the "analytics_views" table.
+	AnalyticsViewsTable = &schema.Table{
+		Name:       "analytics_views",
+		Columns:    AnalyticsViewsColumns,
+		PrimaryKey: []*schema.Column{AnalyticsViewsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "analyticsview_tenant_id_environment_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{AnalyticsViewsColumns[1], AnalyticsViewsColumns[7], AnalyticsViewsColumns[2]},
+			},
+		},
+	}
 	// AuthsColumns holds the columns for the "auths" table.
 	AuthsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -2835,6 +2862,7 @@ var (
 		AddonAssociationsTable,
 		AlertLogsTable,
 		AlertSettingsTable,
+		AnalyticsViewsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,

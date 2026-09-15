@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
+	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -297,4 +298,8 @@ func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.
 
 func NewCheckoutSessionRepository(p RepositoryParams) checkout.Repository {
 	return entRepo.NewCheckoutSessionRepository(p.EntClient, p.Logger)
+}
+
+func NewAnalyticsViewRepository(p RepositoryParams) domainAnalytics.Repository {
+	return entRepo.NewAnalyticsViewRepository(p.EntClient, p.Logger)
 }

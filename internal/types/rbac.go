@@ -100,4 +100,5 @@ const (
 	EntityOAuth           Entity = "oauth"
 	EntityCheckoutSession Entity = "checkoutsession"
 	EntityWorkflow        Entity = "workflow"
+	EntityAnalytics       Entity = "analytics"
 )

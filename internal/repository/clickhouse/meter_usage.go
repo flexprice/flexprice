@@ -805,6 +805,8 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 				result.MeterID = value
 			case "source":
 				result.Source = value
+			case "external_customer_id":
+				result.ExternalCustomerID = value
 			default:
 				// Property group-by: extract property name from JSONExtractString expression
 				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
