@@ -1012,6 +1012,25 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		}
 	}
 
+	// Taxes for the whole page in one query, so a listed invoice carries the same tax_summary
+	// as the detail endpoint. Empty EntityIDs means "no filter" to the repo, hence the guard.
+	invoiceIDs := lo.Compact(lo.Map(items, func(inv *dto.InvoiceResponse, _ int) string { return inv.ID }))
+	if len(invoiceIDs) > 0 {
+		taxService := NewTaxService(s.ServiceParams)
+		taxFilter := types.NewNoLimitTaxAppliedFilter()
+		taxFilter.EntityType = types.TaxRateEntityTypeInvoice
+		taxFilter.EntityIDs = invoiceIDs
+		appliedTaxes, err := taxService.ListTaxApplied(ctx, taxFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		taxesByInvoice := lo.GroupBy(appliedTaxes.Items, func(tax *dto.TaxAppliedResponse) string { return tax.EntityID })
+		for _, inv := range items {
+			inv.WithTaxes(taxesByInvoice[inv.ID])
+		}
+	}
+
 	return &dto.ListInvoicesResponse{
 		Items: items,
 		Pagination: types.PaginationResponse{

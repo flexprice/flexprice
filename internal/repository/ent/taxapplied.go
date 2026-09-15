@@ -415,6 +415,11 @@ func (o TaxAppliedQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 		predicates = append(predicates, taxapplied.EntityID(f.EntityID))
 	}
 
+	// Apply entity IDs filter, for loading several entities' taxes in one query
+	if len(f.EntityIDs) > 0 {
+		predicates = append(predicates, taxapplied.EntityIDIn(f.EntityIDs...))
+	}
+
 	// Apply tax association ID filter
 	if f.TaxAssociationID != "" {
 		predicates = append(predicates, taxapplied.TaxAssociationID(f.TaxAssociationID))
