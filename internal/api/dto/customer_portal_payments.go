@@ -19,9 +19,10 @@ type PortalCheckoutParams struct {
 	// Authorisation for this one payment, given while the customer is present.
 	// Deliberately not persisted. Falls back to a link when no usable saved
 	// method exists or the charge declines — read payment_action, not the URL.
-	UseSavedMethod bool              `json:"use_saved_method,omitempty"`
-	IdempotencyKey *string           `json:"idempotency_key,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	UseSavedMethod        bool                         `json:"use_saved_method,omitempty"`
+	IdempotencyKey        *string                      `json:"idempotency_key,omitempty"`
+	Metadata              map[string]string            `json:"metadata,omitempty"`
+	EntityCreationOptions *types.EntityCreationOptions `json:"entity_creation_options,omitempty"`
 }
 
 // transaction_reason, expiry and priority are pinned server-side so a portal
@@ -60,6 +61,7 @@ type PortalCheckoutSessionResponse struct {
 	// the payment provider on this request — the read was debounced, or the gateway
 	// did not answer. Show "still checking" rather than presenting it as final.
 	Stale bool `json:"stale"`
+	EntityCreationResult *types.EntityCreationResult `json:"entity_creation_result,omitempty"`
 }
 
 type PortalTopUpWalletResponse struct {
