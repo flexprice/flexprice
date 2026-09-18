@@ -79,7 +79,10 @@ type AddAddonToSubscriptionRequest struct {
 	Cadence           types.AddonCadence      `json:"cadence"`
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         *time.Time              `json:"start_date,omitempty"`
-	Metadata          map[string]interface{}  `json:"metadata"`
+	// ChangeAt names when the attach applies without computing a date. Mutually exclusive
+	// with StartDate; omit both to attach now.
+	ChangeAt *types.ScheduleType    `json:"change_at,omitempty"`
+	Metadata map[string]interface{} `json:"metadata"`
 
 	// LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
@@ -121,6 +124,18 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 func (r *AddAddonToSubscriptionRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ChangeAt != nil {
+		if err := r.ChangeAt.Validate(); err != nil {
+			return err
+		}
+		if r.StartDate != nil {
+			return ierr.NewError("change_at and start_date are mutually exclusive").
+				WithHint("Provide change_at for immediate or end_of_period, or start_date for any other date").
+				WithReportableDetails(map[string]any{"addon_id": r.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Default to recurring when not provided for backward compatibility.

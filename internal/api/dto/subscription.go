@@ -636,15 +636,34 @@ type RemoveAddonRequest struct {
 	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	// EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+	// ChangeAt names when the removal applies without computing a date. Mutually exclusive
+	// with EffectiveDate; omit both to remove at period end.
+	ChangeAt *types.ScheduleType `json:"change_at,omitempty"`
 
 	// PreviewOnly quotes the removal without writing anything. Server-set: callers reach it
 	// through the preview endpoint, never by sending it.
 	PreviewOnly bool `json:"-"`
+
+	// SkipPendingCheckoutGuard lets a checkout completion apply the removals its own pending
+	// session gated. Server-set; never sent by callers.
+	SkipPendingCheckoutGuard bool `json:"-"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ChangeAt != nil {
+		if err := r.ChangeAt.Validate(); err != nil {
+			return err
+		}
+		if r.EffectiveDate != nil {
+			return ierr.NewError("change_at and effective_date are mutually exclusive").
+				WithHint("Provide change_at for immediate or end_of_period, or effective_date for any other date").
+				WithReportableDetails(map[string]any{"addon_association_id": r.AddonAssociationID}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 	if r.ProrationBehavior != "" {
 		if err := r.ProrationBehavior.Validate(); err != nil {

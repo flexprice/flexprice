@@ -320,6 +320,81 @@ func (r *SubModifyAddonParams) Validate() error {
 	}
 }
 
+const maxAddonBatchEntries = 20
+
+// SubModifyBulkAddonParams adds and removes several addons as one change, settled as one netted
+// document. Entries are the single-addon requests verbatim, so every per-entry rule is shared.
+// Reached through type "addon" by sending addon_bulk_params instead of addon_params.
+type SubModifyBulkAddonParams struct {
+	Adds    []*AddAddonToSubscriptionRequest `json:"adds,omitempty"`
+	Removes []*RemoveAddonRequest            `json:"removes,omitempty"`
+}
+
+func (p *SubModifyBulkAddonParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("addon_bulk_params is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	total := len(p.Adds) + len(p.Removes)
+	if total == 0 {
+		return ierr.NewError("at least one add or remove is required").
+			WithHint("Provide adds and/or removes with at least one entry").
+			Mark(ierr.ErrValidation)
+	}
+	if total > maxAddonBatchEntries {
+		return ierr.NewError("too many addon entries in one request").
+			WithHintf("An addon batch accepts at most %d entries across adds and removes", maxAddonBatchEntries).
+			WithReportableDetails(map[string]any{"count": total, "max": maxAddonBatchEntries}).
+			Mark(ierr.ErrValidation)
+	}
+
+	for i, add := range p.Adds {
+		if add == nil {
+			return ierr.NewError("add entry must not be null").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := add.Validate(); err != nil {
+			return err
+		}
+		if add.StartDate != nil && add.StartDate.IsZero() {
+			return ierr.NewError("start_date must not be zero").
+				WithHint("Omit start_date to attach now, or provide a real timestamp").
+				WithReportableDetails(map[string]any{"index": i, "addon_id": add.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	seen := make(map[string]struct{}, len(p.Removes))
+	for i, remove := range p.Removes {
+		if remove == nil {
+			return ierr.NewError("remove entry must not be null").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := remove.Validate(); err != nil {
+			return err
+		}
+		if _, ok := seen[remove.AddonAssociationID]; ok {
+			return ierr.NewError("duplicate addon_association_id in removes").
+				WithHint("Each addon association can be removed at most once per request").
+				WithReportableDetails(map[string]any{"index": i, "addon_association_id": remove.AddonAssociationID}).
+				Mark(ierr.ErrValidation)
+		}
+		seen[remove.AddonAssociationID] = struct{}{}
+
+		if remove.EffectiveDate != nil && remove.EffectiveDate.IsZero() {
+			return ierr.NewError("effective_date must not be zero").
+				WithHint("Omit effective_date to remove at period end, or provide a real timestamp").
+				WithReportableDetails(map[string]any{"index": i, "addon_association_id": remove.AddonAssociationID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of the *Params fields must be set, matching the type.
@@ -333,6 +408,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
 	AddonParams            *SubModifyAddonParams            `json:"addon_params,omitempty"`
+	BulkAddonParams        *SubModifyBulkAddonParams        `json:"addon_bulk_params,omitempty"`
 	Checkout               *CheckoutParams                  `json:"checkout,omitempty"`
 }
 
@@ -376,12 +452,23 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 		}
 		err = r.TaxParams.Validate()
 	case SubscriptionModifyTypeAddon:
-		if r.AddonParams == nil {
-			return ierr.NewError("addon_params is required for type 'addon'").
-				WithHint("Provide addon_params with an action of add or remove").
+		// One addon or several: addon_params changes a single addon, addon_bulk_params
+		// changes a set of them as one netted document. Exactly one of the two.
+		switch {
+		case r.AddonParams != nil && r.BulkAddonParams != nil:
+			return ierr.NewError("addon_params and addon_bulk_params are mutually exclusive").
+				WithHint("Send addon_params to change one addon, or addon_bulk_params to change several").
+				Mark(ierr.ErrValidation)
+		case r.BulkAddonParams != nil:
+			err = r.BulkAddonParams.Validate()
+		case r.AddonParams != nil:
+			err = r.AddonParams.Validate()
+		default:
+			return ierr.NewError("addon_params or addon_bulk_params is required for type 'addon'").
+				WithHint("Provide addon_params with an action of add or remove, " +
+					"or addon_bulk_params with at least one add or remove").
 				Mark(ierr.ErrValidation)
 		}
-		err = r.AddonParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
 			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, addon").
@@ -407,7 +494,8 @@ func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.Type == SubscriptionModifyTypeAddon && r.AddonParams.Action == SubscriptionModificationActionRemove {
+	if r.Type == SubscriptionModifyTypeAddon && r.AddonParams != nil &&
+		r.AddonParams.Action == SubscriptionModificationActionRemove {
 		return ierr.NewError("checkout is not supported when removing an addon").
 			WithHint("Removing an addon issues a credit, so there is no payment to collect").
 			Mark(ierr.ErrValidation)

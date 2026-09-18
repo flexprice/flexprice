@@ -401,6 +401,12 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.AddonCadence'
+      change_at:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleType'
+        description: |-
+          ChangeAt names when the attach applies without computing a date. Mutually exclusive
+          with StartDate; omit both to attach now.
       checkout:
         $ref: '#/definitions/CheckoutParams'
       line_item_commitments:
@@ -434,6 +440,12 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.AddonCadence'
+      change_at:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleType'
+        description: |-
+          ChangeAt names when the attach applies without computing a date. Mutually exclusive
+          with StartDate; omit both to attach now.
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
@@ -3604,6 +3616,8 @@ definitions:
         type: string
       id:
         type: string
+      ingested_at:
+        type: string
       properties:
         additionalProperties: true
         type: object
@@ -3630,6 +3644,8 @@ definitions:
     type: object
   ExecuteSubscriptionModifyRequest:
     properties:
+      addon_bulk_params:
+        $ref: '#/definitions/SubModifyBulkAddonParams'
       addon_params:
         $ref: '#/definitions/SubModifyAddonParams'
       checkout:
@@ -3854,6 +3870,10 @@ definitions:
         $ref: '#/definitions/DebugTracker'
       event:
         $ref: '#/definitions/Event'
+      events:
+        items:
+          $ref: '#/definitions/Event'
+        type: array
       processed_events:
         items:
           $ref: '#/definitions/FeatureUsageInfo'
@@ -5736,6 +5756,12 @@ definitions:
     properties:
       addon_association_id:
         type: string
+      change_at:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleType'
+        description: |-
+          ChangeAt names when the removal applies without computing a date. Mutually exclusive
+          with EffectiveDate; omit both to remove at period end.
       effective_date:
         description: EffectiveDate defaults to period end when nil; mid-period with
           create_prorations issues a wallet credit.
@@ -5852,6 +5878,17 @@ definitions:
         $ref: '#/definitions/RemoveAddonRequest'
     required:
     - action
+    type: object
+  SubModifyBulkAddonParams:
+    properties:
+      adds:
+        items:
+          $ref: '#/definitions/AddAddonToSubscriptionRequest'
+        type: array
+      removes:
+        items:
+          $ref: '#/definitions/RemoveAddonRequest'
+        type: array
     type: object
   SubModifyCouponAction:
     enum:
@@ -9481,6 +9518,10 @@ definitions:
         items:
           $ref: '#/definitions/types.AddAddonRef'
         type: array
+      removes:
+        items:
+          $ref: '#/definitions/types.RemoveAddonRef'
+        type: array
       subscription_id:
         type: string
     type: object
@@ -11377,6 +11418,17 @@ definitions:
     x-enum-varnames:
     - RejectedEventReasonNoMeterForName
     - RejectedEventReasonNoMatchingMeter
+  types.RemoveAddonRef:
+    properties:
+      association_id:
+        type: string
+      effective_date:
+        type: string
+      proration_behavior:
+        $ref: '#/definitions/types.ProrationBehavior'
+      reason:
+        type: string
+    type: object
   types.ReportingUnit:
     properties:
       conversion_rate:
@@ -11637,14 +11689,14 @@ definitions:
   types.SubscriptionChangeEntityType:
     enum:
     - plan
-    - addon
+    - addon_association
     - credit_grant
     - entitlement
     - entitlement_grant
     type: string
     x-enum-varnames:
     - SubscriptionChangeEntityTypePlan
-    - SubscriptionChangeEntityTypeAddon
+    - SubscriptionChangeEntityTypeAddonAssociation
     - SubscriptionChangeEntityTypeCreditGrant
     - SubscriptionChangeEntityTypeEntitlement
     - SubscriptionChangeEntityTypeEntitlementGrant
@@ -19042,7 +19094,8 @@ paths:
       consumes:
       - application/json
       description: Execute a mid-cycle subscription modification (inheritance, quantity
-        change, grouped invoicing, trial end, coupon, tax, or addon add/remove).
+        change, grouped invoicing, trial end, coupon, tax, a single addon add/remove,
+        or a batch of addon adds and removes settled as one netted document).
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -19086,8 +19139,8 @@ paths:
       consumes:
       - application/json
       description: Preview the impact of a mid-cycle subscription modification (inheritance,
-        quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove)
-        without committing changes.
+        quantity change, grouped invoicing, trial end, coupon, tax, a single addon
+        add/remove, or a batch of addon adds and removes) without committing changes.
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID

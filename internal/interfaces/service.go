@@ -127,9 +127,6 @@ type SubscriptionService interface {
 	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
 
-	AttachAddon(ctx context.Context, sub *subscription.Subscription, req *dto.AddAddonToSubscriptionRequest, checkout *dto.CheckoutParams) (*dto.AddonChangeResult, error)
-	DetachAddon(ctx context.Context, req *dto.RemoveAddonRequest, subscriptionID string) (*dto.AddonChangeResult, error)
-
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)

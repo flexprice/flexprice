@@ -23,17 +23,18 @@ const entitlementGrantQuotaScale = 15
 type grantProrationSource string
 
 const (
-	grantProrationSourceAddonAttach grantProrationSource = "addon_attach"
-	grantProrationSourceAddonDetach grantProrationSource = "addon_detach"
+	grantProrationSourceAddonAttach  grantProrationSource = "addon_attach"
+	grantProrationSourceAddonDetach  grantProrationSource = "addon_detach"
+	grantProrationSourceAddonsModify grantProrationSource = "addons_modify"
 )
 
 func (s grantProrationSource) String() string { return string(s) }
 
-func (s *subscriptionService) resolveGrantProration(
+func (s *subscriptionGrantService) resolveGrantProration(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	incomingECs []*entitlement.Entitlement,
-	existingByFeature map[string][]*entitlement.Entitlement,
+	survivingByFeature map[string][]*entitlement.Entitlement,
 	effectiveDate time.Time,
 	behavior types.ProrationBehavior,
 	source grantProrationSource,
@@ -113,7 +114,7 @@ func (s *subscriptionService) resolveGrantProration(
 		}
 
 		coverageStart := effectiveDate
-		if len(existingByFeature[featureID]) > 0 {
+		if len(survivingByFeature[featureID]) > 0 {
 			coverageStart = p.Start
 		}
 
@@ -140,85 +141,6 @@ func (s *subscriptionService) resolveGrantProration(
 	return grants, nil
 }
 
-// materialiseEntitlementGrants writes the resolved grants for the cycle: it closes every
-// live window of the features the change touches, then builds the open requests for the
-// ones this path owns.
-func (s *subscriptionService) materialiseEntitlementGrants(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	newGrants []*entitlementgrant.EntitlementGrant,
-	incomingECs []*entitlement.Entitlement,
-	existingByFeature map[string][]*entitlement.Entitlement,
-	effectiveDate time.Time,
-) error {
-	incomingByFeature := lo.GroupBy(
-		lo.Filter(incomingECs, func(ec *entitlement.Entitlement, _ int) bool {
-			return ec != nil && ec.HasGrantConfig()
-		}),
-		func(ec *entitlement.Entitlement) string { return ec.FeatureID },
-	)
-	if len(incomingByFeature) == 0 {
-		return nil
-	}
-
-	at := types.LatestOf(effectiveDate, time.Now().UTC())
-	liveByFeature, err := s.liveGrantsByFeature(ctx, sub, at)
-	if err != nil {
-		return err
-	}
-
-	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-
-	// Close every live window of every feature the change touches, not only the ones this
-	// path reopens. A window this path does not own — a day cadence, or a parallel slot —
-	// would otherwise hold its slot until it expires and hide the incoming quota until
-	// then. Closing hands the slot back to the tick, which reopens it at the config's full quota.
-	toClose := make([]*entitlementgrant.EntitlementGrant, 0, len(incomingByFeature))
-	for featureID := range incomingByFeature {
-		toClose = append(toClose, liveByFeature[featureID]...)
-	}
-
-	closedByID, err := grantSvc.CloseEntitlementGrants(ctx, toClose, at)
-	if err != nil {
-		return err
-	}
-
-	reqs := make([]OpenFeatureBasedEntitlementGrantsRequest, 0, len(newGrants))
-	for _, g := range newGrants {
-		featureID := g.FeatureID()
-		incoming := incomingByFeature[featureID]
-		existing := existingByFeature[featureID]
-
-		if !shouldOpenGrantManually(append(append([]*entitlement.Entitlement{}, existing...), incoming...)) {
-			continue
-		}
-
-		req := OpenFeatureBasedEntitlementGrantsRequest{
-			FeatureID:   featureID,
-			New:         g,
-			ExistingECs: existing,
-			IncomingECs: incoming,
-		}
-
-		// Stamp the successor onto the window that was actually written, so the segments
-		// tile. A feature with no live row keeps the resolved window.
-		if live := lo.FirstOrEmpty(liveByFeature[featureID]); live != nil {
-			req.Closed = closedByID[live.ID]
-			req.New = entitlementgrant.NewEntitlementGrantBuilder(g).
-				WithWindow(req.Closed.ValidTo, g.ValidTo).
-				Build()
-		}
-
-		reqs = append(reqs, req)
-	}
-	if len(reqs) == 0 {
-		return nil
-	}
-
-	_, err = grantSvc.OpenFeatureBasedEntitlementGrants(ctx, reqs)
-	return err
-}
-
 func shouldOpenGrantManually(featureECs []*entitlement.Entitlement) bool {
 	if len(featureECs) == 0 {
 		return false
@@ -231,48 +153,142 @@ func shouldOpenGrantManually(featureECs []*entitlement.Entitlement) bool {
 	})
 }
 
-// handleGrantsForRemovedECs settles the grant windows the removed ECs fed. A parallel EC owns
-// its slot outright, so its row is closed and nothing succeeds it. An additive feature pools
-// the removed quota with whatever else feeds it: the live row is closed and, while any EC
-// survives, a successor carries the remaining balance through the rest of the window.
-// No-op when the removal is future-dated, since no window is live at that instant.
-func (s *subscriptionService) handleGrantsForRemovedECs(
+// applyEntitlementGrantChange settles the whole change in one pass: every window the batch
+// ends is closed together, and every successor is opened together. A feature touched by both
+// a removal and an addition is one decision, so it closes once and opens once.
+func (s *subscriptionGrantService) applyEntitlementGrantChange(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	removedECs []*entitlement.Entitlement,
-	effectiveDate time.Time,
-	source grantProrationSource,
+	cfg *GrantChangeConfig,
 ) error {
-	if s.EntitlementGrantRepo == nil || len(removedECs) == 0 {
+	if cfg == nil || s.EntitlementGrantRepo == nil {
 		return nil
 	}
 
-	removedByFeature := lo.GroupBy(
-		lo.Filter(removedECs, func(ec *entitlement.Entitlement, _ int) bool {
+	incomingByFeature := lo.GroupBy(
+		lo.Filter(cfg.incomingECs, func(ec *entitlement.Entitlement, _ int) bool {
 			return ec != nil && ec.HasGrantConfig()
 		}),
 		func(ec *entitlement.Entitlement) string { return ec.FeatureID },
 	)
-	if len(removedByFeature) == 0 {
+	if len(incomingByFeature) == 0 && len(cfg.entitlementsToRemove) == 0 {
 		return nil
 	}
 
-	// See materialiseEntitlementGrants: a removal dated in the past cannot re-cut windows
-	// that have already been measured and succeeded.
-	at := types.LatestOf(effectiveDate, time.Now().UTC())
-	liveByFeature, err := s.liveGrantsByFeature(ctx, sub, at)
+	at := cfg.entitlementChangeAt
+	liveByFeature, err := s.liveGrantsByFeature(ctx, cfg.sub, at)
 	if err != nil {
 		return err
 	}
 
-	ecsByFeature, err := s.GetSubscriptionGrantECsByFeature(ctx, sub)
+	toClose, carryForward := s.removalClosures(ctx, cfg, liveByFeature)
+
+	// Close every live window of every feature an addition touches, not only the ones this
+	// path reopens. A window this path does not own — a day cadence, or a parallel slot —
+	// would otherwise hold its slot until it expires and hide the incoming quota until then.
+	for featureID := range incomingByFeature {
+		toClose = append(toClose, liveByFeature[featureID]...)
+	}
+
+	grantSvc := NewEntitlementGrantService(s.ServiceParams)
+
+	// A feature with both directions names its pooled row twice.
+	closedByID, err := grantSvc.CloseEntitlementGrants(ctx, lo.UniqBy(lo.Compact(toClose),
+		func(g *entitlementgrant.EntitlementGrant) string { return g.ID }), at)
 	if err != nil {
 		return err
 	}
+
+	reqs := make([]OpenFeatureBasedEntitlementGrantsRequest, 0, len(cfg.entitlementGrantsToAdd)+len(carryForward))
+	for _, grantToAdd := range cfg.entitlementGrantsToAdd {
+		featureID := grantToAdd.FeatureID()
+
+		// The addition owns this feature's successor: it carries the survivors forward itself,
+		// so the removal must not open a second row for the same slot.
+		delete(carryForward, featureID)
+
+		incoming := incomingByFeature[featureID]
+		surviving := cfg.survivingECsByFeature[featureID]
+		if !shouldOpenGrantManually(append(append([]*entitlement.Entitlement{}, surviving...), incoming...)) {
+			continue
+		}
+
+		req := OpenFeatureBasedEntitlementGrantsRequest{
+			FeatureID:   featureID,
+			New:         grantToAdd,
+			ExistingECs: surviving,
+			IncomingECs: incoming,
+		}
+
+		predecessorGrant := lo.FirstOrEmpty(liveByFeature[featureID])
+		if closed := closedByID[predecessorGrant.GetID()]; closed != nil {
+			if len(surviving) > 0 {
+				// Stamp the successor onto the window that was actually written, so the
+				// segments tile and the predecessor's unspent balance carries.
+				req.Closed = closed
+				req.New = entitlementgrant.NewEntitlementGrantBuilder(grantToAdd).
+					WithWindow(closed.ValidTo, grantToAdd.ValidTo).
+					Build()
+			} else {
+				// Nothing funds the feature any more, so the balance dies with the configs that
+				// bought it — the successor only tiles. LatestOf, because a never-evaluated
+				// window is deleted rather than closed and its boundary is its own start: the
+				// successor must not be dragged back to span it.
+				req.New = entitlementgrant.NewEntitlementGrantBuilder(grantToAdd).
+					WithWindow(types.LatestOf(grantToAdd.ValidFrom, closed.ValidTo), grantToAdd.ValidTo).
+					Build()
+			}
+		}
+
+		reqs = append(reqs, req)
+	}
+
+	for featureID, pooled := range carryForward {
+		closed := closedByID[pooled.ID]
+		if closed == nil {
+			continue
+		}
+
+		// Zero delta: the successor's quota is whatever the closed window had left.
+		reqs = append(reqs, OpenFeatureBasedEntitlementGrantsRequest{
+			FeatureID: featureID,
+			Closed:    closed,
+			New: entitlementgrant.NewEntitlementGrantBuilder(pooled).
+				WithQuota(decimal.Zero).
+				WithWindow(closed.ValidTo, pooled.ValidTo).
+				WithMetadata(types.Metadata{
+					"proration_source":   grantProrationSourceAddonsModify.String(),
+					"carry_forward_from": pooled.ID,
+				}).
+				Build(),
+			ExistingECs: cfg.survivingECsByFeature[featureID],
+		})
+	}
+	if len(reqs) == 0 {
+		return nil
+	}
+
+	_, err = grantSvc.OpenFeatureBasedEntitlementGrants(ctx, reqs)
+	return err
+}
+
+// removalClosures decides what the leaving configs settle, writing nothing: the windows to end,
+// and per feature the pooled row a successor must carry forward. A parallel EC owns its slot
+// outright, so its row ends with no successor; an additive feature pools with whatever else
+// feeds it, so its row ends and the survivors carry the remaining balance.
+func (s *subscriptionGrantService) removalClosures(
+	ctx context.Context,
+	cfg *GrantChangeConfig,
+	liveByFeature map[string][]*entitlementgrant.EntitlementGrant,
+) ([]*entitlementgrant.EntitlementGrant, map[string]*entitlementgrant.EntitlementGrant) {
+	removedByFeature := lo.GroupBy(
+		lo.Filter(cfg.entitlementsToRemove, func(ec *entitlement.Entitlement, _ int) bool {
+			return ec != nil && ec.HasGrantConfig()
+		}),
+		func(ec *entitlement.Entitlement) string { return ec.FeatureID },
+	)
 
 	toClose := make([]*entitlementgrant.EntitlementGrant, 0, len(removedByFeature))
-	pooledByFeature := make(map[string]*entitlementgrant.EntitlementGrant, len(removedByFeature))
-	survivingByFeature := make(map[string][]*entitlement.Entitlement, len(removedByFeature))
+	carryForward := make(map[string]*entitlementgrant.EntitlementGrant, len(removedByFeature))
 
 	for featureID, removed := range removedByFeature {
 		live := liveByFeature[featureID]
@@ -299,7 +315,7 @@ func (s *subscriptionService) handleGrantsForRemovedECs(
 		// configs and hand back quota the pool already consumed.
 		if pooled.Remaining().IsZero() {
 			s.Logger.Info(ctx, "keeping the spent entitlement grant window open; nothing to carry forward",
-				"subscription_id", sub.ID,
+				"subscription_id", cfg.sub.ID,
 				"grant_id", pooled.ID,
 				"feature_id", featureID,
 				"quota", pooled.Quota.String(),
@@ -309,56 +325,12 @@ func (s *subscriptionService) handleGrantsForRemovedECs(
 
 		toClose = append(toClose, pooled)
 
-		// all ECs that are not removed
-		surviving := lo.Filter(ecsByFeature[featureID], func(ec *entitlement.Entitlement, _ int) bool {
-			return ec != nil && !removedIDs[ec.ID]
-		})
-		if len(surviving) == 0 {
-			continue
+		if len(cfg.survivingECsByFeature[featureID]) > 0 {
+			carryForward[featureID] = pooled
 		}
-
-		pooledByFeature[featureID] = pooled
-		survivingByFeature[featureID] = surviving
-	}
-	if len(toClose) == 0 {
-		return nil
 	}
 
-	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-
-	closedByID, err := grantSvc.CloseEntitlementGrants(ctx, toClose, at)
-	if err != nil {
-		return err
-	}
-
-	reqs := make([]OpenFeatureBasedEntitlementGrantsRequest, 0, len(pooledByFeature))
-	for featureID, pooled := range pooledByFeature {
-		closed := closedByID[pooled.ID]
-		if closed == nil {
-			continue
-		}
-
-		// Zero delta: the successor's quota is whatever the closed window had left.
-		reqs = append(reqs, OpenFeatureBasedEntitlementGrantsRequest{
-			FeatureID: featureID,
-			Closed:    closed,
-			New: entitlementgrant.NewEntitlementGrantBuilder(pooled).
-				WithQuota(decimal.Zero).
-				WithWindow(closed.ValidTo, pooled.ValidTo).
-				WithMetadata(types.Metadata{
-					"proration_source":   source.String(),
-					"carry_forward_from": pooled.ID,
-				}).
-				Build(),
-			ExistingECs: survivingByFeature[featureID],
-		})
-	}
-	if len(reqs) == 0 {
-		return nil
-	}
-
-	_, err = grantSvc.OpenFeatureBasedEntitlementGrants(ctx, reqs)
-	return err
+	return toClose, carryForward
 }
 
 // -----------------------------------------------------------------------------
@@ -368,11 +340,11 @@ func (s *subscriptionService) handleGrantsForRemovedECs(
 // GetSubscriptionGrantECsByFeature is the subscription's grant ECs grouped by feature —
 // the set that decides slot ownership and the cold-start quota. Called before the incoming
 // ECs are persisted, so they are absent from the result.
-func (s *subscriptionService) GetSubscriptionGrantECsByFeature(
+func (s *subscriptionGrantService) GetSubscriptionGrantECsByFeature(
 	ctx context.Context,
 	sub *subscription.Subscription,
 ) (map[string][]*entitlement.Entitlement, error) {
-	ents, err := s.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+	ents, err := NewSubscriptionService(s.ServiceParams).GetSubscriptionEntitlementsForSubscription(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +364,7 @@ func (s *subscriptionService) GetSubscriptionGrantECsByFeature(
 // liveGrantsByFeature returns the subscription's feature-scoped grant rows whose window
 // contains `at`, grouped by feature. Windows already closed before `at` are excluded by the
 // query, so each slot yields the one segment that is actually live.
-func (s *subscriptionService) liveGrantsByFeature(
+func (s *subscriptionGrantService) liveGrantsByFeature(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	at time.Time,

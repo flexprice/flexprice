@@ -49,6 +49,14 @@ func (g *EntitlementGrant) FeatureID() string {
 	return g.ScopeEntityID
 }
 
+func (g *EntitlementGrant) GetID() string {
+	if g == nil {
+		return ""
+	}
+
+	return g.ID
+}
+
 // Window returns the half-open [valid_from, valid_to) grant window.
 func (g *EntitlementGrant) Window() (time.Time, time.Time) {
 	if g == nil {

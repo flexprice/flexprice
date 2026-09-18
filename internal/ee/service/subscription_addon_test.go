@@ -8,11 +8,13 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -600,11 +602,14 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutNetCharge_PersistsOnlyPe
 		ProrationBehavior: types.ProrationBehaviorCreateProrations,
 	}
 
-	plan, err := subService.createAddonAttachParams(ctx, sub, req, nil)
+	config, err := NewAddonChangeService(subService.ServiceParams).Resolve(ctx, AddonChangeRequest{
+		Subscription: sub,
+		Adds:         []AddonAdd{{Request: req}},
+	})
 	s.Require().NoError(err)
 
-	summary, err := subService.calculateAddonProration(ctx, plan)
-	s.Require().NoError(err)
+	plan := config.getAttaches()[0]
+	summary := config.getQuote()
 	s.True(summary.TotalChargeAmount.GreaterThan(decimal.Zero),
 		"a mid-period fixed ADVANCE addon must produce a charge to gate on")
 
@@ -842,7 +847,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutSessionCreateFailure_Arc
 // Completion & cleanup
 // ─────────────────────────────────────────────
 
-// seedPayFirstAddonCheckout reproduces the state settleAddAddonPayFirst leaves behind —
+// seedPayFirstAddonCheckout reproduces the state a single-addon ExecutePayFirst leaves behind —
 // pending association, DRAFT proration invoice, INITIATED payment, pending session — without
 // going through the provider, which needs a live Razorpay connection.
 func (s *SubscriptionServiceSuite) seedPayFirstAddonCheckout(
@@ -861,11 +866,14 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonCheckout(
 		ProrationBehavior: types.ProrationBehaviorCreateProrations,
 	}
 
-	attach, err := subService.createAddonAttachParams(ctx, sub, req, nil)
+	config, err := NewAddonChangeService(subService.ServiceParams).Resolve(ctx, AddonChangeRequest{
+		Subscription: sub,
+		Adds:         []AddonAdd{{Request: req}},
+	})
 	s.Require().NoError(err)
 
-	summary, err := subService.calculateAddonProration(ctx, attach)
-	s.Require().NoError(err)
+	attach := config.getAttaches()[0]
+	summary := config.getQuote()
 	s.Require().True(summary.TotalChargeAmount.GreaterThan(decimal.Zero))
 
 	pending := attach.getAssociation()
@@ -1069,4 +1077,578 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupLeavesActivatedAs
 	s.Require().NoError(err)
 	s.Equal(types.AddonStatusActive, stored.AddonStatus)
 	s.Equal(types.StatusPublished, stored.Status, "a live addon must survive a late session expiry")
+}
+
+// =============================================================================
+// Characterisation: today's addon attach/detach entity footprint
+// =============================================================================
+
+// Characterisation baseline for addon attach/detach (plan Group A / PR A1).
+//
+// Each test drives ONE change through the real path and then asserts the whole entity
+// footprint it leaves behind — association, line items, credit grants, entitlement grants
+// and the money — rather than the one entity the change is nominally about. The batch
+// refactor moves all five of these across service boundaries at once, so a test that pins
+// only one of them cannot tell a clean move from a dropped write.
+
+// -----------------------------------------------------------------------------
+// fixtures
+// -----------------------------------------------------------------------------
+
+// fullFeaturedAddon carries everything one attach can touch: a fixed ADVANCE price (so it
+// prorates), a metered entitlement on featureID (entitlement grants) and a recurring
+// credit grant template (credit grants).
+func (s *SubscriptionServiceSuite) seedFullFeaturedAddon(addonID, ecID, featureID string, amount int64, quota int64) {
+	ctx := s.GetContext()
+
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      addonID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_" + addonID,
+		Amount:             decimal.NewFromInt(amount),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	s.seedGrantEC(ecID, featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, addonID, quota,
+		types.EntitlementAggregationModeAdditive)
+
+	_, err := NewCreditGrantService(s.service.(*subscriptionService).ServiceParams).
+		CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+			Name:           addonID + " credits",
+			Scope:          types.CreditGrantScopeAddon,
+			AddonID:        lo.ToPtr(addonID),
+			Credits:        decimal.NewFromInt(100),
+			Cadence:        types.CreditGrantCadenceRecurring,
+			Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+			PeriodCount:    lo.ToPtr(1),
+			ExpirationType: types.CreditGrantExpiryTypeBillingCycle,
+			Priority:       lo.ToPtr(1),
+		})
+	s.Require().NoError(err)
+}
+
+// grantsFromAddon returns the SUBSCRIPTION-scoped credit grants materialised from addonID.
+func (s *SubscriptionServiceSuite) grantsFromAddon(addonID string) []*creditgrant.CreditGrant {
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	grants, err := s.GetStores().CreditGrantRepo.List(s.GetContext(), filter)
+	s.Require().NoError(err)
+
+	return lo.Filter(grants, func(g *creditgrant.CreditGrant, _ int) bool {
+		return lo.FromPtr(g.AddonID) == addonID
+	})
+}
+
+// prorationCredits returns only the wallet transactions settlement raises. Credit-grant
+// applications top up under the same transaction reason, so the proration source tag on the
+// metadata is what separates the two.
+func (s *SubscriptionServiceSuite) prorationCredits() []*wallet.Transaction {
+	ctx := s.GetContext()
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, s.testData.customer.ID)
+	s.Require().NoError(err)
+
+	credits := make([]*wallet.Transaction, 0)
+	for _, w := range wallets {
+		filter := types.NewNoLimitWalletTransactionFilter()
+		filter.WalletID = lo.ToPtr(w.ID)
+		txns, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+		s.Require().NoError(err)
+
+		credits = append(credits, lo.Filter(txns, func(t *wallet.Transaction, _ int) bool {
+			return t.TransactionReason == types.TransactionReasonSubscriptionCredit &&
+				t.Metadata["source"] == "subscription_change_proration"
+		})...)
+	}
+	return credits
+}
+
+// monthlyPeriodSubscription widens the shared 7-day fixture window to a whole month, so a
+// monthly addon price is prorated against a period it fits in and the numbers are readable.
+func (s *SubscriptionServiceSuite) monthlyPeriodSubscription() *subscription.Subscription {
+	sub := s.testData.subscription
+	sub.CurrentPeriodEnd = sub.CurrentPeriodStart.AddDate(0, 1, 0)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+	return sub
+}
+
+// -----------------------------------------------------------------------------
+// attach
+// -----------------------------------------------------------------------------
+
+// One mid-period attach, every entity it writes. Anything this test stops seeing after the
+// refactor is a write the new orchestrator dropped.
+func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootprint() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	addonID := "addon_char_attach"
+	featureID := s.seedGrantFeature("feat_char_attach")
+	s.seedFullFeaturedAddon(addonID, "ent_char_attach", featureID, 30, 400)
+
+	// A live window the evaluator has already opened, so the attach has a predecessor to close.
+	planEC := s.seedGrantEC("ent_char_attach_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		s.testData.plan.ID, 500, types.EntitlementAggregationModeAdditive)
+	existing := s.seedCycleGrant(planEC.ID, featureID, 500)
+
+	attachAt := sub.CurrentPeriodStart.Add(24 * time.Hour)
+	result, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(attachAt),
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}, nil)
+	s.Require().NoError(err)
+
+	s.Run("association", func() {
+		s.Require().NotNil(result.Association)
+		stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, result.Association.ID)
+		s.Require().NoError(err)
+
+		s.Equal(types.AddonStatusActive, stored.AddonStatus)
+		s.Equal(addonID, stored.AddonID)
+		s.Equal(sub.ID, stored.EntityID)
+		s.Equal(types.AddonAssociationEntityTypeSubscription, stored.EntityType)
+		s.Require().NotNil(stored.StartDate)
+		s.True(stored.StartDate.Equal(attachAt), "the association starts when the caller asked")
+		s.Nil(stored.EndDate, "a recurring attach is open-ended")
+	})
+
+	s.Run("line_items", func() {
+		items := s.addonLineItemsFor(sub.ID, addonID)
+		s.Require().Len(items, 1, "one price on the addon, one line item")
+
+		item := items[0]
+		s.Equal("price_"+addonID, item.PriceID)
+		s.Equal(types.SubscriptionLineItemEntityTypeAddon, item.EntityType)
+		s.Equal(addonID, item.EntityID)
+		s.Require().NotNil(item.AddonAssociationID)
+		s.Equal(result.Association.ID, *item.AddonAssociationID,
+			"the line item is keyed to its association — the batch path must keep that link")
+		s.True(item.StartDate.Equal(attachAt))
+		s.True(item.EndDate.IsZero(), "a recurring attach leaves the line open")
+	})
+
+	s.Run("credit_grants", func() {
+		grants := s.grantsFromAddon(addonID)
+		s.Require().Len(grants, 1, "the addon's ADDON-scoped template is cloned onto the subscription")
+
+		g := grants[0]
+		s.Equal(types.CreditGrantScopeSubscription, g.Scope, "materialised grants are subscription-scoped")
+		s.Equal(sub.ID, lo.FromPtr(g.SubscriptionID))
+		s.Equal(addonID, lo.FromPtr(g.AddonID), "addon provenance is what detach targets")
+		s.True(g.Credits.Equal(decimal.NewFromInt(100)))
+	})
+
+	s.Run("entitlement_grants", func() {
+		rows := s.sortedGrantsForFeature(featureID)
+		s.Require().Len(rows, 2, "one close, one open — exactly one segment boundary for one change")
+
+		closed := rows[0]
+		s.Equal(existing.ID, closed.ID, "the live window is closed in place, not replaced")
+		// Stores round timestamps, so the boundary is pinned to the second; what must be
+		// exact is the tiling below.
+		s.WithinDuration(attachAt, closed.ValidTo, time.Second,
+			"the predecessor closes at the attach: got %s want %s", closed.ValidTo, attachAt)
+
+		successor := rows[1]
+		s.True(successor.ValidFrom.Equal(closed.ValidTo),
+			"successor must tile onto the predecessor: %s vs %s", successor.ValidFrom, closed.ValidTo)
+		s.True(successor.ValidTo.Equal(sub.CurrentPeriodEnd))
+		s.True(successor.Quota.GreaterThan(decimal.Zero))
+		s.True(successor.Quota.LessThan(decimal.NewFromInt(900)),
+			"the successor's pooled quota is prorated for the remaining cycle, got %s", successor.Quota)
+	})
+
+	s.Run("money", func() {
+		invoices := s.oneOffInvoicesFor(sub.ID)
+		s.Require().Len(invoices, 1, "one attach, one ONE_OFF proration invoice")
+		s.Equal(string(types.InvoiceBillingReasonSubscriptionUpdate), invoices[0].BillingReason)
+		s.True(invoices[0].AmountDue.GreaterThan(decimal.Zero))
+		s.True(invoices[0].AmountDue.LessThan(decimal.NewFromInt(30)),
+			"a mid-period attach bills less than a whole period, got %s", invoices[0].AmountDue)
+
+		s.Empty(s.prorationCredits(), "an attach charges; it must not credit the wallet")
+	})
+}
+
+// With proration off the attach still writes every entity, but moves no money and grants
+// the full quota. This is the shape create-subscription's Addons[] loop uses.
+func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_ProrationNone_WritesEntitiesWithoutMoney() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	addonID := "addon_char_attach_none"
+	featureID := s.seedGrantFeature("feat_char_attach_none")
+	s.seedFullFeaturedAddon(addonID, "ent_char_attach_none", featureID, 30, 400)
+
+	result, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(sub.CurrentPeriodStart.Add(24 * time.Hour)),
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}, nil)
+	s.Require().NoError(err)
+
+	s.Equal(types.AddonStatusActive, result.Association.AddonStatus)
+	s.Len(s.addonLineItemsFor(sub.ID, addonID), 1)
+	s.Len(s.grantsFromAddon(addonID), 1, "credit grants are not gated on proration behaviour")
+	s.Empty(s.oneOffInvoicesFor(sub.ID), "no proration, no invoice")
+	s.Empty(s.prorationCredits())
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 1, "no predecessor to close, so one fresh window")
+	s.True(rows[0].Quota.Equal(decimal.NewFromInt(400)), "behaviour none grants the full quota, got %s", rows[0].Quota)
+}
+
+// -----------------------------------------------------------------------------
+// detach
+// -----------------------------------------------------------------------------
+
+// The mirror image: one detach, every entity it touches. This is the footprint the shared
+// removal seam must reproduce for plan change's dropped addons.
+func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootprint() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	addonID := "addon_char_detach"
+	featureID := s.seedGrantFeature("feat_char_detach")
+	s.seedFullFeaturedAddon(addonID, "ent_char_detach", featureID, 30, 400)
+
+	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}, nil)
+	s.Require().NoError(err)
+
+	addonLine := s.addonLineItemsFor(sub.ID, addonID)
+	s.Require().Len(addonLine, 1)
+
+	// Give the removal a billed basis, or the credit caps at zero.
+	s.recordBilledForLineItem(addonLine[0].ID, decimal.NewFromInt(30))
+	s.Require().NotEmpty(s.sortedGrantsForFeature(featureID))
+
+	detachAt := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+
+	// The credit is quoted before the removal is executed. The in-memory line-item store
+	// hands out the stored pointer, so persisting the removal stamps EndDate on the very
+	// object the settlement quote reads, and Compute then skips it as a non-refundable
+	// onetime item. Against a real DB the params carry their own snapshot and the credit
+	// is issued, so the quote — not the executed top-up — is what this suite can pin.
+	quoted, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: attached.Association.ID,
+		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+		EffectiveDate:      lo.ToPtr(detachAt),
+		PreviewOnly:        true,
+	}, sub.ID)
+	s.Require().NoError(err)
+
+	result, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: attached.Association.ID,
+		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+		EffectiveDate:      lo.ToPtr(detachAt),
+		Reason:             "characterisation",
+	}, sub.ID)
+	s.Require().NoError(err)
+
+	s.Run("association", func() {
+		stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, attached.Association.ID)
+		s.Require().NoError(err)
+
+		s.Equal(types.AddonStatusCancelled, stored.AddonStatus)
+		s.Require().NotNil(stored.EndDate)
+		s.True(stored.EndDate.Equal(detachAt), "the association ends on the effective date")
+		s.Equal("characterisation", stored.CancellationReason)
+	})
+
+	s.Run("line_items", func() {
+		stored, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, addonLine[0].ID)
+		s.Require().NoError(err)
+		s.False(stored.EndDate.IsZero(), "the line item closes with its association")
+		s.True(stored.EndDate.Equal(detachAt), "and closes on the same date")
+
+		s.Require().Len(result.EndedLineItems, 1)
+		s.Equal(addonLine[0].ID, result.EndedLineItems[0].ID)
+	})
+
+	s.Run("credit_grants", func() {
+		grants := s.grantsFromAddon(addonID)
+		s.Require().Len(grants, 1, "the grant row survives; only its future applications stop")
+
+		filter := types.NewNoLimitCreditGrantApplicationFilter()
+		filter.CreditGrantIDs = []string{grants[0].ID}
+		filter.SubscriptionIDs = []string{sub.ID}
+		applications, err := s.GetStores().CreditGrantApplicationRepo.List(ctx, filter)
+		s.Require().NoError(err)
+
+		for _, app := range applications {
+			if app.ScheduledFor.After(detachAt) {
+				s.Equal(types.ApplicationStatusCancelled, app.ApplicationStatus,
+					"applications scheduled after the removal must be cancelled, not left pending")
+			}
+		}
+	})
+
+	// The attach's window was opened but never evaluated, so the removal DELETEs it rather
+	// than closing it — a live window would otherwise keep granting quota the customer no
+	// longer pays for. This is the behaviour the merged close/open pass has to preserve.
+	s.Run("entitlement_grants", func() {
+		s.Empty(s.sortedGrantsForFeature(featureID),
+			"a never-evaluated window is removed outright, not left open")
+	})
+
+	s.Run("money", func() {
+		s.Require().Len(quoted.ChangedInvoices, 1, "the removal quotes exactly one document")
+		s.Equal(dto.ChangedInvoiceStatusPreview, quoted.ChangedInvoices[0].Status)
+		s.Require().NotNil(quoted.ChangedInvoices[0].WalletTransaction)
+		s.True(quoted.ChangedInvoices[0].WalletTransaction.Amount.GreaterThan(decimal.Zero),
+			"half a period of a prepaid addon comes back as a credit")
+
+		s.Len(s.oneOffInvoicesFor(sub.ID), 1,
+			"only the attach's invoice: a removal never raises a second document")
+	})
+}
+
+// A detach with proration off still removes everything; it just issues no credit. The
+// removal seam has to keep these two halves independently switchable.
+func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_ProrationNone_RemovesWithoutCredit() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	addonID := "addon_char_detach_none"
+	featureID := s.seedGrantFeature("feat_char_detach_none")
+	s.seedFullFeaturedAddon(addonID, "ent_char_detach_none", featureID, 30, 400)
+
+	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}, nil)
+	s.Require().NoError(err)
+
+	detachAt := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	_, err = subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: attached.Association.ID,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		EffectiveDate:      lo.ToPtr(detachAt),
+	}, sub.ID)
+	s.Require().NoError(err)
+
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, attached.Association.ID)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusCancelled, stored.AddonStatus, "the addon still goes away")
+
+	s.Empty(s.prorationCredits(), "but no credit is issued")
+	s.Empty(s.oneOffInvoicesFor(sub.ID))
+}
+
+// recordBilledForLineItem writes the invoice line the credit cap reads, so a removal's
+// credit has a basis other than list price.
+func (s *SubscriptionServiceSuite) recordBilledForLineItem(lineItemID string, amount decimal.Decimal) {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	periodStart := sub.CurrentPeriodStart
+	periodEnd := sub.CurrentPeriodEnd
+
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:             sub.CustomerID,
+		SubscriptionID:         &sub.ID,
+		SubscriptionLineItemID: &lineItemID,
+		Amount:                 amount,
+		Quantity:               decimal.NewFromInt(1),
+		Currency:               "usd",
+		PeriodStart:            &periodStart,
+		PeriodEnd:              &periodEnd,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}))
+}
+
+// -----------------------------------------------------------------------------
+// transaction boundary
+// -----------------------------------------------------------------------------
+
+// Settlement runs inside the change's transaction, so failing to raise the proration invoice now
+// fails the attach instead of returning success with the addon attached and unbilled. The rollback
+// itself is the transaction's job and is not observable here: testutil runs WithTx without one.
+func (s *SubscriptionServiceSuite) TestAddonChange_SettlementFailure_FailsTheAttach() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	addonID := "addon_settle_failure"
+	featureID := s.seedGrantFeature("feat_settle_failure")
+	s.seedFullFeaturedAddon(addonID, "ent_settle_failure", featureID, 30, 400)
+
+	// Bill a customer that does not exist: everything resolves and persists, and only the
+	// settlement at the end of the transaction fails.
+	sub.InvoicingCustomerID = lo.ToPtr("cust_missing_settle_failure")
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	_, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(sub.CurrentPeriodStart.Add(24 * time.Hour)),
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}, nil)
+	s.Require().Error(err, "an attach whose settlement cannot raise its invoice must fail")
+}
+
+// =============================================================================
+// Characterisation: addon preview twins and the pay-first draft key
+// =============================================================================
+
+// The attach preview is a second implementation of settlement (previewAddonSettlement),
+// separate from Apply. It must quote what execute then bills, and write nothing.
+func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_AttachPreviewTwinMatchesExecute() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+	addonID := "addon_characterise_preview"
+
+	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+
+	at := sub.CurrentPeriodStart.Add(24 * time.Hour)
+	req := func() *dto.AddAddonToSubscriptionRequest {
+		return &dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         lo.ToPtr(at),
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		}
+	}
+
+	previewReq := req()
+	previewReq.PreviewOnly = true
+	preview, err := subSvc.attachAddon(ctx, sub, previewReq, nil)
+	s.Require().NoError(err)
+	s.Require().Len(preview.ChangedInvoices, 1, "the preview twin quotes one document")
+	s.Equal(dto.ChangedInvoiceStatusPreview, preview.ChangedInvoices[0].Status)
+	quoted := preview.ChangedInvoices[0].Invoice.AmountDue
+
+	// Preview writes nothing: no association, no line item, no invoice.
+	s.Empty(s.addonLineItemsFor(sub.ID, addonID))
+	s.Empty(s.oneOffInvoicesFor(sub.ID))
+
+	executed, err := subSvc.attachAddon(ctx, sub, req(), nil)
+	s.Require().NoError(err)
+	s.Require().Len(executed.ChangedInvoices, 1)
+	charged := executed.ChangedInvoices[0].Invoice.AmountDue
+
+	s.True(quoted.Equal(charged), "the preview twin quoted %s but execute billed %s", quoted, charged)
+	s.Require().Len(s.oneOffInvoicesFor(sub.ID), 1, "execute raises exactly one invoice")
+}
+
+// The detach preview quotes a wallet credit as a synthetic transaction rather than a
+// document — a second shape the twin has to keep in step with Apply's real top-up.
+func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_DetachPreviewTwinQuotesWalletCredit() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+	addonID := "addon_characterise_detach_preview"
+
+	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+
+	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}, nil)
+	s.Require().NoError(err)
+
+	preview, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: attached.Association.ID,
+		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+		EffectiveDate:      lo.ToPtr(sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)),
+		PreviewOnly:        true,
+	}, sub.ID)
+	s.Require().NoError(err)
+
+	s.Require().Len(preview.ChangedInvoices, 1)
+	s.Equal(dto.ChangedInvoiceStatusPreview, preview.ChangedInvoices[0].Status)
+	s.Require().NotNil(preview.ChangedInvoices[0].WalletTransaction)
+	s.True(preview.ChangedInvoices[0].WalletTransaction.Amount.GreaterThan(decimal.Zero),
+		"a mid-period removal of a prepaid addon quotes a positive credit")
+
+	// The quoted cancellation is built but not stored.
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, attached.Association.ID)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusActive, stored.AddonStatus, "preview must not cancel the association")
+	s.Nil(stored.EndDate)
+}
+
+// Pay-first and pay-later must stamp the SAME key on the same economic event, or the two never
+// dedupe against each other. Pay-first used to pass the association's raw key straight through
+// while pay-later hashed it; hoisting pay-first onto the shared spine closed that.
+func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_PayFirstDraft_SharesThePayLaterKey() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+	addonID := "addon_characterise_draft_key"
+
+	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+
+	config, err := NewAddonChangeService(subSvc.ServiceParams).Resolve(ctx, AddonChangeRequest{
+		Subscription: sub,
+		Adds: []AddonAdd{{Request: &dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         lo.ToPtr(sub.CurrentPeriodStart.Add(24 * time.Hour)),
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		}}},
+	})
+	s.Require().NoError(err)
+
+	params := config.getAttaches()[0]
+	summary := config.getQuote()
+	s.Require().True(summary.TotalChargeAmount.GreaterThan(decimal.Zero))
+
+	rawKey := params.prorationIdempotencyKey()
+	hashedKey := prorationChargeInvoiceKey(LineItemProrationRequest{
+		Subscription:   sub,
+		EffectiveDate:  config.getPeriodStart(),
+		IdempotencyKey: rawKey,
+	})
+
+	// Both modes settle off config.getIdempotencyKey(), so the draft and the pay-later invoice
+	// cannot drift apart.
+	s.Equal(hashedKey, config.getIdempotencyKey(),
+		"a single attach hashes its key, whether it is drafted or issued")
+	s.NotEqual(rawKey, config.getIdempotencyKey(),
+		"the raw association key is no longer stamped on the document")
+
+	drafted, err := NewLineItemProrationService(subSvc.ServiceParams).Settle(ctx, NewSettleProrationRequest(
+		sub, summary, config.getPeriodStart(), sub.CurrentPeriodEnd,
+		"Subscription update", config.getIdempotencyKey(), SettleModeDraft,
+	))
+	s.Require().NoError(err)
+	draft := drafted.Draft
+
+	s.Equal(hashedKey, lo.FromPtr(draft.IdempotencyKey))
+
+	// What the draft locks must still be exactly the pay-later amount.
+	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
+	s.Equal(types.InvoiceSourceTypeCheckout, draft.SourceType)
+	s.True(summary.TotalChargeAmount.Equal(draft.AmountDue))
 }

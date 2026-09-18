@@ -7,7 +7,10 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -16,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -853,4 +857,336 @@ func (s *SubscriptionChangeV2Suite) TestExecute_CarriedLineFollowsTheSubscriptio
 		"a carried line still belongs to the subscription, and the subscription moved")
 	s.Equal(lateral.Name, live[0].PlanDisplayName,
 		"plan_display_name is copied onto every future invoice line, so it must not name the old plan")
+}
+
+// =============================================================================
+// Characterisation: today's plan change entity footprint
+// =============================================================================
+
+// Characterisation baseline for plan change v2 (plan Group A / PR A2).
+//
+// Same shape as the addon baseline: one change, then the whole entity footprint it leaves —
+// line items, credit grants, entitlement grants, entitlement overrides, addon associations
+// and the money. Plan change is the last caller to move onto the shared machinery and the
+// riskiest, because several of its writes differ from addon detach's for the same removal.
+// Where they differ, the test says so: those assertions are the ones the convergence PRs
+// are expected to change, and nothing else here should move.
+
+// -----------------------------------------------------------------------------
+// fixtures
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionChangeV2Suite) allEntitlementGrants() []*entitlementgrant.EntitlementGrant {
+	rows, err := s.GetStores().EntitlementGrantRepo.List(s.GetContext(), types.NewNoLimitEntitlementGrantFilter())
+	s.Require().NoError(err)
+	return rows
+}
+
+func (s *SubscriptionChangeV2Suite) storedEntitlement(id string) *entitlement.Entitlement {
+	e, err := s.GetStores().EntitlementRepo.Get(s.GetContext(), id)
+	s.Require().NoError(err)
+	return e
+}
+
+func (s *SubscriptionChangeV2Suite) allLineItems() []*subscription.SubscriptionLineItem {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.td.sub.ID)
+	s.Require().NoError(err)
+	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
+	s.Require().NoError(err)
+	return items
+}
+
+// -----------------------------------------------------------------------------
+// the full footprint of a swap
+// -----------------------------------------------------------------------------
+
+// A mid-period upgrade, every entity it writes. The settlement half of this must be
+// byte-identical after the settlement refactor; the grant half is what Stage 5 moves.
+func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_Upgrade_FullEntityFootprint() {
+	ctx := s.GetContext()
+
+	s.createPlanGrant(s.td.starter.ID, "starter credits", 100)
+	s.createPlanGrant(s.td.pro.ID, "pro credits", 500)
+	starterSubGrants := s.materialisePlanGrants(s.td.starter.ID)
+	s.Require().Len(starterSubGrants, 1)
+
+	f := s.createFeature("api_calls")
+	starterEnt := s.createPlanEntitlement(s.td.starter.ID, f.ID, 1000)
+	s.createPlanEntitlement(s.td.pro.ID, f.ID, 5000)
+	override := s.createSubscriptionOverride(starterEnt, 2000)
+	closingGrant := s.createEntitlementGrant(s.td.sub, override.ID, f.ID, s.td.periodStart, s.td.periodEnd)
+
+	// The outgoing base fee was actually billed, so the swap has a credit to net.
+	s.recordBilled(s.td.baseLine.ID, s.td.starterBase.Amount)
+	invoicesBefore := s.countInvoices()
+
+	resp, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID,
+		s.changeRequest(s.td.pro.ID, types.ProrationBehaviorCreateProrations), time.Now().UTC())
+	s.Require().NoError(err)
+	at := resp.EffectiveAt
+
+	s.Run("subscription_and_line_items", func() {
+		reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, s.td.sub.ID)
+		s.Require().NoError(err)
+		s.Equal(s.td.pro.ID, reloaded.PlanID, "the swap re-points the subscription")
+
+		live := s.liveLineItems()
+		s.Require().Len(live, 1, "one fixed price in, one out")
+		s.Equal(s.td.proBase.ID, live[0].PriceID)
+		s.True(live[0].StartDate.Equal(at), "the incoming line starts at the change instant")
+
+		closed := lo.Filter(s.allLineItems(), func(item *subscription.SubscriptionLineItem, _ int) bool {
+			return item.ID == s.td.baseLine.ID
+		})
+		s.Require().Len(closed, 1)
+		s.False(closed[0].EndDate.IsZero(), "the outgoing line is closed, not deleted")
+		s.True(closed[0].EndDate.Equal(at), "and closed at the change instant")
+	})
+
+	s.Run("credit_grants", func() {
+		s.Empty(s.liveGrantsForPlan(s.td.starter.ID, at), "the outgoing plan's grants stop at the change")
+
+		pro := s.liveGrantsForPlan(s.td.pro.ID, at)
+		s.Require().Len(pro, 1, "the target plan's grants are materialised onto the subscription")
+		s.Equal(types.CreditGrantScopeSubscription, pro[0].Scope)
+		s.Require().NotNil(pro[0].StartDate)
+		s.True(pro[0].StartDate.Equal(at))
+
+		// TODAY the target plan's first period is granted IN FULL, not prorated for the
+		// part of the cycle the customer actually holds the new plan. Addon attach
+		// prorates the same thing. Divergence 3 is the assertion that must flip here.
+		s.True(pro[0].Credits.Equal(decimal.NewFromInt(500)),
+			"TODAY: a mid-period swap grants the whole first period, unprorated")
+
+		ended := lo.Filter(s.subscriptionGrants(), func(g *creditgrant.CreditGrant, _ int) bool {
+			return lo.FromPtr(g.PlanID) == s.td.starter.ID
+		})
+		s.Require().Len(ended, 1)
+		s.Require().NotNil(ended[0].EndDate)
+		s.True(ended[0].EndDate.Equal(at))
+		s.Equal(types.StatusPublished, ended[0].Status, "closed, not deleted — granted credits stand")
+	})
+
+	s.Run("entitlement_overrides", func() {
+		closed := s.storedEntitlement(override.ID)
+		s.Require().NotNil(closed.EndDate, "an override parented on the outgoing plan must close")
+		s.True(closed.EndDate.Equal(at))
+	})
+
+	s.Run("entitlement_grants", func() {
+		closed, err := s.GetStores().EntitlementGrantRepo.Get(ctx, closingGrant.ID)
+		s.Require().NoError(err)
+		s.True(closed.ValidTo.Equal(at), "the outgoing plan's window ends at the swap")
+		s.True(closed.ValidFrom.Equal(s.td.periodStart), "closing must not move the window start")
+
+		// TODAY no successor is opened for the target plan's entitlement: the swap closes
+		// and leaves the feature ungranted until the evaluator's next tick. Addon attach
+		// opens the successor itself. Divergence 5 is what adds a second row here.
+		s.Len(s.allEntitlementGrants(), 1,
+			"TODAY: a plan change closes windows but opens no successors")
+	})
+
+	s.Run("money", func() {
+		s.Equal(invoicesBefore+1, s.countInvoices(), "one change, one document")
+		s.Require().Len(resp.ChangedResources.Invoices, 1)
+
+		inv := resp.ChangedResources.Invoices[0].Invoice
+		s.Require().NotNil(inv)
+		s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+
+		// Plan change already nets: charge lines and credit lines ride the same document
+		// and the total is their net. This is the shape the settlement refactor
+		// generalises, so these assertions must survive it untouched.
+		var charges, credits int
+		for _, li := range inv.LineItems {
+			if li.Amount.IsNegative() {
+				credits++
+			} else {
+				charges++
+			}
+		}
+		s.Positive(charges, "the incoming plan is charged")
+		s.Positive(credits, "the outgoing plan's unused time is credited on the same invoice")
+		s.True(inv.AmountDue.GreaterThan(decimal.Zero), "an upgrade nets to a charge")
+	})
+}
+
+// A downgrade nets the other way: no invoice, one wallet credit for the residual.
+func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_Downgrade_SettlesToWallet() {
+	ctx := s.GetContext()
+
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Delete(ctx, s.td.baseLine.ID))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.UpdatePlan(ctx, s.td.sub.ID, s.td.pro.ID))
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.td.sub.ID)
+	s.Require().NoError(err)
+	s.td.baseLine = s.createLineItem(sub, s.td.proBase, s.td.pro)
+	s.recordBilled(s.td.baseLine.ID, s.td.proBase.Amount)
+
+	invoicesBefore := s.countInvoices()
+
+	resp, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID,
+		s.changeRequest(s.td.starter.ID, types.ProrationBehaviorCreateProrations), time.Now().UTC())
+	s.Require().NoError(err)
+
+	s.Equal(types.SubscriptionChangeTypeDowngrade, resp.ChangeType)
+	s.Equal(invoicesBefore, s.countInvoices(), "a net credit raises no invoice")
+
+	s.Require().Len(resp.ChangedResources.Invoices, 1, "one document, and it is the wallet credit")
+	s.Equal(dto.ChangedInvoiceStatusWalletIssued, resp.ChangedResources.Invoices[0].Status)
+
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	})
+	s.Require().NoError(err)
+	s.Require().NotEmpty(wallets)
+	s.True(wallets[0].Balance.GreaterThan(decimal.Zero))
+}
+
+// -----------------------------------------------------------------------------
+// the dropped-addon removal, where plan change and addon detach disagree
+// -----------------------------------------------------------------------------
+
+// Dropping an addon during a plan change is the same economic event as detaching it, and
+// this is the footprint the shared removal seam has to reproduce. Two of these assertions
+// pin gaps rather than intent — they are the ones the convergence PRs flip.
+func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_DroppedAddon_FullEntityFootprint() {
+	ctx := s.GetContext()
+
+	addonEntity, assoc, addonLine := s.attachAddon("priority_support", 10)
+	s.recordBilled(addonLine.ID, decimal.NewFromInt(10))
+
+	// A live grant window keyed to the addon's own entitlement.
+	f := s.createFeature("addon_feature")
+	addonEnt := s.createPlanEntitlement(addonEntity.ID, f.ID, 1000)
+	addonGrant := s.createEntitlementGrant(s.td.sub, addonEnt.ID, f.ID, s.td.periodStart, s.td.periodEnd)
+
+	invoicesBefore := s.countInvoices()
+
+	resp, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID,
+		s.dropAddonRequest(s.td.pro.ID, assoc.ID), time.Now().UTC())
+	s.Require().NoError(err)
+	at := resp.EffectiveAt
+
+	s.Run("association", func() {
+		stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, assoc.ID)
+		s.Require().NoError(err)
+		s.Equal(types.AddonStatusCancelled, stored.AddonStatus)
+		s.Require().NotNil(stored.EndDate)
+		s.True(stored.EndDate.Equal(at), "the association ends at the change instant")
+	})
+
+	s.Run("line_items", func() {
+		stored, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, addonLine.ID)
+		s.Require().NoError(err)
+		s.False(stored.EndDate.IsZero(), "the dropped addon's line closes with it")
+		s.True(stored.EndDate.Equal(at), "line item and association close together")
+	})
+
+	s.Run("entitlement_grants", func() {
+		stored, err := s.GetStores().EntitlementGrantRepo.Get(ctx, addonGrant.ID)
+		s.Require().NoError(err)
+
+		// TODAY the dropped addon's own grant window is left wide open: the plan change
+		// closes only windows keyed to the OUTGOING PLAN's entitlements, and an addon's
+		// entitlement is not one of those. Addon detach closes it. Divergence 2 is the
+		// assertion that must flip here — until it does, a dropped addon keeps granting
+		// quota the customer no longer pays for.
+		s.True(stored.ValidTo.Equal(s.td.periodEnd),
+			"TODAY: the dropped addon's grant window survives the drop, got %s", stored.ValidTo)
+	})
+
+	s.Run("money", func() {
+		s.Equal(invoicesBefore+1, s.countInvoices(), "one invoice for the whole change")
+		s.Require().Len(resp.ChangedResources.Invoices, 1)
+
+		var addonCredit bool
+		for _, li := range resp.ChangedResources.Invoices[0].Invoice.LineItems {
+			if li.Amount.IsNegative() && lo.FromPtr(li.SubscriptionLineItemID) == addonLine.ID {
+				addonCredit = true
+			}
+		}
+		s.True(addonCredit,
+			"the dropped addon's credit nets onto the change invoice rather than the wallet")
+	})
+
+	s.Run("reported_changes", func() {
+		s.Require().Len(resp.EntityChanges, 1)
+		s.Equal(assoc.ID, resp.EntityChanges[0].EntityID)
+		s.Equal(types.EntityChangeBehaviourDrop, resp.EntityChanges[0].Behaviour)
+	})
+}
+
+// A carried addon is the control case: a plan change that mentions nothing about an addon
+// must leave every one of its entities exactly as it found them.
+func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_CarriedAddon_IsUntouched() {
+	ctx := s.GetContext()
+
+	addonEntity, assoc, addonLine := s.attachAddon("priority_support", 10)
+
+	f := s.createFeature("addon_feature")
+	addonEnt := s.createPlanEntitlement(addonEntity.ID, f.ID, 1000)
+	addonGrant := s.createEntitlementGrant(s.td.sub, addonEnt.ID, f.ID, s.td.periodStart, s.td.periodEnd)
+
+	_, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID,
+		s.changeRequest(s.td.pro.ID, types.ProrationBehaviorCreateProrations), time.Now().UTC())
+	s.Require().NoError(err)
+
+	storedAssoc, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, assoc.ID)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusActive, storedAssoc.AddonStatus)
+	s.Nil(storedAssoc.EndDate)
+
+	storedLine, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, addonLine.ID)
+	s.Require().NoError(err)
+	s.True(storedLine.EndDate.IsZero(), "a carried addon's line is not sliced by the swap")
+
+	storedGrant, err := s.GetStores().EntitlementGrantRepo.Get(ctx, addonGrant.ID)
+	s.Require().NoError(err)
+	s.True(storedGrant.ValidTo.Equal(s.td.periodEnd), "nor is its grant window")
+}
+
+// Preview is the second implementation of everything above. It must describe the same
+// change and write none of it.
+func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_PreviewWritesNothingAndMatchesExecute() {
+	ctx := s.GetContext()
+
+	s.createPlanGrant(s.td.starter.ID, "starter credits", 100)
+	s.createPlanGrant(s.td.pro.ID, "pro credits", 500)
+	s.materialisePlanGrants(s.td.starter.ID)
+
+	f := s.createFeature("api_calls")
+	starterEnt := s.createPlanEntitlement(s.td.starter.ID, f.ID, 1000)
+	grant := s.createEntitlementGrant(s.td.sub, starterEnt.ID, f.ID, s.td.periodStart, s.td.periodEnd)
+
+	s.recordBilled(s.td.baseLine.ID, s.td.starterBase.Amount)
+	invoicesBefore := s.countInvoices()
+	req := s.changeRequest(s.td.pro.ID, types.ProrationBehaviorCreateProrations)
+
+	preview, err := s.svc.PreviewPlanChange(ctx, s.td.sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().Len(preview.ChangedResources.Invoices, 1)
+	quoted := preview.ChangedResources.Invoices[0].Invoice.AmountDue
+
+	// Nothing moved.
+	reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, s.td.sub.ID)
+	s.Require().NoError(err)
+	s.Equal(s.td.starter.ID, reloaded.PlanID)
+	s.Equal(invoicesBefore, s.countInvoices())
+	s.Require().Len(s.liveLineItems(), 1)
+	s.Equal(s.td.baseLine.ID, s.liveLineItems()[0].ID)
+
+	stillOpen, err := s.GetStores().EntitlementGrantRepo.Get(ctx, grant.ID)
+	s.Require().NoError(err)
+	s.True(stillOpen.ValidTo.Equal(s.td.periodEnd), "preview must not close a grant window")
+	s.Require().Len(s.liveGrantsForPlan(s.td.starter.ID, time.Now().UTC()), 1,
+		"preview must not migrate credit grants")
+
+	executed, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID, req, time.Now().UTC())
+	s.Require().NoError(err)
+	s.Require().Len(executed.ChangedResources.Invoices, 1)
+
+	s.True(quoted.Equal(executed.ChangedResources.Invoices[0].Invoice.AmountDue),
+		"quoted %s but billed %s", quoted, executed.ChangedResources.Invoices[0].Invoice.AmountDue)
+	s.Equal(preview.ChangeType, executed.ChangeType)
 }

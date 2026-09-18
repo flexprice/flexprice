@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -779,7 +778,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 		return nil, err
 	}
 
-	existing, err := s.getAnyPendingCheckoutSession(ctx, sub.CustomerID, sub.ID)
+	existing, err := anyPendingCheckoutSession(ctx, sp, sub.CustomerID, sub.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -840,25 +839,6 @@ func (s *subscriptionModificationService) settlePayFirst(
 		},
 		CheckoutSession: sessionResp,
 	}, nil
-}
-
-func (s *subscriptionModificationService) getAnyPendingCheckoutSession(ctx context.Context, customerID string, subscriptionID string) ([]*checkout.CheckoutSession, error) {
-	pendingFilter := &types.CheckoutSessionFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
-		CustomerIDs: []string{customerID},
-		Actions: []types.CheckoutAction{
-			types.CheckoutActionModifySubscription,
-			types.CheckoutActionAddAddon,
-		},
-		CheckoutStatuses: []types.CheckoutStatus{
-			types.CheckoutStatusInitiated,
-			types.CheckoutStatusPending,
-		},
-		Configuration: &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
-	}
-	pendingFilter.Limit = lo.ToPtr(1)
-
-	return s.serviceParams.CheckoutSessionRepo.List(ctx, pendingFilter)
 }
 
 // createAggregatedProrationDraftInvoice locks the batch net (charges − credits) on one DRAFT ONE_OFF.

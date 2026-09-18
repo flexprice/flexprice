@@ -10775,7 +10775,7 @@
           "Subscriptions"
         ],
         "summary": "Execute subscription modification",
-        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove).",
+        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).",
         "operationId": "executeSubscriptionModify",
         "parameters": [
           {
@@ -10856,7 +10856,7 @@
           "Subscriptions"
         ],
         "summary": "Preview subscription modification",
-        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove) without committing changes.",
+        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.",
         "operationId": "previewSubscriptionModify",
         "parameters": [
           {
@@ -16368,6 +16368,9 @@
           "cadence": {
             "$ref": "#/components/schemas/types.AddonCadence"
           },
+          "change_at": {
+            "$ref": "#/components/schemas/types.ScheduleType"
+          },
           "checkout": {
             "$ref": "#/components/schemas/CheckoutParams"
           },
@@ -16412,6 +16415,9 @@
           },
           "cadence": {
             "$ref": "#/components/schemas/types.AddonCadence"
+          },
+          "change_at": {
+            "$ref": "#/components/schemas/types.ScheduleType"
           },
           "line_item_commitments": {
             "type": "object",
@@ -20531,6 +20537,10 @@
           "id": {
             "type": "string"
           },
+          "ingested_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "properties": {
             "type": "object",
             "additionalProperties": true
@@ -20574,6 +20584,9 @@
         ],
         "type": "object",
         "properties": {
+          "addon_bulk_params": {
+            "$ref": "#/components/schemas/SubModifyBulkAddonParams"
+          },
           "addon_params": {
             "$ref": "#/components/schemas/SubModifyAddonParams"
           },
@@ -20889,6 +20902,12 @@
           },
           "event": {
             "$ref": "#/components/schemas/Event"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
           },
           "processed_events": {
             "type": "array",
@@ -23376,6 +23395,9 @@
           "addon_association_id": {
             "type": "string"
           },
+          "change_at": {
+            "$ref": "#/components/schemas/types.ScheduleType"
+          },
           "effective_date": {
             "type": "string",
             "description": "EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.",
@@ -23534,6 +23556,23 @@
           },
           "remove": {
             "$ref": "#/components/schemas/RemoveAddonRequest"
+          }
+        }
+      },
+      "SubModifyBulkAddonParams": {
+        "type": "object",
+        "properties": {
+          "adds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AddAddonToSubscriptionRequest"
+            }
+          },
+          "removes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoveAddonRequest"
+            }
           }
         }
       },
@@ -28240,6 +28279,12 @@
               "$ref": "#/components/schemas/types.AddAddonRef"
             }
           },
+          "removes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.RemoveAddonRef"
+            }
+          },
           "subscription_id": {
             "type": "string"
           }
@@ -30899,6 +30944,25 @@
         ],
         "x-speakeasy-name-override": "RejectedEventReason"
       },
+      "types.RemoveAddonRef": {
+        "type": "object",
+        "properties": {
+          "association_id": {
+            "type": "string"
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "RemoveAddonRef"
+      },
       "types.ReportingUnit": {
         "type": "object",
         "properties": {
@@ -31236,14 +31300,14 @@
         "type": "string",
         "enum": [
           "plan",
-          "addon",
+          "addon_association",
           "credit_grant",
           "entitlement",
           "entitlement_grant"
         ],
         "x-enum-varnames": [
           "SubscriptionChangeEntityTypePlan",
-          "SubscriptionChangeEntityTypeAddon",
+          "SubscriptionChangeEntityTypeAddonAssociation",
           "SubscriptionChangeEntityTypeCreditGrant",
           "SubscriptionChangeEntityTypeEntitlement",
           "SubscriptionChangeEntityTypeEntitlementGrant"

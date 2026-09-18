@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -17,7 +18,7 @@ func (s *subscriptionModificationService) executeAddonModification(
 	params *dto.SubModifyAddonParams,
 	checkout *dto.CheckoutParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	subSvc := NewSubscriptionService(s.serviceParams)
+	subSvc := &subscriptionService{ServiceParams: s.serviceParams}
 
 	var (
 		result *dto.AddonChangeResult
@@ -28,10 +29,10 @@ func (s *subscriptionModificationService) executeAddonModification(
 	case dto.SubscriptionModificationActionAdd:
 		var sub *subscription.Subscription
 		if sub, err = s.loadSubscriptionWithLineItems(ctx, subscriptionID); err == nil {
-			result, err = subSvc.AttachAddon(ctx, sub, params.Add, checkout)
+			result, err = subSvc.attachAddon(ctx, sub, params.Add, checkout)
 		}
 	case dto.SubscriptionModificationActionRemove:
-		result, err = subSvc.DetachAddon(ctx, params.Remove, subscriptionID)
+		result, err = subSvc.detachAddon(ctx, params.Remove, subscriptionID)
 	default:
 		return nil, ierr.NewError("invalid action, action must be add or remove").Mark(ierr.ErrValidation)
 	}
@@ -46,7 +47,8 @@ func (s *subscriptionModificationService) executeAddonModification(
 		triggerHubSpotDealSync(ctx, s.serviceParams, subscriptionID)
 	}
 
-	return s.addonModifyResponse(ctx, subscriptionID, result, false)
+	return s.addonModifyResponse(ctx, subscriptionID,
+		addonChangedLineItems(result, false), result.GetChangedInvoices(), result.GetCheckoutSession())
 }
 
 func (s *subscriptionModificationService) previewAddonModification(
@@ -54,7 +56,7 @@ func (s *subscriptionModificationService) previewAddonModification(
 	subscriptionID string,
 	params *dto.SubModifyAddonParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	subSvc := NewSubscriptionService(s.serviceParams)
+	subSvc := &subscriptionService{ServiceParams: s.serviceParams}
 
 	var (
 		result *dto.AddonChangeResult
@@ -66,11 +68,11 @@ func (s *subscriptionModificationService) previewAddonModification(
 		var sub *subscription.Subscription
 		if sub, err = s.loadSubscriptionWithLineItems(ctx, subscriptionID); err == nil {
 			params.Add.PreviewOnly = true
-			result, err = subSvc.AttachAddon(ctx, sub, params.Add, nil)
+			result, err = subSvc.attachAddon(ctx, sub, params.Add, nil)
 		}
 	case dto.SubscriptionModificationActionRemove:
 		params.Remove.PreviewOnly = true
-		result, err = subSvc.DetachAddon(ctx, params.Remove, subscriptionID)
+		result, err = subSvc.detachAddon(ctx, params.Remove, subscriptionID)
 	default:
 		return nil, ierr.NewError("invalid action, action must be add or remove").Mark(ierr.ErrValidation)
 	}
@@ -78,7 +80,8 @@ func (s *subscriptionModificationService) previewAddonModification(
 		return nil, err
 	}
 
-	return s.addonModifyResponse(ctx, subscriptionID, result, true)
+	return s.addonModifyResponse(ctx, subscriptionID,
+		addonChangedLineItems(result, true), result.GetChangedInvoices(), result.GetCheckoutSession())
 }
 
 func (s *subscriptionModificationService) loadSubscriptionWithLineItems(
@@ -97,8 +100,9 @@ func (s *subscriptionModificationService) loadSubscriptionWithLineItems(
 func (s *subscriptionModificationService) addonModifyResponse(
 	ctx context.Context,
 	subscriptionID string,
-	result *dto.AddonChangeResult,
-	isPreview bool,
+	lineItems []dto.ChangedLineItem,
+	invoices []dto.ChangedInvoice,
+	checkoutSession *dto.CheckoutSessionResponse,
 ) (*dto.SubscriptionModifyResponse, error) {
 	subResp, err := NewSubscriptionService(s.serviceParams).GetSubscription(ctx, subscriptionID)
 	if err != nil {
@@ -108,11 +112,45 @@ func (s *subscriptionModificationService) addonModifyResponse(
 	return &dto.SubscriptionModifyResponse{
 		Subscription: subResp,
 		ChangedResources: dto.ChangedResources{
-			LineItems: addonChangedLineItems(result, isPreview),
-			Invoices:  result.GetChangedInvoices(),
+			LineItems: lineItems,
+			Invoices:  invoices,
 		},
-		CheckoutSession: result.GetCheckoutSession(),
+		CheckoutSession: checkoutSession,
 	}, nil
+}
+
+func changedCreatedLineItem(li *subscription.SubscriptionLineItem, isPreview bool) dto.ChangedLineItem {
+	id := li.ID
+	if isPreview {
+		id = previewCreatedLineItemID
+	}
+
+	startDate := li.StartDate
+	changed := dto.ChangedLineItem{
+		ID:           id,
+		PriceID:      li.PriceID,
+		Quantity:     li.Quantity,
+		StartDate:    &startDate,
+		ChangeAction: dto.ChangedLineItemActionCreated,
+	}
+	if !li.EndDate.IsZero() {
+		endDate := li.EndDate
+		changed.EndDate = &endDate
+	}
+
+	return changed
+}
+
+func changedEndedLineItem(li *subscription.SubscriptionLineItem, endDate time.Time) dto.ChangedLineItem {
+	startDate := li.StartDate
+	return dto.ChangedLineItem{
+		ID:           li.ID,
+		PriceID:      li.PriceID,
+		Quantity:     li.Quantity,
+		StartDate:    &startDate,
+		EndDate:      &endDate,
+		ChangeAction: dto.ChangedLineItemActionEnded,
+	}
 }
 
 func addonChangedLineItems(result *dto.AddonChangeResult, isPreview bool) []dto.ChangedLineItem {
@@ -123,39 +161,11 @@ func addonChangedLineItems(result *dto.AddonChangeResult, isPreview bool) []dto.
 	}
 
 	items := make([]dto.ChangedLineItem, 0, len(created)+len(ended))
-
 	for _, li := range created {
-		id := li.ID
-		if isPreview {
-			id = previewCreatedLineItemID
-		}
-
-		startDate := li.StartDate
-		changed := dto.ChangedLineItem{
-			ID:           id,
-			PriceID:      li.PriceID,
-			Quantity:     li.Quantity,
-			StartDate:    &startDate,
-			ChangeAction: dto.ChangedLineItemActionCreated,
-		}
-		if !li.EndDate.IsZero() {
-			endDate := li.EndDate
-			changed.EndDate = &endDate
-		}
-		items = append(items, changed)
+		items = append(items, changedCreatedLineItem(li, isPreview))
 	}
-
-	endDate := result.GetEffectiveDate()
 	for _, li := range ended {
-		startDate := li.StartDate
-		items = append(items, dto.ChangedLineItem{
-			ID:           li.ID,
-			PriceID:      li.PriceID,
-			Quantity:     li.Quantity,
-			StartDate:    &startDate,
-			EndDate:      &endDate,
-			ChangeAction: dto.ChangedLineItemActionEnded,
-		})
+		items = append(items, changedEndedLineItem(li, result.GetEffectiveDate()))
 	}
 
 	return items

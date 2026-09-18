@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -463,4 +464,505 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NonPeriodDurati
 
 	s.Require().NoError(s.attachAddon("addon_eg_daily", s.testData.now, types.ProrationBehaviorCreateProrations))
 	s.Empty(s.grantsForFeature(featureID), "a day-unit grant opens on its own from usage, not from the attach")
+}
+
+// =============================================================================
+// Batch grant passes: states a single-source change cannot reach
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// batch fixtures
+//
+// The multi-addon entry point does not exist yet (D1/E2), but the merged pass already
+// takes []GrantSource — so these drive it directly and pin the behaviour the batch
+// must have before anything is wired to it.
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionServiceSuite) grantService() *subscriptionGrantService {
+	return newSubscriptionGrantService(s.service.(*subscriptionService).ServiceParams)
+}
+
+func (s *SubscriptionServiceSuite) runGrantPass(incoming, removed []GrantSource) error {
+	svc := s.grantService()
+	cfg, err := svc.Resolve(s.GetContext(), GrantChangeRequest{
+		Sub:      s.testData.subscription,
+		Incoming: incoming,
+		Removed:  removed,
+	})
+	if err != nil {
+		return err
+	}
+	return svc.Apply(s.GetContext(), cfg)
+}
+
+func (s *SubscriptionServiceSuite) source(
+	at time.Time,
+	origin grantProrationSource,
+	ecs ...*entitlement.Entitlement,
+) GrantSource {
+	return GrantSource{
+		ChangeType:    grantChangeTypeFor(s.testData.subscription, at),
+		EffectiveDate: at,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Origin:        origin,
+		AddonID:       ecs[0].EntityID,
+	}
+}
+
+func (s *SubscriptionServiceSuite) periodEnd() time.Time {
+	return s.testData.subscription.CurrentPeriodEnd
+}
+
+// expectedProratedAt scales a quota over the part of the cycle left at `at`.
+func (s *SubscriptionServiceSuite) expectedProratedAt(quota int64, at time.Time) decimal.Decimal {
+	sub := s.testData.subscription
+	total := sub.CurrentPeriodEnd.Sub(sub.CurrentPeriodStart).Seconds()
+	remaining := sub.CurrentPeriodEnd.Sub(at).Seconds()
+	return decimal.NewFromInt(quota).
+		Mul(decimal.NewFromFloat(remaining).Div(decimal.NewFromFloat(total))).
+		Round(15)
+}
+
+func (s *SubscriptionServiceSuite) liveRow(featureID string) *entitlementgrant.EntitlementGrant {
+	rows := s.sortedGrantsForFeature(featureID)
+	if len(rows) == 0 {
+		return nil
+	}
+	return rows[len(rows)-1]
+}
+
+// assertCutAtChange asserts a window was ended by the change rather than running to its
+// natural end. The pass closes at LatestOf(effectiveDate, now), a few ms past the
+// fixture's `now`, so the boundary can only be bracketed.
+func (s *SubscriptionServiceSuite) assertCutAtChange(g *entitlementgrant.EntitlementGrant) {
+	s.True(!g.ValidTo.Before(s.testData.now) && g.ValidTo.Before(s.periodEnd()),
+		"expected a window cut between %s and %s, got %s", s.testData.now, s.periodEnd(), g.ValidTo)
+}
+
+func (s *SubscriptionServiceSuite) assertTiled(featureID string) {
+	rows := s.sortedGrantsForFeature(featureID)
+	for i := 1; i < len(rows); i++ {
+		s.True(rows[i-1].ValidTo.Equal(rows[i].ValidFrom),
+			"%s: segment %d must start where %d ended", featureID, i, i-1)
+	}
+}
+
+func (s *SubscriptionServiceSuite) ecByID(ecID string) *entitlement.Entitlement {
+	ec, err := s.GetStores().EntitlementRepo.Get(s.GetContext(), ecID)
+	s.Require().NoError(err)
+	return ec
+}
+
+// seedActiveAddonAssociation puts an addon on the subscription without going through the
+// attach path, so the feature keeps its cold-start state (no live grant row).
+func (s *SubscriptionServiceSuite) seedActiveAddonAssociation(associationID, addonID string) *addonassociation.AddonAssociation {
+	start := s.testData.now
+	assoc := &addonassociation.AddonAssociation{
+		ID:          associationID,
+		EntityID:    s.testData.subscription.ID,
+		EntityType:  types.AddonAssociationEntityTypeSubscription,
+		AddonID:     addonID,
+		StartDate:   &start,
+		AddonStatus: types.AddonStatusActive,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(s.GetContext(), assoc))
+	return assoc
+}
+
+// -----------------------------------------------------------------------------
+// 1. multiple additions
+// -----------------------------------------------------------------------------
+
+// Two addons landing on one additive feature must pool into ONE successor. Looping the
+// single-addon path would let the second close the successor the first just opened.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Add_OverlappingAdditiveFeature_PoolsIntoOneSuccessor() {
+	featureID := s.seedGrantFeature("feat_b_add_overlap")
+	s.seedGrantEC("ent_b_plan_ov", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_plan_ov", featureID, 1000)
+
+	a := s.seedGrantEC("ent_b_add_a", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_a", 600, "")
+	b := s.seedGrantEC("ent_b_add_b", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_b", 300, "")
+
+	s.Require().NoError(s.runGrantPass([]GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonAttach, a),
+		s.source(s.testData.now, grantProrationSourceAddonAttach, b),
+	}, nil))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "one closed segment plus one live successor, got %d", len(rows))
+
+	want := decimal.NewFromInt(1000).Add(s.expectedProrated(600)).Add(s.expectedProrated(300))
+	s.True(rows[1].Quota.Equal(want), "both deltas pool, expected %s got %s", want, rows[1].Quota)
+	s.True(rows[1].ValidTo.Equal(s.periodEnd()))
+	s.assertTiled(featureID)
+}
+
+// Independent features must not interfere: each closes its own predecessor and opens
+// its own successor.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Add_NonOverlappingFeatures_SegmentIndependently() {
+	f1 := s.seedGrantFeature("feat_b_add_f1")
+	f2 := s.seedGrantFeature("feat_b_add_f2")
+	s.seedGrantEC("ent_b_plan_f1", f1, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedGrantEC("ent_b_plan_f2", f2, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 500, "")
+	s.seedCycleGrant("ent_b_plan_f1", f1, 1000)
+	s.seedCycleGrant("ent_b_plan_f2", f2, 500)
+
+	a := s.seedGrantEC("ent_b_f1_addon", f1, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_f1", 600, "")
+	b := s.seedGrantEC("ent_b_f2_addon", f2, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_f2", 200, "")
+
+	s.Require().NoError(s.runGrantPass([]GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonAttach, a),
+		s.source(s.testData.now, grantProrationSourceAddonAttach, b),
+	}, nil))
+
+	s.Require().Len(s.sortedGrantsForFeature(f1), 2)
+	s.Require().Len(s.sortedGrantsForFeature(f2), 2)
+	s.True(s.liveRow(f1).Quota.Equal(decimal.NewFromInt(1000).Add(s.expectedProrated(600))))
+	s.True(s.liveRow(f2).Quota.Equal(decimal.NewFromInt(500).Add(s.expectedProrated(200))))
+	s.assertTiled(f1)
+	s.assertTiled(f2)
+}
+
+// An add dated at period end belongs to the NEXT cycle: resolveGrantProration skips it
+// and the tick opens it at full quota at renewal. It must not alter this cycle.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Add_NowPlusPeriodEnd_OnlyNowAffectsThisCycle() {
+	featureID := s.seedGrantFeature("feat_b_add_mixed_date")
+	s.seedGrantEC("ent_b_plan_md", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_plan_md", featureID, 1000)
+
+	now := s.seedGrantEC("ent_b_md_now", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_md_now", 600, "")
+	later := s.seedGrantEC("ent_b_md_later", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_md_later", 300, "")
+
+	s.Require().NoError(s.runGrantPass([]GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonAttach, now),
+		s.source(s.periodEnd(), grantProrationSourceAddonAttach, later),
+	}, nil))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "the period-end add must not segment this cycle, got %d rows", len(rows))
+
+	want := decimal.NewFromInt(1000).Add(s.expectedProrated(600))
+	s.True(rows[1].Quota.Equal(want),
+		"only the immediate add contributes this cycle, expected %s got %s", want, rows[1].Quota)
+}
+
+// A parallel EC owns its slot outright, so the pass opens nothing for it — the tick
+// reissues it. The additive feature in the same batch is still segmented.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Add_ParallelFeature_ClosedForTickNotReopened() {
+	par := s.seedGrantFeature("feat_b_add_par")
+	add := s.seedGrantFeature("feat_b_add_additive")
+	s.seedGrantEC("ent_b_par_plan", par, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 400,
+		types.EntitlementAggregationModeParallel)
+	s.seedGrantEC("ent_b_add_plan", add, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_par_plan", par, 400)
+	s.seedCycleGrant("ent_b_add_plan", add, 1000)
+
+	parEC := s.seedGrantEC("ent_b_par_addon", par, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_par", 100,
+		types.EntitlementAggregationModeParallel)
+	addEC := s.seedGrantEC("ent_b_add_addon", add, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_add", 600, "")
+
+	s.Require().NoError(s.runGrantPass([]GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonAttach, parEC),
+		s.source(s.testData.now, grantProrationSourceAddonAttach, addEC),
+	}, nil))
+
+	parRows := s.sortedGrantsForFeature(par)
+	s.Require().Len(parRows, 1, "the parallel slot is closed and left to the tick, got %d rows", len(parRows))
+	s.assertCutAtChange(parRows[0])
+
+	s.Require().Len(s.sortedGrantsForFeature(add), 2)
+	s.True(s.liveRow(add).Quota.Equal(decimal.NewFromInt(1000).Add(s.expectedProrated(600))))
+}
+
+// -----------------------------------------------------------------------------
+// 2. multiple removals
+// -----------------------------------------------------------------------------
+
+// Two removals on one additive feature share one pooled row: it must be closed once,
+// and one successor carries the remaining balance for the survivors.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_OverlappingAdditiveFeature_ClosesPooledRowOnce() {
+	featureID := s.seedGrantFeature("feat_b_rm_overlap")
+	s.seedGrantEC("ent_b_rm_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_rm_plan", featureID, 1000)
+
+	a := s.seedGrantEC("ent_b_rm_a", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rm_a", 600, "")
+	b := s.seedGrantEC("ent_b_rm_b", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rm_b", 300, "")
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonDetach, a),
+		s.source(s.testData.now, grantProrationSourceAddonDetach, b),
+	}))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "closed pool plus one carry-forward, got %d", len(rows))
+	s.True(rows[1].Quota.Equal(decimal.NewFromInt(1000)), "the carry-forward keeps the unspent balance")
+	s.Equal(rows[0].ID, rows[1].Metadata["carry_forward_from"])
+	s.assertTiled(featureID)
+}
+
+// A removal dated at period end must leave this cycle alone: the window expires on its own.
+// What keeps the EC out of the NEXT cycle is the association window, pinned separately by
+// TestGrantBatch_RemoveAtPeriodEnd_AssociationStopsNextCycle.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NowPlusPeriodEnd_PeriodEndLeavesWindowIntact() {
+	f1 := s.seedGrantFeature("feat_b_rm_now")
+	f2 := s.seedGrantFeature("feat_b_rm_later")
+	s.seedGrantEC("ent_b_rmnow_plan", f1, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedGrantEC("ent_b_rmlater_plan", f2, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 500, "")
+	s.seedCycleGrant("ent_b_rmnow_plan", f1, 1000)
+	untouched := s.seedCycleGrant("ent_b_rmlater_plan", f2, 500)
+
+	a := s.seedGrantEC("ent_b_rmnow_addon", f1, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rmnow", 600, "")
+	b := s.seedGrantEC("ent_b_rmlater_addon", f2, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rmlater", 200, "")
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonDetach, a),
+		s.source(s.periodEnd(), grantProrationSourceAddonDetach, b),
+	}))
+
+	s.Len(s.sortedGrantsForFeature(f1), 2, "the immediate removal segments its feature")
+
+	later := s.sortedGrantsForFeature(f2)
+	s.Require().Len(later, 1, "the period-end removal must not segment this cycle, got %d rows", len(later))
+	s.True(later[0].ValidTo.Equal(untouched.ValidTo),
+		"the window must still run to period end, got %s", later[0].ValidTo)
+}
+
+// Parallel slots are owned per EC: removing one addon closes only its own row.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_ParallelFeature_ClosesOnlyItsOwnSlot() {
+	featureID := s.seedGrantFeature("feat_b_rm_par")
+	s.seedGrantEC("ent_b_rmpar_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 400,
+		types.EntitlementAggregationModeParallel)
+	removed := s.seedGrantEC("ent_b_rmpar_addon", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rmpar", 100,
+		types.EntitlementAggregationModeParallel)
+
+	planSlot := s.seedCycleGrant("ent_b_rmpar_plan", featureID, 400)
+	addonSlot := s.seedCycleGrant("ent_b_rmpar_addon", featureID, 100)
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonDetach, removed),
+	}))
+
+	rows := s.grantsForFeature(featureID)
+	byID := lo.SliceToMap(rows, func(g *entitlementgrant.EntitlementGrant) (string, *entitlementgrant.EntitlementGrant) {
+		return g.ID, g
+	})
+	s.True(byID[planSlot.ID].ValidTo.Equal(planSlot.ValidTo), "the surviving slot is untouched")
+	s.assertCutAtChange(byID[addonSlot.ID])
+}
+
+// Nothing survives the removal, so the window closes with no successor: reopening it
+// would hand back quota from configs that no longer feed the feature.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_LastECOnFeature_ClosesWithoutSuccessor() {
+	featureID := s.seedGrantFeature("feat_b_rm_last")
+	only := s.seedGrantEC("ent_b_rmlast_addon", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_rmlast", 600, "")
+	s.seedCycleGrant("ent_b_rmlast_addon", featureID, 600)
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonDetach, only),
+	}))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 1, "no successor when nothing survives, got %d rows", len(rows))
+	s.assertCutAtChange(rows[0])
+}
+
+// -----------------------------------------------------------------------------
+// 3. mixed additions and removals
+// -----------------------------------------------------------------------------
+
+// A swap on one feature is ONE decision: the window closes once and a single successor
+// carries the survivors plus the incoming quota.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_SameAdditiveFeature_OneCloseOneSuccessor() {
+	featureID := s.seedGrantFeature("feat_b_swap")
+	s.seedGrantEC("ent_b_swap_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_swap_plan", featureID, 1000)
+
+	out := s.seedGrantEC("ent_b_swap_out", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_swap_out", 600, "")
+	in := s.seedGrantEC("ent_b_swap_in", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_swap_in", 300, "")
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonDetach, out)},
+	))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "a swap segments once, got %d rows", len(rows))
+
+	want := decimal.NewFromInt(1000).Add(s.expectedProrated(300))
+	s.True(rows[1].Quota.Equal(want), "expected %s got %s", want, rows[1].Quota)
+	s.Empty(rows[1].Metadata["carry_forward_from"], "the incoming open owns the successor, not a carry-forward")
+	s.assertTiled(featureID)
+}
+
+// A removal only changes the successor's quota on a COLD-START feature, where the open
+// sums the surviving ECs instead of inheriting a predecessor's balance. These two pin the
+// one thing a removal's date decides: whether the leaving EC is still a live config.
+//
+// Removed now: the EC is gone, so it must not contribute.
+func (s *SubscriptionServiceSuite) TestGrantBatch_ColdStart_RemoveNow_LeavingECDropsOut() {
+	featureID := s.seedGrantFeature("feat_b_cold_now")
+	s.seedGrantEC("ent_b_cold_now_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedGrantAddon("addon_b_cold_now_out", "ent_b_cold_now_out", featureID, 600, "")
+	s.seedActiveAddonAssociation("assoc_b_cold_now", "addon_b_cold_now_out")
+
+	out := s.ecByID("ent_b_cold_now_out")
+	in := s.seedGrantEC("ent_b_cold_now_in", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_cold_now_in", 300, "")
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonDetach, out)},
+	))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 1, "cold start opens one window, got %d rows", len(rows))
+
+	want := s.expectedProrated(300).Add(decimal.NewFromInt(1000))
+	s.True(rows[0].Quota.Equal(want),
+		"the leaving addon must not contribute, expected %s got %s", want, rows[0].Quota)
+}
+
+// Removed at period end: the addon is paid for through the cycle, so its EC still counts.
+func (s *SubscriptionServiceSuite) TestGrantBatch_ColdStart_RemoveAtPeriodEnd_LeavingECStillCounts() {
+	featureID := s.seedGrantFeature("feat_b_cold_pe")
+	s.seedGrantEC("ent_b_cold_pe_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedGrantAddon("addon_b_cold_pe_out", "ent_b_cold_pe_out", featureID, 600, "")
+	s.seedActiveAddonAssociation("assoc_b_cold_pe", "addon_b_cold_pe_out")
+
+	out := s.ecByID("ent_b_cold_pe_out")
+	in := s.seedGrantEC("ent_b_cold_pe_in", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_cold_pe_in", 300, "")
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.periodEnd(), grantProrationSourceAddonDetach, out)},
+	))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 1, "cold start opens one window, got %d rows", len(rows))
+
+	want := s.expectedProrated(300).Add(decimal.NewFromInt(1000)).Add(decimal.NewFromInt(600))
+	s.True(rows[0].Quota.Equal(want),
+		"the addon leaves at period end, so it still feeds this cycle, expected %s got %s", want, rows[0].Quota)
+}
+
+// The only EC feeding a feature leaves as another arrives. The successor must start where
+// the closed window ended — two live rows over one instant would double the quota — but must
+// NOT inherit its balance: removing that EC on its own drops the balance, and an unrelated
+// addon sharing the batch cannot be what rescues it.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_LastECOnFeature_TilesWithoutCarryingQuota() {
+	featureID := s.seedGrantFeature("feat_b_lastswap")
+	s.seedGrantAddon("addon_b_lastswap_out", "ent_b_lastswap_out", featureID, 600, "")
+	s.seedActiveAddonAssociation("assoc_b_lastswap", "addon_b_lastswap_out")
+	s.seedCycleGrant("ent_b_lastswap_out", featureID, 600)
+
+	out := s.ecByID("ent_b_lastswap_out")
+	in := s.seedGrantEC("ent_b_lastswap_in", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_lastswap_in", 300, "")
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonDetach, out)},
+	))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 2, "one closed window plus the incoming addon's own, got %d", len(rows))
+
+	s.assertCutAtChange(rows[0])
+	s.assertTiled(featureID)
+
+	want := s.expectedProrated(300)
+	s.True(rows[1].Quota.Equal(want),
+		"the leaving addon's unspent quota must not carry, expected %s got %s", want, rows[1].Quota)
+}
+
+// Add and remove on unrelated features must not leak into each other.
+func (s *SubscriptionServiceSuite) TestGrantBatch_AddAndRemove_DifferentFeatures_Independent() {
+	added := s.seedGrantFeature("feat_b_mix_added")
+	removed := s.seedGrantFeature("feat_b_mix_removed")
+	s.seedGrantEC("ent_b_mixadd_plan", added, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedGrantEC("ent_b_mixrm_plan", removed, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 500, "")
+	s.seedCycleGrant("ent_b_mixadd_plan", added, 1000)
+	s.seedCycleGrant("ent_b_mixrm_plan", removed, 500)
+
+	in := s.seedGrantEC("ent_b_mixadd_addon", added, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_mixadd", 600, "")
+	out := s.seedGrantEC("ent_b_mixrm_addon", removed, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_mixrm", 200, "")
+
+	s.Require().NoError(s.runGrantPass(
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonAttach, in)},
+		[]GrantSource{s.source(s.testData.now, grantProrationSourceAddonDetach, out)},
+	))
+
+	s.Require().Len(s.sortedGrantsForFeature(added), 2)
+	s.True(s.liveRow(added).Quota.Equal(decimal.NewFromInt(1000).Add(s.expectedProrated(600))))
+
+	rmRows := s.sortedGrantsForFeature(removed)
+	s.Require().Len(rmRows, 2)
+	s.True(rmRows[1].Quota.Equal(decimal.NewFromInt(500)), "the carry-forward keeps the survivors' balance")
+	s.assertTiled(added)
+	s.assertTiled(removed)
+}
+
+// A spent pool has nothing to hand forward, and a zero-quota successor is rejected by
+// the model — so the window stays open and keeps its slot covered.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_SpentPool_LeavesWindowOpen() {
+	featureID := s.seedGrantFeature("feat_b_rm_spent")
+	s.seedGrantEC("ent_b_spent_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	out := s.seedGrantEC("ent_b_spent_addon", featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon_b_spent", 600, "")
+
+	spent := s.seedCycleGrant("ent_b_spent_plan", featureID, 1000)
+	spent.Usage = decimal.NewFromInt(1000)
+	_, err := s.GetStores().EntitlementGrantRepo.Update(s.GetContext(), spent)
+	s.Require().NoError(err)
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{
+		s.source(s.testData.now, grantProrationSourceAddonDetach, out),
+	}))
+
+	rows := s.sortedGrantsForFeature(featureID)
+	s.Require().Len(rows, 1, "the spent window is left alone, got %d rows", len(rows))
+	s.True(rows[0].ValidTo.Equal(spent.ValidTo), "it must keep its original window")
+}
+
+// What actually stops next cycle's window is the association, not the grant pass: a
+// cancelled association drops out of GetActiveAddonAssociation, so the EC no longer
+// feeds the feature. This pins WHEN that happens for a period-end removal.
+func (s *SubscriptionServiceSuite) TestGrantBatch_RemoveAtPeriodEnd_AssociationStopsNextCycle() {
+	ctx := s.GetContext()
+	featureID := s.seedGrantFeature("feat_b_assoc_end")
+	s.seedGrantEC("ent_b_assoc_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
+	s.seedCycleGrant("ent_b_assoc_plan", featureID, 1000)
+	s.seedGrantAddon("addon_b_assoc", "ent_b_assoc_addon", featureID, 600, "")
+
+	s.Require().NoError(s.attachAddon("addon_b_assoc", s.testData.now, types.ProrationBehaviorCreateProrations))
+
+	ecsBefore, err := s.grantService().GetSubscriptionGrantECsByFeature(ctx, s.testData.subscription)
+	s.Require().NoError(err)
+	s.Len(ecsBefore[featureID], 2, "the attached addon feeds the feature")
+
+	assocs, err := s.GetStores().AddonAssociationRepo.List(ctx, types.NewNoLimitAddonAssociationFilter())
+	s.Require().NoError(err)
+	assoc, found := lo.Find(assocs, func(a *addonassociation.AddonAssociation) bool {
+		return a.AddonID == "addon_b_assoc"
+	})
+	s.Require().True(found)
+
+	s.Require().NoError(s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: assoc.ID,
+		EffectiveDate:      lo.ToPtr(s.periodEnd()),
+	}))
+
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, assoc.ID)
+	s.Require().NoError(err)
+	s.True(lo.FromPtr(stored.EndDate).Equal(s.periodEnd()), "the association ends at period end")
+
+	// Cancelled is stamped immediately even for a future-dated removal, so status alone
+	// cannot gate the entitlement — the window has to.
+	s.Equal(types.AddonStatusCancelled, stored.AddonStatus)
+
+	ecsAfter, err := s.grantService().GetSubscriptionGrantECsByFeature(ctx, s.testData.subscription)
+	s.Require().NoError(err)
+	s.Len(ecsAfter[featureID], 2,
+		"the addon is paid for until period end, so its EC must still feed this cycle")
+
+	s.True(s.liveRow(featureID).ValidTo.Equal(s.periodEnd()),
+		"and its grant window must still run to period end")
 }

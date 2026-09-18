@@ -356,7 +356,11 @@ func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planCh
 		create = append(create, dto.NewSubscriptionScopedCreditGrantRequest(cg, r.currentSub.ID, r.toPlan.ID))
 	}
 
-	if err := s.handleCreditGrantsWithStart(ctx, r.updatedSub, create, r.effectiveAt, nil, nil); err != nil {
+	if err := NewCreditGrantService(s.ServiceParams).CreateSubscriptionGrants(ctx, dto.CreateSubscriptionGrantsRequest{
+		Subscription: r.updatedSub,
+		Grants:       create,
+		StartDate:    r.effectiveAt,
+	}); err != nil {
 		return err
 	}
 
@@ -778,7 +782,7 @@ func (s *subscriptionService) PreviewPlanChange(
 	subscriptionID string,
 	req dto.SubscriptionChangeV2Request,
 ) (*dto.SubscriptionChangeV2Response, error) {
-	sub, err := s.loadSubscriptionForPlanChange(ctx, subscriptionID, false)
+	sub, err := s.loadSubscriptionForChange(ctx, subscriptionID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +851,7 @@ func (s *subscriptionService) executePlanChangeAt(
 	var resp *dto.SubscriptionChangeV2Response
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		sub, err := s.loadSubscriptionForPlanChange(txCtx, subscriptionID, true)
+		sub, err := s.loadSubscriptionForChange(txCtx, subscriptionID, true)
 		if err != nil {
 			return err
 		}
@@ -938,7 +942,7 @@ func (s *subscriptionService) attemptPlanChangePayment(ctx context.Context, resp
 }
 
 // forUpdate takes the row lock as the first read so concurrent changes serialize.
-func (s *subscriptionService) loadSubscriptionForPlanChange(
+func (s *subscriptionService) loadSubscriptionForChange(
 	ctx context.Context,
 	subscriptionID string,
 	forUpdate bool,
@@ -1586,7 +1590,7 @@ func (s *subscriptionService) schedulePlanChangeForPeriodEnd(
 	)
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		sub, err := s.loadSubscriptionForPlanChange(txCtx, subscriptionID, true)
+		sub, err := s.loadSubscriptionForChange(txCtx, subscriptionID, true)
 		if err != nil {
 			return err
 		}

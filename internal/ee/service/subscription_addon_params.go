@@ -11,8 +11,8 @@ import (
 )
 
 // addonAttachParams is a fully-resolved addon attach that has not been written yet, so it can be
-// priced before anyone decides whether to persist it. createAddonAttachParams builds it,
-// calculateAddonProration prices it, persistAddonAttach writes it.
+// priced before anyone decides whether to persist it. createAddonAttachParams builds it and
+// AddonChangeService prices and writes it.
 type addonAttachParams struct {
 	subscription   *subscription.Subscription
 	request        *dto.AddAddonToSubscriptionRequest
@@ -101,8 +101,8 @@ func (p *addonAttachParams) prorationIdempotencyKey() string {
 }
 
 // addonDetachParams is a fully-resolved addon removal that has not been written yet, so it can
-// be priced before anyone decides whether to persist it. createAddonDetachParams builds it,
-// addonDetachProrationRequest prices it, persistAddonDetach writes it.
+// be priced before anyone decides whether to persist it. createAddonDetachParams builds it and
+// AddonChangeService prices and writes it.
 type addonDetachParams struct {
 	subscription  *subscription.Subscription
 	association   *addonassociation.AddonAssociation

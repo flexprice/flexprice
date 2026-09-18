@@ -106,8 +106,6 @@ type SettleProrationRequest struct {
 	IdempotencyKey string
 	Reason         string
 	Mode           SettleMode
-
-	AttemptPayment bool
 }
 
 func NewSettleProrationRequest(
@@ -128,11 +126,6 @@ func NewSettleProrationRequest(
 		IdempotencyKey: idempotencyKey,
 		Mode:           mode,
 	}
-}
-
-type SettleProrationResult struct {
-	Changed []dto.ChangedInvoice
-	Draft   *dto.InvoiceResponse // set only for SettleModeDraft
 }
 
 func (r *SettleProrationRequest) validate() error {
@@ -165,6 +158,25 @@ func (r *SettleProrationRequest) validate() error {
 	}
 
 	return nil
+}
+
+type SettleProrationResult struct {
+	Changed []dto.ChangedInvoice
+	Draft   *dto.InvoiceResponse
+}
+
+func (r *SettleProrationResult) GetChanged() []dto.ChangedInvoice {
+	if r == nil {
+		return nil
+	}
+	return r.Changed
+}
+
+func (r *SettleProrationResult) GetDraft() *dto.InvoiceResponse {
+	if r == nil {
+		return nil
+	}
+	return r.Draft
 }
 
 type LineItemProrationService interface {
@@ -309,9 +321,10 @@ func (s *lineItemProrationService) Settle(ctx context.Context, req *SettleProrat
 			}
 			result.Draft = inv
 
-		case SettleModeIssue:
-			inv, err := s.issueInvoice(ctx, invoiceReq, req.AttemptPayment)
+		default:
+			inv, err := NewInvoiceService(s.params).CreateInvoice(ctx, invoiceReq)
 			if err != nil {
+				s.params.Logger.Error(ctx, "failed to create proration charge invoice", "error", err)
 				return nil, err
 			}
 			result.Changed = append(result.Changed, dto.ChangedInvoice{
@@ -553,33 +566,49 @@ func prorationChargeInvoiceKey(req LineItemProrationRequest) string {
 	})
 }
 
-func (s *lineItemProrationService) issueInvoice(
-	ctx context.Context,
-	req dto.CreateInvoiceRequest,
-	attemptPayment bool,
-) (*dto.InvoiceResponse, error) {
-	invoiceSvc := NewInvoiceService(s.params)
-
-	inv, err := invoiceSvc.CreateInvoice(ctx, req)
-	if err != nil {
-		s.params.Logger.Error(ctx, "failed to create proration charge invoice", "error", err)
-		return nil, err
+// collectableProrationInvoice reports whether an invoice in this payment status still owes
+// money. Settle raises its invoices as PENDING, so the other statuses only arise when a
+// caller hands back an invoice that was already paid, voided or refunded — charging one of
+// those again would take money twice.
+func collectableProrationInvoice(status types.PaymentStatus) bool {
+	switch status {
+	case types.PaymentStatusPending, types.PaymentStatusFailed:
+		return true
+	default:
+		return false
 	}
-	if !attemptPayment {
-		return inv, nil
-	}
+}
 
-	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-		s.params.Logger.Info(ctx, "failed to attempt payment for proration charge invoice",
-			"error", err, "invoice_id", inv.ID)
-	}
+// attemptProrationPayments collects settled proration invoices and refreshes what changed. It
+// does outbound I/O — wallet debits and a gateway charge — so it runs only after the caller's
+// transaction has committed.
+func attemptProrationPayments(ctx context.Context, params ServiceParams, changed []dto.ChangedInvoice) {
+	invoiceSvc := NewInvoiceService(params)
 
-	if latest, err := s.params.InvoiceRepo.Get(ctx, inv.ID); err == nil && latest != nil {
+	for i := range changed {
+		inv := changed[i].Invoice
+		if inv == nil || inv.ID == "" {
+			continue
+		}
+
+		if !collectableProrationInvoice(inv.PaymentStatus) {
+			continue
+		}
+
+		if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
+			params.Logger.Info(ctx, "proration invoice created but payment attempt failed; invoice remains collectable",
+				"error", err, "invoice_id", inv.ID)
+		}
+
+		latest, err := params.InvoiceRepo.Get(ctx, inv.ID)
+		if err != nil || latest == nil {
+			continue
+		}
+
 		inv.InvoiceStatus = latest.InvoiceStatus
 		inv.PaymentStatus = latest.PaymentStatus
 		inv.AmountPaid = latest.AmountPaid
 		inv.AmountRemaining = latest.AmountRemaining
+		changed[i].Status = dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus)
 	}
-
-	return inv, nil
 }

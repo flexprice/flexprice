@@ -16,8 +16,9 @@ import (
 
 type LineItemProrationServiceSuite struct {
 	testutil.BaseServiceTestSuite
-	svc LineItemProrationService
-	td  lineItemProrationTestData
+	svc    LineItemProrationService
+	params ServiceParams
+	td     lineItemProrationTestData
 }
 
 type lineItemProrationTestData struct {
@@ -44,7 +45,7 @@ func (s *LineItemProrationServiceSuite) TearDownTest() {
 }
 
 func (s *LineItemProrationServiceSuite) setupService() {
-	s.svc = NewLineItemProrationService(ServiceParams{
+	s.params = ServiceParams{
 		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
@@ -85,7 +86,8 @@ func (s *LineItemProrationServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		IntegrationFactory:         s.GetIntegrationFactory(),
-	})
+	}
+	s.svc = NewLineItemProrationService(s.params)
 }
 
 func (s *LineItemProrationServiceSuite) setupTestData() {

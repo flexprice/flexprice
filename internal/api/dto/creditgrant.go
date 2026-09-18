@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -517,6 +518,26 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 		EnvironmentID:                   types.GetEnvironmentID(ctx),
 		BaseModel:                       types.GetDefaultBaseModel(ctx),
 	}
+}
+
+type CreateSubscriptionGrantsRequest struct {
+	Subscription *subscription.Subscription
+	Grants       []CreateCreditGrantRequest
+	StartDate    time.Time
+	// EndDate caps recurring grants at a time-bounded (onetime) addon's boundary. Nil keeps
+	// the subscription's own end.
+	EndDate *time.Time
+	// FirstPeriodProration scales the first grant to the part of the period it covers.
+	FirstPeriodProration *FirstPeriodProration
+}
+
+func (r *CreateSubscriptionGrantsRequest) Validate() error {
+	if r.Subscription == nil {
+		return errors.NewError("subscription is required to materialize credit grants").
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
 }
 
 // CancelFutureSubscriptionGrantsRequest represents the request to cancel future credit grants for a subscription

@@ -168,8 +168,9 @@ func (p *ModifySubscriptionParams) Validate() error {
 // List-shaped so batching more than one addon per session is additive; the attach endpoint
 // is single-addon today, so sessions carry one, but completion loops the list.
 type AddAddonParams struct {
-	SubscriptionID string        `json:"subscription_id"`
-	Addons         []AddAddonRef `json:"addons"`
+	SubscriptionID string           `json:"subscription_id"`
+	Addons         []AddAddonRef    `json:"addons"`
+	Removes        []RemoveAddonRef `json:"removes,omitempty"`
 }
 
 // AddAddonRef is one pending addon attach, carrying everything needed to replay the attach
@@ -181,6 +182,15 @@ type AddAddonRef struct {
 	// Needed to prorate the addon's first credit grant.
 	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         time.Time         `json:"start_date"`
+}
+
+// RemoveAddonRef is one removal riding along with a payment-gated attach. It persists nothing
+// at execute time, so it replays by association rather than by addon.
+type RemoveAddonRef struct {
+	AssociationID     string            `json:"association_id"`
+	Reason            string            `json:"reason,omitempty"`
+	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
+	EffectiveDate     time.Time         `json:"effective_date"`
 }
 
 func (p *AddAddonParams) Validate() error {
@@ -224,6 +234,35 @@ func (p *AddAddonParams) Validate() error {
 			return ierr.NewError("start_date is required").
 				WithHint("start_date must be resolved at execute time so completion replays the same attach date").
 				WithReportableDetails(map[string]any{"index": i, "addon_id": ref.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	seen := make(map[string]struct{}, len(p.Removes))
+	for i, ref := range p.Removes {
+		if ref.AssociationID == "" {
+			return ierr.NewError("association_id is required").
+				WithHint("Each remove must reference the addon association being removed").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if _, ok := seen[ref.AssociationID]; ok {
+			return ierr.NewError("duplicate association_id in removes").
+				WithHint("Each addon association can be removed at most once per checkout session").
+				WithReportableDetails(map[string]any{"index": i, "association_id": ref.AssociationID}).
+				Mark(ierr.ErrValidation)
+		}
+		seen[ref.AssociationID] = struct{}{}
+
+		if ref.ProrationBehavior != "" {
+			if err := ref.ProrationBehavior.Validate(); err != nil {
+				return err
+			}
+		}
+		if ref.EffectiveDate.IsZero() {
+			return ierr.NewError("effective_date is required").
+				WithHint("effective_date must be resolved at execute time so completion replays the same removal date").
+				WithReportableDetails(map[string]any{"index": i, "association_id": ref.AssociationID}).
 				Mark(ierr.ErrValidation)
 		}
 	}

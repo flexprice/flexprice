@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -20,11 +21,29 @@ func validAddAddonRef() AddAddonRef {
 	}
 }
 
+func validRemoveAddonRef() RemoveAddonRef {
+	return RemoveAddonRef{
+		AssociationID:     "addon_assoc_456",
+		Reason:            "downgrade",
+		ProrationBehavior: ProrationBehaviorCreateProrations,
+		EffectiveDate:     time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC),
+	}
+}
+
 func TestAddAddonParams_Validate(t *testing.T) {
 	withRef := func(mutate func(*AddAddonRef)) *AddAddonParams {
 		ref := validAddAddonRef()
 		mutate(&ref)
 		return &AddAddonParams{SubscriptionID: "subs_123", Addons: []AddAddonRef{ref}}
+	}
+	withRemove := func(mutate func(*RemoveAddonRef)) *AddAddonParams {
+		ref := validRemoveAddonRef()
+		mutate(&ref)
+		return &AddAddonParams{
+			SubscriptionID: "subs_123",
+			Addons:         []AddAddonRef{validAddAddonRef()},
+			Removes:        []RemoveAddonRef{ref},
+		}
 	}
 
 	tests := []struct {
@@ -104,6 +123,76 @@ func TestAddAddonParams_Validate(t *testing.T) {
 			name:    "zero start date",
 			params:  withRef(func(r *AddAddonRef) { r.StartDate = time.Time{} }),
 			wantErr: true,
+		},
+		{
+			name:    "nil removes stays valid",
+			params:  &AddAddonParams{SubscriptionID: "subs_123", Addons: []AddAddonRef{validAddAddonRef()}, Removes: nil},
+			wantErr: false,
+		},
+		{
+			name:    "valid add and remove",
+			params:  withRemove(func(*RemoveAddonRef) {}),
+			wantErr: false,
+		},
+		{
+			name:    "valid remove with unset proration behavior",
+			params:  withRemove(func(r *RemoveAddonRef) { r.ProrationBehavior = "" }),
+			wantErr: false,
+		},
+		{
+			name:    "valid remove with no reason",
+			params:  withRemove(func(r *RemoveAddonRef) { r.Reason = "" }),
+			wantErr: false,
+		},
+		{
+			// A pay-first session exists because the net is positive, which needs an add.
+			name: "removes without adds rejected",
+			params: &AddAddonParams{
+				SubscriptionID: "subs_123",
+				Removes:        []RemoveAddonRef{validRemoveAddonRef()},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "remove with empty association id",
+			params:  withRemove(func(r *RemoveAddonRef) { r.AssociationID = "" }),
+			wantErr: true,
+		},
+		{
+			name:    "remove with invalid proration behavior",
+			params:  withRemove(func(r *RemoveAddonRef) { r.ProrationBehavior = "always" }),
+			wantErr: true,
+		},
+		{
+			// A zero date would replay as time.Now(), against a different window than the draft.
+			name:    "remove with zero effective date",
+			params:  withRemove(func(r *RemoveAddonRef) { r.EffectiveDate = time.Time{} }),
+			wantErr: true,
+		},
+		{
+			name: "duplicate remove association id rejected",
+			params: &AddAddonParams{
+				SubscriptionID: "subs_123",
+				Addons:         []AddAddonRef{validAddAddonRef()},
+				Removes:        []RemoveAddonRef{validRemoveAddonRef(), validRemoveAddonRef()},
+			},
+			wantErr: true,
+		},
+		{
+			name: "multiple distinct removes allowed",
+			params: &AddAddonParams{
+				SubscriptionID: "subs_123",
+				Addons:         []AddAddonRef{validAddAddonRef()},
+				Removes: []RemoveAddonRef{
+					validRemoveAddonRef(),
+					func() RemoveAddonRef {
+						r := validRemoveAddonRef()
+						r.AssociationID = "addon_assoc_789"
+						return r
+					}(),
+				},
+			},
+			wantErr: false,
 		},
 	}
 
@@ -208,4 +297,18 @@ func TestCheckoutProviderResultBuilder_NilHandling(t *testing.T) {
 
 	var b *CheckoutProviderResultBuilder
 	assert.Nil(t, b.Build())
+}
+
+// Sessions persisted before removes existed must still unmarshal and validate.
+func TestAddAddonParams_LegacyJSONRoundTrip(t *testing.T) {
+	legacy := `{"subscription_id":"subs_123","addons":[{"association_id":"addon_assoc_123","addon_id":"addon_123","cadence":"recurring","proration_behavior":"create_prorations","start_date":"2026-08-05T00:00:00Z"}]}`
+
+	var params AddAddonParams
+	require.NoError(t, json.Unmarshal([]byte(legacy), &params))
+	assert.Nil(t, params.Removes)
+	assert.NoError(t, params.Validate())
+
+	out, err := json.Marshal(&params)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "removes")
 }
