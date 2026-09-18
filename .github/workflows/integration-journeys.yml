@@ -1,0 +1,122 @@
+# Integration journeys — YAML-defined customer workflows executed against
+# live Flexprice targets through the published Go SDK.
+# See integration-testing-suite/README.md.
+#
+# Jobs:
+#   validate — static checks + engine unit tests + coverage summary.
+#              Runs on PRs into develop and main. No secrets needed.
+#   run      — executes sanity-tagged journeys against staging.
+#              Runs on develop→main release PRs only (deploy.yml
+#              keeps staging deployed from develop, so the release PR is
+#              verified against the exact code being promoted), nightly,
+#              and on manual dispatch.
+name: integration-journeys
+
+on:
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "30 2 * * *" # nightly drift detection against staging
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Journey tags to run (comma-separated)"
+        default: sanity
+      parallel:
+        description: "Max journeys running concurrently"
+        default: "4"
+
+concurrency:
+  group: integration-journeys-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate journeys & engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: integration-testing-suite/runner/go.mod
+          cache-dependency-path: integration-testing-suite/runner/go.sum
+
+      - name: Engine unit tests
+        working-directory: integration-testing-suite/runner
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Static journey validation
+        working-directory: integration-testing-suite/runner
+        run: go run . -dir ../journeys -validate
+
+      - name: SDK coverage summary
+        working-directory: integration-testing-suite/runner
+        run: go run . -dir ../journeys -coverage >> "$GITHUB_STEP_SUMMARY"
+
+  run:
+    name: Run journeys against staging
+    needs: validate
+    # Nightly, manual dispatch from develop only, and develop→main release PRs.
+    # Every allowed path runs code that already passed review into develop, so
+    # this job never executes unreviewed code with secrets — neither a PR from
+    # an arbitrary branch nor a workflow_dispatch pointed at one can run a
+    # modified runner that could exfiltrate INTEGRATION_TARGETS_JSON.
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'pull_request' &&
+        github.base_ref == 'main' && github.head_ref == 'develop')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: integration-testing-suite/runner/go.mod
+          cache-dependency-path: integration-testing-suite/runner/go.sum
+
+      - name: Check target secret
+        id: target
+        env:
+          TARGETS: ${{ secrets.INTEGRATION_TARGETS_JSON }}
+        run: |
+          if [ -z "$TARGETS" ]; then
+            echo "INTEGRATION_TARGETS_JSON secret is not configured — skipping live run." >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run journeys
+        if: steps.target.outputs.configured == 'true'
+        working-directory: integration-testing-suite/runner
+        env:
+          FLEXPRICE_TARGETS: ${{ secrets.INTEGRATION_TARGETS_JSON }}
+          JOURNEY_TAGS: ${{ github.event.inputs.tags || 'sanity' }}
+          JOURNEY_PARALLEL: ${{ github.event.inputs.parallel || '4' }}
+        run: |
+          go run . -dir ../journeys \
+            -tags "$JOURNEY_TAGS" \
+            -parallel "$JOURNEY_PARALLEL" \
+            -report-json report.json -junit junit.xml
+
+      - name: Upload reports
+        if: always() && steps.target.outputs.configured == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: journey-reports
+          path: |
+            integration-testing-suite/runner/report.json
+            integration-testing-suite/runner/junit.xml
+          retention-days: 14
