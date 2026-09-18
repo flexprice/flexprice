@@ -47,6 +47,8 @@ type EntitlementGrant struct {
 	Measure types.EntitlementGrantMeasure `json:"measure,omitempty"`
 	// Quota holds the value of the "quota" field.
 	Quota decimal.Decimal `json:"quota,omitempty"`
+	// Unlimited holds the value of the "unlimited" field.
+	Unlimited bool `json:"unlimited,omitempty"`
 	// Usage holds the value of the "usage" field.
 	Usage decimal.Decimal `json:"usage,omitempty"`
 	// ValidFrom holds the value of the "valid_from" field.
@@ -71,6 +73,8 @@ func (*EntitlementGrant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entitlementgrant.FieldQuota, entitlementgrant.FieldUsage:
 			values[i] = new(decimal.Decimal)
+		case entitlementgrant.FieldUnlimited:
+			values[i] = new(sql.NullBool)
 		case entitlementgrant.FieldID, entitlementgrant.FieldTenantID, entitlementgrant.FieldStatus, entitlementgrant.FieldCreatedBy, entitlementgrant.FieldUpdatedBy, entitlementgrant.FieldEnvironmentID, entitlementgrant.FieldEntitlementConfigID, entitlementgrant.FieldCustomerID, entitlementgrant.FieldSubscriptionID, entitlementgrant.FieldScopeEntityType, entitlementgrant.FieldScopeEntityID, entitlementgrant.FieldMeasure, entitlementgrant.FieldGrantStatus:
 			values[i] = new(sql.NullString)
 		case entitlementgrant.FieldCreatedAt, entitlementgrant.FieldUpdatedAt, entitlementgrant.FieldValidFrom, entitlementgrant.FieldValidTo, entitlementgrant.FieldLastComputedAt, entitlementgrant.FieldQuotaCrossedAt:
@@ -181,6 +185,12 @@ func (eg *EntitlementGrant) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field quota", values[i])
 			} else if value != nil {
 				eg.Quota = *value
+			}
+		case entitlementgrant.FieldUnlimited:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field unlimited", values[i])
+			} else if value.Valid {
+				eg.Unlimited = value.Bool
 			}
 		case entitlementgrant.FieldUsage:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
@@ -303,6 +313,9 @@ func (eg *EntitlementGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("quota=")
 	builder.WriteString(fmt.Sprintf("%v", eg.Quota))
+	builder.WriteString(", ")
+	builder.WriteString("unlimited=")
+	builder.WriteString(fmt.Sprintf("%v", eg.Unlimited))
 	builder.WriteString(", ")
 	builder.WriteString("usage=")
 	builder.WriteString(fmt.Sprintf("%v", eg.Usage))

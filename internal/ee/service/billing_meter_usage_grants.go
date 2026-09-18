@@ -12,6 +12,7 @@ import (
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -92,6 +93,17 @@ func (s *billingService) adjustMeterUsageGrants(
 	if len(grants) == 0 {
 		return adjustMeterUsageGrantsResult{}, false, nil
 	}
+
+	// A replaced window's successor re-measures the same period, so folding both would
+	// charge those units twice. Dropped here, not in the query: the read paths still
+	// want these rows as history.
+	grants = lo.Filter(grants, func(g *entitlementgrant.EntitlementGrant, _ int) bool {
+		return g != nil && g.GrantStatus.IsBillable()
+	})
+	if len(grants) == 0 {
+		return adjustMeterUsageGrantsResult{}, false, nil
+	}
+
 	// Measure is copied from the EC to every grant; EC-write validation keeps
 	// it consistent per feature, so the first row is authoritative.
 	measure := grants[0].Measure

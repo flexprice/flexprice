@@ -332,8 +332,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		// overage accrued before detection is never billed: pro-customer,
 		// bounded by the debounce delay. If exactness is ever needed, the
 		// upgrade path is the binary-searched crossing (see ERD decisions).
+		// Unlimited windows track usage for display but have no ceiling to cross,
+		// so they never stamp a crossing and never bill overage.
 		cross := g.QuotaCrossedAt
-		if cross == nil && usage.GreaterThanOrEqual(g.Quota) {
+		if cross == nil && !g.Unlimited && usage.GreaterThanOrEqual(g.Quota) {
 			cross = &at
 		}
 
@@ -343,7 +345,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			WithUsage(usage).
 			WithLastComputedAt(&at).
 			WithQuotaCrossedAt(cross)
-		if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
+		if !g.Unlimited && usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
 			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
 		}
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {

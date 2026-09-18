@@ -20,7 +20,10 @@ type EntitlementGrant struct {
 	ScopeEntityType     types.EntitlementGrantScopeEntityType `json:"scope_entity_type"`
 	ScopeEntityID       string                                `json:"scope_entity_id"`
 	Measure             types.EntitlementGrantMeasure         `json:"measure"`
-	Quota               decimal.Decimal                       `json:"quota"`
+	// Unlimited windows track usage but can never be exhausted and never bill.
+	// Quota is meaningless when set — read it only through the methods below.
+	Unlimited bool            `json:"unlimited"`
+	Quota     decimal.Decimal `json:"quota"`
 	Usage               decimal.Decimal                       `json:"usage"`
 	ValidFrom           time.Time                             `json:"valid_from"`
 	ValidTo             time.Time                             `json:"valid_to"`
@@ -58,7 +61,7 @@ func (g *EntitlementGrant) Window() (time.Time, time.Time) {
 }
 
 func (g *EntitlementGrant) IsExhausted() bool {
-	if g == nil {
+	if g == nil || g.Unlimited {
 		return false
 	}
 	return g.Usage.GreaterThanOrEqual(g.Quota)
@@ -66,7 +69,7 @@ func (g *EntitlementGrant) IsExhausted() bool {
 
 // Overage is the non-negative excess of usage over quota.
 func (g *EntitlementGrant) Overage() decimal.Decimal {
-	if g == nil {
+	if g == nil || g.Unlimited {
 		return decimal.Zero
 	}
 	over := g.Usage.Sub(g.Quota)
@@ -78,8 +81,10 @@ func (g *EntitlementGrant) Overage() decimal.Decimal {
 
 // Remaining is the unspent balance, clamped at zero. The mirror of Overage: a window that
 // ran past its quota hands nothing forward, so debt never crosses into a successor.
+// Unlimited windows return zero: there is no balance to hand a successor, and a
+// caller must branch on Unlimited before presenting this as a number.
 func (g *EntitlementGrant) Remaining() decimal.Decimal {
-	if g == nil {
+	if g == nil || g.Unlimited {
 		return decimal.Zero
 	}
 	remaining := g.Quota.Sub(g.Usage)
@@ -122,7 +127,9 @@ func (g *EntitlementGrant) Validate() error {
 			WithHint("Set measure to quantity or amount").
 			Mark(ierr.ErrValidation)
 	}
-	if !g.Quota.IsPositive() {
+	// Unlimited windows carry no meaningful quota, so the positivity rule only
+	// applies to bounded ones.
+	if !g.Unlimited && !g.Quota.IsPositive() {
 		return ierr.NewError("quota must be positive").
 			WithReportableDetails(map[string]interface{}{"quota": g.Quota.String()}).
 			Mark(ierr.ErrValidation)
@@ -162,6 +169,7 @@ func FromEnt(e *ent.EntitlementGrant) *EntitlementGrant {
 		ScopeEntityID:       e.ScopeEntityID,
 		Measure:             e.Measure,
 		Quota:               e.Quota,
+		Unlimited:           e.Unlimited,
 		Usage:               e.Usage,
 		ValidFrom:           e.ValidFrom,
 		ValidTo:             e.ValidTo,
