@@ -10,6 +10,7 @@ import (
 
 // CheckoutProvider is implemented by each payment gateway that supports hosted checkout.
 type CheckoutProvider interface {
+	// CreatePaymentLink creates a hosted payment link or session for one-time checkout.
 	CreatePaymentLink(ctx context.Context, req CheckoutProviderRequest) (*CheckoutProviderResponse, error)
 
 	// CreateAuthorizationLink registers a payment instrument for future off-session
@@ -22,6 +23,11 @@ type CheckoutProvider interface {
 	// registered instrument. charged=false means no usable method (caller should
 	// fall back to CreateAuthorizationLink). A hard provider error is returned as err.
 	TryAutoChargingSavedMethod(ctx context.Context, req AuthorizationLinkRequest) (resp *CheckoutProviderResponse, charged bool, err error)
+
+	// HasAutoChargeableMethod returns true if the customer has an active instrument
+	// (e.g., a confirmed mandate token or an active vaulted payment source)
+	// ready for off-session automatic charges.
+	HasAutoChargeableMethod(ctx context.Context, customerID string) (bool, error)
 
 	// FetchPaymentState asks the provider what happened to a checkout's payment, so a
 	// session can be reconciled when the webhook was late, dropped, or errored.

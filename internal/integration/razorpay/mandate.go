@@ -213,3 +213,21 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 		// No NextAction — off-session charge; completion via payment webhook.
 	}, true, nil
 }
+
+// HasAutoChargeableMethod implements interfaces.CheckoutProvider by checking
+// if the customer has any confirmed recurring mandate tokens on Razorpay.
+func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, customerID string) (bool, error) {
+	if a == nil || a.Svc == nil || a.Svc.customerSvc == nil {
+		return false, nil
+	}
+
+	_, tokens, err := a.Svc.customerSvc.ListConfirmedCustomerTokens(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return len(tokens) > 0, nil
+}
+

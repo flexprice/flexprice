@@ -77,6 +77,9 @@ func (f *fakeCheckoutProvider) CreateAuthorizationLink(context.Context, interfac
 func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, bool, error) {
 	return nil, false, nil
 }
+func (f *fakeCheckoutProvider) HasAutoChargeableMethod(context.Context, string) (bool, error) {
+	return false, nil
+}
 
 // ── suite ────────────────────────────────────────────────────────────────────
 

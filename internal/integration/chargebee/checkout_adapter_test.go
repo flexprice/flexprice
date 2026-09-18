@@ -7,19 +7,25 @@ import (
 
 	invoiceModel "github.com/chargebee/chargebee-go/v3/models/invoice"
 	invoiceEnum "github.com/chargebee/chargebee-go/v3/models/invoice/enum"
+	paymentSourceModel "github.com/chargebee/chargebee-go/v3/models/paymentsource"
+	paymentSourceEnum "github.com/chargebee/chargebee-go/v3/models/paymentsource/enum"
 	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type stubCheckoutClient struct {
 	ChargebeeClient
-	gotInvoiceReq AdHocInvoiceRequest
-	invoice       *invoiceModel.Invoice
-	voidedIDs     []string
+	gotInvoiceReq  AdHocInvoiceRequest
+	invoice        *invoiceModel.Invoice
+	voidedIDs      []string
+	sources        []*paymentSourceModel.PaymentSource
+	listSourcesErr error
 }
 
 func (c *stubCheckoutClient) CreateAdHocInvoice(_ context.Context, req AdHocInvoiceRequest) (*invoiceModel.Invoice, error) {
@@ -32,10 +38,31 @@ func (c *stubCheckoutClient) VoidInvoice(_ context.Context, chargebeeInvoiceID, 
 	return nil
 }
 
-type stubCustomerSvc struct{ ChargebeeCustomerService }
+func (c *stubCheckoutClient) ListPaymentSources(_ context.Context, _ string) ([]*paymentSourceModel.PaymentSource, error) {
+	if c.listSourcesErr != nil {
+		return nil, c.listSourcesErr
+	}
+	return c.sources, nil
+}
+
+type stubCustomerSvc struct {
+	ChargebeeCustomerService
+	customerID string
+	err        error
+}
 
 func (s *stubCustomerSvc) EnsureCustomerSyncedToChargebee(_ context.Context, _ string) (*customerDomain.Customer, error) {
 	return &customerDomain.Customer{Metadata: map[string]string{"chargebee_customer_id": "cb_cust_1"}}, nil
+}
+
+func (s *stubCustomerSvc) GetChargebeeCustomerID(_ context.Context, _ string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	if s.customerID != "" {
+		return s.customerID, nil
+	}
+	return "cb_cust_1", nil
 }
 
 type stubInvoiceSvc struct{ ChargebeeInvoiceService }
@@ -194,4 +221,104 @@ func TestTryAutoCharging_SendsInvoiceNoteAndLines(t *testing.T) {
 	require.Len(t, client.gotInvoiceReq.Charges, 2)
 	require.Equal(t, int64(5000), client.gotInvoiceReq.Charges[0].AmountMinor)
 	require.Equal(t, int64(1250), client.gotInvoiceReq.Charges[1].AmountMinor)
+}
+
+func TestHasAutoChargeableMethod(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("nil adapter or client returns false, nil", func(t *testing.T) {
+		var nilAdapter *CheckoutAdapter
+		has, err := nilAdapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.False(t, has)
+
+		adapterWithoutClient := &CheckoutAdapter{}
+		has, err = adapterWithoutClient.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("returns true when customer has a payment source with StatusValid", func(t *testing.T) {
+		client := &stubCheckoutClient{
+			sources: []*paymentSourceModel.PaymentSource{
+				{Id: "src_1", Status: paymentSourceEnum.StatusValid},
+			},
+		}
+		adapter := newTestAdapter(client)
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.True(t, has)
+	})
+
+	t.Run("returns true when customer has a payment source with StatusExpiring", func(t *testing.T) {
+		client := &stubCheckoutClient{
+			sources: []*paymentSourceModel.PaymentSource{
+				{Id: "src_1", Status: paymentSourceEnum.StatusExpiring},
+			},
+		}
+		adapter := newTestAdapter(client)
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.True(t, has)
+	})
+
+	t.Run("returns false when all sources have other statuses", func(t *testing.T) {
+		client := &stubCheckoutClient{
+			sources: []*paymentSourceModel.PaymentSource{
+				{Id: "src_1", Status: paymentSourceEnum.StatusInvalid},
+			},
+		}
+		adapter := newTestAdapter(client)
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("returns false, nil when customer is not found", func(t *testing.T) {
+		client := &stubCheckoutClient{}
+		adapter := &CheckoutAdapter{
+			Client:      client,
+			CustomerSvc: &stubCustomerSvc{err: ierr.NewError("customer not found").Mark(ierr.ErrNotFound)},
+			InvoiceSvc:  &stubInvoiceSvc{},
+			Logger:      logger.NewNoopLogger(),
+		}
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("returns false, err when customer service returns a real error", func(t *testing.T) {
+		client := &stubCheckoutClient{}
+		adapter := &CheckoutAdapter{
+			Client:      client,
+			CustomerSvc: &stubCustomerSvc{err: ierr.NewError("db failure").Mark(ierr.ErrDatabase)},
+			InvoiceSvc:  &stubInvoiceSvc{},
+			Logger:      logger.NewNoopLogger(),
+		}
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.Error(t, err)
+		assert.True(t, ierr.IsDatabase(err))
+		assert.False(t, has)
+	})
+
+	t.Run("returns false, nil when ListPaymentSources returns NotFound", func(t *testing.T) {
+		client := &stubCheckoutClient{
+			listSourcesErr: ierr.NewError("sources not found").Mark(ierr.ErrNotFound),
+		}
+		adapter := newTestAdapter(client)
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.NoError(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("returns false, err when ListPaymentSources returns a real error", func(t *testing.T) {
+		client := &stubCheckoutClient{
+			listSourcesErr: ierr.NewError("upstream error").Mark(ierr.ErrHTTPClient),
+		}
+		adapter := newTestAdapter(client)
+		has, err := adapter.HasAutoChargeableMethod(ctx, "cust_1")
+		assert.Error(t, err)
+		assert.True(t, ierr.IsHTTPClient(err))
+		assert.False(t, has)
+	})
 }

@@ -82,6 +82,10 @@ type Factory struct {
 	// checkoutProvider, when set, is returned by GetCheckoutProvider instead of
 	// constructing a live adapter. Tests use this; production never sets it.
 	checkoutProvider interfaces.CheckoutProvider
+
+	// paymentMethodProvider, when set, is returned by GetPaymentMethodProvider instead of
+	// constructing a live adapter. Tests use this; production never sets it.
+	paymentMethodProvider interfaces.PaymentMethodProvider
 }
 
 // NewFactory creates a new integration factory
@@ -1573,6 +1577,9 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 // — the permanent answer for Razorpay, whose tokens need a mandate — and callers
 // must treat it as a capability answer rather than a failure.
 func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.PaymentGatewayType, customerSvc interfaces.CustomerService) (interfaces.PaymentMethodProvider, error) {
+	if f.paymentMethodProvider != nil {
+		return f.paymentMethodProvider, nil
+	}
 	switch gateway {
 	case types.PaymentGatewayTypeChargebee:
 		i, err := f.GetChargebeeIntegration(ctx)
@@ -1613,6 +1620,12 @@ func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGa
 			WithReportableDetails(map[string]interface{}{"gateway": gateway}).
 			Mark(ierr.ErrNotImplemented)
 	}
+}
+
+// SetPaymentMethodProvider overrides GetPaymentMethodProvider with a fixed adapter.
+// Tests use this when no live gateway connection exists. Production never calls it.
+func (f *Factory) SetPaymentMethodProvider(provider interfaces.PaymentMethodProvider) {
+	f.paymentMethodProvider = provider
 }
 
 // SetCheckoutProvider overrides GetCheckoutProvider with a fixed adapter.

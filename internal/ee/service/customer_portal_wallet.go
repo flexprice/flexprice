@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -66,6 +67,12 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 
 		collectionMethod := types.CollectionMethodSendInvoice
 		if req.Checkout.UseSavedMethod {
+			gateway, _ := provider.ToPaymentGateway()
+
+			if err := s.validateSavedMethodForTopUp(ctx, w.CustomerID, gateway); err != nil {
+				return nil, err
+			}
+
 			collectionMethod = types.CollectionMethodChargeAutomatically
 		}
 
@@ -243,3 +250,47 @@ func (s *customerPortalService) minTopupAmount(ctx context.Context, currency str
 
 	return cfg.MinTopupAmount(currency), nil
 }
+
+func (s *customerPortalService) validateSavedMethodForTopUp(
+	ctx context.Context,
+	customerID string,
+	gateway types.PaymentGatewayType,
+) error {
+	methodProvider, err := s.IntegrationFactory.GetPaymentMethodProvider(ctx, gateway, s.customerService)
+	if err != nil {
+		if ierr.IsNotImplemented(err) {
+			return err
+		}
+		return ierr.WithError(err).
+			WithHint("The payment provider could not be reached; try again shortly").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	methods, err := methodProvider.ListSavedMethods(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			methods = nil
+		} else {
+			return ierr.WithError(err).
+				WithHint("The payment provider could not be reached; try again shortly").
+				Mark(ierr.ErrHTTPClient)
+		}
+	}
+
+	hasChargeableMethod := lo.ContainsBy(methods, func(m interfaces.ProviderPaymentMethod) bool {
+		return m.Active
+	})
+
+	if !hasChargeableMethod {
+		return ierr.NewError("instantaneous charge with saved payment method is not supported for provider").
+			WithHintf("Provider '%s' has no saved payment method that can be charged automatically. Please top up using standard checkout.", gateway).
+			WithReportableDetails(map[string]any{
+				"provider":    gateway,
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+

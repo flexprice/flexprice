@@ -42,19 +42,23 @@ type PaymentProviderResolver struct {
 	ServiceParams
 }
 
+// NewPaymentProviderResolver returns a new instance of PaymentProviderResolver.
 func NewPaymentProviderResolver(params ServiceParams) *PaymentProviderResolver {
 	return &PaymentProviderResolver{ServiceParams: params}
 }
 
+// ProviderCapabilities holds a payment gateway and its list of supported capabilities.
 type ProviderCapabilities struct {
-	Gateway      types.PaymentGatewayType
+	// Gateway is the payment gateway type.
+	Gateway types.PaymentGatewayType
+	// Capabilities is the list of capabilities supported by the gateway.
 	Capabilities []types.IntegrationCapability
 }
 
 // ListProviders returns configured gateways with a usable capability, ordered by
 // gateway name.
 func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error) {
-	gateways, err := s.configuredGateways(ctx)
+	gateways, err := s.ConfiguredGateways(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +96,7 @@ func (s *PaymentProviderResolver) ResolveProvider(
 		}
 	}
 
-	gateways, err := s.configuredGateways(ctx)
+	gateways, err := s.ConfiguredGateways(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -140,8 +144,9 @@ func (s *PaymentProviderResolver) ResolveProvider(
 	}
 }
 
-// configuredGateways deduplicates and sorts so listings and error messages are stable.
-func (s *PaymentProviderResolver) configuredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
+// ConfiguredGateways returns all published and configured payment gateways for the current tenant,
+// deduplicated and sorted so listings and error messages are deterministic.
+func (s *PaymentProviderResolver) ConfiguredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
 	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
 	if err != nil {
 		return nil, err

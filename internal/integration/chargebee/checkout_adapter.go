@@ -6,6 +6,8 @@ import (
 
 	invoiceModel "github.com/chargebee/chargebee-go/v3/models/invoice"
 	invoiceEnum "github.com/chargebee/chargebee-go/v3/models/invoice/enum"
+	paymentSourceModel "github.com/chargebee/chargebee-go/v3/models/paymentsource"
+	paymentSourceEnum "github.com/chargebee/chargebee-go/v3/models/paymentsource/enum"
 	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -215,6 +217,34 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 		a.voidAbandonedInvoice(ctx, inv.Id, "nothing collected on the mirrored invoice")
 		return nil, false, nil
 	}
+}
+
+// HasAutoChargeableMethod implements interfaces.CheckoutProvider by checking
+// if the customer has any valid or expiring payment sources in Chargebee.
+func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, customerID string) (bool, error) {
+	if a == nil || a.Client == nil || a.CustomerSvc == nil {
+		return false, nil
+	}
+
+	cbCustomerID, err := a.CustomerSvc.GetChargebeeCustomerID(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	sources, err := a.Client.ListPaymentSources(ctx, cbCustomerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return lo.ContainsBy(sources, func(s *paymentSourceModel.PaymentSource) bool {
+		return s.Status == paymentSourceEnum.StatusValid || s.Status == paymentSourceEnum.StatusExpiring
+	}), nil
 }
 
 func autoCollectResponse(

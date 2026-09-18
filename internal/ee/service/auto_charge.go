@@ -21,47 +21,50 @@ func fetchGatewayWithAutoChargeSupport(
 	customerSvc interfaces.CustomerService,
 	customerID string,
 ) (types.PaymentGatewayType, error) {
-	providers, err := NewPaymentProviderResolver(params).ListProviders(ctx, customerID)
+	if params.IntegrationFactory == nil || params.ConnectionRepo == nil {
+		return "", nil
+	}
+
+	gateways, err := NewPaymentProviderResolver(params).ConfiguredGateways(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	for _, p := range providers {
-		if !hasCapability(p.Capabilities, types.IntegrationCapabilityAutoCharge) {
+	for _, gw := range gateways {
+		if !hasCapability(gatewayCapabilities[gw], types.IntegrationCapabilityAutoCharge) {
 			continue
 		}
-		// A gateway that charges from something other than a saved method (a Razorpay
-		// mandate) exposes nothing to read, so it is taken on capability alone and the
-		// charge itself decides.
-		if !hasCapability(p.Capabilities, types.IntegrationCapabilityPaymentMethodManagement) {
-			return p.Gateway, nil
+
+		checkoutProvider, ok := types.CheckoutProviderFromGateway(gw)
+		if !ok {
+			continue
 		}
 
-		provider, err := params.IntegrationFactory.GetPaymentMethodProvider(ctx, p.Gateway, customerSvc)
+		provider, err := params.IntegrationFactory.GetCheckoutProvider(ctx, checkoutProvider, customerSvc, nil)
+		if err != nil {
+			if ierr.IsValidation(err) || ierr.IsNotImplemented(err) {
+				continue
+			}
+			return "", ierr.WithError(err).
+				WithHint("The payment provider could not be reached; try again shortly").
+				Mark(ierr.ErrHTTPClient)
+		}
+
+		hasMethod, err := provider.HasAutoChargeableMethod(ctx, customerID)
 		if err != nil {
 			return "", ierr.WithError(err).
 				WithHint("The payment provider could not be reached; try again shortly").
 				Mark(ierr.ErrHTTPClient)
 		}
 
-		methods, err := provider.ListSavedMethods(ctx, customerID)
-		if err != nil {
-			return "", ierr.WithError(err).
-				WithHint("The payment provider could not be reached; try again shortly").
-				Mark(ierr.ErrHTTPClient)
-		}
-
-		// Not IsDefault: the adapters charge the primary method when there is one and
-		// the first valid one otherwise, so requiring a default would refuse customers
-		// they can charge.
-		if lo.ContainsBy(methods, func(m interfaces.ProviderPaymentMethod) bool { return m.Active }) {
-			return p.Gateway, nil
+		if hasMethod {
+			return gw, nil
 		}
 	}
 
 	return "", nil
 }
 
-func hasCapability(caps []types.IntegrationCapability, want types.IntegrationCapabilityType) bool {
-	return lo.ContainsBy(caps, func(c types.IntegrationCapability) bool { return c.Type == want })
+func hasCapability(caps []types.IntegrationCapabilityType, want types.IntegrationCapabilityType) bool {
+	return lo.Contains(caps, want)
 }
