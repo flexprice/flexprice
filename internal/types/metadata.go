@@ -37,3 +37,28 @@ func (m Metadata) Value() (driver.Value, error) {
 	}
 	return json.Marshal(m)
 }
+
+// Invoice / invoice-line-item metadata keys written by the billing engine and
+// read back by revenue-facts decomposition and the FINAL flip. Both sides must
+// agree on the exact string, so they are constants rather than literals.
+const (
+	MetadataKeyIsCommitmentTrueup = "is_commitment_trueup"
+	MetadataKeyIsOverage          = "is_overage"
+	MetadataKeyOverageFactor      = "overage_factor"
+	MetadataKeyCommitmentAmount   = "commitment_amount"
+	MetadataKeyCommitmentUtilized = "commitment_utilized"
+	MetadataKeyUsageResetPeriod   = "usage_reset_period"
+	MetadataKeyIsPreview          = "is_preview"
+	MetadataKeyDescription        = "description"
+
+	// MetadataValueTrue is the canonical truthy value for the boolean flags above.
+	MetadataValueTrue = "true"
+)
+
+// GetBool nil-safely reports whether key holds the canonical truthy value.
+func (m Metadata) GetBool(key string) bool {
+	if m == nil {
+		return false
+	}
+	return m[key] == MetadataValueTrue
+}

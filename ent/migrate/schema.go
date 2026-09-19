@@ -1861,6 +1861,68 @@ var (
 			},
 		},
 	}
+	// RevenueFactsColumns holds the columns for the "revenue_facts" table.
+	RevenueFactsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "environment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "sub_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "aggregation_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "revenue_source", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "period_end", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "day", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "service_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "service_end", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "recognition_method", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "usage_at_list_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "tier_delta", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "entitlement_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "line_discount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "invoice_discount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "net_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "billable_qty", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "entitlement_qty", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "decomposition_mode", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "is_revert", Type: field.TypeBool, Default: false},
+		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "invoice_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "lock_adjusted_day", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "computed_at", Type: field.TypeTime, Default: "now()", SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "version", Type: field.TypeInt64, Default: 1},
+	}
+	// RevenueFactsTable holds the schema information for the "revenue_facts" table.
+	RevenueFactsTable = &schema.Table{
+		Name:       "revenue_facts",
+		Columns:    RevenueFactsColumns,
+		PrimaryKey: []*schema.Column{RevenueFactsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "revenue_facts_provisional_grain",
+				Unique:  true,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[4], RevenueFactsColumns[6], RevenueFactsColumns[5], RevenueFactsColumns[12], RevenueFactsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'PROVISIONAL'",
+				},
+			},
+			{
+				Name:    "revenue_facts_read",
+				Unique:  false,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[12], RevenueFactsColumns[9]},
+			},
+			{
+				Name:    "revenue_facts_invoice",
+				Unique:  false,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[28]},
+			},
+		},
+	}
 	// ScheduledTasksColumns holds the columns for the "scheduled_tasks" table.
 	ScheduledTasksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2894,6 +2956,7 @@ var (
 		PricesTable,
 		PriceUnitsTable,
 		RefundsTable,
+		RevenueFactsTable,
 		ScheduledTasksTable,
 		SecretsTable,
 		SettingsTable,

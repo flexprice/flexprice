@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -1072,6 +1073,63 @@ func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, envi
 		}
 	}
 	return nil, nil
+}
+
+// GetCumulativeDailyUsage mirrors BuildCumulativeDailyUsageQuery: per-day
+// SUM(qty_total) for a single meter over [StartTime, EndTime), rolled into a
+// running cumulative total. Day bucketing honors params.Timezone (an IANA
+// name), falling back to UTC when empty or unresolvable, mirroring the
+// ClickHouse path's normalizeCHTimezone default.
+func (s *InMemoryMeterUsageStore) GetCumulativeDailyUsage(_ context.Context, params *events.CumulativeDailyUsageParams) ([]events.DailyUsagePoint, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	loc := time.UTC
+	if params.Timezone != "" {
+		if l, err := time.LoadLocation(params.Timezone); err == nil {
+			loc = l
+		}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dayTotals := make(map[time.Time]decimal.Decimal)
+	for _, r := range s.records {
+		if r.TenantID != params.TenantID || r.EnvironmentID != params.EnvironmentID || r.MeterID != params.MeterID {
+			continue
+		}
+		if len(params.ExternalCustomerIDs) > 0 && !lo.Contains(params.ExternalCustomerIDs, r.ExternalCustomerID) {
+			continue
+		}
+		if !params.StartTime.IsZero() && r.Timestamp.Before(params.StartTime) {
+			continue
+		}
+		if !params.EndTime.IsZero() && !r.Timestamp.Before(params.EndTime) {
+			continue
+		}
+		local := r.Timestamp.In(loc)
+		day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+		dayTotals[day] = dayTotals[day].Add(r.QtyTotal)
+	}
+
+	days := make([]time.Time, 0, len(dayTotals))
+	for d := range dayTotals {
+		days = append(days, d)
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
+
+	points := make([]events.DailyUsagePoint, 0, len(days))
+	running := decimal.Zero
+	for _, d := range days {
+		running = running.Add(dayTotals[d])
+		points = append(points, events.DailyUsagePoint{
+			Day:           d,
+			CumulativeQty: running,
+		})
+	}
+	return points, nil
 }
 
 // Ensure interface compliance

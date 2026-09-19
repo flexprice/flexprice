@@ -192,6 +192,7 @@ func main() {
 			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
 			repository.NewAnalyticsViewRepository,
+			repository.NewRevenueFactRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -289,6 +290,7 @@ func main() {
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
 			service.NewAnalyticsService,
+			service.NewRevenueService,
 		),
 	)
 
@@ -385,6 +387,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	analyticsService service.AnalyticsService,
+	revenueService service.RevenueService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
@@ -440,7 +443,7 @@ func provideHandlers(
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Analytics:                v1.NewAnalyticsHandler(analyticsService, logger),
+		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, logger),
 	}
 }
 
@@ -619,7 +622,7 @@ func startTemporalWorker(
 				}
 			}()
 
-			if err := temporalservice.EnsureSchedules(ctx, temporalClient, log); err != nil {
+			if err := temporalservice.EnsureSchedules(ctx, temporalClient, params.Config, log); err != nil {
 				return fmt.Errorf("ensure temporal server schedules: %w", err)
 			}
 

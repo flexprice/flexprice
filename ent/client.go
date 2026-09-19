@@ -51,6 +51,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -151,6 +152,8 @@ type Client struct {
 	PriceUnit *PriceUnitClient
 	// Refund is the client for interacting with the Refund builders.
 	Refund *RefundClient
+	// RevenueFact is the client for interacting with the RevenueFact builders.
+	RevenueFact *RevenueFactClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
 	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
@@ -236,6 +239,7 @@ func (c *Client) init() {
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
 	c.Refund = NewRefundClient(c.config)
+	c.RevenueFact = NewRevenueFactClient(c.config)
 	c.ScheduledTask = NewScheduledTaskClient(c.config)
 	c.Secret = NewSecretClient(c.config)
 	c.Settings = NewSettingsClient(c.config)
@@ -383,6 +387,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
 		Refund:                   NewRefundClient(cfg),
+		RevenueFact:              NewRevenueFactClient(cfg),
 		ScheduledTask:            NewScheduledTaskClient(cfg),
 		Secret:                   NewSecretClient(cfg),
 		Settings:                 NewSettingsClient(cfg),
@@ -457,6 +462,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
 		Refund:                   NewRefundClient(cfg),
+		RevenueFact:              NewRevenueFactClient(cfg),
 		ScheduledTask:            NewScheduledTaskClient(cfg),
 		Secret:                   NewSecretClient(cfg),
 		Settings:                 NewSettingsClient(cfg),
@@ -512,11 +518,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
 		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
-		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact, c.ScheduledTask,
+		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -533,11 +539,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
 		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
-		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact, c.ScheduledTask,
+		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -618,6 +624,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PriceUnit.mutate(ctx, m)
 	case *RefundMutation:
 		return c.Refund.mutate(ctx, m)
+	case *RevenueFactMutation:
+		return c.RevenueFact.mutate(ctx, m)
 	case *ScheduledTaskMutation:
 		return c.ScheduledTask.mutate(ctx, m)
 	case *SecretMutation:
@@ -5897,6 +5905,139 @@ func (c *RefundClient) mutate(ctx context.Context, m *RefundMutation) (Value, er
 	}
 }
 
+// RevenueFactClient is a client for the RevenueFact schema.
+type RevenueFactClient struct {
+	config
+}
+
+// NewRevenueFactClient returns a client for the RevenueFact from the given config.
+func NewRevenueFactClient(c config) *RevenueFactClient {
+	return &RevenueFactClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `revenuefact.Hooks(f(g(h())))`.
+func (c *RevenueFactClient) Use(hooks ...Hook) {
+	c.hooks.RevenueFact = append(c.hooks.RevenueFact, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `revenuefact.Intercept(f(g(h())))`.
+func (c *RevenueFactClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RevenueFact = append(c.inters.RevenueFact, interceptors...)
+}
+
+// Create returns a builder for creating a RevenueFact entity.
+func (c *RevenueFactClient) Create() *RevenueFactCreate {
+	mutation := newRevenueFactMutation(c.config, OpCreate)
+	return &RevenueFactCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RevenueFact entities.
+func (c *RevenueFactClient) CreateBulk(builders ...*RevenueFactCreate) *RevenueFactCreateBulk {
+	return &RevenueFactCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RevenueFactClient) MapCreateBulk(slice any, setFunc func(*RevenueFactCreate, int)) *RevenueFactCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RevenueFactCreateBulk{err: fmt.Errorf("calling to RevenueFactClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RevenueFactCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RevenueFactCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RevenueFact.
+func (c *RevenueFactClient) Update() *RevenueFactUpdate {
+	mutation := newRevenueFactMutation(c.config, OpUpdate)
+	return &RevenueFactUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RevenueFactClient) UpdateOne(rf *RevenueFact) *RevenueFactUpdateOne {
+	mutation := newRevenueFactMutation(c.config, OpUpdateOne, withRevenueFact(rf))
+	return &RevenueFactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RevenueFactClient) UpdateOneID(id string) *RevenueFactUpdateOne {
+	mutation := newRevenueFactMutation(c.config, OpUpdateOne, withRevenueFactID(id))
+	return &RevenueFactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RevenueFact.
+func (c *RevenueFactClient) Delete() *RevenueFactDelete {
+	mutation := newRevenueFactMutation(c.config, OpDelete)
+	return &RevenueFactDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RevenueFactClient) DeleteOne(rf *RevenueFact) *RevenueFactDeleteOne {
+	return c.DeleteOneID(rf.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RevenueFactClient) DeleteOneID(id string) *RevenueFactDeleteOne {
+	builder := c.Delete().Where(revenuefact.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RevenueFactDeleteOne{builder}
+}
+
+// Query returns a query builder for RevenueFact.
+func (c *RevenueFactClient) Query() *RevenueFactQuery {
+	return &RevenueFactQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRevenueFact},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RevenueFact entity by its id.
+func (c *RevenueFactClient) Get(ctx context.Context, id string) (*RevenueFact, error) {
+	return c.Query().Where(revenuefact.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RevenueFactClient) GetX(ctx context.Context, id string) *RevenueFact {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RevenueFactClient) Hooks() []Hook {
+	return c.hooks.RevenueFact
+}
+
+// Interceptors returns the client interceptors.
+func (c *RevenueFactClient) Interceptors() []Interceptor {
+	return c.inters.RevenueFact
+}
+
+func (c *RevenueFactClient) mutate(ctx context.Context, m *RevenueFactMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RevenueFactCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RevenueFactUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RevenueFactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RevenueFactDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RevenueFact mutation op: %q", m.Op())
+	}
+}
+
 // ScheduledTaskClient is a client for the ScheduledTask schema.
 type ScheduledTaskClient struct {
 	config
@@ -8641,10 +8782,10 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Refund, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		PaymentMethod, Plan, Price, PriceUnit, Refund, RevenueFact, ScheduledTask,
+		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -8654,10 +8795,10 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Refund, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		PaymentMethod, Plan, Price, PriceUnit, Refund, RevenueFact, ScheduledTask,
+		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

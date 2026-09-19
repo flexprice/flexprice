@@ -1212,6 +1212,14 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
+
+	// Flip the invoice's revenue_facts rows to FINAL, async and best-effort —
+	// see asyncRevenueFactsUpdate for the delivery guarantees.
+	asyncRevenueFactsUpdate(ctx, s.ServiceParams, "final flip", inv.ID,
+		func(ctx context.Context, rs RevenueService) error {
+			return rs.FinalizeSubscriptionPeriod(ctx, inv.ID)
+		})
+
 	return nil
 }
 
@@ -1505,6 +1513,14 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID)
+
+	// Write reverting revenue_facts rows for the voided invoice, async and
+	// best-effort — see asyncRevenueFactsUpdate for the delivery guarantees.
+	asyncRevenueFactsUpdate(ctx, s.ServiceParams, "revert", inv.ID,
+		func(ctx context.Context, rs RevenueService) error {
+			return rs.RevertInvoiceFacts(ctx, inv.ID)
+		})
+
 	return inv, nil
 }
 

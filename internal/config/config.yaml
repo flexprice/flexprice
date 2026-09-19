@@ -42,6 +42,11 @@ analytics:
   enabled: false # FLEXPRICE_ANALYTICS_ENABLED
   # FLEXPRICE_ANALYTICS_METER_USAGE_SINK_TOPIC. Future: .sink.backfill / .sink.lazy
   meter_usage_sink_topic: "analytics.meter_usage.sink.realtime"
+  # Periodic Temporal revenue_facts dirty-rollup (RevenueRollupWorkflow). Off by
+  # default — enable only once revenue_facts is trusted enough to run unattended.
+  revenue_rollup:
+    enabled: false # FLEXPRICE_ANALYTICS_REVENUE_ROLLUP_ENABLED
+    interval: 1h # FLEXPRICE_ANALYTICS_REVENUE_ROLLUP_INTERVAL
 
 kafka:
   brokers: "localhost:29092" # For local mode

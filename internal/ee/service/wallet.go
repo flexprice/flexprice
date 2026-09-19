@@ -3336,6 +3336,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 
 			lineItems, totalAmount, err := billingService.CalculateMeterUsageCharges(
 				ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet,
+				nil,
 			)
 			if err != nil {
 				return nil, err

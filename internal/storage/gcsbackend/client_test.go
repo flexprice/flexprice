@@ -444,7 +444,7 @@ func syntheticServiceAccountJSON(t *testing.T) []byte {
 	require.NoError(t, err)
 
 	pemBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "PRIVATE KEY",
+		Type: "PRIVATE KEY",
 		Bytes: func() []byte {
 			b, err := x509.MarshalPKCS8PrivateKey(key)
 			require.NoError(t, err)

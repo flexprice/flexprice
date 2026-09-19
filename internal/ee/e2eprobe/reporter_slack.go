@@ -33,23 +33,23 @@ func (s *slackReporter) Report(ctx context.Context, r FailureReport) {
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
-		s.logWarn(ctx,"marshal", err, r.CheckName)
+		s.logWarn(ctx, "marshal", err, r.CheckName)
 		return
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.webhookURL, bytes.NewReader(buf))
 	if err != nil {
-		s.logWarn(ctx,"build_request", err, r.CheckName)
+		s.logWarn(ctx, "build_request", err, r.CheckName)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logWarn(ctx,"transport", err, r.CheckName)
+		s.logWarn(ctx, "transport", err, r.CheckName)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.logWarn(ctx,"non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
+		s.logWarn(ctx, "non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
 	}
 }
 

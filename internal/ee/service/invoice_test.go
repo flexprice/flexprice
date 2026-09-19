@@ -650,6 +650,72 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 	}
 }
 
+// TestFinalizeInvoice_AsyncRevenueFactFlipErrorDoesNotBlockFinalization is the
+// safety-guard test for the async, non-blocking FINAL flip hooked into
+// performFinalizeInvoiceActions: even when RevenueRollupService.
+// FinalizeSubscriptionPeriod's flip errors, finalization must still return
+// success. failingRevenueFactRepo (defined in revenue_rollup_final_test.go)
+// always errors on FlipToFinal and signals Called so the test can wait for
+// the detached goroutine to actually run instead of guessing with a sleep.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_AsyncRevenueFactFlipErrorDoesNotBlockFinalization() {
+	ctx := s.GetContext()
+
+	called := make(chan struct{}, 4)
+	s.service.(*invoiceService).RevenueFactRepo = &failingRevenueFactRepo{
+		InMemoryRevenueFactStore: testutil.NewInMemoryRevenueFactStore(),
+		Called:                   called,
+	}
+
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(10),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(10),
+		Description:     "Async flip guard test invoice",
+		BillingPeriod:   lo.ToPtr(string(s.testData.subscription.BillingPeriod)),
+		PeriodStart:     &s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:       &s.testData.subscription.CurrentPeriodEnd,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+				CustomerID:     s.testData.customer.ID,
+				SubscriptionID: &s.testData.subscription.ID,
+				PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
+				MeterID:        &s.testData.meters.apiCalls.ID,
+				Amount:         decimal.NewFromFloat(10),
+				Quantity:       decimal.NewFromFloat(100),
+				Currency:       "usd",
+				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
+				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
+				BaseModel:      types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{})
+	s.NoError(err, "finalization must succeed even though the async revenue facts flip errors")
+
+	select {
+	case <-called:
+		// The async flip ran and errored — confirms the error path was
+		// actually exercised (not vacuously passing because nothing ran).
+	case <-time.After(2 * time.Second):
+		s.Fail("expected the async revenue facts flip to run and be observed within 2s")
+	}
+
+	inv, err := s.invoiceRepo.Get(ctx, draftInvoice.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+}
+
 func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEventWhenCreated() {
 	ctx := s.GetContext()
 	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}

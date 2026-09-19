@@ -25,6 +25,9 @@ type Repository interface {
 	// Bulk operations
 	CreateBulk(ctx context.Context, prices []*Price) error
 	DeleteBulk(ctx context.Context, ids []string) error
+	// ListByIDs returns the prices whose ids are in ids, regardless of status.
+	// Missing ids are simply absent from the result, not an error.
+	ListByIDs(ctx context.Context, ids []string) ([]*Price, error)
 
 	// Group-related operations (minimal set)
 	GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*Price, error)

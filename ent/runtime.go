@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -1792,6 +1793,48 @@ func init() {
 	refundDescIdempotencyKey := refundFields[15].Descriptor()
 	// refund.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	refund.IdempotencyKeyValidator = refundDescIdempotencyKey.Validators[0].(func(string) error)
+	revenuefactFields := schema.RevenueFact{}.Fields()
+	_ = revenuefactFields
+	// revenuefactDescUsageAtListRate is the schema descriptor for usage_at_list_rate field.
+	revenuefactDescUsageAtListRate := revenuefactFields[16].Descriptor()
+	// revenuefact.DefaultUsageAtListRate holds the default value on creation for the usage_at_list_rate field.
+	revenuefact.DefaultUsageAtListRate = revenuefactDescUsageAtListRate.Default.(decimal.Decimal)
+	// revenuefactDescTierDelta is the schema descriptor for tier_delta field.
+	revenuefactDescTierDelta := revenuefactFields[17].Descriptor()
+	// revenuefact.DefaultTierDelta holds the default value on creation for the tier_delta field.
+	revenuefact.DefaultTierDelta = revenuefactDescTierDelta.Default.(decimal.Decimal)
+	// revenuefactDescEntitlementAmount is the schema descriptor for entitlement_amount field.
+	revenuefactDescEntitlementAmount := revenuefactFields[18].Descriptor()
+	// revenuefact.DefaultEntitlementAmount holds the default value on creation for the entitlement_amount field.
+	revenuefact.DefaultEntitlementAmount = revenuefactDescEntitlementAmount.Default.(decimal.Decimal)
+	// revenuefactDescLineDiscount is the schema descriptor for line_discount field.
+	revenuefactDescLineDiscount := revenuefactFields[19].Descriptor()
+	// revenuefact.DefaultLineDiscount holds the default value on creation for the line_discount field.
+	revenuefact.DefaultLineDiscount = revenuefactDescLineDiscount.Default.(decimal.Decimal)
+	// revenuefactDescInvoiceDiscount is the schema descriptor for invoice_discount field.
+	revenuefactDescInvoiceDiscount := revenuefactFields[20].Descriptor()
+	// revenuefact.DefaultInvoiceDiscount holds the default value on creation for the invoice_discount field.
+	revenuefact.DefaultInvoiceDiscount = revenuefactDescInvoiceDiscount.Default.(decimal.Decimal)
+	// revenuefactDescBillableQty is the schema descriptor for billable_qty field.
+	revenuefactDescBillableQty := revenuefactFields[22].Descriptor()
+	// revenuefact.DefaultBillableQty holds the default value on creation for the billable_qty field.
+	revenuefact.DefaultBillableQty = revenuefactDescBillableQty.Default.(decimal.Decimal)
+	// revenuefactDescEntitlementQty is the schema descriptor for entitlement_qty field.
+	revenuefactDescEntitlementQty := revenuefactFields[23].Descriptor()
+	// revenuefact.DefaultEntitlementQty holds the default value on creation for the entitlement_qty field.
+	revenuefact.DefaultEntitlementQty = revenuefactDescEntitlementQty.Default.(decimal.Decimal)
+	// revenuefactDescIsRevert is the schema descriptor for is_revert field.
+	revenuefactDescIsRevert := revenuefactFields[27].Descriptor()
+	// revenuefact.DefaultIsRevert holds the default value on creation for the is_revert field.
+	revenuefact.DefaultIsRevert = revenuefactDescIsRevert.Default.(bool)
+	// revenuefactDescComputedAt is the schema descriptor for computed_at field.
+	revenuefactDescComputedAt := revenuefactFields[31].Descriptor()
+	// revenuefact.DefaultComputedAt holds the default value on creation for the computed_at field.
+	revenuefact.DefaultComputedAt = revenuefactDescComputedAt.Default.(func() time.Time)
+	// revenuefactDescVersion is the schema descriptor for version field.
+	revenuefactDescVersion := revenuefactFields[32].Descriptor()
+	// revenuefact.DefaultVersion holds the default value on creation for the version field.
+	revenuefact.DefaultVersion = revenuefactDescVersion.Default.(int64)
 	scheduledtaskMixin := schema.ScheduledTask{}.Mixin()
 	scheduledtaskMixinFields0 := scheduledtaskMixin[0].Fields()
 	_ = scheduledtaskMixinFields0

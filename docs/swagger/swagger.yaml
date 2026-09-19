@@ -3758,6 +3758,8 @@ definitions:
         type: string
       id:
         type: string
+      ingested_at:
+        type: string
       properties:
         additionalProperties: true
         type: object
@@ -4008,6 +4010,10 @@ definitions:
         $ref: '#/definitions/DebugTracker'
       event:
         $ref: '#/definitions/Event'
+      events:
+        items:
+          $ref: '#/definitions/Event'
+        type: array
       processed_events:
         items:
           $ref: '#/definitions/FeatureUsageInfo'
@@ -11860,14 +11866,14 @@ definitions:
   types.SubscriptionChangeEntityType:
     enum:
     - plan
-    - addon
+    - addon_association
     - credit_grant
     - entitlement
     - entitlement_grant
     type: string
     x-enum-varnames:
     - SubscriptionChangeEntityTypePlan
-    - SubscriptionChangeEntityTypeAddon
+    - SubscriptionChangeEntityTypeAddonAssociation
     - SubscriptionChangeEntityTypeCreditGrant
     - SubscriptionChangeEntityTypeEntitlement
     - SubscriptionChangeEntityTypeEntitlementGrant
@@ -14189,6 +14195,43 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Run an ad-hoc analytics query
+      tags:
+      - Analytics
+      x-scope: read
+  /analytics/revenue-facts/export:
+    get:
+      description: 'Streams revenue_facts rows as CSV, ordered by (computed_at, id).
+        Pass since (RFC3339) to export only rows recomputed after a prior export''s
+        max computed_at; omit it for a full snapshot. Requires the tenant''s revenue
+        analytics setting to be enabled. Column reference: docs/export/revenue-facts.md.'
+      operationId: exportRevenueFacts
+      parameters:
+      - description: Only rows with computed_at strictly after this RFC3339 instant
+        in: query
+        name: since
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV stream
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Revenue analytics not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Export revenue facts
       tags:
       - Analytics
       x-scope: read

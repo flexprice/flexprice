@@ -2858,6 +2858,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_SkipsInactiveLineIt
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -2919,6 +2920,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_ItemLevelCommitment
 
 	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
 		subCopy.CurrentPeriodStart, subCopy.CurrentPeriodEnd, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -2967,6 +2969,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_KeepsBothNormalAndO
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -3000,6 +3003,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MatchesActiveLineIt
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -3078,6 +3082,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_WindowedTrueUp_Uses
 
 	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
 		periodStart, periodEnd, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 	s.NoError(err)
 	s.Len(lineItems, 1)
@@ -3214,6 +3219,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_DeferredCommitment_
 
 			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
 				periodStart, periodEnd, types.UsageSourceWallet,
+				nil,
 			)
 			s.NoError(err)
 			if tt.wantZero {
@@ -3612,6 +3618,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitmen
 			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, subToUse, usage,
 				sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
 				types.UsageSourceInvoiceCreation,
+				nil,
 			)
 
 			s.NoError(err)
@@ -5606,7 +5613,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// March: ts in Mar window, QtyTotal=300
 	seedMeterUsage(time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC), decimal.NewFromInt(300))
 
-	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true)
+	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil)
 	s.Require().NoError(err)
 	s.Require().Len(result.UsageCharges, 3, "one usage line item per month")
 
@@ -5905,4 +5912,16 @@ func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_DoesNotMutateSou
 
 	s.True(first.CommitmentInfo.ComputedOverageAmount.Equal(decimal.RequireFromString("10")),
 		"source commitment info was mutated: %s", first.CommitmentInfo.ComputedOverageAmount)
+}
+
+func TestResolveAsOf(t *testing.T) {
+	d := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	if got := resolveAsOf(&dto.PrepareSubscriptionInvoiceRequestParams{AsOf: d}); !got.Equal(d) {
+		t.Fatalf("resolveAsOf(AsOf=%s) = %s, want the override back", d, got)
+	}
+
+	got := resolveAsOf(&dto.PrepareSubscriptionInvoiceRequestParams{}) // zero AsOf -> now
+	if diff := time.Since(got); diff < 0 || diff > time.Minute {
+		t.Fatalf("resolveAsOf(zero) = %s, want ~now", got)
+	}
 }

@@ -11,4 +11,3 @@ type WalletBalanceAlertPubSub struct {
 type IntegrationEventsPubSub struct {
 	pubsub.PubSub
 }
-

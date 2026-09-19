@@ -91,6 +91,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 
 		_, totalUsageCost, err := billingSvc.CalculateMeterUsageCharges(
 			ctx, sub, usage, sub.CurrentPeriodStart, now, types.UsageSourceInvoiceCreation,
+			nil,
 		)
 		if err != nil {
 			s.Logger.Error(ctx, "spend alerts: failed to calculate meter usage charges", "error", err, "subscription_id", sub.ID)

@@ -17,7 +17,7 @@ func NewSubscriptionModificationFlow(c e2eprobe.Client, r e2eprobe.Registry, run
 	return &SubscriptionModificationFlow{client: c, reg: r, runID: runID}
 }
 
-func (s *SubscriptionModificationFlow) Name() string         { return "subscription-modification-flow" }
+func (s *SubscriptionModificationFlow) Name() string        { return "subscription-modification-flow" }
 func (s *SubscriptionModificationFlow) Kind() e2eprobe.Kind { return e2eprobe.KindScenario }
 
 // Run is intentionally a no-op. The CreateLineItem API requires either

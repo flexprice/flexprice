@@ -1,24 +1,30 @@
 package v1
 
 import (
+	"encoding/csv"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 // AnalyticsHandler handles ad-hoc and view analytics query endpoints.
 type AnalyticsHandler struct {
-	svc service.AnalyticsService
-	log *logger.Logger
+	svc        service.AnalyticsService
+	revenueSvc service.RevenueService
+	log        *logger.Logger
 }
 
-func NewAnalyticsHandler(svc service.AnalyticsService, log *logger.Logger) *AnalyticsHandler {
-	return &AnalyticsHandler{svc: svc, log: log}
+func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc service.RevenueService, log *logger.Logger) *AnalyticsHandler {
+	return &AnalyticsHandler{svc: svc, revenueSvc: revenueSvc, log: log}
 }
 
 // Query runs an ad-hoc analytics query against a view definition.
@@ -152,4 +158,100 @@ func (h *AnalyticsHandler) QueryView(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
+}
+
+// revenueFactsCSVHeader is the export column order — keep in sync with
+// writeRevenueFactCSVRow and docs/export/revenue-facts.md.
+var revenueFactsCSVHeader = []string{
+	"id", "customer_id", "subscription_id", "sub_line_item_id", "price_id", "meter_id",
+	"aggregation_type", "revenue_source", "period_start", "period_end", "day",
+	"usage_at_list_rate", "tier_delta", "entitlement_amount", "line_discount", "invoice_discount",
+	"net_amount", "billable_qty", "entitlement_qty", "decomposition_mode", "currency",
+	"status", "is_revert", "invoice_id", "invoice_line_item_id", "computed_at", "version",
+}
+
+// ExportRevenueFacts streams the tenant's revenue_facts as CSV.
+// @Summary Export revenue facts
+// @Description Streams revenue_facts rows as CSV, ordered by (computed_at, id). Pass since (RFC3339) to export only rows recomputed after a prior export's max computed_at; omit it for a full snapshot. Requires the tenant's revenue analytics setting to be enabled. Column reference: docs/export/revenue-facts.md.
+// @ID exportRevenueFacts
+// @Tags Analytics
+// @Produce text/csv
+// @Security ApiKeyAuth
+// @Param since query string false "Only rows with computed_at strictly after this RFC3339 instant"
+// @Success 200 {string} string "CSV stream"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Revenue analytics not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/revenue-facts/export [get]
+func (h *AnalyticsHandler) ExportRevenueFacts(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var since time.Time
+	if raw := c.Query("since"); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			c.Error(ierr.WithError(err).
+				WithHint("since must be an RFC3339 timestamp").
+				Mark(ierr.ErrValidation))
+			return
+		}
+		since = parsed
+	}
+
+	// Gate before any bytes are written so a denial is a clean error response.
+	firstPage, err := h.revenueSvc.ExportFacts(ctx, since, "", 0)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="revenue_facts.csv"`)
+	w := csv.NewWriter(c.Writer)
+	if err := w.Write(revenueFactsCSVHeader); err != nil {
+		h.log.Error(ctx, "revenue facts export write failed", "error", err)
+		return
+	}
+
+	page := firstPage
+	watermark, afterID := since, ""
+	for {
+		for _, f := range page {
+			if err := w.Write(revenueFactCSVRow(f)); err != nil {
+				h.log.Error(ctx, "revenue facts export write failed", "error", err)
+				return
+			}
+			watermark, afterID = f.ComputedAt, f.ID
+		}
+		if len(page) == 0 {
+			break
+		}
+		w.Flush()
+		if page, err = h.revenueSvc.ExportFacts(ctx, watermark, afterID, 0); err != nil {
+			// Body already streaming — log and truncate; the client re-runs
+			// from its last watermark.
+			h.log.Error(ctx, "revenue facts export page failed", "error", err)
+			return
+		}
+	}
+	w.Flush()
+}
+
+func revenueFactCSVRow(f *revenuefact.RevenueFact) []string {
+	const day = "2006-01-02"
+	return []string{
+		f.ID, f.CustomerID, f.SubscriptionID,
+		lo.FromPtr(f.SubLineItemID), lo.FromPtr(f.PriceID), lo.FromPtr(f.MeterID),
+		string(lo.FromPtr(f.AggregationType)), string(f.RevenueSource),
+		f.PeriodStart.Format(day), f.PeriodEnd.Format(day), f.Day.Format(day),
+		f.UsageAtListRate.String(), f.TierDelta.String(), f.EntitlementAmount.String(),
+		f.LineDiscount.String(), f.InvoiceDiscount.String(), f.NetAmount.String(),
+		f.BillableQty.String(), f.EntitlementQty.String(),
+		string(f.DecompositionMode), f.Currency, string(f.Status),
+		strconv.FormatBool(f.IsRevert),
+		lo.FromPtr(f.InvoiceID), lo.FromPtr(f.InvoiceLineItemID),
+		f.ComputedAt.UTC().Format(time.RFC3339Nano),
+		strconv.FormatInt(f.Version, 10),
+	}
 }

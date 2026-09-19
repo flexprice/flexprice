@@ -28,6 +28,9 @@ const (
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
 	ScheduleIDDailyDraftAndCompute                    ScheduleID = "daily-draft-and-compute"
 	ScheduleIDDraftInvoiceFinalization                ScheduleID = "draft-invoice-finalization"
+	// ScheduleIDRevenueRollup drives RevenueRollupWorkflow; gated off by default
+	// via analytics.revenue_rollup.enabled (see EnsureSchedules).
+	ScheduleIDRevenueRollup ScheduleID = "revenue-rollup"
 )
 
 // String returns the raw schedule id.
@@ -52,6 +55,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDMarketplaceUsageReport,
 		ScheduleIDDailyDraftAndCompute,
 		ScheduleIDDraftInvoiceFinalization,
+		ScheduleIDRevenueRollup,
 	}
 }
 

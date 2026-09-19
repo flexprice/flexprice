@@ -36,7 +36,7 @@ func NewCancelCustomerFlow(c e2eprobe.Client, r e2eprobe.Registry, runID string,
 	return &CancelCustomerFlow{client: c, reg: r, runID: runID, poll: poll}
 }
 
-func (s *CancelCustomerFlow) Name() string         { return "cancel-customer-flow" }
+func (s *CancelCustomerFlow) Name() string        { return "cancel-customer-flow" }
 func (s *CancelCustomerFlow) Kind() e2eprobe.Kind { return e2eprobe.KindScenario }
 
 func (s *CancelCustomerFlow) Run(ctx context.Context) error {

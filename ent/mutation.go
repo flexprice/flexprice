@@ -48,6 +48,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -118,6 +119,7 @@ const (
 	TypePrice                    = "Price"
 	TypePriceUnit                = "PriceUnit"
 	TypeRefund                   = "Refund"
+	TypeRevenueFact              = "RevenueFact"
 	TypeScheduledTask            = "ScheduledTask"
 	TypeSecret                   = "Secret"
 	TypeSettings                 = "Settings"
@@ -54104,6 +54106,2241 @@ func (m *RefundMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *RefundMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Refund edge %s", name)
+}
+
+// RevenueFactMutation represents an operation that mutates the RevenueFact nodes in the graph.
+type RevenueFactMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	environment_id       *string
+	customer_id          *string
+	subscription_id      *string
+	sub_line_item_id     *string
+	price_id             *string
+	meter_id             *string
+	aggregation_type     *types.AggregationType
+	revenue_source       *types.RevenueSource
+	period_start         *time.Time
+	period_end           *time.Time
+	day                  *time.Time
+	service_start        *time.Time
+	service_end          *time.Time
+	recognition_method   *types.RecognitionMethod
+	usage_at_list_rate   *decimal.Decimal
+	tier_delta           *decimal.Decimal
+	entitlement_amount   *decimal.Decimal
+	line_discount        *decimal.Decimal
+	invoice_discount     *decimal.Decimal
+	net_amount           *decimal.Decimal
+	billable_qty         *decimal.Decimal
+	entitlement_qty      *decimal.Decimal
+	decomposition_mode   *types.DecompositionMode
+	currency             *string
+	status               *types.FactStatus
+	is_revert            *bool
+	invoice_id           *string
+	invoice_line_item_id *string
+	lock_adjusted_day    *time.Time
+	computed_at          *time.Time
+	version              *int64
+	addversion           *int64
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*RevenueFact, error)
+	predicates           []predicate.RevenueFact
+}
+
+var _ ent.Mutation = (*RevenueFactMutation)(nil)
+
+// revenuefactOption allows management of the mutation configuration using functional options.
+type revenuefactOption func(*RevenueFactMutation)
+
+// newRevenueFactMutation creates new mutation for the RevenueFact entity.
+func newRevenueFactMutation(c config, op Op, opts ...revenuefactOption) *RevenueFactMutation {
+	m := &RevenueFactMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRevenueFact,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRevenueFactID sets the ID field of the mutation.
+func withRevenueFactID(id string) revenuefactOption {
+	return func(m *RevenueFactMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *RevenueFact
+		)
+		m.oldValue = func(ctx context.Context) (*RevenueFact, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().RevenueFact.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRevenueFact sets the old RevenueFact of the mutation.
+func withRevenueFact(node *RevenueFact) revenuefactOption {
+	return func(m *RevenueFactMutation) {
+		m.oldValue = func(context.Context) (*RevenueFact, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RevenueFactMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RevenueFactMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of RevenueFact entities.
+func (m *RevenueFactMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RevenueFactMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RevenueFactMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().RevenueFact.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *RevenueFactMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *RevenueFactMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *RevenueFactMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *RevenueFactMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *RevenueFactMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *RevenueFactMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *RevenueFactMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *RevenueFactMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *RevenueFactMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *RevenueFactMutation) SetSubscriptionID(s string) {
+	m.subscription_id = &s
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *RevenueFactMutation) SubscriptionID() (r string, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldSubscriptionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *RevenueFactMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+}
+
+// SetSubLineItemID sets the "sub_line_item_id" field.
+func (m *RevenueFactMutation) SetSubLineItemID(s string) {
+	m.sub_line_item_id = &s
+}
+
+// SubLineItemID returns the value of the "sub_line_item_id" field in the mutation.
+func (m *RevenueFactMutation) SubLineItemID() (r string, exists bool) {
+	v := m.sub_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubLineItemID returns the old "sub_line_item_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldSubLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubLineItemID: %w", err)
+	}
+	return oldValue.SubLineItemID, nil
+}
+
+// ClearSubLineItemID clears the value of the "sub_line_item_id" field.
+func (m *RevenueFactMutation) ClearSubLineItemID() {
+	m.sub_line_item_id = nil
+	m.clearedFields[revenuefact.FieldSubLineItemID] = struct{}{}
+}
+
+// SubLineItemIDCleared returns if the "sub_line_item_id" field was cleared in this mutation.
+func (m *RevenueFactMutation) SubLineItemIDCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldSubLineItemID]
+	return ok
+}
+
+// ResetSubLineItemID resets all changes to the "sub_line_item_id" field.
+func (m *RevenueFactMutation) ResetSubLineItemID() {
+	m.sub_line_item_id = nil
+	delete(m.clearedFields, revenuefact.FieldSubLineItemID)
+}
+
+// SetPriceID sets the "price_id" field.
+func (m *RevenueFactMutation) SetPriceID(s string) {
+	m.price_id = &s
+}
+
+// PriceID returns the value of the "price_id" field in the mutation.
+func (m *RevenueFactMutation) PriceID() (r string, exists bool) {
+	v := m.price_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceID returns the old "price_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldPriceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceID: %w", err)
+	}
+	return oldValue.PriceID, nil
+}
+
+// ClearPriceID clears the value of the "price_id" field.
+func (m *RevenueFactMutation) ClearPriceID() {
+	m.price_id = nil
+	m.clearedFields[revenuefact.FieldPriceID] = struct{}{}
+}
+
+// PriceIDCleared returns if the "price_id" field was cleared in this mutation.
+func (m *RevenueFactMutation) PriceIDCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldPriceID]
+	return ok
+}
+
+// ResetPriceID resets all changes to the "price_id" field.
+func (m *RevenueFactMutation) ResetPriceID() {
+	m.price_id = nil
+	delete(m.clearedFields, revenuefact.FieldPriceID)
+}
+
+// SetMeterID sets the "meter_id" field.
+func (m *RevenueFactMutation) SetMeterID(s string) {
+	m.meter_id = &s
+}
+
+// MeterID returns the value of the "meter_id" field in the mutation.
+func (m *RevenueFactMutation) MeterID() (r string, exists bool) {
+	v := m.meter_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeterID returns the old "meter_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldMeterID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeterID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeterID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeterID: %w", err)
+	}
+	return oldValue.MeterID, nil
+}
+
+// ClearMeterID clears the value of the "meter_id" field.
+func (m *RevenueFactMutation) ClearMeterID() {
+	m.meter_id = nil
+	m.clearedFields[revenuefact.FieldMeterID] = struct{}{}
+}
+
+// MeterIDCleared returns if the "meter_id" field was cleared in this mutation.
+func (m *RevenueFactMutation) MeterIDCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldMeterID]
+	return ok
+}
+
+// ResetMeterID resets all changes to the "meter_id" field.
+func (m *RevenueFactMutation) ResetMeterID() {
+	m.meter_id = nil
+	delete(m.clearedFields, revenuefact.FieldMeterID)
+}
+
+// SetAggregationType sets the "aggregation_type" field.
+func (m *RevenueFactMutation) SetAggregationType(tt types.AggregationType) {
+	m.aggregation_type = &tt
+}
+
+// AggregationType returns the value of the "aggregation_type" field in the mutation.
+func (m *RevenueFactMutation) AggregationType() (r types.AggregationType, exists bool) {
+	v := m.aggregation_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregationType returns the old "aggregation_type" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldAggregationType(ctx context.Context) (v *types.AggregationType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregationType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregationType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregationType: %w", err)
+	}
+	return oldValue.AggregationType, nil
+}
+
+// ClearAggregationType clears the value of the "aggregation_type" field.
+func (m *RevenueFactMutation) ClearAggregationType() {
+	m.aggregation_type = nil
+	m.clearedFields[revenuefact.FieldAggregationType] = struct{}{}
+}
+
+// AggregationTypeCleared returns if the "aggregation_type" field was cleared in this mutation.
+func (m *RevenueFactMutation) AggregationTypeCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldAggregationType]
+	return ok
+}
+
+// ResetAggregationType resets all changes to the "aggregation_type" field.
+func (m *RevenueFactMutation) ResetAggregationType() {
+	m.aggregation_type = nil
+	delete(m.clearedFields, revenuefact.FieldAggregationType)
+}
+
+// SetRevenueSource sets the "revenue_source" field.
+func (m *RevenueFactMutation) SetRevenueSource(ts types.RevenueSource) {
+	m.revenue_source = &ts
+}
+
+// RevenueSource returns the value of the "revenue_source" field in the mutation.
+func (m *RevenueFactMutation) RevenueSource() (r types.RevenueSource, exists bool) {
+	v := m.revenue_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevenueSource returns the old "revenue_source" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldRevenueSource(ctx context.Context) (v types.RevenueSource, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevenueSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevenueSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevenueSource: %w", err)
+	}
+	return oldValue.RevenueSource, nil
+}
+
+// ResetRevenueSource resets all changes to the "revenue_source" field.
+func (m *RevenueFactMutation) ResetRevenueSource() {
+	m.revenue_source = nil
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *RevenueFactMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *RevenueFactMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *RevenueFactMutation) ResetPeriodStart() {
+	m.period_start = nil
+}
+
+// SetPeriodEnd sets the "period_end" field.
+func (m *RevenueFactMutation) SetPeriodEnd(t time.Time) {
+	m.period_end = &t
+}
+
+// PeriodEnd returns the value of the "period_end" field in the mutation.
+func (m *RevenueFactMutation) PeriodEnd() (r time.Time, exists bool) {
+	v := m.period_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodEnd returns the old "period_end" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldPeriodEnd(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodEnd: %w", err)
+	}
+	return oldValue.PeriodEnd, nil
+}
+
+// ResetPeriodEnd resets all changes to the "period_end" field.
+func (m *RevenueFactMutation) ResetPeriodEnd() {
+	m.period_end = nil
+}
+
+// SetDay sets the "day" field.
+func (m *RevenueFactMutation) SetDay(t time.Time) {
+	m.day = &t
+}
+
+// Day returns the value of the "day" field in the mutation.
+func (m *RevenueFactMutation) Day() (r time.Time, exists bool) {
+	v := m.day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDay returns the old "day" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldDay(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDay: %w", err)
+	}
+	return oldValue.Day, nil
+}
+
+// ResetDay resets all changes to the "day" field.
+func (m *RevenueFactMutation) ResetDay() {
+	m.day = nil
+}
+
+// SetServiceStart sets the "service_start" field.
+func (m *RevenueFactMutation) SetServiceStart(t time.Time) {
+	m.service_start = &t
+}
+
+// ServiceStart returns the value of the "service_start" field in the mutation.
+func (m *RevenueFactMutation) ServiceStart() (r time.Time, exists bool) {
+	v := m.service_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServiceStart returns the old "service_start" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldServiceStart(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServiceStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServiceStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServiceStart: %w", err)
+	}
+	return oldValue.ServiceStart, nil
+}
+
+// ClearServiceStart clears the value of the "service_start" field.
+func (m *RevenueFactMutation) ClearServiceStart() {
+	m.service_start = nil
+	m.clearedFields[revenuefact.FieldServiceStart] = struct{}{}
+}
+
+// ServiceStartCleared returns if the "service_start" field was cleared in this mutation.
+func (m *RevenueFactMutation) ServiceStartCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldServiceStart]
+	return ok
+}
+
+// ResetServiceStart resets all changes to the "service_start" field.
+func (m *RevenueFactMutation) ResetServiceStart() {
+	m.service_start = nil
+	delete(m.clearedFields, revenuefact.FieldServiceStart)
+}
+
+// SetServiceEnd sets the "service_end" field.
+func (m *RevenueFactMutation) SetServiceEnd(t time.Time) {
+	m.service_end = &t
+}
+
+// ServiceEnd returns the value of the "service_end" field in the mutation.
+func (m *RevenueFactMutation) ServiceEnd() (r time.Time, exists bool) {
+	v := m.service_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServiceEnd returns the old "service_end" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldServiceEnd(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServiceEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServiceEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServiceEnd: %w", err)
+	}
+	return oldValue.ServiceEnd, nil
+}
+
+// ClearServiceEnd clears the value of the "service_end" field.
+func (m *RevenueFactMutation) ClearServiceEnd() {
+	m.service_end = nil
+	m.clearedFields[revenuefact.FieldServiceEnd] = struct{}{}
+}
+
+// ServiceEndCleared returns if the "service_end" field was cleared in this mutation.
+func (m *RevenueFactMutation) ServiceEndCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldServiceEnd]
+	return ok
+}
+
+// ResetServiceEnd resets all changes to the "service_end" field.
+func (m *RevenueFactMutation) ResetServiceEnd() {
+	m.service_end = nil
+	delete(m.clearedFields, revenuefact.FieldServiceEnd)
+}
+
+// SetRecognitionMethod sets the "recognition_method" field.
+func (m *RevenueFactMutation) SetRecognitionMethod(tm types.RecognitionMethod) {
+	m.recognition_method = &tm
+}
+
+// RecognitionMethod returns the value of the "recognition_method" field in the mutation.
+func (m *RevenueFactMutation) RecognitionMethod() (r types.RecognitionMethod, exists bool) {
+	v := m.recognition_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRecognitionMethod returns the old "recognition_method" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldRecognitionMethod(ctx context.Context) (v *types.RecognitionMethod, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRecognitionMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRecognitionMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRecognitionMethod: %w", err)
+	}
+	return oldValue.RecognitionMethod, nil
+}
+
+// ClearRecognitionMethod clears the value of the "recognition_method" field.
+func (m *RevenueFactMutation) ClearRecognitionMethod() {
+	m.recognition_method = nil
+	m.clearedFields[revenuefact.FieldRecognitionMethod] = struct{}{}
+}
+
+// RecognitionMethodCleared returns if the "recognition_method" field was cleared in this mutation.
+func (m *RevenueFactMutation) RecognitionMethodCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldRecognitionMethod]
+	return ok
+}
+
+// ResetRecognitionMethod resets all changes to the "recognition_method" field.
+func (m *RevenueFactMutation) ResetRecognitionMethod() {
+	m.recognition_method = nil
+	delete(m.clearedFields, revenuefact.FieldRecognitionMethod)
+}
+
+// SetUsageAtListRate sets the "usage_at_list_rate" field.
+func (m *RevenueFactMutation) SetUsageAtListRate(d decimal.Decimal) {
+	m.usage_at_list_rate = &d
+}
+
+// UsageAtListRate returns the value of the "usage_at_list_rate" field in the mutation.
+func (m *RevenueFactMutation) UsageAtListRate() (r decimal.Decimal, exists bool) {
+	v := m.usage_at_list_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageAtListRate returns the old "usage_at_list_rate" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldUsageAtListRate(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageAtListRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageAtListRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageAtListRate: %w", err)
+	}
+	return oldValue.UsageAtListRate, nil
+}
+
+// ResetUsageAtListRate resets all changes to the "usage_at_list_rate" field.
+func (m *RevenueFactMutation) ResetUsageAtListRate() {
+	m.usage_at_list_rate = nil
+}
+
+// SetTierDelta sets the "tier_delta" field.
+func (m *RevenueFactMutation) SetTierDelta(d decimal.Decimal) {
+	m.tier_delta = &d
+}
+
+// TierDelta returns the value of the "tier_delta" field in the mutation.
+func (m *RevenueFactMutation) TierDelta() (r decimal.Decimal, exists bool) {
+	v := m.tier_delta
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTierDelta returns the old "tier_delta" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldTierDelta(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTierDelta is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTierDelta requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTierDelta: %w", err)
+	}
+	return oldValue.TierDelta, nil
+}
+
+// ResetTierDelta resets all changes to the "tier_delta" field.
+func (m *RevenueFactMutation) ResetTierDelta() {
+	m.tier_delta = nil
+}
+
+// SetEntitlementAmount sets the "entitlement_amount" field.
+func (m *RevenueFactMutation) SetEntitlementAmount(d decimal.Decimal) {
+	m.entitlement_amount = &d
+}
+
+// EntitlementAmount returns the value of the "entitlement_amount" field in the mutation.
+func (m *RevenueFactMutation) EntitlementAmount() (r decimal.Decimal, exists bool) {
+	v := m.entitlement_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntitlementAmount returns the old "entitlement_amount" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldEntitlementAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntitlementAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntitlementAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntitlementAmount: %w", err)
+	}
+	return oldValue.EntitlementAmount, nil
+}
+
+// ResetEntitlementAmount resets all changes to the "entitlement_amount" field.
+func (m *RevenueFactMutation) ResetEntitlementAmount() {
+	m.entitlement_amount = nil
+}
+
+// SetLineDiscount sets the "line_discount" field.
+func (m *RevenueFactMutation) SetLineDiscount(d decimal.Decimal) {
+	m.line_discount = &d
+}
+
+// LineDiscount returns the value of the "line_discount" field in the mutation.
+func (m *RevenueFactMutation) LineDiscount() (r decimal.Decimal, exists bool) {
+	v := m.line_discount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLineDiscount returns the old "line_discount" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldLineDiscount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLineDiscount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLineDiscount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLineDiscount: %w", err)
+	}
+	return oldValue.LineDiscount, nil
+}
+
+// ResetLineDiscount resets all changes to the "line_discount" field.
+func (m *RevenueFactMutation) ResetLineDiscount() {
+	m.line_discount = nil
+}
+
+// SetInvoiceDiscount sets the "invoice_discount" field.
+func (m *RevenueFactMutation) SetInvoiceDiscount(d decimal.Decimal) {
+	m.invoice_discount = &d
+}
+
+// InvoiceDiscount returns the value of the "invoice_discount" field in the mutation.
+func (m *RevenueFactMutation) InvoiceDiscount() (r decimal.Decimal, exists bool) {
+	v := m.invoice_discount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceDiscount returns the old "invoice_discount" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldInvoiceDiscount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceDiscount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceDiscount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceDiscount: %w", err)
+	}
+	return oldValue.InvoiceDiscount, nil
+}
+
+// ResetInvoiceDiscount resets all changes to the "invoice_discount" field.
+func (m *RevenueFactMutation) ResetInvoiceDiscount() {
+	m.invoice_discount = nil
+}
+
+// SetNetAmount sets the "net_amount" field.
+func (m *RevenueFactMutation) SetNetAmount(d decimal.Decimal) {
+	m.net_amount = &d
+}
+
+// NetAmount returns the value of the "net_amount" field in the mutation.
+func (m *RevenueFactMutation) NetAmount() (r decimal.Decimal, exists bool) {
+	v := m.net_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNetAmount returns the old "net_amount" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldNetAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNetAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNetAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNetAmount: %w", err)
+	}
+	return oldValue.NetAmount, nil
+}
+
+// ResetNetAmount resets all changes to the "net_amount" field.
+func (m *RevenueFactMutation) ResetNetAmount() {
+	m.net_amount = nil
+}
+
+// SetBillableQty sets the "billable_qty" field.
+func (m *RevenueFactMutation) SetBillableQty(d decimal.Decimal) {
+	m.billable_qty = &d
+}
+
+// BillableQty returns the value of the "billable_qty" field in the mutation.
+func (m *RevenueFactMutation) BillableQty() (r decimal.Decimal, exists bool) {
+	v := m.billable_qty
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillableQty returns the old "billable_qty" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldBillableQty(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillableQty is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillableQty requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillableQty: %w", err)
+	}
+	return oldValue.BillableQty, nil
+}
+
+// ResetBillableQty resets all changes to the "billable_qty" field.
+func (m *RevenueFactMutation) ResetBillableQty() {
+	m.billable_qty = nil
+}
+
+// SetEntitlementQty sets the "entitlement_qty" field.
+func (m *RevenueFactMutation) SetEntitlementQty(d decimal.Decimal) {
+	m.entitlement_qty = &d
+}
+
+// EntitlementQty returns the value of the "entitlement_qty" field in the mutation.
+func (m *RevenueFactMutation) EntitlementQty() (r decimal.Decimal, exists bool) {
+	v := m.entitlement_qty
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntitlementQty returns the old "entitlement_qty" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldEntitlementQty(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntitlementQty is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntitlementQty requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntitlementQty: %w", err)
+	}
+	return oldValue.EntitlementQty, nil
+}
+
+// ResetEntitlementQty resets all changes to the "entitlement_qty" field.
+func (m *RevenueFactMutation) ResetEntitlementQty() {
+	m.entitlement_qty = nil
+}
+
+// SetDecompositionMode sets the "decomposition_mode" field.
+func (m *RevenueFactMutation) SetDecompositionMode(tm types.DecompositionMode) {
+	m.decomposition_mode = &tm
+}
+
+// DecompositionMode returns the value of the "decomposition_mode" field in the mutation.
+func (m *RevenueFactMutation) DecompositionMode() (r types.DecompositionMode, exists bool) {
+	v := m.decomposition_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecompositionMode returns the old "decomposition_mode" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldDecompositionMode(ctx context.Context) (v types.DecompositionMode, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecompositionMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecompositionMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecompositionMode: %w", err)
+	}
+	return oldValue.DecompositionMode, nil
+}
+
+// ResetDecompositionMode resets all changes to the "decomposition_mode" field.
+func (m *RevenueFactMutation) ResetDecompositionMode() {
+	m.decomposition_mode = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *RevenueFactMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *RevenueFactMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *RevenueFactMutation) ResetCurrency() {
+	m.currency = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *RevenueFactMutation) SetStatus(ts types.FactStatus) {
+	m.status = &ts
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *RevenueFactMutation) Status() (r types.FactStatus, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldStatus(ctx context.Context) (v types.FactStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *RevenueFactMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetIsRevert sets the "is_revert" field.
+func (m *RevenueFactMutation) SetIsRevert(b bool) {
+	m.is_revert = &b
+}
+
+// IsRevert returns the value of the "is_revert" field in the mutation.
+func (m *RevenueFactMutation) IsRevert() (r bool, exists bool) {
+	v := m.is_revert
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsRevert returns the old "is_revert" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldIsRevert(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsRevert is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsRevert requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsRevert: %w", err)
+	}
+	return oldValue.IsRevert, nil
+}
+
+// ResetIsRevert resets all changes to the "is_revert" field.
+func (m *RevenueFactMutation) ResetIsRevert() {
+	m.is_revert = nil
+}
+
+// SetInvoiceID sets the "invoice_id" field.
+func (m *RevenueFactMutation) SetInvoiceID(s string) {
+	m.invoice_id = &s
+}
+
+// InvoiceID returns the value of the "invoice_id" field in the mutation.
+func (m *RevenueFactMutation) InvoiceID() (r string, exists bool) {
+	v := m.invoice_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceID returns the old "invoice_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldInvoiceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceID: %w", err)
+	}
+	return oldValue.InvoiceID, nil
+}
+
+// ClearInvoiceID clears the value of the "invoice_id" field.
+func (m *RevenueFactMutation) ClearInvoiceID() {
+	m.invoice_id = nil
+	m.clearedFields[revenuefact.FieldInvoiceID] = struct{}{}
+}
+
+// InvoiceIDCleared returns if the "invoice_id" field was cleared in this mutation.
+func (m *RevenueFactMutation) InvoiceIDCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldInvoiceID]
+	return ok
+}
+
+// ResetInvoiceID resets all changes to the "invoice_id" field.
+func (m *RevenueFactMutation) ResetInvoiceID() {
+	m.invoice_id = nil
+	delete(m.clearedFields, revenuefact.FieldInvoiceID)
+}
+
+// SetInvoiceLineItemID sets the "invoice_line_item_id" field.
+func (m *RevenueFactMutation) SetInvoiceLineItemID(s string) {
+	m.invoice_line_item_id = &s
+}
+
+// InvoiceLineItemID returns the value of the "invoice_line_item_id" field in the mutation.
+func (m *RevenueFactMutation) InvoiceLineItemID() (r string, exists bool) {
+	v := m.invoice_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceLineItemID returns the old "invoice_line_item_id" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldInvoiceLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceLineItemID: %w", err)
+	}
+	return oldValue.InvoiceLineItemID, nil
+}
+
+// ClearInvoiceLineItemID clears the value of the "invoice_line_item_id" field.
+func (m *RevenueFactMutation) ClearInvoiceLineItemID() {
+	m.invoice_line_item_id = nil
+	m.clearedFields[revenuefact.FieldInvoiceLineItemID] = struct{}{}
+}
+
+// InvoiceLineItemIDCleared returns if the "invoice_line_item_id" field was cleared in this mutation.
+func (m *RevenueFactMutation) InvoiceLineItemIDCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldInvoiceLineItemID]
+	return ok
+}
+
+// ResetInvoiceLineItemID resets all changes to the "invoice_line_item_id" field.
+func (m *RevenueFactMutation) ResetInvoiceLineItemID() {
+	m.invoice_line_item_id = nil
+	delete(m.clearedFields, revenuefact.FieldInvoiceLineItemID)
+}
+
+// SetLockAdjustedDay sets the "lock_adjusted_day" field.
+func (m *RevenueFactMutation) SetLockAdjustedDay(t time.Time) {
+	m.lock_adjusted_day = &t
+}
+
+// LockAdjustedDay returns the value of the "lock_adjusted_day" field in the mutation.
+func (m *RevenueFactMutation) LockAdjustedDay() (r time.Time, exists bool) {
+	v := m.lock_adjusted_day
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockAdjustedDay returns the old "lock_adjusted_day" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldLockAdjustedDay(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockAdjustedDay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockAdjustedDay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockAdjustedDay: %w", err)
+	}
+	return oldValue.LockAdjustedDay, nil
+}
+
+// ClearLockAdjustedDay clears the value of the "lock_adjusted_day" field.
+func (m *RevenueFactMutation) ClearLockAdjustedDay() {
+	m.lock_adjusted_day = nil
+	m.clearedFields[revenuefact.FieldLockAdjustedDay] = struct{}{}
+}
+
+// LockAdjustedDayCleared returns if the "lock_adjusted_day" field was cleared in this mutation.
+func (m *RevenueFactMutation) LockAdjustedDayCleared() bool {
+	_, ok := m.clearedFields[revenuefact.FieldLockAdjustedDay]
+	return ok
+}
+
+// ResetLockAdjustedDay resets all changes to the "lock_adjusted_day" field.
+func (m *RevenueFactMutation) ResetLockAdjustedDay() {
+	m.lock_adjusted_day = nil
+	delete(m.clearedFields, revenuefact.FieldLockAdjustedDay)
+}
+
+// SetComputedAt sets the "computed_at" field.
+func (m *RevenueFactMutation) SetComputedAt(t time.Time) {
+	m.computed_at = &t
+}
+
+// ComputedAt returns the value of the "computed_at" field in the mutation.
+func (m *RevenueFactMutation) ComputedAt() (r time.Time, exists bool) {
+	v := m.computed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldComputedAt returns the old "computed_at" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldComputedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldComputedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldComputedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldComputedAt: %w", err)
+	}
+	return oldValue.ComputedAt, nil
+}
+
+// ResetComputedAt resets all changes to the "computed_at" field.
+func (m *RevenueFactMutation) ResetComputedAt() {
+	m.computed_at = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *RevenueFactMutation) SetVersion(i int64) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *RevenueFactMutation) Version() (r int64, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the RevenueFact entity.
+// If the RevenueFact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RevenueFactMutation) OldVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *RevenueFactMutation) AddVersion(i int64) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *RevenueFactMutation) AddedVersion() (r int64, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *RevenueFactMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// Where appends a list predicates to the RevenueFactMutation builder.
+func (m *RevenueFactMutation) Where(ps ...predicate.RevenueFact) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RevenueFactMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RevenueFactMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.RevenueFact, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RevenueFactMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RevenueFactMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (RevenueFact).
+func (m *RevenueFactMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RevenueFactMutation) Fields() []string {
+	fields := make([]string, 0, 32)
+	if m.tenant_id != nil {
+		fields = append(fields, revenuefact.FieldTenantID)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, revenuefact.FieldEnvironmentID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, revenuefact.FieldCustomerID)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, revenuefact.FieldSubscriptionID)
+	}
+	if m.sub_line_item_id != nil {
+		fields = append(fields, revenuefact.FieldSubLineItemID)
+	}
+	if m.price_id != nil {
+		fields = append(fields, revenuefact.FieldPriceID)
+	}
+	if m.meter_id != nil {
+		fields = append(fields, revenuefact.FieldMeterID)
+	}
+	if m.aggregation_type != nil {
+		fields = append(fields, revenuefact.FieldAggregationType)
+	}
+	if m.revenue_source != nil {
+		fields = append(fields, revenuefact.FieldRevenueSource)
+	}
+	if m.period_start != nil {
+		fields = append(fields, revenuefact.FieldPeriodStart)
+	}
+	if m.period_end != nil {
+		fields = append(fields, revenuefact.FieldPeriodEnd)
+	}
+	if m.day != nil {
+		fields = append(fields, revenuefact.FieldDay)
+	}
+	if m.service_start != nil {
+		fields = append(fields, revenuefact.FieldServiceStart)
+	}
+	if m.service_end != nil {
+		fields = append(fields, revenuefact.FieldServiceEnd)
+	}
+	if m.recognition_method != nil {
+		fields = append(fields, revenuefact.FieldRecognitionMethod)
+	}
+	if m.usage_at_list_rate != nil {
+		fields = append(fields, revenuefact.FieldUsageAtListRate)
+	}
+	if m.tier_delta != nil {
+		fields = append(fields, revenuefact.FieldTierDelta)
+	}
+	if m.entitlement_amount != nil {
+		fields = append(fields, revenuefact.FieldEntitlementAmount)
+	}
+	if m.line_discount != nil {
+		fields = append(fields, revenuefact.FieldLineDiscount)
+	}
+	if m.invoice_discount != nil {
+		fields = append(fields, revenuefact.FieldInvoiceDiscount)
+	}
+	if m.net_amount != nil {
+		fields = append(fields, revenuefact.FieldNetAmount)
+	}
+	if m.billable_qty != nil {
+		fields = append(fields, revenuefact.FieldBillableQty)
+	}
+	if m.entitlement_qty != nil {
+		fields = append(fields, revenuefact.FieldEntitlementQty)
+	}
+	if m.decomposition_mode != nil {
+		fields = append(fields, revenuefact.FieldDecompositionMode)
+	}
+	if m.currency != nil {
+		fields = append(fields, revenuefact.FieldCurrency)
+	}
+	if m.status != nil {
+		fields = append(fields, revenuefact.FieldStatus)
+	}
+	if m.is_revert != nil {
+		fields = append(fields, revenuefact.FieldIsRevert)
+	}
+	if m.invoice_id != nil {
+		fields = append(fields, revenuefact.FieldInvoiceID)
+	}
+	if m.invoice_line_item_id != nil {
+		fields = append(fields, revenuefact.FieldInvoiceLineItemID)
+	}
+	if m.lock_adjusted_day != nil {
+		fields = append(fields, revenuefact.FieldLockAdjustedDay)
+	}
+	if m.computed_at != nil {
+		fields = append(fields, revenuefact.FieldComputedAt)
+	}
+	if m.version != nil {
+		fields = append(fields, revenuefact.FieldVersion)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RevenueFactMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case revenuefact.FieldTenantID:
+		return m.TenantID()
+	case revenuefact.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case revenuefact.FieldCustomerID:
+		return m.CustomerID()
+	case revenuefact.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case revenuefact.FieldSubLineItemID:
+		return m.SubLineItemID()
+	case revenuefact.FieldPriceID:
+		return m.PriceID()
+	case revenuefact.FieldMeterID:
+		return m.MeterID()
+	case revenuefact.FieldAggregationType:
+		return m.AggregationType()
+	case revenuefact.FieldRevenueSource:
+		return m.RevenueSource()
+	case revenuefact.FieldPeriodStart:
+		return m.PeriodStart()
+	case revenuefact.FieldPeriodEnd:
+		return m.PeriodEnd()
+	case revenuefact.FieldDay:
+		return m.Day()
+	case revenuefact.FieldServiceStart:
+		return m.ServiceStart()
+	case revenuefact.FieldServiceEnd:
+		return m.ServiceEnd()
+	case revenuefact.FieldRecognitionMethod:
+		return m.RecognitionMethod()
+	case revenuefact.FieldUsageAtListRate:
+		return m.UsageAtListRate()
+	case revenuefact.FieldTierDelta:
+		return m.TierDelta()
+	case revenuefact.FieldEntitlementAmount:
+		return m.EntitlementAmount()
+	case revenuefact.FieldLineDiscount:
+		return m.LineDiscount()
+	case revenuefact.FieldInvoiceDiscount:
+		return m.InvoiceDiscount()
+	case revenuefact.FieldNetAmount:
+		return m.NetAmount()
+	case revenuefact.FieldBillableQty:
+		return m.BillableQty()
+	case revenuefact.FieldEntitlementQty:
+		return m.EntitlementQty()
+	case revenuefact.FieldDecompositionMode:
+		return m.DecompositionMode()
+	case revenuefact.FieldCurrency:
+		return m.Currency()
+	case revenuefact.FieldStatus:
+		return m.Status()
+	case revenuefact.FieldIsRevert:
+		return m.IsRevert()
+	case revenuefact.FieldInvoiceID:
+		return m.InvoiceID()
+	case revenuefact.FieldInvoiceLineItemID:
+		return m.InvoiceLineItemID()
+	case revenuefact.FieldLockAdjustedDay:
+		return m.LockAdjustedDay()
+	case revenuefact.FieldComputedAt:
+		return m.ComputedAt()
+	case revenuefact.FieldVersion:
+		return m.Version()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RevenueFactMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case revenuefact.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case revenuefact.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case revenuefact.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case revenuefact.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case revenuefact.FieldSubLineItemID:
+		return m.OldSubLineItemID(ctx)
+	case revenuefact.FieldPriceID:
+		return m.OldPriceID(ctx)
+	case revenuefact.FieldMeterID:
+		return m.OldMeterID(ctx)
+	case revenuefact.FieldAggregationType:
+		return m.OldAggregationType(ctx)
+	case revenuefact.FieldRevenueSource:
+		return m.OldRevenueSource(ctx)
+	case revenuefact.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case revenuefact.FieldPeriodEnd:
+		return m.OldPeriodEnd(ctx)
+	case revenuefact.FieldDay:
+		return m.OldDay(ctx)
+	case revenuefact.FieldServiceStart:
+		return m.OldServiceStart(ctx)
+	case revenuefact.FieldServiceEnd:
+		return m.OldServiceEnd(ctx)
+	case revenuefact.FieldRecognitionMethod:
+		return m.OldRecognitionMethod(ctx)
+	case revenuefact.FieldUsageAtListRate:
+		return m.OldUsageAtListRate(ctx)
+	case revenuefact.FieldTierDelta:
+		return m.OldTierDelta(ctx)
+	case revenuefact.FieldEntitlementAmount:
+		return m.OldEntitlementAmount(ctx)
+	case revenuefact.FieldLineDiscount:
+		return m.OldLineDiscount(ctx)
+	case revenuefact.FieldInvoiceDiscount:
+		return m.OldInvoiceDiscount(ctx)
+	case revenuefact.FieldNetAmount:
+		return m.OldNetAmount(ctx)
+	case revenuefact.FieldBillableQty:
+		return m.OldBillableQty(ctx)
+	case revenuefact.FieldEntitlementQty:
+		return m.OldEntitlementQty(ctx)
+	case revenuefact.FieldDecompositionMode:
+		return m.OldDecompositionMode(ctx)
+	case revenuefact.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case revenuefact.FieldStatus:
+		return m.OldStatus(ctx)
+	case revenuefact.FieldIsRevert:
+		return m.OldIsRevert(ctx)
+	case revenuefact.FieldInvoiceID:
+		return m.OldInvoiceID(ctx)
+	case revenuefact.FieldInvoiceLineItemID:
+		return m.OldInvoiceLineItemID(ctx)
+	case revenuefact.FieldLockAdjustedDay:
+		return m.OldLockAdjustedDay(ctx)
+	case revenuefact.FieldComputedAt:
+		return m.OldComputedAt(ctx)
+	case revenuefact.FieldVersion:
+		return m.OldVersion(ctx)
+	}
+	return nil, fmt.Errorf("unknown RevenueFact field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RevenueFactMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case revenuefact.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case revenuefact.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case revenuefact.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case revenuefact.FieldSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case revenuefact.FieldSubLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubLineItemID(v)
+		return nil
+	case revenuefact.FieldPriceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceID(v)
+		return nil
+	case revenuefact.FieldMeterID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeterID(v)
+		return nil
+	case revenuefact.FieldAggregationType:
+		v, ok := value.(types.AggregationType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregationType(v)
+		return nil
+	case revenuefact.FieldRevenueSource:
+		v, ok := value.(types.RevenueSource)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevenueSource(v)
+		return nil
+	case revenuefact.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case revenuefact.FieldPeriodEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodEnd(v)
+		return nil
+	case revenuefact.FieldDay:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDay(v)
+		return nil
+	case revenuefact.FieldServiceStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServiceStart(v)
+		return nil
+	case revenuefact.FieldServiceEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServiceEnd(v)
+		return nil
+	case revenuefact.FieldRecognitionMethod:
+		v, ok := value.(types.RecognitionMethod)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRecognitionMethod(v)
+		return nil
+	case revenuefact.FieldUsageAtListRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageAtListRate(v)
+		return nil
+	case revenuefact.FieldTierDelta:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTierDelta(v)
+		return nil
+	case revenuefact.FieldEntitlementAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntitlementAmount(v)
+		return nil
+	case revenuefact.FieldLineDiscount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLineDiscount(v)
+		return nil
+	case revenuefact.FieldInvoiceDiscount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceDiscount(v)
+		return nil
+	case revenuefact.FieldNetAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNetAmount(v)
+		return nil
+	case revenuefact.FieldBillableQty:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillableQty(v)
+		return nil
+	case revenuefact.FieldEntitlementQty:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntitlementQty(v)
+		return nil
+	case revenuefact.FieldDecompositionMode:
+		v, ok := value.(types.DecompositionMode)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecompositionMode(v)
+		return nil
+	case revenuefact.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case revenuefact.FieldStatus:
+		v, ok := value.(types.FactStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case revenuefact.FieldIsRevert:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsRevert(v)
+		return nil
+	case revenuefact.FieldInvoiceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceID(v)
+		return nil
+	case revenuefact.FieldInvoiceLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceLineItemID(v)
+		return nil
+	case revenuefact.FieldLockAdjustedDay:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockAdjustedDay(v)
+		return nil
+	case revenuefact.FieldComputedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetComputedAt(v)
+		return nil
+	case revenuefact.FieldVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RevenueFact field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RevenueFactMutation) AddedFields() []string {
+	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, revenuefact.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RevenueFactMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case revenuefact.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RevenueFactMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case revenuefact.FieldVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RevenueFact numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RevenueFactMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(revenuefact.FieldSubLineItemID) {
+		fields = append(fields, revenuefact.FieldSubLineItemID)
+	}
+	if m.FieldCleared(revenuefact.FieldPriceID) {
+		fields = append(fields, revenuefact.FieldPriceID)
+	}
+	if m.FieldCleared(revenuefact.FieldMeterID) {
+		fields = append(fields, revenuefact.FieldMeterID)
+	}
+	if m.FieldCleared(revenuefact.FieldAggregationType) {
+		fields = append(fields, revenuefact.FieldAggregationType)
+	}
+	if m.FieldCleared(revenuefact.FieldServiceStart) {
+		fields = append(fields, revenuefact.FieldServiceStart)
+	}
+	if m.FieldCleared(revenuefact.FieldServiceEnd) {
+		fields = append(fields, revenuefact.FieldServiceEnd)
+	}
+	if m.FieldCleared(revenuefact.FieldRecognitionMethod) {
+		fields = append(fields, revenuefact.FieldRecognitionMethod)
+	}
+	if m.FieldCleared(revenuefact.FieldInvoiceID) {
+		fields = append(fields, revenuefact.FieldInvoiceID)
+	}
+	if m.FieldCleared(revenuefact.FieldInvoiceLineItemID) {
+		fields = append(fields, revenuefact.FieldInvoiceLineItemID)
+	}
+	if m.FieldCleared(revenuefact.FieldLockAdjustedDay) {
+		fields = append(fields, revenuefact.FieldLockAdjustedDay)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RevenueFactMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RevenueFactMutation) ClearField(name string) error {
+	switch name {
+	case revenuefact.FieldSubLineItemID:
+		m.ClearSubLineItemID()
+		return nil
+	case revenuefact.FieldPriceID:
+		m.ClearPriceID()
+		return nil
+	case revenuefact.FieldMeterID:
+		m.ClearMeterID()
+		return nil
+	case revenuefact.FieldAggregationType:
+		m.ClearAggregationType()
+		return nil
+	case revenuefact.FieldServiceStart:
+		m.ClearServiceStart()
+		return nil
+	case revenuefact.FieldServiceEnd:
+		m.ClearServiceEnd()
+		return nil
+	case revenuefact.FieldRecognitionMethod:
+		m.ClearRecognitionMethod()
+		return nil
+	case revenuefact.FieldInvoiceID:
+		m.ClearInvoiceID()
+		return nil
+	case revenuefact.FieldInvoiceLineItemID:
+		m.ClearInvoiceLineItemID()
+		return nil
+	case revenuefact.FieldLockAdjustedDay:
+		m.ClearLockAdjustedDay()
+		return nil
+	}
+	return fmt.Errorf("unknown RevenueFact nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RevenueFactMutation) ResetField(name string) error {
+	switch name {
+	case revenuefact.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case revenuefact.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case revenuefact.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case revenuefact.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case revenuefact.FieldSubLineItemID:
+		m.ResetSubLineItemID()
+		return nil
+	case revenuefact.FieldPriceID:
+		m.ResetPriceID()
+		return nil
+	case revenuefact.FieldMeterID:
+		m.ResetMeterID()
+		return nil
+	case revenuefact.FieldAggregationType:
+		m.ResetAggregationType()
+		return nil
+	case revenuefact.FieldRevenueSource:
+		m.ResetRevenueSource()
+		return nil
+	case revenuefact.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case revenuefact.FieldPeriodEnd:
+		m.ResetPeriodEnd()
+		return nil
+	case revenuefact.FieldDay:
+		m.ResetDay()
+		return nil
+	case revenuefact.FieldServiceStart:
+		m.ResetServiceStart()
+		return nil
+	case revenuefact.FieldServiceEnd:
+		m.ResetServiceEnd()
+		return nil
+	case revenuefact.FieldRecognitionMethod:
+		m.ResetRecognitionMethod()
+		return nil
+	case revenuefact.FieldUsageAtListRate:
+		m.ResetUsageAtListRate()
+		return nil
+	case revenuefact.FieldTierDelta:
+		m.ResetTierDelta()
+		return nil
+	case revenuefact.FieldEntitlementAmount:
+		m.ResetEntitlementAmount()
+		return nil
+	case revenuefact.FieldLineDiscount:
+		m.ResetLineDiscount()
+		return nil
+	case revenuefact.FieldInvoiceDiscount:
+		m.ResetInvoiceDiscount()
+		return nil
+	case revenuefact.FieldNetAmount:
+		m.ResetNetAmount()
+		return nil
+	case revenuefact.FieldBillableQty:
+		m.ResetBillableQty()
+		return nil
+	case revenuefact.FieldEntitlementQty:
+		m.ResetEntitlementQty()
+		return nil
+	case revenuefact.FieldDecompositionMode:
+		m.ResetDecompositionMode()
+		return nil
+	case revenuefact.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case revenuefact.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case revenuefact.FieldIsRevert:
+		m.ResetIsRevert()
+		return nil
+	case revenuefact.FieldInvoiceID:
+		m.ResetInvoiceID()
+		return nil
+	case revenuefact.FieldInvoiceLineItemID:
+		m.ResetInvoiceLineItemID()
+		return nil
+	case revenuefact.FieldLockAdjustedDay:
+		m.ResetLockAdjustedDay()
+		return nil
+	case revenuefact.FieldComputedAt:
+		m.ResetComputedAt()
+		return nil
+	case revenuefact.FieldVersion:
+		m.ResetVersion()
+		return nil
+	}
+	return fmt.Errorf("unknown RevenueFact field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RevenueFactMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RevenueFactMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RevenueFactMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RevenueFactMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RevenueFactMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RevenueFactMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RevenueFactMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown RevenueFact unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RevenueFactMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown RevenueFact edge %s", name)
 }
 
 // ScheduledTaskMutation represents an operation that mutates the ScheduledTask nodes in the graph.

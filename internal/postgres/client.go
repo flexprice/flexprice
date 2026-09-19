@@ -122,6 +122,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 
 	// Initialize reader client
 	var readerClient *ent.Client
+	var readerDB *sql.DB
 	hasReader := config.Postgres.HasSeparateReader()
 
 	if hasReader {
@@ -129,7 +130,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		readerDSN := config.Postgres.GetReaderDSN()
 
 		// Open reader PostgreSQL connection
-		readerDB, err := sql.Open("postgres", readerDSN)
+		readerDB, err = sql.Open("postgres", readerDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to postgres reader: %w", err)
 		}

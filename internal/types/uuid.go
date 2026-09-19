@@ -119,6 +119,7 @@ const (
 	UUID_PREFIX_COMMITMENT_BUCKET          = "bucket"
 	UUID_PREFIX_INCOMING_WEBHOOK_EVENT     = "fp_webhook"
 	UUID_PREFIX_ANALYTICS_VIEW             = "aview"
+	UUID_PREFIX_REVENUE_FACT               = "revfact"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

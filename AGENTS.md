@@ -666,10 +666,16 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
 
 ## Coding style guide
 
-1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
+1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings. Two scoped exceptions, matching long-standing convention: domain models (`internal/domain/*`) use exported fields with builders (rule 2) and `FromEnt` converters; serialization/wire types (Temporal workflow inputs, DTOs, config) keep exported fields for JSON round-tripping.
 2. When updating "domain" entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
 3. Only add comments when some logic or definition is complex to understand or there is an edge case. Don't write comments on generic logic and easy to understand structs and methods.
    - **Keep them short — one or two lines.** A comment says what a thing is for and what it does. It is not the place for rationale, alternatives considered, or background. A dev can read the code; a paragraph above every method makes the code harder to reach, not easier.
    - No restating the code in prose, no "why not X" essays, no history of the change. If a decision genuinely needs explaining, it belongs in the design doc, not the file.
    - Same rule for struct field comments and doc comments on exported methods.
 4. Logging: log only meaningful state changes, failures, and operational decisions, with the relevant IDs and error attached. `Warn` is reserved for bootstrap/setup code; use `Info` for a recovered/skipped condition and `Error` for a failure.
+5. Write maintainable Go per [Practical Go](https://dave.cheney.net/practical-go/presentations/qcon-china.html). The rules we enforce in review:
+   - **Naming**: choose clarity over brevity; identifier length grows with distance from its declaration (short names near use, longer names for wider scope). Never name a variable after its type (`usersMap`, `configStruct`). Prefer single-word method and package names; keep receiver names one or two letters and consistent across a type's methods.
+   - **Packages**: name a package for what it *provides*, not what it contains — no `utils`, `helpers`, `common`. Prefer fewer, larger packages; split files by responsibility, not by kind.
+   - **Comments**: a comment explains one of *what*, *how*, or *why* — in one or two lines, self-sufficient with no references to design docs, tickets, or section numbers. Document every exported symbol; skip comments on interface-implementing methods (the interface doc stands). Don't comment bad code — rewrite it; extract a commented block into a well-named function instead.
+   - **Shape**: guard clauses and early returns; keep the happy path unindented and flowing down the screen. Make zero values useful. No package-level mutable state.
+   - **APIs**: easy to use, hard to misuse — avoid several same-typed parameters in a row, avoid nil-tolerant parameters that fork behavior, design for the default case.

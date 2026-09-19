@@ -246,7 +246,7 @@ func applyCustomerCreateIdempotency(customerData map[string]interface{}) map[str
 	if customerData == nil {
 		customerData = map[string]interface{}{}
 	}
-	
+
 	customerData["fail_existing"] = "0"
 	return customerData
 }

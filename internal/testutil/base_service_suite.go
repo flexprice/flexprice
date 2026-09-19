@@ -37,6 +37,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -109,6 +110,7 @@ type Stores struct {
 	CheckoutSessionRepo          domainCheckout.Repository
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
+	RevenueFactRepo              revenuefact.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -268,6 +270,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
+		RevenueFactRepo:              NewInMemoryRevenueFactStore(),
 	}
 
 	// Cache stores
@@ -331,6 +334,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()
+	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

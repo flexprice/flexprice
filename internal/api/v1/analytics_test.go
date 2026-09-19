@@ -64,7 +64,7 @@ func setupAnalyticsRouter(t *testing.T, svc service.AnalyticsService) *gin.Engin
 	log, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
 
-	handler := NewAnalyticsHandler(svc, log)
+	handler := NewAnalyticsHandler(svc, nil, log)
 
 	router := gin.New()
 	// ErrorHandler mirrors router.go's wiring: handlers call c.Error(err) and

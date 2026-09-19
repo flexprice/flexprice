@@ -51,6 +51,12 @@ type RedisCache interface {
 	IsRedisCache() bool
 
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
+
+	// GetBulk retrieves many keys in one round trip, returning the values
+	// found (keyed by the original key) and the keys not found — callers
+	// fetch those from the DB and Set them back. A disabled cache reports
+	// every key missing.
+	GetBulk(ctx context.Context, keys []string) (found map[string]interface{}, missing []string)
 }
 
 // Predefined cache key prefixes for different entity types

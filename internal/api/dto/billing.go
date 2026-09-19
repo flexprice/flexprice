@@ -99,6 +99,9 @@ type PrepareSubscriptionInvoiceRequestParams struct {
 	// OpeningInvoiceAdjustmentAmount is the credit from the cancelled subscription to apply to the
 	// first invoice (reduces fixed line item amounts before coupons).
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+	// AsOf overrides the reference instant used for open-period clipping (inactive line items,
+	// windowed-commitment effective end). Zero value = now, i.e. today's behavior.
+	AsOf time.Time `json:"-"`
 }
 
 // Validate enforces struct tags and the reference point.

@@ -37,6 +37,7 @@ const (
 	SettingKeySAMLConfig                  SettingKey = "saml_config"
 	SettingKeyWalletTopupConfig           SettingKey = "wallet_topup_config"
 	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
+	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -60,6 +61,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeySAMLConfig,
 		SettingKeyWalletTopupConfig,
 		SettingKeyCustomCurrencyConfig,
+		SettingKeyRevenueAnalyticsConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -519,6 +521,16 @@ func (c DraftInvoiceRecomputeConfig) Validate() error {
 	return nil
 }
 
+// RevenueAnalyticsConfig gates the revenue_facts rollup per tenant/environment.
+type RevenueAnalyticsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Validate implements SettingConfig.
+func (c RevenueAnalyticsConfig) Validate() error {
+	return nil
+}
+
 // WalletTopupConfig holds guard rails for wallet top-up operations.
 type WalletTopupConfig struct {
 	// FreeCreditLimitPerTransaction is the maximum currency amount allowed for a single
@@ -758,6 +770,14 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultRevenueAnalyticsConfig := RevenueAnalyticsConfig{
+		Enabled: false,
+	}
+	defaultRevenueAnalyticsConfigMap, err := utils.ToMap(defaultRevenueAnalyticsConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	defaultWalletTopupConfig := WalletTopupConfig{
 		FreeCreditLimitPerTransaction: decimal.Zero,
 		MinTopupAmountPerCurrency: map[string]decimal.Decimal{
@@ -860,6 +880,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyDraftInvoiceRecomputeConfig,
 			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
 			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
+		},
+		SettingKeyRevenueAnalyticsConfig: {
+			Key:          SettingKeyRevenueAnalyticsConfig,
+			DefaultValue: defaultRevenueAnalyticsConfigMap,
+			Description:  "Gates the revenue_facts rollup for this tenant/environment: when enabled, the scheduled dirty-scan decomposes its active subscriptions into provisional revenue facts",
 		},
 		SettingKeyWalletTopupConfig: {
 			Key:          SettingKeyWalletTopupConfig,
@@ -1003,6 +1028,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyDraftInvoiceRecomputeConfig:
 		config, err := utils.ToStruct[DraftInvoiceRecomputeConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyRevenueAnalyticsConfig:
+		config, err := utils.ToStruct[RevenueAnalyticsConfig](value)
 		if err != nil {
 			return err
 		}

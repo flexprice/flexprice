@@ -808,6 +808,59 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/analytics/revenue-facts/export": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Streams revenue_facts rows as CSV, ordered by (computed_at, id). Pass since (RFC3339) to export only rows recomputed after a prior export's max computed_at; omit it for a full snapshot. Requires the tenant's revenue analytics setting to be enabled. Column reference: docs/export/revenue-facts.md.",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Export revenue facts",
+                "operationId": "exportRevenueFacts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Only rows with computed_at strictly after this RFC3339 instant",
+                        "name": "since",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CSV stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Revenue analytics not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/analytics/views": {
             "post": {
                 "security": [
@@ -18841,6 +18894,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "ingested_at": {
+                    "type": "string"
+                },
                 "properties": {
                     "type": "object",
                     "additionalProperties": true
@@ -19201,6 +19257,12 @@ const docTemplate = `{
                 },
                 "event": {
                     "$ref": "#/definitions/Event"
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Event"
+                    }
                 },
                 "processed_events": {
                     "type": "array",
@@ -29900,14 +29962,14 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "plan",
-                "addon",
+                "addon_association",
                 "credit_grant",
                 "entitlement",
                 "entitlement_grant"
             ],
             "x-enum-varnames": [
                 "SubscriptionChangeEntityTypePlan",
-                "SubscriptionChangeEntityTypeAddon",
+                "SubscriptionChangeEntityTypeAddonAssociation",
                 "SubscriptionChangeEntityTypeCreditGrant",
                 "SubscriptionChangeEntityTypeEntitlement",
                 "SubscriptionChangeEntityTypeEntitlementGrant"

@@ -383,7 +383,7 @@ type SavedCardDetails struct {
 type ProviderSavedPaymentMethods struct {
 	Provider types.PaymentGatewayType `json:"provider"`
 	Items    []*SavedPaymentMethod    `json:"items"`
-	Error *ProviderError `json:"error,omitempty"`
+	Error    *ProviderError           `json:"error,omitempty"`
 }
 
 type ProviderError struct {

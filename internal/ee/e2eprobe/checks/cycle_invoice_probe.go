@@ -24,7 +24,7 @@ func NewCycleInvoiceProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string) 
 	return &CycleInvoiceProbe{client: c, reg: r, runID: runID}
 }
 
-func (p *CycleInvoiceProbe) Name() string         { return "cycle-invoice-probe" }
+func (p *CycleInvoiceProbe) Name() string        { return "cycle-invoice-probe" }
 func (p *CycleInvoiceProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
 func (p *CycleInvoiceProbe) Run(ctx context.Context) error {

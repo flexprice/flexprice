@@ -36,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -302,4 +303,8 @@ func NewCheckoutSessionRepository(p RepositoryParams) checkout.Repository {
 
 func NewAnalyticsViewRepository(p RepositoryParams) domainAnalytics.Repository {
 	return entRepo.NewAnalyticsViewRepository(p.EntClient, p.Logger)
+}
+
+func NewRevenueFactRepository(p RepositoryParams) revenuefact.Repository {
+	return entRepo.NewRevenueFactRepository(p.EntClient, p.Logger)
 }

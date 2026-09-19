@@ -279,6 +279,25 @@ func (s *InMemoryPriceStore) GetByGroupIDs(ctx context.Context, groupIDs []strin
 	return prices, nil
 }
 
+// ListByIDs returns the prices whose ids are in ids; missing ids are absent.
+func (s *InMemoryPriceStore) ListByIDs(ctx context.Context, ids []string) ([]*price.Price, error) {
+	prices, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, p *price.Price, _ interface{}) bool {
+		if p == nil {
+			return false
+		}
+		if !CheckTenantFilter(ctx, p.TenantID) || !CheckEnvironmentFilter(ctx, p.EnvironmentID) {
+			return false
+		}
+		return lo.Contains(ids, p.ID)
+	}, priceSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices by ids").
+			Mark(ierr.ErrDatabase)
+	}
+	return prices, nil
+}
+
 // ClearGroupIDsBulk clears the group ID for multiple prices
 func (s *InMemoryPriceStore) ClearGroupIDsBulk(ctx context.Context, ids []string) error {
 	for _, id := range ids {

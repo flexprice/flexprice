@@ -1082,6 +1082,60 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 	return results, nil
 }
 
+// GetCumulativeDailyUsage returns the running cumulative SUM(qty_total)
+// through each day in [StartTime, EndTime] for a single meter. Per-day sums
+// come from BuildCumulativeDailyUsageQuery; the running total is rolled up
+// here since ClickHouse's per-day GROUP BY only gives point sums.
+func (r *MeterUsageRepository) GetCumulativeDailyUsage(ctx context.Context, params *events.CumulativeDailyUsageParams) ([]events.DailyUsagePoint, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_cumulative_daily_usage", map[string]interface{}{
+		"meter_id": params.MeterID,
+	})
+	defer FinishSpan(span)
+
+	query, args := r.qb.BuildCumulativeDailyUsageQuery(params)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query cumulative daily usage").
+			WithReportableDetails(map[string]interface{}{"meter_id": params.MeterID}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	points := make([]events.DailyUsagePoint, 0)
+	running := decimal.Zero
+	for rows.Next() {
+		var d time.Time
+		var dayQty decimal.Decimal
+		if err := rows.Scan(&d, &dayQty); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan cumulative daily usage row").
+				Mark(ierr.ErrDatabase)
+		}
+		running = running.Add(dayQty)
+		points = append(points, events.DailyUsagePoint{
+			Day:           d,
+			CumulativeQty: running,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating cumulative daily usage rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return points, nil
+}
+
 // GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
 func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
 	span := StartRepositorySpan(ctx, "meter_usage", "get_by_event_id", map[string]interface{}{

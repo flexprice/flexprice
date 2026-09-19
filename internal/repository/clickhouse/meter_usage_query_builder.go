@@ -12,6 +12,11 @@ import (
 // validMeterUsageGroupByPattern matches safe property names (alphanumeric, underscores, dots).
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
+// maxMemoryUsageSetting mirrors the inline 90GB bound used by
+// GetEarliestUsageTimestamp/GetMeterUsageForExport/GetByEventID in
+// meter_usage.go (AGENTS.md: every ClickHouse query bounded by 90GB).
+const maxMemoryUsageSetting = "max_memory_usage = 96636764160"
+
 // BucketedGroupByDim describes one group_by dimension supported by the bucketed
 // query: "source" and "properties.X" only. Public so the repo's scan code can
 // read the alias / property name without re-parsing the input.
@@ -654,6 +659,46 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		ORDER BY window_start ASC
 		%s
 	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, settings)
+
+	return query, args
+}
+
+// BuildCumulativeDailyUsageQuery builds a per-day SUM(qty_total) query for a
+// single meter over [StartTime, EndTime], tenant/env-scoped. Reuses
+// BuildDetailedWhereClause for RLS and BuildFinalClause for FINAL handling so
+// tenant/env injection and dedup semantics match the rest of the engine.
+// The repo method (GetCumulativeDailyUsage) rolls the per-day sums this query
+// returns into the running cumulative total.
+func (qb *MeterUsageQueryBuilder) BuildCumulativeDailyUsageQuery(params *events.CumulativeDailyUsageParams) (string, []interface{}) {
+	tz := normalizeCHTimezone(params.Timezone)
+	dayExpr := fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
+
+	detailedParams := &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            params.TenantID,
+		EnvironmentID:       params.EnvironmentID,
+		ExternalCustomerIDs: params.ExternalCustomerIDs,
+		MeterIDs:            []string{params.MeterID},
+		StartTime:           params.StartTime,
+		EndTime:             params.EndTime,
+	}
+	where, args := qb.BuildDetailedWhereClause(detailedParams)
+	finalClause, finalSettings := qb.BuildFinalClause(params.UseFinal)
+
+	settings := "SETTINGS " + maxMemoryUsageSetting
+	if finalSettings != "" {
+		settings = finalSettings + ", " + maxMemoryUsageSetting
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s AS day,
+			SUM(qty_total) AS day_qty
+		FROM meter_usage %s
+		WHERE %s
+		GROUP BY day
+		ORDER BY day ASC
+		%s
+	`, dayExpr, finalClause, where, settings)
 
 	return query, args
 }
