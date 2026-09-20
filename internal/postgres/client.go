@@ -165,6 +165,15 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		logger.Debug(context.Background(), "no separate reader configured, using writer for reads")
 	}
 
+	// Reject all mutations while the write-freeze is on. readerClient may be
+	// the same *ent.Client as writerClient (no separate reader configured);
+	// Use is idempotent per hook instance so registering on both is safe.
+	roHook := newReadOnlyHook(config.Postgres.ReadOnly)
+	writerClient.Use(roHook)
+	if readerClient != writerClient {
+		readerClient.Use(roHook)
+	}
+
 	return &EntClients{
 		Writer:    writerClient,
 		Reader:    readerClient,

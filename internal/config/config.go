@@ -602,6 +602,9 @@ type PostgresConfig struct {
 	// Reader endpoint configuration for read replicas
 	ReaderHost string `mapstructure:"reader_host"`
 	ReaderPort int    `mapstructure:"reader_port"`
+
+	// ReadOnly freezes all Postgres writes (cutover). Env: FLEXPRICE_POSTGRES_READONLY.
+	ReadOnly bool `mapstructure:"readonly"`
 }
 
 type APIKeyConfig struct {
