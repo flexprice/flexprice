@@ -1,5 +1,5 @@
 deployment:
-  mode: "local" # local, api, consumer, temporal_worker, internal
+  mode: "local" # local, api, consumer, temporal_worker, admin
 
 server:
   address: ":8080"

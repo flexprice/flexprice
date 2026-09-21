@@ -1,4 +1,4 @@
-package internalapi
+package admin
 
 import (
 	"bytes"
@@ -8,24 +8,25 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
-	v1 "github.com/flexprice/flexprice/internal/api/internalapi/v1"
+	v1 "github.com/flexprice/flexprice/internal/api/admin/v1"
+	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
 
-type fakeInternalEnvironmentService struct {
-	req  dto.InternalCreateEnvironmentRequest
-	resp *dto.InternalEnvironmentResponse
+type fakeEnvironmentService struct {
+	req  admindto.CreateEnvironmentRequest
+	resp *admindto.EnvironmentResponse
 	err  error
 }
 
-func (f *fakeInternalEnvironmentService) CreateEnvironment(_ context.Context, req dto.InternalCreateEnvironmentRequest) (*dto.InternalEnvironmentResponse, error) {
+func (f *fakeEnvironmentService) CreateEnvironment(_ context.Context, req admindto.CreateEnvironmentRequest) (*admindto.EnvironmentResponse, error) {
 	f.req = req
 	return f.resp, f.err
 }
 
-func newTestServer(environments *fakeInternalEnvironmentService) *Server {
+func newTestServer(environments *fakeEnvironmentService) *Server {
 	return NewRouter(Handlers{
 		Health:      v1.NewHealthHandler(),
 		Environment: v1.NewEnvironmentHandler(environments),
@@ -33,7 +34,7 @@ func newTestServer(environments *fakeInternalEnvironmentService) *Server {
 }
 
 func TestHealth(t *testing.T) {
-	server := newTestServer(&fakeInternalEnvironmentService{})
+	server := newTestServer(&fakeEnvironmentService{})
 
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		req := httptest.NewRequest(method, "/health", nil)
@@ -46,11 +47,11 @@ func TestHealth(t *testing.T) {
 }
 
 func TestCreateEnvironment(t *testing.T) {
-	fake := &fakeInternalEnvironmentService{
-		resp: &dto.InternalEnvironmentResponse{
+	fake := &fakeEnvironmentService{
+		resp: &admindto.EnvironmentResponse{
 			ID:       "env_1",
 			Name:     "Production",
-			Type:     "production",
+			Type:     types.EnvironmentProduction,
 			TenantID: "ten_1",
 		},
 	}
@@ -66,14 +67,15 @@ func TestCreateEnvironment(t *testing.T) {
 	require.Equal(t, "Production", fake.req.Name)
 	require.Equal(t, "owner@example.com", fake.req.Email)
 
-	var resp dto.InternalEnvironmentResponse
+	var resp admindto.EnvironmentResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, "env_1", resp.ID)
 	require.Equal(t, "ten_1", resp.TenantID)
+	require.Equal(t, types.EnvironmentProduction, resp.Type)
 }
 
 func TestCreateEnvironmentValidation(t *testing.T) {
-	fake := &fakeInternalEnvironmentService{
+	fake := &fakeEnvironmentService{
 		err: ierr.NewError("tenant_id or email is required").Mark(ierr.ErrValidation),
 	}
 	server := newTestServer(fake)
@@ -87,7 +89,7 @@ func TestCreateEnvironmentValidation(t *testing.T) {
 }
 
 func TestPublicRouteNotMounted(t *testing.T) {
-	server := newTestServer(&fakeInternalEnvironmentService{})
+	server := newTestServer(&fakeEnvironmentService{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/customers", nil)
 	rec := httptest.NewRecorder()
 	server.engine.ServeHTTP(rec, req)

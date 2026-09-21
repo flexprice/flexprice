@@ -1,17 +1,19 @@
-package service
+package admin
 
 import (
 	"context"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
+	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
 
-func TestInternalCreateEnvironment(t *testing.T) {
+func TestCreateEnvironment(t *testing.T) {
 	const (
 		tenantID = "ten_1"
 		email    = "owner@example.com"
@@ -19,20 +21,20 @@ func TestInternalCreateEnvironment(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		req     dto.InternalCreateEnvironmentRequest
+		req     admindto.CreateEnvironmentRequest
 		setup   func(users *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore)
 		wantErr bool
 	}{
 		{
 			name: "by tenant id",
-			req:  dto.InternalCreateEnvironmentRequest{Name: "Production", Type: "production", TenantID: tenantID},
+			req:  admindto.CreateEnvironmentRequest{Name: "Production", Type: types.EnvironmentProduction, TenantID: tenantID},
 			setup: func(_ *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore) {
 				require.NoError(t, tenants.Create(context.Background(), &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 			},
 		},
 		{
 			name: "by email",
-			req:  dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development", Email: email},
+			req:  admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment, Email: email},
 			setup: func(users *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore) {
 				require.NoError(t, tenants.Create(context.Background(), &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 				require.NoError(t, users.Create(context.Background(), user.NewUser(email, tenantID)))
@@ -40,7 +42,7 @@ func TestInternalCreateEnvironment(t *testing.T) {
 		},
 		{
 			name: "tenant id and email agree",
-			req:  dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development", TenantID: tenantID, Email: email},
+			req:  admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment, TenantID: tenantID, Email: email},
 			setup: func(users *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore) {
 				require.NoError(t, tenants.Create(context.Background(), &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 				require.NoError(t, users.Create(context.Background(), user.NewUser(email, tenantID)))
@@ -48,7 +50,7 @@ func TestInternalCreateEnvironment(t *testing.T) {
 		},
 		{
 			name: "tenant id and email disagree",
-			req:  dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development", TenantID: "ten_other", Email: email},
+			req:  admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment, TenantID: "ten_other", Email: email},
 			setup: func(users *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore) {
 				require.NoError(t, tenants.Create(context.Background(), &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 				require.NoError(t, users.Create(context.Background(), user.NewUser(email, tenantID)))
@@ -57,22 +59,22 @@ func TestInternalCreateEnvironment(t *testing.T) {
 		},
 		{
 			name:    "missing tenant",
-			req:     dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development"},
+			req:     admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment},
 			wantErr: true,
 		},
 		{
 			name:    "unknown tenant",
-			req:     dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development", TenantID: "missing"},
+			req:     admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment, TenantID: "missing"},
 			wantErr: true,
 		},
 		{
 			name:    "unknown email",
-			req:     dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "development", Email: "missing@example.com"},
+			req:     admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: types.EnvironmentDevelopment, Email: "missing@example.com"},
 			wantErr: true,
 		},
 		{
 			name: "invalid type",
-			req:  dto.InternalCreateEnvironmentRequest{Name: "Sandbox", Type: "sandbox", TenantID: tenantID},
+			req:  admindto.CreateEnvironmentRequest{Name: "Sandbox", Type: "sandbox", TenantID: tenantID},
 			setup: func(_ *testutil.InMemoryUserStore, tenants *testutil.InMemoryTenantStore) {
 				require.NoError(t, tenants.Create(context.Background(), &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 			},
@@ -80,7 +82,7 @@ func TestInternalCreateEnvironment(t *testing.T) {
 		},
 		{
 			name:    "missing name",
-			req:     dto.InternalCreateEnvironmentRequest{Type: "development", TenantID: tenantID},
+			req:     admindto.CreateEnvironmentRequest{Type: types.EnvironmentDevelopment, TenantID: tenantID},
 			wantErr: true,
 		},
 	}
@@ -94,7 +96,7 @@ func TestInternalCreateEnvironment(t *testing.T) {
 				tt.setup(users, tenants)
 			}
 
-			svc := NewInternalEnvironmentService(ServiceParams{
+			svc := NewEnvironmentService(service.ServiceParams{
 				UserRepo:        users,
 				TenantRepo:      tenants,
 				EnvironmentRepo: environments,

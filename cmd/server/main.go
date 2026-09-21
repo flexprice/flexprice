@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
-	"github.com/flexprice/flexprice/internal/api/internalapi"
-	internalv1 "github.com/flexprice/flexprice/internal/api/internalapi/v1"
+	adminapi "github.com/flexprice/flexprice/internal/api/admin"
+	adminv1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -235,7 +236,7 @@ func main() {
 			service.NewUserService,
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
-			service.NewInternalEnvironmentService,
+			adminsvc.NewEnvironmentService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -308,8 +309,8 @@ func main() {
 			// API components
 			provideHandlers,
 			provideRouter,
-			provideInternalHandlers,
-			provideInternalRouter,
+			provideAdminHandlers,
+			provideAdminRouter,
 		),
 		fx.Invoke(
 			tracing.RegisterHooks,
@@ -449,17 +450,17 @@ func provideHandlers(
 	}
 }
 
-func provideInternalHandlers(
-	internalEnvironmentService service.InternalEnvironmentService,
-) internalapi.Handlers {
-	return internalapi.Handlers{
-		Health:      internalv1.NewHealthHandler(),
-		Environment: internalv1.NewEnvironmentHandler(internalEnvironmentService),
+func provideAdminHandlers(
+	environments adminsvc.EnvironmentService,
+) adminapi.Handlers {
+	return adminapi.Handlers{
+		Health:      adminv1.NewHealthHandler(),
+		Environment: adminv1.NewEnvironmentHandler(environments),
 	}
 }
 
-func provideInternalRouter(handlers internalapi.Handlers, log *logger.Logger) *internalapi.Server {
-	return internalapi.NewRouter(handlers, log)
+func provideAdminRouter(handlers adminapi.Handlers, log *logger.Logger) *adminapi.Server {
+	return adminapi.NewRouter(handlers, log)
 }
 
 func provideRouter(
@@ -557,7 +558,7 @@ func startServer(
 	lc fx.Lifecycle,
 	cfg *config.Configuration,
 	r *gin.Engine,
-	internalRouter *internalapi.Server,
+	adminRouter *adminapi.Server,
 	consumer kafka.MessageConsumer,
 	temporalClient client.TemporalClient,
 	temporalService temporalservice.TemporalService,
@@ -611,8 +612,8 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
-	case types.ModeInternal:
-		startAPIServer(lc, internalRouter, cfg, log)
+	case types.ModeAdmin:
+		startAPIServer(lc, adminRouter, cfg, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}

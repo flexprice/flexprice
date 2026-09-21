@@ -74,7 +74,7 @@ Controlled by **`FLEXPRICE_DEPLOYMENT_MODE`** (see [`REPO_MAP.md`](REPO_MAP.md) 
 
 - Separate API latency from Kafka consumer backlog processing.
 - Isolate Temporal worker CPU from HTTP.
-- `internal` runs a separate Gin engine (`internal/api/internalapi`) and does not start the public API, Kafka consumers, or Temporal workers. Its handlers, DTOs, and services follow the same shape as the public API.
+- `admin` runs the admin portal (`internal/api/admin`) for operator management of tenant accounts and settings. It does not start the public API, Kafka consumers, or Temporal workers. Admin-only auth, per-operator RBAC, and an audit log of actions are planned and not implemented yet.
 
 ---
 

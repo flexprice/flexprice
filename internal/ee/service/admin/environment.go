@@ -1,28 +1,29 @@
-package service
+package admin
 
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
+	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// InternalEnvironmentService creates environments for the internal router.
-// It does not apply the self-serve environment quota used by EnvironmentService.
-type InternalEnvironmentService interface {
-	CreateEnvironment(ctx context.Context, req dto.InternalCreateEnvironmentRequest) (*dto.InternalEnvironmentResponse, error)
+// EnvironmentService creates environments for the admin portal.
+// It does not apply the self-serve environment quota used by the public API.
+type EnvironmentService interface {
+	CreateEnvironment(ctx context.Context, req admindto.CreateEnvironmentRequest) (*admindto.EnvironmentResponse, error)
 }
 
-type internalEnvironmentService struct {
-	ServiceParams
+type environmentService struct {
+	service.ServiceParams
 }
 
-func NewInternalEnvironmentService(params ServiceParams) InternalEnvironmentService {
-	return &internalEnvironmentService{ServiceParams: params}
+func NewEnvironmentService(params service.ServiceParams) EnvironmentService {
+	return &environmentService{ServiceParams: params}
 }
 
-func (s *internalEnvironmentService) CreateEnvironment(ctx context.Context, req dto.InternalCreateEnvironmentRequest) (*dto.InternalEnvironmentResponse, error) {
+func (s *environmentService) CreateEnvironment(ctx context.Context, req admindto.CreateEnvironmentRequest) (*admindto.EnvironmentResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -48,10 +49,10 @@ func (s *internalEnvironmentService) CreateEnvironment(ctx context.Context, req 
 	if s.Logger != nil {
 		s.Logger.Info(ctx, "created environment", "environment_id", env.ID, "tenant_id", tenantID, "type", env.Type.String())
 	}
-	return dto.NewInternalEnvironmentResponse(env), nil
+	return admindto.NewEnvironmentResponse(env), nil
 }
 
-func (s *internalEnvironmentService) resolveTenant(ctx context.Context, tenantID, email string) (string, string, error) {
+func (s *environmentService) resolveTenant(ctx context.Context, tenantID, email string) (string, string, error) {
 	var userID string
 	if email != "" {
 		u, err := s.UserRepo.GetByEmail(ctx, email)
