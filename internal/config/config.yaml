@@ -1,5 +1,5 @@
 deployment:
-  mode: "local" # "local", "docker", "production"
+  mode: "local" # local, api, consumer, temporal_worker, internal
 
 server:
   address: ":8080"

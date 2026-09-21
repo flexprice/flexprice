@@ -300,6 +300,7 @@ Runs **`go run cmd/server/main.go`** **without** sourcing `.env` / `.env.local`.
 | **`consumer`** | Kafka-heavy process; **`make dev-setup`**’s **`flexprice-consumer`** equivalent | `make run-local-consumer` |
 | **`temporal_worker`** | Temporal workers + minimal router (see `cmd/server/main.go`) | Same env loading pattern; **Makefile has no alias** → run: `(set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a && FLEXPRICE_DEPLOYMENT_MODE=temporal_worker go run cmd/server/main.go)` |
 | **`local`** | Single process (**API + consumer path + Temporal** where applicable) — **Kafka mandatory** per `cmd/server/main.go` | `make run-local` |
+| **`internal`** | Internal router only (`/health`, `POST /v1/environments`). Public API, Kafka consumers, and Temporal workers are not started | `make run-local-internal` |
 
 Explain **Temporal worker** rarely needs `:8080` — **§F** pings differ.
 

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
+	"github.com/flexprice/flexprice/internal/api/internalapi"
+	internalv1 "github.com/flexprice/flexprice/internal/api/internalapi/v1"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -233,6 +235,7 @@ func main() {
 			service.NewUserService,
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
+			service.NewInternalEnvironmentService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -305,6 +308,8 @@ func main() {
 			// API components
 			provideHandlers,
 			provideRouter,
+			provideInternalHandlers,
+			provideInternalRouter,
 		),
 		fx.Invoke(
 			tracing.RegisterHooks,
@@ -444,6 +449,19 @@ func provideHandlers(
 	}
 }
 
+func provideInternalHandlers(
+	internalEnvironmentService service.InternalEnvironmentService,
+) internalapi.Handlers {
+	return internalapi.Handlers{
+		Health:      internalv1.NewHealthHandler(),
+		Environment: internalv1.NewEnvironmentHandler(internalEnvironmentService),
+	}
+}
+
+func provideInternalRouter(handlers internalapi.Handlers, log *logger.Logger) *internalapi.Server {
+	return internalapi.NewRouter(handlers, log)
+}
+
 func provideRouter(
 	handlers api.Handlers,
 	cfg *config.Configuration,
@@ -539,6 +557,7 @@ func startServer(
 	lc fx.Lifecycle,
 	cfg *config.Configuration,
 	r *gin.Engine,
+	internalRouter *internalapi.Server,
 	consumer kafka.MessageConsumer,
 	temporalClient client.TemporalClient,
 	temporalService temporalservice.TemporalService,
@@ -592,6 +611,8 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
+	case types.ModeInternal:
+		startAPIServer(lc, internalRouter, cfg, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -643,9 +664,13 @@ func startTemporalWorker(
 	})
 }
 
+type apiRunner interface {
+	Run(addr ...string) error
+}
+
 func startAPIServer(
 	lc fx.Lifecycle,
-	r *gin.Engine,
+	r apiRunner,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {

@@ -11,6 +11,9 @@ const (
 	ModeConsumer RunMode = "consumer"
 	// ModeTemporalWorker is the mode for running the temporal worker
 	ModeTemporalWorker RunMode = "temporal_worker"
+	// ModeInternal serves only the internal router. Public API, Kafka consumers,
+	// and Temporal workers are not started.
+	ModeInternal RunMode = "internal"
 )
 
 type LogLevel string

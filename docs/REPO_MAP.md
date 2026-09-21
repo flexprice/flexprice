@@ -33,6 +33,9 @@ Controlled by configuration (`deployment.mode`). Same codebase, different runtim
 | `api` | Yes | Router runs; ingestion handlers **not** registered | No |
 | `consumer` | No | Full processing registrations | No |
 | `temporal_worker` | No | Minimal (webhook/integration paths for activity-side publishing) | Yes |
+| `internal` | Internal router only (`/health`, `POST /v1/environments`) | No | No |
+
+`internal` does not mount the public API. `POST /v1/environments` creates an environment for a tenant identified by `tenant_id` or a user's `email`, without the self-serve environment quota.
 
 Implementation reference: `startServer`, `registerRouterHandlers`, `includeProcessingHandlers` in `cmd/server/main.go`.
 
@@ -75,6 +78,7 @@ flowchart TB
 | Area | Path | Responsibility |
 | ---- | ---- | -------------- |
 | HTTP surface | `internal/api/v1/` | REST handlers (~one file per bounded context) |
+| Internal HTTP | `internal/api/internalapi/` | `Handlers` + `NewRouter`, served only when `deployment.mode=internal`. New endpoints follow the public path: DTO in `internal/api/dto`, service in `internal/ee/service`, handler in `internal/api/internalapi/v1`, then register it in `provideInternalHandlers` and `NewRouter` |
 | Cron HTTP trigger | `internal/api/cron/` | Legacy manual `/v1/cron/invoices/void-old-pending` trigger (no Temporal equivalent); all other cron-style jobs run as Temporal schedules |
 | Middleware | `internal/rest/middleware/` | Auth (JWT / API key), RBAC permission checks, tenancy headers, observability hooks |
 | Services | `internal/ee/service/` | Core business logic (~50+ cohesive files plus tests) |
