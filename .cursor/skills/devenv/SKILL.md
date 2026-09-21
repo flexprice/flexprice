@@ -301,7 +301,7 @@ Runs **`go run cmd/server/main.go`** **without** sourcing `.env` / `.env.local`.
 | **`consumer`** | Kafka-heavy process; **`make dev-setup`**’s **`flexprice-consumer`** equivalent | `make run-local-consumer` |
 | **`temporal_worker`** | Temporal workers + minimal router (see `cmd/server/main.go`) | Same env loading pattern; **Makefile has no alias** → run: `(set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a && FLEXPRICE_DEPLOYMENT_MODE=temporal_worker go run cmd/server/main.go)` |
 | **`local`** | Single process (**API + consumer path + Temporal** where applicable) — **Kafka mandatory** per `cmd/server/main.go` | `make run-local` |
-| **`admin`** | Admin portal API only. Operator management of tenant accounts and settings. Public API, Kafka consumers, and Temporal workers are not started. Admin auth, operator RBAC, and action audit logs are planned | `make run-local-admin` |
+| **`admin`** | Admin portal API only. `/v1` requires `X-Admin-Secret` (`FLEXPRICE_ADMIN_SECRET`); mode refuses to boot if that secret is empty. Cross-tenant tenant targeting is intentional. Public API, Kafka consumers, and Temporal workers are not started | `make run-local-admin` |
 
 Explain **Temporal worker** rarely needs `:8080` — **§F** pings differ.
 

@@ -16,7 +16,7 @@ Services take `service.ServiceParams` from `internal/ee/service` so they share r
 
 ## Planned, not built
 
-Admin-only authentication, per-operator RBAC, and an audit log of actions. New write methods should stay easy to wrap with that audit log later: one service method per operator action, with the tenant and actor ids available on the context.
+Per-operator RBAC and an audit log of actions. The admin router already requires `admin.secret`; cross-tenant tenant resolution in this package stays intentional for operators. New write methods should stay easy to wrap with that audit log later: one service method per operator action, with the tenant and actor ids available on the context.
 
 ## Invariants
 

@@ -255,7 +255,7 @@ Set via `FLEXPRICE_DEPLOYMENT_MODE`:
 - `api` — HTTP API only
 - `consumer` — Kafka consumer only
 - `temporal_worker` — Temporal workers only
-- `admin` — Admin portal API only (`make run-local-admin`). Operator management of tenant accounts and settings. Does not serve the public API
+- `admin` — Admin portal API only (`make run-local-admin`). `/v1` requires `FLEXPRICE_ADMIN_SECRET`. Does not serve the public API
 
 Docker Compose runs these as separate services: `flexprice-api`, `flexprice-consumer`, `flexprice-worker`.
 

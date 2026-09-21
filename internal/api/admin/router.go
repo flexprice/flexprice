@@ -22,7 +22,7 @@ type Server struct {
 	engine *gin.Engine
 }
 
-func NewRouter(handlers Handlers, log *logger.Logger) *Server {
+func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(middleware.RequestIDMiddleware)
@@ -33,8 +33,10 @@ func NewRouter(handlers Handlers, log *logger.Logger) *Server {
 	engine.GET("/health", handlers.Health.Health)
 	engine.POST("/health", handlers.Health.Health)
 
+	// Shared secret from admin.secret. Cross-tenant writes stay intentional for operators.
 	group := engine.Group("/v1")
 	group.Use(middleware.ErrorHandler())
+	group.Use(requireSecret(secret))
 	{
 		environment := group.Group("/environments")
 		{

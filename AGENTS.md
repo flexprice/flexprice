@@ -558,7 +558,7 @@ The application can run in split mode for scalability:
 - **API Mode**: Handles HTTP requests only
 - **Consumer Mode**: Processes Kafka events only
 - **Worker Mode**: Runs Temporal workflows only
-- **Admin Mode**: Admin portal API for operator management of tenant accounts and settings. Admin-only auth, per-operator RBAC, and action audit logs are planned
+- **Admin Mode**: Admin portal API. `/v1` requires `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). Cross-tenant tenant targeting is intentional. Per-operator RBAC and an action audit log are not built yet
 
 Set via environment variable:
 

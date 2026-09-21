@@ -53,6 +53,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req admindto
 }
 
 func (s *environmentService) resolveTenant(ctx context.Context, tenantID, email string) (string, string, error) {
+	// Cross-tenant email lookup is intentional; admin.secret on the router authorizes the caller.
 	var userID string
 	if email != "" {
 		u, err := s.UserRepo.GetByEmail(ctx, email)

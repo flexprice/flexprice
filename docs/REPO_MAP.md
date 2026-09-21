@@ -50,7 +50,7 @@ It is its own Gin engine and its own packages, extended the same way as the publ
 
 These routes stay out of the public OpenAPI spec and the generated SDKs.
 
-Authentication is not enforced yet. The portal will get admin-only auth, RBAC for each operator, and an audit log of actions taken. Until then, run this mode only on a private network. Do not mount admin handlers on the public router.
+`/v1` requires `X-Admin-Secret`, checked against `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). `/health` stays open for probes. The secret authorizes the caller; naming a tenant by id or email is still cross-tenant on purpose. Per-operator RBAC and an audit log of actions are not built yet. Keep this process off the public internet.
 
 Implementation reference: `startServer`, `registerRouterHandlers`, `includeProcessingHandlers` in `cmd/server/main.go`.
 

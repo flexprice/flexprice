@@ -4,6 +4,11 @@ deployment:
 server:
   address: ":8080"
 
+# Operator portal (deployment.mode=admin). Empty secret refuses that mode at boot.
+# Prod sets FLEXPRICE_ADMIN_SECRET from the secret manager. Header: X-Admin-Secret.
+admin:
+  secret: ""
+
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
   secret: "super_secret"

@@ -32,13 +32,18 @@ These routes are not part of the public OpenAPI contract or the generated SDKs.
 3. Add a handler in `internal/api/admin/v1`.
 4. Add the handler to `Handlers`, construct it in `provideAdminHandlers`, and register the route in `NewRouter`.
 
+## Auth
+
+`/v1` requires header `X-Admin-Secret` matching `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). Admin mode refuses to boot when that secret is empty. `/health` is open for probes.
+
+Cross-tenant access remains: an authorized operator names the tenant by `tenant_id` or email. That lookup lives in `internal/ee/service/admin`.
+
 ## Planned, not built
 
-- Admin-only authentication, separate from customer API keys and JWTs.
 - RBAC for each operator.
 - An audit log of actions taken through this API.
 
-Until those exist, run this mode only on a private network. Do not mount these handlers on the public router.
+Keep this process off the public internet. Do not mount these handlers on the public router.
 
 ## Invariants
 

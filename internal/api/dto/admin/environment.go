@@ -11,7 +11,7 @@ import (
 )
 
 // CreateEnvironmentRequest creates an environment for a tenant.
-// Identify the tenant with tenant_id, a user's email, or both when they match.
+// Cross-tenant on purpose: an operator, authorized by admin.secret, names the tenant by id or email.
 type CreateEnvironmentRequest struct {
 	Name     string                `json:"name"`
 	Type     types.EnvironmentType `json:"type"`

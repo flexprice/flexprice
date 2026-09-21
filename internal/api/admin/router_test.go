@@ -30,7 +30,7 @@ func newTestServer(environments *fakeEnvironmentService) *Server {
 	return NewRouter(Handlers{
 		Health:      v1.NewHealthHandler(),
 		Environment: v1.NewEnvironmentHandler(environments),
-	}, nil)
+	}, nil, "test-secret")
 }
 
 func TestHealth(t *testing.T) {
@@ -60,6 +60,7 @@ func TestCreateEnvironment(t *testing.T) {
 	body := []byte(`{"name":"Production","type":"production","email":"owner@example.com"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/environments", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(secretHeader, "test-secret")
 	rec := httptest.NewRecorder()
 	server.engine.ServeHTTP(rec, req)
 
@@ -82,10 +83,40 @@ func TestCreateEnvironmentValidation(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/environments", bytes.NewReader([]byte(`{"name":"Production","type":"production"}`)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(secretHeader, "test-secret")
 	rec := httptest.NewRecorder()
 	server.engine.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestCreateEnvironmentUnauthorized(t *testing.T) {
+	server := newTestServer(&fakeEnvironmentService{})
+	body := []byte(`{"name":"Production","type":"production","tenant_id":"ten_1"}`)
+
+	for _, header := range []string{"", "wrong-secret"} {
+		req := httptest.NewRequest(http.MethodPost, "/v1/environments", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if header != "" {
+			req.Header.Set(secretHeader, header)
+		}
+		rec := httptest.NewRecorder()
+		server.engine.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestEmptySecretFailsClosed(t *testing.T) {
+	server := NewRouter(Handlers{
+		Health:      v1.NewHealthHandler(),
+		Environment: v1.NewEnvironmentHandler(&fakeEnvironmentService{}),
+	}, nil, "")
+	req := httptest.NewRequest(http.MethodPost, "/v1/environments", bytes.NewReader([]byte(`{"name":"Production","type":"production","tenant_id":"ten_1"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(secretHeader, "anything")
+	rec := httptest.NewRecorder()
+	server.engine.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestPublicRouteNotMounted(t *testing.T) {

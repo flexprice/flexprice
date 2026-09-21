@@ -74,7 +74,7 @@ Controlled by **`FLEXPRICE_DEPLOYMENT_MODE`** (see [`REPO_MAP.md`](REPO_MAP.md) 
 
 - Separate API latency from Kafka consumer backlog processing.
 - Isolate Temporal worker CPU from HTTP.
-- `admin` runs the admin portal (`internal/api/admin`) for operator management of tenant accounts and settings. It does not start the public API, Kafka consumers, or Temporal workers. Admin-only auth, per-operator RBAC, and an audit log of actions are planned and not implemented yet.
+- `admin` runs the admin portal (`internal/api/admin`) for operator management of tenant accounts and settings. It does not start the public API, Kafka consumers, or Temporal workers. `/v1` requires `admin.secret`. Cross-tenant tenant targeting is intentional. Per-operator RBAC and an action audit log are not built yet.
 
 ---
 
