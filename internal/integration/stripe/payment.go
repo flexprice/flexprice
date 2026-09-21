@@ -442,6 +442,15 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		}
 	}
 
+	if req.ExpiresAt != nil {
+		minExpiry := time.Now().Add(31 * time.Minute)
+		exp := *req.ExpiresAt
+		if exp.Before(minExpiry) {
+			exp = minExpiry
+		}
+		params.ExpiresAt = stripe.Int64(exp.Unix())
+	}
+
 	// Create the checkout session
 	session, err := stripeClient.V1CheckoutSessions.Create(ctx, params)
 	if err != nil {
@@ -471,6 +480,13 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		Status:    string(session.Status),
 		CreatedAt: session.Created,
 		PaymentID: "", // Payment ID will be set by the calling code
+		ExpiresAt: func() *time.Time {
+			if session.ExpiresAt > 0 {
+				exp := time.Unix(session.ExpiresAt, 0).UTC()
+				return &exp
+			}
+			return nil
+		}(),
 	}
 
 	s.logger.Info(ctx, "successfully created stripe payment link",

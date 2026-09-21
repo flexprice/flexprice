@@ -17,6 +17,7 @@ type CreateStripePaymentLinkRequest struct {
 	Metadata               map[string]string `json:"metadata,omitempty"`
 	SaveCardAndMakeDefault bool              `json:"save_card_and_make_default,omitempty"`
 	PaymentID              string            `json:"payment_id" validate:"required"`
+	ExpiresAt              *time.Time        `json:"expires_at,omitempty"`
 }
 
 // StripePaymentLinkResponse represents the response from creating a Stripe payment link
@@ -29,6 +30,7 @@ type StripePaymentLinkResponse struct {
 	Status          string          `json:"status"`
 	CreatedAt       int64           `json:"created_at"`
 	PaymentID       string          `json:"payment_id,omitempty"`
+	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
 }
 
 // ChargeSavedPaymentMethodRequest represents a request to charge a saved payment method

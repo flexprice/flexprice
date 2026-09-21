@@ -163,7 +163,7 @@ func (s *PortalWalletSuite) TestTopUpHonoursNamedProvider() {
 
 // Stripe is connected but has no checkout adapter, so it must not be resolved to.
 func (s *PortalWalletSuite) TestTopUpIgnoresProvidersWithoutCheckout() {
-	s.connect(types.SecretProviderStripe)
+	s.connect(types.SecretProviderNomod)
 
 	_, err := s.svc.(*customerPortalService).
 		resolveCheckoutProvider(s.ctx, "cust_portal", nil)

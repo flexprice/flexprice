@@ -134,7 +134,7 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_Checkout_RejectsConflictin
 			r.DueDate = lo.ToPtr(time.Now().UTC().Add(-time.Hour))
 		}, "due_date must be in the future"},
 		{"unsupported_provider", func(r *dto.CreateInvoiceRequest) {
-			r.Checkout.PaymentProvider = types.CheckoutPaymentProvider("stripe")
+			r.Checkout.PaymentProvider = types.CheckoutPaymentProvider("unsupported")
 		}, "invalid checkout payment provider"},
 	}
 
