@@ -1,4 +1,6 @@
-package workflows
+//go:build ee
+
+package alerts
 
 import (
 	"time"
