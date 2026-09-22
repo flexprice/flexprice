@@ -66,6 +66,25 @@ func TestPaymentMethodAdapter_ListSavedMethods_CustomerNotSynced(t *testing.T) {
 	assert.Nil(t, methods)
 }
 
+func TestPaymentMethodAdapter_ListSavedMethods_CustomerLookupFailurePropagates(t *testing.T) {
+	ctx := context.Background()
+	log := logger.NewNoopLogger()
+	mockCust := &mockCustomerServiceForPMAdapter{
+		err: ierr.NewError("database unavailable").Mark(ierr.ErrSystem),
+	}
+	adapter := &PaymentMethodAdapter{
+		Client:      &Client{},
+		CustomerSvc: mockCust,
+		Logger:      log,
+	}
+
+	// A genuine lookup failure must not be reported as "no saved methods" - the
+	// portal needs to tell the two apart.
+	methods, err := adapter.ListSavedMethods(ctx, "cust_123")
+	require.Error(t, err)
+	assert.Nil(t, methods)
+}
+
 func TestPaymentMethodAdapter_ValidateMethodIDRequired(t *testing.T) {
 	ctx := context.Background()
 	adapter := &PaymentMethodAdapter{

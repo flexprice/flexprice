@@ -192,43 +192,24 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			return nil
 		}
 
-		// If payment is already succeeded, verify checkout session completion and return
-		if payment.PaymentStatus == types.PaymentStatusSucceeded {
-			h.logger.Info(ctx, "FlexPrice payment already succeeded, verifying checkout session completion",
+		// Skip card payments - they're handled synchronously by charge API
+		if payment.PaymentMethodType == types.PaymentMethodTypeCard || payment.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+			h.logger.Info(ctx, "payment is a card payment or payment link, skipping the webhook processing",
 				"flexprice_payment_id", flexpricePaymentID,
-				"payment_intent_id", paymentIntent.ID,
-				"payment_status", payment.PaymentStatus)
-			_, _ = h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, paymentIntent.ID, services)
-			return nil
-		}
-
-		// Reconcile payment with invoice as fallback if checkout.session.completed was not processed
-		actualAmount := types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
-		paymentStatus := string(types.PaymentStatusSucceeded)
-		updateReq := dto.UpdatePaymentRequest{
-			PaymentStatus:    &paymentStatus,
-			GatewayPaymentID: &paymentIntent.ID,
-		}
-		if paymentIntent.PaymentMethod != nil {
-			updateReq.PaymentMethodID = &paymentIntent.PaymentMethod.ID
-		}
-		if _, err := services.PaymentService.UpdatePayment(ctx, payment.ID, updateReq); err != nil {
-			h.logger.Error(ctx, "failed to update payment record, skipping event",
-				"error", err,
-				"payment_id", payment.ID,
 				"payment_intent_id", paymentIntent.ID)
 			return nil
 		}
 
-		if err := h.paymentSvc.ReconcilePaymentWithInvoice(ctx, payment.ID, actualAmount, services.PaymentService, services.InvoiceService); err != nil {
-			h.logger.Error(ctx, "failed to reconcile payment with invoice",
-				"error", err,
-				"payment_id", payment.ID,
-				"amount", actualAmount.String())
+		// If payment is already succeeded, skip processing
+		if payment.PaymentStatus == types.PaymentStatusSucceeded {
+			h.logger.Info(ctx, "FlexPrice payment already succeeded, skipping webhook processing",
+				"flexprice_payment_id", flexpricePaymentID,
+				"payment_intent_id", paymentIntent.ID,
+				"payment_status", payment.PaymentStatus)
+			return nil
 		}
 
-		_, _ = h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, paymentIntent.ID, services)
-		return nil
+		return nil // no need to process further
 	}
 
 	// No flexprice_payment_id - this is an external Stripe payment
@@ -854,7 +835,9 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	// check if payment is already succeeded
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, verifying checkout session completion", "event_id", event.ID)
-		_, _ = h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services)
+		if _, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -868,7 +851,9 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	_, _ = h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services)
+	if _, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -914,6 +899,9 @@ func (h *Handler) handleCheckoutSessionForPayment(
 					"flexprice_payment_id", flexpricePaymentID,
 					"stripe_payment_intent_id", stripePaymentIntentID,
 				)
+				// Unlike the already-exists case, the session is still pending here, so
+				// the caller must fail the webhook and let Stripe redeliver it.
+				return false, err
 			}
 		} else {
 			h.logger.Info(ctx, "completed checkout session from stripe webhook",
@@ -922,7 +910,8 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"stripe_payment_intent_id", stripePaymentIntentID)
 		}
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
-		h.logger.Warn(ctx, "received stripe payment for expired/failed checkout session",
+		h.logger.Error(ctx, "received stripe payment for expired/failed checkout session",
+			"error", "checkout session status does not accept a completed payment",
 			"session_id", session.ID,
 			"status", session.CheckoutStatus,
 			"flexprice_payment_id", flexpricePaymentID,

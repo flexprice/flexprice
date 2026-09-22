@@ -80,6 +80,31 @@ func TestHandler_HandleCheckoutSessionForPayment_IdempotentAlreadyExists(t *test
 	require.Len(t, fakeCheckout.completeCalls, 1)
 }
 
+func TestHandler_HandleCheckoutSessionForPayment_CompleteFailurePropagates(t *testing.T) {
+	ctx := context.Background()
+	log := logger.NewNoopLogger()
+	handler := &Handler{
+		logger: log,
+	}
+
+	fakeCheckout := &fakeCheckoutSessionServiceForStripe{
+		session: &dto.CheckoutSessionResponse{
+			ID:             "cs_test_session_1",
+			CheckoutStatus: types.CheckoutStatusPending,
+		},
+		completeErr: ierr.NewError("transient failure").Mark(ierr.ErrSystem),
+	}
+	deps := &ServiceDependencies{
+		CheckoutSessionService: fakeCheckout,
+	}
+
+	// The session is still pending after this failure, so the error must reach the
+	// caller and fail the webhook rather than being logged and dropped.
+	found, err := handler.handleCheckoutSessionForPayment(ctx, "pay_001", "pi_test_123", deps)
+	require.Error(t, err)
+	assert.False(t, found)
+}
+
 func TestHandler_HandleCheckoutSessionForPayment_NoSession(t *testing.T) {
 	ctx := context.Background()
 	log := logger.NewNoopLogger()

@@ -30,9 +30,9 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 
 	ourCustResp, err := a.CustomerSvc.GetCustomer(ctx, flexCustomerID)
 	if err != nil {
-		a.Logger.Info(ctx, "failed to get customer for saved payment methods",
+		a.Logger.Error(ctx, "failed to get customer for saved payment methods",
 			"customer_id", flexCustomerID, "error", err)
-		return nil, nil
+		return nil, err
 	}
 	if ourCustResp == nil || ourCustResp.Customer == nil {
 		return nil, nil
