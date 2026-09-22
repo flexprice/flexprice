@@ -1,8 +1,13 @@
 deployment:
-  mode: "local" # "local", "docker", "production"
+  mode: "local" # local, api, consumer, temporal_worker, admin
 
 server:
   address: ":8080"
+
+# Operator portal (deployment.mode=admin). Empty secret refuses that mode at boot.
+# Prod sets FLEXPRICE_ADMIN_SECRET from the secret manager. Header: X-Admin-Secret.
+admin:
+  secret: ""
 
 auth:
   provider: "flexprice" # "flexprice" or "supabase"

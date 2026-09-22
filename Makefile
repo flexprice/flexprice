@@ -135,6 +135,12 @@ run-local:
 	@set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a; \
 	FLEXPRICE_DEPLOYMENT_MODE=local go run cmd/server/main.go
 
+# Run the admin portal API only (loads .env then .env.local)
+.PHONY: run-local-admin
+run-local-admin:
+	@set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a; \
+	FLEXPRICE_DEPLOYMENT_MODE=admin go run cmd/server/main.go
+
 # ---------------------------------------------------------------------------
 # Worktree-aware server — deterministic port from branch name, shared .env
 # ---------------------------------------------------------------------------

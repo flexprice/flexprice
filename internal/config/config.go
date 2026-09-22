@@ -78,6 +78,13 @@ type Configuration struct {
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
 	Analytics              AnalyticsConfig              `mapstructure:"analytics" validate:"omitempty"`
+	Admin                  AdminConfig                  `mapstructure:"admin" validate:"omitempty"`
+}
+
+// AdminConfig is the operator portal. Secret is required when deployment.mode is admin.
+// Set it from the secret manager via FLEXPRICE_ADMIN_SECRET. Callers send it as X-Admin-Secret.
+type AdminConfig struct {
+	Secret string `mapstructure:"secret"`
 }
 
 // AnalyticsConfig gates the fire-and-forget analytics meter_usage feed.
