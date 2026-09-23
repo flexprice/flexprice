@@ -485,6 +485,12 @@ func (c *Client) CreateCustomer(ctx context.Context, req *CustomerCreateRequest)
 		"DisplayName": req.DisplayName,
 	}
 
+	if req.CurrencyRef != nil && req.CurrencyRef.Value != "" {
+		payload["CurrencyRef"] = map[string]string{
+			"value": req.CurrencyRef.Value,
+		}
+	}
+
 	if req.PrimaryEmailAddr != nil && req.PrimaryEmailAddr.Address != "" {
 		payload["PrimaryEmailAddr"] = map[string]string{
 			"Address": req.PrimaryEmailAddr.Address,
@@ -777,9 +783,18 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		payload["DueDate"] = *req.DueDate
 	}
 
+	currencyRef := ""
+	if req.CurrencyRef != nil && req.CurrencyRef.Value != "" {
+		currencyRef = req.CurrencyRef.Value
+		payload["CurrencyRef"] = map[string]string{
+			"value": currencyRef,
+		}
+	}
+
 	c.logger.Debug(ctx, "sending QuickBooks Invoice create request",
 		"customer_ref", req.CustomerRef.Value,
 		"line_items_count", len(req.Line),
+		"currency_ref", currencyRef,
 		"due_date", req.DueDate)
 
 	resp, err := c.makeRequestWithRetry(ctx, "POST", "invoice", payload, 0)

@@ -114,7 +114,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	if err != nil {
 		return nil, err
 	}
-	zohoCustomerID, err := s.customerSvc.GetOrCreateZohoCustomer(ctx, flexCustomer)
+	zohoCustomerID, err := s.customerSvc.GetOrCreateZohoCustomer(ctx, flexCustomer, flexInvoice.Currency)
 	if err != nil {
 		return nil, err
 	}
@@ -156,16 +156,16 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	reqPayload.CustomFields = append(reqPayload.CustomFields,
 		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
 
-	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
+	currencyID, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
 		return nil, err
 	}
 	s.logger.Info(ctx, "resolved Zoho invoice currency for sync",
 		"invoice_id", req.InvoiceID,
 		"flexprice_currency", flexInvoice.Currency,
-		"zoho_currency_code", curCode,
+		"zoho_currency_id", currencyID,
 		"zoho_exchange_rate", exchRate)
-	reqPayload.CurrencyCode = curCode
+	reqPayload.CurrencyID = currencyID
 	reqPayload.ExchangeRate = exchRate
 
 	zohoInv, err := s.client.CreateInvoice(ctx, reqPayload)
