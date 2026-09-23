@@ -71,6 +71,12 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Install squawk
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/squawk \
+            https://github.com/sbdchd/squawk/releases/download/v2.63.0/squawk-linux-x86_64
+          sudo chmod +x /usr/local/bin/squawk
+
       - name: Install dbmate and psql
         # Pinned to the same version the deployment image builds (Dockerfile
         # DBMATE_VERSION). `releases/latest` drifts, which would leave CI
@@ -96,6 +102,17 @@ jobs:
 
       - name: Sync check — is any schema change missing a migration?
         run: make migrate-check-sync
+
+      # Mostly advisory: findings print and do not fail the build. Two rules DO
+      # fail it, because each maps to a failure that reached main here --
+      # adding-required-field and ban-concurrent-index-creation-in-transaction.
+      # See scripts/migrations/lint.sh for why those two and not the rest.
+      #
+      # No continue-on-error: the script decides what blocks, so a genuine
+      # scanner error (missing binary, bad config) also fails rather than
+      # passing silently.
+      - name: Lint — is this migration safe to run?
+        run: ./scripts/migrations/lint.sh origin/${{ github.base_ref || 'develop' }}
 
       - name: Checksum — was a shipped migration edited?
         run: make migrate-check-checksum
