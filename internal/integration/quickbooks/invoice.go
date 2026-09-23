@@ -125,6 +125,21 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 		invoiceReq.DueDate = &dueDateStr
 	}
 
+	// Step 4: Resolve exchange rate from QuickBooks for accurate General Ledger valuation
+	exchangeRate, err := s.Client.GetExchangeRate(ctx, invoiceCurrency)
+	if err != nil {
+		s.Logger.Warn(ctx, "failed to resolve QuickBooks exchange rate, continuing without explicit rate",
+			"invoice_id", flexInvoice.ID,
+			"currency", invoiceCurrency,
+			"error", err)
+	} else if exchangeRate != nil && !exchangeRate.IsZero() {
+		invoiceReq.ExchangeRate = exchangeRate
+		s.Logger.Info(ctx, "resolved QuickBooks exchange rate for invoice",
+			"invoice_id", flexInvoice.ID,
+			"currency", invoiceCurrency,
+			"exchange_rate", exchangeRate.String())
+	}
+
 	quickBooksInvoice, err := s.Client.CreateInvoice(ctx, invoiceReq)
 	if err != nil {
 		return nil, ierr.WithError(err).

@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // maxQueryLiteralLen bounds a value interpolated into a QuickBooks query. The
@@ -69,6 +70,9 @@ type QuickBooksClient interface {
 	// Invoice API wrappers
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
 	GetInvoice(ctx context.Context, invoiceID string) (*InvoiceResponse, error)
+
+	// Currency & Exchange Rate API wrappers
+	GetExchangeRate(ctx context.Context, sourceCurrencyCode string) (*decimal.Decimal, error)
 
 	// Payment API wrappers (inbound only)
 	GetPayment(ctx context.Context, paymentID string) (*PaymentResponse, error)
@@ -331,7 +335,11 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 
 	baseURL := c.GetBaseURL(qbConfig.Environment)
-	fullURL := fmt.Sprintf("%s/v3/company/%s/%s?minorversion=%s", baseURL, qbConfig.RealmID, endpoint, c.minorVersion)
+	sep := "?"
+	if strings.Contains(endpoint, "?") {
+		sep = "&"
+	}
+	fullURL := fmt.Sprintf("%s/v3/company/%s/%s%sminorversion=%s", baseURL, qbConfig.RealmID, endpoint, sep, c.minorVersion)
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -791,10 +799,15 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		}
 	}
 
+	if req.ExchangeRate != nil {
+		payload["ExchangeRate"] = req.ExchangeRate
+	}
+
 	c.logger.Debug(ctx, "sending QuickBooks Invoice create request",
 		"customer_ref", req.CustomerRef.Value,
 		"line_items_count", len(req.Line),
 		"currency_ref", currencyRef,
+		"exchange_rate", req.ExchangeRate,
 		"due_date", req.DueDate)
 
 	resp, err := c.makeRequestWithRetry(ctx, "POST", "invoice", payload, 0)
@@ -858,6 +871,62 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (*InvoiceResp
 	}
 
 	return &result.Invoice, nil
+}
+
+// GetExchangeRate retrieves the active exchange rate from QuickBooks for converting
+// sourceCurrencyCode to the company's home currency.
+// If the currency is the company's home currency (QuickBooks returns 400 'cannot be the same'),
+// it returns 1.0.
+func (c *Client) GetExchangeRate(ctx context.Context, sourceCurrencyCode string) (*decimal.Decimal, error) {
+	if err := c.EnsureValidAccessToken(ctx); err != nil {
+		return nil, err
+	}
+
+	sourceCurrency := strings.ToUpper(strings.TrimSpace(sourceCurrencyCode))
+	if sourceCurrency == "" {
+		return nil, ierr.NewError("source currency is required to get exchange rate").
+			Mark(ierr.ErrValidation)
+	}
+
+	endpoint := fmt.Sprintf("exchangerate?sourcecurrencycode=%s", url.QueryEscape(sourceCurrency))
+	c.logger.Debug(ctx, "fetching QuickBooks exchange rate",
+		"source_currency", sourceCurrency)
+
+	resp, err := c.makeRequestWithRetry(ctx, "GET", endpoint, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		parsedErr := c.parseErrorResponse(resp)
+		// If source and target are the same (home currency), exchange rate is 1.0
+		if strings.Contains(parsedErr.Error(), "cannot be the same") {
+			one := decimal.NewFromInt(1)
+			return &one, nil
+		}
+		return nil, parsedErr
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, ierr.NewError("failed to read exchange rate response").Mark(ierr.ErrSystem)
+	}
+
+	var result ExchangeRateResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, ierr.NewError("failed to parse QuickBooks exchange rate response").
+			Mark(ierr.ErrSystem)
+	}
+
+	rate := result.ExchangeRate.Rate
+	c.logger.Info(ctx, "resolved QuickBooks exchange rate",
+		"source_currency", sourceCurrency,
+		"target_currency", result.ExchangeRate.TargetCurrencyCode,
+		"rate", rate.String(),
+		"as_of_date", result.ExchangeRate.AsOfDate)
+
+	return &rate, nil
 }
 
 // GetPayment retrieves a payment by ID from QuickBooks
