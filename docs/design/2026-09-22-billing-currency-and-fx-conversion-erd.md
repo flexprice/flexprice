@@ -1,6 +1,6 @@
 # Billing Currency & FX Conversion — ERD
 
-Status: **Proposed** — v1 (supersedes v0, which scoped conversion to integration egress)
+Status: **Proposed**
 Date: 2026-09-23
 PRD: [`docs/prds/billing-currency-and-fx-conversion-prd.md`](../prds/billing-currency-and-fx-conversion-prd.md)
 
@@ -15,37 +15,48 @@ it at invoice generation, at a rate resolved from a scope hierarchy. The rate is
 the invoice at finalization and reused by everything downstream, including the accounting
 integrations.
 
-### 1.1 M1 and M2
+### 1.1 Phase 1 and Phase 2
 
-**M1 is custom rates only.** Rates come from configuration — tenant, customer or
-subscription. With none configured, invoice generation fails; it does not reach for a market
+**Phase 1 is custom rates only.** Rates come from configuration — tenant+environment,
+customer or subscription. With none configured, invoice generation fails; it does not reach for a market
 rate.
 
-| | M1 | M2 |
+| | Phase 1 | Phase 2 |
 | --- | --- | --- |
 | `customers.billing_currency` | ✅ | |
-| `exchange_rates`, scoped and dated | ✅ fixed only | `dynamic` enabled |
+| `exchange_rates` — tenant+env, customer, subscription; dated | ✅ fixed only | `dynamic` enabled |
 | Conversion at invoice generation | ✅ | |
 | Rate frozen on the invoice | ✅ | |
 | Integrations send our rate | ✅ | |
 | Live market feed | | ✅ |
 | Fiat wallets follow billing currency | | ✅ (PRD D1) |
-| Custom currency shares the denomination | | ✅ (PRD D2) |
+| Custom currency shares the denomination | | ✅ if §3.4 chooses A |
 
-The `rate_mode = dynamic` column and the `feed` source value ship in M1 **unused**, so M2 is
-a validation change rather than a migration on a populated table. Sections marked **[M2]**
+The `rate_mode = dynamic` column and the `feed` source value ship in Phase 1 **unused**, so Phase 2 is
+a validation change rather than a migration on a populated table. Sections marked **[Phase 2]**
 are specified for that reason, not built.
 
-### 1.2 Why this is safe to ship incrementally
+### 1.2 What production looks like, and what it costs
 
-**Today, for every customer, invoice currency == subscription currency == wallet currency.**
-Nothing in production is multi-currency at the customer level.
+The invariant this design relies on is narrow and exactly true:
 
-So M1's backfill is unambiguous, and until a tenant deliberately sets a billing currency that
-differs from a subscription's charge currency, the conversion branch is never entered and
-every existing path runs unchanged.
+> **No fiat-to-fiat conversion exists in the product.** Custom currency converts a
+> tenant-invented unit into fiat; nothing converts USD into INR.
 
-**Not in scope, either milestone** (PRD §5.3): cross-currency payments, changing a customer's
+It is *not* true that every customer is single-currency. 248 of 182,674 vary (PRD §5.0), and two
+of the causes are features: custom currency (`MAC → USD`) and multi-currency wallets, which
+`WalletConfig.AllowedPriceTypes` exists to support. The schema below must survive both.
+
+**Six production customers do not satisfy the new invariant** — they hold a live subscription in
+a fiat currency differing from the currency the backfill would assign them (Vaani ×4 needing
+`INR → USD`, DRIZZ ×1 needing `USD → INR`, one Flexprice test row). Out of 7,200 with finalized
+invoices. Enabling conversion without a rate for them fails their next invoice per F3 — two real
+pairs to configure, or set those customers to NULL and they take the unchanged path (§5.2 step 2).
+
+Everything else is inert: 6,903 have a live subscription already in the assigned currency, 280
+have no live subscription, 11 backfill to NULL and take the charge currency unchanged.
+
+**Not in scope, either phase** (PRD §5.3): cross-currency payments, changing a customer's
 billing currency after invoicing, `price_units` convergence.
 
 ---
@@ -73,7 +84,7 @@ erDiagram
         varchar(20)    rate_mode    "fixed|dynamic"
         numeric(24_12) rate         "null when dynamic"
         varchar(50)    rate_source  "null when fixed"
-        varchar(50)    entity_type  "tenant|customer|subscription"
+        varchar(50)    entity_type  "tenant|customer|subscription (within tenant+env)"
         varchar(50)    entity_id
         timestamptz    effective_from
         timestamptz    effective_to "nullable"
@@ -137,6 +148,15 @@ first moment the answer exists.
 
 ```go
 // ent/schema/exchangerate.go
+
+// BaseMixin supplies tenant_id and status; EnvironmentMixin supplies environment_id.
+// Every rate is therefore scoped to a tenant AND an environment, at every entity_type.
+func (ExchangeRate) Mixin() []ent.Mixin {
+    return []ent.Mixin{
+        baseMixin.BaseMixin{},
+        baseMixin.EnvironmentMixin{},
+    }
+}
 
 func (ExchangeRate) Fields() []ent.Field {
     return []ent.Field{
@@ -234,16 +254,30 @@ type CustomCurrency struct {
 with per-line copies on `invoice_line_items.custom_currency`, and
 `ProjectCustomCurrency()` / `RestoreFromDenomination()` handling the round trip.
 
-**Two options, and the choice is PRD D2:**
+**This is PRD D2, and this document owns it** — the PRD deliberately left it here because it is
+a storage and finalization-path question, not a product one.
 
 | | Approach | Cost |
 | --- | --- | --- |
-| **A** | Generalize: rename the concept to `denomination`, carry a `source_kind` of `custom` or `fiat`. Custom currency and FX both produce it | One migration on a live JSON column; touches finalization |
-| **B** | Parallel: add `invoices.exchange_rate` + `source_currency` columns beside `custom_currency` | Cheaper now, two denomination mechanisms forever |
+| **A** | Generalize: rename the concept to `denomination`, carry a `source_kind` of `custom` or `fiat`. Custom currency and FX both produce it | One migration on a live JSON column; touches finalization for tenants already on custom currency |
+| **B** | Parallel: add `invoices.exchange_rate` + `source_currency` columns beside `custom_currency` | Cheaper now; two denomination mechanisms that must agree forever on rounding, freezing and what a recompute restarts from |
 
-**Recommend A**, sequenced last (PRD phase 6). B is the pragmatic way to ship phase 4 before
-phase 6 lands, and the two can coexist during the transition — but shipping B and stopping
-leaves the duplication permanently.
+**Recommendation: A, sequenced last (PRD §7 step 7).**
+
+The argument against B is not aesthetic. Two mechanisms on the invoice-finalization path must
+agree indefinitely, and this codebase has a worked example of what happens when they do not:
+`tax_associations.priority` is stored, validated and copied but nothing sorts by it, and
+`EntityHierarchy` is declared but called nowhere — because the real cascade was written a second
+time elsewhere. A divergence between two denomination paths is a mis-billed invoice.
+
+The argument for B is real though: no user is waiting for convergence, and the migration touches
+live tenants. So **B is how Phase 1 ships** — FX writes the same shape alongside `custom_currency`
+without touching it — and A is the Phase 2 merge, taken once conversion has run in production.
+The failure mode to avoid is shipping B and calling it done.
+
+> [!NOTE]
+> This is the one decision in this document that is not yet signed off. Phase 1 is identical
+> either way; only the Phase 2 step depends on it.
 
 ### 3.5 Write-time validation
 
@@ -272,6 +306,65 @@ misconfiguration.
 
 ---
 
+### 3.7 API surface
+
+Follows the `/taxes/rates` pattern in `router.go:528` — a `v1Private` group, write actions gated
+on a new `types.EntityExchangeRate`, `@x-scope` annotations for MCP per `AGENTS.md`.
+
+```
+POST   /v1/exchange-rates          create                      write
+GET    /v1/exchange-rates          list — from, to, scope,     read
+                                   entity_id, active_at
+POST   /v1/exchange-rates/search   query, complex filters      read   (@x-scope "read")
+GET    /v1/exchange-rates/:id      read                        read
+PUT    /v1/exchange-rates/:id      update — see below          write
+DELETE /v1/exchange-rates/:id      soft delete, status=deleted delete
+```
+
+One non-CRUD endpoint carries more weight than the five above:
+
+```
+GET /v1/exchange-rates/resolve?from=usd&to=inr&customer_id=…&subscription_id=…&at=…
+    → { rate, scope, entity_id, effective_from, effective_to, source }
+      404 naming every scope tried, which is the same message F3 puts on a failed invoice
+```
+
+`resolve` is what makes the hierarchy legible. Three scopes (§4.1) mean the rate that applies to
+a given customer is a computed answer, not a row — without this endpoint a tenant configures
+rates and guesses. It calls the same resolver invoice generation calls, so a preview cannot
+disagree with what actually happens at billing time.
+
+`billing_currency` needs no new endpoint: `PUT /v1/customers/:id` gains the field (PRD C3),
+rejected once invoices exist (PRD §3.6).
+
+#### Updating a rate
+
+PRD R6 says editing a rate never alters a recorded conversion, which `exchange_rates_applied`
+guarantees by snapshotting. But in-place edits still lose history, so:
+
+| Situation | Allowed |
+| --- | --- |
+| Row has no `exchange_rates_applied` referencing it | Edit `rate` freely — nothing has used it, this is typo correction |
+| Row has been applied | **Close the window and insert a superseding row.** `PUT` sets `effective_to`; the new rate is a new row |
+
+That makes the table append-only in practice and gives "what did we charge in March" for free,
+rather than requiring an audit trail bolted on later.
+
+#### What the dashboard needs
+
+| Screen | Endpoint |
+| --- | --- |
+| Rate list, filterable by pair and scope, expired windows included | `GET /exchange-rates` |
+| Add a rate — scope picker, pair, value, effective window | `POST /exchange-rates` |
+| "What would this customer convert at?" preview | `GET /exchange-rates/resolve` |
+
+The scope picker is the part worth designing carefully. A rate is meaningless without knowing
+which of tenant+env / customer / subscription it attaches to, and the most-specific-wins rule
+(§4.1) is invisible in a flat list — a customer-scoped rate silently overriding a tenant one is
+exactly the confusion `resolve` exists to dispel.
+
+---
+
 ## 4. Resolution
 
 ### 4.1 Algorithm
@@ -284,7 +377,9 @@ ResolveRate(ctx, from, to, at, scope) → (rate, source, rateID, err)
 
 2. For level in [subscription, customer, tenant]:
        published exchange_rates where
-           entity_type     = level
+           tenant_id       = ctx.TenantID           -- always
+       AND environment_id  = ctx.EnvironmentID      -- always, at every level
+       AND entity_type     = level
        AND entity_id       = scope.ID(level)        -- skip level if unset
        AND from_currency   = from
        AND to_currency     = to
@@ -296,7 +391,7 @@ ResolveRate(ctx, from, to, at, scope) → (rate, source, rateID, err)
        rate_mode = fixed   → the row's rate,       source = manual
        rate_mode = dynamic → call rate_source,     source = feed
 
-3. [M2] No configured rate, feed configured for the tenant
+3. [Phase 2] No configured rate, feed configured for the tenant
        → cached feed rate (§4.3).                  source = feed
 
 4. Nothing
@@ -305,9 +400,9 @@ ResolveRate(ctx, from, to, at, scope) → (rate, source, rateID, err)
 
 Three queries at worst, all served by `Idx_exchange_rate_resolution`.
 
-**M1 stops at step 2.** Step 3 does not exist — no configured rate means step 4. The
+**Phase 1 stops at step 2.** Step 3 does not exist — no configured rate means step 4. The
 `rate_mode = dynamic` column and the `feed` source value ship unused so that adding step 3
-in M2 is a validation change, not a migration on a populated table.
+in Phase 2 is a validation change, not a migration on a populated table.
 
 > [!IMPORTANT]
 > **Resolution happens at conversion time, not copy-down at entity creation.** This is a
@@ -323,13 +418,15 @@ in M2 is a validation change, not a migration on a populated table.
 
 Ordering is fully specified, with nothing left to database row order:
 
-1. **Scope specificity** — subscription, then customer, then tenant. The whole point.
+1. **Scope specificity** — subscription, then customer, then tenant+environment. The whole
+   point. Tenant and environment are filtered on every query, at every level, so they are
+   not a fourth tier — they bound the search rather than order it.
 2. **`effective_from DESC`** — the most recently effective rate within a level.
 3. **`created_at DESC`** — tie-break for identical `effective_from`.
 
-### 4.3 The feed — **M2**
+### 4.3 The feed — **Phase 2**
 
-Not built in M1. Specified here so the M1 schema does not foreclose it.
+Not built in Phase 1. Specified here so the Phase 1 schema does not foreclose it.
 
 | | |
 | --- | --- |
@@ -349,8 +446,8 @@ and its value recorded, so an invoice can always be explained.
 
 ### 4.4 The `Convert` primitive
 
-One function, one rounding policy, one residual policy — shared with custom currency when
-PRD phase 6 lands.
+One function, one rounding policy, one residual policy — shared with custom currency if §3.4
+chooses A.
 
 ```go
 // internal/types/fxconvert.go
@@ -439,6 +536,16 @@ if ccCfg.IsCustom(code) {
 Step 2 is the bootstrap. Step 3 is the common case and must stay free — a single-currency
 tenant does no extra work and touches no new code.
 
+Step 1 is deliberately source-agnostic, which is what makes PRD §3.8 fall out for free: a
+subscription, a wallet top-up and a one-off API call all arrive at `CreateEmptyDraftInvoice`
+with a charge currency, and all three convert identically.
+
+**A top-up converts the invoice, not the wallet.** A customer billed in INR who tops up a USD
+wallet gets an INR invoice denominated in USD; the wallet still holds USD credits, and §6.1's
+credit matching keeps working because credits apply in the denomination currency. The one-off
+API's supplied currency is a charge currency like any other — never an override on
+`billing_currency`.
+
 ### 5.3 Freezing
 
 Mirrors custom currency exactly, because it is the same mechanism:
@@ -467,6 +574,21 @@ number.
 That factor is unreachable today because invoice currency is pinned to
 `default_fiat_currency` tenant-wide. Billing currency is what makes it reachable — the config
 was written for this and has been dead since.
+
+### 5.5 What the customer sees
+
+PRD I7 makes the source amount non-optional, so the denomination is a rendering input, not only
+storage. A converted invoice shows the source amount and the rate alongside the total:
+
+```
+Subtotal                        ₹9,500.00
+  converted from $100.00 at 95.00
+```
+
+The top-up case is why this is a requirement rather than a nicety: an invoice reading ₹9,500 with
+no `$100.00 of credits` leaves the customer unable to tell what they bought. Both the PDF
+template and the invoice API response read from the denomination — there is no second source of
+truth for the source amount.
 
 ---
 
@@ -524,16 +646,18 @@ that does not rescale line items.
 | --- | --- | --- |
 | F1 | `chargeCurrency == billingCurrency` | Short-circuit. No rate, no record, no cost |
 | F2 | Customer has no billing currency | Set from charge currency, no conversion. Not an error |
-| F3 | No rate at any scope | **Invoice generation fails**, naming the pair and scopes tried. This is the M1 terminal case |
-| F4 | [M2] Feed configured but unreachable, no configured rate | Same as F3. Never `1` |
-| F5 | [M2] Feed rate older than its TTL | Recommend reject — a wrong rate is worse than a late invoice |
+| F3 | No rate at any scope | **Invoice generation fails**, naming the pair and scopes tried. This is the Phase 1 terminal case |
+| F4 | [Phase 2] Feed configured but unreachable, no configured rate | Same as F3. Never `1` |
+| F5 | [Phase 2] Feed rate older than its TTL | Recommend reject — a wrong rate is worse than a late invoice |
 | F6 | Rate resolves but `Convert` yields zero from a non-zero source | `ErrInternal`. Indicates a rate underflowing target precision |
 | F7 | Finalization with no resolvable rate | Refuse to finalize. Matches custom currency's existing behaviour |
 | F8 | Invoice already finalized | Frozen rate reused, never re-resolved |
 
-F3 is the one that will be felt: a tenant who enables billing currency without configuring
-rates gets blocked invoice generation. That is correct — a blocked invoice is recoverable, a
-wrong one is not — but it needs to surface as an actionable error, not a Temporal stack trace.
+F3 is the one that will be felt, and it has six known occupants on day one (§1.2). A tenant who
+enables billing currency without configuring rates gets blocked invoice generation. That is
+correct — a blocked invoice is recoverable, a wrong one is not — but it needs to surface as an
+actionable error naming the pair, not a Temporal stack trace. §1.2 names the six it will hit on
+day one.
 
 ---
 
@@ -551,9 +675,10 @@ wrong one is not — but it needs to surface as an actionable error, not a Tempo
 | T6 | Two rows, different `effective_from` | later wins |
 | T7 | Identical `effective_from` | later `created_at` wins |
 | T8 | Archived row | not resolved |
-| T9 | Different environment | not resolved (tenancy) |
-| T10 | No rate configured at any scope | `ErrValidation` — the M1 terminal case |
-| T11 | [M2] No rate, feed configured | feed rate, source feed |
+| T9 | Same tenant, different environment | not resolved at any level — a staging rate never reaches production |
+| T9b | Same environment, different tenant | not resolved |
+| T10 | No rate configured at any scope | `ErrValidation` — the Phase 1 terminal case |
+| T11 | [Phase 2] No rate, feed configured | feed rate, source feed |
 | T12 | Reverse pair exists, not the requested direction | **not** resolved — no inverse derivation |
 
 ### 8.2 Conversion
@@ -577,6 +702,27 @@ wrong one is not — but it needs to surface as an actionable error, not a Tempo
 | T22 | Two subscriptions, USD and EUR, billing INR | **both invoices in INR** |
 | T23 | Change billing currency with invoices present | rejected |
 | T24 | Explicit set before any invoice | accepted |
+| T33 | INR-billed customer tops up a USD wallet | invoice in **INR**, denomination USD, wallet still holds USD credits |
+| T34 | One-off API posts a USD invoice for an INR-billed customer | issued in INR; supplied currency treated as source, not override |
+| T35 | Converted invoice rendered | source amount and rate present in both the PDF and the API response (I7) |
+
+### 8.6 Backfill
+
+| # | Case | Expect |
+| --- | --- | --- |
+| T36 | Customer with finalized USD invoices and 20 unfinalized INR drafts | backfills **USD** — drafts ignored |
+| T37 | Customer finalized and paid in two currencies | backfills **NULL**, then behaves as T19 |
+| T38 | Customer with `billing_currency` set and a live subscription in another currency, no rate | invoice generation fails per F3, naming the pair |
+
+### 8.7 API
+
+| # | Case | Expect |
+| --- | --- | --- |
+| T40 | `resolve` with rates at tenant and customer scope | returns the customer one, and says which scope |
+| T41 | `resolve` with no rate | 404 naming every scope tried — same text as F3 |
+| T42 | `PUT` a rate that has been applied | rejected; must close the window and supersede |
+| T43 | `PUT` a rate never applied | accepted |
+| T44 | `resolve` and invoice generation disagree | impossible — same resolver. Asserted by running both over one fixture |
 
 ### 8.4 Lifecycle
 
@@ -604,19 +750,32 @@ wrong one is not — but it needs to surface as an actionable error, not a Tempo
 | --- | --- | --- |
 | 1 | `CREATE TABLE exchange_rates`, `exchange_rates_applied` + indexes | Yes — nothing reads them |
 | 2 | `ALTER TABLE customers ADD COLUMN billing_currency varchar(10) NULL` | Yes — nullable, unread |
-| 3 | Backfill `billing_currency` from each customer's most recent invoice currency | Yes — it is derived |
+| 3 | Backfill `billing_currency` (rule below) | Yes — it is derived |
 | 4 | Enable conversion | **No** — invoices are issued in a new currency |
 
-**M1 ends at step 4.** No wallet migration: credits already apply in the denomination
-currency, which for every existing customer *is* the invoice currency (PRD §6.1).
+**Phase 1 ends at step 4.** No wallet migration: credits apply in the denomination currency,
+which under Phase 1 is the pre-conversion source — the currency the wallet is already in
+(PRD §6.1).
 
-Steps 1–3 are inert: after them, `billing_currency == charge_currency` for every existing
-customer, so step 4 switches conversion on against data already known to be correct.
+### 9.1 The backfill rule
 
-**Step 3 is the one to think about.** A customer whose invoices span currencies — 123 exist,
-though all 7 Zoho-mapped ones are test accounts — has no single right answer. Recommend:
-backfill from the most recent invoice, and report the ambiguous set for review rather than
-guessing silently.
+A draft invoice's currency is not a commitment, so the backfill reads finalized history only:
+
+```sql
+billing_currency :=
+  1. the currency of the customer's finalized, paid invoices   if exactly one
+  2. the currency of the customer's finalized invoices         if exactly one
+  3. NULL                                                      otherwise
+```
+
+Rule 3 is the safety valve, and it needs no special handling downstream: §5.2 step 2 already
+treats NULL as *"take the charge currency and set it"*, so an ambiguous customer keeps today's
+behaviour until someone sets one deliberately.
+
+This matters more than it looks. The naive version — *backfill from the most recent invoice* —
+picks a currency for customers whose recent invoices are unfinalized drafts. Vaani has customers
+with 18 and 23 INR drafts against USD invoices that all finalize and pay; most-recent-invoice
+would assign them INR and break every one of them the moment conversion is enabled.
 
 ---
 
