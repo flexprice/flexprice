@@ -90,6 +90,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      promote_outcome: ${{ steps.promote.outcome }}
     env:
       SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
     steps:
@@ -170,8 +172,9 @@ jobs:
 
       # Tags added during upload don't make Speakeasy rebuild the hosted docs spec; tagging through
       # `speakeasy tag promote` (what Speakeasy's own GitHub Action runs) does. Non-fatal so the docs
-      # can't block SDK publishing; refresh-docs fails visibly if the hosted spec never updates.
+      # can't block SDK publishing; refresh-docs checks this step's outcome and fails if it didn't succeed.
       - name: Promote spec and code samples to main
+        id: promote
         continue-on-error: true
         run: speakeasy tag promote -s swagger-json -c flexprice-go,flexprice-python,flexprice-typescript -t main
 
@@ -226,6 +229,16 @@ jobs:
     permissions:
       contents: read
     steps:
+      # With an unchanged spec, the previous hosted spec would still pass the wait below, hiding a failed promote.
+      - name: Check the spec and code samples were promoted
+        env:
+          PROMOTE_OUTCOME: ${{ needs.generate.outputs.promote_outcome }}
+        run: |
+          if [ "$PROMOTE_OUTCOME" != "success" ]; then
+            echo "::error::Promoting the spec and code samples to main did not succeed (outcome: ${PROMOTE_OUTCOME:-unknown}); docs were not redeployed."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
