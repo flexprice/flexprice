@@ -36,6 +36,7 @@ type SubModifyInheritanceRequest struct {
 // checkoutAllowedModifyTypes is the allowlist of modification types that accept checkout.
 var checkoutAllowedModifyTypes = []SubscriptionModifyType{
 	SubscriptionModifyTypeQuantityChange,
+	SubscriptionModifyTypeLineItemChange,
 	SubscriptionModifyTypeAddon,
 }
 
@@ -74,6 +75,9 @@ type LineItemQuantityChange struct {
 }
 
 // SubModifyQuantityChangeRequest is the payload for mid-cycle seat/quantity changes.
+//
+// Deprecated: use SubModifyLineItemChangeRequest with type "line_item_change", which changes
+// quantity, price, or both through the shared proration layer.
 type SubModifyQuantityChangeRequest struct {
 	LineItems []LineItemQuantityChange `json:"line_items" binding:"required,min=1"`
 }
@@ -99,6 +103,7 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 	return nil
 }
 
+// LineItemChange changes a single line item's quantity, price, or both.
 type LineItemChange struct {
 	ID            string           `json:"id" binding:"required"`
 	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
@@ -199,6 +204,7 @@ const (
 	SubscriptionModifyTypeCoupon           SubscriptionModifyType = "coupon"
 	SubscriptionModifyTypeTax              SubscriptionModifyType = "tax"
 	SubscriptionModifyTypeAddon            SubscriptionModifyType = "addon"
+	SubscriptionModifyTypeLineItemChange   SubscriptionModifyType = "line_item_change"
 )
 
 type SubscriptionModificationAction string
@@ -462,6 +468,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	Type                   SubscriptionModifyType           `json:"type" binding:"required"`
 	InheritanceParams      *SubModifyInheritanceRequest     `json:"inheritance_params,omitempty"`
 	QuantityChangeParams   *SubModifyQuantityChangeRequest  `json:"quantity_change_params,omitempty"`
+	LineItemChangeParams   *SubModifyLineItemChangeRequest  `json:"line_item_change_params,omitempty"`
 	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
@@ -486,6 +493,12 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		err = r.QuantityChangeParams.Validate()
+	case SubscriptionModifyTypeLineItemChange:
+		if r.LineItemChangeParams == nil {
+			return ierr.NewError("line_item_change_params is required for type 'line_item_change'").
+				Mark(ierr.ErrValidation)
+		}
+		err = r.LineItemChangeParams.Validate()
 	case SubscriptionModifyTypeGroupedInvoicing:
 		if r.GroupedInvoicingParams == nil {
 			return ierr.NewError("grouped_invoicing_params is required for type 'grouped_invoicing'").
@@ -530,7 +543,7 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 		}
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, addon").
+			WithHint("Valid values: inheritance, quantity_change, line_item_change, grouped_invoicing, trial_end, coupon, tax, addon").
 			Mark(ierr.ErrValidation)
 	}
 	if err != nil {

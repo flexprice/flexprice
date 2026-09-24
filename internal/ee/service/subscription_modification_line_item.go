@@ -600,7 +600,6 @@ func (s *subscriptionModificationService) applyModifySubscriptionParams(
 func (s *subscriptionModificationService) quoteLineItemChange(
 	ctx context.Context,
 	request *lineItemChangeRequest,
-	behavior types.ProrationBehavior,
 ) (*SettleProrationRequest, error) {
 	sub := request.GetSubscription()
 	if sub == nil {
@@ -647,7 +646,7 @@ func (s *subscriptionModificationService) quoteLineItemChange(
 			Subscription:  sub,
 			Entries:       []LineItemProrationEntry{entry},
 			EffectiveDate: effectiveDate,
-			Behavior:      behavior,
+			Behavior:      types.ProrationBehaviorCreateProrations,
 			Reason:        lineItemChangeReason,
 		})
 		if err != nil {
@@ -661,14 +660,11 @@ func (s *subscriptionModificationService) quoteLineItemChange(
 		}
 	}
 
-	idempotencyKey := ""
-	if behavior != types.ProrationBehaviorNone {
-		idempotencyKey = prorationChargeInvoiceKey(LineItemProrationRequest{
-			Subscription:  sub,
-			Entries:       entries,
-			EffectiveDate: combinedPeriodStart,
-		})
-	}
+	idempotencyKey := prorationChargeInvoiceKey(LineItemProrationRequest{
+		Subscription:  sub,
+		Entries:       entries,
+		EffectiveDate: combinedPeriodStart,
+	})
 
 	req := NewSettleProrationRequest(
 		sub,

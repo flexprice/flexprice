@@ -50,6 +50,8 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams, req.Checkout)
+	case dto.SubscriptionModifyTypeLineItemChange:
+		return s.executeLineItemChange(ctx, subscriptionID, req.LineItemChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
@@ -66,7 +68,7 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		return s.executeBulkAddonModification(ctx, subscriptionID, params, req.Checkout)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, addon").
+			WithHint("Valid values: inheritance, quantity_change, line_item_change, grouped_invoicing, trial_end, coupon, tax, addon").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -82,6 +84,8 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 		return s.previewInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.previewQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
+	case dto.SubscriptionModifyTypeLineItemChange:
+		return s.previewLineItemChange(ctx, subscriptionID, req.LineItemChangeParams)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
@@ -98,7 +102,7 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 		return s.previewBulkAddonModification(ctx, subscriptionID, params)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, addon").
+			WithHint("Valid values: inheritance, quantity_change, line_item_change, grouped_invoicing, trial_end, coupon, tax, addon").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -369,6 +373,95 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		ChangedResources: dto.ChangedResources{
 			LineItems: changedLineItems,
 			Invoices:  changedInvoices,
+		},
+	}, nil
+}
+
+func (s *subscriptionModificationService) executeLineItemChange(
+	ctx context.Context,
+	subscriptionID string,
+	params *dto.SubModifyLineItemChangeRequest,
+	checkout *dto.CheckoutParams,
+) (*dto.SubscriptionModifyResponse, error) {
+	sp := s.serviceParams
+
+	request, err := s.buildLineItemChangeRequest(ctx, subscriptionID, params)
+	if err != nil {
+		return nil, err
+	}
+
+	settleReq, err := s.quoteLineItemChange(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	// Pay-first only when the batch nets to a charge; a net credit has nothing to collect.
+	if checkout != nil {
+		if err := checkout.Validate(); err != nil {
+			return nil, err
+		}
+		if settleReq.Quote.NetAmount().IsPositive() {
+			return s.settleLineItemChangePayFirst(ctx, request, settleReq, checkout)
+		}
+	}
+
+	changedLineItems, changedInvoices, err := s.settleLineItemChangePayLater(ctx, request, settleReq)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	triggerHubSpotDealSync(ctx, sp, subscriptionID)
+
+	subResp, err := NewSubscriptionService(sp).GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.SubscriptionModifyResponse{
+		Subscription: subResp,
+		ChangedResources: dto.ChangedResources{
+			LineItems: changedLineItems,
+			Invoices:  changedInvoices,
+		},
+	}, nil
+}
+
+func (s *subscriptionModificationService) previewLineItemChange(
+	ctx context.Context,
+	subscriptionID string,
+	params *dto.SubModifyLineItemChangeRequest,
+) (*dto.SubscriptionModifyResponse, error) {
+	sp := s.serviceParams
+
+	request, err := s.buildLineItemChangeRequest(ctx, subscriptionID, params)
+	if err != nil {
+		return nil, err
+	}
+
+	settleReq, err := s.quoteLineItemChange(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	// A preview writes nothing, so it carries no key to deduplicate against.
+	settleReq.Mode = SettleModePreview
+	settleReq.IdempotencyKey = ""
+	settled, err := NewLineItemProrationService(sp).Settle(ctx, settleReq)
+	if err != nil {
+		return nil, err
+	}
+
+	subResp, err := NewSubscriptionService(sp).GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.SubscriptionModifyResponse{
+		Subscription: subResp,
+		ChangedResources: dto.ChangedResources{
+			LineItems: request.previewChangedLineItems(),
+			Invoices:  settled.GetChanged(),
 		},
 	}, nil
 }
