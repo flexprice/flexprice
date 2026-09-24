@@ -13,45 +13,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// anyPendingCheckoutSession returns the outstanding payment-gated change on a subscription, if
-// any. At most one can exist: starting a second is rejected against this very lookup.
-func anyPendingCheckoutSession(
-	ctx context.Context,
-	sp ServiceParams,
-	customerID string,
-	subscriptionID string,
-) ([]*domainCheckout.CheckoutSession, error) {
-	filter := pendingCheckoutSessionFilter(customerID, subscriptionID,
-		types.CheckoutActionModifySubscription, types.CheckoutActionAddAddon)
-	filter.Limit = lo.ToPtr(1)
-
-	return sp.CheckoutSessionRepo.List(ctx, filter)
-}
-
-// ensureNoPendingCheckoutSession rejects a second payment-gated change while one is still open.
-func ensureNoPendingCheckoutSession(
-	ctx context.Context,
-	sp ServiceParams,
-	customerID string,
-	subscriptionID string,
-) error {
-	existing, err := anyPendingCheckoutSession(ctx, sp, customerID, subscriptionID)
-	if err != nil {
-		return err
-	}
-	if len(existing) == 0 {
-		return nil
-	}
-
-	return ierr.NewError("a pending checkout session already exists for this subscription").
-		WithHint("Complete or cancel the existing checkout before starting another payment-gated change").
-		WithReportableDetails(map[string]any{
-			"subscription_id":     subscriptionID,
-			"checkout_session_id": existing[0].ID,
-		}).
-		Mark(ierr.ErrAlreadyExists)
-}
-
 // pendingAddAddonCheckoutSessions returns EVERY open addon checkout on the subscription.
 // A scan for one association has to see all of them, not whichever row came back first.
 func pendingAddAddonCheckoutSessions(
@@ -62,24 +23,6 @@ func pendingAddAddonCheckoutSessions(
 ) ([]*domainCheckout.CheckoutSession, error) {
 	return sp.CheckoutSessionRepo.List(ctx,
 		pendingCheckoutSessionFilter(customerID, subscriptionID, types.CheckoutActionAddAddon))
-}
-
-// pendingCheckoutSessionFilter matches the subscription's checkouts that are still open.
-func pendingCheckoutSessionFilter(
-	customerID string,
-	subscriptionID string,
-	actions ...types.CheckoutAction,
-) *types.CheckoutSessionFilter {
-	return &types.CheckoutSessionFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
-		CustomerIDs: []string{customerID},
-		Actions:     actions,
-		CheckoutStatuses: []types.CheckoutStatus{
-			types.CheckoutStatusInitiated,
-			types.CheckoutStatusPending,
-		},
-		Configuration: &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
-	}
 }
 
 // pendingCheckoutSessionForAssociation reports whether an outstanding checkout already gates this

@@ -9184,7 +9184,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).",
+                "description": "Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).\nType \"quantity_change\" is deprecated: use \"line_item_change\", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9250,7 +9250,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.",
+                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.\nType \"quantity_change\" is deprecated: use \"line_item_change\".",
                 "consumes": [
                     "application/json"
                 ],
@@ -19091,6 +19091,9 @@ const docTemplate = `{
                 "inheritance_params": {
                     "$ref": "#/definitions/SubModifyInheritanceRequest"
                 },
+                "line_item_change_params": {
+                    "$ref": "#/definitions/SubModifyLineItemChangeRequest"
+                },
                 "quantity_change_params": {
                     "$ref": "#/definitions/SubModifyQuantityChangeRequest"
                 },
@@ -20776,6 +20779,27 @@ const docTemplate = `{
                 },
                 "voided_at": {
                     "description": "voided_at is the timestamp when this invoice was voided or cancelled",
+                    "type": "string"
+                }
+            }
+        },
+        "LineItemChange": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "amount": {
+                    "description": "Amount reprices the charge. Flat fee only for now.",
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "quantity": {
                     "type": "string"
                 }
             }
@@ -22511,6 +22535,21 @@ const docTemplate = `{
                 }
             }
         },
+        "SubModifyLineItemChangeRequest": {
+            "type": "object",
+            "required": [
+                "line_items"
+            ],
+            "properties": {
+                "line_items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/LineItemChange"
+                    }
+                }
+            }
+        },
         "SubModifyQuantityChangeRequest": {
             "type": "object",
             "required": [
@@ -23228,7 +23267,8 @@ const docTemplate = `{
                 "trial_end",
                 "coupon",
                 "tax",
-                "addon"
+                "addon",
+                "line_item_change"
             ],
             "x-enum-varnames": [
                 "SubscriptionModifyTypeInheritance",
@@ -23237,7 +23277,8 @@ const docTemplate = `{
                 "SubscriptionModifyTypeTrialEnd",
                 "SubscriptionModifyTypeCoupon",
                 "SubscriptionModifyTypeTax",
-                "SubscriptionModifyTypeAddon"
+                "SubscriptionModifyTypeAddon",
+                "SubscriptionModifyTypeLineItemChange"
             ]
         },
         "SubscriptionPhaseCreateRequest": {
@@ -29495,6 +29536,9 @@ const docTemplate = `{
         "types.ModifySubscriptionLineItem": {
             "type": "object",
             "properties": {
+                "amount": {
+                    "type": "string"
+                },
                 "effective_date": {
                     "type": "string"
                 },
@@ -29515,10 +29559,24 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ModifySubscriptionLineItem"
                     }
                 },
+                "modify_type": {
+                    "$ref": "#/definitions/types.ModifySubscriptionType"
+                },
                 "subscription_id": {
                     "type": "string"
                 }
             }
+        },
+        "types.ModifySubscriptionType": {
+            "type": "string",
+            "enum": [
+                "quantity_change",
+                "line_item_change"
+            ],
+            "x-enum-varnames": [
+                "ModifySubscriptionTypeQuantityChange",
+                "ModifySubscriptionTypeLineItemChange"
+            ]
         },
         "types.OnExistingEntityPolicy": {
             "type": "string",
@@ -29893,6 +29951,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Status"
                 },
                 "subscription_id": {
+                    "type": "string"
+                },
+                "updated_after": {
+                    "description": "UpdatedAfter matches prices edited since the given time. TimeRangeFilter\nabove filters on created_at, so it cannot see an edit to an existing\nprice.",
                     "type": "string"
                 }
             }

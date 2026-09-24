@@ -3882,6 +3882,8 @@ definitions:
         $ref: '#/definitions/SubModifyGroupedInvoicingParams'
       inheritance_params:
         $ref: '#/definitions/SubModifyInheritanceRequest'
+      line_item_change_params:
+        $ref: '#/definitions/SubModifyLineItemChangeRequest'
       quantity_change_params:
         $ref: '#/definitions/SubModifyQuantityChangeRequest'
       tax_params:
@@ -5170,6 +5172,20 @@ definitions:
         description: voided_at is the timestamp when this invoice was voided or cancelled
         type: string
     type: object
+  LineItemChange:
+    properties:
+      amount:
+        description: Amount reprices the charge. Flat fee only for now.
+        type: string
+      effective_date:
+        type: string
+      id:
+        type: string
+      quantity:
+        type: string
+    required:
+    - id
+    type: object
   LineItemCommitmentConfig:
     properties:
       commitment_amount:
@@ -6395,6 +6411,16 @@ definitions:
           type: string
         type: array
     type: object
+  SubModifyLineItemChangeRequest:
+    properties:
+      line_items:
+        items:
+          $ref: '#/definitions/LineItemChange'
+        minItems: 1
+        type: array
+    required:
+    - line_items
+    type: object
   SubModifyQuantityChangeRequest:
     properties:
       line_items:
@@ -6890,6 +6916,7 @@ definitions:
     - coupon
     - tax
     - addon
+    - line_item_change
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
@@ -6899,6 +6926,7 @@ definitions:
     - SubscriptionModifyTypeCoupon
     - SubscriptionModifyTypeTax
     - SubscriptionModifyTypeAddon
+    - SubscriptionModifyTypeLineItemChange
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -11511,6 +11539,8 @@ definitions:
     - MetricEventCount
   types.ModifySubscriptionLineItem:
     properties:
+      amount:
+        type: string
       effective_date:
         type: string
       line_item_id:
@@ -11524,9 +11554,19 @@ definitions:
         items:
           $ref: '#/definitions/types.ModifySubscriptionLineItem'
         type: array
+      modify_type:
+        $ref: '#/definitions/types.ModifySubscriptionType'
       subscription_id:
         type: string
     type: object
+  types.ModifySubscriptionType:
+    enum:
+    - quantity_change
+    - line_item_change
+    type: string
+    x-enum-varnames:
+    - ModifySubscriptionTypeQuantityChange
+    - ModifySubscriptionTypeLineItemChange
   types.OnExistingEntityPolicy:
     enum:
     - reject
@@ -11806,6 +11846,12 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      updated_after:
+        description: |-
+          UpdatedAfter matches prices edited since the given time. TimeRangeFilter
+          above filters on created_at, so it cannot see an edit to an existing
+          price.
         type: string
     type: object
   types.PriceType:
@@ -19821,9 +19867,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Execute a mid-cycle subscription modification (inheritance, quantity
-        change, grouped invoicing, trial end, coupon, tax, a single addon add/remove,
-        or a batch of addon adds and removes settled as one netted document).
+      description: |-
+        Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).
+        Type "quantity_change" is deprecated: use "line_item_change", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -19866,9 +19912,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview the impact of a mid-cycle subscription modification (inheritance,
-        quantity change, grouped invoicing, trial end, coupon, tax, a single addon
-        add/remove, or a batch of addon adds and removes) without committing changes.
+      description: |-
+        Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.
+        Type "quantity_change" is deprecated: use "line_item_change".
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID

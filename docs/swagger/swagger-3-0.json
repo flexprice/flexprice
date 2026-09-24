@@ -11045,7 +11045,7 @@
           "Subscriptions"
         ],
         "summary": "Execute subscription modification",
-        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).",
+        "description": "Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).\nType \"quantity_change\" is deprecated: use \"line_item_change\", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.",
         "operationId": "executeSubscriptionModify",
         "parameters": [
           {
@@ -11126,7 +11126,7 @@
           "Subscriptions"
         ],
         "summary": "Preview subscription modification",
-        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.",
+        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.\nType \"quantity_change\" is deprecated: use \"line_item_change\".",
         "operationId": "previewSubscriptionModify",
         "parameters": [
           {
@@ -21172,6 +21172,9 @@
           "inheritance_params": {
             "$ref": "#/components/schemas/SubModifyInheritanceRequest"
           },
+          "line_item_change_params": {
+            "$ref": "#/components/schemas/SubModifyLineItemChangeRequest"
+          },
           "quantity_change_params": {
             "$ref": "#/components/schemas/SubModifyQuantityChangeRequest"
           },
@@ -22821,6 +22824,28 @@
             "type": "string",
             "description": "voided_at is the timestamp when this invoice was voided or cancelled",
             "format": "date-time"
+          }
+        }
+      },
+      "LineItemChange": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Amount reprices the charge. Flat fee only for now."
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
           }
         }
       },
@@ -24478,6 +24503,21 @@
           }
         }
       },
+      "SubModifyLineItemChangeRequest": {
+        "required": [
+          "line_items"
+        ],
+        "type": "object",
+        "properties": {
+          "line_items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineItemChange"
+            }
+          }
+        }
+      },
       "SubModifyQuantityChangeRequest": {
         "required": [
           "line_items"
@@ -25085,7 +25125,8 @@
           "trial_end",
           "coupon",
           "tax",
-          "addon"
+          "addon",
+          "line_item_change"
         ],
         "x-enum-varnames": [
           "SubscriptionModifyTypeInheritance",
@@ -25094,7 +25135,8 @@
           "SubscriptionModifyTypeTrialEnd",
           "SubscriptionModifyTypeCoupon",
           "SubscriptionModifyTypeTax",
-          "SubscriptionModifyTypeAddon"
+          "SubscriptionModifyTypeAddon",
+          "SubscriptionModifyTypeLineItemChange"
         ]
       },
       "SubscriptionPhaseCreateRequest": {
@@ -31275,6 +31317,9 @@
       "types.ModifySubscriptionLineItem": {
         "type": "object",
         "properties": {
+          "amount": {
+            "type": "string"
+          },
           "effective_date": {
             "type": "string",
             "format": "date-time"
@@ -31297,11 +31342,26 @@
               "$ref": "#/components/schemas/types.ModifySubscriptionLineItem"
             }
           },
+          "modify_type": {
+            "$ref": "#/components/schemas/types.ModifySubscriptionType"
+          },
           "subscription_id": {
             "type": "string"
           }
         },
         "x-speakeasy-name-override": "ModifySubscriptionParams"
+      },
+      "types.ModifySubscriptionType": {
+        "type": "string",
+        "enum": [
+          "quantity_change",
+          "line_item_change"
+        ],
+        "x-enum-varnames": [
+          "ModifySubscriptionTypeQuantityChange",
+          "ModifySubscriptionTypeLineItemChange"
+        ],
+        "x-speakeasy-name-override": "ModifySubscriptionType"
       },
       "types.OnExistingEntityPolicy": {
         "type": "string",
@@ -31697,6 +31757,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "updated_after": {
+            "type": "string",
+            "description": "UpdatedAfter matches prices edited since the given time. TimeRangeFilter\nabove filters on created_at, so it cannot see an edit to an existing\nprice."
           }
         },
         "x-speakeasy-name-override": "PriceFilter"
