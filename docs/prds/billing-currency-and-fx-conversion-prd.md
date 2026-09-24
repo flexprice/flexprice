@@ -81,7 +81,8 @@ hold or what those subscriptions are priced in.
 A rate is resolved from the first of these that answers:
 
 ```
-subscription → customer → tenant → live market feed → hard fail
+subscription  →  customer  →  tenant  →  hard fail          [M1]
+subscription  →  customer  →  tenant  →  feed  →  hard fail  [M2]
 ```
 
 It is **recorded on the invoice**, and that recorded rate is what every downstream consumer
@@ -114,21 +115,37 @@ their own.
 | R6 | Editing a rate never alters a conversion already recorded |
 | R7 | A rate row is **fixed** (carries a value) or **dynamic** (names a source to call) |
 
-### 3.3 Live market feed
+### 3.3 Live market feed — **M2**
 
-The fallback when no configured rate resolves.
+Deferred. **M1 resolves rates from configuration only.** With no configured rate, invoice
+generation fails (§3.7) rather than reaching for a market rate.
+
+Recorded here so M1's schema does not foreclose it:
 
 | # | Requirement |
 | --- | --- |
 | F1 | A tenant-level setting names the feed provider and its credentials |
-| F2 | Rates are fetched and **cached with a TTL**, not called per invoice |
+| F2 | Rates are fetched and **cached with a TTL**, never called per invoice |
 | F3 | A feed-sourced rate is recorded with `source = feed` and the fetch timestamp |
-| F4 | Feed unavailable **and** no configured rate → invoice generation fails loudly. Never fall back to `1` |
+| F4 | Feed unavailable **and** no configured rate → fail loudly. Never fall back to `1` |
 
-> [!IMPORTANT]
-> Rate `1` as a fallback is not a degraded mode — it is a wrong invoice. The Zoho defect was
-> precisely an unconverted amount presented as a converted one. Nothing in this design may
-> reintroduce it.
+The `rate_mode = dynamic` column and the `feed` source value ship in M1 unused, so enabling
+this is a validation change rather than a migration on a populated table.
+
+#### Why it is not in M1
+
+The requirement driving this project is **contract rates** — "customer A signed at ₹83." A
+market feed is the opposite of that: it is a rate that moves. Maxio documents the same
+conclusion for the same reason:
+
+> *"you may choose to define a specific exchange rate, which will ensure that as
+> subscriptions renew each month, the price they're charged doesn't change each billing
+> cycle based on the market rate."*
+
+A feed also puts a third-party network dependency on the invoice-generation path, where a
+slow or unavailable provider becomes a billing outage. And the industry runs slower than
+instinct suggests: Microsoft uses **monthly** benchmark rates; Zuora's OANDA integration is
+1–2 days behind by design. Nobody needs intraday rates to bill monthly.
 
 ### 3.4 Conversion at invoice generation
 
@@ -160,6 +177,16 @@ and there is no correct thing to do with them.
 The documented path is a new customer record — which is also what QuickBooks and Stripe tell
 you to do.
 
+### 3.7 Rate `1` is never a fallback
+
+> [!IMPORTANT]
+> Rate `1` as a fallback is not a degraded mode — it is a wrong invoice. The Zoho defect was
+> precisely an unconverted amount presented as a converted one. Nothing in this design may
+> reintroduce it, in M1 or M2.
+>
+> With no resolvable rate, invoice generation **fails**. A blocked invoice is recoverable; a
+> wrong one, already sent and already in someone's ledger, is not.
+
 ---
 
 ## 4. This is the same mechanism custom currency already uses
@@ -187,7 +214,7 @@ enforced today.
 | --- | --- | --- |
 | Source | a tenant-invented unit (`MAC`) | a real currency (`USD`) |
 | Target | `default_fiat_currency` | the customer's billing currency |
-| Rate from | `fiat_conversion_factors` | `exchange_rates` + feed |
+| Rate from | `fiat_conversion_factors` | `exchange_rates` |
 | Scope | tenant + environment | tenant → customer → subscription |
 | Converted at | invoice generation | invoice generation |
 | Frozen at | finalization | finalization |
@@ -227,28 +254,56 @@ else.
 
 ## 5. Scope
 
-### 5.1 In scope
+### 5.0 The starting position makes this safe
+
+Worth stating plainly, because it is the reason this can ship incrementally:
+
+> **Today, for every customer, invoice currency == subscription currency == wallet currency.**
+
+Nothing in production is multi-currency at the customer level. A customer subscribes in USD,
+is invoiced in USD, and holds a USD wallet. That alignment is not a coincidence — it is a
+consequence of there being no way to express anything else.
+
+Two things follow:
+
+1. **Backfill is unambiguous.** `billing_currency` = the customer's existing invoice
+   currency, which is already the only currency they have.
+2. **M1 is inert until someone opts in.** With `billing_currency == charge_currency`, the
+   conversion branch is never entered and every existing code path runs unchanged. The new
+   behaviour engages only when a tenant deliberately sets a different billing currency.
+
+A production audit found 123 customers with invoices in more than one currency — but only 7
+are mapped to an accounting integration and **all 7 are test accounts**. There is no real
+customer whose backfill is ambiguous.
+
+### 5.1 M1 — custom FX rates
 
 | # | |
 | --- | --- |
 | S1 | `customers.billing_currency`, null by default, set on first invoice, settable via API |
-| S2 | `exchange_rates` — scoped, dated, fixed-or-dynamic |
-| S3 | Resolution: subscription → customer → tenant → feed → fail |
-| S4 | Live market feed with cached rates and a TTL |
-| S5 | Conversion at invoice generation into the billing currency |
-| S6 | Rate frozen at finalization and recorded on the invoice |
-| S7 | Integrations send the invoice's recorded rate instead of polling their own |
-| S8 | An audit record of every conversion, queryable across invoices |
+| S2 | `exchange_rates` — scoped, dated, **fixed rates only** |
+| S3 | Resolution: subscription → customer → tenant → **fail** |
+| S4 | Conversion at invoice generation into the billing currency |
+| S5 | Rate frozen at finalization and recorded on the invoice |
+| S6 | Integrations send the invoice's recorded rate instead of polling their own |
+| S7 | An audit record of every conversion, queryable across invoices |
 
-### 5.2 Explicitly not in scope
+### 5.2 M2 — the rest
+
+| # | | Why deferred |
+| --- | --- | --- |
+| M2-1 | Live market feed | §3.3 — contract rates are the requirement; a feed is the opposite of one |
+| M2-2 | Fiat wallets follow billing currency | §6.1 — M1 leaves wallets on the denomination currency, where they already work |
+| M2-3 | Custom currency generalizes onto the shared denomination | §4 — touches finalization for live tenants; highest risk, no user waiting |
+| M2-4 | Marketplace usage conversion | Same rate table, different consumer |
+
+### 5.3 Explicitly not in scope, either milestone
 
 | # | | Why |
 | --- | --- | --- |
-| N1 | Cross-currency wallets | A wallet pays invoices, so it follows billing currency. Converting at application time means FX gain/loss accounting — a separate project (§6.3) |
-| N2 | Cross-currency payments | `payment_processor.go:739` sums payments and hard-errors on mismatch. Needs a two-amount payment model first |
-| N3 | Changing a customer's billing currency after invoicing | §3.6 |
-| N4 | Marketplace usage conversion | Uses the same rate table, different consumer. Sequenced after |
-| N5 | `price_units` convergence | Different discipline — immutable, snapshot-at-authoring, bound 1:1 to a price's currency |
+| N1 | Cross-currency **payments** | `payment_processor.go:739` sums payments and hard-errors on mismatch. Needs a two-amount payment model first |
+| N2 | Changing a customer's billing currency after invoicing | §3.6 |
+| N3 | `price_units` convergence | Different discipline — immutable, snapshot-at-authoring, bound 1:1 to a price's currency |
 
 ---
 
@@ -261,20 +316,37 @@ inherits one currency from the subscription. Billing currency breaks that, in fi
 | Path | Today | What breaks |
 | --- | --- | --- |
 | **Price → subscription** | Prices not matching the subscription currency are silently dropped (`subscription.go:3785, 3829, 4003`) | Unchanged mechanically, but the rule now needs restating: the filter is against *charge* currency, not billing currency |
-| **Wallet → invoice** | *"wallets are per-currency; an EUR invoice can't be paid by a USD wallet"* (`wallet.go:2634`) | A wallet in charge currency cannot pay an invoice in billing currency. **Wallets must follow billing currency** |
-| **Payment → invoice** | Rejects on mismatch (`payment_processor.go:641`), and sums raw amounts (`:739`) | Payments are in billing currency — consistent, provided wallets move too |
+| **Wallet → invoice** | Credits apply in the **denomination** currency, not the invoice currency (`credit_adjustment.go:221-223`) | **Nothing breaks.** §6.1 |
+| **Payment → invoice** | Rejects on mismatch (`payment_processor.go:641`), sums raw amounts (`:739`) | Payments are in billing currency, consistently. Cross-currency payment stays out of scope (§5.3 N1) |
 | **Credit notes** | Inherit invoice currency | Must inherit the *converted* currency and reuse the parent's **frozen** rate, never re-resolve |
 | **Proration / plan change** | Built from `sub.Currency` | Must convert at the same point, at the same rate, as the parent invoice |
 
-### 6.1 The wallet decision
+### 6.1 Wallets — nothing to do in M1
 
-**A wallet should be denominated in the customer's billing currency, not the subscription's.**
+An earlier draft said wallets must move to the billing currency. That was wrong: the
+mechanism already handles it.
 
-A wallet exists to pay invoices; invoices are in billing currency; therefore wallets are too.
-Any other answer means converting at credit-application time, which is realised FX gain or
-loss and needs somewhere in the books to land.
+Credits are selected and applied in the **denomination** currency, not the invoice currency:
 
-This has migration consequences for existing wallets and is the first thing to settle.
+```go
+// credit_adjustment.go — Credits apply in the denomination currency, before any conversion.
+// Match on the denomination currency so a fiat wallet never applies at a 1:1 rate.
+wallets, err := walletPaymentService.GetWalletsForCreditAdjustment(ctx, inv.CustomerID, denominationCurrency)
+```
+
+`DenominationCurrency()` returns the custom currency when set, the invoice's currency
+otherwise — so a MAC invoice draws only from MAC wallets, with a test asserting exactly that.
+Under FX the same rule gives: invoice in INR, denomination USD, credits drawn from the USD
+wallet, pre-conversion. **Which is what wallets already are.**
+
+So M1 requires no wallet change and no migration. Existing wallets keep working because for
+every existing customer denomination == invoice currency anyway (§5.0).
+
+**The M2 question**, recorded as D1: should a *fiat* wallet instead follow billing currency,
+so an INR-billed customer holds an INR balance rather than a USD one? That is a product
+judgement about what a customer expects to see, not a constraint — and it is the one place
+M1 does not deliver "one currency everywhere", since such a customer sees a USD balance
+against INR invoices until M2.
 
 ### 6.2 What "converted exactly once" must mean
 
@@ -313,20 +385,32 @@ it should be a decision rather than a discovery.
 
 ## 7. Sequencing
 
-Ordered by risk, each step independently shippable.
+### M1 — custom FX rates
 
-| Phase | | Risk |
+Four steps, each independently shippable, ordered so risk arrives last.
+
+| Step | | Risk |
 | --- | --- | --- |
-| **1** | `exchange_rates` table, resolution, admin API. Nothing consumes it yet | Low — additive |
-| **2** | `customers.billing_currency`, null by default, set on first invoice. No conversion yet: billing currency always equals charge currency | Low — no behaviour change |
-| **3** | Live market feed with cached rates | Low — additive |
-| **4** | **Conversion at invoice generation.** Wallets move to billing currency | **High** — the real change |
-| **5** | Integrations read the invoice's frozen rate instead of polling | Medium — touches shipped sync paths |
-| **6** | Custom currency generalizes onto the same denomination (§4) | **High** — touches finalization for live tenants |
+| **1** | `exchange_rates` table, resolution, admin API. Nothing consumes it | Low — additive, unreachable |
+| **2** | `customers.billing_currency` — add, backfill, set on first invoice. **No conversion**: billing currency equals charge currency for everyone | Low — no behaviour change |
+| **3** | **Conversion at invoice generation** | **High** — the real change |
+| **4** | Integrations send the invoice's frozen rate instead of polling their own | Medium — touches the sync paths shipped in #2907 |
 
-Phase 2 is deliberately inert: it establishes and backfills the field while
-`billing_currency == charge_currency` for everyone, so phase 4 turns on conversion against
-data that is already correct.
+Steps 1 and 2 are deliberately inert and can go in parallel. After them the system is
+identical to today, with the field populated and the table empty — so step 3 turns conversion
+on against data already known to be correct (§5.0).
+
+**Step 3 is where a tenant opts in**, by setting a billing currency that differs from a
+subscription's charge currency. Until someone does that, step 3 changes nothing observable.
+
+### M2
+
+| Step | | Gated on |
+| --- | --- | --- |
+| **5** | Live market feed | A tenant who cannot answer "what rate should we use?" themselves |
+| **6** | Fiat wallets follow billing currency | D1 |
+| **7** | Custom currency generalizes onto the shared denomination | D2 — highest risk, no user waiting |
+| **8** | Marketplace usage conversion | Already blocked in code; unblocked by M1's rate table |
 
 ---
 
@@ -338,23 +422,51 @@ data that is already correct.
 | S2 | The rate used is on the invoice and retrievable |
 | S3 | Line items sum exactly to the invoice total — no residual drift |
 | S4 | Changing a tenant rate does not alter any finalized invoice |
-| S5 | No configured rate and no feed → invoice generation fails, naming the pair. No invoice is created |
+| S5 | No configured rate → invoice generation fails, naming the pair. No invoice is created |
 | S6 | A customer whose billing currency equals the charge currency follows an unchanged code path |
 | S7 | Zoho and QuickBooks send the invoice's recorded rate, not one polled from the provider |
 | S8 | Enabling customer or subscription scoped rates requires no migration |
 
 ---
 
-## 9. Open decisions
+## 9. Decisions
+
+### 9.1 Closed
+
+| # | Decision | Resolution |
+| --- | --- | --- |
+| **D3** | Which market feed | **Deferred to M2.** M1 resolves from configuration only. §3.3 |
+| **D4** | Rate frozen at finalization or draft creation | **Finalization**, matching custom currency. Two freeze points would be confusing, and a draft that tracks the rate is the more useful preview |
+| **D6** | In-flight drafts when a rate changes | **Drafts re-resolve, finalized never move.** Follows D4 |
+| **D7** | Do wallets need migrating for M1 | **No.** Credits already apply in the denomination currency. §6.1 |
+
+### 9.2 Open — needed before M1 ships
 
 | # | Decision | Recommendation |
 | --- | --- | --- |
-| **D1** | Wallets follow billing currency | §6.1 — yes. Needs a migration plan for existing wallets. **Settle first** |
-| **D2** | Generalize the custom-currency denomination, or build a parallel one | §4 — generalize. Highest risk, last phase |
-| **D3** | Which market feed | Not chosen. Needs a provider, credentials and a TTL. ECB is free and daily; commercial feeds are intraday |
-| **D4** | Rate frozen at finalization, or at draft creation | Finalization, matching custom currency. A draft that moves with the rate is arguably correct, but two freeze points would be confusing |
-| **D5** | Does the customer-facing invoice show the source amount? | Recommend yes — *"$100.00 converted at 83.00"*. It is the only place the contract denomination survives |
-| **D6** | What happens to in-flight drafts when a rate changes | Recommend: drafts re-resolve, finalized never move. Follows D4 |
+| **D5** | Does the customer-facing invoice show the source amount? | Recommend yes — *"$100.00 converted at 83.00"*. It is the only place the contract denomination survives, and the first thing a customer will ask |
+| **D8** | Which rate belongs on a statutory document | **Unresolved, and the one that could change the model.** §9.4 |
+
+### 9.3 Open — needed before M2
+
+| # | Decision | Recommendation |
+| --- | --- | --- |
+| **D1** | Should a fiat wallet follow billing currency? | Probably yes — an INR-billed customer expects an INR balance. But it moves credit application to post-conversion, so it needs to be deliberate. §6.1 |
+| **D2** | Generalize the custom-currency denomination, or keep a parallel one | Generalize. §4. Highest risk, no user waiting, so last |
+
+### 9.4 D8 — the one that could change the model
+
+The moment we convert, we own a number that lands in someone's statutory filing. For an
+Indian entity, the INR value on a GST return may require a **prescribed reference rate**,
+not the rate sales negotiated. Those are different numbers, and *"our billing system
+decided"* is not an answer an auditor accepts.
+
+If a tenant's finance team confirms a reference rate is required, the model needs **two
+rates per invoice** — one commercial, one statutory — rather than one. That is a schema
+consequence, not a configuration one, which is why it belongs before M1 rather than after.
+
+**How to close it:** one conversation with the finance contact at a tenant who would use
+this. Not a question the codebase can answer.
 
 ---
 

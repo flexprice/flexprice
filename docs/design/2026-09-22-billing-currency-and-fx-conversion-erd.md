@@ -11,12 +11,42 @@ PRD: [`docs/prds/billing-currency-and-fx-conversion-prd.md`](../prds/billing-cur
 One new column on `customers`, two new tables, one changed decision inside invoice creation.
 
 A customer acquires a **billing currency**. Charges priced in any currency are converted into
-it at invoice generation, at a rate resolved from a scope hierarchy with a market feed as
-fallback. The rate is frozen onto the invoice at finalization and reused by everything
-downstream, including the accounting integrations.
+it at invoice generation, at a rate resolved from a scope hierarchy. The rate is frozen onto
+the invoice at finalization and reused by everything downstream, including the accounting
+integrations.
 
-**Not in scope** (PRD §5.2): cross-currency wallets, cross-currency payments, changing a
-customer's billing currency, marketplace usage conversion, `price_units`.
+### 1.1 M1 and M2
+
+**M1 is custom rates only.** Rates come from configuration — tenant, customer or
+subscription. With none configured, invoice generation fails; it does not reach for a market
+rate.
+
+| | M1 | M2 |
+| --- | --- | --- |
+| `customers.billing_currency` | ✅ | |
+| `exchange_rates`, scoped and dated | ✅ fixed only | `dynamic` enabled |
+| Conversion at invoice generation | ✅ | |
+| Rate frozen on the invoice | ✅ | |
+| Integrations send our rate | ✅ | |
+| Live market feed | | ✅ |
+| Fiat wallets follow billing currency | | ✅ (PRD D1) |
+| Custom currency shares the denomination | | ✅ (PRD D2) |
+
+The `rate_mode = dynamic` column and the `feed` source value ship in M1 **unused**, so M2 is
+a validation change rather than a migration on a populated table. Sections marked **[M2]**
+are specified for that reason, not built.
+
+### 1.2 Why this is safe to ship incrementally
+
+**Today, for every customer, invoice currency == subscription currency == wallet currency.**
+Nothing in production is multi-currency at the customer level.
+
+So M1's backfill is unambiguous, and until a tenant deliberately sets a billing currency that
+differs from a subscription's charge currency, the conversion branch is never entered and
+every existing path runs unchanged.
+
+**Not in scope, either milestone** (PRD §5.3): cross-currency payments, changing a customer's
+billing currency after invoicing, `price_units` convergence.
 
 ---
 
@@ -266,14 +296,18 @@ ResolveRate(ctx, from, to, at, scope) → (rate, source, rateID, err)
        rate_mode = fixed   → the row's rate,       source = manual
        rate_mode = dynamic → call rate_source,     source = feed
 
-3. No configured rate, feed configured for the tenant
-       → cached feed rate (§4.4).                  source = feed
+3. [M2] No configured rate, feed configured for the tenant
+       → cached feed rate (§4.3).                  source = feed
 
 4. Nothing
-       → ierr.ErrValidation naming the pair, the scopes tried, and whether a feed exists.
+       → ierr.ErrValidation naming the pair and the scopes tried.
 ```
 
 Three queries at worst, all served by `Idx_exchange_rate_resolution`.
+
+**M1 stops at step 2.** Step 3 does not exist — no configured rate means step 4. The
+`rate_mode = dynamic` column and the `feed` source value ship unused so that adding step 3
+in M2 is a validation change, not a migration on a populated table.
 
 > [!IMPORTANT]
 > **Resolution happens at conversion time, not copy-down at entity creation.** This is a
@@ -293,7 +327,9 @@ Ordering is fully specified, with nothing left to database row order:
 2. **`effective_from DESC`** — the most recently effective rate within a level.
 3. **`created_at DESC`** — tie-break for identical `effective_from`.
 
-### 4.3 The feed
+### 4.3 The feed — **M2**
+
+Not built in M1. Specified here so the M1 schema does not foreclose it.
 
 | | |
 | --- | --- |
@@ -488,9 +524,9 @@ that does not rescale line items.
 | --- | --- | --- |
 | F1 | `chargeCurrency == billingCurrency` | Short-circuit. No rate, no record, no cost |
 | F2 | Customer has no billing currency | Set from charge currency, no conversion. Not an error |
-| F3 | No rate at any scope and no feed | **Invoice generation fails**, naming the pair and scopes tried |
-| F4 | Feed configured but unreachable, no configured rate | Same as F3. Never `1` |
-| F5 | Feed rate older than its TTL | Configurable: reject, or use with a staleness flag on the record. Recommend reject — a wrong rate is worse than a late invoice |
+| F3 | No rate at any scope | **Invoice generation fails**, naming the pair and scopes tried. This is the M1 terminal case |
+| F4 | [M2] Feed configured but unreachable, no configured rate | Same as F3. Never `1` |
+| F5 | [M2] Feed rate older than its TTL | Recommend reject — a wrong rate is worse than a late invoice |
 | F6 | Rate resolves but `Convert` yields zero from a non-zero source | `ErrInternal`. Indicates a rate underflowing target precision |
 | F7 | Finalization with no resolvable rate | Refuse to finalize. Matches custom currency's existing behaviour |
 | F8 | Invoice already finalized | Frozen rate reused, never re-resolved |
@@ -516,8 +552,8 @@ wrong one is not — but it needs to surface as an actionable error, not a Tempo
 | T7 | Identical `effective_from` | later `created_at` wins |
 | T8 | Archived row | not resolved |
 | T9 | Different environment | not resolved (tenancy) |
-| T10 | No rate, feed configured | feed rate, source feed |
-| T11 | No rate, no feed | `ErrValidation` |
+| T10 | No rate configured at any scope | `ErrValidation` — the M1 terminal case |
+| T11 | [M2] No rate, feed configured | feed rate, source feed |
 | T12 | Reverse pair exists, not the requested direction | **not** resolved — no inverse derivation |
 
 ### 8.2 Conversion
@@ -570,7 +606,9 @@ wrong one is not — but it needs to surface as an actionable error, not a Tempo
 | 2 | `ALTER TABLE customers ADD COLUMN billing_currency varchar(10) NULL` | Yes — nullable, unread |
 | 3 | Backfill `billing_currency` from each customer's most recent invoice currency | Yes — it is derived |
 | 4 | Enable conversion | **No** — invoices are issued in a new currency |
-| 5 | Wallets migrate to billing currency | **No** — see PRD D1 |
+
+**M1 ends at step 4.** No wallet migration: credits already apply in the denomination
+currency, which for every existing customer *is* the invoice currency (PRD §6.1).
 
 Steps 1–3 are inert: after them, `billing_currency == charge_currency` for every existing
 customer, so step 4 switches conversion on against data already known to be correct.
