@@ -81,6 +81,16 @@ func (s *PaymentService) buildSyncedLineItems(ctx context.Context, invoiceResp *
 
 const checkoutDiscountMetadataKey = "stripe_checkout_discounts"
 
+// stripeCheckoutMinExpiry is Stripe's floor for a Checkout Session's expires_at, plus a
+// minute so a request in flight does not arrive under it.
+const stripeCheckoutMinExpiry = 31 * time.Minute
+
+// checkoutExpiryAccepted reports whether Stripe will accept this expires_at. Pure (no
+// Stripe calls) so it's unit-testable directly.
+func checkoutExpiryAccepted(requested, now time.Time) bool {
+	return !requested.Before(now.Add(stripeCheckoutMinExpiry))
+}
+
 // stripeCheckoutDiscountEntry is one entry in the JSON array stored under
 // Invoice.Metadata[checkoutDiscountMetadataKey].
 type stripeCheckoutDiscountEntry struct {
@@ -443,12 +453,19 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	}
 
 	if req.ExpiresAt != nil {
-		minExpiry := time.Now().Add(31 * time.Minute)
-		exp := *req.ExpiresAt
-		if exp.Before(minExpiry) {
-			exp = minExpiry
+		// Extending to meet Stripe's floor would return a link that outlives the checkout
+		// session that owns it, and a payment landing after the session expires can only
+		// be refunded. A session this close to expiry does not get a Stripe link at all.
+		if !checkoutExpiryAccepted(*req.ExpiresAt, time.Now()) {
+			return nil, ierr.NewError("checkout session expires too soon for a Stripe payment link").
+				WithHint("The checkout session is too close to expiry to start a Stripe payment").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": req.InvoiceID,
+					"expires_at": req.ExpiresAt.UTC(),
+				}).
+				Mark(ierr.ErrInvalidOperation)
 		}
-		params.ExpiresAt = stripe.Int64(exp.Unix())
+		params.ExpiresAt = stripe.Int64(req.ExpiresAt.Unix())
 	}
 
 	// Create the checkout session

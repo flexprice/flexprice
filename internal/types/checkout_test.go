@@ -53,7 +53,26 @@ func TestCheckoutPaymentProvider(t *testing.T) {
 	t.Run("LinkExpiry", func(t *testing.T) {
 		assert.Equal(t, 20*time.Minute, CheckoutPaymentProviderRazorpay.LinkExpiry())
 		assert.Equal(t, 25*time.Minute, CheckoutPaymentProviderChargebee.LinkExpiry())
-		assert.Equal(t, 30*time.Minute, CheckoutPaymentProviderStripe.LinkExpiry())
+		assert.Equal(t, 35*time.Minute, CheckoutPaymentProviderStripe.LinkExpiry())
 		assert.Equal(t, 30*time.Minute, CheckoutPaymentProvider("other").LinkExpiry())
+	})
+
+	// Stripe refuses an expires_at under 30m and the adapter will not extend one to
+	// meet it, so a LinkExpiry at or below the floor makes every Stripe checkout fail.
+	t.Run("StripeLinkExpiryClearsStripeFloor", func(t *testing.T) {
+		assert.Greater(t, CheckoutPaymentProviderStripe.LinkExpiry(), 31*time.Minute)
+	})
+
+	// The link has to die before the session that owns it, otherwise a payment can land
+	// after the session is gone and the only remedy is a refund.
+	t.Run("SessionOutlivesLink", func(t *testing.T) {
+		for _, p := range []CheckoutPaymentProvider{
+			CheckoutPaymentProviderRazorpay,
+			CheckoutPaymentProviderChargebee,
+			CheckoutPaymentProviderStripe,
+			CheckoutPaymentProvider("other"),
+		} {
+			assert.Greater(t, p.SessionExpiry(), p.LinkExpiry(), "provider %q", p)
+		}
 	})
 }

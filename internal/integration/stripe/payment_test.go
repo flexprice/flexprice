@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -346,4 +347,37 @@ func TestHandleFlexPriceCheckoutPayment_DiscountAppliedAfterSuccessfulClaim(t *t
 	require.Equal(t, 1, invoiceSvc.applyDiscountCalls)
 	require.NotNil(t, paymentSvc.updatePaymentReq.Amount)
 	require.True(t, decimal.NewFromInt(80).Equal(*paymentSvc.updatePaymentReq.Amount))
+}
+
+func TestCheckoutExpiryAccepted(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		requested time.Time
+		want      bool
+	}{
+		{name: "comfortably above the floor", requested: now.Add(35 * time.Minute), want: true},
+		{name: "exactly on our floor", requested: now.Add(31 * time.Minute), want: true},
+		// Stripe's own floor is 30m; we require a minute more so a request in flight
+		// does not arrive under it.
+		{name: "on Stripe's floor but inside our margin", requested: now.Add(30 * time.Minute), want: false},
+		{name: "below Stripe's floor", requested: now.Add(20 * time.Minute), want: false},
+		{name: "already past", requested: now.Add(-time.Minute), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, checkoutExpiryAccepted(tt.requested, now))
+		})
+	}
+}
+
+// The link expiry the checkout service asks Stripe for is LinkExpiry out from session
+// creation, so it must clear the floor or every Stripe checkout is refused.
+func TestStripeLinkExpiryIsAcceptedByCheckoutGuard(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	requested := now.Add(types.CheckoutPaymentProviderStripe.LinkExpiry())
+
+	require.True(t, checkoutExpiryAccepted(requested, now))
 }

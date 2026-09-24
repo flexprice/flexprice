@@ -153,7 +153,9 @@ func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 		// than past it: an abandoned session must die before the intent's fund hold does.
 		return 25 * time.Minute
 	case CheckoutPaymentProviderStripe:
-		return 30 * time.Minute
+		// Stripe rejects an expires_at under 30m, so asking for exactly 30 sits on the
+		// floor and arrives under it. Leave headroom rather than race the boundary.
+		return 35 * time.Minute
 	default:
 		return 30 * time.Minute
 	}
