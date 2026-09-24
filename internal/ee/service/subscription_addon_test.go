@@ -707,7 +707,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutConcurrentGuard() {
 			cfg.ModifySubscriptionParams = &types.ModifySubscriptionParams{
 				SubscriptionID: subscriptionID,
 				LineItemModifications: []types.ModifySubscriptionLineItem{
-					{LineItemID: "subs_li_outstanding", Quantity: decimal.NewFromInt(2)},
+					{LineItemID: "subs_li_outstanding", Quantity: lo.ToPtr(decimal.NewFromInt(2))},
 				},
 			}
 		}

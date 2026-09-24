@@ -99,6 +99,59 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 	return nil
 }
 
+type LineItemChange struct {
+	ID            string           `json:"id" binding:"required"`
+	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
+}
+
+func (c *LineItemChange) ToOverrideLineItemRequest(priceID string) OverrideLineItemRequest {
+	return OverrideLineItemRequest{
+		PriceID: priceID,
+		Amount:  c.Amount,
+	}
+}
+
+type SubModifyLineItemChangeRequest struct {
+	LineItems []LineItemChange `json:"line_items" binding:"required,min=1"`
+}
+
+func (r *SubModifyLineItemChangeRequest) Validate() error {
+	if r == nil || len(r.LineItems) == 0 {
+		return ierr.NewError("at least one line item is required").
+			WithHint("Provide line_items with at least one entry").
+			Mark(ierr.ErrValidation)
+	}
+	for i := range r.LineItems {
+		li := &r.LineItems[i]
+		if li.ID == "" {
+			return ierr.NewError("line item ID is required").
+				WithHint("Each line_item entry must have a non-empty id").
+				Mark(ierr.ErrValidation)
+		}
+		if li.Quantity == nil && li.Amount == nil {
+			return ierr.NewError("line item change must set a quantity or an amount").
+				WithHint("Provide quantity and/or amount").
+				WithReportableDetails(map[string]any{"line_item_id": li.ID}).
+				Mark(ierr.ErrValidation)
+		}
+		if li.Quantity != nil && li.Quantity.IsNegative() {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"line_item_id": li.ID}).
+				Mark(ierr.ErrValidation)
+		}
+		if li.Amount != nil && li.Amount.IsNegative() {
+			return ierr.NewError("amount must be non-negative").
+				WithHint("Amount cannot be negative").
+				WithReportableDetails(map[string]any{"line_item_id": li.ID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // TrialEndAction specifies how to modify the trial period.
 type TrialEndAction string
 

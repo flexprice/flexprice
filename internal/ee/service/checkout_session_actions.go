@@ -328,11 +328,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	paymentID := *session.CheckoutPaymentID
 
 	modSvc := &subscriptionModificationService{serviceParams: s.ServiceParams}
-	quantityChangeReq, err := modSvc.requestFromModifySubscriptionParams(ctx, params)
-	if err != nil {
-		return err
-	}
-	if _, err := modSvc.applyQuantityChange(ctx, quantityChangeReq); err != nil {
+	if err := modSvc.applyModifySubscriptionParams(ctx, params); err != nil {
 		return err
 	}
 
