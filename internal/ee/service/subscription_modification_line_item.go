@@ -686,6 +686,7 @@ func (s *subscriptionModificationService) settleLineItemChangePayLater(
 	settleReq *SettleProrationRequest,
 ) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
 	sp := s.serviceParams
+	sub := request.GetSubscription()
 	settleReq.Mode = SettleModeIssue
 
 	var (
@@ -708,7 +709,6 @@ func (s *subscriptionModificationService) settleLineItemChangePayLater(
 				Mark(ierr.ErrValidation)
 		}
 
-		var err error
 		if changedLineItems, err = s.applyLineItemChange(txCtx, request); err != nil {
 			return err
 		}
@@ -814,7 +814,7 @@ func (s *subscriptionModificationService) archiveLineItemChangeDraft(
 	if draft == nil {
 		return
 	}
-	
+
 	if err := s.serviceParams.InvoiceRepo.Delete(ctx, draft.ID); err != nil {
 		s.serviceParams.Logger.Error(ctx, "failed to archive draft invoice after pay-first failure",
 			"error", err,
