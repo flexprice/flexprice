@@ -2,9 +2,14 @@
 #
 # Flow: release published -> version-check (version from release tag only) -> generate -> push to GitHub -> publish to npm/PyPI.
 # Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
+# Docs: generate uploads the spec plus the Go, Python and TypeScript code samples to the Speakeasy registry and promotes
+# them to the main tag, which rebuilds https://spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples.
+# refresh-docs waits for that URL to match the release, then pushes an empty commit to the docs repo so Mintlify redeploys.
 #
 # Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
+# Docs redeploy: secret DOCS_REPO_TOKEN (fine-grained PAT: Contents R/W on the docs repo); optional variables DOCS_REPO
+# (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
 #
@@ -155,11 +160,20 @@ jobs:
         run: |
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
-      # SDKs: generate with resolved version only (from version-check job)
+      # SDKs: generate with resolved version only (from version-check job).
+      # Also uploads the spec and each target's code samples (codeSamples in .speakeasy/workflow.yaml) to the
+      # Speakeasy registry tagged main; Speakeasy combines them into the hosted docs spec.
       - name: Generate SDKs and MCP
         env:
           SDK_VERSION: ${{ needs.version-check.outputs.version }}
-        run: make sdk-all VERSION="$SDK_VERSION"
+        run: make sdk-all VERSION="$SDK_VERSION" SPEAKEASY_RUN_FLAGS="--skip-testing --skip-versioning --registry-tags main"
+
+      # Tags added during upload don't make Speakeasy rebuild the hosted docs spec; tagging through
+      # `speakeasy tag promote` (what Speakeasy's own GitHub Action runs) does. Non-fatal so the docs
+      # can't block SDK publishing; refresh-docs fails visibly if the hosted spec never updates.
+      - name: Promote spec and code samples to main
+        continue-on-error: true
+        run: speakeasy tag promote -s swagger-json -c flexprice-go,flexprice-python,flexprice-typescript -t main
 
       # Overwrite Speakeasy version in artifacts with resolved version only
       - name: Apply resolved version to SDK artifacts
@@ -194,6 +208,65 @@ jobs:
         with:
           name: api-mcp
           path: api/mcp/
+
+      - name: Upload openapi-spec artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: openapi-spec
+          path: docs/swagger/swagger-3-0.json
+
+  # ---------------------------------------------------------------------------
+  # Docs: Mintlify re-reads the hosted spec only on deploy, so wait for Speakeasy to
+  # rebuild it (spec and code samples) from this release's upload, then redeploy the docs.
+  # ---------------------------------------------------------------------------
+  refresh-docs:
+    needs: [version-check, generate]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download openapi-spec artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: openapi-spec
+          path: release-spec
+
+      - name: Wait for the hosted docs spec to match this release
+        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json
+
+      # Mintlify redeploys on every push to the docs repo's branch, so an empty commit makes it
+      # re-read the hosted spec. Created through the GitHub API; the commit is authored by the token's owner.
+      - name: Redeploy docs with an empty commit
+        env:
+          DOCS_REPO_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+          DOCS_REPO: ${{ vars.DOCS_REPO || 'flexprice/flexprice-docs' }}
+          DOCS_BRANCH: ${{ vars.DOCS_BRANCH || 'main' }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -z "$DOCS_REPO_TOKEN" ]; then
+            echo "::error::DOCS_REPO_TOKEN is not set; docs were not redeployed."
+            exit 1
+          fi
+          api() {
+            curl -fsS -H "Authorization: Bearer ${DOCS_REPO_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+          }
+          repo_api="https://api.github.com/repos/${DOCS_REPO}"
+          head=$(api "${repo_api}/git/ref/heads/${DOCS_BRANCH}" | jq -r .object.sha)
+          tree=$(api "${repo_api}/git/commits/${head}" | jq -r .tree.sha)
+          # Reusing the head's tree means the commit changes no files.
+          commit=$(jq -n --arg m "chore: redeploy docs for flexprice ${RELEASE_TAG}" --arg t "$tree" --arg p "$head" \
+            '{message: $m, tree: $t, parents: [$p]}' | api -X POST "${repo_api}/git/commits" --data @- | jq -r .sha)
+          jq -n --arg s "$commit" '{sha: $s}' | api -X PATCH "${repo_api}/git/refs/heads/${DOCS_BRANCH}" --data @- > /dev/null
+          echo "Pushed empty commit ${commit} to ${DOCS_REPO}@${DOCS_BRANCH}"
 
   # ---------------------------------------------------------------------------
   # Publish: one matrix cell per SDK/MCP (parallel push to GitHub repos)
