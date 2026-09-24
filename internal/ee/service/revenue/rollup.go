@@ -713,7 +713,7 @@ func (s *revenueService) RollupDirty(ctx context.Context, req types.RollupDirtyR
 			resuming = false
 		}
 
-		envRolled, envSkipped, envErr := s.rollupDirtyForEnvironment(envCtx, req, after, setCursor)
+		envRolled, envSkipped, envErr := s.rollupDirtyForEnvironment(envCtx, req, after, setCursor, &result.ScopedOut)
 		result.Rolled += envRolled
 		result.Skipped += envSkipped
 		if envErr != nil {
@@ -1045,7 +1045,7 @@ func (s *revenueService) parentsOfActiveChildren(ctx context.Context, customers 
 
 // rollupDirtyForEnvironment scans one (tenant, environment)'s active
 // subscriptions in pages and rolls every one with activity since `since`.
-func (s *revenueService) rollupDirtyForEnvironment(ctx context.Context, req types.RollupDirtyRequest, after string, setCursor func(types.RollupCursor)) (rolled, skipped int, err error) {
+func (s *revenueService) rollupDirtyForEnvironment(ctx context.Context, req types.RollupDirtyRequest, after string, setCursor func(types.RollupCursor), scopedOut *int) (rolled, skipped int, err error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 	if tenantID == "" || environmentID == "" {
@@ -1088,6 +1088,7 @@ func (s *revenueService) rollupDirtyForEnvironment(ctx context.Context, req type
 				continue
 			}
 			if !scope.includes(sub) {
+				*scopedOut++
 				continue
 			}
 
