@@ -190,8 +190,8 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				Entries: []LineItemProrationEntry{
 					{
 						LineItem:    lineItem,
-						Price:       priceResp.Price,
 						Action:      types.ProrationActionAddItem,
+						NewPrice:    priceResp.Price,
 						NewQuantity: lineItem.Quantity,
 					},
 				},
@@ -486,9 +486,10 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 						IdempotencyKey: types.GenerateUUIDWithPrefix("proration_del"),
 						Entries: []LineItemProrationEntry{
 							{
-								LineItem: &lineItemForProration,
-								Price:    priceResp.Price,
-								Action:   types.ProrationActionRemoveItem,
+								LineItem:        &lineItemForProration,
+								Action:          types.ProrationActionRemoveItem,
+								CurrentPrice:    priceResp.Price,
+								CurrentQuantity: lineItemForProration.Quantity,
 							},
 						},
 					}

@@ -20,7 +20,10 @@ func planChangeMove(amount int64, quantity int64) LineItemProrationEntry {
 			ID:       "subs_line_" + decimal.NewFromInt(amount).String(),
 			Quantity: decimal.NewFromInt(quantity),
 		},
-		Price: &price.Price{Amount: decimal.NewFromInt(amount)},
+		CurrentPrice:    &price.Price{Amount: decimal.NewFromInt(amount)},
+		CurrentQuantity: decimal.NewFromInt(quantity),
+		NewPrice:        &price.Price{Amount: decimal.NewFromInt(amount)},
+		NewQuantity:     decimal.NewFromInt(quantity),
 	}
 }
 

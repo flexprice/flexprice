@@ -191,8 +191,8 @@ func (s *MultiCadenceAddonMatrixSuite) attachLaterAddonTotal(sc *scenario) decim
 		Subscription: sc.sub,
 		Entries: []LineItemProrationEntry{{
 			LineItem: sc.addonLI,
-			Price:    sc.addonPr,
-			Action:   types.ProrationActionAddItem,
+			NewPrice: sc.addonPr, NewQuantity: sc.addonLI.Quantity,
+			Action: types.ProrationActionAddItem,
 		}},
 		EffectiveDate: sc.addonLI.StartDate,
 		Behavior:      types.ProrationBehaviorCreateProrations,

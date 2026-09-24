@@ -11,6 +11,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	lineItemChangeDisplayName = "Line item change"
+	lineItemChangeReason      = "line item change"
+)
+
 type lineItemChangeRequest struct {
 	subscription  *subscription.Subscription
 	modifications []*lineItemChangeMod
@@ -213,6 +218,10 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 
 	var newPriceReq *dto.CreatePriceRequest
 	if amount != nil {
+		if err := validateRepricableFixedPrice(oldPrice, lineItemID); err != nil {
+			return nil, err
+		}
+
 		override := dto.OverrideLineItemRequest{PriceID: lineItem.PriceID, Amount: amount}
 		priceMap := map[string]*dto.PriceResponse{lineItem.PriceID: oldPrice}
 		lineItemsByPriceID := map[string]*subscription.SubscriptionLineItem{lineItem.PriceID: lineItem}
@@ -239,6 +248,30 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	return newLineItemChangeMod(
 		lineItemID, updatedQuantity, newPriceReq, amount, effectiveDate, lineItem, oldPrice, newEndDate,
 	), nil
+}
+
+func validateRepricableFixedPrice(p *dto.PriceResponse, lineItemID string) error {
+	if p.BillingModel != types.BILLING_MODEL_FLAT_FEE {
+		return ierr.NewError("price cannot be changed for this billing model").
+			WithHint("Only flat fee charges can be repriced; tiered and package charges are not supported yet").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":  lineItemID,
+				"billing_model": p.BillingModel,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+		return ierr.NewError("price cannot be changed for a custom price unit").
+			WithHint("Charges priced in a custom unit are not supported yet").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":    lineItemID,
+				"price_unit_type": p.PriceUnitType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 func (s *subscriptionModificationService) buildLineItemChangeRequest(
@@ -562,4 +595,180 @@ func (s *subscriptionModificationService) applyModifySubscriptionParams(
 	}
 	_, err = s.applyQuantityChange(ctx, request)
 	return err
+}
+
+func (s *subscriptionModificationService) quoteLineItemChange(
+	ctx context.Context,
+	request *lineItemChangeRequest,
+	behavior types.ProrationBehavior,
+) (*SettleProrationRequest, error) {
+	sub := request.GetSubscription()
+	if sub == nil {
+		return nil, ierr.NewError("line item change request has no subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	prorationSvc := NewLineItemProrationService(s.serviceParams)
+	summary := emptyProrationSummary(sub)
+	entries := make([]LineItemProrationEntry, 0, len(request.GetModifications()))
+	combinedPeriodStart := sub.CurrentPeriodEnd
+
+	for _, mod := range request.GetModifications() {
+		if mod == nil {
+			continue
+		}
+
+		oldLineItem, oldPrice := mod.getOldLineItem(), mod.getOldPrice()
+		if oldLineItem == nil || oldPrice == nil {
+			return nil, ierr.NewError("line item change modification is not resolved").
+				WithHint("Build the line item change request before quoting it").
+				Mark(ierr.ErrValidation)
+		}
+
+		entry := LineItemProrationEntry{
+			LineItem:        oldLineItem,
+			Action:          types.ProrationActionQuantityChange,
+			CurrentPrice:    oldPrice.Price,
+			CurrentQuantity: oldLineItem.Quantity,
+			NewPrice:        oldPrice.Price,
+			NewQuantity:     mod.getTargetQuantity(),
+		}
+		if priceReq := mod.getNewPriceRequest(); priceReq != nil {
+			newPrice, err := priceReq.ToPrice(ctx)
+			if err != nil {
+				return nil, err
+			}
+			entry.Action = types.ProrationActionPriceChange
+			entry.NewPrice = newPrice
+		}
+
+		effectiveDate := mod.getEffectiveDate()
+		computed, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
+			Subscription:  sub,
+			Entries:       []LineItemProrationEntry{entry},
+			EffectiveDate: effectiveDate,
+			Behavior:      behavior,
+			Reason:        lineItemChangeReason,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		summary.Merge(computed)
+		entries = append(entries, entry)
+		if effectiveDate.Before(combinedPeriodStart) {
+			combinedPeriodStart = effectiveDate
+		}
+	}
+
+	idempotencyKey := ""
+	if behavior != types.ProrationBehaviorNone {
+		idempotencyKey = prorationChargeInvoiceKey(LineItemProrationRequest{
+			Subscription:  sub,
+			Entries:       entries,
+			EffectiveDate: combinedPeriodStart,
+		})
+	}
+
+	req := NewSettleProrationRequest(
+		sub,
+		summary,
+		combinedPeriodStart,
+		sub.CurrentPeriodEnd,
+		lineItemChangeDisplayName,
+		idempotencyKey,
+		SettleModePreview,
+	)
+	req.Reason = lineItemChangeReason
+
+	return req, nil
+}
+
+func (s *subscriptionModificationService) settleLineItemChangePayLater(
+	ctx context.Context,
+	request *lineItemChangeRequest,
+	settleReq *SettleProrationRequest,
+) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
+	sp := s.serviceParams
+	settleReq.Mode = SettleModeIssue
+
+	var (
+		changedLineItems []dto.ChangedLineItem
+		settled          *SettleProrationResult
+	)
+
+	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		var err error
+		if changedLineItems, err = s.applyLineItemChange(txCtx, request); err != nil {
+			return err
+		}
+
+		settled, err = NewLineItemProrationService(sp).Settle(txCtx, settleReq)
+		return err
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	attemptProrationPayments(ctx, sp, settled.GetChanged())
+
+	return changedLineItems, settled.GetChanged(), nil
+}
+
+func (s *subscriptionModificationService) settleLineItemChangePayFirst(
+	ctx context.Context,
+	request *lineItemChangeRequest,
+	settleReq *SettleProrationRequest,
+	checkout *dto.CheckoutParams,
+) (*dto.SubscriptionModifyResponse, error) {
+	sp := s.serviceParams
+	sub := request.GetSubscription()
+	settleReq.Mode = SettleModeDraft
+
+	modifyParams := request.toModifySubscriptionParams()
+	if err := modifyParams.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := ensureNoPendingCheckoutSession(ctx, sp, sub.CustomerID, sub.ID); err != nil {
+		return nil, err
+	}
+
+	settled, err := NewLineItemProrationService(sp).Settle(ctx, settleReq)
+	if err != nil {
+		return nil, err
+	}
+	draft := settled.GetDraft()
+
+	session, err := NewCheckoutSessionService(sp).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+		CustomerID: sub.CustomerID,
+		Action:     types.CheckoutActionModifySubscription,
+		Configuration: types.CheckoutConfiguration{
+			ModifySubscriptionParams: modifyParams,
+		},
+		DraftInvoice: &draft.Invoice,
+		Checkout:     checkout,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	subResp, err := NewSubscriptionService(sp).GetSubscription(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.SubscriptionModifyResponse{
+		Subscription: subResp,
+		ChangedResources: dto.ChangedResources{
+			LineItems: request.previewChangedLineItems(),
+			Invoices: []dto.ChangedInvoice{{
+				ID:      draft.ID,
+				Action:  dto.ChangedInvoiceActionCreated,
+				Status:  dto.ChangedInvoiceStatusFromPaymentStatus(draft.PaymentStatus),
+				Invoice: draft,
+			}},
+		},
+		CheckoutSession: session,
+	}, nil
 }

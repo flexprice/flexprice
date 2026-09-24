@@ -670,18 +670,8 @@ func (s *addonChangeService) ExecutePayFirst(
 		}
 
 		// Taken under the row lock, so two concurrent payment-gated changes cannot both pass.
-		existing, err := anyPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID)
-		if err != nil {
+		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID); err != nil {
 			return err
-		}
-		if len(existing) > 0 {
-			return ierr.NewError("a pending checkout session already exists for this subscription").
-				WithHint("Complete or cancel the existing checkout before starting another payment-gated change").
-				WithReportableDetails(map[string]any{
-					"subscription_id":     locked.ID,
-					"checkout_session_id": existing[0].ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
 		}
 
 		resolved, err := s.Resolve(txCtx, req)

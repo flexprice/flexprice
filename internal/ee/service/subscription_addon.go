@@ -28,6 +28,30 @@ func anyPendingCheckoutSession(
 	return sp.CheckoutSessionRepo.List(ctx, filter)
 }
 
+// ensureNoPendingCheckoutSession rejects a second payment-gated change while one is still open.
+func ensureNoPendingCheckoutSession(
+	ctx context.Context,
+	sp ServiceParams,
+	customerID string,
+	subscriptionID string,
+) error {
+	existing, err := anyPendingCheckoutSession(ctx, sp, customerID, subscriptionID)
+	if err != nil {
+		return err
+	}
+	if len(existing) == 0 {
+		return nil
+	}
+
+	return ierr.NewError("a pending checkout session already exists for this subscription").
+		WithHint("Complete or cancel the existing checkout before starting another payment-gated change").
+		WithReportableDetails(map[string]any{
+			"subscription_id":     subscriptionID,
+			"checkout_session_id": existing[0].ID,
+		}).
+		Mark(ierr.ErrAlreadyExists)
+}
+
 // pendingAddAddonCheckoutSessions returns EVERY open addon checkout on the subscription.
 // A scan for one association has to see all of them, not whichever row came back first.
 func pendingAddAddonCheckoutSessions(

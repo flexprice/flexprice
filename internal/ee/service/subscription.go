@@ -5510,11 +5510,12 @@ func (s *subscriptionService) buildAddonProrationEntries(
 
 		entry := LineItemProrationEntry{
 			LineItem: lineItem,
-			Price:    priceResp.Price,
 			Action:   action,
 		}
 		if action == types.ProrationActionAddItem {
-			entry.NewQuantity = lineItem.Quantity
+			entry.NewPrice, entry.NewQuantity = priceResp.Price, lineItem.Quantity
+		} else {
+			entry.CurrentPrice, entry.CurrentQuantity = priceResp.Price, lineItem.Quantity
 		}
 		entries = append(entries, entry)
 	}
