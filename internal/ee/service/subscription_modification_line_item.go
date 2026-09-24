@@ -67,7 +67,7 @@ func newLineItemChangeMod(
 	lineItemID string,
 	updatedQuantity *decimal.Decimal,
 	newPriceReq *dto.CreatePriceRequest,
-	amount *decimal.Decimal,
+	change dto.LineItemChange,
 	effectiveDate time.Time,
 	oldLineItem *subscription.SubscriptionLineItem,
 	oldPrice *dto.PriceResponse,
@@ -77,7 +77,7 @@ func newLineItemChangeMod(
 		lineItemID:      lineItemID,
 		updatedQuantity: updatedQuantity,
 		newPriceReq:     newPriceReq,
-		amount:          amount,
+		amount:          change.Amount,
 		effectiveDate:   effectiveDate,
 		oldLineItem:     oldLineItem,
 		oldPrice:        oldPrice,
@@ -158,21 +158,16 @@ func (m *lineItemChangeMod) getNewEndDate() time.Time {
 	return m.newEndDate
 }
 
-const (
-	previewEndedLineItemID = "(preview-ended)"
-	previewPriceID         = "(preview-price)"
-)
-
 func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	lineItemID string,
-	updatedQuantity *decimal.Decimal,
-	amount *decimal.Decimal,
+	change dto.LineItemChange,
 	effectiveDate time.Time,
 	allowAlreadyApplied bool,
 ) (*lineItemChangeMod, error) {
 	sp := s.serviceParams
+	lineItemID := change.ID
+	updatedQuantity := change.Quantity
 
 	lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 	if err != nil {
@@ -217,12 +212,12 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	}
 
 	var newPriceReq *dto.CreatePriceRequest
-	if amount != nil {
-		if err := validateRepricableFixedPrice(oldPrice, lineItemID); err != nil {
+	if change.PriceChange() {
+		if err := ValidatePriceChange(oldPrice, lineItemID); err != nil {
 			return nil, err
 		}
 
-		override := dto.OverrideLineItemRequest{PriceID: lineItem.PriceID, Amount: amount}
+		override := change.ToOverrideLineItemRequest(lineItem.PriceID)
 		priceMap := map[string]*dto.PriceResponse{lineItem.PriceID: oldPrice}
 		lineItemsByPriceID := map[string]*subscription.SubscriptionLineItem{lineItem.PriceID: lineItem}
 		if err := override.Validate(priceMap, lineItemsByPriceID, sub.PlanID); err != nil {
@@ -246,14 +241,14 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	}
 
 	return newLineItemChangeMod(
-		lineItemID, updatedQuantity, newPriceReq, amount, effectiveDate, lineItem, oldPrice, newEndDate,
+		lineItemID, updatedQuantity, newPriceReq, change, effectiveDate, lineItem, oldPrice, newEndDate,
 	), nil
 }
 
-func validateRepricableFixedPrice(p *dto.PriceResponse, lineItemID string) error {
+func ValidatePriceChange(p *dto.PriceResponse, lineItemID string) error {
 	if p.BillingModel != types.BILLING_MODEL_FLAT_FEE {
 		return ierr.NewError("price cannot be changed for this billing model").
-			WithHint("Only flat fee charges can be repriced; tiered and package charges are not supported yet").
+			WithHint("Only flat fee charges can be repriced today; package and tiered support is planned").
 			WithReportableDetails(map[string]interface{}{
 				"line_item_id":  lineItemID,
 				"billing_model": p.BillingModel,
@@ -303,7 +298,7 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 			return nil, err
 		}
 
-		mod, err := s.resolveLineItemChangeMod(ctx, sub, change.ID, change.Quantity, change.Amount, effectiveDate, false)
+		mod, err := s.resolveLineItemChangeMod(ctx, sub, *change, effectiveDate, false)
 		if err != nil {
 			return nil, err
 		}
@@ -339,7 +334,9 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 			effectiveDate = m.EffectiveDate.UTC()
 		}
 
-		mod, err := s.resolveLineItemChangeMod(ctx, sub, m.LineItemID, m.Quantity, m.Amount, effectiveDate, true)
+		change := dto.LineItemChange{ID: m.LineItemID, Quantity: m.Quantity, Amount: m.Amount}
+
+		mod, err := s.resolveLineItemChangeMod(ctx, sub, change, effectiveDate, true)
 		if err != nil {
 			return nil, err
 		}
@@ -455,7 +452,7 @@ func (r *lineItemChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 			WithEndDate(effectiveDate).
 			Build()
 		created := subscription.NewSubscriptionLineItemBuilder(ended).
-			WithID(previewCreatedLineItemID).
+			WithID(previewCreatedID).
 			WithQuantity(m.getTargetQuantity()).
 			WithStartDate(effectiveDate).
 			Build()

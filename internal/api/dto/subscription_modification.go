@@ -105,8 +105,9 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 
 // LineItemChange changes a single line item's quantity, price, or both.
 type LineItemChange struct {
-	ID            string           `json:"id" binding:"required"`
-	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	ID       string           `json:"id" binding:"required"`
+	Quantity *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	// Amount reprices the charge. Flat fee only for now.
 	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
 }
@@ -116,6 +117,11 @@ func (c *LineItemChange) ToOverrideLineItemRequest(priceID string) OverrideLineI
 		PriceID: priceID,
 		Amount:  c.Amount,
 	}
+}
+
+// PriceChange reports whether the change carries a new price configuration.
+func (c *LineItemChange) PriceChange() bool {
+	return c.Amount != nil
 }
 
 type SubModifyLineItemChangeRequest struct {
@@ -145,7 +151,7 @@ func (r *SubModifyLineItemChangeRequest) Validate() error {
 		}
 		seen[li.ID] = struct{}{}
 
-		if li.Quantity == nil && li.Amount == nil {
+		if li.Quantity == nil && !li.PriceChange() {
 			return ierr.NewError("line item change must set a quantity or an amount").
 				WithHint("Provide quantity and/or amount").
 				WithReportableDetails(map[string]any{"line_item_id": li.ID}).

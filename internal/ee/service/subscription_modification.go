@@ -19,6 +19,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	previewInvoiceID       = "(preview-invoice)"
+	previewWalletCreditID  = "(preview-wallet-credit)"
+	previewLineItemID      = "(preview-line)"
+	previewCreatedID       = "(preview-created)"
+	previewEndedLineItemID = "(preview-ended)"
+	previewPriceID         = "(preview-price)"
+)
+
 // SubscriptionModificationService handles mid-cycle subscription modifications.
 type SubscriptionModificationService interface {
 	// Execute performs the modification and persists all changes.
@@ -299,7 +308,7 @@ func (s *subscriptionModificationService) previewInheritance(
 	}
 	for range childCustomerIDs {
 		changedSubs = append(changedSubs, dto.ChangedSubscription{
-			ID:     "(preview-created)",
+			ID:     previewCreatedID,
 			Action: dto.ChangedSubscriptionActionCreated,
 			Status: types.SubscriptionStatusActive,
 		})
@@ -532,7 +541,7 @@ func (s *subscriptionModificationService) toPreviewChangedInvoices(
 		if netAmount.GreaterThan(decimal.Zero) {
 			invResp := previewProrationQuantityChangeInvoiceResponse(ctx, sub, oldItem, newItem, mod.getEffectiveDate(), price, netAmount)
 			out = append(out, dto.ChangedInvoice{
-				ID:      "(preview-invoice)",
+				ID:      previewInvoiceID,
 				Action:  dto.ChangedInvoiceActionCreated,
 				Status:  dto.ChangedInvoiceStatusPreview,
 				Invoice: invResp,
@@ -544,7 +553,7 @@ func (s *subscriptionModificationService) toPreviewChangedInvoices(
 			return nil, err
 		}
 		out = append(out, dto.ChangedInvoice{
-			ID:                "(preview-wallet-credit)",
+			ID:                previewWalletCreditID,
 			Action:            dto.ChangedInvoiceActionWalletCredit,
 			Status:            dto.ChangedInvoiceStatusPreview,
 			WalletTransaction: walletTx,
@@ -584,8 +593,8 @@ func previewProrationQuantityChangeInvoiceResponse(
 	bm := types.GetDefaultBaseModel(ctx)
 
 	invLine := &invoice.InvoiceLineItem{
-		ID:                    "(preview-line)",
-		InvoiceID:             "(preview-invoice)",
+		ID:                    previewLineItemID,
+		InvoiceID:             previewInvoiceID,
 		CustomerID:            billingCustomer,
 		SubscriptionID:        &subscriptionID,
 		PlanDisplayName:       &planDisplayName,
@@ -606,7 +615,7 @@ func previewProrationQuantityChangeInvoiceResponse(
 	}
 
 	inv := &invoice.Invoice{
-		ID:                         "(preview-invoice)",
+		ID:                         previewInvoiceID,
 		CustomerID:                 billingCustomer,
 		SubscriptionID:             &subscriptionID,
 		SubscriptionCustomerID:     &subscriptionCustomerID,
@@ -669,7 +678,7 @@ func (s *subscriptionModificationService) previewProrationWalletTransactionRespo
 	envID := types.GetEnvironmentID(ctx)
 	bm := types.GetDefaultBaseModel(ctx)
 	tx := &wallet.Transaction{
-		ID:                  "(preview-wallet-credit)",
+		ID:                  previewWalletCreditID,
 		CustomerID:          billingCustomer,
 		Type:                types.TransactionTypeCredit,
 		Amount:              currencyTopUpAmount,

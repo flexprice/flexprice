@@ -11,9 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// previewCreatedID stands in for any id preview would have minted but never wrote.
-const previewCreatedID = "(preview-created)"
-
 // addonBulkParams maps the single-addon payload onto the batch one, so type "addon" has one
 // implementation whichever shape the caller sends.
 func addonBulkParams(req dto.ExecuteSubscriptionModifyRequest) (*dto.SubModifyBulkAddonParams, error) {

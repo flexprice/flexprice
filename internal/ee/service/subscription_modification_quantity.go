@@ -203,7 +203,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 		newEndDate := m.getNewEndDate()
 		out = append(out,
 			dto.ChangedLineItem{
-				ID:           "(preview-ended)",
+				ID:           previewEndedLineItemID,
 				PriceID:      old.PriceID,
 				Quantity:     old.Quantity,
 				StartDate:    &oldStart,
@@ -211,7 +211,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 				ChangeAction: dto.ChangedLineItemActionEnded,
 			},
 			dto.ChangedLineItem{
-				ID:           "(preview-created)",
+				ID:           previewCreatedID,
 				PriceID:      old.PriceID,
 				Quantity:     m.getQuantity(),
 				StartDate:    &startDate,

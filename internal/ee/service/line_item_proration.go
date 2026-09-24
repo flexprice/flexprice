@@ -97,11 +97,6 @@ const (
 	SettleModeDraft                     // pay-first: a DRAFT invoice to collect against
 )
 
-const (
-	previewInvoiceID      = "(preview-invoice)"
-	previewWalletCreditID = "(preview-wallet-credit)"
-)
-
 type SettleProrationRequest struct {
 	Subscription *subscription.Subscription
 	Quote        *LineItemProrationSummary
@@ -566,8 +561,6 @@ func buildProrationLineItem(
 	subscriptionLineItemID := item.ID
 	planDisplayName := item.PlanDisplayName
 
-	// The amount is a prorated adjustment, not a period charge, so the label and window go on
-	// the display name — otherwise the invoice reads as a full-price line billed for a part period.
 	displayName := fmt.Sprintf("%s — %s (%s – %s)",
 		item.DisplayName,
 		label,
