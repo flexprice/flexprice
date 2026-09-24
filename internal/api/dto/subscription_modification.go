@@ -128,6 +128,8 @@ func (r *SubModifyLineItemChangeRequest) Validate() error {
 			WithHint("Provide line_items with at least one entry").
 			Mark(ierr.ErrValidation)
 	}
+	seen := make(map[string]struct{}, len(r.LineItems))
+
 	for i := range r.LineItems {
 		li := &r.LineItems[i]
 		if li.ID == "" {
@@ -135,6 +137,14 @@ func (r *SubModifyLineItemChangeRequest) Validate() error {
 				WithHint("Each line_item entry must have a non-empty id").
 				Mark(ierr.ErrValidation)
 		}
+		if _, ok := seen[li.ID]; ok {
+			return ierr.NewError("duplicate line item id in line_items").
+				WithHint("Each line item can be changed at most once per request; combine quantity and amount into a single entry").
+				WithReportableDetails(map[string]any{"line_item_id": li.ID}).
+				Mark(ierr.ErrValidation)
+		}
+		seen[li.ID] = struct{}{}
+
 		if li.Quantity == nil && li.Amount == nil {
 			return ierr.NewError("line item change must set a quantity or an amount").
 				WithHint("Provide quantity and/or amount").

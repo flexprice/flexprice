@@ -694,6 +694,20 @@ func (s *subscriptionModificationService) settleLineItemChangePayLater(
 	)
 
 	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		locked, err := sp.SubRepo.GetForUpdate(txCtx, sub.ID)
+		if err != nil {
+			return err
+		}
+		if locked.SubscriptionStatus != types.SubscriptionStatusActive {
+			return ierr.NewError("subscription is not active").
+				WithHint("Only active subscriptions can be modified").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": sub.ID,
+					"status":          locked.SubscriptionStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		var err error
 		if changedLineItems, err = s.applyLineItemChange(txCtx, request); err != nil {
 			return err
@@ -726,15 +740,37 @@ func (s *subscriptionModificationService) settleLineItemChangePayFirst(
 		return nil, err
 	}
 
-	if err := ensureNoPendingCheckoutSession(ctx, sp, sub.CustomerID, sub.ID); err != nil {
-		return nil, err
-	}
+	var draft *dto.InvoiceResponse
 
-	settled, err := NewLineItemProrationService(sp).Settle(ctx, settleReq)
+	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		locked, err := sp.SubRepo.GetForUpdate(txCtx, sub.ID)
+		if err != nil {
+			return err
+		}
+		if locked.SubscriptionStatus != types.SubscriptionStatusActive {
+			return ierr.NewError("subscription is not active").
+				WithHint("Only active subscriptions can be modified").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": sub.ID,
+					"status":          locked.SubscriptionStatus,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		if err := ensureNoPendingCheckoutSession(txCtx, sp, locked.CustomerID, locked.ID); err != nil {
+			return err
+		}
+
+		settled, err := NewLineItemProrationService(sp).Settle(txCtx, settleReq)
+		if err != nil {
+			return err
+		}
+		draft = settled.GetDraft()
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	draft := settled.GetDraft()
 
 	session, err := NewCheckoutSessionService(sp).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
 		CustomerID: sub.CustomerID,
@@ -746,6 +782,7 @@ func (s *subscriptionModificationService) settleLineItemChangePayFirst(
 		Checkout:     checkout,
 	})
 	if err != nil {
+		s.archiveLineItemChangeDraft(ctx, draft, err)
 		return nil, err
 	}
 
@@ -767,4 +804,22 @@ func (s *subscriptionModificationService) settleLineItemChangePayFirst(
 		},
 		CheckoutSession: session,
 	}, nil
+}
+
+func (s *subscriptionModificationService) archiveLineItemChangeDraft(
+	ctx context.Context,
+	draft *dto.InvoiceResponse,
+	cause error,
+) {
+	if draft == nil {
+		return
+	}
+	
+	if err := s.serviceParams.InvoiceRepo.Delete(ctx, draft.ID); err != nil {
+		s.serviceParams.Logger.Error(ctx, "failed to archive draft invoice after pay-first failure",
+			"error", err,
+			"invoice_id", draft.ID,
+			"original_error", cause,
+		)
+	}
 }

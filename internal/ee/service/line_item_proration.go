@@ -97,6 +97,11 @@ const (
 	SettleModeDraft                     // pay-first: a DRAFT invoice to collect against
 )
 
+const (
+	previewInvoiceID      = "(preview-invoice)"
+	previewWalletCreditID = "(preview-wallet-credit)"
+)
+
 type SettleProrationRequest struct {
 	Subscription *subscription.Subscription
 	Quote        *LineItemProrationSummary
@@ -325,6 +330,7 @@ func (s *lineItemProrationService) Settle(ctx context.Context, req *SettleProrat
 				return nil, err
 			}
 			result.Changed = append(result.Changed, dto.ChangedInvoice{
+				ID:      previewInvoiceID,
 				Action:  dto.ChangedInvoiceActionCreated,
 				Status:  dto.ChangedInvoiceStatusPreview,
 				Invoice: inv,
@@ -377,14 +383,16 @@ func (s *lineItemProrationService) creditWallet(
 	sub := req.Subscription
 
 	if req.Mode == SettleModePreview {
-		return walletCreditChangedInvoice(&dto.WalletTransactionResponse{
+		credit := walletCreditChangedInvoice(&dto.WalletTransactionResponse{
 			Transaction: &wallet.Transaction{
 				CustomerID:        sub.GetInvoicingCustomerID(),
 				Amount:            amount,
 				Currency:          sub.Currency,
 				TransactionReason: types.TransactionReasonSubscriptionCredit,
 			},
-		}, dto.ChangedInvoiceStatusPreview), nil
+		}, dto.ChangedInvoiceStatusPreview)
+		credit.ID = previewWalletCreditID
+		return credit, nil
 	}
 
 	walletTx, err := NewWalletService(s.params).TopUpWalletForProratedCharge(
@@ -555,13 +563,20 @@ func buildProrationLineItem(
 ) dto.CreateInvoiceLineItemRequest {
 	priceID := item.PriceID
 	priceType := string(p.Type)
-	displayName := item.DisplayName
 	subscriptionLineItemID := item.ID
+	planDisplayName := item.PlanDisplayName
+
+	// The amount is a prorated adjustment, not a period charge, so the label and window go on
+	// the display name — otherwise the invoice reads as a full-price line billed for a part period.
+	displayName := fmt.Sprintf("%s — %s (%s – %s)",
+		item.DisplayName,
+		label,
+		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
 
 	description := fmt.Sprintf("%s: %s × %s %s %s/unit (%s – %s)",
 		label,
 		quantity.String(),
-		displayName,
+		item.DisplayName,
 		strings.ToUpper(sub.Currency),
 		p.Amount.String(),
 		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
@@ -569,6 +584,7 @@ func buildProrationLineItem(
 	return dto.CreateInvoiceLineItemRequest{
 		PriceID:                &priceID,
 		PriceType:              &priceType,
+		PlanDisplayName:        &planDisplayName,
 		DisplayName:            &displayName,
 		Amount:                 amount,
 		Quantity:               quantity,

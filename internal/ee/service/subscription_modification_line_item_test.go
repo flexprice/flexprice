@@ -407,3 +407,90 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_LegacyParamsRe
 	s.Require().NoError(err)
 	s.Equal(effectiveDate, ended.EndDate, "an empty modify type must still replay the quantity change")
 }
+
+// Two entries for one line item have no defined composition. Before the guard the quote summed
+// both deltas while apply silently skipped the second, billing for a change never made.
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_RejectsDuplicateLineItemID() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 10)
+
+	cust := s.createCustomer("lic-dupe")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(10))
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeLineItemChange,
+		LineItemChangeParams: &dto.SubModifyLineItemChangeRequest{
+			LineItems: []dto.LineItemChange{
+				{ID: li.ID, Amount: lo.ToPtr(decimal.NewFromInt(12)), EffectiveDate: &effectiveDate},
+				{ID: li.ID, Amount: lo.ToPtr(decimal.NewFromInt(15)), EffectiveDate: &effectiveDate},
+			},
+		},
+	}
+
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "duplicate line item id")
+
+	// Nothing was billed and the line item is untouched.
+	unchanged, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	s.True(unchanged.EndDate.IsZero())
+	s.Equal(p.ID, unchanged.PriceID)
+
+	_, err = s.service.Preview(ctx, sub.ID, req)
+	s.Require().Error(err, "preview must reject the same shape execute does")
+}
+
+// A preview quotes a document it never writes; callers tell that apart by the placeholder ID.
+func (s *SubscriptionModificationServiceSuite) TestPreviewLineItemChange_CarriesPlaceholderIDs() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	run := func(name string, oldAmount, newAmount decimal.Decimal) dto.ChangedInvoice {
+		cust := s.createCustomer("lic-placeholder-" + name)
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(oldAmount)
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+		resp, err := s.service.Preview(ctx, sub.ID,
+			s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(newAmount), effectiveDate))
+		s.Require().NoError(err)
+		s.Require().Len(resp.ChangedResources.Invoices, 1)
+		return resp.ChangedResources.Invoices[0]
+	}
+
+	charge := run("charge", decimal.NewFromInt(20), decimal.NewFromInt(40))
+	s.Equal(dto.ChangedInvoiceActionCreated, charge.Action)
+	s.Equal(previewInvoiceID, charge.ID)
+
+	credit := run("credit", decimal.NewFromInt(40), decimal.NewFromInt(20))
+	s.Equal(dto.ChangedInvoiceActionWalletCredit, credit.Action)
+	s.Equal(previewWalletCreditID, credit.ID)
+}
+
+// A prorated adjustment is not a period charge; without the label and window the invoice reads
+// as a full-price line, since the amount is a delta but the quantity is the priced quantity.
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_InvoiceLineIsLabelledAsProration() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("lic-label")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	resp, err := s.service.Execute(ctx, sub.ID,
+		s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(40)), effectiveDate))
+	s.Require().NoError(err)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, resp.ChangedResources.Invoices[0].ID)
+	s.Require().NoError(err)
+	s.Require().Len(inv.LineItems, 1)
+
+	display := lo.FromPtr(inv.LineItems[0].DisplayName)
+	s.Contains(display, "Proration charge", "invoice line must say it is a proration: %q", display)
+	s.Contains(display, effectiveDate.Format("2 Jan 2006"), "invoice line must carry the window: %q", display)
+}
