@@ -484,6 +484,11 @@ event_processing:
   # DLQ (kafka.topic_dlq) — messages are never dropped. Create the topic
   # (or enable auto.create.topics.enable) before enabling in an environment.
   topic_dlq: "event_processing_dlq"
+  # Re-publish the events topic to topic_bulk, batching before publish (loss-safe).
+  batch_to_bulk: false
+  batch_flush_size: 500
+  # Throughput ceiling: partitions / flush_millis.
+  batch_flush_millis: 50
 
 event_processing_lazy:
   enabled: true

@@ -577,21 +577,21 @@ func startServer(
 
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once (no event consumption)
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 
 	case types.ModeTemporalWorker:
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
 		if consumer == nil {
@@ -600,7 +600,7 @@ func startServer(
 
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -695,6 +695,7 @@ func registerRouterHandlers(
 		webhookService.RegisterHandler(router)
 		integrationEventService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)
+		eventConsumptionSvc.RegisterHandlerBatchToBulk(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
 		eventConsumptionSvc.RegisterBulkHandler(router, cfg)
@@ -710,6 +711,7 @@ func startRouter(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
 	logger *logger.Logger,
+	eventConsumptionSvc service.EventConsumptionService,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -723,6 +725,9 @@ func startRouter(
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info(ctx, "stopping message router")
+			// Drain the batcher first: releases in-flight handlers before
+			// router.Close() waits on them, avoiding a shutdown deadlock.
+			eventConsumptionSvc.CloseBatcher()
 			return router.Close()
 		},
 	})

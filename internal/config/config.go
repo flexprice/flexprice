@@ -837,6 +837,13 @@ type EventProcessingConfig struct {
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
 	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
+
+	// BatchToBulk consumes the events topic and re-publishes to topic_bulk,
+	// committing offsets only after publish (loss-safe).
+	BatchToBulk    bool `mapstructure:"batch_to_bulk" default:"false"`
+	BatchFlushSize int  `mapstructure:"batch_flush_size" default:"500"`
+	// Throughput ceiling: partitions / flush_millis.
+	BatchFlushMillis int `mapstructure:"batch_flush_millis" default:"50"`
 }
 
 type EventProcessingLazyConfig struct {
