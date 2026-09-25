@@ -208,6 +208,14 @@ jobs:
       - name: Apply white-label branding to custom files
         run: bash scripts/apply-wl-custom-branding.sh
 
+      # Speakeasy sets the generated SDK's minimum Go version, which can be newer
+      # than the Go used above for make swagger.
+      - name: Set up Go for the generated SDK
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: api/go/go.mod
+          cache: false
+
       - name: Verify SDK builds
         run: bash scripts/verify-sdk-builds.sh
 
