@@ -23,8 +23,8 @@ var nanoUSDMultiplier = decimal.NewFromInt(1_000_000_000)
 
 // DebugEvent powers GET /events/:id (event debugger UI).
 // Reads meter_usage instead of the removed feature_usage table.
-func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error) {
-	rawEvents, err := s.EventRepo.ListEventsByID(ctx, eventID, eventLookupMaxVersions)
+func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, eventID string) (*dto.GetEventByIDResponse, error) {
+	rawEvents, err := s.EventRepo.ListEventsByID(ctx, externalCustomerID, eventID, eventLookupMaxVersions)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from events table").
@@ -34,7 +34,8 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 		return nil, ierr.NewError("event not found").
 			WithHint("Event not found in events table").
 			WithReportableDetails(map[string]interface{}{
-				"event_id": eventID,
+				"event_id":             eventID,
+				"external_customer_id": externalCustomerID,
 			}).
 			Mark(ierr.ErrNotFound)
 	}
@@ -47,7 +48,7 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 		Event: eventToDTO(event),
 	}
 
-	meterUsage, err := s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, eventID)
+	meterUsage, err := s.MeterUsageRepo.GetByCustomerEventID(ctx, tenantID, envID, externalCustomerID, eventID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from meter_usage table").
@@ -351,7 +352,7 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 	tracker.AttributedToCustomer = &dto.AttributedToCustomerResult{Status: types.DebugTrackerStatusUnprocessed}
 	mu := meterUsage
 	if mu == nil {
-		mu, err = s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, event.ID)
+		mu, err = s.MeterUsageRepo.GetByCustomerEventID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID)
 		if err != nil {
 			status, code := ierr.ResolveError(err)
 			errResp := &ierr.ErrorResponse{Code: code, Message: err.Error(), HTTPStatusCode: status}

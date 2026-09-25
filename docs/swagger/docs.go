@@ -3966,6 +3966,13 @@ const docTemplate = `{
                         "name": "id",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "External customer ID the event was ingested with",
+                        "name": "external_customer_id",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -3973,6 +3980,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/GetEventByIDResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing event ID or external customer ID",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {

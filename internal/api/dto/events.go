@@ -315,6 +315,13 @@ func (r *GetEventsRequest) Validate() error {
 		return err
 	}
 
+	// An id-only lookup can't use the sort key and scans the tenant's whole time range.
+	if r.EventID != "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("external_customer_id is required when filtering by event_id").
+			WithHint("Please provide the external customer ID the event was ingested with").
+			Mark(ierr.ErrValidation)
+	}
+
 	allowedSortFields := []string{"timestamp", "event_name"}
 	if r.Sort != nil && !slices.Contains(allowedSortFields, *r.Sort) {
 		return ierr.NewErrorf("invalid sort field: %s", *r.Sort).

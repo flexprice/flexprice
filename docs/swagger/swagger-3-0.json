@@ -4788,6 +4788,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "external_customer_id",
+            "in": "query",
+            "description": "External customer ID the event was ingested with",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4797,6 +4806,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GetEventByIDResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing event ID or external customer ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
                 }
               }
             }

@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -1196,6 +1197,24 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 	})
 	defer FinishSpan(span)
 
+	return r.getByEventID(ctx, span, "", tenantID, environmentID, eventID)
+}
+
+// GetByCustomerEventID returns the customer's meter_usage record for a single event, or nil if not yet processed.
+func (r *MeterUsageRepository) GetByCustomerEventID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+	span := StartRepositorySpan(ctx, "meter_usage", "get_by_customer_event_id", map[string]interface{}{
+		"tenant_id":            tenantID,
+		"environment_id":       environmentID,
+		"external_customer_id": externalCustomerID,
+		"event_id":             eventID,
+	})
+	defer FinishSpan(span)
+
+	return r.getByEventID(ctx, span, "AND external_customer_id = ?", tenantID, environmentID, externalCustomerID, eventID)
+}
+
+// getByEventID runs the single-event lookup; customerFilter is spliced before the id predicate.
+func (r *MeterUsageRepository) getByEventID(ctx context.Context, span *tracing.Span, customerFilter string, args ...interface{}) (*events.MeterUsage, error) {
 	query := `
 		SELECT
 			id,
@@ -1213,6 +1232,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 		FROM meter_usage
 		WHERE tenant_id = ?
 		  AND environment_id = ?
+		  ` + customerFilter + `
 		  AND id = ?
 		LIMIT 1
 		SETTINGS max_memory_usage = 96636764160
@@ -1221,7 +1241,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 	var usage events.MeterUsage
 	var propertiesJSON string
 
-	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, eventID).Scan(
+	err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(
 		&usage.ID,
 		&usage.TenantID,
 		&usage.EnvironmentID,
