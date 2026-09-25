@@ -61,6 +61,13 @@ path, which is why none of them has done it.
 | **Orb** | No, for real currencies | Price in the target currency; only virtual units convert, at overage | One ledger per currency or unit |
 | **Flexprice (this)** | **Yes** | **Keep one priced plan; convert to the customer's currency at a rate you configure** | **Charge currency; only the leftover converts** |
 
+**Orb, up close** (the nearest comparison). Orb stores an *invoicing currency*, but it is the single
+currency a customer, its prices, and its invoices all share — not a conversion target. An invoice is
+one real-world currency, and the only conversion Orb performs is **credits (a custom pricing unit) →
+that currency**, at overage. There is no fiat-to-fiat conversion, so billing a USD-priced plan in INR
+means either a parallel INR price list or re-pricing the plan in credits. Orb's FX-rate and
+functional-amount handling is for **ledger reporting**, not for changing an invoice's currency.
+
 Two takeaways shape this design:
 
 - **It is a real, urgent gap.** The incumbents cannot offer native configured-rate billing without
