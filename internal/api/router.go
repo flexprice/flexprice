@@ -33,7 +33,7 @@ type Handlers struct {
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
 	SubscriptionModification *v1.SubscriptionModificationHandler
-	InvoiceModification      *v1.InvoiceModificationHandler
+	InvoiceModification      v1.InvoiceModificationExecutor
 	SubscriptionSchedule     *v1.SubscriptionScheduleHandler
 	Wallet                   *v1.WalletHandler
 	Tenant                   *v1.TenantHandler
