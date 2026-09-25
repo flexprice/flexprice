@@ -45,6 +45,7 @@ var CURRENCY_CONFIG = map[string]CurrencyConfig{
 	"twd": {Symbol: "NT$", Precision: 2},
 	"zar": {Symbol: "ZAR", Precision: 2},
 	"kwd": {Symbol: "KD", Precision: 3},
+	"ngn": {Symbol: "NGN", Precision: 2},
 	// TODO add more currencies later
 }
 
