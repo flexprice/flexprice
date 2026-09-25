@@ -14,7 +14,10 @@ const (
 
 // CustomerCreateRequest represents the request to create a customer
 type CustomerCreateRequest struct {
-	DisplayName      string        `json:"DisplayName"`
+	DisplayName string `json:"DisplayName"`
+	// CurrencyRef pins the customer's currency. Omitted, QuickBooks locks it to the company's
+	// home currency. Immutable once the customer has transactions, so it is only sent on create.
+	CurrencyRef      *AccountRef   `json:"CurrencyRef,omitempty"`
 	PrimaryEmailAddr *EmailAddress `json:"PrimaryEmailAddr,omitempty"`
 	BillAddr         *Address      `json:"BillAddr,omitempty"`
 }
@@ -84,6 +87,25 @@ type InvoiceCreateRequest struct {
 	CustomerRef AccountRef        `json:"CustomerRef"`
 	Line        []InvoiceLineItem `json:"Line"`
 	DueDate     *string           `json:"DueDate,omitempty"` // Format: YYYY-MM-DD
+	// CurrencyRef sets the invoice's currency. Omitted, the invoice inherits the customer's,
+	// which silently reinterprets the amounts when the two differ.
+	CurrencyRef *AccountRef `json:"CurrencyRef,omitempty"`
+	// ExchangeRate translates foreign currency amounts into the company's home currency.
+	// Omitted, QuickBooks API defaults the rate to 1.0, misstating the General Ledger.
+	ExchangeRate *decimal.Decimal `json:"ExchangeRate,omitempty"`
+}
+
+// ExchangeRate represents an exchange rate record in QuickBooks
+type ExchangeRate struct {
+	SourceCurrencyCode string          `json:"SourceCurrencyCode"`
+	TargetCurrencyCode string          `json:"TargetCurrencyCode"`
+	Rate               decimal.Decimal `json:"Rate"`
+	AsOfDate           string          `json:"AsOfDate,omitempty"`
+}
+
+// ExchangeRateResponse represents the response from the QuickBooks exchangerate endpoint
+type ExchangeRateResponse struct {
+	ExchangeRate ExchangeRate `json:"ExchangeRate"`
 }
 
 // InvoiceLineItem represents a line item in invoice request

@@ -21,17 +21,27 @@ const (
 // fakeContactClient captures the contact payloads the sync builds.
 type fakeContactClient struct {
 	ZohoClient
-	createReq    *ContactCreateRequest
-	createCalls  int
-	updateReq    *ContactUpdateRequest
-	updateID     string
-	updateCalls  int
-	updateErr    error
-	queryByEmail *ContactResponse
+	createReq     *ContactCreateRequest
+	createCalls   int
+	updateReq     *ContactUpdateRequest
+	updateID      string
+	updateCalls   int
+	updateErr     error
+	queryByEmail  *ContactResponse
+	currencyIDErr error
+	currencyCodes []string
 }
 
 func (f *fakeContactClient) QueryContactByEmail(_ context.Context, _ string) (*ContactResponse, error) {
 	return f.queryByEmail, nil
+}
+
+func (f *fakeContactClient) CurrencyIDFor(_ context.Context, currencyCode string) (string, error) {
+	f.currencyCodes = append(f.currencyCodes, currencyCode)
+	if f.currencyIDErr != nil {
+		return "", f.currencyIDErr
+	}
+	return "cur_" + currencyCode, nil
 }
 
 func (f *fakeContactClient) CreateContact(_ context.Context, req *ContactCreateRequest) (*ContactResponse, error) {
@@ -116,7 +126,7 @@ func TestCreateContactCarriesGSTFields(t *testing.T) {
 	client := &fakeContactClient{}
 	svc := newTestCustomerService(client, &writableMappingRepo{})
 
-	id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer())
+	id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer(), "usd")
 	require.NoError(t, err)
 	assert.Equal(t, "zoho_contact_1", id)
 	require.NotNil(t, client.createReq)
@@ -148,7 +158,7 @@ func TestNonIndianCustomerOmitsGSTFields(t *testing.T) {
 		Name:           "Acme Inc",
 		AddressCountry: "US",
 	}
-	_, err := svc.GetOrCreateZohoCustomer(context.Background(), c)
+	_, err := svc.GetOrCreateZohoCustomer(context.Background(), c, "usd")
 	require.NoError(t, err)
 
 	req := client.createReq
@@ -169,7 +179,7 @@ func TestCreateFlowNeverUpdates(t *testing.T) {
 		}
 		svc := newTestCustomerService(client, repo)
 
-		id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer())
+		id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer(), "usd")
 		require.NoError(t, err)
 		assert.Equal(t, "zoho_contact_1", id)
 		assert.Equal(t, 0, client.createCalls)
@@ -183,7 +193,7 @@ func TestCreateFlowNeverUpdates(t *testing.T) {
 		repo := &writableMappingRepo{}
 		svc := newTestCustomerService(client, repo)
 
-		id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer())
+		id, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer(), "usd")
 		require.NoError(t, err)
 		assert.Equal(t, "zoho_existing_9", id)
 		assert.Equal(t, 0, client.updateCalls)
