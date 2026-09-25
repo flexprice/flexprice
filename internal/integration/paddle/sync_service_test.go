@@ -1106,7 +1106,7 @@ func (m *mockSubscriptionService) ListByCustomerID(ctx context.Context, customer
 func (m *mockSubscriptionService) ActivateDraftSubscription(ctx context.Context, subID string, req apidto.ActivateDraftSubscriptionRequest) (*apidto.SubscriptionResponse, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (*apidto.ListAddonAssociationsResponse, error) {
+func (m *mockSubscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string, addonStatuses ...types.AddonStatus) (*apidto.ListAddonAssociationsResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {

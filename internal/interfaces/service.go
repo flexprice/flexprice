@@ -198,7 +198,9 @@ type SubscriptionService interface {
 	// ActivateDraftSubscription activates a draft subscription with a new start date
 	ActivateDraftSubscription(ctx context.Context, subID string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error)
 
-	GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (*dto.ListAddonAssociationsResponse, error)
+	// GetActiveAddonAssociations lists the subscription's addon associations. With no
+	// statuses it keeps the default (active only).
+	GetActiveAddonAssociations(ctx context.Context, subscriptionID string, addonStatuses ...types.AddonStatus) (*dto.ListAddonAssociationsResponse, error)
 
 	// TriggerSubscriptionWorkflow triggers the subscription billing workflow
 	TriggerSubscriptionWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
