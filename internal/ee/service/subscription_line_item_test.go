@@ -140,6 +140,7 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		DB:                         s.GetDB(),
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,

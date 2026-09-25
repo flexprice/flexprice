@@ -45,7 +45,7 @@ func taxAppliedFilterFn(ctx context.Context, ta *taxapplied.TaxApplied, filter i
 
 	// Filter by tax rate IDs
 	if len(f.TaxRateIDs) > 0 {
-		if !lo.Contains(f.TaxRateIDs, ta.TaxRateID) {
+		if !lo.Contains(f.TaxRateIDs, ta.GetTaxRateID()) {
 			return false
 		}
 	}
@@ -132,35 +132,6 @@ func (s *InMemoryTaxAppliedStore) Get(ctx context.Context, id string) (*taxappli
 	}
 	return ta, nil
 }
-
-func (s *InMemoryTaxAppliedStore) GetByIdempotencyKey(ctx context.Context, idempotencyKey string) (*taxapplied.TaxApplied, error) {
-	// Create a filter to find by idempotency key
-	filter := &types.TaxAppliedFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-	}
-
-	taxAppliedRecords, err := s.List(ctx, filter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get tax applied record by idempotency key").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Find the record with matching idempotency key
-	for _, record := range taxAppliedRecords {
-		if record.IdempotencyKey != nil && *record.IdempotencyKey == idempotencyKey {
-			return record, nil
-		}
-	}
-
-	return nil, ierr.NewError("tax applied record not found").
-		WithHintf("Tax applied record with idempotency key %s was not found", idempotencyKey).
-		WithReportableDetails(map[string]any{
-			"idempotency_key": idempotencyKey,
-		}).
-		Mark(ierr.ErrNotFound)
-}
-
 func (s *InMemoryTaxAppliedStore) List(ctx context.Context, filter *types.TaxAppliedFilter) ([]*taxapplied.TaxApplied, error) {
 	taxAppliedRecords, err := s.InMemoryStore.List(ctx, filter, taxAppliedFilterFn, taxAppliedSortFn)
 	if err != nil {

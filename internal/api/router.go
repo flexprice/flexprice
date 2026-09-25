@@ -603,6 +603,8 @@ func NewRouter(
 		creditNotes := v1Private.Group("/creditnotes")
 		{
 			creditNotes.POST("", write(types.EntityCreditNote, types.ActionWrite), handlers.CreditNote.CreateCreditNote)
+			// Quotes the tax a credit would carry and writes nothing, so it reads like a GET.
+			creditNotes.POST("/preview", handlers.CreditNote.PreviewCreditNote)
 			creditNotes.GET("", handlers.CreditNote.ListCreditNotes)
 			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
 			creditNotes.POST("/:id/void", write(types.EntityCreditNote, types.ActionWrite), handlers.CreditNote.VoidCreditNote)

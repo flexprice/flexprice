@@ -31,12 +31,13 @@ func (s *invoiceService) recalculateDiscountOnInvoice(ctx context.Context, inv *
 		return err
 	}
 
-	return s.applyCurrentDiscountToDraft(ctx, inv, inv)
+	return s.recomputeDraftAmounts(ctx, inv, inv)
 }
 
-// applyCurrentDiscountToDraft re-derives discount, tax, and totals from current coupon
-// associations; assumes no stale coupon applications (recalculateDiscountOnInvoice wipes first).
-func (s *invoiceService) applyCurrentDiscountToDraft(ctx context.Context, sourceInvoice, destinationInvoice *invoice.Invoice) error {
+// recomputeDraftAmounts re-derives discount, tax and totals on destinationInvoice from
+// sourceInvoice's current coupon associations. Assumes no stale coupon applications,
+// which recalculateDiscountOnInvoice wipes first.
+func (s *invoiceService) recomputeDraftAmounts(ctx context.Context, sourceInvoice, destinationInvoice *invoice.Invoice) error {
 	if destinationInvoice.InvoiceStatus != types.InvoiceStatusDraft {
 		return ierr.NewError("invoice is not in draft status").
 			WithHint("Only draft invoices can have their discount recalculated").
@@ -73,9 +74,6 @@ func (s *invoiceService) applyCurrentDiscountToDraft(ctx context.Context, source
 		return err
 	}
 	if taxAppliedCount > 0 {
-		// Reset first: applyTaxesToInvoice no-ops (leaving TotalTax stale) when the current
-		// subscription resolves to no active tax rates, e.g. the association was removed.
-		destinationInvoice.TotalTax = decimal.Zero
 		if err := s.applyTaxesToInvoice(ctx, destinationInvoice, dto.InvoiceComputeRequest{}); err != nil {
 			return err
 		}

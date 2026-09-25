@@ -24,9 +24,6 @@ const (
 	// Credit note
 	ScopeCreditNote Scope = "credit_note"
 
-	// Tax Application
-	ScopeTaxApplication Scope = "tax_application"
-
 	// Wallet Top Up
 	ScopeWalletTopUp Scope = "wallet_top_up"
 

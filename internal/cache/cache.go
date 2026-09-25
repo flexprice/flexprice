@@ -98,6 +98,7 @@ const (
 	PrefixUsageAlertSchedule       = "usage_alert_schedule:v1:"
 	PrefixSettingsByKey            = "settings_by_key:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
+	PrefixBillerTaxIDs             = "biller_tax_ids:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"
 	PrefixWalletRealTimeBalance    = "wallet_realtime_balance:v1:"
 	PrefixWorkflowExecution        = "workflow_execution:v1:"

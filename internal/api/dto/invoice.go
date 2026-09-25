@@ -1731,18 +1731,12 @@ type TaxExemptionSummary struct {
 }
 
 func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemptionReasonCode) *TaxSummary {
-	// A reason code means nothing was charged, so the totals are zero by definition.
-	if reasonCode != nil {
-		return &TaxSummary{
-			Exemption: &TaxExemptionSummary{
-				ReasonCode: *reasonCode,
-				Reason:     reasonCode.DisplayLabel(),
-			},
-		}
-	}
-
 	var inclusiveTax, exclusiveTax decimal.Decimal
 	for _, t := range taxes {
+		// A reversal records tax being un-filed, not a tax the invoice charges.
+		if t.IsReversal() {
+			continue
+		}
 		switch t.TaxBehavior {
 		case types.TaxBehaviorInclusive:
 			inclusiveTax = inclusiveTax.Add(t.TaxAmount)
@@ -1751,11 +1745,23 @@ func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemption
 		}
 	}
 
-	return &TaxSummary{
+	summary := &TaxSummary{
 		TotalInclusiveTax: inclusiveTax,
 		TotalExclusiveTax: exclusiveTax,
 		TotalTax:          inclusiveTax.Add(exclusiveTax),
 	}
+
+	// A reason does not mean nothing was charged. An invoice can reverse charge one
+	// jurisdiction and be taxed in another, and reporting that one as zero hides the tax
+	// the customer actually owes.
+	if reasonCode != nil {
+		summary.Exemption = &TaxExemptionSummary{
+			ReasonCode: *reasonCode,
+			Reason:     reasonCode.DisplayLabel(),
+		}
+	}
+
+	return summary
 }
 
 // InvoicePDFRequest selects which rendering of an invoice to return.

@@ -42,6 +42,7 @@
       country: invoice-data.at("biller", default: (:)).at("address", default: (:)).at("country", default: ""),
     ),
     payment-instructions: invoice-data.at("biller", default: (:)).at("payment_instructions", default: ""),
+    tax_ids: invoice-data.at("biller", default: (:)).at("tax_ids", default: none),
   ),
   recipient: (
     name: invoice-data.at("recipient", default: (:)).at("name", default: ""),
@@ -52,10 +53,12 @@
       postal-code: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("postal_code", default: ""),
       state: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("state", default: ""),
       country: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("country", default: ""),
-    )
+    ),
+    tax_ids: invoice-data.at("recipient", default: (:)).at("tax_ids", default: none),
   ),
   items: json-array(invoice-data, "line_items"),
   applied-taxes: json-array(invoice-data, "applied_taxes"),
+  tax-notice: invoice-data.at("tax_notice", default: ""),
   applied-discounts: json-array(invoice-data, "applied_discounts"),
   styling: (
     font: if "styling" in invoice-data and "font" in invoice-data.styling {

@@ -73665,31 +73665,35 @@ func (m *TaskMutation) ResetEdge(name string) error {
 // TaxAppliedMutation represents an operation that mutates the TaxApplied nodes in the graph.
 type TaxAppliedMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *string
-	tenant_id          *string
-	status             *string
-	created_at         *time.Time
-	updated_at         *time.Time
-	created_by         *string
-	updated_by         *string
-	environment_id     *string
-	tax_rate_id        *string
-	entity_type        *string
-	entity_id          *string
-	tax_association_id *string
-	taxable_amount     *decimal.Decimal
-	tax_amount         *decimal.Decimal
-	currency           *string
-	applied_at         *time.Time
-	metadata           *map[string]string
-	idempotency_key    *string
-	tax_behavior       *types.TaxBehavior
-	clearedFields      map[string]struct{}
-	done               bool
-	oldValue           func(context.Context) (*TaxApplied, error)
-	predicates         []predicate.TaxApplied
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	tax_rate_id          *string
+	entity_type          *string
+	entity_id            *string
+	tax_association_id   *string
+	taxable_amount       *decimal.Decimal
+	tax_amount           *decimal.Decimal
+	currency             *string
+	applied_at           *time.Time
+	metadata             *map[string]string
+	idempotency_key      *string
+	tax_behavior         *types.TaxBehavior
+	provider             *types.TaxProvider
+	tax_transaction_id   *string
+	tax_transaction_type *types.TaxTransactionType
+	external_tax_details **types.ExternalTaxDetails
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*TaxApplied, error)
+	predicates           []predicate.TaxApplied
 }
 
 var _ ent.Mutation = (*TaxAppliedMutation)(nil)
@@ -74104,7 +74108,7 @@ func (m *TaxAppliedMutation) TaxRateID() (r string, exists bool) {
 // OldTaxRateID returns the old "tax_rate_id" field's value of the TaxApplied entity.
 // If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxAppliedMutation) OldTaxRateID(ctx context.Context) (v string, err error) {
+func (m *TaxAppliedMutation) OldTaxRateID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTaxRateID is only allowed on UpdateOne operations")
 	}
@@ -74118,9 +74122,22 @@ func (m *TaxAppliedMutation) OldTaxRateID(ctx context.Context) (v string, err er
 	return oldValue.TaxRateID, nil
 }
 
+// ClearTaxRateID clears the value of the "tax_rate_id" field.
+func (m *TaxAppliedMutation) ClearTaxRateID() {
+	m.tax_rate_id = nil
+	m.clearedFields[taxapplied.FieldTaxRateID] = struct{}{}
+}
+
+// TaxRateIDCleared returns if the "tax_rate_id" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxRateIDCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxRateID]
+	return ok
+}
+
 // ResetTaxRateID resets all changes to the "tax_rate_id" field.
 func (m *TaxAppliedMutation) ResetTaxRateID() {
 	m.tax_rate_id = nil
+	delete(m.clearedFields, taxapplied.FieldTaxRateID)
 }
 
 // SetEntityType sets the "entity_type" field.
@@ -74535,6 +74552,202 @@ func (m *TaxAppliedMutation) ResetTaxBehavior() {
 	delete(m.clearedFields, taxapplied.FieldTaxBehavior)
 }
 
+// SetProvider sets the "provider" field.
+func (m *TaxAppliedMutation) SetProvider(tp types.TaxProvider) {
+	m.provider = &tp
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *TaxAppliedMutation) Provider() (r types.TaxProvider, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldProvider(ctx context.Context) (v types.TaxProvider, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ClearProvider clears the value of the "provider" field.
+func (m *TaxAppliedMutation) ClearProvider() {
+	m.provider = nil
+	m.clearedFields[taxapplied.FieldProvider] = struct{}{}
+}
+
+// ProviderCleared returns if the "provider" field was cleared in this mutation.
+func (m *TaxAppliedMutation) ProviderCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldProvider]
+	return ok
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *TaxAppliedMutation) ResetProvider() {
+	m.provider = nil
+	delete(m.clearedFields, taxapplied.FieldProvider)
+}
+
+// SetTaxTransactionID sets the "tax_transaction_id" field.
+func (m *TaxAppliedMutation) SetTaxTransactionID(s string) {
+	m.tax_transaction_id = &s
+}
+
+// TaxTransactionID returns the value of the "tax_transaction_id" field in the mutation.
+func (m *TaxAppliedMutation) TaxTransactionID() (r string, exists bool) {
+	v := m.tax_transaction_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxTransactionID returns the old "tax_transaction_id" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxTransactionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxTransactionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxTransactionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxTransactionID: %w", err)
+	}
+	return oldValue.TaxTransactionID, nil
+}
+
+// ClearTaxTransactionID clears the value of the "tax_transaction_id" field.
+func (m *TaxAppliedMutation) ClearTaxTransactionID() {
+	m.tax_transaction_id = nil
+	m.clearedFields[taxapplied.FieldTaxTransactionID] = struct{}{}
+}
+
+// TaxTransactionIDCleared returns if the "tax_transaction_id" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxTransactionIDCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxTransactionID]
+	return ok
+}
+
+// ResetTaxTransactionID resets all changes to the "tax_transaction_id" field.
+func (m *TaxAppliedMutation) ResetTaxTransactionID() {
+	m.tax_transaction_id = nil
+	delete(m.clearedFields, taxapplied.FieldTaxTransactionID)
+}
+
+// SetTaxTransactionType sets the "tax_transaction_type" field.
+func (m *TaxAppliedMutation) SetTaxTransactionType(ttt types.TaxTransactionType) {
+	m.tax_transaction_type = &ttt
+}
+
+// TaxTransactionType returns the value of the "tax_transaction_type" field in the mutation.
+func (m *TaxAppliedMutation) TaxTransactionType() (r types.TaxTransactionType, exists bool) {
+	v := m.tax_transaction_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxTransactionType returns the old "tax_transaction_type" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldTaxTransactionType(ctx context.Context) (v types.TaxTransactionType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxTransactionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxTransactionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxTransactionType: %w", err)
+	}
+	return oldValue.TaxTransactionType, nil
+}
+
+// ClearTaxTransactionType clears the value of the "tax_transaction_type" field.
+func (m *TaxAppliedMutation) ClearTaxTransactionType() {
+	m.tax_transaction_type = nil
+	m.clearedFields[taxapplied.FieldTaxTransactionType] = struct{}{}
+}
+
+// TaxTransactionTypeCleared returns if the "tax_transaction_type" field was cleared in this mutation.
+func (m *TaxAppliedMutation) TaxTransactionTypeCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldTaxTransactionType]
+	return ok
+}
+
+// ResetTaxTransactionType resets all changes to the "tax_transaction_type" field.
+func (m *TaxAppliedMutation) ResetTaxTransactionType() {
+	m.tax_transaction_type = nil
+	delete(m.clearedFields, taxapplied.FieldTaxTransactionType)
+}
+
+// SetExternalTaxDetails sets the "external_tax_details" field.
+func (m *TaxAppliedMutation) SetExternalTaxDetails(ttd *types.ExternalTaxDetails) {
+	m.external_tax_details = &ttd
+}
+
+// ExternalTaxDetails returns the value of the "external_tax_details" field in the mutation.
+func (m *TaxAppliedMutation) ExternalTaxDetails() (r *types.ExternalTaxDetails, exists bool) {
+	v := m.external_tax_details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExternalTaxDetails returns the old "external_tax_details" field's value of the TaxApplied entity.
+// If the TaxApplied object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAppliedMutation) OldExternalTaxDetails(ctx context.Context) (v *types.ExternalTaxDetails, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExternalTaxDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExternalTaxDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExternalTaxDetails: %w", err)
+	}
+	return oldValue.ExternalTaxDetails, nil
+}
+
+// ClearExternalTaxDetails clears the value of the "external_tax_details" field.
+func (m *TaxAppliedMutation) ClearExternalTaxDetails() {
+	m.external_tax_details = nil
+	m.clearedFields[taxapplied.FieldExternalTaxDetails] = struct{}{}
+}
+
+// ExternalTaxDetailsCleared returns if the "external_tax_details" field was cleared in this mutation.
+func (m *TaxAppliedMutation) ExternalTaxDetailsCleared() bool {
+	_, ok := m.clearedFields[taxapplied.FieldExternalTaxDetails]
+	return ok
+}
+
+// ResetExternalTaxDetails resets all changes to the "external_tax_details" field.
+func (m *TaxAppliedMutation) ResetExternalTaxDetails() {
+	m.external_tax_details = nil
+	delete(m.clearedFields, taxapplied.FieldExternalTaxDetails)
+}
+
 // Where appends a list predicates to the TaxAppliedMutation builder.
 func (m *TaxAppliedMutation) Where(ps ...predicate.TaxApplied) {
 	m.predicates = append(m.predicates, ps...)
@@ -74569,7 +74782,7 @@ func (m *TaxAppliedMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAppliedMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, taxapplied.FieldTenantID)
 	}
@@ -74624,6 +74837,18 @@ func (m *TaxAppliedMutation) Fields() []string {
 	if m.tax_behavior != nil {
 		fields = append(fields, taxapplied.FieldTaxBehavior)
 	}
+	if m.provider != nil {
+		fields = append(fields, taxapplied.FieldProvider)
+	}
+	if m.tax_transaction_id != nil {
+		fields = append(fields, taxapplied.FieldTaxTransactionID)
+	}
+	if m.tax_transaction_type != nil {
+		fields = append(fields, taxapplied.FieldTaxTransactionType)
+	}
+	if m.external_tax_details != nil {
+		fields = append(fields, taxapplied.FieldExternalTaxDetails)
+	}
 	return fields
 }
 
@@ -74668,6 +74893,14 @@ func (m *TaxAppliedMutation) Field(name string) (ent.Value, bool) {
 		return m.IdempotencyKey()
 	case taxapplied.FieldTaxBehavior:
 		return m.TaxBehavior()
+	case taxapplied.FieldProvider:
+		return m.Provider()
+	case taxapplied.FieldTaxTransactionID:
+		return m.TaxTransactionID()
+	case taxapplied.FieldTaxTransactionType:
+		return m.TaxTransactionType()
+	case taxapplied.FieldExternalTaxDetails:
+		return m.ExternalTaxDetails()
 	}
 	return nil, false
 }
@@ -74713,6 +74946,14 @@ func (m *TaxAppliedMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldIdempotencyKey(ctx)
 	case taxapplied.FieldTaxBehavior:
 		return m.OldTaxBehavior(ctx)
+	case taxapplied.FieldProvider:
+		return m.OldProvider(ctx)
+	case taxapplied.FieldTaxTransactionID:
+		return m.OldTaxTransactionID(ctx)
+	case taxapplied.FieldTaxTransactionType:
+		return m.OldTaxTransactionType(ctx)
+	case taxapplied.FieldExternalTaxDetails:
+		return m.OldExternalTaxDetails(ctx)
 	}
 	return nil, fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -74848,6 +75089,34 @@ func (m *TaxAppliedMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTaxBehavior(v)
 		return nil
+	case taxapplied.FieldProvider:
+		v, ok := value.(types.TaxProvider)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case taxapplied.FieldTaxTransactionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxTransactionID(v)
+		return nil
+	case taxapplied.FieldTaxTransactionType:
+		v, ok := value.(types.TaxTransactionType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxTransactionType(v)
+		return nil
+	case taxapplied.FieldExternalTaxDetails:
+		v, ok := value.(*types.ExternalTaxDetails)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExternalTaxDetails(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)
 }
@@ -74887,6 +75156,9 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	if m.FieldCleared(taxapplied.FieldEnvironmentID) {
 		fields = append(fields, taxapplied.FieldEnvironmentID)
 	}
+	if m.FieldCleared(taxapplied.FieldTaxRateID) {
+		fields = append(fields, taxapplied.FieldTaxRateID)
+	}
 	if m.FieldCleared(taxapplied.FieldTaxAssociationID) {
 		fields = append(fields, taxapplied.FieldTaxAssociationID)
 	}
@@ -74898,6 +75170,18 @@ func (m *TaxAppliedMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(taxapplied.FieldTaxBehavior) {
 		fields = append(fields, taxapplied.FieldTaxBehavior)
+	}
+	if m.FieldCleared(taxapplied.FieldProvider) {
+		fields = append(fields, taxapplied.FieldProvider)
+	}
+	if m.FieldCleared(taxapplied.FieldTaxTransactionID) {
+		fields = append(fields, taxapplied.FieldTaxTransactionID)
+	}
+	if m.FieldCleared(taxapplied.FieldTaxTransactionType) {
+		fields = append(fields, taxapplied.FieldTaxTransactionType)
+	}
+	if m.FieldCleared(taxapplied.FieldExternalTaxDetails) {
+		fields = append(fields, taxapplied.FieldExternalTaxDetails)
 	}
 	return fields
 }
@@ -74922,6 +75206,9 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 	case taxapplied.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case taxapplied.FieldTaxRateID:
+		m.ClearTaxRateID()
+		return nil
 	case taxapplied.FieldTaxAssociationID:
 		m.ClearTaxAssociationID()
 		return nil
@@ -74933,6 +75220,18 @@ func (m *TaxAppliedMutation) ClearField(name string) error {
 		return nil
 	case taxapplied.FieldTaxBehavior:
 		m.ClearTaxBehavior()
+		return nil
+	case taxapplied.FieldProvider:
+		m.ClearProvider()
+		return nil
+	case taxapplied.FieldTaxTransactionID:
+		m.ClearTaxTransactionID()
+		return nil
+	case taxapplied.FieldTaxTransactionType:
+		m.ClearTaxTransactionType()
+		return nil
+	case taxapplied.FieldExternalTaxDetails:
+		m.ClearExternalTaxDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied nullable field %s", name)
@@ -74995,6 +75294,18 @@ func (m *TaxAppliedMutation) ResetField(name string) error {
 		return nil
 	case taxapplied.FieldTaxBehavior:
 		m.ResetTaxBehavior()
+		return nil
+	case taxapplied.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case taxapplied.FieldTaxTransactionID:
+		m.ResetTaxTransactionID()
+		return nil
+	case taxapplied.FieldTaxTransactionType:
+		m.ResetTaxTransactionType()
+		return nil
+	case taxapplied.FieldExternalTaxDetails:
+		m.ResetExternalTaxDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxApplied field %s", name)

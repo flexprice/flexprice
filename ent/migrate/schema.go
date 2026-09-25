@@ -2492,7 +2492,7 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tax_rate_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tax_rate_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_association_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2503,6 +2503,10 @@ var (
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_behavior", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tax_transaction_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "tax_transaction_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "external_tax_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// TaxAppliedsTable holds the schema information for the "tax_applieds" table.
 	TaxAppliedsTable = &schema.Table{
@@ -2514,11 +2518,14 @@ var (
 				Name:    "idx_entity_tax_rate_id",
 				Unique:  true,
 				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10], TaxAppliedsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
 			},
 			{
 				Name:    "idx_entity_tax_association_lookup",
 				Unique:  false,
-				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10]},
+				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10], TaxAppliedsColumns[2]},
 			},
 		},
 	}

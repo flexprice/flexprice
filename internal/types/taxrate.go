@@ -63,6 +63,7 @@ const (
 	TaxRateEntityTypeSubscription TaxRateEntityType = "subscription"
 	TaxRateEntityTypeInvoice      TaxRateEntityType = "invoice"
 	TaxRateEntityTypeTenant       TaxRateEntityType = "tenant"
+	TaxRateEntityTypeCreditNote   TaxRateEntityType = "credit_note"
 )
 
 func (t TaxRateEntityType) String() string {
@@ -75,6 +76,7 @@ func (t TaxRateEntityType) Validate() error {
 		TaxRateEntityTypeSubscription.String(),
 		TaxRateEntityTypeInvoice.String(),
 		TaxRateEntityTypeTenant.String(),
+		TaxRateEntityTypeCreditNote.String(),
 	}
 
 	if !slices.Contains(allowedValues, string(t)) {

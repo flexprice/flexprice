@@ -2432,10 +2432,6 @@ func init() {
 	taxappliedDescEnvironmentID := taxappliedMixinFields1[0].Descriptor()
 	// taxapplied.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	taxapplied.DefaultEnvironmentID = taxappliedDescEnvironmentID.Default.(string)
-	// taxappliedDescTaxRateID is the schema descriptor for tax_rate_id field.
-	taxappliedDescTaxRateID := taxappliedFields[1].Descriptor()
-	// taxapplied.TaxRateIDValidator is a validator for the "tax_rate_id" field. It is called by the builders before save.
-	taxapplied.TaxRateIDValidator = taxappliedDescTaxRateID.Validators[0].(func(string) error)
 	// taxappliedDescEntityType is the schema descriptor for entity_type field.
 	taxappliedDescEntityType := taxappliedFields[2].Descriptor()
 	// taxapplied.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
