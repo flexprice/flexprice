@@ -19492,6 +19492,14 @@ paths:
         name: id
         required: true
         type: string
+      - collectionFormat: multi
+        description: Addon statuses to include (active, cancelled, pending). Defaults
+          to active.
+        in: query
+        items:
+          type: string
+        name: addon_statuses
+        type: array
       produces:
       - application/json
       responses:

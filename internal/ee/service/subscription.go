@@ -7207,11 +7207,12 @@ func (s *subscriptionService) ListByCustomerID(ctx context.Context, customerID s
 	return subscriptions, nil
 }
 
-func (s *subscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (*dto.ListAddonAssociationsResponse, error) {
+func (s *subscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string, addonStatuses ...types.AddonStatus) (*dto.ListAddonAssociationsResponse, error) {
 	addonService := NewAddonService(s.ServiceParams)
 	associations, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
-		EntityID:   subscriptionID,
-		EntityType: types.AddonAssociationEntityTypeSubscription,
+		EntityID:      subscriptionID,
+		EntityType:    types.AddonAssociationEntityTypeSubscription,
+		AddonStatuses: addonStatuses,
 	})
 	if err != nil {
 		return nil, err

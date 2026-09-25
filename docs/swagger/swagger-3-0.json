@@ -10367,6 +10367,19 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "addon_statuses",
+            "in": "query",
+            "description": "Addon statuses to include (active, cancelled, pending). Defaults to active.",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         ],
         "responses": {
