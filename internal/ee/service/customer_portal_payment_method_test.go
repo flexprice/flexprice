@@ -72,7 +72,11 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 	s.Contains(byProvider, types.PaymentGatewayTypeStripe)
 
 	s.ElementsMatch([]dto.IntegrationCapability{
+		{Type: types.IntegrationCapabilityCheckout},
 		{Type: types.IntegrationCapabilityPaymentLink},
+		{Type: types.IntegrationCapabilityAutoCharge},
+		{Type: types.IntegrationCapabilityPaymentMethodManagement},
+		{Type: types.IntegrationCapabilitySetDefaultMethod},
 	}, byProvider[types.PaymentGatewayTypeStripe])
 	s.ElementsMatch([]dto.IntegrationCapability{
 		{Type: types.IntegrationCapabilityCheckout},
@@ -126,10 +130,10 @@ func (s *PortalPaymentMethodSuite) TestReadSavedMethodsReportsProviderFailure() 
 	s.Empty(group.Items)
 }
 
-// Stripe has no payment_method_management capability yet, so it must not appear
+// Razorpay has no payment_method_management capability, so it must not appear
 // in the fan-out even though it is connected.
 func (s *PortalPaymentMethodSuite) TestListPaymentMethodsSkipsIncapableProviders() {
-	s.connect(types.SecretProviderStripe)
+	s.connect(types.SecretProviderRazorpay)
 
 	resp, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{})
 	s.NoError(err)
@@ -140,17 +144,17 @@ func (s *PortalPaymentMethodSuite) TestListPaymentMethodsRejectsUnconnectedProvi
 	s.connect(types.SecretProviderChargebee)
 
 	_, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{
-		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeRazorpay},
+		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeNomod},
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
 }
 
 func (s *PortalPaymentMethodSuite) TestListPaymentMethodsRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
 
 	_, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{
-		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeStripe},
+		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeRazorpay},
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
@@ -273,10 +277,10 @@ func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnconnectedProvide
 }
 
 func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
 
 	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeStripe,
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
@@ -324,10 +328,10 @@ func (s *PortalPaymentMethodSuite) TestMutateRequiresPortalCustomer() {
 }
 
 func (s *PortalPaymentMethodSuite) TestMutateRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
 
 	_, err := s.svc.SetDefaultPaymentMethod(s.ctx, &dto.PortalSetDefaultPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeStripe,
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
 		PaymentMethodID: "pm_x",
 	})
 	s.Error(err)

@@ -90,6 +90,7 @@ type CheckoutPaymentProvider string
 const (
 	CheckoutPaymentProviderRazorpay  CheckoutPaymentProvider = "razorpay"
 	CheckoutPaymentProviderChargebee CheckoutPaymentProvider = "chargebee"
+	CheckoutPaymentProviderStripe    CheckoutPaymentProvider = "stripe"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
@@ -98,10 +99,11 @@ func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
 		CheckoutPaymentProviderRazorpay,
 		CheckoutPaymentProviderChargebee,
+		CheckoutPaymentProviderStripe,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: razorpay, chargebee").
+			WithHint("Allowed values: razorpay, chargebee, stripe").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -115,6 +117,8 @@ func (p CheckoutPaymentProvider) ToPaymentGateway() (PaymentGatewayType, bool) {
 		return PaymentGatewayTypeRazorpay, true
 	case CheckoutPaymentProviderChargebee:
 		return PaymentGatewayTypeChargebee, true
+	case CheckoutPaymentProviderStripe:
+		return PaymentGatewayTypeStripe, true
 	default:
 		return "", false
 	}
@@ -128,6 +132,8 @@ func CheckoutProviderFromGateway(g PaymentGatewayType) (CheckoutPaymentProvider,
 		return CheckoutPaymentProviderRazorpay, true
 	case PaymentGatewayTypeChargebee:
 		return CheckoutPaymentProviderChargebee, true
+	case PaymentGatewayTypeStripe:
+		return CheckoutPaymentProviderStripe, true
 	default:
 		return "", false
 	}
@@ -146,6 +152,10 @@ func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 		// cannot shorten either. Sized so SessionExpiry lands on the 30m intent rather
 		// than past it: an abandoned session must die before the intent's fund hold does.
 		return 25 * time.Minute
+	case CheckoutPaymentProviderStripe:
+		// Stripe rejects an expires_at under 30m, so asking for exactly 30 sits on the
+		// floor and arrives under it. Leave headroom rather than race the boundary.
+		return 35 * time.Minute
 	default:
 		return 30 * time.Minute
 	}

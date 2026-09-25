@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
@@ -815,16 +816,12 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	// check if payment is already succeeded
-	if payment.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
-		return nil
-	}
-
 	// Get payment intent if it exists
 	var paymentIntent *stripeapi.PaymentIntent
+	piID := ""
 	if checkoutSession.PaymentIntent != nil {
 		paymentIntentID := checkoutSession.PaymentIntent.ID
+		piID = paymentIntentID
 		paymentIntent, err = h.paymentSvc.GetPaymentIntent(ctx, paymentIntentID, environmentID)
 		if err != nil {
 			h.logger.Error(ctx, "failed to fetch payment intent, continuing without it",
@@ -833,6 +830,15 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 				"event_id", event.ID)
 			paymentIntent = nil
 		}
+	}
+
+	// check if payment is already succeeded
+	if payment.PaymentStatus == types.PaymentStatusSucceeded {
+		h.logger.Info(ctx, "payment already succeeded, verifying checkout session completion", "event_id", event.ID)
+		if _, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// Call HandleFlexPriceCheckoutPayment with optional payment intent
@@ -845,5 +851,102 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
+	if _, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, piID, services); err != nil {
+		return err
+	}
 	return nil
+}
+
+// handleCheckoutSessionForPayment completes the checkout session that owns this payment if any.
+func (h *Handler) handleCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	stripePaymentIntentID string,
+	services *ServiceDependencies,
+) (bool, error) {
+	session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+	if err != nil {
+		h.logger.Error(ctx, "failed to look up checkout session for payment",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"stripe_payment_intent_id", stripePaymentIntentID,
+		)
+		return false, err
+	}
+	if session == nil {
+		return false, nil
+	}
+
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusPending:
+		providerResult := &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: stripePaymentIntentID,
+		}
+		if stripePaymentIntentID != "" {
+			providerResult.ProviderMetadata = map[string]string{
+				"stripe_payment_intent_id": stripePaymentIntentID,
+			}
+		}
+		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, providerResult); err != nil {
+			if ierr.IsAlreadyExists(err) {
+				h.logger.Info(ctx, "checkout session already completed",
+					"session_id", session.ID,
+					"stripe_payment_intent_id", stripePaymentIntentID)
+			} else {
+				h.logger.Error(ctx, "failed to complete checkout session",
+					"error", err,
+					"session_id", session.ID,
+					"flexprice_payment_id", flexpricePaymentID,
+					"stripe_payment_intent_id", stripePaymentIntentID,
+				)
+				// Unlike the already-exists case, the session is still pending here, so
+				// the caller must fail the webhook and let Stripe redeliver it.
+				return false, err
+			}
+		} else {
+			h.logger.Info(ctx, "completed checkout session from stripe webhook",
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"stripe_payment_intent_id", stripePaymentIntentID)
+		}
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+		h.logger.Error(ctx, "received stripe payment for expired/failed checkout session",
+			"error", "checkout session status does not accept a completed payment",
+			"session_id", session.ID,
+			"status", session.CheckoutStatus,
+			"flexprice_payment_id", flexpricePaymentID,
+		)
+	default:
+		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
+			"session_id", session.ID,
+			"session_status", session.CheckoutStatus,
+			"flexprice_payment_id", flexpricePaymentID,
+		)
+	}
+
+	return true, nil
+}
+
+func (h *Handler) findCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	services *ServiceDependencies,
+) (*dto.CheckoutSessionResponse, error) {
+	if flexpricePaymentID == "" || services == nil || services.CheckoutSessionService == nil {
+		return nil, nil
+	}
+
+	filter := types.NewDefaultCheckoutSessionFilter()
+	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
+	filter.Limit = lo.ToPtr(1)
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	sessions, err := services.CheckoutSessionService.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if sessions == nil || len(sessions.Items) == 0 {
+		return nil, nil
+	}
+	return sessions.Items[0], nil
 }

@@ -28,7 +28,11 @@ var gatewayCapabilities = map[types.PaymentGatewayType][]types.IntegrationCapabi
 		types.IntegrationCapabilityPaymentLink,
 	},
 	types.PaymentGatewayTypeStripe: {
+		types.IntegrationCapabilityCheckout,
 		types.IntegrationCapabilityPaymentLink,
+		types.IntegrationCapabilityAutoCharge,
+		types.IntegrationCapabilityPaymentMethodManagement,
+		types.IntegrationCapabilitySetDefaultMethod,
 	},
 	types.PaymentGatewayTypeNomod: {
 		types.IntegrationCapabilityPaymentLink,

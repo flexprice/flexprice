@@ -58,16 +58,15 @@ func (s *PaymentProviderResolverSuite) TestResolvesSoleCandidate() {
 	s.Equal(types.PaymentGatewayTypeChargebee, gw)
 }
 
-// The capability intersection is the point of the resolver: a Chargebee+Stripe
-// tenant has exactly one checkout provider and exactly one payment-link provider,
-// and they are different gateways.
+// The capability intersection is the point of the resolver: a Stripe+Nomod
+// tenant has exactly one checkout provider and both do payment links.
 func (s *PaymentProviderResolverSuite) TestIntersectionNarrowsPerCapability() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderStripe, types.SecretProviderNomod)
 	ctx := s.GetContext()
 
 	gw, err := s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityCheckout, "")
 	s.NoError(err)
-	s.Equal(types.PaymentGatewayTypeChargebee, gw)
+	s.Equal(types.PaymentGatewayTypeStripe, gw)
 
 	// Both do payment links, so that capability is contested and must be chosen.
 	_, err = s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityPaymentLink, "")
@@ -75,7 +74,7 @@ func (s *PaymentProviderResolverSuite) TestIntersectionNarrowsPerCapability() {
 
 	gw, err = s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityPaymentMethodManagement, "")
 	s.NoError(err)
-	s.Equal(types.PaymentGatewayTypeChargebee, gw)
+	s.Equal(types.PaymentGatewayTypeStripe, gw)
 }
 
 func (s *PaymentProviderResolverSuite) TestAmbiguousWithoutRequest() {
@@ -105,10 +104,10 @@ func (s *PaymentProviderResolverSuite) TestRequestedProviderNotConnected() {
 }
 
 func (s *PaymentProviderResolverSuite) TestRequestedProviderLacksCapability() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderNomod)
 
 	_, err := s.svc.ResolveProvider(s.GetContext(), "cust_1",
-		types.IntegrationCapabilityCheckout, types.PaymentGatewayTypeStripe)
+		types.IntegrationCapabilityCheckout, types.PaymentGatewayTypeNomod)
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
 }
