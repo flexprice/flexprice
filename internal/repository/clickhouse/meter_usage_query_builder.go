@@ -641,8 +641,21 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		where += " AND external_customer_id = ?"
 		args = append(args, result.ExternalCustomerID)
 	}
-	for propName, propValue := range result.Properties {
-		if propValue != "" {
+	// Same as empty source/customer: always constrain a grouped property,
+	// including JSONExtractString = '' (missing key). The API omits empty keys.
+	if groupByResult != nil {
+		for _, g := range params.GroupBy {
+			if !strings.HasPrefix(g, "properties.") {
+				continue
+			}
+			if _, ok := groupByResult.FieldMapping[g]; !ok {
+				continue
+			}
+			propName := strings.TrimPrefix(g, "properties.")
+			propValue := ""
+			if result.Properties != nil {
+				propValue = result.Properties[propName]
+			}
 			where += " AND JSONExtractString(properties, ?) = ?"
 			args = append(args, propName, propValue)
 		}

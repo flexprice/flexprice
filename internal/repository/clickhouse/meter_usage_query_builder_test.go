@@ -117,6 +117,54 @@ func TestBuildDetailedPointsQuery_NoStructuralPredicateWhenNotGrouped(t *testing
 	require.NotContains(t, query, "external_customer_id = ?")
 }
 
+func TestBuildDetailedPointsQuery_ConstrainsEmptyPropertyGroup(t *testing.T) {
+	qb := NewMeterUsageQueryBuilder()
+
+	params := &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:      "tenant_1",
+		EnvironmentID: "env_1",
+		WindowSize:    types.WindowSizeWeek,
+		GroupBy:       []string{"source", "meter_id", "properties.user_id"},
+	}
+	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
+	require.NoError(t, err)
+
+	// Untagged row: scanner dropped empty user_id from Properties.
+	result := &events.MeterUsageDetailedResult{
+		MeterID:    "meter_1",
+		Source:     "src_1",
+		Properties: map[string]string{},
+	}
+	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
+	require.Contains(t, query, "JSONExtractString(properties, ?) = ?")
+	require.Contains(t, args, "user_id")
+	require.Contains(t, args, "")
+	require.Contains(t, query, "source = ?")
+	require.Contains(t, query, "meter_id = ?")
+}
+
+func TestBuildDetailedPointsQuery_NarrowsByNonEmptyProperty(t *testing.T) {
+	qb := NewMeterUsageQueryBuilder()
+
+	params := &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:      "tenant_1",
+		EnvironmentID: "env_1",
+		WindowSize:    types.WindowSizeWeek,
+		GroupBy:       []string{"properties.user_id"},
+	}
+	groupByResult, err := qb.BuildDetailedGroupByColumns(params)
+	require.NoError(t, err)
+
+	result := &events.MeterUsageDetailedResult{
+		Properties: map[string]string{"user_id": "abc"},
+	}
+	query, args := qb.BuildDetailedPointsQuery(params, result, groupByResult)
+	require.Contains(t, query, "JSONExtractString(properties, ?) = ?")
+	require.Equal(t, 1, strings.Count(query, "JSONExtractString(properties, ?) = ?"))
+	require.Equal(t, "user_id", args[len(args)-2])
+	require.Equal(t, "abc", args[len(args)-1])
+}
+
 func TestBuildDetailedGroupByColumns_RejectsUnknownEntry(t *testing.T) {
 	qb := NewMeterUsageQueryBuilder()
 
