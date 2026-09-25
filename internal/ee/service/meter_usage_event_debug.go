@@ -48,7 +48,7 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, 
 		Event: eventToDTO(event),
 	}
 
-	meterUsage, err := s.MeterUsageRepo.GetByCustomerEventID(ctx, tenantID, envID, externalCustomerID, eventID)
+	meterUsage, err := s.MeterUsageRepo.GetEventsByCustomerIDEventID(ctx, tenantID, envID, externalCustomerID, eventID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from meter_usage table").
@@ -352,7 +352,7 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 	tracker.AttributedToCustomer = &dto.AttributedToCustomerResult{Status: types.DebugTrackerStatusUnprocessed}
 	mu := meterUsage
 	if mu == nil {
-		mu, err = s.MeterUsageRepo.GetByCustomerEventID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID)
+		mu, err = s.MeterUsageRepo.GetEventsByCustomerIDEventID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID)
 		if err != nil {
 			status, code := ierr.ResolveError(err)
 			errResp := &ierr.ErrorResponse{Code: code, Message: err.Error(), HTTPStatusCode: status}

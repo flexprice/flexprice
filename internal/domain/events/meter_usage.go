@@ -250,11 +250,11 @@ type MeterUsageRepository interface {
 	GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*MeterUsage, error)
 
 	// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
-	// Scans the whole tenant partition — prefer GetByCustomerEventID when the customer is known.
+	// Scans the whole tenant partition — prefer GetEventsByCustomerIDEventID when the customer is known.
 	GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*MeterUsage, error)
 
-	// GetByCustomerEventID is GetByEventID narrowed to one customer, which the primary key can prune.
-	GetByCustomerEventID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*MeterUsage, error)
+	// GetEventsByCustomerIDEventID is GetByEventID narrowed to one customer, which the primary key can prune.
+	GetEventsByCustomerIDEventID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*MeterUsage, error)
 
 	// GetDailyUsageByMeter returns per-day SUM(qty_total) over the half-open
 	// window [StartTime, EndTime), keyed by meter id — one round-trip for every
