@@ -16704,6 +16704,11 @@ paths:
         name: id
         required: true
         type: string
+      - description: External customer ID the event was ingested with
+        in: query
+        name: external_customer_id
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -16711,6 +16716,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/GetEventByIDResponse'
+        "400":
+          description: Missing event ID or external customer ID
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:

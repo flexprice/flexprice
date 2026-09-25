@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -54,7 +55,7 @@ func (s *MeterUsageServiceSuite) TestDebugEvent_ListsAllRawEventsNewestFirst() {
 		},
 	}))
 
-	resp, err := s.svc.DebugEvent(ctx, eventID)
+	resp, err := s.svc.DebugEvent(ctx, s.customer.ExternalID, eventID)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Require().NotNil(resp.Event)
@@ -67,4 +68,25 @@ func (s *MeterUsageServiceSuite) TestDebugEvent_ListsAllRawEventsNewestFirst() {
 	s.Equal(float64(4975355), resp.Events[0].Properties["value"])
 	s.Equal(ingestedEarly, resp.Events[1].IngestedAt)
 	s.Equal(float64(0), resp.Events[1].Properties["value"])
+}
+
+func (s *MeterUsageServiceSuite) TestDebugEvent_OtherCustomerIsNotFound() {
+	ctx := s.GetContext()
+	eventID := "evt_scoped_to_customer"
+
+	s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, &events.Event{
+		ID:                 eventID,
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		EventName:          "pageviews",
+		Timestamp:          time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+		IngestedAt:         time.Date(2026, 8, 31, 1, 0, 0, 0, time.UTC),
+		Properties:         map[string]interface{}{"value": float64(1)},
+		Source:             "public-api",
+	}))
+
+	_, err := s.svc.DebugEvent(ctx, "some-other-customer", eventID)
+	s.Require().Error(err)
+	s.True(ierr.IsNotFound(err))
 }

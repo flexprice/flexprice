@@ -1256,3 +1256,75 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 	SetSpanSuccess(span)
 	return &usage, nil
 }
+
+// GetEventsByCustomerIDEventID returns the customer's meter_usage record for a single event, or nil if not yet processed.
+func (r *MeterUsageRepository) GetEventsByCustomerIDEventID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+	span := StartRepositorySpan(ctx, "meter_usage", "get_events_by_customer_id_event_id", map[string]interface{}{
+		"tenant_id":            tenantID,
+		"environment_id":       environmentID,
+		"external_customer_id": externalCustomerID,
+		"event_id":             eventID,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT
+			id,
+			tenant_id,
+			environment_id,
+			external_customer_id,
+			event_name,
+			source,
+			timestamp,
+			ingested_at,
+			properties,
+			meter_id,
+			qty_total,
+			unique_hash
+		FROM meter_usage
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND external_customer_id = ?
+		  AND id = ?
+		LIMIT 1
+		SETTINGS max_memory_usage = 96636764160
+	`
+
+	var usage events.MeterUsage
+	var propertiesJSON string
+
+	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, externalCustomerID, eventID).Scan(
+		&usage.ID,
+		&usage.TenantID,
+		&usage.EnvironmentID,
+		&usage.ExternalCustomerID,
+		&usage.EventName,
+		&usage.Source,
+		&usage.Timestamp,
+		&usage.IngestedAt,
+		&propertiesJSON,
+		&usage.MeterID,
+		&usage.QtyTotal,
+		&usage.UniqueHash,
+	)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			SetSpanSuccess(span)
+			return nil, nil
+		}
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query meter_usage by event ID").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if propertiesJSON != "" {
+		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
+			usage.Properties = make(map[string]interface{})
+		}
+	}
+
+	SetSpanSuccess(span)
+	return &usage, nil
+}

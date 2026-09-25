@@ -492,7 +492,9 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id query string true "Event ID"
+// @Param external_customer_id query string true "External customer ID the event was ingested with"
 // @Success 200 {object} dto.GetEventByIDResponse
+// @Failure 400 {object} ierr.ErrorResponse "Missing event ID or external customer ID"
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/lookup [get]
@@ -509,9 +511,16 @@ func (h *EventsHandler) GetEventByID(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
-	response, err := h.meterUsageService.DebugEvent(ctx, eventID)
+	externalCustomerID := c.Query("external_customer_id")
+	if externalCustomerID == "" {
+		c.Error(ierr.NewError("external_customer_id is required").
+			WithHint("Please provide the external customer ID the event was ingested with").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.meterUsageService.DebugEvent(ctx, externalCustomerID, eventID)
 	if err != nil {
-		h.log.Error(ctx, "Failed to debug event", "error", err, "event_id", eventID)
+		h.log.Error(ctx, "Failed to debug event", "error", err, "event_id", eventID, "external_customer_id", externalCustomerID)
 		c.Error(err)
 		return
 	}

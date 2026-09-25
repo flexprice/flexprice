@@ -1075,6 +1075,29 @@ func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, envi
 	return nil, nil
 }
 
+// GetEventsByCustomerIDEventID returns the customer's meter_usage record for a single event, or nil if not found.
+func (s *InMemoryMeterUsageStore) GetEventsByCustomerIDEventID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, r := range s.records {
+		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
+			return &events.MeterUsage{
+				Event: events.Event{
+					ID:                 eventID,
+					ExternalCustomerID: r.ExternalCustomerID,
+					IngestedAt:         r.IngestedAt,
+					Properties:         r.Properties,
+					Timestamp:          r.Timestamp,
+				},
+				MeterID:  r.MeterID,
+				QtyTotal: r.QtyTotal,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
 // GetUsageActivitySince mirrors the ClickHouse activity query: distinct
 // customers with usage ingested after the given time.
 func (s *InMemoryMeterUsageStore) GetUsageActivitySince(_ context.Context, params *events.UsageActivityParams) (*events.UsageActivity, error) {
