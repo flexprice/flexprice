@@ -79,6 +79,7 @@ const (
 	PrefixCreditGrantApplication   = "creditgrantapplication:v1:"
 	PrefixCreditNote               = "creditnote:v1:"
 	PrefixTaxRate                  = "taxrate:v1:"
+	PrefixFXRate                   = "fxrate:v1:"
 	PrefixTaxAssociation           = "taxassociation:v1:"
 	PrefixTaxApplied               = "taxapplied:v1:"
 	PrefixCoupon                   = "coupon:v1:"
