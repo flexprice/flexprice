@@ -38,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -124,6 +125,8 @@ type Client struct {
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
+	// FXRate is the client for interacting with the FXRate builders.
+	FXRate *FXRateClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
@@ -225,6 +228,7 @@ func (c *Client) init() {
 	c.EntitlementGrant = NewEntitlementGrantClient(c.config)
 	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
+	c.FXRate = NewFXRateClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IncomingWebhookEvent = NewIncomingWebhookEventClient(c.config)
@@ -373,6 +377,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		EntitlementGrant:         NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
 		Environment:              NewEnvironmentClient(cfg),
+		FXRate:                   NewFXRateClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
 		Group:                    NewGroupClient(cfg),
 		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
@@ -448,6 +453,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		EntitlementGrant:         NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
 		Environment:              NewEnvironmentClient(cfg),
+		FXRate:                   NewFXRateClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
 		Group:                    NewGroupClient(cfg),
 		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
@@ -516,10 +522,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.FXRate, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
+		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
 		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
@@ -537,10 +543,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.FXRate, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
+		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
 		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
@@ -596,6 +602,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EntityIntegrationMapping.mutate(ctx, m)
 	case *EnvironmentMutation:
 		return c.Environment.mutate(ctx, m)
+	case *FXRateMutation:
+		return c.FXRate.mutate(ctx, m)
 	case *FeatureMutation:
 		return c.Feature.mutate(ctx, m)
 	case *GroupMutation:
@@ -3880,6 +3888,139 @@ func (c *EnvironmentClient) mutate(ctx context.Context, m *EnvironmentMutation) 
 		return (&EnvironmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Environment mutation op: %q", m.Op())
+	}
+}
+
+// FXRateClient is a client for the FXRate schema.
+type FXRateClient struct {
+	config
+}
+
+// NewFXRateClient returns a client for the FXRate from the given config.
+func NewFXRateClient(c config) *FXRateClient {
+	return &FXRateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `fxrate.Hooks(f(g(h())))`.
+func (c *FXRateClient) Use(hooks ...Hook) {
+	c.hooks.FXRate = append(c.hooks.FXRate, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `fxrate.Intercept(f(g(h())))`.
+func (c *FXRateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FXRate = append(c.inters.FXRate, interceptors...)
+}
+
+// Create returns a builder for creating a FXRate entity.
+func (c *FXRateClient) Create() *FXRateCreate {
+	mutation := newFXRateMutation(c.config, OpCreate)
+	return &FXRateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FXRate entities.
+func (c *FXRateClient) CreateBulk(builders ...*FXRateCreate) *FXRateCreateBulk {
+	return &FXRateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FXRateClient) MapCreateBulk(slice any, setFunc func(*FXRateCreate, int)) *FXRateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FXRateCreateBulk{err: fmt.Errorf("calling to FXRateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FXRateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FXRateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FXRate.
+func (c *FXRateClient) Update() *FXRateUpdate {
+	mutation := newFXRateMutation(c.config, OpUpdate)
+	return &FXRateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FXRateClient) UpdateOne(fr *FXRate) *FXRateUpdateOne {
+	mutation := newFXRateMutation(c.config, OpUpdateOne, withFXRate(fr))
+	return &FXRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FXRateClient) UpdateOneID(id string) *FXRateUpdateOne {
+	mutation := newFXRateMutation(c.config, OpUpdateOne, withFXRateID(id))
+	return &FXRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FXRate.
+func (c *FXRateClient) Delete() *FXRateDelete {
+	mutation := newFXRateMutation(c.config, OpDelete)
+	return &FXRateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FXRateClient) DeleteOne(fr *FXRate) *FXRateDeleteOne {
+	return c.DeleteOneID(fr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FXRateClient) DeleteOneID(id string) *FXRateDeleteOne {
+	builder := c.Delete().Where(fxrate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FXRateDeleteOne{builder}
+}
+
+// Query returns a query builder for FXRate.
+func (c *FXRateClient) Query() *FXRateQuery {
+	return &FXRateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFXRate},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FXRate entity by its id.
+func (c *FXRateClient) Get(ctx context.Context, id string) (*FXRate, error) {
+	return c.Query().Where(fxrate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FXRateClient) GetX(ctx context.Context, id string) *FXRate {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FXRateClient) Hooks() []Hook {
+	return c.hooks.FXRate
+}
+
+// Interceptors returns the client interceptors.
+func (c *FXRateClient) Interceptors() []Interceptor {
+	return c.inters.FXRate
+}
+
+func (c *FXRateClient) mutate(ctx context.Context, m *FXRateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FXRateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FXRateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FXRateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FXRateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FXRate mutation op: %q", m.Op())
 	}
 }
 
@@ -8780,12 +8921,13 @@ type (
 		BillingSequence, CheckoutSession, Connection, Costsheet, Coupon,
 		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
-		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Refund, RevenueFact, ScheduledTask,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, Refund,
+		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -8793,12 +8935,13 @@ type (
 		BillingSequence, CheckoutSession, Connection, Costsheet, Coupon,
 		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
-		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
-		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Refund, RevenueFact, ScheduledTask,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, Refund,
+		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

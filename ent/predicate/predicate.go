@@ -72,6 +72,9 @@ type EntityIntegrationMapping func(*sql.Selector)
 // Environment is the predicate function for environment builders.
 type Environment func(*sql.Selector)
 
+// FXRate is the predicate function for fxrate builders.
+type FXRate func(*sql.Selector)
+
 // Feature is the predicate function for feature builders.
 type Feature func(*sql.Selector)
 

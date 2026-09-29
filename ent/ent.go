@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -150,6 +151,7 @@ func checkColumn(table, column string) error {
 			entitlementgrant.Table:         entitlementgrant.ValidColumn,
 			entityintegrationmapping.Table: entityintegrationmapping.ValidColumn,
 			environment.Table:              environment.ValidColumn,
+			fxrate.Table:                   fxrate.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
 			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
