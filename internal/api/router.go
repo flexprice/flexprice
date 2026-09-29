@@ -49,6 +49,7 @@ type Handlers struct {
 	CreditNote               *v1.CreditNoteHandler
 	Refund                   *v1.RefundHandler
 	Tax                      *v1.TaxHandler
+	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
@@ -533,6 +534,19 @@ func NewRouter(
 			taxRates.GET("/:id", handlers.Tax.GetTaxRate)
 			taxRates.PUT("/:id", write(types.EntityTax, types.ActionWrite), handlers.Tax.UpdateTaxRate)
 			taxRates.DELETE("/:id", write(types.EntityTax, types.ActionWrite), handlers.Tax.DeleteTaxRate)
+		}
+
+		// FX rate routes. /resolve and /search are registered before /:id so the
+		// param route does not capture them.
+		fxRates := v1Private.Group("/fx-rates")
+		{
+			fxRates.POST("", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.CreateFXRate)
+			fxRates.GET("", handlers.FXRate.ListFXRates)
+			fxRates.POST("/search", handlers.FXRate.QueryFXRates)
+			fxRates.GET("/resolve", handlers.FXRate.ResolveFXRate)
+			fxRates.GET("/:id", handlers.FXRate.GetFXRate)
+			fxRates.PUT("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.UpdateFXRate)
+			fxRates.DELETE("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.DeleteFXRate)
 		}
 
 		taxAssociations := tax.Group("/associations")
