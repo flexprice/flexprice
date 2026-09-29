@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -322,7 +324,7 @@ func main() {
 			startServer,
 		),
 	)
-	opts = append(opts, fx.StartTimeout(3*time.Minute))
+	opts = append(opts, fx.StartTimeout(3*time.Minute), fx.StopTimeout(1*time.Minute))
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -659,20 +661,36 @@ func startAPIServer(
 	log *logger.Logger,
 ) {
 	log.Info(context.Background(), "Registering API server start hook")
+	srv := &http.Server{
+		Addr:    cfg.Server.Address,
+		Handler: r,
+	}
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Info(ctx, "Starting API server...")
 			go func() {
-				if err := r.Run(cfg.Server.Address); err != nil {
+				if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					log.Fatalf("Failed to start server: %v", err)
 				}
 			}()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Info(ctx, "Shutting down server...")
+			timeout := cfg.Server.GetShutdownTimeout()
+			log.Info(ctx, "Shutting down server, draining in-flight requests", "timeout", timeout.String())
+
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+			defer cancel()
+
+			err := srv.Shutdown(shutdownCtx)
+			if err != nil {
+				log.Error(ctx, "server shutdown did not drain cleanly", "error", err)
+			} else {
+				log.Info(ctx, "server drained, all in-flight requests completed")
+			}
+
 			log.Shutdown(ctx)
-			return nil
+			return err
 		},
 	})
 }

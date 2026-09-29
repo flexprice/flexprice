@@ -338,6 +338,16 @@ type DeploymentConfig struct {
 
 type ServerConfig struct {
 	Address string `mapstructure:"address" validate:"required"`
+	// Grace period for in-flight requests to finish after SIGTERM.
+	// Must stay below the ECS task stopTimeout.
+	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+}
+
+func (c ServerConfig) GetShutdownTimeout() time.Duration {
+	if c.ShutdownTimeout <= 0 {
+		return 25 * time.Second
+	}
+	return c.ShutdownTimeout
 }
 
 type AuthConfig struct {

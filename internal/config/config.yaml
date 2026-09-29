@@ -3,6 +3,8 @@ deployment:
 
 server:
   address: ":8080"
+  # Grace period for in-flight requests after SIGTERM. Keep below ECS stopTimeout.
+  shutdown_timeout: 25s
 
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
