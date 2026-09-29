@@ -371,6 +371,8 @@ func (r *invoiceLineItemRepository) ListByInvoiceID(ctx context.Context, invoice
 			invoicelineitem.InvoiceID(invoiceID),
 			invoicelineitem.Status(string(types.StatusPublished)),
 		).
+		// Stable order: finalization places credits onto lines in this order.
+		Order(ent.Asc(invoicelineitem.FieldCreatedAt), ent.Asc(invoicelineitem.FieldID)).
 		All(ctx)
 
 	if err != nil {

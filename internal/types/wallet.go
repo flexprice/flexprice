@@ -329,6 +329,8 @@ type ExpireCreditsResult struct {
 	Expired bool `json:"expired"`
 	// SkipReason is set when expiry was skipped (e.g. active_subscription, active_invoice).
 	SkipReason CreditExpirySkipReason `json:"skip_reason,omitempty"`
+	// Applied is the credit amount applied to draft invoices for pre-expiry usage before expiring the rest.
+	Applied decimal.Decimal `json:"applied"`
 }
 
 // WalletFilter represents the filter options for wallets

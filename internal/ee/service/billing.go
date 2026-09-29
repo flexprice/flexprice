@@ -43,6 +43,10 @@ type FindMatchingLineItemPeriodResult struct {
 
 // BillingService handles all billing calculations
 type BillingService interface {
+	// UsageChargesForWindow returns the usage charges of the subscription's current period for
+	// usage in [start, end), priced as of end.
+	UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, start, end time.Time) (decimal.Decimal, error)
+
 	// CalculateFixedCharges calculates all fixed charges for a subscription.
 	CalculateFixedCharges(ctx context.Context, params *dto.CalculateFixedChargesParams) (*dto.CalculateFixedChargesResult, error)
 

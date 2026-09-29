@@ -61,6 +61,25 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 // MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
 // the reference instant used to clip line items and windowed commitments (see resolveAsOf);
 // otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
+func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, start, end time.Time) (decimal.Decimal, error) {
+	usage, err := NewSubscriptionService(s.ServiceParams).GetMeterUsageForSubscription(ctx, sub, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      start,
+		EndTime:        end,
+		Source:         string(types.UsageSourceWallet),
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	_, total, err := s.CalculateMeterUsageCharges(
+		ctx, sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.UsageSourceWallet, &end,
+	)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return total, nil
+}
+
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,

@@ -363,6 +363,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
+	case types.SettingKeyPreExpiryCreditConsumption:
+		return getSettingByKey[types.PreExpiryCreditConsumptionConfig](s, ctx, key)
 	case types.SettingKeySAMLConfig:
 		return getSettingByKey[types.SAMLConfig](s, ctx, key)
 	case types.SettingKeyWalletTopupConfig:
@@ -425,6 +427,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
+	case types.SettingKeyPreExpiryCreditConsumption:
+		return updateSettingByKey[types.PreExpiryCreditConsumptionConfig](s, ctx, key, req)
 	case types.SettingKeySAMLConfig:
 		return updateSettingByKey[types.SAMLConfig](s, ctx, key, req)
 	case types.SettingKeyWalletTopupConfig:
