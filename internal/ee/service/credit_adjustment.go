@@ -215,9 +215,8 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		}, nil
 	}
 
-	// Credits an expiring credit already paid onto this subscription draft; debited at expiry.
-	// They go first in the pool so the allocation below places them on the usage lines like any
-	// other credit, but they are not debited again.
+	// Credits applied to this draft at expiry, already debited. They lead the pool so they are
+	// placed on usage lines first, and are not debited again.
 	appliedBeforeFinalization := decimal.Zero
 	if inv.InvoiceType == types.InvoiceTypeSubscription {
 		appliedBeforeFinalization = inv.TotalPrepaidCreditsApplied
@@ -369,10 +368,8 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 // draft before finalization. It matches no wallet, so the debit loop never debits it.
 const appliedBeforeFinalizationSourceID = "applied_before_finalization"
 
-// capToEligibleCredits limits each wallet's pool amount to the credits a debit for this invoice
-// can actually use: those not expired as of the invoice's period end (the reference the debit
-// uses). wallet.balance also counts credits past expiry that the expiry job hasn't removed yet;
-// sizing the pool from it makes the debit fail with "insufficient balance".
+// capToEligibleCredits limits each wallet to credits not expired as of the invoice's period end.
+// The wallet balance still includes expired credits the expiry job hasn't removed yet.
 func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv *invoice.Invoice, wallets []*wallet.Wallet) ([]*wallet.Wallet, error) {
 	reference := time.Now().UTC()
 	if inv.PeriodEnd != nil {
@@ -382,16 +379,11 @@ func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv 
 	walletService := NewWalletService(s.ServiceParams)
 	capped := make([]*wallet.Wallet, 0, len(wallets))
 	for _, w := range wallets {
-		credits, err := s.WalletRepo.FindEligibleCredits(ctx, w.ID, w.CreditBalance, 100, reference)
+		eligible, err := walletService.EligibleCreditsAmount(ctx, w, reference)
 		if err != nil {
 			return nil, err
 		}
-		eligibleCredits := decimal.Zero
-		for _, c := range credits {
-			eligibleCredits = eligibleCredits.Add(c.CreditsAvailable)
-		}
-
-		available := decimal.Min(w.Balance, walletService.GetCurrencyAmountFromCredits(eligibleCredits, w.ConversionRate))
+		available := decimal.Min(w.Balance, eligible)
 		if !available.IsPositive() {
 			continue
 		}
@@ -402,9 +394,8 @@ func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv 
 	return capped, nil
 }
 
-// ApplyExpiringCreditToInvoice debits up to credits from one expiring credit onto a draft
-// subscription invoice and returns the amount applied, in the wallet's currency. Line items are
-// left alone: finalization places TotalPrepaidCreditsApplied onto them.
+// ApplyExpiringCreditToInvoice debits credits from an expiring credit onto a draft subscription
+// invoice's total and returns the amount applied. Finalization places it on the lines.
 func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
 	ctx context.Context,
 	invoiceID string,
@@ -444,7 +435,8 @@ func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
 		}
 
 		walletService := NewWalletService(s.ServiceParams)
-		amount := walletService.GetCurrencyAmountFromCredits(credits, w.ConversionRate)
+		// Rounded to drop division noise from the credits conversion (e.g. 66.66 / 7 * 7).
+		amount := types.RoundToCurrencyPrecision(walletService.GetCurrencyAmountFromCredits(credits, w.ConversionRate), inv.DenominationCurrency())
 
 		if err := walletService.DebitWallet(ctx, &wallet.WalletOperation{
 			WalletID:          creditTx.WalletID,

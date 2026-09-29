@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -86,6 +84,14 @@ type WalletService interface {
 	// CreditExpiryCutoff returns the latest expiry date the expiry job may process now. The
 	// grace after expiry depends on whether pre-expiry credit consumption is on for the tenant.
 	CreditExpiryCutoff(ctx context.Context) (time.Time, error)
+
+	// HasPendingExpiringCredit reports whether a prepaid credit that expired inside
+	// (periodStart, periodEnd) may still be applied to that period's draft by the expiry job.
+	HasPendingExpiringCredit(ctx context.Context, customerID, currency string, periodStart, periodEnd time.Time) (bool, error)
+
+	// EligibleCreditsAmount returns, in the wallet's currency, the credits a debit with the given
+	// reference time can use.
+	EligibleCreditsAmount(ctx context.Context, w *wallet.Wallet, reference time.Time) (decimal.Decimal, error)
 
 	// conversion rate operations
 	GetCurrencyAmountFromCredits(credits decimal.Decimal, conversionRate decimal.Decimal) decimal.Decimal
@@ -160,7 +166,7 @@ type walletService struct {
 
 	// Seams for pre-expiry credit consumption; tests override them to avoid ClickHouse.
 	preExpiryDraftInvoice func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error)
-	preExpiryUsageCharges func(ctx context.Context, sub *subscription.Subscription, until time.Time) (decimal.Decimal, error)
+	preExpiryUsageCharges func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error)
 }
 
 // NewWalletService creates a new instance of WalletService
@@ -176,8 +182,8 @@ func NewWalletService(params ServiceParams) WalletService {
 	s.preExpiryDraftInvoice = func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {
 		return NewInvoiceService(s.ServiceParams).GetOrComputeCurrentPeriodDraft(ctx, sub)
 	}
-	s.preExpiryUsageCharges = func(ctx context.Context, sub *subscription.Subscription, until time.Time) (decimal.Decimal, error) {
-		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, sub.CurrentPeriodStart, until)
+	s.preExpiryUsageCharges = func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
+		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, periodStart, periodEnd, until)
 	}
 	return s
 }
@@ -1750,13 +1756,11 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	}
 
 	// PRE_PAID wallets: calculate pending usage charges that will consume prepaid balance
-	var totalPendingCharges decimal.Decimal
 	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
-	usageBySubscription := make(map[string]decimal.Decimal)
-	currentPeriodStarts := make(map[string]time.Time)
+	usageBySubscription := make(map[string]currentPeriodUsage)
 	if shouldIncludeUsage {
 		// Get all active subscriptions to calculate current usage
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
@@ -1816,27 +1820,13 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 				"usage_total", usageResult.TotalAmount,
 				"num_usage_charges", len(usageResult.LineItems))
 
-			usageBySubscription[sub.ID] = usageResult.TotalAmount
-			currentPeriodStarts[sub.ID] = sub.CurrentPeriodStart
+			usageBySubscription[sub.ID] = currentPeriodUsage{periodStart: sub.CurrentPeriodStart, amount: usageResult.TotalAmount}
 		}
 	}
 
-	// Get unpaid invoices for PRE_PAID wallets
-	invoiceService := NewInvoiceService(s.ServiceParams)
-	resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
-		CustomerID:          w.CustomerID,
-		Currency:            w.Currency,
-		CurrentPeriodStarts: currentPeriodStarts,
-	})
+	totalPendingCharges, resp, err := s.pendingCharges(ctx, w, usageBySubscription)
 	if err != nil {
 		return nil, err
-	}
-	totalPendingCharges = totalPendingCharges.Add(usageNetOfDraftCredits(usageBySubscription, resp.CurrentPeriodCreditsApplied))
-
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
-	} else {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
 	}
 
 	// Calculate real-time balance: wallet balance minus pending charges
@@ -2579,7 +2569,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	preExpiryEnabled, err := s.preExpiryCreditConsumptionEnabled(ctx)
+	preExpiryEnabled, err := preExpiryCreditConsumptionEnabled(ctx, s.ServiceParams)
 	if err != nil {
 		return nil, err
 	}
@@ -2605,6 +2595,20 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	return &types.ExpireCreditsResult{Expired: true}, nil
 }
 
+// EligibleCreditsAmount returns, in the wallet's currency, the credits a debit with the given
+// reference time can use: not expired as of reference.
+func (s *walletService) EligibleCreditsAmount(ctx context.Context, w *wallet.Wallet, reference time.Time) (decimal.Decimal, error) {
+	credits, err := s.WalletRepo.FindEligibleCredits(ctx, w.ID, w.CreditBalance, 100, reference)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, c := range credits {
+		total = total.Add(c.CreditsAvailable)
+	}
+	return s.GetCurrencyAmountFromCredits(total, w.ConversionRate), nil
+}
+
 // debitExpiredCredits writes the CREDIT_EXPIRED debit for credits left on tx.
 func (s *walletService) debitExpiredCredits(ctx context.Context, tx *wallet.Transaction, credits decimal.Decimal) error {
 	return s.DebitWallet(ctx, &wallet.WalletOperation{
@@ -2622,162 +2626,6 @@ func (s *walletService) debitExpiredCredits(ctx context.Context, tx *wallet.Tran
 			"expiry_date":            tx.ExpiryDate.Format(time.RFC3339),
 		},
 	})
-}
-
-const (
-	// creditExpiryGracePeriod is how long after expiry the job waits when pre-expiry
-	// consumption is off, so the period's invoice can finalize and use the credit first.
-	creditExpiryGracePeriod = 6 * time.Hour
-	// preExpiryCreditExpiryGracePeriod lets late events timestamped before the expiry
-	// arrive before the credit is applied to drafts.
-	preExpiryCreditExpiryGracePeriod = 2 * time.Hour
-)
-
-func (s *walletService) CreditExpiryCutoff(ctx context.Context) (time.Time, error) {
-	enabled, err := s.preExpiryCreditConsumptionEnabled(ctx)
-	if err != nil {
-		return time.Time{}, err
-	}
-	grace := creditExpiryGracePeriod
-	if enabled {
-		grace = preExpiryCreditExpiryGracePeriod
-	}
-	return time.Now().UTC().Add(-grace), nil
-}
-
-func (s *walletService) preExpiryCreditConsumptionEnabled(ctx context.Context) (bool, error) {
-	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
-		return false, nil
-	}
-	setting, err := s.SettingsRepo.GetByKey(ctx, types.SettingKeyPreExpiryCreditConsumption)
-	if err != nil {
-		if ierr.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	cfg, err := utils.ToStruct[types.PreExpiryCreditConsumptionConfig](setting.Value)
-	if err != nil {
-		return false, err
-	}
-	return cfg.Enabled, nil
-}
-
-// preExpiryPlan is a draft invoice and the most it may take from an expiring credit.
-type preExpiryPlan struct {
-	invoiceID string
-	maxAmount decimal.Decimal
-}
-
-// expireCreditAfterPreExpiryConsumption applies an expiring credit to the current period's
-// draft invoice of each eligible subscription, capped at usage before the expiry, then expires
-// what is left. Drafts are created and computed outside the transaction (compute queries
-// ClickHouse and takes its own lock); applying and expiring happen in one transaction.
-func (s *walletService) expireCreditAfterPreExpiryConsumption(ctx context.Context, tx *wallet.Transaction) (*types.ExpireCreditsResult, error) {
-	subs, err := s.preExpiryEligibleSubscriptions(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	plans := make([]preExpiryPlan, 0, len(subs))
-	for _, sub := range subs {
-		draft, skipped, err := s.preExpiryDraftInvoice(ctx, sub)
-		if err != nil {
-			return nil, err
-		}
-		if skipped || draft == nil {
-			continue
-		}
-
-		usage, err := s.preExpiryUsageCharges(ctx, sub, lo.FromPtr(tx.ExpiryDate))
-		if err != nil {
-			return nil, err
-		}
-		// Usage is priced in the subscription's currency, so compare in the invoice's denomination.
-		alreadyApplied, unpaid := draft.TotalPrepaidCreditsApplied, draft.AmountRemaining
-		if cc := draft.CustomCurrency; cc != nil {
-			alreadyApplied, unpaid = cc.TotalPrepaidCreditsApplied, cc.AmountDue.Sub(cc.FromFiat(draft.AmountPaid))
-		}
-		// Credits already applied to this draft by an earlier expiry cover part of the same usage.
-		maxAmount := decimal.Min(usage.Sub(alreadyApplied), unpaid)
-		if !maxAmount.IsPositive() {
-			continue
-		}
-		plans = append(plans, preExpiryPlan{invoiceID: draft.ID, maxAmount: maxAmount})
-	}
-
-	applied := decimal.Zero
-	expired := false
-	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		current, err := s.WalletRepo.GetTransactionByID(ctx, tx.ID)
-		if err != nil {
-			return err
-		}
-		w, err := s.WalletRepo.GetWalletByID(ctx, current.WalletID)
-		if err != nil {
-			return err
-		}
-
-		remaining := current.CreditsAvailable
-		for _, plan := range plans {
-			if !remaining.IsPositive() {
-				break
-			}
-			credits := decimal.Min(remaining, s.GetCreditsFromCurrencyAmount(plan.maxAmount, w.ConversionRate))
-			amount, err := creditAdjustmentService.ApplyExpiringCreditToInvoice(ctx, plan.invoiceID, w, current, credits)
-			if err != nil {
-				return err
-			}
-			if amount.IsPositive() {
-				remaining = remaining.Sub(credits)
-				applied = applied.Add(amount)
-			}
-		}
-
-		if !remaining.IsPositive() {
-			return nil
-		}
-		expired = true
-		return s.debitExpiredCredits(ctx, current, remaining)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.ExpireCreditsResult{Expired: expired, Applied: applied}, nil
-}
-
-// preExpiryEligibleSubscriptions returns the customer's subscriptions whose current period
-// holds usage from before the credit's expiry, earliest period end first (the invoice that
-// would finalize first today).
-func (s *walletService) preExpiryEligibleSubscriptions(ctx context.Context, tx *wallet.Transaction) ([]*subscription.Subscription, error) {
-	subs, err := s.SubRepo.ListByCustomerID(ctx, tx.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-	expiry := lo.FromPtr(tx.ExpiryDate)
-
-	eligible := lo.Filter(subs, func(sub *subscription.Subscription, _ int) bool {
-		return sub.SubscriptionStatus == types.SubscriptionStatusActive &&
-			(sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent) &&
-			types.IsMatchingCurrency(sub.Currency, tx.Currency) &&
-			// Threshold invoices move current_period_start and would orphan the draft.
-			!sub.HasPositiveAutoInvoiceThreshold() &&
-			sub.CurrentPeriodStart.Before(expiry)
-	})
-
-	sort.SliceStable(eligible, func(i, j int) bool {
-		a, b := eligible[i], eligible[j]
-		if !a.CurrentPeriodEnd.Equal(b.CurrentPeriodEnd) {
-			return a.CurrentPeriodEnd.Before(b.CurrentPeriodEnd)
-		}
-		if !a.CreatedAt.Equal(b.CreatedAt) {
-			return a.CreatedAt.Before(b.CreatedAt)
-		}
-		return a.ID < b.ID
-	})
-	return eligible, nil
 }
 
 // shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice checks if there is any subscription or invoice
@@ -3518,14 +3366,37 @@ func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance
 	}
 }
 
-// usageNetOfDraftCredits sums each subscription's live usage for its current period, minus the
-// credits already applied to that period's draft (an expiring credit's pre-expiry share), so that
-// usage isn't counted as pending twice.
-func usageNetOfDraftCredits(usageBySubscription, creditsApplied map[string]decimal.Decimal) decimal.Decimal {
+// currentPeriodUsage is a subscription's live usage charges for the period starting at periodStart.
+type currentPeriodUsage struct {
+	periodStart time.Time
+	amount      decimal.Decimal
+}
+
+// pendingCharges returns what will still consume w's balance: live usage net of credits already
+// applied to the period's draft, plus unpaid invoices.
+func (s *walletService) pendingCharges(ctx context.Context, w *wallet.Wallet, usage map[string]currentPeriodUsage) (decimal.Decimal, *dto.GetUnpaidInvoicesToBePaidResponse, error) {
+	resp, err := NewInvoiceService(s.ServiceParams).GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID:          w.CustomerID,
+		Currency:            w.Currency,
+		CurrentPeriodStarts: lo.MapValues(usage, func(u currentPeriodUsage, _ string) time.Time { return u.periodStart }),
+	})
+	if err != nil {
+		return decimal.Zero, nil, err
+	}
+
+	pending := usageNetOfDraftCredits(usage, resp.CurrentPeriodCreditsApplied)
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+		return pending.Add(resp.TotalUnpaidAmount), resp, nil
+	}
+	return pending.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount), resp, nil
+}
+
+// usageNetOfDraftCredits sums live usage minus credits already applied to each period's draft.
+func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied map[string]decimal.Decimal) decimal.Decimal {
 	total := decimal.Zero
-	for subscriptionID, usage := range usageBySubscription {
-		paid := decimal.Min(creditsApplied[subscriptionID], usage)
-		total = total.Add(usage.Sub(decimal.Max(decimal.Zero, paid)))
+	for subscriptionID, u := range usage {
+		paid := decimal.Max(decimal.Zero, decimal.Min(creditsApplied[subscriptionID], u.amount))
+		total = total.Add(u.amount.Sub(paid))
 	}
 	return total
 }
@@ -3535,13 +3406,11 @@ func usageNetOfDraftCredits(usageBySubscription, creditsApplied map[string]decim
 // field by NewWalletService; tests may override the field to inject failures.
 func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
 	// PRE_PAID wallets: calculate pending usage charges that will consume prepaid balance
-	var totalPendingCharges decimal.Decimal
 	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
-	usageBySubscription := make(map[string]decimal.Decimal)
-	currentPeriodStarts := make(map[string]time.Time)
+	usageBySubscription := make(map[string]currentPeriodUsage)
 	if shouldIncludeUsage {
 		// Get all active subscriptions to calculate current usage
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
@@ -3601,27 +3470,13 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				"usage_total", totalAmount,
 				"num_usage_charges", len(lineItems))
 
-			usageBySubscription[sub.ID] = totalAmount
-			currentPeriodStarts[sub.ID] = sub.CurrentPeriodStart
+			usageBySubscription[sub.ID] = currentPeriodUsage{periodStart: sub.CurrentPeriodStart, amount: totalAmount}
 		}
 	}
 
-	// Get unpaid invoices for PRE_PAID wallets
-	invoiceService := NewInvoiceService(s.ServiceParams)
-	resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
-		CustomerID:          w.CustomerID,
-		Currency:            w.Currency,
-		CurrentPeriodStarts: currentPeriodStarts,
-	})
+	totalPendingCharges, resp, err := s.pendingCharges(ctx, w, usageBySubscription)
 	if err != nil {
 		return nil, err
-	}
-	totalPendingCharges = totalPendingCharges.Add(usageNetOfDraftCredits(usageBySubscription, resp.CurrentPeriodCreditsApplied))
-
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
-	} else {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
 	}
 
 	// Calculate real-time balance: wallet balance minus pending charges

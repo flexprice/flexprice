@@ -1676,9 +1676,8 @@ type GetUnpaidInvoicesToBePaidRequest struct {
 	// currency is the three-letter ISO currency code for this request
 	Currency string `json:"currency" validate:"required"`
 
-	// CurrentPeriodStarts maps subscription ID to the start of the period whose usage the caller
-	// already counts live. That period's draft is then not counted as unpaid; the credits already
-	// applied to it are reported in CurrentPeriodCreditsApplied instead.
+	// CurrentPeriodStarts maps subscription ID to the period start whose usage the caller counts
+	// live; that period's draft is skipped and its applied credits reported instead.
 	CurrentPeriodStarts map[string]time.Time `json:"-"`
 }
 

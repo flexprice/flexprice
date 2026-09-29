@@ -265,10 +265,8 @@ type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 
-	// ApplyExpiringCreditToInvoice debits up to credits from one expiring credit on wallet w onto a
-	// draft subscription invoice and returns the amount applied, in the wallet's currency. A
-	// non-draft invoice, another currency, or a repeat call for the same credit and invoice applies
-	// nothing.
+	// ApplyExpiringCreditToInvoice debits credits from an expiring credit onto a draft subscription
+	// invoice and returns the amount applied; repeats, non-drafts and other currencies apply nothing.
 	ApplyExpiringCreditToInvoice(ctx context.Context, invoiceID string, w *wallet.Wallet, creditTx *wallet.Transaction, credits decimal.Decimal) (decimal.Decimal, error)
 }
 

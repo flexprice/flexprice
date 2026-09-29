@@ -50,6 +50,9 @@ type InvoiceService interface {
 	// GetOrComputeCurrentPeriodDraft gets or creates the subscription's cycle draft for its current
 	// period and computes it. skipped is true when the period is already invoiced or has no charges.
 	GetOrComputeCurrentPeriodDraft(ctx context.Context, sub *subscription.Subscription) (inv *invoice.Invoice, skipped bool, err error)
+	// ListOpenCycleDrafts returns the subscription's unfinalized cycle drafts for periods starting
+	// before startedBefore, oldest first, with their line items.
+	ListOpenCycleDrafts(ctx context.Context, subscriptionID string, startedBefore time.Time) ([]*invoice.Invoice, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreatePreviewInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -457,6 +460,32 @@ func (s *invoiceService) GetOrComputeCurrentPeriodDraft(ctx context.Context, sub
 	return s.ComputeInvoice(ctx, draft.ID, nil)
 }
 
+func (s *invoiceService) ListOpenCycleDrafts(ctx context.Context, subscriptionID string, startedBefore time.Time) ([]*invoice.Invoice, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	filter.InvoiceType = types.InvoiceTypeSubscription
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	drafts := lo.Filter(invoices, func(inv *invoice.Invoice, _ int) bool {
+		return inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) &&
+			inv.PeriodStart != nil && inv.PeriodEnd != nil && inv.PeriodStart.Before(startedBefore)
+	})
+	sort.SliceStable(drafts, func(i, j int) bool { return drafts[i].PeriodStart.Before(*drafts[j].PeriodStart) })
+
+	for _, inv := range drafts {
+		if len(inv.LineItems) > 0 {
+			continue
+		}
+		if inv.LineItems, err = s.InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID); err != nil {
+			return nil, err
+		}
+	}
+	return drafts, nil
+}
+
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
 // applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
 // Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
@@ -585,9 +614,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		computed = true
 
-		// Credits applied to a subscription draft before finalization (an expiring credit's
-		// pre-expiry share) must survive recompute. The pipeline below runs in the subscription's
-		// currency, so read them from the denomination for custom-currency invoices.
+		// Credits applied at expiry must survive recompute. Read them in the subscription's
+		// currency, which is the denomination for custom-currency invoices.
 		creditsAppliedToDraft := inv.TotalPrepaidCreditsApplied
 		if cc := inv.CustomCurrency; cc != nil {
 			creditsAppliedToDraft = cc.TotalPrepaidCreditsApplied
@@ -1286,6 +1314,14 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 		return false, nil
 	}
 
+	pending, err := s.hasPendingExpiringCredit(ctx, inv)
+	if err != nil {
+		return false, err
+	}
+	if pending {
+		return false, nil
+	}
+
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
 	if err != nil {
@@ -1299,6 +1335,26 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 
 	dueAt := inv.LastComputedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
 	return time.Now().UTC().After(dueAt), nil
+}
+
+// hasPendingExpiringCredit reports whether a credit that expired inside this subscription draft's
+// period still waits for the expiry job, which applies its pre-expiry share to this draft first.
+func (s *invoiceService) hasPendingExpiringCredit(ctx context.Context, inv *invoice.Invoice) (bool, error) {
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.PeriodStart == nil || inv.PeriodEnd == nil {
+		return false, nil
+	}
+	enabled, err := preExpiryCreditConsumptionEnabled(ctx, s.ServiceParams)
+	if err != nil || !enabled {
+		return false, err
+	}
+	pending, err := NewWalletService(s.ServiceParams).HasPendingExpiringCredit(ctx, inv.CustomerID, inv.DenominationCurrency(), *inv.PeriodStart, *inv.PeriodEnd)
+	if err != nil {
+		return false, err
+	}
+	if pending {
+		s.Logger.Info(ctx, "holding finalization until the expiry job applies an expiring credit", "invoice_id", inv.ID)
+	}
+	return pending, nil
 }
 
 // ListAllTenantDraftInvoices returns draft invoices across all tenants with LastComputedAt set.
@@ -2694,9 +2750,8 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		inCustomCurrency := inv.CustomCurrency != nil && types.IsMatchingCurrency(inv.CustomCurrency.Code, req.Currency)
 		matchesCurrency := inCustomCurrency || types.IsMatchingCurrency(inv.Currency, req.Currency)
 
-		// The caller counts this period's usage live, so its draft is not unpaid, even after the
-		// period ends and before the billing run rolls the subscription. Report the credits already
-		// applied to it so the caller can net them off that usage.
+		// The caller counts this period's usage live, so skip its draft (also between period end and
+		// rollover) and report the credits applied to it for netting.
 		if isCurrentPeriodDraft(inv, req.CurrentPeriodStarts) {
 			if matchesCurrency && inv.TotalPrepaidCreditsApplied.IsPositive() {
 				applied := inv.TotalPrepaidCreditsApplied
@@ -2774,7 +2829,8 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 // isCurrentPeriodDraft reports whether inv is the draft for the period starting at its
 // subscription's entry in currentPeriodStarts.
 func isCurrentPeriodDraft(inv *dto.InvoiceResponse, currentPeriodStarts map[string]time.Time) bool {
-	if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.SubscriptionID == nil || inv.PeriodStart == nil {
+	if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.SubscriptionID == nil || inv.PeriodStart == nil ||
+		inv.BillingReason != string(types.InvoiceBillingReasonSubscriptionCycle) {
 		return false
 	}
 	start, ok := currentPeriodStarts[*inv.SubscriptionID]

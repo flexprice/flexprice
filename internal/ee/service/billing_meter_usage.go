@@ -56,23 +56,20 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 	return time.Now().UTC()
 }
 
-// CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
-// All queries (bucketed meters, windowed entitlements, windowed commitments) read from
-// MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
-// the reference instant used to clip line items and windowed commitments (see resolveAsOf);
-// otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
-func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, start, end time.Time) (decimal.Decimal, error) {
+// UsageChargesForWindow returns sub's usage charges for [periodStart, until), priced for the
+// period [periodStart, periodEnd).
+func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
 	usage, err := NewSubscriptionService(s.ServiceParams).GetMeterUsageForSubscription(ctx, sub, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
-		StartTime:      start,
-		EndTime:        end,
+		StartTime:      periodStart,
+		EndTime:        until,
 		Source:         string(types.UsageSourceWallet),
 	})
 	if err != nil {
 		return decimal.Zero, err
 	}
 	_, total, err := s.CalculateMeterUsageCharges(
-		ctx, sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, types.UsageSourceWallet, &end,
+		ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet, &until,
 	)
 	if err != nil {
 		return decimal.Zero, err
@@ -80,6 +77,11 @@ func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscri
 	return total, nil
 }
 
+// CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
+// All queries (bucketed meters, windowed entitlements, windowed commitments) read from
+// MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
+// the reference instant used to clip line items and windowed commitments (see resolveAsOf);
+// otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,

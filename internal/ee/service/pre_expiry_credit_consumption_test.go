@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -59,7 +60,7 @@ func (s *CreditExpiryInvoiceRaceSuite) stubPreExpiry(drafts map[string]string, u
 		inv, err := s.GetStores().InvoiceRepo.Get(ctx, invoiceID)
 		return inv, false, err
 	}
-	ws.preExpiryUsageCharges = func(_ context.Context, sub *subscription.Subscription, _ time.Time) (decimal.Decimal, error) {
+	ws.preExpiryUsageCharges = func(_ context.Context, sub *subscription.Subscription, _, _, _ time.Time) (decimal.Decimal, error) {
 		return usage[sub.ID], nil
 	}
 	return ws
@@ -153,6 +154,144 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_CappedAtUsageBeforeExpiry()
 	updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(15).Equal(updated.AmountRemaining))
+}
+
+// Finalization never pays invoices from postpaid or inactive wallets, so their expiring credits
+// expire in full without touching the draft.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_OnlyActivePrepaidWallets() {
+	cases := []struct {
+		name       string
+		walletType types.WalletType
+		status     types.WalletStatus
+	}{
+		{"postpaid", types.WalletTypePostPaid, types.WalletStatusActive},
+		{"frozen", types.WalletTypePrePaid, types.WalletStatusFrozen},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.enablePreExpiryConsumption()
+			tx, periodStart, periodEnd := s.midPeriodGrant(30)
+			s.wallet.WalletType = tc.walletType
+			s.wallet.WalletStatus = tc.status
+			s.NoError(s.GetStores().WalletRepo.UpdateWallet(s.GetContext(), s.wallet.ID, s.wallet))
+			sub := s.activeSubscription("subs_pre_expiry", periodStart, periodEnd)
+			inv := s.subscriptionInvoice("inv_pre_expiry", decimal.NewFromInt(35), periodStart, periodEnd)
+			s.stubPreExpiry(map[string]string{sub.ID: inv.ID}, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(20)})
+
+			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+			s.Require().NoError(err)
+			s.True(result.Applied.IsZero(), "applied %s", result.Applied)
+			s.True(result.Expired)
+
+			updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
+			s.Require().NoError(err)
+			s.True(updated.TotalPrepaidCreditsApplied.IsZero())
+		})
+	}
+}
+
+// discountedDraft is a draft with a usage line of usage less discount, plus a fixed fee line.
+func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, usage, discount, fee decimal.Decimal, periodStart, periodEnd time.Time) *invoice.Invoice {
+	ctx := s.GetContext()
+	total := usage.Sub(discount).Add(fee)
+	line := func(suffix string, amount, lineDiscount decimal.Decimal, priceType types.PriceType) *invoice.InvoiceLineItem {
+		return &invoice.InvoiceLineItem{
+			ID:               id + suffix,
+			InvoiceID:        id,
+			CustomerID:       s.cust.ID,
+			Amount:           amount,
+			LineItemDiscount: lineDiscount,
+			Currency:         "usd",
+			Quantity:         decimal.NewFromInt(1),
+			PriceType:        lo.ToPtr(string(priceType)),
+			PeriodStart:      lo.ToPtr(periodStart),
+			PeriodEnd:        lo.ToPtr(periodEnd),
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+	}
+	inv := &invoice.Invoice{
+		ID:              id,
+		CustomerID:      s.cust.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		Subtotal:        usage.Add(fee),
+		TotalDiscount:   discount,
+		Total:           total,
+		AmountDue:       total,
+		AmountRemaining: total,
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(periodEnd),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			line("_usage", usage, discount, types.PRICE_TYPE_USAGE),
+			line("_fee", fee, decimal.Zero, types.PRICE_TYPE_FIXED),
+		},
+	}
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(ctx, inv))
+	return inv
+}
+
+// Finalization places credits only on usage after discounts, so expiry applies no more than that.
+// $100 usage with a 50% coupon and a $200 fee: all usage before expiry places $50, not $100.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_CappedAtUsageAfterDiscounts() {
+	cases := []struct {
+		name      string
+		preExpiry int64
+		want      int64
+	}{
+		{"all usage before expiry", 100, 50},
+		{"part of usage before expiry", 60, 30},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.enablePreExpiryConsumption()
+			tx, periodStart, periodEnd := s.midPeriodGrant(100)
+			sub := s.activeSubscription("subs_pre_expiry", periodStart, periodEnd)
+			inv := s.discountedDraft("inv_pre_expiry", decimal.NewFromInt(100), decimal.NewFromInt(50), decimal.NewFromInt(200), periodStart, periodEnd)
+			s.stubPreExpiry(map[string]string{sub.ID: inv.ID}, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(tc.preExpiry)})
+
+			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+			s.Require().NoError(err)
+			s.True(decimal.NewFromInt(tc.want).Equal(result.Applied), "applied %s", result.Applied)
+			s.True(result.Expired)
+		})
+	}
+}
+
+// The applied amount is whole cents, rounded down: $50 of usage at a 2/3 discount ratio is
+// $33.333…, applied as $33.33. A conversion rate that doesn't divide evenly still lands on cents.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_AppliesWholeCents() {
+	for _, rate := range []int64{1, 7} {
+		s.Run(fmt.Sprintf("rate %d", rate), func() {
+			s.SetupTest()
+			s.enablePreExpiryConsumption()
+			tx, periodStart, periodEnd := s.midPeriodGrant(100)
+			s.wallet.ConversionRate = decimal.NewFromInt(rate)
+			s.NoError(s.GetStores().WalletRepo.UpdateWallet(s.GetContext(), s.wallet.ID, s.wallet))
+			sub := s.activeSubscription("subs_pre_expiry", periodStart, periodEnd)
+			inv := s.discountedDraft("inv_pre_expiry", decimal.NewFromInt(90), decimal.NewFromInt(30), decimal.Zero, periodStart, periodEnd)
+			s.stubPreExpiry(map[string]string{sub.ID: inv.ID}, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(50)})
+
+			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+			s.Require().NoError(err)
+			want := decimal.RequireFromString("33.33")
+			s.True(want.Equal(result.Applied), "applied %s", result.Applied)
+
+			updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
+			s.Require().NoError(err)
+			s.True(want.Equal(updated.TotalPrepaidCreditsApplied), "invoice applied %s", updated.TotalPrepaidCreditsApplied)
+			s.True(decimal.RequireFromString("26.67").Equal(updated.AmountRemaining), "remaining %s", updated.AmountRemaining)
+
+			debits := s.walletTransactions(types.TransactionReasonCreditAdjustment)
+			s.Require().Len(debits, 1)
+			debited := debits[0].CreditAmount.Mul(s.wallet.ConversionRate)
+			s.True(debited.LessThanOrEqual(want) && debited.GreaterThan(decimal.RequireFromString("33.32")), "debited %s", debited)
+		})
+	}
 }
 
 // A credit that expired earlier in the period already paid part of the same usage.
@@ -364,6 +503,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_CustomCurrencyAppliedInDeno
 		Total:     decimal.NewFromInt(20),
 		AmountDue: decimal.NewFromInt(20),
 	}
+	inv.LineItems[0].CustomCurrency = &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(20)}
 	// The expiry path always computes the draft first; an uncomputed one would be recomputed
 	// inline by the balance check that runs after the wallet debit.
 	inv.LastComputedAt = &now
@@ -543,6 +683,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestFinalize_PoolExcludesCreditsPastExpir
 func (s *CreditExpiryInvoiceRaceSuite) subscriptionDraft(id, subID string, usage, applied decimal.Decimal, start, end time.Time) *invoice.Invoice {
 	inv := s.draftWithAppliedCredits(id, applied, usage.IntPart())
 	inv.SubscriptionID = lo.ToPtr(subID)
+	inv.BillingReason = string(types.InvoiceBillingReasonSubscriptionCycle)
 	inv.PeriodStart = lo.ToPtr(start)
 	inv.PeriodEnd = lo.ToPtr(end)
 	computedAt := time.Now().UTC()
@@ -599,10 +740,216 @@ func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_PreviousPeriodDraftNetOfApplie
 	s.True(decimal.NewFromInt(12).Equal(resp.TotalUnpaidAmount))
 }
 
+// Only the cycle draft is covered by live usage. Another draft starting on the same day (here a
+// proration invoice from a cancel) is still unpaid, and its credits aren't netted off usage.
+func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_OnlyCycleDraftIsCurrentPeriod() {
+	now := time.Now().UTC()
+	start := now.Add(-20 * 24 * time.Hour)
+	s.subscriptionDraft("inv_current", "subs_a", decimal.NewFromInt(30), decimal.NewFromInt(20), start, now.Add(10*24*time.Hour))
+	proration := s.subscriptionDraft("inv_proration", "subs_a", decimal.NewFromInt(50), decimal.NewFromInt(5), start, now.Add(-time.Hour))
+	proration.BillingReason = string(types.InvoiceBillingReasonProration)
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), proration))
+
+	resp := s.unpaid(map[string]time.Time{"subs_a": start})
+	s.Require().Len(resp.Invoices, 1)
+	s.Equal(proration.ID, resp.Invoices[0].ID)
+	s.True(decimal.NewFromInt(45).Equal(resp.TotalUnpaidUsageCharges), "50 usage − 5 applied, got %s", resp.TotalUnpaidUsageCharges)
+	s.True(decimal.NewFromInt(20).Equal(resp.CurrentPeriodCreditsApplied["subs_a"]), "cycle draft only, got %s", resp.CurrentPeriodCreditsApplied["subs_a"])
+}
+
 func (s *CreditExpiryInvoiceRaceSuite) TestUsageNetOfDraftCredits() {
-	usage := map[string]decimal.Decimal{"a": decimal.NewFromInt(35), "b": decimal.NewFromInt(10), "c": decimal.NewFromInt(5)}
+	usage := map[string]currentPeriodUsage{
+		"a": {amount: decimal.NewFromInt(35)},
+		"b": {amount: decimal.NewFromInt(10)},
+		"c": {amount: decimal.NewFromInt(5)},
+	}
 	applied := map[string]decimal.Decimal{"a": decimal.NewFromInt(20), "b": decimal.NewFromInt(30)}
 	// a: 35−20=15, b: capped at its usage → 0, c: no credits → 5
 	s.True(decimal.NewFromInt(20).Equal(usageNetOfDraftCredits(usage, applied)))
 	s.True(decimal.NewFromInt(50).Equal(usageNetOfDraftCredits(usage, nil)))
+}
+
+// ---------------------------------------------------------------------------
+// Earlier periods: when the expiry job runs, the period the credit belongs to may already have
+// rolled over. Its unfinalized draft still gets the pre-expiry share.
+// ---------------------------------------------------------------------------
+
+// cycleDraft is a computed SUBSCRIPTION_CYCLE draft for subID over [start, end) with one usage line.
+func (s *CreditExpiryInvoiceRaceSuite) cycleDraft(id, subID string, usage int64, start, end time.Time) *invoice.Invoice {
+	inv := s.draftWithAppliedCredits(id, decimal.Zero, usage)
+	inv.SubscriptionID = lo.ToPtr(subID)
+	inv.BillingReason = string(types.InvoiceBillingReasonSubscriptionCycle)
+	inv.PeriodStart, inv.PeriodEnd = lo.ToPtr(start), lo.ToPtr(end)
+	computedAt := end.Add(15 * time.Minute)
+	inv.LastComputedAt = &computedAt
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+	return inv
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) failOnCurrentDraft() {
+	s.walletService.(*walletService).preExpiryDraftInvoice = func(context.Context, *subscription.Subscription) (*invoice.Invoice, bool, error) {
+		s.Fail("no current-period draft should be created")
+		return nil, true, nil
+	}
+}
+
+// Billing-cycle grant: expires exactly at the period end. By the time the job runs the
+// subscription has rolled, so the credit pays the previous period's draft.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_BillingCycleCreditPaysPreviousPeriodDraft() {
+	s.enablePreExpiryConsumption()
+	now := time.Now().UTC()
+	boundary := now.Add(-3 * time.Hour)
+	prevStart := boundary.Add(-30 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_cycle_grant", decimal.NewFromInt(30), prevStart, boundary)
+	sub := s.activeSubscription("subs_rolled", boundary, boundary.Add(30*24*time.Hour))
+	prev := s.cycleDraft("inv_prev", sub.ID, 20, prevStart, boundary)
+	s.stubPreExpiry(nil, nil)
+	s.failOnCurrentDraft()
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(20).Equal(result.Applied), "applied %s", result.Applied)
+	s.True(result.Expired)
+
+	updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), prev.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(20).Equal(updated.TotalPrepaidCreditsApplied))
+}
+
+// The credit expires an hour before the previous period ended: only usage before the expiry counts.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_PreviousPeriodCappedAtUsageBeforeExpiry() {
+	s.enablePreExpiryConsumption()
+	now := time.Now().UTC()
+	boundary := now.Add(-2 * time.Hour)
+	prevStart := boundary.Add(-30 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_mid_grant", decimal.NewFromInt(30), prevStart, boundary.Add(-time.Hour))
+	sub := s.activeSubscription("subs_rolled", boundary, boundary.Add(30*24*time.Hour))
+	prev := s.cycleDraft("inv_prev", sub.ID, 25, prevStart, boundary)
+	s.stubPreExpiry(nil, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(15)})
+	s.failOnCurrentDraft()
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(15).Equal(result.Applied), "applied %s", result.Applied)
+
+	updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), prev.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(15).Equal(updated.TotalPrepaidCreditsApplied))
+}
+
+// Both periods hold pre-expiry usage: the older draft is paid first.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_PreviousPeriodBeforeCurrent() {
+	s.enablePreExpiryConsumption()
+	now := time.Now().UTC()
+	boundary := now.Add(-10 * 24 * time.Hour)
+	prevStart := boundary.Add(-30 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_grant", decimal.NewFromInt(20), prevStart, now.Add(-3*time.Hour))
+	sub := s.activeSubscription("subs_two", boundary, boundary.Add(30*24*time.Hour))
+	prev := s.cycleDraft("inv_prev", sub.ID, 10, prevStart, boundary)
+	cur := s.subscriptionInvoice("inv_cur", decimal.NewFromInt(15), boundary, boundary.Add(30*24*time.Hour))
+	s.stubPreExpiry(map[string]string{sub.ID: cur.ID}, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(15)})
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(20).Equal(result.Applied))
+	s.False(result.Expired)
+
+	p, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), prev.ID)
+	s.Require().NoError(err)
+	c, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), cur.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(10).Equal(p.TotalPrepaidCreditsApplied), "previous got %s", p.TotalPrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(10).Equal(c.TotalPrepaidCreditsApplied), "current got %s", c.TotalPrepaidCreditsApplied)
+}
+
+// No usage before the expiry in the current period: no draft is created for it.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_NoCurrentDraftWithoutPreExpiryUsage() {
+	s.enablePreExpiryConsumption()
+	tx, periodStart, periodEnd := s.midPeriodGrant(30)
+	s.activeSubscription("subs_idle", periodStart, periodEnd)
+	s.stubPreExpiry(nil, map[string]decimal.Decimal{})
+	s.failOnCurrentDraft()
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(result.Applied.IsZero())
+	s.True(result.Expired)
+}
+
+// A finalized previous-period invoice can't take pre-expiry credit.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_SkipsFinalizedPreviousPeriod() {
+	s.enablePreExpiryConsumption()
+	now := time.Now().UTC()
+	boundary := now.Add(-3 * time.Hour)
+	prevStart := boundary.Add(-30 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_cycle_grant", decimal.NewFromInt(30), prevStart, boundary)
+	sub := s.activeSubscription("subs_rolled", boundary, boundary.Add(30*24*time.Hour))
+	prev := s.cycleDraft("inv_prev", sub.ID, 20, prevStart, boundary)
+	prev.InvoiceStatus = types.InvoiceStatusFinalized
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), prev))
+	s.stubPreExpiry(nil, nil)
+	s.failOnCurrentDraft()
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(result.Applied.IsZero())
+	s.True(result.Expired)
+}
+
+// ---------------------------------------------------------------------------
+// Finalization waits while a credit that expired inside the draft's period is still unprocessed.
+// ---------------------------------------------------------------------------
+
+// finalizationCase is a cycle draft whose period ended 130m ago (computed 125m ago, so the default
+// 2h delay has passed) and a credit expiring at expiryAgo.
+func (s *CreditExpiryInvoiceRaceSuite) finalizationCase(expiryAgo time.Duration) (*invoice.Invoice, *wallet.Transaction) {
+	now := time.Now().UTC()
+	end := now.Add(-130 * time.Minute)
+	start := end.Add(-30 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_pending", decimal.NewFromInt(30), start, now.Add(-expiryAgo))
+	inv := s.cycleDraft("inv_hold", "subs_hold", 20, start, end)
+	computedAt := now.Add(-125 * time.Minute)
+	inv.LastComputedAt = &computedAt
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+	return inv, tx
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) finalizationDue(invoiceID string) bool {
+	due, err := s.invoiceService.IsFinalizationDue(s.GetContext(), invoiceID)
+	s.Require().NoError(err)
+	return due
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_WaitsForPendingExpiry() {
+	s.enablePreExpiryConsumption()
+	inv, _ := s.finalizationCase(150 * time.Minute) // expired inside the period, 150m ago
+	s.False(s.finalizationDue(inv.ID))
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_SettingOff() {
+	inv, _ := s.finalizationCase(150 * time.Minute)
+	s.True(s.finalizationDue(inv.ID))
+}
+
+// A credit expiring exactly at the period end is eligible at finalization, so nothing waits.
+func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_ExpiryAtPeriodEnd() {
+	s.enablePreExpiryConsumption()
+	inv, _ := s.finalizationCase(130 * time.Minute)
+	s.True(s.finalizationDue(inv.ID))
+}
+
+// Once processed (nothing left on the credit), finalization goes ahead.
+func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_ReleasedOnceProcessed() {
+	s.enablePreExpiryConsumption()
+	inv, tx := s.finalizationCase(150 * time.Minute)
+	tx.CreditsAvailable = decimal.Zero
+	s.NoError(s.GetStores().WalletRepo.UpdateTransaction(s.GetContext(), tx))
+	s.True(s.finalizationDue(inv.ID))
+}
+
+// A stuck expiry job can't block billing: past the hold limit, finalization goes ahead.
+func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_SafetyCap() {
+	s.enablePreExpiryConsumption()
+	inv, _ := s.finalizationCase(preExpiryFinalizationHold + 10*time.Minute)
+	s.True(s.finalizationDue(inv.ID))
 }
