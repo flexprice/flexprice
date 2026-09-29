@@ -11,9 +11,14 @@ func TestServerConfigGetShutdownTimeout(t *testing.T) {
 		cfg  ServerConfig
 		want time.Duration
 	}{
-		{"unset falls back to default", ServerConfig{}, 25 * time.Second},
-		{"negative falls back to default", ServerConfig{ShutdownTimeout: -1 * time.Second}, 25 * time.Second},
+		{"unset falls back to default", ServerConfig{}, DefaultServerShutdownTimeout},
+		{"negative falls back to default", ServerConfig{ShutdownTimeout: -1 * time.Second}, DefaultServerShutdownTimeout},
 		{"configured value is used", ServerConfig{ShutdownTimeout: 40 * time.Second}, 40 * time.Second},
+		{"value above ceiling is clamped", ServerConfig{ShutdownTimeout: 5 * time.Minute}, MaxServerShutdownTimeout},
+	}
+
+	if MaxServerShutdownTimeout >= ServerStopTimeout {
+		t.Fatalf("drain ceiling %v must stay below fx stop budget %v", MaxServerShutdownTimeout, ServerStopTimeout)
 	}
 
 	for _, tt := range tests {

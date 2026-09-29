@@ -3,7 +3,7 @@ deployment:
 
 server:
   address: ":8080"
-  # Grace period for in-flight requests after SIGTERM. Keep below ECS stopTimeout.
+  # Grace period for in-flight requests after SIGTERM. Clamped to 45s.
   shutdown_timeout: 25s
 
 auth:

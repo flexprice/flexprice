@@ -324,7 +324,7 @@ func main() {
 			startServer,
 		),
 	)
-	opts = append(opts, fx.StartTimeout(3*time.Minute), fx.StopTimeout(1*time.Minute))
+	opts = append(opts, fx.StartTimeout(3*time.Minute), fx.StopTimeout(config.ServerStopTimeout))
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -575,18 +575,20 @@ func startServer(
 		if consumer == nil {
 			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
-		startAPIServer(lc, r, cfg, log)
-
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
-	case types.ModeAPI:
-		startAPIServer(lc, r, cfg, log)
 
+		// Registered last so fx's reverse-order stop drains HTTP before deps close.
+		startAPIServer(lc, r, cfg, log)
+	case types.ModeAPI:
 		// Register all handlers and start router once (no event consumption)
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
 		startRouter(lc, router, log)
+
+		// Registered last so fx's reverse-order stop drains HTTP before deps close.
+		startAPIServer(lc, r, cfg, log)
 
 	case types.ModeTemporalWorker:
 		// Register webhook handler and start router so that webhook events
@@ -684,7 +686,12 @@ func startAPIServer(
 
 			err := srv.Shutdown(shutdownCtx)
 			if err != nil {
-				log.Error(ctx, "server shutdown did not drain cleanly", "error", err)
+				// Shutdown leaves connections past the deadline running; sever them
+				// so later stop hooks do not tear down deps under live handlers.
+				log.Error(ctx, "server drain timed out, closing active connections", "error", err)
+				if closeErr := srv.Close(); closeErr != nil {
+					log.Error(ctx, "failed to close listener after drain timeout", "error", closeErr)
+				}
 			} else {
 				log.Info(ctx, "server drained, all in-flight requests completed")
 			}

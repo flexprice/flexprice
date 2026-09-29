@@ -336,6 +336,14 @@ type DeploymentConfig struct {
 	Mode types.RunMode `mapstructure:"mode" validate:"required"`
 }
 
+const (
+	DefaultServerShutdownTimeout = 25 * time.Second
+	// Ceiling for the drain, leaving the rest of StopTimeout to other stop hooks.
+	MaxServerShutdownTimeout = 45 * time.Second
+	// Budget fx allows for all stop hooks combined.
+	ServerStopTimeout = 1 * time.Minute
+)
+
 type ServerConfig struct {
 	Address string `mapstructure:"address" validate:"required"`
 	// Grace period for in-flight requests to finish after SIGTERM.
@@ -343,9 +351,13 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
 }
 
+// GetShutdownTimeout clamps the configured drain so it cannot outlive the fx stop budget.
 func (c ServerConfig) GetShutdownTimeout() time.Duration {
 	if c.ShutdownTimeout <= 0 {
-		return 25 * time.Second
+		return DefaultServerShutdownTimeout
+	}
+	if c.ShutdownTimeout > MaxServerShutdownTimeout {
+		return MaxServerShutdownTimeout
 	}
 	return c.ShutdownTimeout
 }
