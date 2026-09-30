@@ -131,12 +131,12 @@ func (InvoiceLineItem) Fields() []ent.Field {
 				"postgres": "numeric(20,8)",
 			}).
 			Default(decimal.Zero),
+		// Not immutable: conversion at finalize rewrites the line into the billing currency (§3.6).
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
-			NotEmpty().
-			Immutable(),
+			NotEmpty(),
 		field.Time("period_start").
 			Optional().
 			Nillable(),

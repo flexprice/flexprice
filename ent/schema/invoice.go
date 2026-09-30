@@ -78,12 +78,13 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Default(string(types.PaymentStatusPending)).
 			GoType(types.PaymentStatus("")),
+		// Not immutable: conversion at finalize switches the invoice from the charge currency to
+		// the customer's billing currency (§3.5).
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
-			NotEmpty().
-			Immutable(),
+			NotEmpty(),
 		field.Other("amount_due", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",

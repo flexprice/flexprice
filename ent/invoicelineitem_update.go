@@ -99,6 +99,20 @@ func (iliu *InvoiceLineItemUpdate) SetNillableQuantity(d *decimal.Decimal) *Invo
 	return iliu
 }
 
+// SetCurrency sets the "currency" field.
+func (iliu *InvoiceLineItemUpdate) SetCurrency(s string) *InvoiceLineItemUpdate {
+	iliu.mutation.SetCurrency(s)
+	return iliu
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableCurrency(s *string) *InvoiceLineItemUpdate {
+	if s != nil {
+		iliu.SetCurrency(*s)
+	}
+	return iliu
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (iliu *InvoiceLineItemUpdate) SetPeriodStart(t time.Time) *InvoiceLineItemUpdate {
 	iliu.mutation.SetPeriodStart(t)
@@ -374,6 +388,11 @@ func (iliu *InvoiceLineItemUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (iliu *InvoiceLineItemUpdate) check() error {
+	if v, ok := iliu.mutation.Currency(); ok {
+		if err := invoicelineitem.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
+		}
+	}
 	if iliu.mutation.InvoiceCleared() && len(iliu.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
@@ -451,6 +470,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if value, ok := iliu.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
+	}
+	if value, ok := iliu.mutation.Currency(); ok {
+		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := iliu.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
@@ -653,6 +675,20 @@ func (iliuo *InvoiceLineItemUpdateOne) SetQuantity(d decimal.Decimal) *InvoiceLi
 func (iliuo *InvoiceLineItemUpdateOne) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
 	if d != nil {
 		iliuo.SetQuantity(*d)
+	}
+	return iliuo
+}
+
+// SetCurrency sets the "currency" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetCurrency(s string) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetCurrency(s)
+	return iliuo
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableCurrency(s *string) *InvoiceLineItemUpdateOne {
+	if s != nil {
+		iliuo.SetCurrency(*s)
 	}
 	return iliuo
 }
@@ -945,6 +981,11 @@ func (iliuo *InvoiceLineItemUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (iliuo *InvoiceLineItemUpdateOne) check() error {
+	if v, ok := iliuo.mutation.Currency(); ok {
+		if err := invoicelineitem.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
+		}
+	}
 	if iliuo.mutation.InvoiceCleared() && len(iliuo.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
@@ -1039,6 +1080,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if value, ok := iliuo.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
+	}
+	if value, ok := iliuo.mutation.Currency(); ok {
+		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := iliuo.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)

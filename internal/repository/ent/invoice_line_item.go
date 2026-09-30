@@ -271,6 +271,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		).
 		SetAmount(item.Amount).
 		SetQuantity(item.Quantity).
+		SetCurrency(item.Currency).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).

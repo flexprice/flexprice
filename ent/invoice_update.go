@@ -120,6 +120,20 @@ func (iu *InvoiceUpdate) SetNillablePaymentStatus(ts *types.PaymentStatus) *Invo
 	return iu
 }
 
+// SetCurrency sets the "currency" field.
+func (iu *InvoiceUpdate) SetCurrency(s string) *InvoiceUpdate {
+	iu.mutation.SetCurrency(s)
+	return iu
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableCurrency(s *string) *InvoiceUpdate {
+	if s != nil {
+		iu.SetCurrency(*s)
+	}
+	return iu
+}
+
 // SetAmountDue sets the "amount_due" field.
 func (iu *InvoiceUpdate) SetAmountDue(d decimal.Decimal) *InvoiceUpdate {
 	iu.mutation.SetAmountDue(d)
@@ -773,7 +787,30 @@ func (iu *InvoiceUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (iu *InvoiceUpdate) check() error {
+	if v, ok := iu.mutation.InvoiceStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
+		}
+	}
+	if v, ok := iu.mutation.PaymentStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
+	}
+	if v, ok := iu.mutation.Currency(); ok {
+		if err := invoice.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Invoice.currency": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
+	if err := iu.check(); err != nil {
+		return n, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(invoice.Table, invoice.Columns, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
 	if ps := iu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -814,6 +851,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := iu.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
+	}
+	if value, ok := iu.mutation.Currency(); ok {
+		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := iu.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)
@@ -1186,6 +1226,20 @@ func (iuo *InvoiceUpdateOne) SetPaymentStatus(ts types.PaymentStatus) *InvoiceUp
 func (iuo *InvoiceUpdateOne) SetNillablePaymentStatus(ts *types.PaymentStatus) *InvoiceUpdateOne {
 	if ts != nil {
 		iuo.SetPaymentStatus(*ts)
+	}
+	return iuo
+}
+
+// SetCurrency sets the "currency" field.
+func (iuo *InvoiceUpdateOne) SetCurrency(s string) *InvoiceUpdateOne {
+	iuo.mutation.SetCurrency(s)
+	return iuo
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableCurrency(s *string) *InvoiceUpdateOne {
+	if s != nil {
+		iuo.SetCurrency(*s)
 	}
 	return iuo
 }
@@ -1856,7 +1910,30 @@ func (iuo *InvoiceUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (iuo *InvoiceUpdateOne) check() error {
+	if v, ok := iuo.mutation.InvoiceStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
+		}
+	}
+	if v, ok := iuo.mutation.PaymentStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
+	}
+	if v, ok := iuo.mutation.Currency(); ok {
+		if err := invoice.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Invoice.currency": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err error) {
+	if err := iuo.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(invoice.Table, invoice.Columns, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
 	id, ok := iuo.mutation.ID()
 	if !ok {
@@ -1914,6 +1991,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if value, ok := iuo.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
+	}
+	if value, ok := iuo.mutation.Currency(); ok {
+		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := iuo.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)

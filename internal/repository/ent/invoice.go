@@ -573,6 +573,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	query.
 		SetInvoiceStatus(inv.InvoiceStatus).
 		SetPaymentStatus(inv.PaymentStatus).
+		SetCurrency(inv.Currency).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
