@@ -507,6 +507,9 @@ ingress:
       redirectToHttps:
         enabled: true
         responseCodeName: MOVED_PERMANENTLY_DEFAULT
+      # Optional compute SSL policy governing the TLS handshake. Leave empty to
+      # inherit the GCE default, which still accepts TLS 1.0 and 1.1.
+      sslPolicy: ""
 
 
 # Frontend deployment configuration

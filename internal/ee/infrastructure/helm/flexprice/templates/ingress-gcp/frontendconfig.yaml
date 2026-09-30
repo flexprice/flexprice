@@ -29,4 +29,7 @@ spec:
     {{- if .Values.ingress.gce.frontendConfig.redirectToHttps.enabled }}
     responseCodeName: {{ .Values.ingress.gce.frontendConfig.redirectToHttps.responseCodeName }}
     {{- end }}
+  {{- with .Values.ingress.gce.frontendConfig.sslPolicy }}
+  sslPolicy: {{ . }}
+  {{- end }}
 {{- end }}
