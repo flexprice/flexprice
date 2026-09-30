@@ -39,30 +39,6 @@ func (s *CreditExpiryInvoiceRaceSuite) usageSubscription(id string, lineStart, p
 	ctx := s.GetContext()
 	pl := &plan.Plan{ID: "plan_" + id, Name: "Plan " + id, BaseModel: types.GetDefaultBaseModel(ctx)}
 	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
-	m := &meter.Meter{
-		ID:          "meter_" + id,
-		Name:        "API calls " + id,
-		EventName:   "api_calls_" + id,
-		Aggregation: meter.Aggregation{Type: types.AggregationSum},
-		BaseModel:   types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
-	p := &price.Price{
-		ID:                 "price_" + id,
-		Amount:             decimal.NewFromInt(1),
-		Currency:           "usd",
-		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-		EntityID:           pl.ID,
-		Type:               types.PRICE_TYPE_USAGE,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		BillingCadence:     types.BILLING_CADENCE_RECURRING,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		MeterID:            m.ID,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 
 	sub := &subscription.Subscription{
 		ID:                 id,
@@ -82,32 +58,67 @@ func (s *CreditExpiryInvoiceRaceSuite) usageSubscription(id string, lineStart, p
 		Timezone:           "UTC",
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
-	li := &subscription.SubscriptionLineItem{
-		ID:                 "subs_line_" + id,
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	s.addUsagePrice(sub, "")
+	return sub
+}
+
+// addUsagePrice gives sub another $1-per-unit usage price on its own meter, identified by suffix.
+func (s *CreditExpiryInvoiceRaceSuite) addUsagePrice(sub *subscription.Subscription, suffix string) {
+	ctx := s.GetContext()
+	key := sub.ID + suffix
+	m := &meter.Meter{
+		ID:          "meter_" + key,
+		Name:        "API calls " + key,
+		EventName:   "api_calls_" + key,
+		Aggregation: meter.Aggregation{Type: types.AggregationSum},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := &price.Price{
+		ID:                 "price_" + key,
+		Amount:             decimal.NewFromInt(1),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           sub.PlanID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            m.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, &subscription.SubscriptionLineItem{
+		ID:                 "subs_line_" + key,
 		SubscriptionID:     sub.ID,
 		CustomerID:         sub.CustomerID,
-		EntityID:           pl.ID,
+		EntityID:           sub.PlanID,
 		EntityType:         types.SubscriptionLineItemEntityTypePlan,
-		PlanDisplayName:    pl.Name,
 		PriceID:            p.ID,
 		PriceType:          types.PRICE_TYPE_USAGE,
 		MeterID:            m.ID,
 		MeterDisplayName:   m.Name,
-		DisplayName:        "API calls",
+		DisplayName:        "API calls " + key,
 		Quantity:           decimal.Zero,
 		Currency:           sub.Currency,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
-		StartDate:          lineStart,
+		StartDate:          sub.StartDate,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{li}))
-	return sub
+	}))
 }
 
-// usage records qty units of sub's meter at the given time.
+// usage records qty units of sub's first meter at the given time.
 func (s *CreditExpiryInvoiceRaceSuite) usage(sub *subscription.Subscription, at time.Time, qty int64) {
+	s.usageOn(sub, "", at, qty)
+}
+
+// usageOn records qty units of the sub meter identified by suffix at the given time.
+func (s *CreditExpiryInvoiceRaceSuite) usageOn(sub *subscription.Subscription, suffix string, at time.Time, qty int64) {
 	ctx := s.GetContext()
 	id := types.GenerateUUID()
 	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
@@ -115,13 +126,13 @@ func (s *CreditExpiryInvoiceRaceSuite) usage(sub *subscription.Subscription, at 
 			ID:                 id,
 			TenantID:           types.GetTenantID(ctx),
 			EnvironmentID:      types.GetEnvironmentID(ctx),
-			EventName:          "api_calls_" + sub.ID,
+			EventName:          "api_calls_" + sub.ID + suffix,
 			ExternalCustomerID: s.cust.ExternalID,
 			CustomerID:         s.cust.ID,
 			Timestamp:          at,
 			IngestedAt:         at,
 		},
-		MeterID:    "meter_" + sub.ID,
+		MeterID:    "meter_" + sub.ID + suffix,
 		QtyTotal:   decimal.NewFromInt(qty),
 		UniqueHash: id,
 	}}))
@@ -326,26 +337,40 @@ func (s *CreditExpiryInvoiceRaceSuite) rolledSubscription(id string, boundary ti
 	return s.usageSubscription(id, prevStart, boundary, boundary.Add(30*24*time.Hour)), prevStart
 }
 
-// discountedDraft is sub's previous-period cycle draft: a usage line of usage less discount, plus a
-// fixed fee line, computed after the period ended.
-func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, sub *subscription.Subscription, usage, discount, fee decimal.Decimal, periodStart, periodEnd time.Time) *invoice.Invoice {
+// draftLine is one line of a hand-built draft: its price (by suffix on sub's prices), type,
+// amount and line discount.
+type draftLine struct {
+	priceSuffix string
+	priceType   types.PriceType
+	amount      int64
+	discount    int64
+}
+
+// previousDraft is sub's previous-period cycle draft with the given lines, computed after the period
+// ended, so settlement uses it as is.
+func (s *CreditExpiryInvoiceRaceSuite) previousDraft(id string, sub *subscription.Subscription, periodStart, periodEnd time.Time, lines ...draftLine) *invoice.Invoice {
 	ctx := s.GetContext()
-	total := usage.Sub(discount).Add(fee)
-	line := func(suffix string, amount, lineDiscount decimal.Decimal, priceType types.PriceType) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{
-			ID:               id + suffix,
+	subtotal, discount := decimal.Zero, decimal.Zero
+	items := make([]*invoice.InvoiceLineItem, 0, len(lines))
+	for i, l := range lines {
+		subtotal = subtotal.Add(decimal.NewFromInt(l.amount))
+		discount = discount.Add(decimal.NewFromInt(l.discount))
+		items = append(items, &invoice.InvoiceLineItem{
+			ID:               fmt.Sprintf("%s_line_%d", id, i),
 			InvoiceID:        id,
 			CustomerID:       s.cust.ID,
-			Amount:           amount,
-			LineItemDiscount: lineDiscount,
+			PriceID:          lo.ToPtr("price_" + sub.ID + l.priceSuffix),
+			PriceType:        lo.ToPtr(string(l.priceType)),
+			Amount:           decimal.NewFromInt(l.amount),
+			LineItemDiscount: decimal.NewFromInt(l.discount),
 			Currency:         "usd",
 			Quantity:         decimal.NewFromInt(1),
-			PriceType:        lo.ToPtr(string(priceType)),
 			PeriodStart:      lo.ToPtr(periodStart),
 			PeriodEnd:        lo.ToPtr(periodEnd),
 			BaseModel:        types.GetDefaultBaseModel(ctx),
-		}
+		})
 	}
+	total := subtotal.Sub(discount)
 	computedAt := periodEnd.Add(15 * time.Minute)
 	inv := &invoice.Invoice{
 		ID:              id,
@@ -356,7 +381,7 @@ func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, sub *subscript
 		PaymentStatus:   types.PaymentStatusPending,
 		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
 		Currency:        "usd",
-		Subtotal:        usage.Add(fee),
+		Subtotal:        subtotal,
 		TotalDiscount:   discount,
 		Total:           total,
 		AmountDue:       total,
@@ -365,13 +390,19 @@ func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, sub *subscript
 		PeriodEnd:       lo.ToPtr(periodEnd),
 		LastComputedAt:  &computedAt,
 		BaseModel:       types.GetDefaultBaseModel(ctx),
-		LineItems: []*invoice.InvoiceLineItem{
-			line("_usage", usage, discount, types.PRICE_TYPE_USAGE),
-			line("_fee", fee, decimal.Zero, types.PRICE_TYPE_FIXED),
-		},
+		LineItems:       items,
 	}
 	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(ctx, inv))
 	return inv
+}
+
+// discountedDraft is sub's previous-period draft: a usage line of usage less discount, plus a
+// fixed fee line.
+func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, sub *subscription.Subscription, usage, discount, fee int64, periodStart, periodEnd time.Time) *invoice.Invoice {
+	return s.previousDraft(id, sub, periodStart, periodEnd,
+		draftLine{"", types.PRICE_TYPE_USAGE, usage, discount},
+		draftLine{"_fee", types.PRICE_TYPE_FIXED, fee, 0},
+	)
 }
 
 // Finalization places credits only on usage after discounts, so expiry applies no more than that.
@@ -395,7 +426,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_CappedAtUsageAfterDi
 			expiry := boundary.Add(-24 * time.Hour)
 			s.usage(sub, expiry.Add(-time.Hour), tc.beforeExpiry)
 			s.usage(sub, expiry.Add(time.Hour), 100-tc.beforeExpiry)
-			s.discountedDraft("inv_settlement", sub, decimal.NewFromInt(100), decimal.NewFromInt(50), decimal.NewFromInt(200), prevStart, boundary)
+			s.discountedDraft("inv_settlement", sub, 100, 50, 200, prevStart, boundary)
 			tx := s.seedGrant("wtxn_free_grant", decimal.NewFromInt(100), prevStart, expiry)
 
 			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
@@ -420,7 +451,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_AppliesWholeCents() 
 			expiry := boundary.Add(-24 * time.Hour)
 			s.usage(sub, expiry.Add(-time.Hour), 50)
 			s.usage(sub, expiry.Add(time.Hour), 40)
-			inv := s.discountedDraft("inv_settlement", sub, decimal.NewFromInt(90), decimal.NewFromInt(30), decimal.Zero, prevStart, boundary)
+			inv := s.discountedDraft("inv_settlement", sub, 90, 30, 0, prevStart, boundary)
 			tx := s.seedGrant("wtxn_free_grant", decimal.NewFromInt(100), prevStart, expiry)
 
 			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
@@ -437,6 +468,42 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_AppliesWholeCents() 
 			s.Require().Len(debits, 1)
 			debited := debits[0].CreditAmount.Mul(s.wallet.ConversionRate)
 			s.True(debited.LessThanOrEqual(want) && debited.GreaterThan(decimal.RequireFromString("33.32")), "debited %s", debited)
+		})
+	}
+}
+
+// Each line's usage before expiry is priced with that line's own discount, as finalization prices
+// the line. Line A (no discount) has 100 before the expiry; line B (100% off) has 100 after it.
+// A's usage is full price, so the credit pays 100. Swap the discounts and the usage before expiry
+// was free, so it pays nothing. A blended ratio (50% across both lines) would pay 50 both times.
+func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_DiscountPerLine() {
+	cases := []struct {
+		name                 string
+		discountA, discountB int64
+		want                 int64
+	}{
+		{"usage before expiry at full price", 0, 100, 100},
+		{"usage before expiry free", 100, 0, 0},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.enableExpirySettlement()
+			boundary := time.Now().UTC().Add(-3 * time.Hour)
+			sub, prevStart := s.rolledSubscription("subs_settlement", boundary)
+			s.addUsagePrice(sub, "_b")
+			expiry := boundary.Add(-24 * time.Hour)
+			s.usageOn(sub, "", expiry.Add(-time.Hour), 100)
+			s.usageOn(sub, "_b", expiry.Add(time.Hour), 100)
+			s.previousDraft("inv_settlement", sub, prevStart, boundary,
+				draftLine{"", types.PRICE_TYPE_USAGE, 100, tc.discountA},
+				draftLine{"_b", types.PRICE_TYPE_USAGE, 100, tc.discountB},
+			)
+			tx := s.seedGrant("wtxn_free_grant", decimal.NewFromInt(200), prevStart, expiry)
+
+			result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+			s.Require().NoError(err)
+			s.True(decimal.NewFromInt(tc.want).Equal(result.Applied), "applied %s", result.Applied)
 		})
 	}
 }
@@ -906,9 +973,15 @@ func (s *CreditExpiryInvoiceRaceSuite) TestUsageNetOfDraftCredits() {
 // rolled over. Its unfinalized draft still gets the share for usage before the expiry.
 // ---------------------------------------------------------------------------
 
-// cycleDraft is a computed SUBSCRIPTION_CYCLE draft for subID over [start, end) with one usage line.
+// cycleDraft is a computed SUBSCRIPTION_CYCLE draft for subID over [start, end) with one usage line
+// on subID's usage price.
 func (s *CreditExpiryInvoiceRaceSuite) cycleDraft(id, subID string, usage int64, start, end time.Time) *invoice.Invoice {
 	inv := s.draftWithAppliedCredits(id, decimal.Zero, usage)
+	for _, item := range inv.LineItems {
+		item.PriceID = lo.ToPtr("price_" + subID)
+		item.PeriodStart, item.PeriodEnd = lo.ToPtr(start), lo.ToPtr(end)
+		s.NoError(s.GetStores().InvoiceLineItemRepo.Update(s.GetContext(), item))
+	}
 	inv.SubscriptionID = lo.ToPtr(subID)
 	inv.BillingReason = string(types.InvoiceBillingReasonSubscriptionCycle)
 	inv.PeriodStart, inv.PeriodEnd = lo.ToPtr(start), lo.ToPtr(end)
