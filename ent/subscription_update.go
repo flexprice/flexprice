@@ -33,878 +33,878 @@ type SubscriptionUpdate struct {
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
-func (su *SubscriptionUpdate) Where(ps ...predicate.Subscription) *SubscriptionUpdate {
-	su.mutation.Where(ps...)
-	return su
+func (_u *SubscriptionUpdate) Where(ps ...predicate.Subscription) *SubscriptionUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (su *SubscriptionUpdate) SetStatus(s string) *SubscriptionUpdate {
-	su.mutation.SetStatus(s)
-	return su
+func (_u *SubscriptionUpdate) SetStatus(v string) *SubscriptionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableStatus(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetStatus(*s)
+func (_u *SubscriptionUpdate) SetNillableStatus(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return su
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (su *SubscriptionUpdate) SetUpdatedAt(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetUpdatedAt(t)
-	return su
+func (_u *SubscriptionUpdate) SetUpdatedAt(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (su *SubscriptionUpdate) SetUpdatedBy(s string) *SubscriptionUpdate {
-	su.mutation.SetUpdatedBy(s)
-	return su
+func (_u *SubscriptionUpdate) SetUpdatedBy(v string) *SubscriptionUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableUpdatedBy(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetUpdatedBy(*s)
+func (_u *SubscriptionUpdate) SetNillableUpdatedBy(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (su *SubscriptionUpdate) ClearUpdatedBy() *SubscriptionUpdate {
-	su.mutation.ClearUpdatedBy()
-	return su
+func (_u *SubscriptionUpdate) ClearUpdatedBy() *SubscriptionUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (su *SubscriptionUpdate) SetLookupKey(s string) *SubscriptionUpdate {
-	su.mutation.SetLookupKey(s)
-	return su
+func (_u *SubscriptionUpdate) SetLookupKey(v string) *SubscriptionUpdate {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableLookupKey(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetLookupKey(*s)
+func (_u *SubscriptionUpdate) SetNillableLookupKey(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (su *SubscriptionUpdate) ClearLookupKey() *SubscriptionUpdate {
-	su.mutation.ClearLookupKey()
-	return su
+func (_u *SubscriptionUpdate) ClearLookupKey() *SubscriptionUpdate {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (su *SubscriptionUpdate) SetPlanID(s string) *SubscriptionUpdate {
-	su.mutation.SetPlanID(s)
-	return su
+func (_u *SubscriptionUpdate) SetPlanID(v string) *SubscriptionUpdate {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePlanID(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetPlanID(*s)
+func (_u *SubscriptionUpdate) SetNillablePlanID(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return su
+	return _u
 }
 
 // SetSubscriptionStatus sets the "subscription_status" field.
-func (su *SubscriptionUpdate) SetSubscriptionStatus(ts types.SubscriptionStatus) *SubscriptionUpdate {
-	su.mutation.SetSubscriptionStatus(ts)
-	return su
+func (_u *SubscriptionUpdate) SetSubscriptionStatus(v types.SubscriptionStatus) *SubscriptionUpdate {
+	_u.mutation.SetSubscriptionStatus(v)
+	return _u
 }
 
 // SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableSubscriptionStatus(ts *types.SubscriptionStatus) *SubscriptionUpdate {
-	if ts != nil {
-		su.SetSubscriptionStatus(*ts)
+func (_u *SubscriptionUpdate) SetNillableSubscriptionStatus(v *types.SubscriptionStatus) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetSubscriptionStatus(*v)
 	}
-	return su
+	return _u
 }
 
 // SetBillingAnchor sets the "billing_anchor" field.
-func (su *SubscriptionUpdate) SetBillingAnchor(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetBillingAnchor(t)
-	return su
+func (_u *SubscriptionUpdate) SetBillingAnchor(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetBillingAnchor(v)
+	return _u
 }
 
 // SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetBillingAnchor(*t)
+func (_u *SubscriptionUpdate) SetNillableBillingAnchor(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetBillingAnchor(*v)
 	}
-	return su
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (su *SubscriptionUpdate) SetStartDate(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetStartDate(t)
-	return su
+func (_u *SubscriptionUpdate) SetStartDate(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableStartDate(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetStartDate(*t)
+func (_u *SubscriptionUpdate) SetNillableStartDate(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return su
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (su *SubscriptionUpdate) SetEndDate(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetEndDate(t)
-	return su
+func (_u *SubscriptionUpdate) SetEndDate(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableEndDate(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetEndDate(*t)
+func (_u *SubscriptionUpdate) SetNillableEndDate(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (su *SubscriptionUpdate) ClearEndDate() *SubscriptionUpdate {
-	su.mutation.ClearEndDate()
-	return su
+func (_u *SubscriptionUpdate) ClearEndDate() *SubscriptionUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetCurrentPeriodStart sets the "current_period_start" field.
-func (su *SubscriptionUpdate) SetCurrentPeriodStart(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetCurrentPeriodStart(t)
-	return su
+func (_u *SubscriptionUpdate) SetCurrentPeriodStart(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetCurrentPeriodStart(v)
+	return _u
 }
 
 // SetNillableCurrentPeriodStart sets the "current_period_start" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCurrentPeriodStart(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetCurrentPeriodStart(*t)
+func (_u *SubscriptionUpdate) SetNillableCurrentPeriodStart(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCurrentPeriodStart(*v)
 	}
-	return su
+	return _u
 }
 
 // SetCurrentPeriodEnd sets the "current_period_end" field.
-func (su *SubscriptionUpdate) SetCurrentPeriodEnd(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetCurrentPeriodEnd(t)
-	return su
+func (_u *SubscriptionUpdate) SetCurrentPeriodEnd(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetCurrentPeriodEnd(v)
+	return _u
 }
 
 // SetNillableCurrentPeriodEnd sets the "current_period_end" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCurrentPeriodEnd(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetCurrentPeriodEnd(*t)
+func (_u *SubscriptionUpdate) SetNillableCurrentPeriodEnd(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCurrentPeriodEnd(*v)
 	}
-	return su
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (su *SubscriptionUpdate) SetCancelledAt(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetCancelledAt(t)
-	return su
+func (_u *SubscriptionUpdate) SetCancelledAt(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCancelledAt(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetCancelledAt(*t)
+func (_u *SubscriptionUpdate) SetNillableCancelledAt(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (su *SubscriptionUpdate) ClearCancelledAt() *SubscriptionUpdate {
-	su.mutation.ClearCancelledAt()
-	return su
+func (_u *SubscriptionUpdate) ClearCancelledAt() *SubscriptionUpdate {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetCancelAt sets the "cancel_at" field.
-func (su *SubscriptionUpdate) SetCancelAt(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetCancelAt(t)
-	return su
+func (_u *SubscriptionUpdate) SetCancelAt(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetCancelAt(v)
+	return _u
 }
 
 // SetNillableCancelAt sets the "cancel_at" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCancelAt(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetCancelAt(*t)
+func (_u *SubscriptionUpdate) SetNillableCancelAt(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCancelAt(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearCancelAt clears the value of the "cancel_at" field.
-func (su *SubscriptionUpdate) ClearCancelAt() *SubscriptionUpdate {
-	su.mutation.ClearCancelAt()
-	return su
+func (_u *SubscriptionUpdate) ClearCancelAt() *SubscriptionUpdate {
+	_u.mutation.ClearCancelAt()
+	return _u
 }
 
 // SetCancelAtPeriodEnd sets the "cancel_at_period_end" field.
-func (su *SubscriptionUpdate) SetCancelAtPeriodEnd(b bool) *SubscriptionUpdate {
-	su.mutation.SetCancelAtPeriodEnd(b)
-	return su
+func (_u *SubscriptionUpdate) SetCancelAtPeriodEnd(v bool) *SubscriptionUpdate {
+	_u.mutation.SetCancelAtPeriodEnd(v)
+	return _u
 }
 
 // SetNillableCancelAtPeriodEnd sets the "cancel_at_period_end" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCancelAtPeriodEnd(b *bool) *SubscriptionUpdate {
-	if b != nil {
-		su.SetCancelAtPeriodEnd(*b)
+func (_u *SubscriptionUpdate) SetNillableCancelAtPeriodEnd(v *bool) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCancelAtPeriodEnd(*v)
 	}
-	return su
+	return _u
 }
 
 // SetTrialStart sets the "trial_start" field.
-func (su *SubscriptionUpdate) SetTrialStart(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetTrialStart(t)
-	return su
+func (_u *SubscriptionUpdate) SetTrialStart(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetTrialStart(v)
+	return _u
 }
 
 // SetNillableTrialStart sets the "trial_start" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableTrialStart(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetTrialStart(*t)
+func (_u *SubscriptionUpdate) SetNillableTrialStart(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetTrialStart(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearTrialStart clears the value of the "trial_start" field.
-func (su *SubscriptionUpdate) ClearTrialStart() *SubscriptionUpdate {
-	su.mutation.ClearTrialStart()
-	return su
+func (_u *SubscriptionUpdate) ClearTrialStart() *SubscriptionUpdate {
+	_u.mutation.ClearTrialStart()
+	return _u
 }
 
 // SetTrialEnd sets the "trial_end" field.
-func (su *SubscriptionUpdate) SetTrialEnd(t time.Time) *SubscriptionUpdate {
-	su.mutation.SetTrialEnd(t)
-	return su
+func (_u *SubscriptionUpdate) SetTrialEnd(v time.Time) *SubscriptionUpdate {
+	_u.mutation.SetTrialEnd(v)
+	return _u
 }
 
 // SetNillableTrialEnd sets the "trial_end" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableTrialEnd(t *time.Time) *SubscriptionUpdate {
-	if t != nil {
-		su.SetTrialEnd(*t)
+func (_u *SubscriptionUpdate) SetNillableTrialEnd(v *time.Time) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetTrialEnd(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearTrialEnd clears the value of the "trial_end" field.
-func (su *SubscriptionUpdate) ClearTrialEnd() *SubscriptionUpdate {
-	su.mutation.ClearTrialEnd()
-	return su
+func (_u *SubscriptionUpdate) ClearTrialEnd() *SubscriptionUpdate {
+	_u.mutation.ClearTrialEnd()
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (su *SubscriptionUpdate) SetVersion(i int) *SubscriptionUpdate {
-	su.mutation.ResetVersion()
-	su.mutation.SetVersion(i)
-	return su
+func (_u *SubscriptionUpdate) SetVersion(v int) *SubscriptionUpdate {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableVersion(i *int) *SubscriptionUpdate {
-	if i != nil {
-		su.SetVersion(*i)
+func (_u *SubscriptionUpdate) SetNillableVersion(v *int) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return su
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (su *SubscriptionUpdate) AddVersion(i int) *SubscriptionUpdate {
-	su.mutation.AddVersion(i)
-	return su
+// AddVersion adds value to the "version" field.
+func (_u *SubscriptionUpdate) AddVersion(v int) *SubscriptionUpdate {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (su *SubscriptionUpdate) SetMetadata(m map[string]string) *SubscriptionUpdate {
-	su.mutation.SetMetadata(m)
-	return su
+func (_u *SubscriptionUpdate) SetMetadata(v map[string]string) *SubscriptionUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (su *SubscriptionUpdate) ClearMetadata() *SubscriptionUpdate {
-	su.mutation.ClearMetadata()
-	return su
+func (_u *SubscriptionUpdate) ClearMetadata() *SubscriptionUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (su *SubscriptionUpdate) SetPauseStatus(ts types.PauseStatus) *SubscriptionUpdate {
-	su.mutation.SetPauseStatus(ts)
-	return su
+func (_u *SubscriptionUpdate) SetPauseStatus(v types.PauseStatus) *SubscriptionUpdate {
+	_u.mutation.SetPauseStatus(v)
+	return _u
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePauseStatus(ts *types.PauseStatus) *SubscriptionUpdate {
-	if ts != nil {
-		su.SetPauseStatus(*ts)
+func (_u *SubscriptionUpdate) SetNillablePauseStatus(v *types.PauseStatus) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetPauseStatus(*v)
 	}
-	return su
+	return _u
 }
 
 // SetActivePauseID sets the "active_pause_id" field.
-func (su *SubscriptionUpdate) SetActivePauseID(s string) *SubscriptionUpdate {
-	su.mutation.SetActivePauseID(s)
-	return su
+func (_u *SubscriptionUpdate) SetActivePauseID(v string) *SubscriptionUpdate {
+	_u.mutation.SetActivePauseID(v)
+	return _u
 }
 
 // SetNillableActivePauseID sets the "active_pause_id" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableActivePauseID(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetActivePauseID(*s)
+func (_u *SubscriptionUpdate) SetNillableActivePauseID(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetActivePauseID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearActivePauseID clears the value of the "active_pause_id" field.
-func (su *SubscriptionUpdate) ClearActivePauseID() *SubscriptionUpdate {
-	su.mutation.ClearActivePauseID()
-	return su
+func (_u *SubscriptionUpdate) ClearActivePauseID() *SubscriptionUpdate {
+	_u.mutation.ClearActivePauseID()
+	return _u
 }
 
 // SetCommitmentAmount sets the "commitment_amount" field.
-func (su *SubscriptionUpdate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionUpdate {
-	su.mutation.SetCommitmentAmount(d)
-	return su
+func (_u *SubscriptionUpdate) SetCommitmentAmount(v decimal.Decimal) *SubscriptionUpdate {
+	_u.mutation.SetCommitmentAmount(v)
+	return _u
 }
 
 // SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionUpdate {
-	if d != nil {
-		su.SetCommitmentAmount(*d)
+func (_u *SubscriptionUpdate) SetNillableCommitmentAmount(v *decimal.Decimal) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCommitmentAmount(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearCommitmentAmount clears the value of the "commitment_amount" field.
-func (su *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
-	su.mutation.ClearCommitmentAmount()
-	return su
+func (_u *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
+	_u.mutation.ClearCommitmentAmount()
+	return _u
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (su *SubscriptionUpdate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdate {
-	su.mutation.SetCommitmentDuration(tp)
-	return su
+func (_u *SubscriptionUpdate) SetCommitmentDuration(v types.BillingPeriod) *SubscriptionUpdate {
+	_u.mutation.SetCommitmentDuration(v)
+	return _u
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdate {
-	if tp != nil {
-		su.SetCommitmentDuration(*tp)
+func (_u *SubscriptionUpdate) SetNillableCommitmentDuration(v *types.BillingPeriod) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCommitmentDuration(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearCommitmentDuration clears the value of the "commitment_duration" field.
-func (su *SubscriptionUpdate) ClearCommitmentDuration() *SubscriptionUpdate {
-	su.mutation.ClearCommitmentDuration()
-	return su
+func (_u *SubscriptionUpdate) ClearCommitmentDuration() *SubscriptionUpdate {
+	_u.mutation.ClearCommitmentDuration()
+	return _u
 }
 
 // SetOverageFactor sets the "overage_factor" field.
-func (su *SubscriptionUpdate) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdate {
-	su.mutation.SetOverageFactor(d)
-	return su
+func (_u *SubscriptionUpdate) SetOverageFactor(v decimal.Decimal) *SubscriptionUpdate {
+	_u.mutation.SetOverageFactor(v)
+	return _u
 }
 
 // SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionUpdate {
-	if d != nil {
-		su.SetOverageFactor(*d)
+func (_u *SubscriptionUpdate) SetNillableOverageFactor(v *decimal.Decimal) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetOverageFactor(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearOverageFactor clears the value of the "overage_factor" field.
-func (su *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
-	su.mutation.ClearOverageFactor()
-	return su
+func (_u *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
+	_u.mutation.ClearOverageFactor()
+	return _u
 }
 
 // SetPaymentBehavior sets the "payment_behavior" field.
-func (su *SubscriptionUpdate) SetPaymentBehavior(tb types.PaymentBehavior) *SubscriptionUpdate {
-	su.mutation.SetPaymentBehavior(tb)
-	return su
+func (_u *SubscriptionUpdate) SetPaymentBehavior(v types.PaymentBehavior) *SubscriptionUpdate {
+	_u.mutation.SetPaymentBehavior(v)
+	return _u
 }
 
 // SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *SubscriptionUpdate {
-	if tb != nil {
-		su.SetPaymentBehavior(*tb)
+func (_u *SubscriptionUpdate) SetNillablePaymentBehavior(v *types.PaymentBehavior) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetPaymentBehavior(*v)
 	}
-	return su
+	return _u
 }
 
 // SetCollectionMethod sets the "collection_method" field.
-func (su *SubscriptionUpdate) SetCollectionMethod(tm types.CollectionMethod) *SubscriptionUpdate {
-	su.mutation.SetCollectionMethod(tm)
-	return su
+func (_u *SubscriptionUpdate) SetCollectionMethod(v types.CollectionMethod) *SubscriptionUpdate {
+	_u.mutation.SetCollectionMethod(v)
+	return _u
 }
 
 // SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCollectionMethod(tm *types.CollectionMethod) *SubscriptionUpdate {
-	if tm != nil {
-		su.SetCollectionMethod(*tm)
+func (_u *SubscriptionUpdate) SetNillableCollectionMethod(v *types.CollectionMethod) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetCollectionMethod(*v)
 	}
-	return su
+	return _u
 }
 
 // SetGatewayPaymentMethodID sets the "gateway_payment_method_id" field.
-func (su *SubscriptionUpdate) SetGatewayPaymentMethodID(s string) *SubscriptionUpdate {
-	su.mutation.SetGatewayPaymentMethodID(s)
-	return su
+func (_u *SubscriptionUpdate) SetGatewayPaymentMethodID(v string) *SubscriptionUpdate {
+	_u.mutation.SetGatewayPaymentMethodID(v)
+	return _u
 }
 
 // SetNillableGatewayPaymentMethodID sets the "gateway_payment_method_id" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableGatewayPaymentMethodID(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetGatewayPaymentMethodID(*s)
+func (_u *SubscriptionUpdate) SetNillableGatewayPaymentMethodID(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetGatewayPaymentMethodID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearGatewayPaymentMethodID clears the value of the "gateway_payment_method_id" field.
-func (su *SubscriptionUpdate) ClearGatewayPaymentMethodID() *SubscriptionUpdate {
-	su.mutation.ClearGatewayPaymentMethodID()
-	return su
+func (_u *SubscriptionUpdate) ClearGatewayPaymentMethodID() *SubscriptionUpdate {
+	_u.mutation.ClearGatewayPaymentMethodID()
+	return _u
 }
 
 // SetTimezone sets the "timezone" field.
-func (su *SubscriptionUpdate) SetTimezone(s string) *SubscriptionUpdate {
-	su.mutation.SetTimezone(s)
-	return su
+func (_u *SubscriptionUpdate) SetTimezone(v string) *SubscriptionUpdate {
+	_u.mutation.SetTimezone(v)
+	return _u
 }
 
 // SetNillableTimezone sets the "timezone" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableTimezone(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetTimezone(*s)
+func (_u *SubscriptionUpdate) SetNillableTimezone(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetTimezone(*v)
 	}
-	return su
+	return _u
 }
 
 // SetLineItemGrouping sets the "line_item_grouping" field.
-func (su *SubscriptionUpdate) SetLineItemGrouping(tig types.LineItemGrouping) *SubscriptionUpdate {
-	su.mutation.SetLineItemGrouping(tig)
-	return su
+func (_u *SubscriptionUpdate) SetLineItemGrouping(v types.LineItemGrouping) *SubscriptionUpdate {
+	_u.mutation.SetLineItemGrouping(v)
+	return _u
 }
 
 // SetNillableLineItemGrouping sets the "line_item_grouping" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableLineItemGrouping(tig *types.LineItemGrouping) *SubscriptionUpdate {
-	if tig != nil {
-		su.SetLineItemGrouping(*tig)
+func (_u *SubscriptionUpdate) SetNillableLineItemGrouping(v *types.LineItemGrouping) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetLineItemGrouping(*v)
 	}
-	return su
+	return _u
 }
 
 // SetEnableTrueUp sets the "enable_true_up" field.
-func (su *SubscriptionUpdate) SetEnableTrueUp(b bool) *SubscriptionUpdate {
-	su.mutation.SetEnableTrueUp(b)
-	return su
+func (_u *SubscriptionUpdate) SetEnableTrueUp(v bool) *SubscriptionUpdate {
+	_u.mutation.SetEnableTrueUp(v)
+	return _u
 }
 
 // SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdate {
-	if b != nil {
-		su.SetEnableTrueUp(*b)
+func (_u *SubscriptionUpdate) SetNillableEnableTrueUp(v *bool) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetEnableTrueUp(*v)
 	}
-	return su
+	return _u
 }
 
 // SetInvoicingCustomerID sets the "invoicing_customer_id" field.
-func (su *SubscriptionUpdate) SetInvoicingCustomerID(s string) *SubscriptionUpdate {
-	su.mutation.SetInvoicingCustomerID(s)
-	return su
+func (_u *SubscriptionUpdate) SetInvoicingCustomerID(v string) *SubscriptionUpdate {
+	_u.mutation.SetInvoicingCustomerID(v)
+	return _u
 }
 
 // SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableInvoicingCustomerID(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetInvoicingCustomerID(*s)
+func (_u *SubscriptionUpdate) SetNillableInvoicingCustomerID(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetInvoicingCustomerID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
-func (su *SubscriptionUpdate) ClearInvoicingCustomerID() *SubscriptionUpdate {
-	su.mutation.ClearInvoicingCustomerID()
-	return su
+func (_u *SubscriptionUpdate) ClearInvoicingCustomerID() *SubscriptionUpdate {
+	_u.mutation.ClearInvoicingCustomerID()
+	return _u
 }
 
 // SetParentSubscriptionID sets the "parent_subscription_id" field.
-func (su *SubscriptionUpdate) SetParentSubscriptionID(s string) *SubscriptionUpdate {
-	su.mutation.SetParentSubscriptionID(s)
-	return su
+func (_u *SubscriptionUpdate) SetParentSubscriptionID(v string) *SubscriptionUpdate {
+	_u.mutation.SetParentSubscriptionID(v)
+	return _u
 }
 
 // SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetParentSubscriptionID(*s)
+func (_u *SubscriptionUpdate) SetNillableParentSubscriptionID(v *string) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetParentSubscriptionID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
-func (su *SubscriptionUpdate) ClearParentSubscriptionID() *SubscriptionUpdate {
-	su.mutation.ClearParentSubscriptionID()
-	return su
+func (_u *SubscriptionUpdate) ClearParentSubscriptionID() *SubscriptionUpdate {
+	_u.mutation.ClearParentSubscriptionID()
+	return _u
 }
 
 // SetPaymentTerms sets the "payment_terms" field.
-func (su *SubscriptionUpdate) SetPaymentTerms(tt types.PaymentTerms) *SubscriptionUpdate {
-	su.mutation.SetPaymentTerms(tt)
-	return su
+func (_u *SubscriptionUpdate) SetPaymentTerms(v types.PaymentTerms) *SubscriptionUpdate {
+	_u.mutation.SetPaymentTerms(v)
+	return _u
 }
 
 // SetNillablePaymentTerms sets the "payment_terms" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePaymentTerms(tt *types.PaymentTerms) *SubscriptionUpdate {
-	if tt != nil {
-		su.SetPaymentTerms(*tt)
+func (_u *SubscriptionUpdate) SetNillablePaymentTerms(v *types.PaymentTerms) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetPaymentTerms(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearPaymentTerms clears the value of the "payment_terms" field.
-func (su *SubscriptionUpdate) ClearPaymentTerms() *SubscriptionUpdate {
-	su.mutation.ClearPaymentTerms()
-	return su
+func (_u *SubscriptionUpdate) ClearPaymentTerms() *SubscriptionUpdate {
+	_u.mutation.ClearPaymentTerms()
+	return _u
 }
 
 // SetSubscriptionType sets the "subscription_type" field.
-func (su *SubscriptionUpdate) SetSubscriptionType(tt types.SubscriptionType) *SubscriptionUpdate {
-	su.mutation.SetSubscriptionType(tt)
-	return su
+func (_u *SubscriptionUpdate) SetSubscriptionType(v types.SubscriptionType) *SubscriptionUpdate {
+	_u.mutation.SetSubscriptionType(v)
+	return _u
 }
 
 // SetNillableSubscriptionType sets the "subscription_type" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableSubscriptionType(tt *types.SubscriptionType) *SubscriptionUpdate {
-	if tt != nil {
-		su.SetSubscriptionType(*tt)
+func (_u *SubscriptionUpdate) SetNillableSubscriptionType(v *types.SubscriptionType) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetSubscriptionType(*v)
 	}
-	return su
+	return _u
 }
 
 // SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
-func (su *SubscriptionUpdate) SetAutoInvoiceThreshold(d decimal.Decimal) *SubscriptionUpdate {
-	su.mutation.SetAutoInvoiceThreshold(d)
-	return su
+func (_u *SubscriptionUpdate) SetAutoInvoiceThreshold(v decimal.Decimal) *SubscriptionUpdate {
+	_u.mutation.SetAutoInvoiceThreshold(v)
+	return _u
 }
 
 // SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *SubscriptionUpdate {
-	if d != nil {
-		su.SetAutoInvoiceThreshold(*d)
+func (_u *SubscriptionUpdate) SetNillableAutoInvoiceThreshold(v *decimal.Decimal) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetAutoInvoiceThreshold(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
-func (su *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
-	su.mutation.ClearAutoInvoiceThreshold()
-	return su
+func (_u *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
+	_u.mutation.ClearAutoInvoiceThreshold()
+	return _u
 }
 
 // SetSyncedPriceSequence sets the "synced_price_sequence" field.
-func (su *SubscriptionUpdate) SetSyncedPriceSequence(i int64) *SubscriptionUpdate {
-	su.mutation.ResetSyncedPriceSequence()
-	su.mutation.SetSyncedPriceSequence(i)
-	return su
+func (_u *SubscriptionUpdate) SetSyncedPriceSequence(v int64) *SubscriptionUpdate {
+	_u.mutation.ResetSyncedPriceSequence()
+	_u.mutation.SetSyncedPriceSequence(v)
+	return _u
 }
 
 // SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableSyncedPriceSequence(i *int64) *SubscriptionUpdate {
-	if i != nil {
-		su.SetSyncedPriceSequence(*i)
+func (_u *SubscriptionUpdate) SetNillableSyncedPriceSequence(v *int64) *SubscriptionUpdate {
+	if v != nil {
+		_u.SetSyncedPriceSequence(*v)
 	}
-	return su
+	return _u
 }
 
-// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
-func (su *SubscriptionUpdate) AddSyncedPriceSequence(i int64) *SubscriptionUpdate {
-	su.mutation.AddSyncedPriceSequence(i)
-	return su
+// AddSyncedPriceSequence adds value to the "synced_price_sequence" field.
+func (_u *SubscriptionUpdate) AddSyncedPriceSequence(v int64) *SubscriptionUpdate {
+	_u.mutation.AddSyncedPriceSequence(v)
+	return _u
 }
 
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
-func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddLineItemIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddLineItemIDs(ids...)
+	return _u
 }
 
 // AddLineItems adds the "line_items" edges to the SubscriptionLineItem entity.
-func (su *SubscriptionUpdate) AddLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) AddLineItems(v ...*SubscriptionLineItem) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddLineItemIDs(ids...)
+	return _u.AddLineItemIDs(ids...)
 }
 
 // AddPauseIDs adds the "pauses" edge to the SubscriptionPause entity by IDs.
-func (su *SubscriptionUpdate) AddPauseIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddPauseIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddPauseIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddPauseIDs(ids...)
+	return _u
 }
 
 // AddPauses adds the "pauses" edges to the SubscriptionPause entity.
-func (su *SubscriptionUpdate) AddPauses(s ...*SubscriptionPause) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) AddPauses(v ...*SubscriptionPause) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddPauseIDs(ids...)
+	return _u.AddPauseIDs(ids...)
 }
 
 // AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
-func (su *SubscriptionUpdate) AddPhaseIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddPhaseIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddPhaseIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddPhaseIDs(ids...)
+	return _u
 }
 
 // AddPhases adds the "phases" edges to the SubscriptionPhase entity.
-func (su *SubscriptionUpdate) AddPhases(s ...*SubscriptionPhase) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) AddPhases(v ...*SubscriptionPhase) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddPhaseIDs(ids...)
+	return _u.AddPhaseIDs(ids...)
 }
 
 // AddScheduleIDs adds the "schedules" edge to the SubscriptionSchedule entity by IDs.
-func (su *SubscriptionUpdate) AddScheduleIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddScheduleIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddScheduleIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddScheduleIDs(ids...)
+	return _u
 }
 
 // AddSchedules adds the "schedules" edges to the SubscriptionSchedule entity.
-func (su *SubscriptionUpdate) AddSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) AddSchedules(v ...*SubscriptionSchedule) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddScheduleIDs(ids...)
+	return _u.AddScheduleIDs(ids...)
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
-func (su *SubscriptionUpdate) AddCreditGrantIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddCreditGrantIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddCreditGrantIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddCreditGrantIDs(ids...)
+	return _u
 }
 
 // AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
-func (su *SubscriptionUpdate) AddCreditGrants(c ...*CreditGrant) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) AddCreditGrants(v ...*CreditGrant) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddCreditGrantIDs(ids...)
+	return _u.AddCreditGrantIDs(ids...)
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (su *SubscriptionUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddCouponAssociationIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (su *SubscriptionUpdate) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) AddCouponAssociations(v ...*CouponAssociation) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (su *SubscriptionUpdate) AddCouponApplicationIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.AddCouponApplicationIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) AddCouponApplicationIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (su *SubscriptionUpdate) AddCouponApplications(c ...*CouponApplication) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) AddCouponApplications(v ...*CouponApplication) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
-func (su *SubscriptionUpdate) SetInvoicingCustomer(c *Customer) *SubscriptionUpdate {
-	return su.SetInvoicingCustomerID(c.ID)
+func (_u *SubscriptionUpdate) SetInvoicingCustomer(v *Customer) *SubscriptionUpdate {
+	return _u.SetInvoicingCustomerID(v.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
-func (su *SubscriptionUpdate) Mutation() *SubscriptionMutation {
-	return su.mutation
+func (_u *SubscriptionUpdate) Mutation() *SubscriptionMutation {
+	return _u.mutation
 }
 
 // ClearLineItems clears all "line_items" edges to the SubscriptionLineItem entity.
-func (su *SubscriptionUpdate) ClearLineItems() *SubscriptionUpdate {
-	su.mutation.ClearLineItems()
-	return su
+func (_u *SubscriptionUpdate) ClearLineItems() *SubscriptionUpdate {
+	_u.mutation.ClearLineItems()
+	return _u
 }
 
 // RemoveLineItemIDs removes the "line_items" edge to SubscriptionLineItem entities by IDs.
-func (su *SubscriptionUpdate) RemoveLineItemIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemoveLineItemIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemoveLineItemIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemoveLineItemIDs(ids...)
+	return _u
 }
 
 // RemoveLineItems removes "line_items" edges to SubscriptionLineItem entities.
-func (su *SubscriptionUpdate) RemoveLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) RemoveLineItems(v ...*SubscriptionLineItem) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemoveLineItemIDs(ids...)
+	return _u.RemoveLineItemIDs(ids...)
 }
 
 // ClearPauses clears all "pauses" edges to the SubscriptionPause entity.
-func (su *SubscriptionUpdate) ClearPauses() *SubscriptionUpdate {
-	su.mutation.ClearPauses()
-	return su
+func (_u *SubscriptionUpdate) ClearPauses() *SubscriptionUpdate {
+	_u.mutation.ClearPauses()
+	return _u
 }
 
 // RemovePauseIDs removes the "pauses" edge to SubscriptionPause entities by IDs.
-func (su *SubscriptionUpdate) RemovePauseIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemovePauseIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemovePauseIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemovePauseIDs(ids...)
+	return _u
 }
 
 // RemovePauses removes "pauses" edges to SubscriptionPause entities.
-func (su *SubscriptionUpdate) RemovePauses(s ...*SubscriptionPause) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) RemovePauses(v ...*SubscriptionPause) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemovePauseIDs(ids...)
+	return _u.RemovePauseIDs(ids...)
 }
 
 // ClearPhases clears all "phases" edges to the SubscriptionPhase entity.
-func (su *SubscriptionUpdate) ClearPhases() *SubscriptionUpdate {
-	su.mutation.ClearPhases()
-	return su
+func (_u *SubscriptionUpdate) ClearPhases() *SubscriptionUpdate {
+	_u.mutation.ClearPhases()
+	return _u
 }
 
 // RemovePhaseIDs removes the "phases" edge to SubscriptionPhase entities by IDs.
-func (su *SubscriptionUpdate) RemovePhaseIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemovePhaseIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemovePhaseIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemovePhaseIDs(ids...)
+	return _u
 }
 
 // RemovePhases removes "phases" edges to SubscriptionPhase entities.
-func (su *SubscriptionUpdate) RemovePhases(s ...*SubscriptionPhase) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) RemovePhases(v ...*SubscriptionPhase) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemovePhaseIDs(ids...)
+	return _u.RemovePhaseIDs(ids...)
 }
 
 // ClearSchedules clears all "schedules" edges to the SubscriptionSchedule entity.
-func (su *SubscriptionUpdate) ClearSchedules() *SubscriptionUpdate {
-	su.mutation.ClearSchedules()
-	return su
+func (_u *SubscriptionUpdate) ClearSchedules() *SubscriptionUpdate {
+	_u.mutation.ClearSchedules()
+	return _u
 }
 
 // RemoveScheduleIDs removes the "schedules" edge to SubscriptionSchedule entities by IDs.
-func (su *SubscriptionUpdate) RemoveScheduleIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemoveScheduleIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemoveScheduleIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemoveScheduleIDs(ids...)
+	return _u
 }
 
 // RemoveSchedules removes "schedules" edges to SubscriptionSchedule entities.
-func (su *SubscriptionUpdate) RemoveSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdate {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdate) RemoveSchedules(v ...*SubscriptionSchedule) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemoveScheduleIDs(ids...)
+	return _u.RemoveScheduleIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
-func (su *SubscriptionUpdate) ClearCreditGrants() *SubscriptionUpdate {
-	su.mutation.ClearCreditGrants()
-	return su
+func (_u *SubscriptionUpdate) ClearCreditGrants() *SubscriptionUpdate {
+	_u.mutation.ClearCreditGrants()
+	return _u
 }
 
 // RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
-func (su *SubscriptionUpdate) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemoveCreditGrantIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemoveCreditGrantIDs(ids...)
+	return _u
 }
 
 // RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
-func (su *SubscriptionUpdate) RemoveCreditGrants(c ...*CreditGrant) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) RemoveCreditGrants(v ...*CreditGrant) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemoveCreditGrantIDs(ids...)
+	return _u.RemoveCreditGrantIDs(ids...)
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (su *SubscriptionUpdate) ClearCouponAssociations() *SubscriptionUpdate {
-	su.mutation.ClearCouponAssociations()
-	return su
+func (_u *SubscriptionUpdate) ClearCouponAssociations() *SubscriptionUpdate {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (su *SubscriptionUpdate) RemoveCouponAssociationIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemoveCouponAssociationIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemoveCouponAssociationIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (su *SubscriptionUpdate) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) RemoveCouponAssociations(v ...*CouponAssociation) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (su *SubscriptionUpdate) ClearCouponApplications() *SubscriptionUpdate {
-	su.mutation.ClearCouponApplications()
-	return su
+func (_u *SubscriptionUpdate) ClearCouponApplications() *SubscriptionUpdate {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (su *SubscriptionUpdate) RemoveCouponApplicationIDs(ids ...string) *SubscriptionUpdate {
-	su.mutation.RemoveCouponApplicationIDs(ids...)
-	return su
+func (_u *SubscriptionUpdate) RemoveCouponApplicationIDs(ids ...string) *SubscriptionUpdate {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (su *SubscriptionUpdate) RemoveCouponApplications(c ...*CouponApplication) *SubscriptionUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdate) RemoveCouponApplications(v ...*CouponApplication) *SubscriptionUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return su.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
-func (su *SubscriptionUpdate) ClearInvoicingCustomer() *SubscriptionUpdate {
-	su.mutation.ClearInvoicingCustomer()
-	return su
+func (_u *SubscriptionUpdate) ClearInvoicingCustomer() *SubscriptionUpdate {
+	_u.mutation.ClearInvoicingCustomer()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (su *SubscriptionUpdate) Save(ctx context.Context) (int, error) {
-	su.defaults()
-	return withHooks(ctx, su.sqlSave, su.mutation, su.hooks)
+func (_u *SubscriptionUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (su *SubscriptionUpdate) SaveX(ctx context.Context) int {
-	affected, err := su.Save(ctx)
+func (_u *SubscriptionUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -912,69 +912,69 @@ func (su *SubscriptionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (su *SubscriptionUpdate) Exec(ctx context.Context) error {
-	_, err := su.Save(ctx)
+func (_u *SubscriptionUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (su *SubscriptionUpdate) ExecX(ctx context.Context) {
-	if err := su.Exec(ctx); err != nil {
+func (_u *SubscriptionUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (su *SubscriptionUpdate) defaults() {
-	if _, ok := su.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscription.UpdateDefaultUpdatedAt()
-		su.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (su *SubscriptionUpdate) check() error {
-	if v, ok := su.mutation.PlanID(); ok {
+func (_u *SubscriptionUpdate) check() error {
+	if v, ok := _u.mutation.PlanID(); ok {
 		if err := subscription.PlanIDValidator(v); err != nil {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Subscription.plan_id": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.SubscriptionStatus(); ok {
+	if v, ok := _u.mutation.SubscriptionStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_status": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.PauseStatus(); ok {
+	if v, ok := _u.mutation.PauseStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.pause_status": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.CommitmentDuration(); ok {
+	if v, ok := _u.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.PaymentBehavior(); ok {
+	if v, ok := _u.mutation.PaymentBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.CollectionMethod(); ok {
+	if v, ok := _u.mutation.CollectionMethod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.LineItemGrouping(); ok {
+	if v, ok := _u.mutation.LineItemGrouping(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.PaymentTerms(); ok {
+	if v, ok := _u.mutation.PaymentTerms(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.SubscriptionType(); ok {
+	if v, ok := _u.mutation.SubscriptionType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_type": %w`, err)}
 		}
@@ -982,181 +982,181 @@ func (su *SubscriptionUpdate) check() error {
 	return nil
 }
 
-func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := su.check(); err != nil {
-		return n, err
+func (_u *SubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
-	if ps := su.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := su.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscription.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := su.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscription.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if su.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscription.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := su.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscription.FieldUpdatedBy, field.TypeString, value)
 	}
-	if su.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscription.FieldUpdatedBy, field.TypeString)
 	}
-	if su.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscription.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := su.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(subscription.FieldLookupKey, field.TypeString, value)
 	}
-	if su.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(subscription.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := su.mutation.PlanID(); ok {
+	if value, ok := _u.mutation.PlanID(); ok {
 		_spec.SetField(subscription.FieldPlanID, field.TypeString, value)
 	}
-	if value, ok := su.mutation.SubscriptionStatus(); ok {
+	if value, ok := _u.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
 	}
-	if value, ok := su.mutation.BillingAnchor(); ok {
+	if value, ok := _u.mutation.BillingAnchor(); ok {
 		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
 	}
-	if value, ok := su.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
 	}
-	if value, ok := su.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)
 	}
-	if su.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscription.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := su.mutation.CurrentPeriodStart(); ok {
+	if value, ok := _u.mutation.CurrentPeriodStart(); ok {
 		_spec.SetField(subscription.FieldCurrentPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := su.mutation.CurrentPeriodEnd(); ok {
+	if value, ok := _u.mutation.CurrentPeriodEnd(); ok {
 		_spec.SetField(subscription.FieldCurrentPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := su.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(subscription.FieldCancelledAt, field.TypeTime, value)
 	}
-	if su.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(subscription.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := su.mutation.CancelAt(); ok {
+	if value, ok := _u.mutation.CancelAt(); ok {
 		_spec.SetField(subscription.FieldCancelAt, field.TypeTime, value)
 	}
-	if su.mutation.CancelAtCleared() {
+	if _u.mutation.CancelAtCleared() {
 		_spec.ClearField(subscription.FieldCancelAt, field.TypeTime)
 	}
-	if value, ok := su.mutation.CancelAtPeriodEnd(); ok {
+	if value, ok := _u.mutation.CancelAtPeriodEnd(); ok {
 		_spec.SetField(subscription.FieldCancelAtPeriodEnd, field.TypeBool, value)
 	}
-	if value, ok := su.mutation.TrialStart(); ok {
+	if value, ok := _u.mutation.TrialStart(); ok {
 		_spec.SetField(subscription.FieldTrialStart, field.TypeTime, value)
 	}
-	if su.mutation.TrialStartCleared() {
+	if _u.mutation.TrialStartCleared() {
 		_spec.ClearField(subscription.FieldTrialStart, field.TypeTime)
 	}
-	if value, ok := su.mutation.TrialEnd(); ok {
+	if value, ok := _u.mutation.TrialEnd(); ok {
 		_spec.SetField(subscription.FieldTrialEnd, field.TypeTime, value)
 	}
-	if su.mutation.TrialEndCleared() {
+	if _u.mutation.TrialEndCleared() {
 		_spec.ClearField(subscription.FieldTrialEnd, field.TypeTime)
 	}
-	if value, ok := su.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(subscription.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := su.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(subscription.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := su.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscription.FieldMetadata, field.TypeJSON, value)
 	}
-	if su.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscription.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := su.mutation.PauseStatus(); ok {
+	if value, ok := _u.mutation.PauseStatus(); ok {
 		_spec.SetField(subscription.FieldPauseStatus, field.TypeString, value)
 	}
-	if value, ok := su.mutation.ActivePauseID(); ok {
+	if value, ok := _u.mutation.ActivePauseID(); ok {
 		_spec.SetField(subscription.FieldActivePauseID, field.TypeString, value)
 	}
-	if su.mutation.ActivePauseIDCleared() {
+	if _u.mutation.ActivePauseIDCleared() {
 		_spec.ClearField(subscription.FieldActivePauseID, field.TypeString)
 	}
-	if value, ok := su.mutation.CommitmentAmount(); ok {
+	if value, ok := _u.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
 	}
-	if su.mutation.CommitmentAmountCleared() {
+	if _u.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
 	}
-	if value, ok := su.mutation.CommitmentDuration(); ok {
+	if value, ok := _u.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
 	}
-	if su.mutation.CommitmentDurationCleared() {
+	if _u.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
 	}
-	if value, ok := su.mutation.OverageFactor(); ok {
+	if value, ok := _u.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 	}
-	if su.mutation.OverageFactorCleared() {
+	if _u.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
 	}
-	if value, ok := su.mutation.PaymentBehavior(); ok {
+	if value, ok := _u.mutation.PaymentBehavior(); ok {
 		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeString, value)
 	}
-	if value, ok := su.mutation.CollectionMethod(); ok {
+	if value, ok := _u.mutation.CollectionMethod(); ok {
 		_spec.SetField(subscription.FieldCollectionMethod, field.TypeString, value)
 	}
-	if value, ok := su.mutation.GatewayPaymentMethodID(); ok {
+	if value, ok := _u.mutation.GatewayPaymentMethodID(); ok {
 		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
 	}
-	if su.mutation.GatewayPaymentMethodIDCleared() {
+	if _u.mutation.GatewayPaymentMethodIDCleared() {
 		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
 	}
-	if value, ok := su.mutation.Timezone(); ok {
+	if value, ok := _u.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
 	}
-	if value, ok := su.mutation.LineItemGrouping(); ok {
+	if value, ok := _u.mutation.LineItemGrouping(); ok {
 		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
 	}
-	if value, ok := su.mutation.EnableTrueUp(); ok {
+	if value, ok := _u.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
-	if value, ok := su.mutation.ParentSubscriptionID(); ok {
+	if value, ok := _u.mutation.ParentSubscriptionID(); ok {
 		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
 	}
-	if su.mutation.ParentSubscriptionIDCleared() {
+	if _u.mutation.ParentSubscriptionIDCleared() {
 		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
-	if value, ok := su.mutation.PaymentTerms(); ok {
+	if value, ok := _u.mutation.PaymentTerms(); ok {
 		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
 	}
-	if su.mutation.PaymentTermsCleared() {
+	if _u.mutation.PaymentTermsCleared() {
 		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
 	}
-	if value, ok := su.mutation.SubscriptionType(); ok {
+	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
 	}
-	if value, ok := su.mutation.AutoInvoiceThreshold(); ok {
+	if value, ok := _u.mutation.AutoInvoiceThreshold(); ok {
 		_spec.SetField(subscription.FieldAutoInvoiceThreshold, field.TypeOther, value)
 	}
-	if su.mutation.AutoInvoiceThresholdCleared() {
+	if _u.mutation.AutoInvoiceThresholdCleared() {
 		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
-	if value, ok := su.mutation.SyncedPriceSequence(); ok {
+	if value, ok := _u.mutation.SyncedPriceSequence(); ok {
 		_spec.SetField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
-	if value, ok := su.mutation.AddedSyncedPriceSequence(); ok {
+	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
 		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
-	if su.mutation.LineItemsCleared() {
+	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1169,23 +1169,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !su.mutation.LineItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   subscription.LineItemsTable,
-			Columns: []string{subscription.LineItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := su.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !_u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1199,9 +1183,25 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LineItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.PausesCleared() {
+	if _u.mutation.PausesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1214,7 +1214,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedPausesIDs(); len(nodes) > 0 && !su.mutation.PausesCleared() {
+	if nodes := _u.mutation.RemovedPausesIDs(); len(nodes) > 0 && !_u.mutation.PausesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1230,7 +1230,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.PausesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PausesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1246,7 +1246,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.PhasesCleared() {
+	if _u.mutation.PhasesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1259,23 +1259,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !su.mutation.PhasesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   subscription.PhasesTable,
-			Columns: []string{subscription.PhasesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := su.mutation.PhasesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !_u.mutation.PhasesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1289,9 +1273,25 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.SchedulesCleared() {
+	if _u.mutation.SchedulesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1304,7 +1304,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !su.mutation.SchedulesCleared() {
+	if nodes := _u.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !_u.mutation.SchedulesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1320,7 +1320,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.SchedulesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SchedulesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1336,7 +1336,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.CreditGrantsCleared() {
+	if _u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1349,7 +1349,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !su.mutation.CreditGrantsCleared() {
+	if nodes := _u.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !_u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1365,7 +1365,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1381,7 +1381,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1394,7 +1394,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !su.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1410,7 +1410,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1426,7 +1426,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1439,7 +1439,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !su.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1455,7 +1455,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1471,7 +1471,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if su.mutation.InvoicingCustomerCleared() {
+	if _u.mutation.InvoicingCustomerCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
@@ -1484,7 +1484,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := su.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
@@ -1500,7 +1500,7 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscription.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1508,8 +1508,8 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	su.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SubscriptionUpdateOne is the builder for updating a single Subscription entity.
@@ -1521,885 +1521,885 @@ type SubscriptionUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (suo *SubscriptionUpdateOne) SetStatus(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetStatus(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetStatus(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableStatus(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetStatus(*s)
+func (_u *SubscriptionUpdateOne) SetNillableStatus(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (suo *SubscriptionUpdateOne) SetUpdatedAt(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetUpdatedAt(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (suo *SubscriptionUpdateOne) SetUpdatedBy(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetUpdatedBy(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetUpdatedBy(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableUpdatedBy(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetUpdatedBy(*s)
+func (_u *SubscriptionUpdateOne) SetNillableUpdatedBy(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (suo *SubscriptionUpdateOne) ClearUpdatedBy() *SubscriptionUpdateOne {
-	suo.mutation.ClearUpdatedBy()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearUpdatedBy() *SubscriptionUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (suo *SubscriptionUpdateOne) SetLookupKey(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetLookupKey(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetLookupKey(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableLookupKey(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetLookupKey(*s)
+func (_u *SubscriptionUpdateOne) SetNillableLookupKey(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (suo *SubscriptionUpdateOne) ClearLookupKey() *SubscriptionUpdateOne {
-	suo.mutation.ClearLookupKey()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearLookupKey() *SubscriptionUpdateOne {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (suo *SubscriptionUpdateOne) SetPlanID(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetPlanID(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetPlanID(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePlanID(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetPlanID(*s)
+func (_u *SubscriptionUpdateOne) SetNillablePlanID(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetSubscriptionStatus sets the "subscription_status" field.
-func (suo *SubscriptionUpdateOne) SetSubscriptionStatus(ts types.SubscriptionStatus) *SubscriptionUpdateOne {
-	suo.mutation.SetSubscriptionStatus(ts)
-	return suo
+func (_u *SubscriptionUpdateOne) SetSubscriptionStatus(v types.SubscriptionStatus) *SubscriptionUpdateOne {
+	_u.mutation.SetSubscriptionStatus(v)
+	return _u
 }
 
 // SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableSubscriptionStatus(ts *types.SubscriptionStatus) *SubscriptionUpdateOne {
-	if ts != nil {
-		suo.SetSubscriptionStatus(*ts)
+func (_u *SubscriptionUpdateOne) SetNillableSubscriptionStatus(v *types.SubscriptionStatus) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionStatus(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetBillingAnchor sets the "billing_anchor" field.
-func (suo *SubscriptionUpdateOne) SetBillingAnchor(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetBillingAnchor(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetBillingAnchor(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetBillingAnchor(v)
+	return _u
 }
 
 // SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetBillingAnchor(*t)
+func (_u *SubscriptionUpdateOne) SetNillableBillingAnchor(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetBillingAnchor(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (suo *SubscriptionUpdateOne) SetStartDate(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetStartDate(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetStartDate(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableStartDate(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetStartDate(*t)
+func (_u *SubscriptionUpdateOne) SetNillableStartDate(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (suo *SubscriptionUpdateOne) SetEndDate(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetEndDate(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetEndDate(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableEndDate(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetEndDate(*t)
+func (_u *SubscriptionUpdateOne) SetNillableEndDate(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (suo *SubscriptionUpdateOne) ClearEndDate() *SubscriptionUpdateOne {
-	suo.mutation.ClearEndDate()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearEndDate() *SubscriptionUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetCurrentPeriodStart sets the "current_period_start" field.
-func (suo *SubscriptionUpdateOne) SetCurrentPeriodStart(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetCurrentPeriodStart(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCurrentPeriodStart(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetCurrentPeriodStart(v)
+	return _u
 }
 
 // SetNillableCurrentPeriodStart sets the "current_period_start" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCurrentPeriodStart(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetCurrentPeriodStart(*t)
+func (_u *SubscriptionUpdateOne) SetNillableCurrentPeriodStart(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCurrentPeriodStart(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetCurrentPeriodEnd sets the "current_period_end" field.
-func (suo *SubscriptionUpdateOne) SetCurrentPeriodEnd(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetCurrentPeriodEnd(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCurrentPeriodEnd(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetCurrentPeriodEnd(v)
+	return _u
 }
 
 // SetNillableCurrentPeriodEnd sets the "current_period_end" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCurrentPeriodEnd(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetCurrentPeriodEnd(*t)
+func (_u *SubscriptionUpdateOne) SetNillableCurrentPeriodEnd(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCurrentPeriodEnd(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (suo *SubscriptionUpdateOne) SetCancelledAt(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetCancelledAt(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCancelledAt(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCancelledAt(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetCancelledAt(*t)
+func (_u *SubscriptionUpdateOne) SetNillableCancelledAt(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (suo *SubscriptionUpdateOne) ClearCancelledAt() *SubscriptionUpdateOne {
-	suo.mutation.ClearCancelledAt()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCancelledAt() *SubscriptionUpdateOne {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetCancelAt sets the "cancel_at" field.
-func (suo *SubscriptionUpdateOne) SetCancelAt(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetCancelAt(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCancelAt(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetCancelAt(v)
+	return _u
 }
 
 // SetNillableCancelAt sets the "cancel_at" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCancelAt(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetCancelAt(*t)
+func (_u *SubscriptionUpdateOne) SetNillableCancelAt(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCancelAt(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearCancelAt clears the value of the "cancel_at" field.
-func (suo *SubscriptionUpdateOne) ClearCancelAt() *SubscriptionUpdateOne {
-	suo.mutation.ClearCancelAt()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCancelAt() *SubscriptionUpdateOne {
+	_u.mutation.ClearCancelAt()
+	return _u
 }
 
 // SetCancelAtPeriodEnd sets the "cancel_at_period_end" field.
-func (suo *SubscriptionUpdateOne) SetCancelAtPeriodEnd(b bool) *SubscriptionUpdateOne {
-	suo.mutation.SetCancelAtPeriodEnd(b)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCancelAtPeriodEnd(v bool) *SubscriptionUpdateOne {
+	_u.mutation.SetCancelAtPeriodEnd(v)
+	return _u
 }
 
 // SetNillableCancelAtPeriodEnd sets the "cancel_at_period_end" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCancelAtPeriodEnd(b *bool) *SubscriptionUpdateOne {
-	if b != nil {
-		suo.SetCancelAtPeriodEnd(*b)
+func (_u *SubscriptionUpdateOne) SetNillableCancelAtPeriodEnd(v *bool) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCancelAtPeriodEnd(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetTrialStart sets the "trial_start" field.
-func (suo *SubscriptionUpdateOne) SetTrialStart(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetTrialStart(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetTrialStart(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetTrialStart(v)
+	return _u
 }
 
 // SetNillableTrialStart sets the "trial_start" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableTrialStart(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetTrialStart(*t)
+func (_u *SubscriptionUpdateOne) SetNillableTrialStart(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetTrialStart(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearTrialStart clears the value of the "trial_start" field.
-func (suo *SubscriptionUpdateOne) ClearTrialStart() *SubscriptionUpdateOne {
-	suo.mutation.ClearTrialStart()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearTrialStart() *SubscriptionUpdateOne {
+	_u.mutation.ClearTrialStart()
+	return _u
 }
 
 // SetTrialEnd sets the "trial_end" field.
-func (suo *SubscriptionUpdateOne) SetTrialEnd(t time.Time) *SubscriptionUpdateOne {
-	suo.mutation.SetTrialEnd(t)
-	return suo
+func (_u *SubscriptionUpdateOne) SetTrialEnd(v time.Time) *SubscriptionUpdateOne {
+	_u.mutation.SetTrialEnd(v)
+	return _u
 }
 
 // SetNillableTrialEnd sets the "trial_end" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableTrialEnd(t *time.Time) *SubscriptionUpdateOne {
-	if t != nil {
-		suo.SetTrialEnd(*t)
+func (_u *SubscriptionUpdateOne) SetNillableTrialEnd(v *time.Time) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetTrialEnd(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearTrialEnd clears the value of the "trial_end" field.
-func (suo *SubscriptionUpdateOne) ClearTrialEnd() *SubscriptionUpdateOne {
-	suo.mutation.ClearTrialEnd()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearTrialEnd() *SubscriptionUpdateOne {
+	_u.mutation.ClearTrialEnd()
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (suo *SubscriptionUpdateOne) SetVersion(i int) *SubscriptionUpdateOne {
-	suo.mutation.ResetVersion()
-	suo.mutation.SetVersion(i)
-	return suo
+func (_u *SubscriptionUpdateOne) SetVersion(v int) *SubscriptionUpdateOne {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableVersion(i *int) *SubscriptionUpdateOne {
-	if i != nil {
-		suo.SetVersion(*i)
+func (_u *SubscriptionUpdateOne) SetNillableVersion(v *int) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return suo
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (suo *SubscriptionUpdateOne) AddVersion(i int) *SubscriptionUpdateOne {
-	suo.mutation.AddVersion(i)
-	return suo
+// AddVersion adds value to the "version" field.
+func (_u *SubscriptionUpdateOne) AddVersion(v int) *SubscriptionUpdateOne {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (suo *SubscriptionUpdateOne) SetMetadata(m map[string]string) *SubscriptionUpdateOne {
-	suo.mutation.SetMetadata(m)
-	return suo
+func (_u *SubscriptionUpdateOne) SetMetadata(v map[string]string) *SubscriptionUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (suo *SubscriptionUpdateOne) ClearMetadata() *SubscriptionUpdateOne {
-	suo.mutation.ClearMetadata()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearMetadata() *SubscriptionUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (suo *SubscriptionUpdateOne) SetPauseStatus(ts types.PauseStatus) *SubscriptionUpdateOne {
-	suo.mutation.SetPauseStatus(ts)
-	return suo
+func (_u *SubscriptionUpdateOne) SetPauseStatus(v types.PauseStatus) *SubscriptionUpdateOne {
+	_u.mutation.SetPauseStatus(v)
+	return _u
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePauseStatus(ts *types.PauseStatus) *SubscriptionUpdateOne {
-	if ts != nil {
-		suo.SetPauseStatus(*ts)
+func (_u *SubscriptionUpdateOne) SetNillablePauseStatus(v *types.PauseStatus) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPauseStatus(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetActivePauseID sets the "active_pause_id" field.
-func (suo *SubscriptionUpdateOne) SetActivePauseID(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetActivePauseID(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetActivePauseID(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetActivePauseID(v)
+	return _u
 }
 
 // SetNillableActivePauseID sets the "active_pause_id" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableActivePauseID(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetActivePauseID(*s)
+func (_u *SubscriptionUpdateOne) SetNillableActivePauseID(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetActivePauseID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearActivePauseID clears the value of the "active_pause_id" field.
-func (suo *SubscriptionUpdateOne) ClearActivePauseID() *SubscriptionUpdateOne {
-	suo.mutation.ClearActivePauseID()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearActivePauseID() *SubscriptionUpdateOne {
+	_u.mutation.ClearActivePauseID()
+	return _u
 }
 
 // SetCommitmentAmount sets the "commitment_amount" field.
-func (suo *SubscriptionUpdateOne) SetCommitmentAmount(d decimal.Decimal) *SubscriptionUpdateOne {
-	suo.mutation.SetCommitmentAmount(d)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCommitmentAmount(v decimal.Decimal) *SubscriptionUpdateOne {
+	_u.mutation.SetCommitmentAmount(v)
+	return _u
 }
 
 // SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionUpdateOne {
-	if d != nil {
-		suo.SetCommitmentAmount(*d)
+func (_u *SubscriptionUpdateOne) SetNillableCommitmentAmount(v *decimal.Decimal) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCommitmentAmount(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearCommitmentAmount clears the value of the "commitment_amount" field.
-func (suo *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne {
-	suo.mutation.ClearCommitmentAmount()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne {
+	_u.mutation.ClearCommitmentAmount()
+	return _u
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (suo *SubscriptionUpdateOne) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdateOne {
-	suo.mutation.SetCommitmentDuration(tp)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCommitmentDuration(v types.BillingPeriod) *SubscriptionUpdateOne {
+	_u.mutation.SetCommitmentDuration(v)
+	return _u
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdateOne {
-	if tp != nil {
-		suo.SetCommitmentDuration(*tp)
+func (_u *SubscriptionUpdateOne) SetNillableCommitmentDuration(v *types.BillingPeriod) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCommitmentDuration(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearCommitmentDuration clears the value of the "commitment_duration" field.
-func (suo *SubscriptionUpdateOne) ClearCommitmentDuration() *SubscriptionUpdateOne {
-	suo.mutation.ClearCommitmentDuration()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCommitmentDuration() *SubscriptionUpdateOne {
+	_u.mutation.ClearCommitmentDuration()
+	return _u
 }
 
 // SetOverageFactor sets the "overage_factor" field.
-func (suo *SubscriptionUpdateOne) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdateOne {
-	suo.mutation.SetOverageFactor(d)
-	return suo
+func (_u *SubscriptionUpdateOne) SetOverageFactor(v decimal.Decimal) *SubscriptionUpdateOne {
+	_u.mutation.SetOverageFactor(v)
+	return _u
 }
 
 // SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionUpdateOne {
-	if d != nil {
-		suo.SetOverageFactor(*d)
+func (_u *SubscriptionUpdateOne) SetNillableOverageFactor(v *decimal.Decimal) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetOverageFactor(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearOverageFactor clears the value of the "overage_factor" field.
-func (suo *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
-	suo.mutation.ClearOverageFactor()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
+	_u.mutation.ClearOverageFactor()
+	return _u
 }
 
 // SetPaymentBehavior sets the "payment_behavior" field.
-func (suo *SubscriptionUpdateOne) SetPaymentBehavior(tb types.PaymentBehavior) *SubscriptionUpdateOne {
-	suo.mutation.SetPaymentBehavior(tb)
-	return suo
+func (_u *SubscriptionUpdateOne) SetPaymentBehavior(v types.PaymentBehavior) *SubscriptionUpdateOne {
+	_u.mutation.SetPaymentBehavior(v)
+	return _u
 }
 
 // SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *SubscriptionUpdateOne {
-	if tb != nil {
-		suo.SetPaymentBehavior(*tb)
+func (_u *SubscriptionUpdateOne) SetNillablePaymentBehavior(v *types.PaymentBehavior) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPaymentBehavior(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetCollectionMethod sets the "collection_method" field.
-func (suo *SubscriptionUpdateOne) SetCollectionMethod(tm types.CollectionMethod) *SubscriptionUpdateOne {
-	suo.mutation.SetCollectionMethod(tm)
-	return suo
+func (_u *SubscriptionUpdateOne) SetCollectionMethod(v types.CollectionMethod) *SubscriptionUpdateOne {
+	_u.mutation.SetCollectionMethod(v)
+	return _u
 }
 
 // SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCollectionMethod(tm *types.CollectionMethod) *SubscriptionUpdateOne {
-	if tm != nil {
-		suo.SetCollectionMethod(*tm)
+func (_u *SubscriptionUpdateOne) SetNillableCollectionMethod(v *types.CollectionMethod) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetCollectionMethod(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetGatewayPaymentMethodID sets the "gateway_payment_method_id" field.
-func (suo *SubscriptionUpdateOne) SetGatewayPaymentMethodID(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetGatewayPaymentMethodID(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetGatewayPaymentMethodID(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetGatewayPaymentMethodID(v)
+	return _u
 }
 
 // SetNillableGatewayPaymentMethodID sets the "gateway_payment_method_id" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableGatewayPaymentMethodID(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetGatewayPaymentMethodID(*s)
+func (_u *SubscriptionUpdateOne) SetNillableGatewayPaymentMethodID(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetGatewayPaymentMethodID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearGatewayPaymentMethodID clears the value of the "gateway_payment_method_id" field.
-func (suo *SubscriptionUpdateOne) ClearGatewayPaymentMethodID() *SubscriptionUpdateOne {
-	suo.mutation.ClearGatewayPaymentMethodID()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearGatewayPaymentMethodID() *SubscriptionUpdateOne {
+	_u.mutation.ClearGatewayPaymentMethodID()
+	return _u
 }
 
 // SetTimezone sets the "timezone" field.
-func (suo *SubscriptionUpdateOne) SetTimezone(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetTimezone(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetTimezone(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetTimezone(v)
+	return _u
 }
 
 // SetNillableTimezone sets the "timezone" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableTimezone(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetTimezone(*s)
+func (_u *SubscriptionUpdateOne) SetNillableTimezone(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetTimezone(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetLineItemGrouping sets the "line_item_grouping" field.
-func (suo *SubscriptionUpdateOne) SetLineItemGrouping(tig types.LineItemGrouping) *SubscriptionUpdateOne {
-	suo.mutation.SetLineItemGrouping(tig)
-	return suo
+func (_u *SubscriptionUpdateOne) SetLineItemGrouping(v types.LineItemGrouping) *SubscriptionUpdateOne {
+	_u.mutation.SetLineItemGrouping(v)
+	return _u
 }
 
 // SetNillableLineItemGrouping sets the "line_item_grouping" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableLineItemGrouping(tig *types.LineItemGrouping) *SubscriptionUpdateOne {
-	if tig != nil {
-		suo.SetLineItemGrouping(*tig)
+func (_u *SubscriptionUpdateOne) SetNillableLineItemGrouping(v *types.LineItemGrouping) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetLineItemGrouping(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetEnableTrueUp sets the "enable_true_up" field.
-func (suo *SubscriptionUpdateOne) SetEnableTrueUp(b bool) *SubscriptionUpdateOne {
-	suo.mutation.SetEnableTrueUp(b)
-	return suo
+func (_u *SubscriptionUpdateOne) SetEnableTrueUp(v bool) *SubscriptionUpdateOne {
+	_u.mutation.SetEnableTrueUp(v)
+	return _u
 }
 
 // SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdateOne {
-	if b != nil {
-		suo.SetEnableTrueUp(*b)
+func (_u *SubscriptionUpdateOne) SetNillableEnableTrueUp(v *bool) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetEnableTrueUp(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetInvoicingCustomerID sets the "invoicing_customer_id" field.
-func (suo *SubscriptionUpdateOne) SetInvoicingCustomerID(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetInvoicingCustomerID(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetInvoicingCustomerID(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetInvoicingCustomerID(v)
+	return _u
 }
 
 // SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableInvoicingCustomerID(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetInvoicingCustomerID(*s)
+func (_u *SubscriptionUpdateOne) SetNillableInvoicingCustomerID(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetInvoicingCustomerID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
-func (suo *SubscriptionUpdateOne) ClearInvoicingCustomerID() *SubscriptionUpdateOne {
-	suo.mutation.ClearInvoicingCustomerID()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearInvoicingCustomerID() *SubscriptionUpdateOne {
+	_u.mutation.ClearInvoicingCustomerID()
+	return _u
 }
 
 // SetParentSubscriptionID sets the "parent_subscription_id" field.
-func (suo *SubscriptionUpdateOne) SetParentSubscriptionID(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetParentSubscriptionID(s)
-	return suo
+func (_u *SubscriptionUpdateOne) SetParentSubscriptionID(v string) *SubscriptionUpdateOne {
+	_u.mutation.SetParentSubscriptionID(v)
+	return _u
 }
 
 // SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetParentSubscriptionID(*s)
+func (_u *SubscriptionUpdateOne) SetNillableParentSubscriptionID(v *string) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetParentSubscriptionID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
-func (suo *SubscriptionUpdateOne) ClearParentSubscriptionID() *SubscriptionUpdateOne {
-	suo.mutation.ClearParentSubscriptionID()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearParentSubscriptionID() *SubscriptionUpdateOne {
+	_u.mutation.ClearParentSubscriptionID()
+	return _u
 }
 
 // SetPaymentTerms sets the "payment_terms" field.
-func (suo *SubscriptionUpdateOne) SetPaymentTerms(tt types.PaymentTerms) *SubscriptionUpdateOne {
-	suo.mutation.SetPaymentTerms(tt)
-	return suo
+func (_u *SubscriptionUpdateOne) SetPaymentTerms(v types.PaymentTerms) *SubscriptionUpdateOne {
+	_u.mutation.SetPaymentTerms(v)
+	return _u
 }
 
 // SetNillablePaymentTerms sets the "payment_terms" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePaymentTerms(tt *types.PaymentTerms) *SubscriptionUpdateOne {
-	if tt != nil {
-		suo.SetPaymentTerms(*tt)
+func (_u *SubscriptionUpdateOne) SetNillablePaymentTerms(v *types.PaymentTerms) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetPaymentTerms(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearPaymentTerms clears the value of the "payment_terms" field.
-func (suo *SubscriptionUpdateOne) ClearPaymentTerms() *SubscriptionUpdateOne {
-	suo.mutation.ClearPaymentTerms()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearPaymentTerms() *SubscriptionUpdateOne {
+	_u.mutation.ClearPaymentTerms()
+	return _u
 }
 
 // SetSubscriptionType sets the "subscription_type" field.
-func (suo *SubscriptionUpdateOne) SetSubscriptionType(tt types.SubscriptionType) *SubscriptionUpdateOne {
-	suo.mutation.SetSubscriptionType(tt)
-	return suo
+func (_u *SubscriptionUpdateOne) SetSubscriptionType(v types.SubscriptionType) *SubscriptionUpdateOne {
+	_u.mutation.SetSubscriptionType(v)
+	return _u
 }
 
 // SetNillableSubscriptionType sets the "subscription_type" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableSubscriptionType(tt *types.SubscriptionType) *SubscriptionUpdateOne {
-	if tt != nil {
-		suo.SetSubscriptionType(*tt)
+func (_u *SubscriptionUpdateOne) SetNillableSubscriptionType(v *types.SubscriptionType) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionType(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
-func (suo *SubscriptionUpdateOne) SetAutoInvoiceThreshold(d decimal.Decimal) *SubscriptionUpdateOne {
-	suo.mutation.SetAutoInvoiceThreshold(d)
-	return suo
+func (_u *SubscriptionUpdateOne) SetAutoInvoiceThreshold(v decimal.Decimal) *SubscriptionUpdateOne {
+	_u.mutation.SetAutoInvoiceThreshold(v)
+	return _u
 }
 
 // SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *SubscriptionUpdateOne {
-	if d != nil {
-		suo.SetAutoInvoiceThreshold(*d)
+func (_u *SubscriptionUpdateOne) SetNillableAutoInvoiceThreshold(v *decimal.Decimal) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetAutoInvoiceThreshold(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
-func (suo *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdateOne {
-	suo.mutation.ClearAutoInvoiceThreshold()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdateOne {
+	_u.mutation.ClearAutoInvoiceThreshold()
+	return _u
 }
 
 // SetSyncedPriceSequence sets the "synced_price_sequence" field.
-func (suo *SubscriptionUpdateOne) SetSyncedPriceSequence(i int64) *SubscriptionUpdateOne {
-	suo.mutation.ResetSyncedPriceSequence()
-	suo.mutation.SetSyncedPriceSequence(i)
-	return suo
+func (_u *SubscriptionUpdateOne) SetSyncedPriceSequence(v int64) *SubscriptionUpdateOne {
+	_u.mutation.ResetSyncedPriceSequence()
+	_u.mutation.SetSyncedPriceSequence(v)
+	return _u
 }
 
 // SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableSyncedPriceSequence(i *int64) *SubscriptionUpdateOne {
-	if i != nil {
-		suo.SetSyncedPriceSequence(*i)
+func (_u *SubscriptionUpdateOne) SetNillableSyncedPriceSequence(v *int64) *SubscriptionUpdateOne {
+	if v != nil {
+		_u.SetSyncedPriceSequence(*v)
 	}
-	return suo
+	return _u
 }
 
-// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
-func (suo *SubscriptionUpdateOne) AddSyncedPriceSequence(i int64) *SubscriptionUpdateOne {
-	suo.mutation.AddSyncedPriceSequence(i)
-	return suo
+// AddSyncedPriceSequence adds value to the "synced_price_sequence" field.
+func (_u *SubscriptionUpdateOne) AddSyncedPriceSequence(v int64) *SubscriptionUpdateOne {
+	_u.mutation.AddSyncedPriceSequence(v)
+	return _u
 }
 
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
-func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddLineItemIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddLineItemIDs(ids...)
+	return _u
 }
 
 // AddLineItems adds the "line_items" edges to the SubscriptionLineItem entity.
-func (suo *SubscriptionUpdateOne) AddLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) AddLineItems(v ...*SubscriptionLineItem) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddLineItemIDs(ids...)
+	return _u.AddLineItemIDs(ids...)
 }
 
 // AddPauseIDs adds the "pauses" edge to the SubscriptionPause entity by IDs.
-func (suo *SubscriptionUpdateOne) AddPauseIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddPauseIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddPauseIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddPauseIDs(ids...)
+	return _u
 }
 
 // AddPauses adds the "pauses" edges to the SubscriptionPause entity.
-func (suo *SubscriptionUpdateOne) AddPauses(s ...*SubscriptionPause) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) AddPauses(v ...*SubscriptionPause) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddPauseIDs(ids...)
+	return _u.AddPauseIDs(ids...)
 }
 
 // AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
-func (suo *SubscriptionUpdateOne) AddPhaseIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddPhaseIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddPhaseIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddPhaseIDs(ids...)
+	return _u
 }
 
 // AddPhases adds the "phases" edges to the SubscriptionPhase entity.
-func (suo *SubscriptionUpdateOne) AddPhases(s ...*SubscriptionPhase) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) AddPhases(v ...*SubscriptionPhase) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddPhaseIDs(ids...)
+	return _u.AddPhaseIDs(ids...)
 }
 
 // AddScheduleIDs adds the "schedules" edge to the SubscriptionSchedule entity by IDs.
-func (suo *SubscriptionUpdateOne) AddScheduleIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddScheduleIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddScheduleIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddScheduleIDs(ids...)
+	return _u
 }
 
 // AddSchedules adds the "schedules" edges to the SubscriptionSchedule entity.
-func (suo *SubscriptionUpdateOne) AddSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) AddSchedules(v ...*SubscriptionSchedule) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddScheduleIDs(ids...)
+	return _u.AddScheduleIDs(ids...)
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
-func (suo *SubscriptionUpdateOne) AddCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddCreditGrantIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddCreditGrantIDs(ids...)
+	return _u
 }
 
 // AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
-func (suo *SubscriptionUpdateOne) AddCreditGrants(c ...*CreditGrant) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) AddCreditGrants(v ...*CreditGrant) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddCreditGrantIDs(ids...)
+	return _u.AddCreditGrantIDs(ids...)
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (suo *SubscriptionUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddCouponAssociationIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (suo *SubscriptionUpdateOne) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) AddCouponAssociations(v ...*CouponAssociation) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (suo *SubscriptionUpdateOne) AddCouponApplicationIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.AddCouponApplicationIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) AddCouponApplicationIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (suo *SubscriptionUpdateOne) AddCouponApplications(c ...*CouponApplication) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) AddCouponApplications(v ...*CouponApplication) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
-func (suo *SubscriptionUpdateOne) SetInvoicingCustomer(c *Customer) *SubscriptionUpdateOne {
-	return suo.SetInvoicingCustomerID(c.ID)
+func (_u *SubscriptionUpdateOne) SetInvoicingCustomer(v *Customer) *SubscriptionUpdateOne {
+	return _u.SetInvoicingCustomerID(v.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
-func (suo *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
-	return suo.mutation
+func (_u *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
+	return _u.mutation
 }
 
 // ClearLineItems clears all "line_items" edges to the SubscriptionLineItem entity.
-func (suo *SubscriptionUpdateOne) ClearLineItems() *SubscriptionUpdateOne {
-	suo.mutation.ClearLineItems()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearLineItems() *SubscriptionUpdateOne {
+	_u.mutation.ClearLineItems()
+	return _u
 }
 
 // RemoveLineItemIDs removes the "line_items" edge to SubscriptionLineItem entities by IDs.
-func (suo *SubscriptionUpdateOne) RemoveLineItemIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemoveLineItemIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemoveLineItemIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemoveLineItemIDs(ids...)
+	return _u
 }
 
 // RemoveLineItems removes "line_items" edges to SubscriptionLineItem entities.
-func (suo *SubscriptionUpdateOne) RemoveLineItems(s ...*SubscriptionLineItem) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) RemoveLineItems(v ...*SubscriptionLineItem) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemoveLineItemIDs(ids...)
+	return _u.RemoveLineItemIDs(ids...)
 }
 
 // ClearPauses clears all "pauses" edges to the SubscriptionPause entity.
-func (suo *SubscriptionUpdateOne) ClearPauses() *SubscriptionUpdateOne {
-	suo.mutation.ClearPauses()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearPauses() *SubscriptionUpdateOne {
+	_u.mutation.ClearPauses()
+	return _u
 }
 
 // RemovePauseIDs removes the "pauses" edge to SubscriptionPause entities by IDs.
-func (suo *SubscriptionUpdateOne) RemovePauseIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemovePauseIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemovePauseIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemovePauseIDs(ids...)
+	return _u
 }
 
 // RemovePauses removes "pauses" edges to SubscriptionPause entities.
-func (suo *SubscriptionUpdateOne) RemovePauses(s ...*SubscriptionPause) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) RemovePauses(v ...*SubscriptionPause) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemovePauseIDs(ids...)
+	return _u.RemovePauseIDs(ids...)
 }
 
 // ClearPhases clears all "phases" edges to the SubscriptionPhase entity.
-func (suo *SubscriptionUpdateOne) ClearPhases() *SubscriptionUpdateOne {
-	suo.mutation.ClearPhases()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearPhases() *SubscriptionUpdateOne {
+	_u.mutation.ClearPhases()
+	return _u
 }
 
 // RemovePhaseIDs removes the "phases" edge to SubscriptionPhase entities by IDs.
-func (suo *SubscriptionUpdateOne) RemovePhaseIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemovePhaseIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemovePhaseIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemovePhaseIDs(ids...)
+	return _u
 }
 
 // RemovePhases removes "phases" edges to SubscriptionPhase entities.
-func (suo *SubscriptionUpdateOne) RemovePhases(s ...*SubscriptionPhase) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) RemovePhases(v ...*SubscriptionPhase) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemovePhaseIDs(ids...)
+	return _u.RemovePhaseIDs(ids...)
 }
 
 // ClearSchedules clears all "schedules" edges to the SubscriptionSchedule entity.
-func (suo *SubscriptionUpdateOne) ClearSchedules() *SubscriptionUpdateOne {
-	suo.mutation.ClearSchedules()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearSchedules() *SubscriptionUpdateOne {
+	_u.mutation.ClearSchedules()
+	return _u
 }
 
 // RemoveScheduleIDs removes the "schedules" edge to SubscriptionSchedule entities by IDs.
-func (suo *SubscriptionUpdateOne) RemoveScheduleIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemoveScheduleIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemoveScheduleIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemoveScheduleIDs(ids...)
+	return _u
 }
 
 // RemoveSchedules removes "schedules" edges to SubscriptionSchedule entities.
-func (suo *SubscriptionUpdateOne) RemoveSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdateOne {
-	ids := make([]string, len(s))
-	for i := range s {
-		ids[i] = s[i].ID
+func (_u *SubscriptionUpdateOne) RemoveSchedules(v ...*SubscriptionSchedule) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemoveScheduleIDs(ids...)
+	return _u.RemoveScheduleIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
-func (suo *SubscriptionUpdateOne) ClearCreditGrants() *SubscriptionUpdateOne {
-	suo.mutation.ClearCreditGrants()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCreditGrants() *SubscriptionUpdateOne {
+	_u.mutation.ClearCreditGrants()
+	return _u
 }
 
 // RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
-func (suo *SubscriptionUpdateOne) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemoveCreditGrantIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemoveCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemoveCreditGrantIDs(ids...)
+	return _u
 }
 
 // RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
-func (suo *SubscriptionUpdateOne) RemoveCreditGrants(c ...*CreditGrant) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) RemoveCreditGrants(v ...*CreditGrant) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemoveCreditGrantIDs(ids...)
+	return _u.RemoveCreditGrantIDs(ids...)
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (suo *SubscriptionUpdateOne) ClearCouponAssociations() *SubscriptionUpdateOne {
-	suo.mutation.ClearCouponAssociations()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCouponAssociations() *SubscriptionUpdateOne {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (suo *SubscriptionUpdateOne) RemoveCouponAssociationIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemoveCouponAssociationIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemoveCouponAssociationIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (suo *SubscriptionUpdateOne) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) RemoveCouponAssociations(v ...*CouponAssociation) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (suo *SubscriptionUpdateOne) ClearCouponApplications() *SubscriptionUpdateOne {
-	suo.mutation.ClearCouponApplications()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearCouponApplications() *SubscriptionUpdateOne {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (suo *SubscriptionUpdateOne) RemoveCouponApplicationIDs(ids ...string) *SubscriptionUpdateOne {
-	suo.mutation.RemoveCouponApplicationIDs(ids...)
-	return suo
+func (_u *SubscriptionUpdateOne) RemoveCouponApplicationIDs(ids ...string) *SubscriptionUpdateOne {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (suo *SubscriptionUpdateOne) RemoveCouponApplications(c ...*CouponApplication) *SubscriptionUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionUpdateOne) RemoveCouponApplications(v ...*CouponApplication) *SubscriptionUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return suo.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
-func (suo *SubscriptionUpdateOne) ClearInvoicingCustomer() *SubscriptionUpdateOne {
-	suo.mutation.ClearInvoicingCustomer()
-	return suo
+func (_u *SubscriptionUpdateOne) ClearInvoicingCustomer() *SubscriptionUpdateOne {
+	_u.mutation.ClearInvoicingCustomer()
+	return _u
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
-func (suo *SubscriptionUpdateOne) Where(ps ...predicate.Subscription) *SubscriptionUpdateOne {
-	suo.mutation.Where(ps...)
-	return suo
+func (_u *SubscriptionUpdateOne) Where(ps ...predicate.Subscription) *SubscriptionUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (suo *SubscriptionUpdateOne) Select(field string, fields ...string) *SubscriptionUpdateOne {
-	suo.fields = append([]string{field}, fields...)
-	return suo
+func (_u *SubscriptionUpdateOne) Select(field string, fields ...string) *SubscriptionUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Subscription entity.
-func (suo *SubscriptionUpdateOne) Save(ctx context.Context) (*Subscription, error) {
-	suo.defaults()
-	return withHooks(ctx, suo.sqlSave, suo.mutation, suo.hooks)
+func (_u *SubscriptionUpdateOne) Save(ctx context.Context) (*Subscription, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (suo *SubscriptionUpdateOne) SaveX(ctx context.Context) *Subscription {
-	node, err := suo.Save(ctx)
+func (_u *SubscriptionUpdateOne) SaveX(ctx context.Context) *Subscription {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -2407,69 +2407,69 @@ func (suo *SubscriptionUpdateOne) SaveX(ctx context.Context) *Subscription {
 }
 
 // Exec executes the query on the entity.
-func (suo *SubscriptionUpdateOne) Exec(ctx context.Context) error {
-	_, err := suo.Save(ctx)
+func (_u *SubscriptionUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (suo *SubscriptionUpdateOne) ExecX(ctx context.Context) {
-	if err := suo.Exec(ctx); err != nil {
+func (_u *SubscriptionUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (suo *SubscriptionUpdateOne) defaults() {
-	if _, ok := suo.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscription.UpdateDefaultUpdatedAt()
-		suo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (suo *SubscriptionUpdateOne) check() error {
-	if v, ok := suo.mutation.PlanID(); ok {
+func (_u *SubscriptionUpdateOne) check() error {
+	if v, ok := _u.mutation.PlanID(); ok {
 		if err := subscription.PlanIDValidator(v); err != nil {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "Subscription.plan_id": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.SubscriptionStatus(); ok {
+	if v, ok := _u.mutation.SubscriptionStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_status": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.PauseStatus(); ok {
+	if v, ok := _u.mutation.PauseStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "Subscription.pause_status": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.CommitmentDuration(); ok {
+	if v, ok := _u.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.PaymentBehavior(); ok {
+	if v, ok := _u.mutation.PaymentBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.CollectionMethod(); ok {
+	if v, ok := _u.mutation.CollectionMethod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.LineItemGrouping(); ok {
+	if v, ok := _u.mutation.LineItemGrouping(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "line_item_grouping", err: fmt.Errorf(`ent: validator failed for field "Subscription.line_item_grouping": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.PaymentTerms(); ok {
+	if v, ok := _u.mutation.PaymentTerms(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.SubscriptionType(); ok {
+	if v, ok := _u.mutation.SubscriptionType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_type": %w`, err)}
 		}
@@ -2477,17 +2477,17 @@ func (suo *SubscriptionUpdateOne) check() error {
 	return nil
 }
 
-func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
-	if err := suo.check(); err != nil {
+func (_u *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
-	id, ok := suo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Subscription.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := suo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscription.FieldID)
 		for _, f := range fields {
@@ -2499,176 +2499,176 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			}
 		}
 	}
-	if ps := suo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := suo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscription.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscription.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if suo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscription.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := suo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscription.FieldUpdatedBy, field.TypeString, value)
 	}
-	if suo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscription.FieldUpdatedBy, field.TypeString)
 	}
-	if suo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscription.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := suo.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(subscription.FieldLookupKey, field.TypeString, value)
 	}
-	if suo.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(subscription.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := suo.mutation.PlanID(); ok {
+	if value, ok := _u.mutation.PlanID(); ok {
 		_spec.SetField(subscription.FieldPlanID, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.SubscriptionStatus(); ok {
+	if value, ok := _u.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.BillingAnchor(); ok {
+	if value, ok := _u.mutation.BillingAnchor(); ok {
 		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
 	}
-	if value, ok := suo.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
 	}
-	if value, ok := suo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)
 	}
-	if suo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscription.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := suo.mutation.CurrentPeriodStart(); ok {
+	if value, ok := _u.mutation.CurrentPeriodStart(); ok {
 		_spec.SetField(subscription.FieldCurrentPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := suo.mutation.CurrentPeriodEnd(); ok {
+	if value, ok := _u.mutation.CurrentPeriodEnd(); ok {
 		_spec.SetField(subscription.FieldCurrentPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := suo.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(subscription.FieldCancelledAt, field.TypeTime, value)
 	}
-	if suo.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(subscription.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := suo.mutation.CancelAt(); ok {
+	if value, ok := _u.mutation.CancelAt(); ok {
 		_spec.SetField(subscription.FieldCancelAt, field.TypeTime, value)
 	}
-	if suo.mutation.CancelAtCleared() {
+	if _u.mutation.CancelAtCleared() {
 		_spec.ClearField(subscription.FieldCancelAt, field.TypeTime)
 	}
-	if value, ok := suo.mutation.CancelAtPeriodEnd(); ok {
+	if value, ok := _u.mutation.CancelAtPeriodEnd(); ok {
 		_spec.SetField(subscription.FieldCancelAtPeriodEnd, field.TypeBool, value)
 	}
-	if value, ok := suo.mutation.TrialStart(); ok {
+	if value, ok := _u.mutation.TrialStart(); ok {
 		_spec.SetField(subscription.FieldTrialStart, field.TypeTime, value)
 	}
-	if suo.mutation.TrialStartCleared() {
+	if _u.mutation.TrialStartCleared() {
 		_spec.ClearField(subscription.FieldTrialStart, field.TypeTime)
 	}
-	if value, ok := suo.mutation.TrialEnd(); ok {
+	if value, ok := _u.mutation.TrialEnd(); ok {
 		_spec.SetField(subscription.FieldTrialEnd, field.TypeTime, value)
 	}
-	if suo.mutation.TrialEndCleared() {
+	if _u.mutation.TrialEndCleared() {
 		_spec.ClearField(subscription.FieldTrialEnd, field.TypeTime)
 	}
-	if value, ok := suo.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(subscription.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := suo.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(subscription.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := suo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscription.FieldMetadata, field.TypeJSON, value)
 	}
-	if suo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscription.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := suo.mutation.PauseStatus(); ok {
+	if value, ok := _u.mutation.PauseStatus(); ok {
 		_spec.SetField(subscription.FieldPauseStatus, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.ActivePauseID(); ok {
+	if value, ok := _u.mutation.ActivePauseID(); ok {
 		_spec.SetField(subscription.FieldActivePauseID, field.TypeString, value)
 	}
-	if suo.mutation.ActivePauseIDCleared() {
+	if _u.mutation.ActivePauseIDCleared() {
 		_spec.ClearField(subscription.FieldActivePauseID, field.TypeString)
 	}
-	if value, ok := suo.mutation.CommitmentAmount(); ok {
+	if value, ok := _u.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
 	}
-	if suo.mutation.CommitmentAmountCleared() {
+	if _u.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
 	}
-	if value, ok := suo.mutation.CommitmentDuration(); ok {
+	if value, ok := _u.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
 	}
-	if suo.mutation.CommitmentDurationCleared() {
+	if _u.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
 	}
-	if value, ok := suo.mutation.OverageFactor(); ok {
+	if value, ok := _u.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 	}
-	if suo.mutation.OverageFactorCleared() {
+	if _u.mutation.OverageFactorCleared() {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
 	}
-	if value, ok := suo.mutation.PaymentBehavior(); ok {
+	if value, ok := _u.mutation.PaymentBehavior(); ok {
 		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.CollectionMethod(); ok {
+	if value, ok := _u.mutation.CollectionMethod(); ok {
 		_spec.SetField(subscription.FieldCollectionMethod, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.GatewayPaymentMethodID(); ok {
+	if value, ok := _u.mutation.GatewayPaymentMethodID(); ok {
 		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
 	}
-	if suo.mutation.GatewayPaymentMethodIDCleared() {
+	if _u.mutation.GatewayPaymentMethodIDCleared() {
 		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
 	}
-	if value, ok := suo.mutation.Timezone(); ok {
+	if value, ok := _u.mutation.Timezone(); ok {
 		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.LineItemGrouping(); ok {
+	if value, ok := _u.mutation.LineItemGrouping(); ok {
 		_spec.SetField(subscription.FieldLineItemGrouping, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.EnableTrueUp(); ok {
+	if value, ok := _u.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
-	if value, ok := suo.mutation.ParentSubscriptionID(); ok {
+	if value, ok := _u.mutation.ParentSubscriptionID(); ok {
 		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
 	}
-	if suo.mutation.ParentSubscriptionIDCleared() {
+	if _u.mutation.ParentSubscriptionIDCleared() {
 		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
-	if value, ok := suo.mutation.PaymentTerms(); ok {
+	if value, ok := _u.mutation.PaymentTerms(); ok {
 		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
 	}
-	if suo.mutation.PaymentTermsCleared() {
+	if _u.mutation.PaymentTermsCleared() {
 		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
 	}
-	if value, ok := suo.mutation.SubscriptionType(); ok {
+	if value, ok := _u.mutation.SubscriptionType(); ok {
 		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.AutoInvoiceThreshold(); ok {
+	if value, ok := _u.mutation.AutoInvoiceThreshold(); ok {
 		_spec.SetField(subscription.FieldAutoInvoiceThreshold, field.TypeOther, value)
 	}
-	if suo.mutation.AutoInvoiceThresholdCleared() {
+	if _u.mutation.AutoInvoiceThresholdCleared() {
 		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
-	if value, ok := suo.mutation.SyncedPriceSequence(); ok {
+	if value, ok := _u.mutation.SyncedPriceSequence(); ok {
 		_spec.SetField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
-	if value, ok := suo.mutation.AddedSyncedPriceSequence(); ok {
+	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
 		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
-	if suo.mutation.LineItemsCleared() {
+	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2681,23 +2681,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !suo.mutation.LineItemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   subscription.LineItemsTable,
-			Columns: []string{subscription.LineItemsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := suo.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !_u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2711,9 +2695,25 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LineItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.LineItemsTable,
+			Columns: []string{subscription.LineItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.PausesCleared() {
+	if _u.mutation.PausesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2726,7 +2726,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedPausesIDs(); len(nodes) > 0 && !suo.mutation.PausesCleared() {
+	if nodes := _u.mutation.RemovedPausesIDs(); len(nodes) > 0 && !_u.mutation.PausesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2742,7 +2742,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.PausesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PausesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2758,7 +2758,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.PhasesCleared() {
+	if _u.mutation.PhasesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2771,23 +2771,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !suo.mutation.PhasesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   subscription.PhasesTable,
-			Columns: []string{subscription.PhasesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := suo.mutation.PhasesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !_u.mutation.PhasesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2801,9 +2785,25 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.SchedulesCleared() {
+	if _u.mutation.SchedulesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2816,7 +2816,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !suo.mutation.SchedulesCleared() {
+	if nodes := _u.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !_u.mutation.SchedulesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2832,7 +2832,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.SchedulesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SchedulesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2848,7 +2848,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.CreditGrantsCleared() {
+	if _u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2861,7 +2861,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !suo.mutation.CreditGrantsCleared() {
+	if nodes := _u.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !_u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2877,7 +2877,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2893,7 +2893,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2906,7 +2906,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !suo.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2922,7 +2922,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2938,7 +2938,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2951,7 +2951,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !suo.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2967,7 +2967,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -2983,7 +2983,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if suo.mutation.InvoicingCustomerCleared() {
+	if _u.mutation.InvoicingCustomerCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
@@ -2996,7 +2996,7 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := suo.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
@@ -3012,10 +3012,10 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &Subscription{config: suo.config}
+	_node = &Subscription{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, suo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscription.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -3023,6 +3023,6 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		}
 		return nil, err
 	}
-	suo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

@@ -21,79 +21,79 @@ type AuthCreate struct {
 }
 
 // SetUserID sets the "user_id" field.
-func (ac *AuthCreate) SetUserID(s string) *AuthCreate {
-	ac.mutation.SetUserID(s)
-	return ac
+func (_c *AuthCreate) SetUserID(v string) *AuthCreate {
+	_c.mutation.SetUserID(v)
+	return _c
 }
 
 // SetProvider sets the "provider" field.
-func (ac *AuthCreate) SetProvider(s string) *AuthCreate {
-	ac.mutation.SetProvider(s)
-	return ac
+func (_c *AuthCreate) SetProvider(v string) *AuthCreate {
+	_c.mutation.SetProvider(v)
+	return _c
 }
 
 // SetToken sets the "token" field.
-func (ac *AuthCreate) SetToken(s string) *AuthCreate {
-	ac.mutation.SetToken(s)
-	return ac
+func (_c *AuthCreate) SetToken(v string) *AuthCreate {
+	_c.mutation.SetToken(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (ac *AuthCreate) SetStatus(s string) *AuthCreate {
-	ac.mutation.SetStatus(s)
-	return ac
+func (_c *AuthCreate) SetStatus(v string) *AuthCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ac *AuthCreate) SetNillableStatus(s *string) *AuthCreate {
-	if s != nil {
-		ac.SetStatus(*s)
+func (_c *AuthCreate) SetNillableStatus(v *string) *AuthCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (ac *AuthCreate) SetCreatedAt(t time.Time) *AuthCreate {
-	ac.mutation.SetCreatedAt(t)
-	return ac
+func (_c *AuthCreate) SetCreatedAt(v time.Time) *AuthCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (ac *AuthCreate) SetNillableCreatedAt(t *time.Time) *AuthCreate {
-	if t != nil {
-		ac.SetCreatedAt(*t)
+func (_c *AuthCreate) SetNillableCreatedAt(v *time.Time) *AuthCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ac *AuthCreate) SetUpdatedAt(t time.Time) *AuthCreate {
-	ac.mutation.SetUpdatedAt(t)
-	return ac
+func (_c *AuthCreate) SetUpdatedAt(v time.Time) *AuthCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (ac *AuthCreate) SetNillableUpdatedAt(t *time.Time) *AuthCreate {
-	if t != nil {
-		ac.SetUpdatedAt(*t)
+func (_c *AuthCreate) SetNillableUpdatedAt(v *time.Time) *AuthCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return ac
+	return _c
 }
 
 // Mutation returns the AuthMutation object of the builder.
-func (ac *AuthCreate) Mutation() *AuthMutation {
-	return ac.mutation
+func (_c *AuthCreate) Mutation() *AuthMutation {
+	return _c.mutation
 }
 
 // Save creates the Auth in the database.
-func (ac *AuthCreate) Save(ctx context.Context) (*Auth, error) {
-	ac.defaults()
-	return withHooks(ctx, ac.sqlSave, ac.mutation, ac.hooks)
+func (_c *AuthCreate) Save(ctx context.Context) (*Auth, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (ac *AuthCreate) SaveX(ctx context.Context) *Auth {
-	v, err := ac.Save(ctx)
+func (_c *AuthCreate) SaveX(ctx context.Context) *Auth {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -101,73 +101,73 @@ func (ac *AuthCreate) SaveX(ctx context.Context) *Auth {
 }
 
 // Exec executes the query.
-func (ac *AuthCreate) Exec(ctx context.Context) error {
-	_, err := ac.Save(ctx)
+func (_c *AuthCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ac *AuthCreate) ExecX(ctx context.Context) {
-	if err := ac.Exec(ctx); err != nil {
+func (_c *AuthCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ac *AuthCreate) defaults() {
-	if _, ok := ac.mutation.Status(); !ok {
+func (_c *AuthCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := auth.DefaultStatus
-		ac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := ac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := auth.DefaultCreatedAt()
-		ac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := ac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := auth.DefaultUpdatedAt()
-		ac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ac *AuthCreate) check() error {
-	if _, ok := ac.mutation.UserID(); !ok {
+func (_c *AuthCreate) check() error {
+	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "Auth.user_id"`)}
 	}
-	if _, ok := ac.mutation.Provider(); !ok {
+	if _, ok := _c.mutation.Provider(); !ok {
 		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "Auth.provider"`)}
 	}
-	if v, ok := ac.mutation.Provider(); ok {
+	if v, ok := _c.mutation.Provider(); ok {
 		if err := auth.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Auth.provider": %w`, err)}
 		}
 	}
-	if _, ok := ac.mutation.Token(); !ok {
+	if _, ok := _c.mutation.Token(); !ok {
 		return &ValidationError{Name: "token", err: errors.New(`ent: missing required field "Auth.token"`)}
 	}
-	if v, ok := ac.mutation.Token(); ok {
+	if v, ok := _c.mutation.Token(); ok {
 		if err := auth.TokenValidator(v); err != nil {
 			return &ValidationError{Name: "token", err: fmt.Errorf(`ent: validator failed for field "Auth.token": %w`, err)}
 		}
 	}
-	if _, ok := ac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Auth.status"`)}
 	}
-	if _, ok := ac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Auth.created_at"`)}
 	}
-	if _, ok := ac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Auth.updated_at"`)}
 	}
 	return nil
 }
 
-func (ac *AuthCreate) sqlSave(ctx context.Context) (*Auth, error) {
-	if err := ac.check(); err != nil {
+func (_c *AuthCreate) sqlSave(ctx context.Context) (*Auth, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := ac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, ac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -175,37 +175,37 @@ func (ac *AuthCreate) sqlSave(ctx context.Context) (*Auth, error) {
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	ac.mutation.id = &_node.ID
-	ac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (ac *AuthCreate) createSpec() (*Auth, *sqlgraph.CreateSpec) {
+func (_c *AuthCreate) createSpec() (*Auth, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Auth{config: ac.config}
+		_node = &Auth{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(auth.Table, sqlgraph.NewFieldSpec(auth.FieldID, field.TypeInt))
 	)
-	if value, ok := ac.mutation.UserID(); ok {
+	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(auth.FieldUserID, field.TypeString, value)
 		_node.UserID = value
 	}
-	if value, ok := ac.mutation.Provider(); ok {
+	if value, ok := _c.mutation.Provider(); ok {
 		_spec.SetField(auth.FieldProvider, field.TypeString, value)
 		_node.Provider = value
 	}
-	if value, ok := ac.mutation.Token(); ok {
+	if value, ok := _c.mutation.Token(); ok {
 		_spec.SetField(auth.FieldToken, field.TypeString, value)
 		_node.Token = value
 	}
-	if value, ok := ac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(auth.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := ac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(auth.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := ac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(auth.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
@@ -220,16 +220,16 @@ type AuthCreateBulk struct {
 }
 
 // Save creates the Auth entities in the database.
-func (acb *AuthCreateBulk) Save(ctx context.Context) ([]*Auth, error) {
-	if acb.err != nil {
-		return nil, acb.err
+func (_c *AuthCreateBulk) Save(ctx context.Context) ([]*Auth, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(acb.builders))
-	nodes := make([]*Auth, len(acb.builders))
-	mutators := make([]Mutator, len(acb.builders))
-	for i := range acb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Auth, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := acb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AuthMutation)
@@ -243,11 +243,11 @@ func (acb *AuthCreateBulk) Save(ctx context.Context) ([]*Auth, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, acb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, acb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -271,7 +271,7 @@ func (acb *AuthCreateBulk) Save(ctx context.Context) ([]*Auth, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, acb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -279,8 +279,8 @@ func (acb *AuthCreateBulk) Save(ctx context.Context) ([]*Auth, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (acb *AuthCreateBulk) SaveX(ctx context.Context) []*Auth {
-	v, err := acb.Save(ctx)
+func (_c *AuthCreateBulk) SaveX(ctx context.Context) []*Auth {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -288,14 +288,14 @@ func (acb *AuthCreateBulk) SaveX(ctx context.Context) []*Auth {
 }
 
 // Exec executes the query.
-func (acb *AuthCreateBulk) Exec(ctx context.Context) error {
-	_, err := acb.Save(ctx)
+func (_c *AuthCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (acb *AuthCreateBulk) ExecX(ctx context.Context) {
-	if err := acb.Exec(ctx); err != nil {
+func (_c *AuthCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

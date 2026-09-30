@@ -20,56 +20,56 @@ type AlertLogsDelete struct {
 }
 
 // Where appends a list predicates to the AlertLogsDelete builder.
-func (ald *AlertLogsDelete) Where(ps ...predicate.AlertLogs) *AlertLogsDelete {
-	ald.mutation.Where(ps...)
-	return ald
+func (_d *AlertLogsDelete) Where(ps ...predicate.AlertLogs) *AlertLogsDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (ald *AlertLogsDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, ald.sqlExec, ald.mutation, ald.hooks)
+func (_d *AlertLogsDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ald *AlertLogsDelete) ExecX(ctx context.Context) int {
-	n, err := ald.Exec(ctx)
+func (_d *AlertLogsDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (ald *AlertLogsDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *AlertLogsDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(alertlogs.Table, sqlgraph.NewFieldSpec(alertlogs.FieldID, field.TypeString))
-	if ps := ald.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, ald.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	ald.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // AlertLogsDeleteOne is the builder for deleting a single AlertLogs entity.
 type AlertLogsDeleteOne struct {
-	ald *AlertLogsDelete
+	_d *AlertLogsDelete
 }
 
 // Where appends a list predicates to the AlertLogsDelete builder.
-func (aldo *AlertLogsDeleteOne) Where(ps ...predicate.AlertLogs) *AlertLogsDeleteOne {
-	aldo.ald.mutation.Where(ps...)
-	return aldo
+func (_d *AlertLogsDeleteOne) Where(ps ...predicate.AlertLogs) *AlertLogsDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (aldo *AlertLogsDeleteOne) Exec(ctx context.Context) error {
-	n, err := aldo.ald.Exec(ctx)
+func (_d *AlertLogsDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (aldo *AlertLogsDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aldo *AlertLogsDeleteOne) ExecX(ctx context.Context) {
-	if err := aldo.Exec(ctx); err != nil {
+func (_d *AlertLogsDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

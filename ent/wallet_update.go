@@ -25,245 +25,245 @@ type WalletUpdate struct {
 }
 
 // Where appends a list predicates to the WalletUpdate builder.
-func (wu *WalletUpdate) Where(ps ...predicate.Wallet) *WalletUpdate {
-	wu.mutation.Where(ps...)
-	return wu
+func (_u *WalletUpdate) Where(ps ...predicate.Wallet) *WalletUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (wu *WalletUpdate) SetStatus(s string) *WalletUpdate {
-	wu.mutation.SetStatus(s)
-	return wu
+func (_u *WalletUpdate) SetStatus(v string) *WalletUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableStatus(s *string) *WalletUpdate {
-	if s != nil {
-		wu.SetStatus(*s)
+func (_u *WalletUpdate) SetNillableStatus(v *string) *WalletUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return wu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (wu *WalletUpdate) SetUpdatedAt(t time.Time) *WalletUpdate {
-	wu.mutation.SetUpdatedAt(t)
-	return wu
+func (_u *WalletUpdate) SetUpdatedAt(v time.Time) *WalletUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (wu *WalletUpdate) SetUpdatedBy(s string) *WalletUpdate {
-	wu.mutation.SetUpdatedBy(s)
-	return wu
+func (_u *WalletUpdate) SetUpdatedBy(v string) *WalletUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableUpdatedBy(s *string) *WalletUpdate {
-	if s != nil {
-		wu.SetUpdatedBy(*s)
+func (_u *WalletUpdate) SetNillableUpdatedBy(v *string) *WalletUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (wu *WalletUpdate) ClearUpdatedBy() *WalletUpdate {
-	wu.mutation.ClearUpdatedBy()
-	return wu
+func (_u *WalletUpdate) ClearUpdatedBy() *WalletUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (wu *WalletUpdate) SetName(s string) *WalletUpdate {
-	wu.mutation.SetName(s)
-	return wu
+func (_u *WalletUpdate) SetName(v string) *WalletUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableName(s *string) *WalletUpdate {
-	if s != nil {
-		wu.SetName(*s)
+func (_u *WalletUpdate) SetNillableName(v *string) *WalletUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearName clears the value of the "name" field.
-func (wu *WalletUpdate) ClearName() *WalletUpdate {
-	wu.mutation.ClearName()
-	return wu
+func (_u *WalletUpdate) ClearName() *WalletUpdate {
+	_u.mutation.ClearName()
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (wu *WalletUpdate) SetCurrency(s string) *WalletUpdate {
-	wu.mutation.SetCurrency(s)
-	return wu
+func (_u *WalletUpdate) SetCurrency(v string) *WalletUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableCurrency(s *string) *WalletUpdate {
-	if s != nil {
-		wu.SetCurrency(*s)
+func (_u *WalletUpdate) SetNillableCurrency(v *string) *WalletUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return wu
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (wu *WalletUpdate) SetDescription(s string) *WalletUpdate {
-	wu.mutation.SetDescription(s)
-	return wu
+func (_u *WalletUpdate) SetDescription(v string) *WalletUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableDescription(s *string) *WalletUpdate {
-	if s != nil {
-		wu.SetDescription(*s)
+func (_u *WalletUpdate) SetNillableDescription(v *string) *WalletUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (wu *WalletUpdate) ClearDescription() *WalletUpdate {
-	wu.mutation.ClearDescription()
-	return wu
+func (_u *WalletUpdate) ClearDescription() *WalletUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (wu *WalletUpdate) SetMetadata(m map[string]string) *WalletUpdate {
-	wu.mutation.SetMetadata(m)
-	return wu
+func (_u *WalletUpdate) SetMetadata(v map[string]string) *WalletUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (wu *WalletUpdate) ClearMetadata() *WalletUpdate {
-	wu.mutation.ClearMetadata()
-	return wu
+func (_u *WalletUpdate) ClearMetadata() *WalletUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetBalance sets the "balance" field.
-func (wu *WalletUpdate) SetBalance(d decimal.Decimal) *WalletUpdate {
-	wu.mutation.SetBalance(d)
-	return wu
+func (_u *WalletUpdate) SetBalance(v decimal.Decimal) *WalletUpdate {
+	_u.mutation.SetBalance(v)
+	return _u
 }
 
 // SetNillableBalance sets the "balance" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableBalance(d *decimal.Decimal) *WalletUpdate {
-	if d != nil {
-		wu.SetBalance(*d)
+func (_u *WalletUpdate) SetNillableBalance(v *decimal.Decimal) *WalletUpdate {
+	if v != nil {
+		_u.SetBalance(*v)
 	}
-	return wu
+	return _u
 }
 
 // SetCreditBalance sets the "credit_balance" field.
-func (wu *WalletUpdate) SetCreditBalance(d decimal.Decimal) *WalletUpdate {
-	wu.mutation.SetCreditBalance(d)
-	return wu
+func (_u *WalletUpdate) SetCreditBalance(v decimal.Decimal) *WalletUpdate {
+	_u.mutation.SetCreditBalance(v)
+	return _u
 }
 
 // SetNillableCreditBalance sets the "credit_balance" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableCreditBalance(d *decimal.Decimal) *WalletUpdate {
-	if d != nil {
-		wu.SetCreditBalance(*d)
+func (_u *WalletUpdate) SetNillableCreditBalance(v *decimal.Decimal) *WalletUpdate {
+	if v != nil {
+		_u.SetCreditBalance(*v)
 	}
-	return wu
+	return _u
 }
 
 // SetWalletStatus sets the "wallet_status" field.
-func (wu *WalletUpdate) SetWalletStatus(ts types.WalletStatus) *WalletUpdate {
-	wu.mutation.SetWalletStatus(ts)
-	return wu
+func (_u *WalletUpdate) SetWalletStatus(v types.WalletStatus) *WalletUpdate {
+	_u.mutation.SetWalletStatus(v)
+	return _u
 }
 
 // SetNillableWalletStatus sets the "wallet_status" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableWalletStatus(ts *types.WalletStatus) *WalletUpdate {
-	if ts != nil {
-		wu.SetWalletStatus(*ts)
+func (_u *WalletUpdate) SetNillableWalletStatus(v *types.WalletStatus) *WalletUpdate {
+	if v != nil {
+		_u.SetWalletStatus(*v)
 	}
-	return wu
+	return _u
 }
 
 // SetAutoTopup sets the "auto_topup" field.
-func (wu *WalletUpdate) SetAutoTopup(tt *types.AutoTopup) *WalletUpdate {
-	wu.mutation.SetAutoTopup(tt)
-	return wu
+func (_u *WalletUpdate) SetAutoTopup(v *types.AutoTopup) *WalletUpdate {
+	_u.mutation.SetAutoTopup(v)
+	return _u
 }
 
 // ClearAutoTopup clears the value of the "auto_topup" field.
-func (wu *WalletUpdate) ClearAutoTopup() *WalletUpdate {
-	wu.mutation.ClearAutoTopup()
-	return wu
+func (_u *WalletUpdate) ClearAutoTopup() *WalletUpdate {
+	_u.mutation.ClearAutoTopup()
+	return _u
 }
 
 // SetConfig sets the "config" field.
-func (wu *WalletUpdate) SetConfig(tc types.WalletConfig) *WalletUpdate {
-	wu.mutation.SetConfig(tc)
-	return wu
+func (_u *WalletUpdate) SetConfig(v types.WalletConfig) *WalletUpdate {
+	_u.mutation.SetConfig(v)
+	return _u
 }
 
 // SetNillableConfig sets the "config" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableConfig(tc *types.WalletConfig) *WalletUpdate {
-	if tc != nil {
-		wu.SetConfig(*tc)
+func (_u *WalletUpdate) SetNillableConfig(v *types.WalletConfig) *WalletUpdate {
+	if v != nil {
+		_u.SetConfig(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearConfig clears the value of the "config" field.
-func (wu *WalletUpdate) ClearConfig() *WalletUpdate {
-	wu.mutation.ClearConfig()
-	return wu
+func (_u *WalletUpdate) ClearConfig() *WalletUpdate {
+	_u.mutation.ClearConfig()
+	return _u
 }
 
 // SetAlertSettings sets the "alert_settings" field.
-func (wu *WalletUpdate) SetAlertSettings(ts types.AlertSettings) *WalletUpdate {
-	wu.mutation.SetAlertSettings(ts)
-	return wu
+func (_u *WalletUpdate) SetAlertSettings(v types.AlertSettings) *WalletUpdate {
+	_u.mutation.SetAlertSettings(v)
+	return _u
 }
 
 // SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableAlertSettings(ts *types.AlertSettings) *WalletUpdate {
-	if ts != nil {
-		wu.SetAlertSettings(*ts)
+func (_u *WalletUpdate) SetNillableAlertSettings(v *types.AlertSettings) *WalletUpdate {
+	if v != nil {
+		_u.SetAlertSettings(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearAlertSettings clears the value of the "alert_settings" field.
-func (wu *WalletUpdate) ClearAlertSettings() *WalletUpdate {
-	wu.mutation.ClearAlertSettings()
-	return wu
+func (_u *WalletUpdate) ClearAlertSettings() *WalletUpdate {
+	_u.mutation.ClearAlertSettings()
+	return _u
 }
 
 // SetAlertState sets the "alert_state" field.
-func (wu *WalletUpdate) SetAlertState(ts types.AlertState) *WalletUpdate {
-	wu.mutation.SetAlertState(ts)
-	return wu
+func (_u *WalletUpdate) SetAlertState(v types.AlertState) *WalletUpdate {
+	_u.mutation.SetAlertState(v)
+	return _u
 }
 
 // SetNillableAlertState sets the "alert_state" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableAlertState(ts *types.AlertState) *WalletUpdate {
-	if ts != nil {
-		wu.SetAlertState(*ts)
+func (_u *WalletUpdate) SetNillableAlertState(v *types.AlertState) *WalletUpdate {
+	if v != nil {
+		_u.SetAlertState(*v)
 	}
-	return wu
+	return _u
 }
 
 // ClearAlertState clears the value of the "alert_state" field.
-func (wu *WalletUpdate) ClearAlertState() *WalletUpdate {
-	wu.mutation.ClearAlertState()
-	return wu
+func (_u *WalletUpdate) ClearAlertState() *WalletUpdate {
+	_u.mutation.ClearAlertState()
+	return _u
 }
 
 // Mutation returns the WalletMutation object of the builder.
-func (wu *WalletUpdate) Mutation() *WalletMutation {
-	return wu.mutation
+func (_u *WalletUpdate) Mutation() *WalletMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (wu *WalletUpdate) Save(ctx context.Context) (int, error) {
-	wu.defaults()
-	return withHooks(ctx, wu.sqlSave, wu.mutation, wu.hooks)
+func (_u *WalletUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (wu *WalletUpdate) SaveX(ctx context.Context) int {
-	affected, err := wu.Save(ctx)
+func (_u *WalletUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -271,44 +271,44 @@ func (wu *WalletUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (wu *WalletUpdate) Exec(ctx context.Context) error {
-	_, err := wu.Save(ctx)
+func (_u *WalletUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wu *WalletUpdate) ExecX(ctx context.Context) {
-	if err := wu.Exec(ctx); err != nil {
+func (_u *WalletUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (wu *WalletUpdate) defaults() {
-	if _, ok := wu.mutation.UpdatedAt(); !ok {
+func (_u *WalletUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := wallet.UpdateDefaultUpdatedAt()
-		wu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (wu *WalletUpdate) check() error {
-	if v, ok := wu.mutation.Currency(); ok {
+func (_u *WalletUpdate) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := wallet.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Wallet.currency": %w`, err)}
 		}
 	}
-	if v, ok := wu.mutation.AutoTopup(); ok {
+	if v, ok := _u.mutation.AutoTopup(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "auto_topup", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup": %w`, err)}
 		}
 	}
-	if v, ok := wu.mutation.Config(); ok {
+	if v, ok := _u.mutation.Config(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "config", err: fmt.Errorf(`ent: validator failed for field "Wallet.config": %w`, err)}
 		}
 	}
-	if v, ok := wu.mutation.AlertSettings(); ok {
+	if v, ok := _u.mutation.AlertSettings(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Wallet.alert_settings": %w`, err)}
 		}
@@ -316,94 +316,94 @@ func (wu *WalletUpdate) check() error {
 	return nil
 }
 
-func (wu *WalletUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := wu.check(); err != nil {
-		return n, err
+func (_u *WalletUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(wallet.Table, wallet.Columns, sqlgraph.NewFieldSpec(wallet.FieldID, field.TypeString))
-	if ps := wu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := wu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(wallet.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := wu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(wallet.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if wu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(wallet.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := wu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(wallet.FieldUpdatedBy, field.TypeString, value)
 	}
-	if wu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallet.FieldUpdatedBy, field.TypeString)
 	}
-	if wu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(wallet.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := wu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(wallet.FieldName, field.TypeString, value)
 	}
-	if wu.mutation.NameCleared() {
+	if _u.mutation.NameCleared() {
 		_spec.ClearField(wallet.FieldName, field.TypeString)
 	}
-	if value, ok := wu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(wallet.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := wu.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(wallet.FieldDescription, field.TypeString, value)
 	}
-	if wu.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(wallet.FieldDescription, field.TypeString)
 	}
-	if value, ok := wu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(wallet.FieldMetadata, field.TypeJSON, value)
 	}
-	if wu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(wallet.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := wu.mutation.Balance(); ok {
+	if value, ok := _u.mutation.Balance(); ok {
 		_spec.SetField(wallet.FieldBalance, field.TypeOther, value)
 	}
-	if value, ok := wu.mutation.CreditBalance(); ok {
+	if value, ok := _u.mutation.CreditBalance(); ok {
 		_spec.SetField(wallet.FieldCreditBalance, field.TypeOther, value)
 	}
-	if value, ok := wu.mutation.WalletStatus(); ok {
+	if value, ok := _u.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 	}
-	if value, ok := wu.mutation.AutoTopup(); ok {
+	if value, ok := _u.mutation.AutoTopup(); ok {
 		_spec.SetField(wallet.FieldAutoTopup, field.TypeJSON, value)
 	}
-	if wu.mutation.AutoTopupCleared() {
+	if _u.mutation.AutoTopupCleared() {
 		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
 	}
-	if wu.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(wallet.FieldTopupConversionRate, field.TypeOther)
 	}
-	if value, ok := wu.mutation.Config(); ok {
+	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)
 	}
-	if wu.mutation.ConfigCleared() {
+	if _u.mutation.ConfigCleared() {
 		_spec.ClearField(wallet.FieldConfig, field.TypeJSON)
 	}
-	if value, ok := wu.mutation.AlertSettings(); ok {
+	if value, ok := _u.mutation.AlertSettings(); ok {
 		_spec.SetField(wallet.FieldAlertSettings, field.TypeJSON, value)
 	}
-	if wu.mutation.AlertSettingsCleared() {
+	if _u.mutation.AlertSettingsCleared() {
 		_spec.ClearField(wallet.FieldAlertSettings, field.TypeJSON)
 	}
-	if value, ok := wu.mutation.AlertState(); ok {
+	if value, ok := _u.mutation.AlertState(); ok {
 		_spec.SetField(wallet.FieldAlertState, field.TypeString, value)
 	}
-	if wu.mutation.AlertStateCleared() {
+	if _u.mutation.AlertStateCleared() {
 		_spec.ClearField(wallet.FieldAlertState, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, wu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallet.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -411,8 +411,8 @@ func (wu *WalletUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	wu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // WalletUpdateOne is the builder for updating a single Wallet entity.
@@ -424,252 +424,252 @@ type WalletUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (wuo *WalletUpdateOne) SetStatus(s string) *WalletUpdateOne {
-	wuo.mutation.SetStatus(s)
-	return wuo
+func (_u *WalletUpdateOne) SetStatus(v string) *WalletUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableStatus(s *string) *WalletUpdateOne {
-	if s != nil {
-		wuo.SetStatus(*s)
+func (_u *WalletUpdateOne) SetNillableStatus(v *string) *WalletUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return wuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (wuo *WalletUpdateOne) SetUpdatedAt(t time.Time) *WalletUpdateOne {
-	wuo.mutation.SetUpdatedAt(t)
-	return wuo
+func (_u *WalletUpdateOne) SetUpdatedAt(v time.Time) *WalletUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (wuo *WalletUpdateOne) SetUpdatedBy(s string) *WalletUpdateOne {
-	wuo.mutation.SetUpdatedBy(s)
-	return wuo
+func (_u *WalletUpdateOne) SetUpdatedBy(v string) *WalletUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableUpdatedBy(s *string) *WalletUpdateOne {
-	if s != nil {
-		wuo.SetUpdatedBy(*s)
+func (_u *WalletUpdateOne) SetNillableUpdatedBy(v *string) *WalletUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (wuo *WalletUpdateOne) ClearUpdatedBy() *WalletUpdateOne {
-	wuo.mutation.ClearUpdatedBy()
-	return wuo
+func (_u *WalletUpdateOne) ClearUpdatedBy() *WalletUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (wuo *WalletUpdateOne) SetName(s string) *WalletUpdateOne {
-	wuo.mutation.SetName(s)
-	return wuo
+func (_u *WalletUpdateOne) SetName(v string) *WalletUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableName(s *string) *WalletUpdateOne {
-	if s != nil {
-		wuo.SetName(*s)
+func (_u *WalletUpdateOne) SetNillableName(v *string) *WalletUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearName clears the value of the "name" field.
-func (wuo *WalletUpdateOne) ClearName() *WalletUpdateOne {
-	wuo.mutation.ClearName()
-	return wuo
+func (_u *WalletUpdateOne) ClearName() *WalletUpdateOne {
+	_u.mutation.ClearName()
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (wuo *WalletUpdateOne) SetCurrency(s string) *WalletUpdateOne {
-	wuo.mutation.SetCurrency(s)
-	return wuo
+func (_u *WalletUpdateOne) SetCurrency(v string) *WalletUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableCurrency(s *string) *WalletUpdateOne {
-	if s != nil {
-		wuo.SetCurrency(*s)
+func (_u *WalletUpdateOne) SetNillableCurrency(v *string) *WalletUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return wuo
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (wuo *WalletUpdateOne) SetDescription(s string) *WalletUpdateOne {
-	wuo.mutation.SetDescription(s)
-	return wuo
+func (_u *WalletUpdateOne) SetDescription(v string) *WalletUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableDescription(s *string) *WalletUpdateOne {
-	if s != nil {
-		wuo.SetDescription(*s)
+func (_u *WalletUpdateOne) SetNillableDescription(v *string) *WalletUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (wuo *WalletUpdateOne) ClearDescription() *WalletUpdateOne {
-	wuo.mutation.ClearDescription()
-	return wuo
+func (_u *WalletUpdateOne) ClearDescription() *WalletUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (wuo *WalletUpdateOne) SetMetadata(m map[string]string) *WalletUpdateOne {
-	wuo.mutation.SetMetadata(m)
-	return wuo
+func (_u *WalletUpdateOne) SetMetadata(v map[string]string) *WalletUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (wuo *WalletUpdateOne) ClearMetadata() *WalletUpdateOne {
-	wuo.mutation.ClearMetadata()
-	return wuo
+func (_u *WalletUpdateOne) ClearMetadata() *WalletUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetBalance sets the "balance" field.
-func (wuo *WalletUpdateOne) SetBalance(d decimal.Decimal) *WalletUpdateOne {
-	wuo.mutation.SetBalance(d)
-	return wuo
+func (_u *WalletUpdateOne) SetBalance(v decimal.Decimal) *WalletUpdateOne {
+	_u.mutation.SetBalance(v)
+	return _u
 }
 
 // SetNillableBalance sets the "balance" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableBalance(d *decimal.Decimal) *WalletUpdateOne {
-	if d != nil {
-		wuo.SetBalance(*d)
+func (_u *WalletUpdateOne) SetNillableBalance(v *decimal.Decimal) *WalletUpdateOne {
+	if v != nil {
+		_u.SetBalance(*v)
 	}
-	return wuo
+	return _u
 }
 
 // SetCreditBalance sets the "credit_balance" field.
-func (wuo *WalletUpdateOne) SetCreditBalance(d decimal.Decimal) *WalletUpdateOne {
-	wuo.mutation.SetCreditBalance(d)
-	return wuo
+func (_u *WalletUpdateOne) SetCreditBalance(v decimal.Decimal) *WalletUpdateOne {
+	_u.mutation.SetCreditBalance(v)
+	return _u
 }
 
 // SetNillableCreditBalance sets the "credit_balance" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableCreditBalance(d *decimal.Decimal) *WalletUpdateOne {
-	if d != nil {
-		wuo.SetCreditBalance(*d)
+func (_u *WalletUpdateOne) SetNillableCreditBalance(v *decimal.Decimal) *WalletUpdateOne {
+	if v != nil {
+		_u.SetCreditBalance(*v)
 	}
-	return wuo
+	return _u
 }
 
 // SetWalletStatus sets the "wallet_status" field.
-func (wuo *WalletUpdateOne) SetWalletStatus(ts types.WalletStatus) *WalletUpdateOne {
-	wuo.mutation.SetWalletStatus(ts)
-	return wuo
+func (_u *WalletUpdateOne) SetWalletStatus(v types.WalletStatus) *WalletUpdateOne {
+	_u.mutation.SetWalletStatus(v)
+	return _u
 }
 
 // SetNillableWalletStatus sets the "wallet_status" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableWalletStatus(ts *types.WalletStatus) *WalletUpdateOne {
-	if ts != nil {
-		wuo.SetWalletStatus(*ts)
+func (_u *WalletUpdateOne) SetNillableWalletStatus(v *types.WalletStatus) *WalletUpdateOne {
+	if v != nil {
+		_u.SetWalletStatus(*v)
 	}
-	return wuo
+	return _u
 }
 
 // SetAutoTopup sets the "auto_topup" field.
-func (wuo *WalletUpdateOne) SetAutoTopup(tt *types.AutoTopup) *WalletUpdateOne {
-	wuo.mutation.SetAutoTopup(tt)
-	return wuo
+func (_u *WalletUpdateOne) SetAutoTopup(v *types.AutoTopup) *WalletUpdateOne {
+	_u.mutation.SetAutoTopup(v)
+	return _u
 }
 
 // ClearAutoTopup clears the value of the "auto_topup" field.
-func (wuo *WalletUpdateOne) ClearAutoTopup() *WalletUpdateOne {
-	wuo.mutation.ClearAutoTopup()
-	return wuo
+func (_u *WalletUpdateOne) ClearAutoTopup() *WalletUpdateOne {
+	_u.mutation.ClearAutoTopup()
+	return _u
 }
 
 // SetConfig sets the "config" field.
-func (wuo *WalletUpdateOne) SetConfig(tc types.WalletConfig) *WalletUpdateOne {
-	wuo.mutation.SetConfig(tc)
-	return wuo
+func (_u *WalletUpdateOne) SetConfig(v types.WalletConfig) *WalletUpdateOne {
+	_u.mutation.SetConfig(v)
+	return _u
 }
 
 // SetNillableConfig sets the "config" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableConfig(tc *types.WalletConfig) *WalletUpdateOne {
-	if tc != nil {
-		wuo.SetConfig(*tc)
+func (_u *WalletUpdateOne) SetNillableConfig(v *types.WalletConfig) *WalletUpdateOne {
+	if v != nil {
+		_u.SetConfig(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearConfig clears the value of the "config" field.
-func (wuo *WalletUpdateOne) ClearConfig() *WalletUpdateOne {
-	wuo.mutation.ClearConfig()
-	return wuo
+func (_u *WalletUpdateOne) ClearConfig() *WalletUpdateOne {
+	_u.mutation.ClearConfig()
+	return _u
 }
 
 // SetAlertSettings sets the "alert_settings" field.
-func (wuo *WalletUpdateOne) SetAlertSettings(ts types.AlertSettings) *WalletUpdateOne {
-	wuo.mutation.SetAlertSettings(ts)
-	return wuo
+func (_u *WalletUpdateOne) SetAlertSettings(v types.AlertSettings) *WalletUpdateOne {
+	_u.mutation.SetAlertSettings(v)
+	return _u
 }
 
 // SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableAlertSettings(ts *types.AlertSettings) *WalletUpdateOne {
-	if ts != nil {
-		wuo.SetAlertSettings(*ts)
+func (_u *WalletUpdateOne) SetNillableAlertSettings(v *types.AlertSettings) *WalletUpdateOne {
+	if v != nil {
+		_u.SetAlertSettings(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearAlertSettings clears the value of the "alert_settings" field.
-func (wuo *WalletUpdateOne) ClearAlertSettings() *WalletUpdateOne {
-	wuo.mutation.ClearAlertSettings()
-	return wuo
+func (_u *WalletUpdateOne) ClearAlertSettings() *WalletUpdateOne {
+	_u.mutation.ClearAlertSettings()
+	return _u
 }
 
 // SetAlertState sets the "alert_state" field.
-func (wuo *WalletUpdateOne) SetAlertState(ts types.AlertState) *WalletUpdateOne {
-	wuo.mutation.SetAlertState(ts)
-	return wuo
+func (_u *WalletUpdateOne) SetAlertState(v types.AlertState) *WalletUpdateOne {
+	_u.mutation.SetAlertState(v)
+	return _u
 }
 
 // SetNillableAlertState sets the "alert_state" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableAlertState(ts *types.AlertState) *WalletUpdateOne {
-	if ts != nil {
-		wuo.SetAlertState(*ts)
+func (_u *WalletUpdateOne) SetNillableAlertState(v *types.AlertState) *WalletUpdateOne {
+	if v != nil {
+		_u.SetAlertState(*v)
 	}
-	return wuo
+	return _u
 }
 
 // ClearAlertState clears the value of the "alert_state" field.
-func (wuo *WalletUpdateOne) ClearAlertState() *WalletUpdateOne {
-	wuo.mutation.ClearAlertState()
-	return wuo
+func (_u *WalletUpdateOne) ClearAlertState() *WalletUpdateOne {
+	_u.mutation.ClearAlertState()
+	return _u
 }
 
 // Mutation returns the WalletMutation object of the builder.
-func (wuo *WalletUpdateOne) Mutation() *WalletMutation {
-	return wuo.mutation
+func (_u *WalletUpdateOne) Mutation() *WalletMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the WalletUpdate builder.
-func (wuo *WalletUpdateOne) Where(ps ...predicate.Wallet) *WalletUpdateOne {
-	wuo.mutation.Where(ps...)
-	return wuo
+func (_u *WalletUpdateOne) Where(ps ...predicate.Wallet) *WalletUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (wuo *WalletUpdateOne) Select(field string, fields ...string) *WalletUpdateOne {
-	wuo.fields = append([]string{field}, fields...)
-	return wuo
+func (_u *WalletUpdateOne) Select(field string, fields ...string) *WalletUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Wallet entity.
-func (wuo *WalletUpdateOne) Save(ctx context.Context) (*Wallet, error) {
-	wuo.defaults()
-	return withHooks(ctx, wuo.sqlSave, wuo.mutation, wuo.hooks)
+func (_u *WalletUpdateOne) Save(ctx context.Context) (*Wallet, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (wuo *WalletUpdateOne) SaveX(ctx context.Context) *Wallet {
-	node, err := wuo.Save(ctx)
+func (_u *WalletUpdateOne) SaveX(ctx context.Context) *Wallet {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -677,44 +677,44 @@ func (wuo *WalletUpdateOne) SaveX(ctx context.Context) *Wallet {
 }
 
 // Exec executes the query on the entity.
-func (wuo *WalletUpdateOne) Exec(ctx context.Context) error {
-	_, err := wuo.Save(ctx)
+func (_u *WalletUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wuo *WalletUpdateOne) ExecX(ctx context.Context) {
-	if err := wuo.Exec(ctx); err != nil {
+func (_u *WalletUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (wuo *WalletUpdateOne) defaults() {
-	if _, ok := wuo.mutation.UpdatedAt(); !ok {
+func (_u *WalletUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := wallet.UpdateDefaultUpdatedAt()
-		wuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (wuo *WalletUpdateOne) check() error {
-	if v, ok := wuo.mutation.Currency(); ok {
+func (_u *WalletUpdateOne) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := wallet.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Wallet.currency": %w`, err)}
 		}
 	}
-	if v, ok := wuo.mutation.AutoTopup(); ok {
+	if v, ok := _u.mutation.AutoTopup(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "auto_topup", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup": %w`, err)}
 		}
 	}
-	if v, ok := wuo.mutation.Config(); ok {
+	if v, ok := _u.mutation.Config(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "config", err: fmt.Errorf(`ent: validator failed for field "Wallet.config": %w`, err)}
 		}
 	}
-	if v, ok := wuo.mutation.AlertSettings(); ok {
+	if v, ok := _u.mutation.AlertSettings(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Wallet.alert_settings": %w`, err)}
 		}
@@ -722,17 +722,17 @@ func (wuo *WalletUpdateOne) check() error {
 	return nil
 }
 
-func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err error) {
-	if err := wuo.check(); err != nil {
+func (_u *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(wallet.Table, wallet.Columns, sqlgraph.NewFieldSpec(wallet.FieldID, field.TypeString))
-	id, ok := wuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Wallet.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := wuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, wallet.FieldID)
 		for _, f := range fields {
@@ -744,92 +744,92 @@ func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err err
 			}
 		}
 	}
-	if ps := wuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := wuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(wallet.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := wuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(wallet.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if wuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(wallet.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := wuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(wallet.FieldUpdatedBy, field.TypeString, value)
 	}
-	if wuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallet.FieldUpdatedBy, field.TypeString)
 	}
-	if wuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(wallet.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := wuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(wallet.FieldName, field.TypeString, value)
 	}
-	if wuo.mutation.NameCleared() {
+	if _u.mutation.NameCleared() {
 		_spec.ClearField(wallet.FieldName, field.TypeString)
 	}
-	if value, ok := wuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(wallet.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := wuo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(wallet.FieldDescription, field.TypeString, value)
 	}
-	if wuo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(wallet.FieldDescription, field.TypeString)
 	}
-	if value, ok := wuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(wallet.FieldMetadata, field.TypeJSON, value)
 	}
-	if wuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(wallet.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := wuo.mutation.Balance(); ok {
+	if value, ok := _u.mutation.Balance(); ok {
 		_spec.SetField(wallet.FieldBalance, field.TypeOther, value)
 	}
-	if value, ok := wuo.mutation.CreditBalance(); ok {
+	if value, ok := _u.mutation.CreditBalance(); ok {
 		_spec.SetField(wallet.FieldCreditBalance, field.TypeOther, value)
 	}
-	if value, ok := wuo.mutation.WalletStatus(); ok {
+	if value, ok := _u.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 	}
-	if value, ok := wuo.mutation.AutoTopup(); ok {
+	if value, ok := _u.mutation.AutoTopup(); ok {
 		_spec.SetField(wallet.FieldAutoTopup, field.TypeJSON, value)
 	}
-	if wuo.mutation.AutoTopupCleared() {
+	if _u.mutation.AutoTopupCleared() {
 		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
 	}
-	if wuo.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(wallet.FieldTopupConversionRate, field.TypeOther)
 	}
-	if value, ok := wuo.mutation.Config(); ok {
+	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)
 	}
-	if wuo.mutation.ConfigCleared() {
+	if _u.mutation.ConfigCleared() {
 		_spec.ClearField(wallet.FieldConfig, field.TypeJSON)
 	}
-	if value, ok := wuo.mutation.AlertSettings(); ok {
+	if value, ok := _u.mutation.AlertSettings(); ok {
 		_spec.SetField(wallet.FieldAlertSettings, field.TypeJSON, value)
 	}
-	if wuo.mutation.AlertSettingsCleared() {
+	if _u.mutation.AlertSettingsCleared() {
 		_spec.ClearField(wallet.FieldAlertSettings, field.TypeJSON)
 	}
-	if value, ok := wuo.mutation.AlertState(); ok {
+	if value, ok := _u.mutation.AlertState(); ok {
 		_spec.SetField(wallet.FieldAlertState, field.TypeString, value)
 	}
-	if wuo.mutation.AlertStateCleared() {
+	if _u.mutation.AlertStateCleared() {
 		_spec.ClearField(wallet.FieldAlertState, field.TypeString)
 	}
-	_node = &Wallet{config: wuo.config}
+	_node = &Wallet{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, wuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallet.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -837,6 +837,6 @@ func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err err
 		}
 		return nil, err
 	}
-	wuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

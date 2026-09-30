@@ -106,7 +106,7 @@ func (*Refund) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Refund fields.
-func (r *Refund) assignValues(columns []string, values []any) error {
+func (_m *Refund) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -116,165 +116,165 @@ func (r *Refund) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				r.ID = value.String
+				_m.ID = value.String
 			}
 		case refund.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				r.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case refund.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				r.Status = value.String
+				_m.Status = value.String
 			}
 		case refund.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				r.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case refund.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				r.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case refund.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				r.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case refund.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				r.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case refund.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				r.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case refund.FieldPaymentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_id", values[i])
 			} else if value.Valid {
-				r.PaymentID = new(string)
-				*r.PaymentID = value.String
+				_m.PaymentID = new(string)
+				*_m.PaymentID = value.String
 			}
 		case refund.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
 			} else if value.Valid {
-				r.InvoiceID = value.String
+				_m.InvoiceID = value.String
 			}
 		case refund.FieldCreditNoteID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_note_id", values[i])
 			} else if value.Valid {
-				r.CreditNoteID = new(string)
-				*r.CreditNoteID = value.String
+				_m.CreditNoteID = new(string)
+				*_m.CreditNoteID = value.String
 			}
 		case refund.FieldPaymentGateway:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_gateway", values[i])
 			} else if value.Valid {
-				r.PaymentGateway = new(string)
-				*r.PaymentGateway = value.String
+				_m.PaymentGateway = new(string)
+				*_m.PaymentGateway = value.String
 			}
 		case refund.FieldGatewayRefundID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_refund_id", values[i])
 			} else if value.Valid {
-				r.GatewayRefundID = new(string)
-				*r.GatewayRefundID = value.String
+				_m.GatewayRefundID = new(string)
+				*_m.GatewayRefundID = value.String
 			}
 		case refund.FieldGatewayTrackingID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_tracking_id", values[i])
 			} else if value.Valid {
-				r.GatewayTrackingID = new(string)
-				*r.GatewayTrackingID = value.String
+				_m.GatewayTrackingID = new(string)
+				*_m.GatewayTrackingID = value.String
 			}
 		case refund.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				r.Amount = *value
+				_m.Amount = *value
 			}
 		case refund.FieldSettledAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field settled_amount", values[i])
 			} else if value != nil {
-				r.SettledAmount = *value
+				_m.SettledAmount = *value
 			}
 		case refund.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				r.Currency = value.String
+				_m.Currency = value.String
 			}
 		case refund.FieldRefundStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field refund_status", values[i])
 			} else if value.Valid {
-				r.RefundStatus = value.String
+				_m.RefundStatus = value.String
 			}
 		case refund.FieldRefundReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field refund_reason", values[i])
 			} else if value.Valid {
-				r.RefundReason = value.String
+				_m.RefundReason = value.String
 			}
 		case refund.FieldRefundDestination:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field refund_destination", values[i])
 			} else if value.Valid {
-				r.RefundDestination = value.String
+				_m.RefundDestination = value.String
 			}
 		case refund.FieldRefundDestinationID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field refund_destination_id", values[i])
 			} else if value.Valid {
-				r.RefundDestinationID = new(string)
-				*r.RefundDestinationID = value.String
+				_m.RefundDestinationID = new(string)
+				*_m.RefundDestinationID = value.String
 			}
 		case refund.FieldAttempt:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field attempt", values[i])
 			} else if value.Valid {
-				r.Attempt = int(value.Int64)
+				_m.Attempt = int(value.Int64)
 			}
 		case refund.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
-				r.IdempotencyKey = value.String
+				_m.IdempotencyKey = value.String
 			}
 		case refund.FieldGatewayIdempotencyToken:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_idempotency_token", values[i])
 			} else if value.Valid {
-				r.GatewayIdempotencyToken = new(string)
-				*r.GatewayIdempotencyToken = value.String
+				_m.GatewayIdempotencyToken = new(string)
+				*_m.GatewayIdempotencyToken = value.String
 			}
 		case refund.FieldFailureReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
 			} else if value.Valid {
-				r.FailureReason = new(string)
-				*r.FailureReason = value.String
+				_m.FailureReason = new(string)
+				*_m.FailureReason = value.String
 			}
 		case refund.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &r.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -282,7 +282,7 @@ func (r *Refund) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &r.GatewayMetadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.GatewayMetadata); err != nil {
 					return fmt.Errorf("unmarshal field gateway_metadata: %w", err)
 				}
 			}
@@ -290,32 +290,32 @@ func (r *Refund) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field initiated_at", values[i])
 			} else if value.Valid {
-				r.InitiatedAt = new(time.Time)
-				*r.InitiatedAt = value.Time
+				_m.InitiatedAt = new(time.Time)
+				*_m.InitiatedAt = value.Time
 			}
 		case refund.FieldSucceededAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field succeeded_at", values[i])
 			} else if value.Valid {
-				r.SucceededAt = new(time.Time)
-				*r.SucceededAt = value.Time
+				_m.SucceededAt = new(time.Time)
+				*_m.SucceededAt = value.Time
 			}
 		case refund.FieldFailedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field failed_at", values[i])
 			} else if value.Valid {
-				r.FailedAt = new(time.Time)
-				*r.FailedAt = value.Time
+				_m.FailedAt = new(time.Time)
+				*_m.FailedAt = value.Time
 			}
 		case refund.FieldCancelledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cancelled_at", values[i])
 			} else if value.Valid {
-				r.CancelledAt = new(time.Time)
-				*r.CancelledAt = value.Time
+				_m.CancelledAt = new(time.Time)
+				*_m.CancelledAt = value.Time
 			}
 		default:
-			r.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -323,143 +323,143 @@ func (r *Refund) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Refund.
 // This includes values selected through modifiers, order, etc.
-func (r *Refund) Value(name string) (ent.Value, error) {
-	return r.selectValues.Get(name)
+func (_m *Refund) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Refund.
 // Note that you need to call Refund.Unwrap() before calling this method if this Refund
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (r *Refund) Update() *RefundUpdateOne {
-	return NewRefundClient(r.config).UpdateOne(r)
+func (_m *Refund) Update() *RefundUpdateOne {
+	return NewRefundClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Refund entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (r *Refund) Unwrap() *Refund {
-	_tx, ok := r.config.driver.(*txDriver)
+func (_m *Refund) Unwrap() *Refund {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Refund is not a transactional entity")
 	}
-	r.config.driver = _tx.drv
-	return r
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (r *Refund) String() string {
+func (_m *Refund) String() string {
 	var builder strings.Builder
 	builder.WriteString("Refund(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", r.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(r.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(r.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(r.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(r.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(r.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(r.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(r.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
-	if v := r.PaymentID; v != nil {
+	if v := _m.PaymentID; v != nil {
 		builder.WriteString("payment_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("invoice_id=")
-	builder.WriteString(r.InvoiceID)
+	builder.WriteString(_m.InvoiceID)
 	builder.WriteString(", ")
-	if v := r.CreditNoteID; v != nil {
+	if v := _m.CreditNoteID; v != nil {
 		builder.WriteString("credit_note_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := r.PaymentGateway; v != nil {
+	if v := _m.PaymentGateway; v != nil {
 		builder.WriteString("payment_gateway=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := r.GatewayRefundID; v != nil {
+	if v := _m.GatewayRefundID; v != nil {
 		builder.WriteString("gateway_refund_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := r.GatewayTrackingID; v != nil {
+	if v := _m.GatewayTrackingID; v != nil {
 		builder.WriteString("gateway_tracking_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", r.Amount))
+	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("settled_amount=")
-	builder.WriteString(fmt.Sprintf("%v", r.SettledAmount))
+	builder.WriteString(fmt.Sprintf("%v", _m.SettledAmount))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(r.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("refund_status=")
-	builder.WriteString(r.RefundStatus)
+	builder.WriteString(_m.RefundStatus)
 	builder.WriteString(", ")
 	builder.WriteString("refund_reason=")
-	builder.WriteString(r.RefundReason)
+	builder.WriteString(_m.RefundReason)
 	builder.WriteString(", ")
 	builder.WriteString("refund_destination=")
-	builder.WriteString(r.RefundDestination)
+	builder.WriteString(_m.RefundDestination)
 	builder.WriteString(", ")
-	if v := r.RefundDestinationID; v != nil {
+	if v := _m.RefundDestinationID; v != nil {
 		builder.WriteString("refund_destination_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("attempt=")
-	builder.WriteString(fmt.Sprintf("%v", r.Attempt))
+	builder.WriteString(fmt.Sprintf("%v", _m.Attempt))
 	builder.WriteString(", ")
 	builder.WriteString("idempotency_key=")
-	builder.WriteString(r.IdempotencyKey)
+	builder.WriteString(_m.IdempotencyKey)
 	builder.WriteString(", ")
-	if v := r.GatewayIdempotencyToken; v != nil {
+	if v := _m.GatewayIdempotencyToken; v != nil {
 		builder.WriteString("gateway_idempotency_token=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := r.FailureReason; v != nil {
+	if v := _m.FailureReason; v != nil {
 		builder.WriteString("failure_reason=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", r.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("gateway_metadata=")
-	builder.WriteString(fmt.Sprintf("%v", r.GatewayMetadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.GatewayMetadata))
 	builder.WriteString(", ")
-	if v := r.InitiatedAt; v != nil {
+	if v := _m.InitiatedAt; v != nil {
 		builder.WriteString("initiated_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := r.SucceededAt; v != nil {
+	if v := _m.SucceededAt; v != nil {
 		builder.WriteString("succeeded_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := r.FailedAt; v != nil {
+	if v := _m.FailedAt; v != nil {
 		builder.WriteString("failed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := r.CancelledAt; v != nil {
+	if v := _m.CancelledAt; v != nil {
 		builder.WriteString("cancelled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}

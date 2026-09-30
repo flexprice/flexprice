@@ -22,160 +22,160 @@ type SubscriptionPhaseCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (spc *SubscriptionPhaseCreate) SetTenantID(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetTenantID(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetTenantID(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (spc *SubscriptionPhaseCreate) SetStatus(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetStatus(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetStatus(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableStatus(s *string) *SubscriptionPhaseCreate {
-	if s != nil {
-		spc.SetStatus(*s)
+func (_c *SubscriptionPhaseCreate) SetNillableStatus(v *string) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (spc *SubscriptionPhaseCreate) SetCreatedAt(t time.Time) *SubscriptionPhaseCreate {
-	spc.mutation.SetCreatedAt(t)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetCreatedAt(v time.Time) *SubscriptionPhaseCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableCreatedAt(t *time.Time) *SubscriptionPhaseCreate {
-	if t != nil {
-		spc.SetCreatedAt(*t)
+func (_c *SubscriptionPhaseCreate) SetNillableCreatedAt(v *time.Time) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spc *SubscriptionPhaseCreate) SetUpdatedAt(t time.Time) *SubscriptionPhaseCreate {
-	spc.mutation.SetUpdatedAt(t)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetUpdatedAt(v time.Time) *SubscriptionPhaseCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableUpdatedAt(t *time.Time) *SubscriptionPhaseCreate {
-	if t != nil {
-		spc.SetUpdatedAt(*t)
+func (_c *SubscriptionPhaseCreate) SetNillableUpdatedAt(v *time.Time) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (spc *SubscriptionPhaseCreate) SetCreatedBy(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetCreatedBy(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetCreatedBy(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableCreatedBy(s *string) *SubscriptionPhaseCreate {
-	if s != nil {
-		spc.SetCreatedBy(*s)
+func (_c *SubscriptionPhaseCreate) SetNillableCreatedBy(v *string) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spc *SubscriptionPhaseCreate) SetUpdatedBy(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetUpdatedBy(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetUpdatedBy(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableUpdatedBy(s *string) *SubscriptionPhaseCreate {
-	if s != nil {
-		spc.SetUpdatedBy(*s)
+func (_c *SubscriptionPhaseCreate) SetNillableUpdatedBy(v *string) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (spc *SubscriptionPhaseCreate) SetEnvironmentID(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetEnvironmentID(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetEnvironmentID(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableEnvironmentID(s *string) *SubscriptionPhaseCreate {
-	if s != nil {
-		spc.SetEnvironmentID(*s)
+func (_c *SubscriptionPhaseCreate) SetNillableEnvironmentID(v *string) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (spc *SubscriptionPhaseCreate) SetMetadata(m map[string]string) *SubscriptionPhaseCreate {
-	spc.mutation.SetMetadata(m)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetMetadata(v map[string]string) *SubscriptionPhaseCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spc *SubscriptionPhaseCreate) SetSubscriptionID(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetSubscriptionID(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetSubscriptionID(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (spc *SubscriptionPhaseCreate) SetStartDate(t time.Time) *SubscriptionPhaseCreate {
-	spc.mutation.SetStartDate(t)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetStartDate(v time.Time) *SubscriptionPhaseCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableStartDate(t *time.Time) *SubscriptionPhaseCreate {
-	if t != nil {
-		spc.SetStartDate(*t)
+func (_c *SubscriptionPhaseCreate) SetNillableStartDate(v *time.Time) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (spc *SubscriptionPhaseCreate) SetEndDate(t time.Time) *SubscriptionPhaseCreate {
-	spc.mutation.SetEndDate(t)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetEndDate(v time.Time) *SubscriptionPhaseCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (spc *SubscriptionPhaseCreate) SetNillableEndDate(t *time.Time) *SubscriptionPhaseCreate {
-	if t != nil {
-		spc.SetEndDate(*t)
+func (_c *SubscriptionPhaseCreate) SetNillableEndDate(v *time.Time) *SubscriptionPhaseCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (spc *SubscriptionPhaseCreate) SetID(s string) *SubscriptionPhaseCreate {
-	spc.mutation.SetID(s)
-	return spc
+func (_c *SubscriptionPhaseCreate) SetID(v string) *SubscriptionPhaseCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spc *SubscriptionPhaseCreate) SetSubscription(s *Subscription) *SubscriptionPhaseCreate {
-	return spc.SetSubscriptionID(s.ID)
+func (_c *SubscriptionPhaseCreate) SetSubscription(v *Subscription) *SubscriptionPhaseCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
-func (spc *SubscriptionPhaseCreate) Mutation() *SubscriptionPhaseMutation {
-	return spc.mutation
+func (_c *SubscriptionPhaseCreate) Mutation() *SubscriptionPhaseMutation {
+	return _c.mutation
 }
 
 // Save creates the SubscriptionPhase in the database.
-func (spc *SubscriptionPhaseCreate) Save(ctx context.Context) (*SubscriptionPhase, error) {
-	spc.defaults()
-	return withHooks(ctx, spc.sqlSave, spc.mutation, spc.hooks)
+func (_c *SubscriptionPhaseCreate) Save(ctx context.Context) (*SubscriptionPhase, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (spc *SubscriptionPhaseCreate) SaveX(ctx context.Context) *SubscriptionPhase {
-	v, err := spc.Save(ctx)
+func (_c *SubscriptionPhaseCreate) SaveX(ctx context.Context) *SubscriptionPhase {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -183,84 +183,84 @@ func (spc *SubscriptionPhaseCreate) SaveX(ctx context.Context) *SubscriptionPhas
 }
 
 // Exec executes the query.
-func (spc *SubscriptionPhaseCreate) Exec(ctx context.Context) error {
-	_, err := spc.Save(ctx)
+func (_c *SubscriptionPhaseCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spc *SubscriptionPhaseCreate) ExecX(ctx context.Context) {
-	if err := spc.Exec(ctx); err != nil {
+func (_c *SubscriptionPhaseCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spc *SubscriptionPhaseCreate) defaults() {
-	if _, ok := spc.mutation.Status(); !ok {
+func (_c *SubscriptionPhaseCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := subscriptionphase.DefaultStatus
-		spc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := spc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionphase.DefaultCreatedAt()
-		spc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := spc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := subscriptionphase.DefaultUpdatedAt()
-		spc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := spc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := subscriptionphase.DefaultEnvironmentID
-		spc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := spc.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		v := subscriptionphase.DefaultStartDate()
-		spc.mutation.SetStartDate(v)
+		_c.mutation.SetStartDate(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spc *SubscriptionPhaseCreate) check() error {
-	if _, ok := spc.mutation.TenantID(); !ok {
+func (_c *SubscriptionPhaseCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "SubscriptionPhase.tenant_id"`)}
 	}
-	if v, ok := spc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := subscriptionphase.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SubscriptionPhase.status"`)}
 	}
-	if _, ok := spc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionPhase.created_at"`)}
 	}
-	if _, ok := spc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SubscriptionPhase.updated_at"`)}
 	}
-	if _, ok := spc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "SubscriptionPhase.subscription_id"`)}
 	}
-	if v, ok := spc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := subscriptionphase.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "SubscriptionPhase.start_date"`)}
 	}
-	if len(spc.mutation.SubscriptionIDs()) == 0 {
+	if len(_c.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionPhase.subscription"`)}
 	}
 	return nil
 }
 
-func (spc *SubscriptionPhaseCreate) sqlSave(ctx context.Context) (*SubscriptionPhase, error) {
-	if err := spc.check(); err != nil {
+func (_c *SubscriptionPhaseCreate) sqlSave(ctx context.Context) (*SubscriptionPhase, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := spc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, spc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -273,61 +273,61 @@ func (spc *SubscriptionPhaseCreate) sqlSave(ctx context.Context) (*SubscriptionP
 			return nil, fmt.Errorf("unexpected SubscriptionPhase.ID type: %T", _spec.ID.Value)
 		}
 	}
-	spc.mutation.id = &_node.ID
-	spc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (spc *SubscriptionPhaseCreate) createSpec() (*SubscriptionPhase, *sqlgraph.CreateSpec) {
+func (_c *SubscriptionPhaseCreate) createSpec() (*SubscriptionPhase, *sqlgraph.CreateSpec) {
 	var (
-		_node = &SubscriptionPhase{config: spc.config}
+		_node = &SubscriptionPhase{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(subscriptionphase.Table, sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString))
 	)
-	if id, ok := spc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := spc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(subscriptionphase.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := spc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(subscriptionphase.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := spc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionphase.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := spc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := spc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(subscriptionphase.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := spc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := spc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(subscriptionphase.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := spc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionphase.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := spc.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(subscriptionphase.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = value
 	}
-	if value, ok := spc.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if nodes := spc.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -355,16 +355,16 @@ type SubscriptionPhaseCreateBulk struct {
 }
 
 // Save creates the SubscriptionPhase entities in the database.
-func (spcb *SubscriptionPhaseCreateBulk) Save(ctx context.Context) ([]*SubscriptionPhase, error) {
-	if spcb.err != nil {
-		return nil, spcb.err
+func (_c *SubscriptionPhaseCreateBulk) Save(ctx context.Context) ([]*SubscriptionPhase, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(spcb.builders))
-	nodes := make([]*SubscriptionPhase, len(spcb.builders))
-	mutators := make([]Mutator, len(spcb.builders))
-	for i := range spcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*SubscriptionPhase, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := spcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SubscriptionPhaseMutation)
@@ -378,11 +378,11 @@ func (spcb *SubscriptionPhaseCreateBulk) Save(ctx context.Context) ([]*Subscript
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, spcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, spcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -402,7 +402,7 @@ func (spcb *SubscriptionPhaseCreateBulk) Save(ctx context.Context) ([]*Subscript
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, spcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -410,8 +410,8 @@ func (spcb *SubscriptionPhaseCreateBulk) Save(ctx context.Context) ([]*Subscript
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spcb *SubscriptionPhaseCreateBulk) SaveX(ctx context.Context) []*SubscriptionPhase {
-	v, err := spcb.Save(ctx)
+func (_c *SubscriptionPhaseCreateBulk) SaveX(ctx context.Context) []*SubscriptionPhase {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -419,14 +419,14 @@ func (spcb *SubscriptionPhaseCreateBulk) SaveX(ctx context.Context) []*Subscript
 }
 
 // Exec executes the query.
-func (spcb *SubscriptionPhaseCreateBulk) Exec(ctx context.Context) error {
-	_, err := spcb.Save(ctx)
+func (_c *SubscriptionPhaseCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spcb *SubscriptionPhaseCreateBulk) ExecX(ctx context.Context) {
-	if err := spcb.Exec(ctx); err != nil {
+func (_c *SubscriptionPhaseCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

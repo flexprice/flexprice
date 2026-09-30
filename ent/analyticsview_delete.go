@@ -20,56 +20,56 @@ type AnalyticsViewDelete struct {
 }
 
 // Where appends a list predicates to the AnalyticsViewDelete builder.
-func (avd *AnalyticsViewDelete) Where(ps ...predicate.AnalyticsView) *AnalyticsViewDelete {
-	avd.mutation.Where(ps...)
-	return avd
+func (_d *AnalyticsViewDelete) Where(ps ...predicate.AnalyticsView) *AnalyticsViewDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (avd *AnalyticsViewDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, avd.sqlExec, avd.mutation, avd.hooks)
+func (_d *AnalyticsViewDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avd *AnalyticsViewDelete) ExecX(ctx context.Context) int {
-	n, err := avd.Exec(ctx)
+func (_d *AnalyticsViewDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (avd *AnalyticsViewDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *AnalyticsViewDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(analyticsview.Table, sqlgraph.NewFieldSpec(analyticsview.FieldID, field.TypeString))
-	if ps := avd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, avd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	avd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // AnalyticsViewDeleteOne is the builder for deleting a single AnalyticsView entity.
 type AnalyticsViewDeleteOne struct {
-	avd *AnalyticsViewDelete
+	_d *AnalyticsViewDelete
 }
 
 // Where appends a list predicates to the AnalyticsViewDelete builder.
-func (avdo *AnalyticsViewDeleteOne) Where(ps ...predicate.AnalyticsView) *AnalyticsViewDeleteOne {
-	avdo.avd.mutation.Where(ps...)
-	return avdo
+func (_d *AnalyticsViewDeleteOne) Where(ps ...predicate.AnalyticsView) *AnalyticsViewDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (avdo *AnalyticsViewDeleteOne) Exec(ctx context.Context) error {
-	n, err := avdo.avd.Exec(ctx)
+func (_d *AnalyticsViewDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (avdo *AnalyticsViewDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avdo *AnalyticsViewDeleteOne) ExecX(ctx context.Context) {
-	if err := avdo.Exec(ctx); err != nil {
+func (_d *AnalyticsViewDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

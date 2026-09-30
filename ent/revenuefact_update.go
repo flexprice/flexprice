@@ -25,539 +25,539 @@ type RevenueFactUpdate struct {
 }
 
 // Where appends a list predicates to the RevenueFactUpdate builder.
-func (rfu *RevenueFactUpdate) Where(ps ...predicate.RevenueFact) *RevenueFactUpdate {
-	rfu.mutation.Where(ps...)
-	return rfu
+func (_u *RevenueFactUpdate) Where(ps ...predicate.RevenueFact) *RevenueFactUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (rfu *RevenueFactUpdate) SetTenantID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetTenantID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetTenantID(v string) *RevenueFactUpdate {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableTenantID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetTenantID(*s)
+func (_u *RevenueFactUpdate) SetNillableTenantID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (rfu *RevenueFactUpdate) SetEnvironmentID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetEnvironmentID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetEnvironmentID(v string) *RevenueFactUpdate {
+	_u.mutation.SetEnvironmentID(v)
+	return _u
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableEnvironmentID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetEnvironmentID(*s)
+func (_u *RevenueFactUpdate) SetNillableEnvironmentID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetEnvironmentID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (rfu *RevenueFactUpdate) SetCustomerID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetCustomerID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetCustomerID(v string) *RevenueFactUpdate {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableCustomerID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetCustomerID(*s)
+func (_u *RevenueFactUpdate) SetNillableCustomerID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (rfu *RevenueFactUpdate) SetSubscriptionID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetSubscriptionID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetSubscriptionID(v string) *RevenueFactUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableSubscriptionID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetSubscriptionID(*s)
+func (_u *RevenueFactUpdate) SetNillableSubscriptionID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetSubLineItemID sets the "sub_line_item_id" field.
-func (rfu *RevenueFactUpdate) SetSubLineItemID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetSubLineItemID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetSubLineItemID(v string) *RevenueFactUpdate {
+	_u.mutation.SetSubLineItemID(v)
+	return _u
 }
 
 // SetNillableSubLineItemID sets the "sub_line_item_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableSubLineItemID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetSubLineItemID(*s)
+func (_u *RevenueFactUpdate) SetNillableSubLineItemID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetSubLineItemID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearSubLineItemID clears the value of the "sub_line_item_id" field.
-func (rfu *RevenueFactUpdate) ClearSubLineItemID() *RevenueFactUpdate {
-	rfu.mutation.ClearSubLineItemID()
-	return rfu
+func (_u *RevenueFactUpdate) ClearSubLineItemID() *RevenueFactUpdate {
+	_u.mutation.ClearSubLineItemID()
+	return _u
 }
 
 // SetPriceID sets the "price_id" field.
-func (rfu *RevenueFactUpdate) SetPriceID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetPriceID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetPriceID(v string) *RevenueFactUpdate {
+	_u.mutation.SetPriceID(v)
+	return _u
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillablePriceID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetPriceID(*s)
+func (_u *RevenueFactUpdate) SetNillablePriceID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetPriceID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearPriceID clears the value of the "price_id" field.
-func (rfu *RevenueFactUpdate) ClearPriceID() *RevenueFactUpdate {
-	rfu.mutation.ClearPriceID()
-	return rfu
+func (_u *RevenueFactUpdate) ClearPriceID() *RevenueFactUpdate {
+	_u.mutation.ClearPriceID()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (rfu *RevenueFactUpdate) SetMeterID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetMeterID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetMeterID(v string) *RevenueFactUpdate {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableMeterID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetMeterID(*s)
+func (_u *RevenueFactUpdate) SetNillableMeterID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (rfu *RevenueFactUpdate) ClearMeterID() *RevenueFactUpdate {
-	rfu.mutation.ClearMeterID()
-	return rfu
+func (_u *RevenueFactUpdate) ClearMeterID() *RevenueFactUpdate {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetAggregationType sets the "aggregation_type" field.
-func (rfu *RevenueFactUpdate) SetAggregationType(tt types.AggregationType) *RevenueFactUpdate {
-	rfu.mutation.SetAggregationType(tt)
-	return rfu
+func (_u *RevenueFactUpdate) SetAggregationType(v types.AggregationType) *RevenueFactUpdate {
+	_u.mutation.SetAggregationType(v)
+	return _u
 }
 
 // SetNillableAggregationType sets the "aggregation_type" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableAggregationType(tt *types.AggregationType) *RevenueFactUpdate {
-	if tt != nil {
-		rfu.SetAggregationType(*tt)
+func (_u *RevenueFactUpdate) SetNillableAggregationType(v *types.AggregationType) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetAggregationType(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearAggregationType clears the value of the "aggregation_type" field.
-func (rfu *RevenueFactUpdate) ClearAggregationType() *RevenueFactUpdate {
-	rfu.mutation.ClearAggregationType()
-	return rfu
+func (_u *RevenueFactUpdate) ClearAggregationType() *RevenueFactUpdate {
+	_u.mutation.ClearAggregationType()
+	return _u
 }
 
 // SetRevenueSource sets the "revenue_source" field.
-func (rfu *RevenueFactUpdate) SetRevenueSource(ts types.RevenueSource) *RevenueFactUpdate {
-	rfu.mutation.SetRevenueSource(ts)
-	return rfu
+func (_u *RevenueFactUpdate) SetRevenueSource(v types.RevenueSource) *RevenueFactUpdate {
+	_u.mutation.SetRevenueSource(v)
+	return _u
 }
 
 // SetNillableRevenueSource sets the "revenue_source" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableRevenueSource(ts *types.RevenueSource) *RevenueFactUpdate {
-	if ts != nil {
-		rfu.SetRevenueSource(*ts)
+func (_u *RevenueFactUpdate) SetNillableRevenueSource(v *types.RevenueSource) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetRevenueSource(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (rfu *RevenueFactUpdate) SetPeriodStart(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetPeriodStart(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetPeriodStart(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillablePeriodStart(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetPeriodStart(*t)
+func (_u *RevenueFactUpdate) SetNillablePeriodStart(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (rfu *RevenueFactUpdate) SetPeriodEnd(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetPeriodEnd(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetPeriodEnd(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillablePeriodEnd(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetPeriodEnd(*t)
+func (_u *RevenueFactUpdate) SetNillablePeriodEnd(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetDay sets the "day" field.
-func (rfu *RevenueFactUpdate) SetDay(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetDay(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetDay(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetDay(v)
+	return _u
 }
 
 // SetNillableDay sets the "day" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableDay(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetDay(*t)
+func (_u *RevenueFactUpdate) SetNillableDay(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetDay(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetServiceStart sets the "service_start" field.
-func (rfu *RevenueFactUpdate) SetServiceStart(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetServiceStart(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetServiceStart(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetServiceStart(v)
+	return _u
 }
 
 // SetNillableServiceStart sets the "service_start" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableServiceStart(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetServiceStart(*t)
+func (_u *RevenueFactUpdate) SetNillableServiceStart(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetServiceStart(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearServiceStart clears the value of the "service_start" field.
-func (rfu *RevenueFactUpdate) ClearServiceStart() *RevenueFactUpdate {
-	rfu.mutation.ClearServiceStart()
-	return rfu
+func (_u *RevenueFactUpdate) ClearServiceStart() *RevenueFactUpdate {
+	_u.mutation.ClearServiceStart()
+	return _u
 }
 
 // SetServiceEnd sets the "service_end" field.
-func (rfu *RevenueFactUpdate) SetServiceEnd(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetServiceEnd(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetServiceEnd(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetServiceEnd(v)
+	return _u
 }
 
 // SetNillableServiceEnd sets the "service_end" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableServiceEnd(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetServiceEnd(*t)
+func (_u *RevenueFactUpdate) SetNillableServiceEnd(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetServiceEnd(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearServiceEnd clears the value of the "service_end" field.
-func (rfu *RevenueFactUpdate) ClearServiceEnd() *RevenueFactUpdate {
-	rfu.mutation.ClearServiceEnd()
-	return rfu
+func (_u *RevenueFactUpdate) ClearServiceEnd() *RevenueFactUpdate {
+	_u.mutation.ClearServiceEnd()
+	return _u
 }
 
 // SetRecognitionMethod sets the "recognition_method" field.
-func (rfu *RevenueFactUpdate) SetRecognitionMethod(tm types.RecognitionMethod) *RevenueFactUpdate {
-	rfu.mutation.SetRecognitionMethod(tm)
-	return rfu
+func (_u *RevenueFactUpdate) SetRecognitionMethod(v types.RecognitionMethod) *RevenueFactUpdate {
+	_u.mutation.SetRecognitionMethod(v)
+	return _u
 }
 
 // SetNillableRecognitionMethod sets the "recognition_method" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableRecognitionMethod(tm *types.RecognitionMethod) *RevenueFactUpdate {
-	if tm != nil {
-		rfu.SetRecognitionMethod(*tm)
+func (_u *RevenueFactUpdate) SetNillableRecognitionMethod(v *types.RecognitionMethod) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetRecognitionMethod(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearRecognitionMethod clears the value of the "recognition_method" field.
-func (rfu *RevenueFactUpdate) ClearRecognitionMethod() *RevenueFactUpdate {
-	rfu.mutation.ClearRecognitionMethod()
-	return rfu
+func (_u *RevenueFactUpdate) ClearRecognitionMethod() *RevenueFactUpdate {
+	_u.mutation.ClearRecognitionMethod()
+	return _u
 }
 
 // SetUsageAtListRate sets the "usage_at_list_rate" field.
-func (rfu *RevenueFactUpdate) SetUsageAtListRate(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetUsageAtListRate(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetUsageAtListRate(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetUsageAtListRate(v)
+	return _u
 }
 
 // SetNillableUsageAtListRate sets the "usage_at_list_rate" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableUsageAtListRate(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetUsageAtListRate(*d)
+func (_u *RevenueFactUpdate) SetNillableUsageAtListRate(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetUsageAtListRate(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetTierDelta sets the "tier_delta" field.
-func (rfu *RevenueFactUpdate) SetTierDelta(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetTierDelta(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetTierDelta(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetTierDelta(v)
+	return _u
 }
 
 // SetNillableTierDelta sets the "tier_delta" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableTierDelta(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetTierDelta(*d)
+func (_u *RevenueFactUpdate) SetNillableTierDelta(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetTierDelta(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetEntitlementAmount sets the "entitlement_amount" field.
-func (rfu *RevenueFactUpdate) SetEntitlementAmount(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetEntitlementAmount(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetEntitlementAmount(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetEntitlementAmount(v)
+	return _u
 }
 
 // SetNillableEntitlementAmount sets the "entitlement_amount" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableEntitlementAmount(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetEntitlementAmount(*d)
+func (_u *RevenueFactUpdate) SetNillableEntitlementAmount(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetEntitlementAmount(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetLineDiscount sets the "line_discount" field.
-func (rfu *RevenueFactUpdate) SetLineDiscount(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetLineDiscount(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetLineDiscount(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetLineDiscount(v)
+	return _u
 }
 
 // SetNillableLineDiscount sets the "line_discount" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableLineDiscount(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetLineDiscount(*d)
+func (_u *RevenueFactUpdate) SetNillableLineDiscount(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetLineDiscount(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetInvoiceDiscount sets the "invoice_discount" field.
-func (rfu *RevenueFactUpdate) SetInvoiceDiscount(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetInvoiceDiscount(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetInvoiceDiscount(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetInvoiceDiscount(v)
+	return _u
 }
 
 // SetNillableInvoiceDiscount sets the "invoice_discount" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableInvoiceDiscount(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetInvoiceDiscount(*d)
+func (_u *RevenueFactUpdate) SetNillableInvoiceDiscount(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetInvoiceDiscount(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetNetAmount sets the "net_amount" field.
-func (rfu *RevenueFactUpdate) SetNetAmount(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetNetAmount(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetNetAmount(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetNetAmount(v)
+	return _u
 }
 
 // SetNillableNetAmount sets the "net_amount" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableNetAmount(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetNetAmount(*d)
+func (_u *RevenueFactUpdate) SetNillableNetAmount(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetNetAmount(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetBillableQty sets the "billable_qty" field.
-func (rfu *RevenueFactUpdate) SetBillableQty(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetBillableQty(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetBillableQty(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetBillableQty(v)
+	return _u
 }
 
 // SetNillableBillableQty sets the "billable_qty" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableBillableQty(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetBillableQty(*d)
+func (_u *RevenueFactUpdate) SetNillableBillableQty(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetBillableQty(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetEntitlementQty sets the "entitlement_qty" field.
-func (rfu *RevenueFactUpdate) SetEntitlementQty(d decimal.Decimal) *RevenueFactUpdate {
-	rfu.mutation.SetEntitlementQty(d)
-	return rfu
+func (_u *RevenueFactUpdate) SetEntitlementQty(v decimal.Decimal) *RevenueFactUpdate {
+	_u.mutation.SetEntitlementQty(v)
+	return _u
 }
 
 // SetNillableEntitlementQty sets the "entitlement_qty" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableEntitlementQty(d *decimal.Decimal) *RevenueFactUpdate {
-	if d != nil {
-		rfu.SetEntitlementQty(*d)
+func (_u *RevenueFactUpdate) SetNillableEntitlementQty(v *decimal.Decimal) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetEntitlementQty(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetDecompositionMode sets the "decomposition_mode" field.
-func (rfu *RevenueFactUpdate) SetDecompositionMode(tm types.DecompositionMode) *RevenueFactUpdate {
-	rfu.mutation.SetDecompositionMode(tm)
-	return rfu
+func (_u *RevenueFactUpdate) SetDecompositionMode(v types.DecompositionMode) *RevenueFactUpdate {
+	_u.mutation.SetDecompositionMode(v)
+	return _u
 }
 
 // SetNillableDecompositionMode sets the "decomposition_mode" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableDecompositionMode(tm *types.DecompositionMode) *RevenueFactUpdate {
-	if tm != nil {
-		rfu.SetDecompositionMode(*tm)
+func (_u *RevenueFactUpdate) SetNillableDecompositionMode(v *types.DecompositionMode) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetDecompositionMode(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (rfu *RevenueFactUpdate) SetCurrency(s string) *RevenueFactUpdate {
-	rfu.mutation.SetCurrency(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetCurrency(v string) *RevenueFactUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableCurrency(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetCurrency(*s)
+func (_u *RevenueFactUpdate) SetNillableCurrency(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (rfu *RevenueFactUpdate) SetStatus(ts types.FactStatus) *RevenueFactUpdate {
-	rfu.mutation.SetStatus(ts)
-	return rfu
+func (_u *RevenueFactUpdate) SetStatus(v types.FactStatus) *RevenueFactUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableStatus(ts *types.FactStatus) *RevenueFactUpdate {
-	if ts != nil {
-		rfu.SetStatus(*ts)
+func (_u *RevenueFactUpdate) SetNillableStatus(v *types.FactStatus) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetIsRevert sets the "is_revert" field.
-func (rfu *RevenueFactUpdate) SetIsRevert(b bool) *RevenueFactUpdate {
-	rfu.mutation.SetIsRevert(b)
-	return rfu
+func (_u *RevenueFactUpdate) SetIsRevert(v bool) *RevenueFactUpdate {
+	_u.mutation.SetIsRevert(v)
+	return _u
 }
 
 // SetNillableIsRevert sets the "is_revert" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableIsRevert(b *bool) *RevenueFactUpdate {
-	if b != nil {
-		rfu.SetIsRevert(*b)
+func (_u *RevenueFactUpdate) SetNillableIsRevert(v *bool) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetIsRevert(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (rfu *RevenueFactUpdate) SetInvoiceID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetInvoiceID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetInvoiceID(v string) *RevenueFactUpdate {
+	_u.mutation.SetInvoiceID(v)
+	return _u
 }
 
 // SetNillableInvoiceID sets the "invoice_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableInvoiceID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetInvoiceID(*s)
+func (_u *RevenueFactUpdate) SetNillableInvoiceID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetInvoiceID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearInvoiceID clears the value of the "invoice_id" field.
-func (rfu *RevenueFactUpdate) ClearInvoiceID() *RevenueFactUpdate {
-	rfu.mutation.ClearInvoiceID()
-	return rfu
+func (_u *RevenueFactUpdate) ClearInvoiceID() *RevenueFactUpdate {
+	_u.mutation.ClearInvoiceID()
+	return _u
 }
 
 // SetInvoiceLineItemID sets the "invoice_line_item_id" field.
-func (rfu *RevenueFactUpdate) SetInvoiceLineItemID(s string) *RevenueFactUpdate {
-	rfu.mutation.SetInvoiceLineItemID(s)
-	return rfu
+func (_u *RevenueFactUpdate) SetInvoiceLineItemID(v string) *RevenueFactUpdate {
+	_u.mutation.SetInvoiceLineItemID(v)
+	return _u
 }
 
 // SetNillableInvoiceLineItemID sets the "invoice_line_item_id" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableInvoiceLineItemID(s *string) *RevenueFactUpdate {
-	if s != nil {
-		rfu.SetInvoiceLineItemID(*s)
+func (_u *RevenueFactUpdate) SetNillableInvoiceLineItemID(v *string) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetInvoiceLineItemID(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearInvoiceLineItemID clears the value of the "invoice_line_item_id" field.
-func (rfu *RevenueFactUpdate) ClearInvoiceLineItemID() *RevenueFactUpdate {
-	rfu.mutation.ClearInvoiceLineItemID()
-	return rfu
+func (_u *RevenueFactUpdate) ClearInvoiceLineItemID() *RevenueFactUpdate {
+	_u.mutation.ClearInvoiceLineItemID()
+	return _u
 }
 
 // SetLockAdjustedDay sets the "lock_adjusted_day" field.
-func (rfu *RevenueFactUpdate) SetLockAdjustedDay(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetLockAdjustedDay(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetLockAdjustedDay(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetLockAdjustedDay(v)
+	return _u
 }
 
 // SetNillableLockAdjustedDay sets the "lock_adjusted_day" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableLockAdjustedDay(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetLockAdjustedDay(*t)
+func (_u *RevenueFactUpdate) SetNillableLockAdjustedDay(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetLockAdjustedDay(*v)
 	}
-	return rfu
+	return _u
 }
 
 // ClearLockAdjustedDay clears the value of the "lock_adjusted_day" field.
-func (rfu *RevenueFactUpdate) ClearLockAdjustedDay() *RevenueFactUpdate {
-	rfu.mutation.ClearLockAdjustedDay()
-	return rfu
+func (_u *RevenueFactUpdate) ClearLockAdjustedDay() *RevenueFactUpdate {
+	_u.mutation.ClearLockAdjustedDay()
+	return _u
 }
 
 // SetComputedAt sets the "computed_at" field.
-func (rfu *RevenueFactUpdate) SetComputedAt(t time.Time) *RevenueFactUpdate {
-	rfu.mutation.SetComputedAt(t)
-	return rfu
+func (_u *RevenueFactUpdate) SetComputedAt(v time.Time) *RevenueFactUpdate {
+	_u.mutation.SetComputedAt(v)
+	return _u
 }
 
 // SetNillableComputedAt sets the "computed_at" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableComputedAt(t *time.Time) *RevenueFactUpdate {
-	if t != nil {
-		rfu.SetComputedAt(*t)
+func (_u *RevenueFactUpdate) SetNillableComputedAt(v *time.Time) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetComputedAt(*v)
 	}
-	return rfu
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (rfu *RevenueFactUpdate) SetVersion(i int64) *RevenueFactUpdate {
-	rfu.mutation.ResetVersion()
-	rfu.mutation.SetVersion(i)
-	return rfu
+func (_u *RevenueFactUpdate) SetVersion(v int64) *RevenueFactUpdate {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (rfu *RevenueFactUpdate) SetNillableVersion(i *int64) *RevenueFactUpdate {
-	if i != nil {
-		rfu.SetVersion(*i)
+func (_u *RevenueFactUpdate) SetNillableVersion(v *int64) *RevenueFactUpdate {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return rfu
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (rfu *RevenueFactUpdate) AddVersion(i int64) *RevenueFactUpdate {
-	rfu.mutation.AddVersion(i)
-	return rfu
+// AddVersion adds value to the "version" field.
+func (_u *RevenueFactUpdate) AddVersion(v int64) *RevenueFactUpdate {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // Mutation returns the RevenueFactMutation object of the builder.
-func (rfu *RevenueFactUpdate) Mutation() *RevenueFactMutation {
-	return rfu.mutation
+func (_u *RevenueFactUpdate) Mutation() *RevenueFactMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (rfu *RevenueFactUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, rfu.sqlSave, rfu.mutation, rfu.hooks)
+func (_u *RevenueFactUpdate) Save(ctx context.Context) (int, error) {
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (rfu *RevenueFactUpdate) SaveX(ctx context.Context) int {
-	affected, err := rfu.Save(ctx)
+func (_u *RevenueFactUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -565,157 +565,157 @@ func (rfu *RevenueFactUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (rfu *RevenueFactUpdate) Exec(ctx context.Context) error {
-	_, err := rfu.Save(ctx)
+func (_u *RevenueFactUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfu *RevenueFactUpdate) ExecX(ctx context.Context) {
-	if err := rfu.Exec(ctx); err != nil {
+func (_u *RevenueFactUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (rfu *RevenueFactUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *RevenueFactUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(revenuefact.Table, revenuefact.Columns, sqlgraph.NewFieldSpec(revenuefact.FieldID, field.TypeString))
-	if ps := rfu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := rfu.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(revenuefact.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.EnvironmentID(); ok {
+	if value, ok := _u.mutation.EnvironmentID(); ok {
 		_spec.SetField(revenuefact.FieldEnvironmentID, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(revenuefact.FieldCustomerID, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(revenuefact.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.SubLineItemID(); ok {
+	if value, ok := _u.mutation.SubLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldSubLineItemID, field.TypeString, value)
 	}
-	if rfu.mutation.SubLineItemIDCleared() {
+	if _u.mutation.SubLineItemIDCleared() {
 		_spec.ClearField(revenuefact.FieldSubLineItemID, field.TypeString)
 	}
-	if value, ok := rfu.mutation.PriceID(); ok {
+	if value, ok := _u.mutation.PriceID(); ok {
 		_spec.SetField(revenuefact.FieldPriceID, field.TypeString, value)
 	}
-	if rfu.mutation.PriceIDCleared() {
+	if _u.mutation.PriceIDCleared() {
 		_spec.ClearField(revenuefact.FieldPriceID, field.TypeString)
 	}
-	if value, ok := rfu.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(revenuefact.FieldMeterID, field.TypeString, value)
 	}
-	if rfu.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(revenuefact.FieldMeterID, field.TypeString)
 	}
-	if value, ok := rfu.mutation.AggregationType(); ok {
+	if value, ok := _u.mutation.AggregationType(); ok {
 		_spec.SetField(revenuefact.FieldAggregationType, field.TypeString, value)
 	}
-	if rfu.mutation.AggregationTypeCleared() {
+	if _u.mutation.AggregationTypeCleared() {
 		_spec.ClearField(revenuefact.FieldAggregationType, field.TypeString)
 	}
-	if value, ok := rfu.mutation.RevenueSource(); ok {
+	if value, ok := _u.mutation.RevenueSource(); ok {
 		_spec.SetField(revenuefact.FieldRevenueSource, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(revenuefact.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := rfu.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(revenuefact.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := rfu.mutation.Day(); ok {
+	if value, ok := _u.mutation.Day(); ok {
 		_spec.SetField(revenuefact.FieldDay, field.TypeTime, value)
 	}
-	if value, ok := rfu.mutation.ServiceStart(); ok {
+	if value, ok := _u.mutation.ServiceStart(); ok {
 		_spec.SetField(revenuefact.FieldServiceStart, field.TypeTime, value)
 	}
-	if rfu.mutation.ServiceStartCleared() {
+	if _u.mutation.ServiceStartCleared() {
 		_spec.ClearField(revenuefact.FieldServiceStart, field.TypeTime)
 	}
-	if value, ok := rfu.mutation.ServiceEnd(); ok {
+	if value, ok := _u.mutation.ServiceEnd(); ok {
 		_spec.SetField(revenuefact.FieldServiceEnd, field.TypeTime, value)
 	}
-	if rfu.mutation.ServiceEndCleared() {
+	if _u.mutation.ServiceEndCleared() {
 		_spec.ClearField(revenuefact.FieldServiceEnd, field.TypeTime)
 	}
-	if value, ok := rfu.mutation.RecognitionMethod(); ok {
+	if value, ok := _u.mutation.RecognitionMethod(); ok {
 		_spec.SetField(revenuefact.FieldRecognitionMethod, field.TypeString, value)
 	}
-	if rfu.mutation.RecognitionMethodCleared() {
+	if _u.mutation.RecognitionMethodCleared() {
 		_spec.ClearField(revenuefact.FieldRecognitionMethod, field.TypeString)
 	}
-	if value, ok := rfu.mutation.UsageAtListRate(); ok {
+	if value, ok := _u.mutation.UsageAtListRate(); ok {
 		_spec.SetField(revenuefact.FieldUsageAtListRate, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.TierDelta(); ok {
+	if value, ok := _u.mutation.TierDelta(); ok {
 		_spec.SetField(revenuefact.FieldTierDelta, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.EntitlementAmount(); ok {
+	if value, ok := _u.mutation.EntitlementAmount(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementAmount, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.LineDiscount(); ok {
+	if value, ok := _u.mutation.LineDiscount(); ok {
 		_spec.SetField(revenuefact.FieldLineDiscount, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.InvoiceDiscount(); ok {
+	if value, ok := _u.mutation.InvoiceDiscount(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceDiscount, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.NetAmount(); ok {
+	if value, ok := _u.mutation.NetAmount(); ok {
 		_spec.SetField(revenuefact.FieldNetAmount, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.BillableQty(); ok {
+	if value, ok := _u.mutation.BillableQty(); ok {
 		_spec.SetField(revenuefact.FieldBillableQty, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.EntitlementQty(); ok {
+	if value, ok := _u.mutation.EntitlementQty(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementQty, field.TypeOther, value)
 	}
-	if value, ok := rfu.mutation.DecompositionMode(); ok {
+	if value, ok := _u.mutation.DecompositionMode(); ok {
 		_spec.SetField(revenuefact.FieldDecompositionMode, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(revenuefact.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(revenuefact.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := rfu.mutation.IsRevert(); ok {
+	if value, ok := _u.mutation.IsRevert(); ok {
 		_spec.SetField(revenuefact.FieldIsRevert, field.TypeBool, value)
 	}
-	if value, ok := rfu.mutation.InvoiceID(); ok {
+	if value, ok := _u.mutation.InvoiceID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceID, field.TypeString, value)
 	}
-	if rfu.mutation.InvoiceIDCleared() {
+	if _u.mutation.InvoiceIDCleared() {
 		_spec.ClearField(revenuefact.FieldInvoiceID, field.TypeString)
 	}
-	if value, ok := rfu.mutation.InvoiceLineItemID(); ok {
+	if value, ok := _u.mutation.InvoiceLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceLineItemID, field.TypeString, value)
 	}
-	if rfu.mutation.InvoiceLineItemIDCleared() {
+	if _u.mutation.InvoiceLineItemIDCleared() {
 		_spec.ClearField(revenuefact.FieldInvoiceLineItemID, field.TypeString)
 	}
-	if value, ok := rfu.mutation.LockAdjustedDay(); ok {
+	if value, ok := _u.mutation.LockAdjustedDay(); ok {
 		_spec.SetField(revenuefact.FieldLockAdjustedDay, field.TypeTime, value)
 	}
-	if rfu.mutation.LockAdjustedDayCleared() {
+	if _u.mutation.LockAdjustedDayCleared() {
 		_spec.ClearField(revenuefact.FieldLockAdjustedDay, field.TypeTime)
 	}
-	if value, ok := rfu.mutation.ComputedAt(); ok {
+	if value, ok := _u.mutation.ComputedAt(); ok {
 		_spec.SetField(revenuefact.FieldComputedAt, field.TypeTime, value)
 	}
-	if value, ok := rfu.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(revenuefact.FieldVersion, field.TypeInt64, value)
 	}
-	if value, ok := rfu.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(revenuefact.FieldVersion, field.TypeInt64, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, rfu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{revenuefact.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -723,8 +723,8 @@ func (rfu *RevenueFactUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	rfu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // RevenueFactUpdateOne is the builder for updating a single RevenueFact entity.
@@ -736,546 +736,546 @@ type RevenueFactUpdateOne struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (rfuo *RevenueFactUpdateOne) SetTenantID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetTenantID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetTenantID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableTenantID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetTenantID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableTenantID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (rfuo *RevenueFactUpdateOne) SetEnvironmentID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetEnvironmentID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetEnvironmentID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetEnvironmentID(v)
+	return _u
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableEnvironmentID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetEnvironmentID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableEnvironmentID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetEnvironmentID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (rfuo *RevenueFactUpdateOne) SetCustomerID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetCustomerID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetCustomerID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableCustomerID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetCustomerID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableCustomerID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (rfuo *RevenueFactUpdateOne) SetSubscriptionID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetSubscriptionID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetSubscriptionID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableSubscriptionID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetSubscriptionID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableSubscriptionID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetSubLineItemID sets the "sub_line_item_id" field.
-func (rfuo *RevenueFactUpdateOne) SetSubLineItemID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetSubLineItemID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetSubLineItemID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetSubLineItemID(v)
+	return _u
 }
 
 // SetNillableSubLineItemID sets the "sub_line_item_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableSubLineItemID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetSubLineItemID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableSubLineItemID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetSubLineItemID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearSubLineItemID clears the value of the "sub_line_item_id" field.
-func (rfuo *RevenueFactUpdateOne) ClearSubLineItemID() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearSubLineItemID()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearSubLineItemID() *RevenueFactUpdateOne {
+	_u.mutation.ClearSubLineItemID()
+	return _u
 }
 
 // SetPriceID sets the "price_id" field.
-func (rfuo *RevenueFactUpdateOne) SetPriceID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetPriceID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetPriceID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetPriceID(v)
+	return _u
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillablePriceID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetPriceID(*s)
+func (_u *RevenueFactUpdateOne) SetNillablePriceID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetPriceID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearPriceID clears the value of the "price_id" field.
-func (rfuo *RevenueFactUpdateOne) ClearPriceID() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearPriceID()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearPriceID() *RevenueFactUpdateOne {
+	_u.mutation.ClearPriceID()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (rfuo *RevenueFactUpdateOne) SetMeterID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetMeterID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetMeterID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableMeterID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetMeterID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableMeterID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (rfuo *RevenueFactUpdateOne) ClearMeterID() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearMeterID()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearMeterID() *RevenueFactUpdateOne {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetAggregationType sets the "aggregation_type" field.
-func (rfuo *RevenueFactUpdateOne) SetAggregationType(tt types.AggregationType) *RevenueFactUpdateOne {
-	rfuo.mutation.SetAggregationType(tt)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetAggregationType(v types.AggregationType) *RevenueFactUpdateOne {
+	_u.mutation.SetAggregationType(v)
+	return _u
 }
 
 // SetNillableAggregationType sets the "aggregation_type" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableAggregationType(tt *types.AggregationType) *RevenueFactUpdateOne {
-	if tt != nil {
-		rfuo.SetAggregationType(*tt)
+func (_u *RevenueFactUpdateOne) SetNillableAggregationType(v *types.AggregationType) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetAggregationType(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearAggregationType clears the value of the "aggregation_type" field.
-func (rfuo *RevenueFactUpdateOne) ClearAggregationType() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearAggregationType()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearAggregationType() *RevenueFactUpdateOne {
+	_u.mutation.ClearAggregationType()
+	return _u
 }
 
 // SetRevenueSource sets the "revenue_source" field.
-func (rfuo *RevenueFactUpdateOne) SetRevenueSource(ts types.RevenueSource) *RevenueFactUpdateOne {
-	rfuo.mutation.SetRevenueSource(ts)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetRevenueSource(v types.RevenueSource) *RevenueFactUpdateOne {
+	_u.mutation.SetRevenueSource(v)
+	return _u
 }
 
 // SetNillableRevenueSource sets the "revenue_source" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableRevenueSource(ts *types.RevenueSource) *RevenueFactUpdateOne {
-	if ts != nil {
-		rfuo.SetRevenueSource(*ts)
+func (_u *RevenueFactUpdateOne) SetNillableRevenueSource(v *types.RevenueSource) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetRevenueSource(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (rfuo *RevenueFactUpdateOne) SetPeriodStart(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetPeriodStart(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetPeriodStart(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillablePeriodStart(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetPeriodStart(*t)
+func (_u *RevenueFactUpdateOne) SetNillablePeriodStart(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (rfuo *RevenueFactUpdateOne) SetPeriodEnd(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetPeriodEnd(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetPeriodEnd(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillablePeriodEnd(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetPeriodEnd(*t)
+func (_u *RevenueFactUpdateOne) SetNillablePeriodEnd(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetDay sets the "day" field.
-func (rfuo *RevenueFactUpdateOne) SetDay(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetDay(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetDay(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetDay(v)
+	return _u
 }
 
 // SetNillableDay sets the "day" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableDay(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetDay(*t)
+func (_u *RevenueFactUpdateOne) SetNillableDay(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetDay(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetServiceStart sets the "service_start" field.
-func (rfuo *RevenueFactUpdateOne) SetServiceStart(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetServiceStart(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetServiceStart(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetServiceStart(v)
+	return _u
 }
 
 // SetNillableServiceStart sets the "service_start" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableServiceStart(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetServiceStart(*t)
+func (_u *RevenueFactUpdateOne) SetNillableServiceStart(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetServiceStart(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearServiceStart clears the value of the "service_start" field.
-func (rfuo *RevenueFactUpdateOne) ClearServiceStart() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearServiceStart()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearServiceStart() *RevenueFactUpdateOne {
+	_u.mutation.ClearServiceStart()
+	return _u
 }
 
 // SetServiceEnd sets the "service_end" field.
-func (rfuo *RevenueFactUpdateOne) SetServiceEnd(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetServiceEnd(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetServiceEnd(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetServiceEnd(v)
+	return _u
 }
 
 // SetNillableServiceEnd sets the "service_end" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableServiceEnd(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetServiceEnd(*t)
+func (_u *RevenueFactUpdateOne) SetNillableServiceEnd(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetServiceEnd(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearServiceEnd clears the value of the "service_end" field.
-func (rfuo *RevenueFactUpdateOne) ClearServiceEnd() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearServiceEnd()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearServiceEnd() *RevenueFactUpdateOne {
+	_u.mutation.ClearServiceEnd()
+	return _u
 }
 
 // SetRecognitionMethod sets the "recognition_method" field.
-func (rfuo *RevenueFactUpdateOne) SetRecognitionMethod(tm types.RecognitionMethod) *RevenueFactUpdateOne {
-	rfuo.mutation.SetRecognitionMethod(tm)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetRecognitionMethod(v types.RecognitionMethod) *RevenueFactUpdateOne {
+	_u.mutation.SetRecognitionMethod(v)
+	return _u
 }
 
 // SetNillableRecognitionMethod sets the "recognition_method" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableRecognitionMethod(tm *types.RecognitionMethod) *RevenueFactUpdateOne {
-	if tm != nil {
-		rfuo.SetRecognitionMethod(*tm)
+func (_u *RevenueFactUpdateOne) SetNillableRecognitionMethod(v *types.RecognitionMethod) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetRecognitionMethod(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearRecognitionMethod clears the value of the "recognition_method" field.
-func (rfuo *RevenueFactUpdateOne) ClearRecognitionMethod() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearRecognitionMethod()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearRecognitionMethod() *RevenueFactUpdateOne {
+	_u.mutation.ClearRecognitionMethod()
+	return _u
 }
 
 // SetUsageAtListRate sets the "usage_at_list_rate" field.
-func (rfuo *RevenueFactUpdateOne) SetUsageAtListRate(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetUsageAtListRate(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetUsageAtListRate(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetUsageAtListRate(v)
+	return _u
 }
 
 // SetNillableUsageAtListRate sets the "usage_at_list_rate" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableUsageAtListRate(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetUsageAtListRate(*d)
+func (_u *RevenueFactUpdateOne) SetNillableUsageAtListRate(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetUsageAtListRate(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetTierDelta sets the "tier_delta" field.
-func (rfuo *RevenueFactUpdateOne) SetTierDelta(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetTierDelta(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetTierDelta(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetTierDelta(v)
+	return _u
 }
 
 // SetNillableTierDelta sets the "tier_delta" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableTierDelta(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetTierDelta(*d)
+func (_u *RevenueFactUpdateOne) SetNillableTierDelta(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetTierDelta(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetEntitlementAmount sets the "entitlement_amount" field.
-func (rfuo *RevenueFactUpdateOne) SetEntitlementAmount(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetEntitlementAmount(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetEntitlementAmount(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetEntitlementAmount(v)
+	return _u
 }
 
 // SetNillableEntitlementAmount sets the "entitlement_amount" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableEntitlementAmount(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetEntitlementAmount(*d)
+func (_u *RevenueFactUpdateOne) SetNillableEntitlementAmount(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetEntitlementAmount(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetLineDiscount sets the "line_discount" field.
-func (rfuo *RevenueFactUpdateOne) SetLineDiscount(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetLineDiscount(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetLineDiscount(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetLineDiscount(v)
+	return _u
 }
 
 // SetNillableLineDiscount sets the "line_discount" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableLineDiscount(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetLineDiscount(*d)
+func (_u *RevenueFactUpdateOne) SetNillableLineDiscount(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetLineDiscount(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetInvoiceDiscount sets the "invoice_discount" field.
-func (rfuo *RevenueFactUpdateOne) SetInvoiceDiscount(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetInvoiceDiscount(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetInvoiceDiscount(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetInvoiceDiscount(v)
+	return _u
 }
 
 // SetNillableInvoiceDiscount sets the "invoice_discount" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableInvoiceDiscount(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetInvoiceDiscount(*d)
+func (_u *RevenueFactUpdateOne) SetNillableInvoiceDiscount(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetInvoiceDiscount(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetNetAmount sets the "net_amount" field.
-func (rfuo *RevenueFactUpdateOne) SetNetAmount(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetNetAmount(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetNetAmount(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetNetAmount(v)
+	return _u
 }
 
 // SetNillableNetAmount sets the "net_amount" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableNetAmount(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetNetAmount(*d)
+func (_u *RevenueFactUpdateOne) SetNillableNetAmount(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetNetAmount(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetBillableQty sets the "billable_qty" field.
-func (rfuo *RevenueFactUpdateOne) SetBillableQty(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetBillableQty(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetBillableQty(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetBillableQty(v)
+	return _u
 }
 
 // SetNillableBillableQty sets the "billable_qty" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableBillableQty(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetBillableQty(*d)
+func (_u *RevenueFactUpdateOne) SetNillableBillableQty(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetBillableQty(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetEntitlementQty sets the "entitlement_qty" field.
-func (rfuo *RevenueFactUpdateOne) SetEntitlementQty(d decimal.Decimal) *RevenueFactUpdateOne {
-	rfuo.mutation.SetEntitlementQty(d)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetEntitlementQty(v decimal.Decimal) *RevenueFactUpdateOne {
+	_u.mutation.SetEntitlementQty(v)
+	return _u
 }
 
 // SetNillableEntitlementQty sets the "entitlement_qty" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableEntitlementQty(d *decimal.Decimal) *RevenueFactUpdateOne {
-	if d != nil {
-		rfuo.SetEntitlementQty(*d)
+func (_u *RevenueFactUpdateOne) SetNillableEntitlementQty(v *decimal.Decimal) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetEntitlementQty(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetDecompositionMode sets the "decomposition_mode" field.
-func (rfuo *RevenueFactUpdateOne) SetDecompositionMode(tm types.DecompositionMode) *RevenueFactUpdateOne {
-	rfuo.mutation.SetDecompositionMode(tm)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetDecompositionMode(v types.DecompositionMode) *RevenueFactUpdateOne {
+	_u.mutation.SetDecompositionMode(v)
+	return _u
 }
 
 // SetNillableDecompositionMode sets the "decomposition_mode" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableDecompositionMode(tm *types.DecompositionMode) *RevenueFactUpdateOne {
-	if tm != nil {
-		rfuo.SetDecompositionMode(*tm)
+func (_u *RevenueFactUpdateOne) SetNillableDecompositionMode(v *types.DecompositionMode) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetDecompositionMode(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (rfuo *RevenueFactUpdateOne) SetCurrency(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetCurrency(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetCurrency(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableCurrency(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetCurrency(*s)
+func (_u *RevenueFactUpdateOne) SetNillableCurrency(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (rfuo *RevenueFactUpdateOne) SetStatus(ts types.FactStatus) *RevenueFactUpdateOne {
-	rfuo.mutation.SetStatus(ts)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetStatus(v types.FactStatus) *RevenueFactUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableStatus(ts *types.FactStatus) *RevenueFactUpdateOne {
-	if ts != nil {
-		rfuo.SetStatus(*ts)
+func (_u *RevenueFactUpdateOne) SetNillableStatus(v *types.FactStatus) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetIsRevert sets the "is_revert" field.
-func (rfuo *RevenueFactUpdateOne) SetIsRevert(b bool) *RevenueFactUpdateOne {
-	rfuo.mutation.SetIsRevert(b)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetIsRevert(v bool) *RevenueFactUpdateOne {
+	_u.mutation.SetIsRevert(v)
+	return _u
 }
 
 // SetNillableIsRevert sets the "is_revert" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableIsRevert(b *bool) *RevenueFactUpdateOne {
-	if b != nil {
-		rfuo.SetIsRevert(*b)
+func (_u *RevenueFactUpdateOne) SetNillableIsRevert(v *bool) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetIsRevert(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (rfuo *RevenueFactUpdateOne) SetInvoiceID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetInvoiceID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetInvoiceID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetInvoiceID(v)
+	return _u
 }
 
 // SetNillableInvoiceID sets the "invoice_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableInvoiceID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetInvoiceID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableInvoiceID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetInvoiceID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearInvoiceID clears the value of the "invoice_id" field.
-func (rfuo *RevenueFactUpdateOne) ClearInvoiceID() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearInvoiceID()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearInvoiceID() *RevenueFactUpdateOne {
+	_u.mutation.ClearInvoiceID()
+	return _u
 }
 
 // SetInvoiceLineItemID sets the "invoice_line_item_id" field.
-func (rfuo *RevenueFactUpdateOne) SetInvoiceLineItemID(s string) *RevenueFactUpdateOne {
-	rfuo.mutation.SetInvoiceLineItemID(s)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetInvoiceLineItemID(v string) *RevenueFactUpdateOne {
+	_u.mutation.SetInvoiceLineItemID(v)
+	return _u
 }
 
 // SetNillableInvoiceLineItemID sets the "invoice_line_item_id" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableInvoiceLineItemID(s *string) *RevenueFactUpdateOne {
-	if s != nil {
-		rfuo.SetInvoiceLineItemID(*s)
+func (_u *RevenueFactUpdateOne) SetNillableInvoiceLineItemID(v *string) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetInvoiceLineItemID(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearInvoiceLineItemID clears the value of the "invoice_line_item_id" field.
-func (rfuo *RevenueFactUpdateOne) ClearInvoiceLineItemID() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearInvoiceLineItemID()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearInvoiceLineItemID() *RevenueFactUpdateOne {
+	_u.mutation.ClearInvoiceLineItemID()
+	return _u
 }
 
 // SetLockAdjustedDay sets the "lock_adjusted_day" field.
-func (rfuo *RevenueFactUpdateOne) SetLockAdjustedDay(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetLockAdjustedDay(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetLockAdjustedDay(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetLockAdjustedDay(v)
+	return _u
 }
 
 // SetNillableLockAdjustedDay sets the "lock_adjusted_day" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableLockAdjustedDay(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetLockAdjustedDay(*t)
+func (_u *RevenueFactUpdateOne) SetNillableLockAdjustedDay(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetLockAdjustedDay(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // ClearLockAdjustedDay clears the value of the "lock_adjusted_day" field.
-func (rfuo *RevenueFactUpdateOne) ClearLockAdjustedDay() *RevenueFactUpdateOne {
-	rfuo.mutation.ClearLockAdjustedDay()
-	return rfuo
+func (_u *RevenueFactUpdateOne) ClearLockAdjustedDay() *RevenueFactUpdateOne {
+	_u.mutation.ClearLockAdjustedDay()
+	return _u
 }
 
 // SetComputedAt sets the "computed_at" field.
-func (rfuo *RevenueFactUpdateOne) SetComputedAt(t time.Time) *RevenueFactUpdateOne {
-	rfuo.mutation.SetComputedAt(t)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetComputedAt(v time.Time) *RevenueFactUpdateOne {
+	_u.mutation.SetComputedAt(v)
+	return _u
 }
 
 // SetNillableComputedAt sets the "computed_at" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableComputedAt(t *time.Time) *RevenueFactUpdateOne {
-	if t != nil {
-		rfuo.SetComputedAt(*t)
+func (_u *RevenueFactUpdateOne) SetNillableComputedAt(v *time.Time) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetComputedAt(*v)
 	}
-	return rfuo
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (rfuo *RevenueFactUpdateOne) SetVersion(i int64) *RevenueFactUpdateOne {
-	rfuo.mutation.ResetVersion()
-	rfuo.mutation.SetVersion(i)
-	return rfuo
+func (_u *RevenueFactUpdateOne) SetVersion(v int64) *RevenueFactUpdateOne {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (rfuo *RevenueFactUpdateOne) SetNillableVersion(i *int64) *RevenueFactUpdateOne {
-	if i != nil {
-		rfuo.SetVersion(*i)
+func (_u *RevenueFactUpdateOne) SetNillableVersion(v *int64) *RevenueFactUpdateOne {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return rfuo
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (rfuo *RevenueFactUpdateOne) AddVersion(i int64) *RevenueFactUpdateOne {
-	rfuo.mutation.AddVersion(i)
-	return rfuo
+// AddVersion adds value to the "version" field.
+func (_u *RevenueFactUpdateOne) AddVersion(v int64) *RevenueFactUpdateOne {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // Mutation returns the RevenueFactMutation object of the builder.
-func (rfuo *RevenueFactUpdateOne) Mutation() *RevenueFactMutation {
-	return rfuo.mutation
+func (_u *RevenueFactUpdateOne) Mutation() *RevenueFactMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the RevenueFactUpdate builder.
-func (rfuo *RevenueFactUpdateOne) Where(ps ...predicate.RevenueFact) *RevenueFactUpdateOne {
-	rfuo.mutation.Where(ps...)
-	return rfuo
+func (_u *RevenueFactUpdateOne) Where(ps ...predicate.RevenueFact) *RevenueFactUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (rfuo *RevenueFactUpdateOne) Select(field string, fields ...string) *RevenueFactUpdateOne {
-	rfuo.fields = append([]string{field}, fields...)
-	return rfuo
+func (_u *RevenueFactUpdateOne) Select(field string, fields ...string) *RevenueFactUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated RevenueFact entity.
-func (rfuo *RevenueFactUpdateOne) Save(ctx context.Context) (*RevenueFact, error) {
-	return withHooks(ctx, rfuo.sqlSave, rfuo.mutation, rfuo.hooks)
+func (_u *RevenueFactUpdateOne) Save(ctx context.Context) (*RevenueFact, error) {
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (rfuo *RevenueFactUpdateOne) SaveX(ctx context.Context) *RevenueFact {
-	node, err := rfuo.Save(ctx)
+func (_u *RevenueFactUpdateOne) SaveX(ctx context.Context) *RevenueFact {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1283,26 +1283,26 @@ func (rfuo *RevenueFactUpdateOne) SaveX(ctx context.Context) *RevenueFact {
 }
 
 // Exec executes the query on the entity.
-func (rfuo *RevenueFactUpdateOne) Exec(ctx context.Context) error {
-	_, err := rfuo.Save(ctx)
+func (_u *RevenueFactUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfuo *RevenueFactUpdateOne) ExecX(ctx context.Context) {
-	if err := rfuo.Exec(ctx); err != nil {
+func (_u *RevenueFactUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (rfuo *RevenueFactUpdateOne) sqlSave(ctx context.Context) (_node *RevenueFact, err error) {
+func (_u *RevenueFactUpdateOne) sqlSave(ctx context.Context) (_node *RevenueFact, err error) {
 	_spec := sqlgraph.NewUpdateSpec(revenuefact.Table, revenuefact.Columns, sqlgraph.NewFieldSpec(revenuefact.FieldID, field.TypeString))
-	id, ok := rfuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "RevenueFact.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := rfuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, revenuefact.FieldID)
 		for _, f := range fields {
@@ -1314,146 +1314,146 @@ func (rfuo *RevenueFactUpdateOne) sqlSave(ctx context.Context) (_node *RevenueFa
 			}
 		}
 	}
-	if ps := rfuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := rfuo.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(revenuefact.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.EnvironmentID(); ok {
+	if value, ok := _u.mutation.EnvironmentID(); ok {
 		_spec.SetField(revenuefact.FieldEnvironmentID, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(revenuefact.FieldCustomerID, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(revenuefact.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.SubLineItemID(); ok {
+	if value, ok := _u.mutation.SubLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldSubLineItemID, field.TypeString, value)
 	}
-	if rfuo.mutation.SubLineItemIDCleared() {
+	if _u.mutation.SubLineItemIDCleared() {
 		_spec.ClearField(revenuefact.FieldSubLineItemID, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.PriceID(); ok {
+	if value, ok := _u.mutation.PriceID(); ok {
 		_spec.SetField(revenuefact.FieldPriceID, field.TypeString, value)
 	}
-	if rfuo.mutation.PriceIDCleared() {
+	if _u.mutation.PriceIDCleared() {
 		_spec.ClearField(revenuefact.FieldPriceID, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(revenuefact.FieldMeterID, field.TypeString, value)
 	}
-	if rfuo.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(revenuefact.FieldMeterID, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.AggregationType(); ok {
+	if value, ok := _u.mutation.AggregationType(); ok {
 		_spec.SetField(revenuefact.FieldAggregationType, field.TypeString, value)
 	}
-	if rfuo.mutation.AggregationTypeCleared() {
+	if _u.mutation.AggregationTypeCleared() {
 		_spec.ClearField(revenuefact.FieldAggregationType, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.RevenueSource(); ok {
+	if value, ok := _u.mutation.RevenueSource(); ok {
 		_spec.SetField(revenuefact.FieldRevenueSource, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(revenuefact.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := rfuo.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(revenuefact.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := rfuo.mutation.Day(); ok {
+	if value, ok := _u.mutation.Day(); ok {
 		_spec.SetField(revenuefact.FieldDay, field.TypeTime, value)
 	}
-	if value, ok := rfuo.mutation.ServiceStart(); ok {
+	if value, ok := _u.mutation.ServiceStart(); ok {
 		_spec.SetField(revenuefact.FieldServiceStart, field.TypeTime, value)
 	}
-	if rfuo.mutation.ServiceStartCleared() {
+	if _u.mutation.ServiceStartCleared() {
 		_spec.ClearField(revenuefact.FieldServiceStart, field.TypeTime)
 	}
-	if value, ok := rfuo.mutation.ServiceEnd(); ok {
+	if value, ok := _u.mutation.ServiceEnd(); ok {
 		_spec.SetField(revenuefact.FieldServiceEnd, field.TypeTime, value)
 	}
-	if rfuo.mutation.ServiceEndCleared() {
+	if _u.mutation.ServiceEndCleared() {
 		_spec.ClearField(revenuefact.FieldServiceEnd, field.TypeTime)
 	}
-	if value, ok := rfuo.mutation.RecognitionMethod(); ok {
+	if value, ok := _u.mutation.RecognitionMethod(); ok {
 		_spec.SetField(revenuefact.FieldRecognitionMethod, field.TypeString, value)
 	}
-	if rfuo.mutation.RecognitionMethodCleared() {
+	if _u.mutation.RecognitionMethodCleared() {
 		_spec.ClearField(revenuefact.FieldRecognitionMethod, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.UsageAtListRate(); ok {
+	if value, ok := _u.mutation.UsageAtListRate(); ok {
 		_spec.SetField(revenuefact.FieldUsageAtListRate, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.TierDelta(); ok {
+	if value, ok := _u.mutation.TierDelta(); ok {
 		_spec.SetField(revenuefact.FieldTierDelta, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.EntitlementAmount(); ok {
+	if value, ok := _u.mutation.EntitlementAmount(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementAmount, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.LineDiscount(); ok {
+	if value, ok := _u.mutation.LineDiscount(); ok {
 		_spec.SetField(revenuefact.FieldLineDiscount, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.InvoiceDiscount(); ok {
+	if value, ok := _u.mutation.InvoiceDiscount(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceDiscount, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.NetAmount(); ok {
+	if value, ok := _u.mutation.NetAmount(); ok {
 		_spec.SetField(revenuefact.FieldNetAmount, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.BillableQty(); ok {
+	if value, ok := _u.mutation.BillableQty(); ok {
 		_spec.SetField(revenuefact.FieldBillableQty, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.EntitlementQty(); ok {
+	if value, ok := _u.mutation.EntitlementQty(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementQty, field.TypeOther, value)
 	}
-	if value, ok := rfuo.mutation.DecompositionMode(); ok {
+	if value, ok := _u.mutation.DecompositionMode(); ok {
 		_spec.SetField(revenuefact.FieldDecompositionMode, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(revenuefact.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(revenuefact.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := rfuo.mutation.IsRevert(); ok {
+	if value, ok := _u.mutation.IsRevert(); ok {
 		_spec.SetField(revenuefact.FieldIsRevert, field.TypeBool, value)
 	}
-	if value, ok := rfuo.mutation.InvoiceID(); ok {
+	if value, ok := _u.mutation.InvoiceID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceID, field.TypeString, value)
 	}
-	if rfuo.mutation.InvoiceIDCleared() {
+	if _u.mutation.InvoiceIDCleared() {
 		_spec.ClearField(revenuefact.FieldInvoiceID, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.InvoiceLineItemID(); ok {
+	if value, ok := _u.mutation.InvoiceLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceLineItemID, field.TypeString, value)
 	}
-	if rfuo.mutation.InvoiceLineItemIDCleared() {
+	if _u.mutation.InvoiceLineItemIDCleared() {
 		_spec.ClearField(revenuefact.FieldInvoiceLineItemID, field.TypeString)
 	}
-	if value, ok := rfuo.mutation.LockAdjustedDay(); ok {
+	if value, ok := _u.mutation.LockAdjustedDay(); ok {
 		_spec.SetField(revenuefact.FieldLockAdjustedDay, field.TypeTime, value)
 	}
-	if rfuo.mutation.LockAdjustedDayCleared() {
+	if _u.mutation.LockAdjustedDayCleared() {
 		_spec.ClearField(revenuefact.FieldLockAdjustedDay, field.TypeTime)
 	}
-	if value, ok := rfuo.mutation.ComputedAt(); ok {
+	if value, ok := _u.mutation.ComputedAt(); ok {
 		_spec.SetField(revenuefact.FieldComputedAt, field.TypeTime, value)
 	}
-	if value, ok := rfuo.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(revenuefact.FieldVersion, field.TypeInt64, value)
 	}
-	if value, ok := rfuo.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(revenuefact.FieldVersion, field.TypeInt64, value)
 	}
-	_node = &RevenueFact{config: rfuo.config}
+	_node = &RevenueFact{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, rfuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{revenuefact.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1461,6 +1461,6 @@ func (rfuo *RevenueFactUpdateOne) sqlSave(ctx context.Context) (_node *RevenueFa
 		}
 		return nil, err
 	}
-	rfuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

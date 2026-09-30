@@ -25,223 +25,223 @@ type UsageRecordUpdate struct {
 }
 
 // Where appends a list predicates to the UsageRecordUpdate builder.
-func (uru *UsageRecordUpdate) Where(ps ...predicate.UsageRecord) *UsageRecordUpdate {
-	uru.mutation.Where(ps...)
-	return uru
+func (_u *UsageRecordUpdate) Where(ps ...predicate.UsageRecord) *UsageRecordUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (uru *UsageRecordUpdate) SetStatus(s string) *UsageRecordUpdate {
-	uru.mutation.SetStatus(s)
-	return uru
+func (_u *UsageRecordUpdate) SetStatus(v string) *UsageRecordUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableStatus(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetStatus(*s)
+func (_u *UsageRecordUpdate) SetNillableStatus(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (uru *UsageRecordUpdate) SetUpdatedAt(t time.Time) *UsageRecordUpdate {
-	uru.mutation.SetUpdatedAt(t)
-	return uru
+func (_u *UsageRecordUpdate) SetUpdatedAt(v time.Time) *UsageRecordUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (uru *UsageRecordUpdate) SetUpdatedBy(s string) *UsageRecordUpdate {
-	uru.mutation.SetUpdatedBy(s)
-	return uru
+func (_u *UsageRecordUpdate) SetUpdatedBy(v string) *UsageRecordUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableUpdatedBy(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetUpdatedBy(*s)
+func (_u *UsageRecordUpdate) SetNillableUpdatedBy(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return uru
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (uru *UsageRecordUpdate) ClearUpdatedBy() *UsageRecordUpdate {
-	uru.mutation.ClearUpdatedBy()
-	return uru
+func (_u *UsageRecordUpdate) ClearUpdatedBy() *UsageRecordUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (uru *UsageRecordUpdate) SetCustomerID(s string) *UsageRecordUpdate {
-	uru.mutation.SetCustomerID(s)
-	return uru
+func (_u *UsageRecordUpdate) SetCustomerID(v string) *UsageRecordUpdate {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableCustomerID(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetCustomerID(*s)
+func (_u *UsageRecordUpdate) SetNillableCustomerID(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetCustomerExternalID sets the "customer_external_id" field.
-func (uru *UsageRecordUpdate) SetCustomerExternalID(s string) *UsageRecordUpdate {
-	uru.mutation.SetCustomerExternalID(s)
-	return uru
+func (_u *UsageRecordUpdate) SetCustomerExternalID(v string) *UsageRecordUpdate {
+	_u.mutation.SetCustomerExternalID(v)
+	return _u
 }
 
 // SetNillableCustomerExternalID sets the "customer_external_id" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableCustomerExternalID(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetCustomerExternalID(*s)
+func (_u *UsageRecordUpdate) SetNillableCustomerExternalID(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetCustomerExternalID(*v)
 	}
-	return uru
+	return _u
 }
 
 // ClearCustomerExternalID clears the value of the "customer_external_id" field.
-func (uru *UsageRecordUpdate) ClearCustomerExternalID() *UsageRecordUpdate {
-	uru.mutation.ClearCustomerExternalID()
-	return uru
+func (_u *UsageRecordUpdate) ClearCustomerExternalID() *UsageRecordUpdate {
+	_u.mutation.ClearCustomerExternalID()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (uru *UsageRecordUpdate) SetSubscriptionID(s string) *UsageRecordUpdate {
-	uru.mutation.SetSubscriptionID(s)
-	return uru
+func (_u *UsageRecordUpdate) SetSubscriptionID(v string) *UsageRecordUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableSubscriptionID(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetSubscriptionID(*s)
+func (_u *UsageRecordUpdate) SetNillableSubscriptionID(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (uru *UsageRecordUpdate) SetPlanID(s string) *UsageRecordUpdate {
-	uru.mutation.SetPlanID(s)
-	return uru
+func (_u *UsageRecordUpdate) SetPlanID(v string) *UsageRecordUpdate {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillablePlanID(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetPlanID(*s)
+func (_u *UsageRecordUpdate) SetNillablePlanID(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (uru *UsageRecordUpdate) SetQuantity(d decimal.Decimal) *UsageRecordUpdate {
-	uru.mutation.SetQuantity(d)
-	return uru
+func (_u *UsageRecordUpdate) SetQuantity(v decimal.Decimal) *UsageRecordUpdate {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableQuantity(d *decimal.Decimal) *UsageRecordUpdate {
-	if d != nil {
-		uru.SetQuantity(*d)
+func (_u *UsageRecordUpdate) SetNillableQuantity(v *decimal.Decimal) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (uru *UsageRecordUpdate) SetAmount(d decimal.Decimal) *UsageRecordUpdate {
-	uru.mutation.SetAmount(d)
-	return uru
+func (_u *UsageRecordUpdate) SetAmount(v decimal.Decimal) *UsageRecordUpdate {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableAmount(d *decimal.Decimal) *UsageRecordUpdate {
-	if d != nil {
-		uru.SetAmount(*d)
+func (_u *UsageRecordUpdate) SetNillableAmount(v *decimal.Decimal) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (uru *UsageRecordUpdate) SetCurrency(s string) *UsageRecordUpdate {
-	uru.mutation.SetCurrency(s)
-	return uru
+func (_u *UsageRecordUpdate) SetCurrency(v string) *UsageRecordUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableCurrency(s *string) *UsageRecordUpdate {
-	if s != nil {
-		uru.SetCurrency(*s)
+func (_u *UsageRecordUpdate) SetNillableCurrency(v *string) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (uru *UsageRecordUpdate) SetPeriodStart(t time.Time) *UsageRecordUpdate {
-	uru.mutation.SetPeriodStart(t)
-	return uru
+func (_u *UsageRecordUpdate) SetPeriodStart(v time.Time) *UsageRecordUpdate {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillablePeriodStart(t *time.Time) *UsageRecordUpdate {
-	if t != nil {
-		uru.SetPeriodStart(*t)
+func (_u *UsageRecordUpdate) SetNillablePeriodStart(v *time.Time) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (uru *UsageRecordUpdate) SetPeriodEnd(t time.Time) *UsageRecordUpdate {
-	uru.mutation.SetPeriodEnd(t)
-	return uru
+func (_u *UsageRecordUpdate) SetPeriodEnd(v time.Time) *UsageRecordUpdate {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillablePeriodEnd(t *time.Time) *UsageRecordUpdate {
-	if t != nil {
-		uru.SetPeriodEnd(*t)
+func (_u *UsageRecordUpdate) SetNillablePeriodEnd(v *time.Time) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetSynced sets the "synced" field.
-func (uru *UsageRecordUpdate) SetSynced(b bool) *UsageRecordUpdate {
-	uru.mutation.SetSynced(b)
-	return uru
+func (_u *UsageRecordUpdate) SetSynced(v bool) *UsageRecordUpdate {
+	_u.mutation.SetSynced(v)
+	return _u
 }
 
 // SetNillableSynced sets the "synced" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableSynced(b *bool) *UsageRecordUpdate {
-	if b != nil {
-		uru.SetSynced(*b)
+func (_u *UsageRecordUpdate) SetNillableSynced(v *bool) *UsageRecordUpdate {
+	if v != nil {
+		_u.SetSynced(*v)
 	}
-	return uru
+	return _u
 }
 
 // SetSyncs sets the "syncs" field.
-func (uru *UsageRecordUpdate) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordUpdate {
-	uru.mutation.SetSyncs(mrse)
-	return uru
+func (_u *UsageRecordUpdate) SetSyncs(v map[string]types.UsageRecordSyncEntry) *UsageRecordUpdate {
+	_u.mutation.SetSyncs(v)
+	return _u
 }
 
 // ClearSyncs clears the value of the "syncs" field.
-func (uru *UsageRecordUpdate) ClearSyncs() *UsageRecordUpdate {
-	uru.mutation.ClearSyncs()
-	return uru
+func (_u *UsageRecordUpdate) ClearSyncs() *UsageRecordUpdate {
+	_u.mutation.ClearSyncs()
+	return _u
 }
 
 // Mutation returns the UsageRecordMutation object of the builder.
-func (uru *UsageRecordUpdate) Mutation() *UsageRecordMutation {
-	return uru.mutation
+func (_u *UsageRecordUpdate) Mutation() *UsageRecordMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (uru *UsageRecordUpdate) Save(ctx context.Context) (int, error) {
-	uru.defaults()
-	return withHooks(ctx, uru.sqlSave, uru.mutation, uru.hooks)
+func (_u *UsageRecordUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (uru *UsageRecordUpdate) SaveX(ctx context.Context) int {
-	affected, err := uru.Save(ctx)
+func (_u *UsageRecordUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -249,44 +249,44 @@ func (uru *UsageRecordUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (uru *UsageRecordUpdate) Exec(ctx context.Context) error {
-	_, err := uru.Save(ctx)
+func (_u *UsageRecordUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (uru *UsageRecordUpdate) ExecX(ctx context.Context) {
-	if err := uru.Exec(ctx); err != nil {
+func (_u *UsageRecordUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (uru *UsageRecordUpdate) defaults() {
-	if _, ok := uru.mutation.UpdatedAt(); !ok {
+func (_u *UsageRecordUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := usagerecord.UpdateDefaultUpdatedAt()
-		uru.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (uru *UsageRecordUpdate) check() error {
-	if v, ok := uru.mutation.CustomerID(); ok {
+func (_u *UsageRecordUpdate) check() error {
+	if v, ok := _u.mutation.CustomerID(); ok {
 		if err := usagerecord.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.customer_id": %w`, err)}
 		}
 	}
-	if v, ok := uru.mutation.SubscriptionID(); ok {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := usagerecord.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := uru.mutation.PlanID(); ok {
+	if v, ok := _u.mutation.PlanID(); ok {
 		if err := usagerecord.PlanIDValidator(v); err != nil {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.plan_id": %w`, err)}
 		}
 	}
-	if v, ok := uru.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := usagerecord.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
 		}
@@ -294,76 +294,76 @@ func (uru *UsageRecordUpdate) check() error {
 	return nil
 }
 
-func (uru *UsageRecordUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := uru.check(); err != nil {
-		return n, err
+func (_u *UsageRecordUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(usagerecord.Table, usagerecord.Columns, sqlgraph.NewFieldSpec(usagerecord.FieldID, field.TypeString))
-	if ps := uru.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := uru.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(usagerecord.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := uru.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if uru.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(usagerecord.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := uru.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedBy, field.TypeString, value)
 	}
-	if uru.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(usagerecord.FieldUpdatedBy, field.TypeString)
 	}
-	if uru.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(usagerecord.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := uru.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerID, field.TypeString, value)
 	}
-	if value, ok := uru.mutation.CustomerExternalID(); ok {
+	if value, ok := _u.mutation.CustomerExternalID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerExternalID, field.TypeString, value)
 	}
-	if uru.mutation.CustomerExternalIDCleared() {
+	if _u.mutation.CustomerExternalIDCleared() {
 		_spec.ClearField(usagerecord.FieldCustomerExternalID, field.TypeString)
 	}
-	if value, ok := uru.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(usagerecord.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := uru.mutation.PlanID(); ok {
+	if value, ok := _u.mutation.PlanID(); ok {
 		_spec.SetField(usagerecord.FieldPlanID, field.TypeString, value)
 	}
-	if value, ok := uru.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(usagerecord.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := uru.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := uru.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := uru.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := uru.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := uru.mutation.Synced(); ok {
+	if value, ok := _u.mutation.Synced(); ok {
 		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
 	}
-	if value, ok := uru.mutation.Syncs(); ok {
+	if value, ok := _u.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 	}
-	if uru.mutation.SyncsCleared() {
+	if _u.mutation.SyncsCleared() {
 		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, uru.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{usagerecord.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -371,8 +371,8 @@ func (uru *UsageRecordUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	uru.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // UsageRecordUpdateOne is the builder for updating a single UsageRecord entity.
@@ -384,230 +384,230 @@ type UsageRecordUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (uruo *UsageRecordUpdateOne) SetStatus(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetStatus(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetStatus(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableStatus(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetStatus(*s)
+func (_u *UsageRecordUpdateOne) SetNillableStatus(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (uruo *UsageRecordUpdateOne) SetUpdatedAt(t time.Time) *UsageRecordUpdateOne {
-	uruo.mutation.SetUpdatedAt(t)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetUpdatedAt(v time.Time) *UsageRecordUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (uruo *UsageRecordUpdateOne) SetUpdatedBy(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetUpdatedBy(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetUpdatedBy(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableUpdatedBy(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetUpdatedBy(*s)
+func (_u *UsageRecordUpdateOne) SetNillableUpdatedBy(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return uruo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (uruo *UsageRecordUpdateOne) ClearUpdatedBy() *UsageRecordUpdateOne {
-	uruo.mutation.ClearUpdatedBy()
-	return uruo
+func (_u *UsageRecordUpdateOne) ClearUpdatedBy() *UsageRecordUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (uruo *UsageRecordUpdateOne) SetCustomerID(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetCustomerID(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetCustomerID(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableCustomerID(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetCustomerID(*s)
+func (_u *UsageRecordUpdateOne) SetNillableCustomerID(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetCustomerExternalID sets the "customer_external_id" field.
-func (uruo *UsageRecordUpdateOne) SetCustomerExternalID(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetCustomerExternalID(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetCustomerExternalID(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetCustomerExternalID(v)
+	return _u
 }
 
 // SetNillableCustomerExternalID sets the "customer_external_id" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableCustomerExternalID(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetCustomerExternalID(*s)
+func (_u *UsageRecordUpdateOne) SetNillableCustomerExternalID(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetCustomerExternalID(*v)
 	}
-	return uruo
+	return _u
 }
 
 // ClearCustomerExternalID clears the value of the "customer_external_id" field.
-func (uruo *UsageRecordUpdateOne) ClearCustomerExternalID() *UsageRecordUpdateOne {
-	uruo.mutation.ClearCustomerExternalID()
-	return uruo
+func (_u *UsageRecordUpdateOne) ClearCustomerExternalID() *UsageRecordUpdateOne {
+	_u.mutation.ClearCustomerExternalID()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (uruo *UsageRecordUpdateOne) SetSubscriptionID(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetSubscriptionID(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetSubscriptionID(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableSubscriptionID(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetSubscriptionID(*s)
+func (_u *UsageRecordUpdateOne) SetNillableSubscriptionID(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (uruo *UsageRecordUpdateOne) SetPlanID(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetPlanID(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetPlanID(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillablePlanID(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetPlanID(*s)
+func (_u *UsageRecordUpdateOne) SetNillablePlanID(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (uruo *UsageRecordUpdateOne) SetQuantity(d decimal.Decimal) *UsageRecordUpdateOne {
-	uruo.mutation.SetQuantity(d)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetQuantity(v decimal.Decimal) *UsageRecordUpdateOne {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableQuantity(d *decimal.Decimal) *UsageRecordUpdateOne {
-	if d != nil {
-		uruo.SetQuantity(*d)
+func (_u *UsageRecordUpdateOne) SetNillableQuantity(v *decimal.Decimal) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (uruo *UsageRecordUpdateOne) SetAmount(d decimal.Decimal) *UsageRecordUpdateOne {
-	uruo.mutation.SetAmount(d)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetAmount(v decimal.Decimal) *UsageRecordUpdateOne {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableAmount(d *decimal.Decimal) *UsageRecordUpdateOne {
-	if d != nil {
-		uruo.SetAmount(*d)
+func (_u *UsageRecordUpdateOne) SetNillableAmount(v *decimal.Decimal) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (uruo *UsageRecordUpdateOne) SetCurrency(s string) *UsageRecordUpdateOne {
-	uruo.mutation.SetCurrency(s)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetCurrency(v string) *UsageRecordUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableCurrency(s *string) *UsageRecordUpdateOne {
-	if s != nil {
-		uruo.SetCurrency(*s)
+func (_u *UsageRecordUpdateOne) SetNillableCurrency(v *string) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (uruo *UsageRecordUpdateOne) SetPeriodStart(t time.Time) *UsageRecordUpdateOne {
-	uruo.mutation.SetPeriodStart(t)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetPeriodStart(v time.Time) *UsageRecordUpdateOne {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillablePeriodStart(t *time.Time) *UsageRecordUpdateOne {
-	if t != nil {
-		uruo.SetPeriodStart(*t)
+func (_u *UsageRecordUpdateOne) SetNillablePeriodStart(v *time.Time) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (uruo *UsageRecordUpdateOne) SetPeriodEnd(t time.Time) *UsageRecordUpdateOne {
-	uruo.mutation.SetPeriodEnd(t)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetPeriodEnd(v time.Time) *UsageRecordUpdateOne {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillablePeriodEnd(t *time.Time) *UsageRecordUpdateOne {
-	if t != nil {
-		uruo.SetPeriodEnd(*t)
+func (_u *UsageRecordUpdateOne) SetNillablePeriodEnd(v *time.Time) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetSynced sets the "synced" field.
-func (uruo *UsageRecordUpdateOne) SetSynced(b bool) *UsageRecordUpdateOne {
-	uruo.mutation.SetSynced(b)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetSynced(v bool) *UsageRecordUpdateOne {
+	_u.mutation.SetSynced(v)
+	return _u
 }
 
 // SetNillableSynced sets the "synced" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableSynced(b *bool) *UsageRecordUpdateOne {
-	if b != nil {
-		uruo.SetSynced(*b)
+func (_u *UsageRecordUpdateOne) SetNillableSynced(v *bool) *UsageRecordUpdateOne {
+	if v != nil {
+		_u.SetSynced(*v)
 	}
-	return uruo
+	return _u
 }
 
 // SetSyncs sets the "syncs" field.
-func (uruo *UsageRecordUpdateOne) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordUpdateOne {
-	uruo.mutation.SetSyncs(mrse)
-	return uruo
+func (_u *UsageRecordUpdateOne) SetSyncs(v map[string]types.UsageRecordSyncEntry) *UsageRecordUpdateOne {
+	_u.mutation.SetSyncs(v)
+	return _u
 }
 
 // ClearSyncs clears the value of the "syncs" field.
-func (uruo *UsageRecordUpdateOne) ClearSyncs() *UsageRecordUpdateOne {
-	uruo.mutation.ClearSyncs()
-	return uruo
+func (_u *UsageRecordUpdateOne) ClearSyncs() *UsageRecordUpdateOne {
+	_u.mutation.ClearSyncs()
+	return _u
 }
 
 // Mutation returns the UsageRecordMutation object of the builder.
-func (uruo *UsageRecordUpdateOne) Mutation() *UsageRecordMutation {
-	return uruo.mutation
+func (_u *UsageRecordUpdateOne) Mutation() *UsageRecordMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the UsageRecordUpdate builder.
-func (uruo *UsageRecordUpdateOne) Where(ps ...predicate.UsageRecord) *UsageRecordUpdateOne {
-	uruo.mutation.Where(ps...)
-	return uruo
+func (_u *UsageRecordUpdateOne) Where(ps ...predicate.UsageRecord) *UsageRecordUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (uruo *UsageRecordUpdateOne) Select(field string, fields ...string) *UsageRecordUpdateOne {
-	uruo.fields = append([]string{field}, fields...)
-	return uruo
+func (_u *UsageRecordUpdateOne) Select(field string, fields ...string) *UsageRecordUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated UsageRecord entity.
-func (uruo *UsageRecordUpdateOne) Save(ctx context.Context) (*UsageRecord, error) {
-	uruo.defaults()
-	return withHooks(ctx, uruo.sqlSave, uruo.mutation, uruo.hooks)
+func (_u *UsageRecordUpdateOne) Save(ctx context.Context) (*UsageRecord, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (uruo *UsageRecordUpdateOne) SaveX(ctx context.Context) *UsageRecord {
-	node, err := uruo.Save(ctx)
+func (_u *UsageRecordUpdateOne) SaveX(ctx context.Context) *UsageRecord {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -615,44 +615,44 @@ func (uruo *UsageRecordUpdateOne) SaveX(ctx context.Context) *UsageRecord {
 }
 
 // Exec executes the query on the entity.
-func (uruo *UsageRecordUpdateOne) Exec(ctx context.Context) error {
-	_, err := uruo.Save(ctx)
+func (_u *UsageRecordUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (uruo *UsageRecordUpdateOne) ExecX(ctx context.Context) {
-	if err := uruo.Exec(ctx); err != nil {
+func (_u *UsageRecordUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (uruo *UsageRecordUpdateOne) defaults() {
-	if _, ok := uruo.mutation.UpdatedAt(); !ok {
+func (_u *UsageRecordUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := usagerecord.UpdateDefaultUpdatedAt()
-		uruo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (uruo *UsageRecordUpdateOne) check() error {
-	if v, ok := uruo.mutation.CustomerID(); ok {
+func (_u *UsageRecordUpdateOne) check() error {
+	if v, ok := _u.mutation.CustomerID(); ok {
 		if err := usagerecord.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.customer_id": %w`, err)}
 		}
 	}
-	if v, ok := uruo.mutation.SubscriptionID(); ok {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := usagerecord.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := uruo.mutation.PlanID(); ok {
+	if v, ok := _u.mutation.PlanID(); ok {
 		if err := usagerecord.PlanIDValidator(v); err != nil {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.plan_id": %w`, err)}
 		}
 	}
-	if v, ok := uruo.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := usagerecord.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
 		}
@@ -660,17 +660,17 @@ func (uruo *UsageRecordUpdateOne) check() error {
 	return nil
 }
 
-func (uruo *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageRecord, err error) {
-	if err := uruo.check(); err != nil {
+func (_u *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageRecord, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(usagerecord.Table, usagerecord.Columns, sqlgraph.NewFieldSpec(usagerecord.FieldID, field.TypeString))
-	id, ok := uruo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "UsageRecord.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := uruo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, usagerecord.FieldID)
 		for _, f := range fields {
@@ -682,74 +682,74 @@ func (uruo *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageReco
 			}
 		}
 	}
-	if ps := uruo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := uruo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(usagerecord.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := uruo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if uruo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(usagerecord.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := uruo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedBy, field.TypeString, value)
 	}
-	if uruo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(usagerecord.FieldUpdatedBy, field.TypeString)
 	}
-	if uruo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(usagerecord.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := uruo.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerID, field.TypeString, value)
 	}
-	if value, ok := uruo.mutation.CustomerExternalID(); ok {
+	if value, ok := _u.mutation.CustomerExternalID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerExternalID, field.TypeString, value)
 	}
-	if uruo.mutation.CustomerExternalIDCleared() {
+	if _u.mutation.CustomerExternalIDCleared() {
 		_spec.ClearField(usagerecord.FieldCustomerExternalID, field.TypeString)
 	}
-	if value, ok := uruo.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(usagerecord.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := uruo.mutation.PlanID(); ok {
+	if value, ok := _u.mutation.PlanID(); ok {
 		_spec.SetField(usagerecord.FieldPlanID, field.TypeString, value)
 	}
-	if value, ok := uruo.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(usagerecord.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := uruo.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := uruo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := uruo.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := uruo.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := uruo.mutation.Synced(); ok {
+	if value, ok := _u.mutation.Synced(); ok {
 		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
 	}
-	if value, ok := uruo.mutation.Syncs(); ok {
+	if value, ok := _u.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 	}
-	if uruo.mutation.SyncsCleared() {
+	if _u.mutation.SyncsCleared() {
 		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
 	}
-	_node = &UsageRecord{config: uruo.config}
+	_node = &UsageRecord{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, uruo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{usagerecord.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -757,6 +757,6 @@ func (uruo *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageReco
 		}
 		return nil, err
 	}
-	uruo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

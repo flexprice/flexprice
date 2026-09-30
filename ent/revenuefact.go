@@ -110,7 +110,7 @@ func (*RevenueFact) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the RevenueFact fields.
-func (rf *RevenueFact) assignValues(columns []string, values []any) error {
+func (_m *RevenueFact) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -120,212 +120,212 @@ func (rf *RevenueFact) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				rf.ID = value.String
+				_m.ID = value.String
 			}
 		case revenuefact.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				rf.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case revenuefact.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				rf.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case revenuefact.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				rf.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case revenuefact.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				rf.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case revenuefact.FieldSubLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field sub_line_item_id", values[i])
 			} else if value.Valid {
-				rf.SubLineItemID = new(string)
-				*rf.SubLineItemID = value.String
+				_m.SubLineItemID = new(string)
+				*_m.SubLineItemID = value.String
 			}
 		case revenuefact.FieldPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_id", values[i])
 			} else if value.Valid {
-				rf.PriceID = new(string)
-				*rf.PriceID = value.String
+				_m.PriceID = new(string)
+				*_m.PriceID = value.String
 			}
 		case revenuefact.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
-				rf.MeterID = new(string)
-				*rf.MeterID = value.String
+				_m.MeterID = new(string)
+				*_m.MeterID = value.String
 			}
 		case revenuefact.FieldAggregationType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field aggregation_type", values[i])
 			} else if value.Valid {
-				rf.AggregationType = new(types.AggregationType)
-				*rf.AggregationType = types.AggregationType(value.String)
+				_m.AggregationType = new(types.AggregationType)
+				*_m.AggregationType = types.AggregationType(value.String)
 			}
 		case revenuefact.FieldRevenueSource:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field revenue_source", values[i])
 			} else if value.Valid {
-				rf.RevenueSource = types.RevenueSource(value.String)
+				_m.RevenueSource = types.RevenueSource(value.String)
 			}
 		case revenuefact.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
 			} else if value.Valid {
-				rf.PeriodStart = value.Time
+				_m.PeriodStart = value.Time
 			}
 		case revenuefact.FieldPeriodEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_end", values[i])
 			} else if value.Valid {
-				rf.PeriodEnd = value.Time
+				_m.PeriodEnd = value.Time
 			}
 		case revenuefact.FieldDay:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field day", values[i])
 			} else if value.Valid {
-				rf.Day = value.Time
+				_m.Day = value.Time
 			}
 		case revenuefact.FieldServiceStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field service_start", values[i])
 			} else if value.Valid {
-				rf.ServiceStart = new(time.Time)
-				*rf.ServiceStart = value.Time
+				_m.ServiceStart = new(time.Time)
+				*_m.ServiceStart = value.Time
 			}
 		case revenuefact.FieldServiceEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field service_end", values[i])
 			} else if value.Valid {
-				rf.ServiceEnd = new(time.Time)
-				*rf.ServiceEnd = value.Time
+				_m.ServiceEnd = new(time.Time)
+				*_m.ServiceEnd = value.Time
 			}
 		case revenuefact.FieldRecognitionMethod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field recognition_method", values[i])
 			} else if value.Valid {
-				rf.RecognitionMethod = new(types.RecognitionMethod)
-				*rf.RecognitionMethod = types.RecognitionMethod(value.String)
+				_m.RecognitionMethod = new(types.RecognitionMethod)
+				*_m.RecognitionMethod = types.RecognitionMethod(value.String)
 			}
 		case revenuefact.FieldUsageAtListRate:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field usage_at_list_rate", values[i])
 			} else if value != nil {
-				rf.UsageAtListRate = *value
+				_m.UsageAtListRate = *value
 			}
 		case revenuefact.FieldTierDelta:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field tier_delta", values[i])
 			} else if value != nil {
-				rf.TierDelta = *value
+				_m.TierDelta = *value
 			}
 		case revenuefact.FieldEntitlementAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field entitlement_amount", values[i])
 			} else if value != nil {
-				rf.EntitlementAmount = *value
+				_m.EntitlementAmount = *value
 			}
 		case revenuefact.FieldLineDiscount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field line_discount", values[i])
 			} else if value != nil {
-				rf.LineDiscount = *value
+				_m.LineDiscount = *value
 			}
 		case revenuefact.FieldInvoiceDiscount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_discount", values[i])
 			} else if value != nil {
-				rf.InvoiceDiscount = *value
+				_m.InvoiceDiscount = *value
 			}
 		case revenuefact.FieldNetAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field net_amount", values[i])
 			} else if value != nil {
-				rf.NetAmount = *value
+				_m.NetAmount = *value
 			}
 		case revenuefact.FieldBillableQty:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field billable_qty", values[i])
 			} else if value != nil {
-				rf.BillableQty = *value
+				_m.BillableQty = *value
 			}
 		case revenuefact.FieldEntitlementQty:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field entitlement_qty", values[i])
 			} else if value != nil {
-				rf.EntitlementQty = *value
+				_m.EntitlementQty = *value
 			}
 		case revenuefact.FieldDecompositionMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field decomposition_mode", values[i])
 			} else if value.Valid {
-				rf.DecompositionMode = types.DecompositionMode(value.String)
+				_m.DecompositionMode = types.DecompositionMode(value.String)
 			}
 		case revenuefact.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				rf.Currency = value.String
+				_m.Currency = value.String
 			}
 		case revenuefact.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				rf.Status = types.FactStatus(value.String)
+				_m.Status = types.FactStatus(value.String)
 			}
 		case revenuefact.FieldIsRevert:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_revert", values[i])
 			} else if value.Valid {
-				rf.IsRevert = value.Bool
+				_m.IsRevert = value.Bool
 			}
 		case revenuefact.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
 			} else if value.Valid {
-				rf.InvoiceID = new(string)
-				*rf.InvoiceID = value.String
+				_m.InvoiceID = new(string)
+				*_m.InvoiceID = value.String
 			}
 		case revenuefact.FieldInvoiceLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_line_item_id", values[i])
 			} else if value.Valid {
-				rf.InvoiceLineItemID = new(string)
-				*rf.InvoiceLineItemID = value.String
+				_m.InvoiceLineItemID = new(string)
+				*_m.InvoiceLineItemID = value.String
 			}
 		case revenuefact.FieldLockAdjustedDay:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field lock_adjusted_day", values[i])
 			} else if value.Valid {
-				rf.LockAdjustedDay = new(time.Time)
-				*rf.LockAdjustedDay = value.Time
+				_m.LockAdjustedDay = new(time.Time)
+				*_m.LockAdjustedDay = value.Time
 			}
 		case revenuefact.FieldComputedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field computed_at", values[i])
 			} else if value.Valid {
-				rf.ComputedAt = value.Time
+				_m.ComputedAt = value.Time
 			}
 		case revenuefact.FieldVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field version", values[i])
 			} else if value.Valid {
-				rf.Version = value.Int64
+				_m.Version = value.Int64
 			}
 		default:
-			rf.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -333,148 +333,148 @@ func (rf *RevenueFact) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the RevenueFact.
 // This includes values selected through modifiers, order, etc.
-func (rf *RevenueFact) Value(name string) (ent.Value, error) {
-	return rf.selectValues.Get(name)
+func (_m *RevenueFact) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this RevenueFact.
 // Note that you need to call RevenueFact.Unwrap() before calling this method if this RevenueFact
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (rf *RevenueFact) Update() *RevenueFactUpdateOne {
-	return NewRevenueFactClient(rf.config).UpdateOne(rf)
+func (_m *RevenueFact) Update() *RevenueFactUpdateOne {
+	return NewRevenueFactClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the RevenueFact entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (rf *RevenueFact) Unwrap() *RevenueFact {
-	_tx, ok := rf.config.driver.(*txDriver)
+func (_m *RevenueFact) Unwrap() *RevenueFact {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: RevenueFact is not a transactional entity")
 	}
-	rf.config.driver = _tx.drv
-	return rf
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (rf *RevenueFact) String() string {
+func (_m *RevenueFact) String() string {
 	var builder strings.Builder
 	builder.WriteString("RevenueFact(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", rf.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(rf.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(rf.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(rf.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(rf.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
-	if v := rf.SubLineItemID; v != nil {
+	if v := _m.SubLineItemID; v != nil {
 		builder.WriteString("sub_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := rf.PriceID; v != nil {
+	if v := _m.PriceID; v != nil {
 		builder.WriteString("price_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := rf.MeterID; v != nil {
+	if v := _m.MeterID; v != nil {
 		builder.WriteString("meter_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := rf.AggregationType; v != nil {
+	if v := _m.AggregationType; v != nil {
 		builder.WriteString("aggregation_type=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("revenue_source=")
-	builder.WriteString(fmt.Sprintf("%v", rf.RevenueSource))
+	builder.WriteString(fmt.Sprintf("%v", _m.RevenueSource))
 	builder.WriteString(", ")
 	builder.WriteString("period_start=")
-	builder.WriteString(rf.PeriodStart.Format(time.ANSIC))
+	builder.WriteString(_m.PeriodStart.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("period_end=")
-	builder.WriteString(rf.PeriodEnd.Format(time.ANSIC))
+	builder.WriteString(_m.PeriodEnd.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("day=")
-	builder.WriteString(rf.Day.Format(time.ANSIC))
+	builder.WriteString(_m.Day.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := rf.ServiceStart; v != nil {
+	if v := _m.ServiceStart; v != nil {
 		builder.WriteString("service_start=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := rf.ServiceEnd; v != nil {
+	if v := _m.ServiceEnd; v != nil {
 		builder.WriteString("service_end=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := rf.RecognitionMethod; v != nil {
+	if v := _m.RecognitionMethod; v != nil {
 		builder.WriteString("recognition_method=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("usage_at_list_rate=")
-	builder.WriteString(fmt.Sprintf("%v", rf.UsageAtListRate))
+	builder.WriteString(fmt.Sprintf("%v", _m.UsageAtListRate))
 	builder.WriteString(", ")
 	builder.WriteString("tier_delta=")
-	builder.WriteString(fmt.Sprintf("%v", rf.TierDelta))
+	builder.WriteString(fmt.Sprintf("%v", _m.TierDelta))
 	builder.WriteString(", ")
 	builder.WriteString("entitlement_amount=")
-	builder.WriteString(fmt.Sprintf("%v", rf.EntitlementAmount))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntitlementAmount))
 	builder.WriteString(", ")
 	builder.WriteString("line_discount=")
-	builder.WriteString(fmt.Sprintf("%v", rf.LineDiscount))
+	builder.WriteString(fmt.Sprintf("%v", _m.LineDiscount))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_discount=")
-	builder.WriteString(fmt.Sprintf("%v", rf.InvoiceDiscount))
+	builder.WriteString(fmt.Sprintf("%v", _m.InvoiceDiscount))
 	builder.WriteString(", ")
 	builder.WriteString("net_amount=")
-	builder.WriteString(fmt.Sprintf("%v", rf.NetAmount))
+	builder.WriteString(fmt.Sprintf("%v", _m.NetAmount))
 	builder.WriteString(", ")
 	builder.WriteString("billable_qty=")
-	builder.WriteString(fmt.Sprintf("%v", rf.BillableQty))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillableQty))
 	builder.WriteString(", ")
 	builder.WriteString("entitlement_qty=")
-	builder.WriteString(fmt.Sprintf("%v", rf.EntitlementQty))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntitlementQty))
 	builder.WriteString(", ")
 	builder.WriteString("decomposition_mode=")
-	builder.WriteString(fmt.Sprintf("%v", rf.DecompositionMode))
+	builder.WriteString(fmt.Sprintf("%v", _m.DecompositionMode))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(rf.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(fmt.Sprintf("%v", rf.Status))
+	builder.WriteString(fmt.Sprintf("%v", _m.Status))
 	builder.WriteString(", ")
 	builder.WriteString("is_revert=")
-	builder.WriteString(fmt.Sprintf("%v", rf.IsRevert))
+	builder.WriteString(fmt.Sprintf("%v", _m.IsRevert))
 	builder.WriteString(", ")
-	if v := rf.InvoiceID; v != nil {
+	if v := _m.InvoiceID; v != nil {
 		builder.WriteString("invoice_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := rf.InvoiceLineItemID; v != nil {
+	if v := _m.InvoiceLineItemID; v != nil {
 		builder.WriteString("invoice_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := rf.LockAdjustedDay; v != nil {
+	if v := _m.LockAdjustedDay; v != nil {
 		builder.WriteString("lock_adjusted_day=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("computed_at=")
-	builder.WriteString(rf.ComputedAt.Format(time.ANSIC))
+	builder.WriteString(_m.ComputedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("version=")
-	builder.WriteString(fmt.Sprintf("%v", rf.Version))
+	builder.WriteString(fmt.Sprintf("%v", _m.Version))
 	builder.WriteByte(')')
 	return builder.String()
 }

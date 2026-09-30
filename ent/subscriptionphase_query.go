@@ -30,44 +30,44 @@ type SubscriptionPhaseQuery struct {
 }
 
 // Where adds a new predicate for the SubscriptionPhaseQuery builder.
-func (spq *SubscriptionPhaseQuery) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseQuery {
-	spq.predicates = append(spq.predicates, ps...)
-	return spq
+func (_q *SubscriptionPhaseQuery) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (spq *SubscriptionPhaseQuery) Limit(limit int) *SubscriptionPhaseQuery {
-	spq.ctx.Limit = &limit
-	return spq
+func (_q *SubscriptionPhaseQuery) Limit(limit int) *SubscriptionPhaseQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (spq *SubscriptionPhaseQuery) Offset(offset int) *SubscriptionPhaseQuery {
-	spq.ctx.Offset = &offset
-	return spq
+func (_q *SubscriptionPhaseQuery) Offset(offset int) *SubscriptionPhaseQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (spq *SubscriptionPhaseQuery) Unique(unique bool) *SubscriptionPhaseQuery {
-	spq.ctx.Unique = &unique
-	return spq
+func (_q *SubscriptionPhaseQuery) Unique(unique bool) *SubscriptionPhaseQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (spq *SubscriptionPhaseQuery) Order(o ...subscriptionphase.OrderOption) *SubscriptionPhaseQuery {
-	spq.order = append(spq.order, o...)
-	return spq
+func (_q *SubscriptionPhaseQuery) Order(o ...subscriptionphase.OrderOption) *SubscriptionPhaseQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QuerySubscription chains the current query on the "subscription" edge.
-func (spq *SubscriptionPhaseQuery) QuerySubscription() *SubscriptionQuery {
-	query := (&SubscriptionClient{config: spq.config}).Query()
+func (_q *SubscriptionPhaseQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := spq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := spq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func (spq *SubscriptionPhaseQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionphase.SubscriptionTable, subscriptionphase.SubscriptionColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(spq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -84,8 +84,8 @@ func (spq *SubscriptionPhaseQuery) QuerySubscription() *SubscriptionQuery {
 
 // First returns the first SubscriptionPhase entity from the query.
 // Returns a *NotFoundError when no SubscriptionPhase was found.
-func (spq *SubscriptionPhaseQuery) First(ctx context.Context) (*SubscriptionPhase, error) {
-	nodes, err := spq.Limit(1).All(setContextOp(ctx, spq.ctx, ent.OpQueryFirst))
+func (_q *SubscriptionPhaseQuery) First(ctx context.Context) (*SubscriptionPhase, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +96,8 @@ func (spq *SubscriptionPhaseQuery) First(ctx context.Context) (*SubscriptionPhas
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) FirstX(ctx context.Context) *SubscriptionPhase {
-	node, err := spq.First(ctx)
+func (_q *SubscriptionPhaseQuery) FirstX(ctx context.Context) *SubscriptionPhase {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,9 +106,9 @@ func (spq *SubscriptionPhaseQuery) FirstX(ctx context.Context) *SubscriptionPhas
 
 // FirstID returns the first SubscriptionPhase ID from the query.
 // Returns a *NotFoundError when no SubscriptionPhase ID was found.
-func (spq *SubscriptionPhaseQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionPhaseQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = spq.Limit(1).IDs(setContextOp(ctx, spq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -119,8 +119,8 @@ func (spq *SubscriptionPhaseQuery) FirstID(ctx context.Context) (id string, err 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) FirstIDX(ctx context.Context) string {
-	id, err := spq.FirstID(ctx)
+func (_q *SubscriptionPhaseQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -130,8 +130,8 @@ func (spq *SubscriptionPhaseQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single SubscriptionPhase entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one SubscriptionPhase entity is found.
 // Returns a *NotFoundError when no SubscriptionPhase entities are found.
-func (spq *SubscriptionPhaseQuery) Only(ctx context.Context) (*SubscriptionPhase, error) {
-	nodes, err := spq.Limit(2).All(setContextOp(ctx, spq.ctx, ent.OpQueryOnly))
+func (_q *SubscriptionPhaseQuery) Only(ctx context.Context) (*SubscriptionPhase, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +146,8 @@ func (spq *SubscriptionPhaseQuery) Only(ctx context.Context) (*SubscriptionPhase
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) OnlyX(ctx context.Context) *SubscriptionPhase {
-	node, err := spq.Only(ctx)
+func (_q *SubscriptionPhaseQuery) OnlyX(ctx context.Context) *SubscriptionPhase {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -157,9 +157,9 @@ func (spq *SubscriptionPhaseQuery) OnlyX(ctx context.Context) *SubscriptionPhase
 // OnlyID is like Only, but returns the only SubscriptionPhase ID in the query.
 // Returns a *NotSingularError when more than one SubscriptionPhase ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (spq *SubscriptionPhaseQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionPhaseQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = spq.Limit(2).IDs(setContextOp(ctx, spq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -174,8 +174,8 @@ func (spq *SubscriptionPhaseQuery) OnlyID(ctx context.Context) (id string, err e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) OnlyIDX(ctx context.Context) string {
-	id, err := spq.OnlyID(ctx)
+func (_q *SubscriptionPhaseQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -183,18 +183,18 @@ func (spq *SubscriptionPhaseQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of SubscriptionPhases.
-func (spq *SubscriptionPhaseQuery) All(ctx context.Context) ([]*SubscriptionPhase, error) {
-	ctx = setContextOp(ctx, spq.ctx, ent.OpQueryAll)
-	if err := spq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionPhaseQuery) All(ctx context.Context) ([]*SubscriptionPhase, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*SubscriptionPhase, *SubscriptionPhaseQuery]()
-	return withInterceptors[[]*SubscriptionPhase](ctx, spq, qr, spq.inters)
+	return withInterceptors[[]*SubscriptionPhase](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) AllX(ctx context.Context) []*SubscriptionPhase {
-	nodes, err := spq.All(ctx)
+func (_q *SubscriptionPhaseQuery) AllX(ctx context.Context) []*SubscriptionPhase {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -202,20 +202,20 @@ func (spq *SubscriptionPhaseQuery) AllX(ctx context.Context) []*SubscriptionPhas
 }
 
 // IDs executes the query and returns a list of SubscriptionPhase IDs.
-func (spq *SubscriptionPhaseQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if spq.ctx.Unique == nil && spq.path != nil {
-		spq.Unique(true)
+func (_q *SubscriptionPhaseQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, spq.ctx, ent.OpQueryIDs)
-	if err = spq.Select(subscriptionphase.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(subscriptionphase.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) IDsX(ctx context.Context) []string {
-	ids, err := spq.IDs(ctx)
+func (_q *SubscriptionPhaseQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -223,17 +223,17 @@ func (spq *SubscriptionPhaseQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (spq *SubscriptionPhaseQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, spq.ctx, ent.OpQueryCount)
-	if err := spq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionPhaseQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, spq, querierCount[*SubscriptionPhaseQuery](), spq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*SubscriptionPhaseQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) CountX(ctx context.Context) int {
-	count, err := spq.Count(ctx)
+func (_q *SubscriptionPhaseQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -241,9 +241,9 @@ func (spq *SubscriptionPhaseQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (spq *SubscriptionPhaseQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, spq.ctx, ent.OpQueryExist)
-	switch _, err := spq.FirstID(ctx); {
+func (_q *SubscriptionPhaseQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -254,8 +254,8 @@ func (spq *SubscriptionPhaseQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (spq *SubscriptionPhaseQuery) ExistX(ctx context.Context) bool {
-	exist, err := spq.Exist(ctx)
+func (_q *SubscriptionPhaseQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -264,32 +264,32 @@ func (spq *SubscriptionPhaseQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the SubscriptionPhaseQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (spq *SubscriptionPhaseQuery) Clone() *SubscriptionPhaseQuery {
-	if spq == nil {
+func (_q *SubscriptionPhaseQuery) Clone() *SubscriptionPhaseQuery {
+	if _q == nil {
 		return nil
 	}
 	return &SubscriptionPhaseQuery{
-		config:           spq.config,
-		ctx:              spq.ctx.Clone(),
-		order:            append([]subscriptionphase.OrderOption{}, spq.order...),
-		inters:           append([]Interceptor{}, spq.inters...),
-		predicates:       append([]predicate.SubscriptionPhase{}, spq.predicates...),
-		withSubscription: spq.withSubscription.Clone(),
+		config:           _q.config,
+		ctx:              _q.ctx.Clone(),
+		order:            append([]subscriptionphase.OrderOption{}, _q.order...),
+		inters:           append([]Interceptor{}, _q.inters...),
+		predicates:       append([]predicate.SubscriptionPhase{}, _q.predicates...),
+		withSubscription: _q.withSubscription.Clone(),
 		// clone intermediate query.
-		sql:  spq.sql.Clone(),
-		path: spq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithSubscription tells the query-builder to eager-load the nodes that are connected to
 // the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
-func (spq *SubscriptionPhaseQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionPhaseQuery {
-	query := (&SubscriptionClient{config: spq.config}).Query()
+func (_q *SubscriptionPhaseQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionPhaseQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	spq.withSubscription = query
-	return spq
+	_q.withSubscription = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -306,10 +306,10 @@ func (spq *SubscriptionPhaseQuery) WithSubscription(opts ...func(*SubscriptionQu
 //		GroupBy(subscriptionphase.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (spq *SubscriptionPhaseQuery) GroupBy(field string, fields ...string) *SubscriptionPhaseGroupBy {
-	spq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SubscriptionPhaseGroupBy{build: spq}
-	grbuild.flds = &spq.ctx.Fields
+func (_q *SubscriptionPhaseQuery) GroupBy(field string, fields ...string) *SubscriptionPhaseGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &SubscriptionPhaseGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = subscriptionphase.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -327,58 +327,58 @@ func (spq *SubscriptionPhaseQuery) GroupBy(field string, fields ...string) *Subs
 //	client.SubscriptionPhase.Query().
 //		Select(subscriptionphase.FieldTenantID).
 //		Scan(ctx, &v)
-func (spq *SubscriptionPhaseQuery) Select(fields ...string) *SubscriptionPhaseSelect {
-	spq.ctx.Fields = append(spq.ctx.Fields, fields...)
-	sbuild := &SubscriptionPhaseSelect{SubscriptionPhaseQuery: spq}
+func (_q *SubscriptionPhaseQuery) Select(fields ...string) *SubscriptionPhaseSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &SubscriptionPhaseSelect{SubscriptionPhaseQuery: _q}
 	sbuild.label = subscriptionphase.Label
-	sbuild.flds, sbuild.scan = &spq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a SubscriptionPhaseSelect configured with the given aggregations.
-func (spq *SubscriptionPhaseQuery) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseSelect {
-	return spq.Select().Aggregate(fns...)
+func (_q *SubscriptionPhaseQuery) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (spq *SubscriptionPhaseQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range spq.inters {
+func (_q *SubscriptionPhaseQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, spq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range spq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !subscriptionphase.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if spq.path != nil {
-		prev, err := spq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		spq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionPhase, error) {
+func (_q *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionPhase, error) {
 	var (
 		nodes       = []*SubscriptionPhase{}
-		_spec       = spq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
-			spq.withSubscription != nil,
+			_q.withSubscription != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SubscriptionPhase).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &SubscriptionPhase{config: spq.config}
+		node := &SubscriptionPhase{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -386,14 +386,14 @@ func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, spq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := spq.withSubscription; query != nil {
-		if err := spq.loadSubscription(ctx, query, nodes, nil,
+	if query := _q.withSubscription; query != nil {
+		if err := _q.loadSubscription(ctx, query, nodes, nil,
 			func(n *SubscriptionPhase, e *Subscription) { n.Edges.Subscription = e }); err != nil {
 			return nil, err
 		}
@@ -401,7 +401,7 @@ func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	return nodes, nil
 }
 
-func (spq *SubscriptionPhaseQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionPhase, init func(*SubscriptionPhase), assign func(*SubscriptionPhase, *Subscription)) error {
+func (_q *SubscriptionPhaseQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionPhase, init func(*SubscriptionPhase), assign func(*SubscriptionPhase, *Subscription)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*SubscriptionPhase)
 	for i := range nodes {
@@ -431,24 +431,24 @@ func (spq *SubscriptionPhaseQuery) loadSubscription(ctx context.Context, query *
 	return nil
 }
 
-func (spq *SubscriptionPhaseQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := spq.querySpec()
-	_spec.Node.Columns = spq.ctx.Fields
-	if len(spq.ctx.Fields) > 0 {
-		_spec.Unique = spq.ctx.Unique != nil && *spq.ctx.Unique
+func (_q *SubscriptionPhaseQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, spq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (spq *SubscriptionPhaseQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *SubscriptionPhaseQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(subscriptionphase.Table, subscriptionphase.Columns, sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString))
-	_spec.From = spq.sql
-	if unique := spq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if spq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := spq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionphase.FieldID)
 		for i := range fields {
@@ -456,24 +456,24 @@ func (spq *SubscriptionPhaseQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if spq.withSubscription != nil {
+		if _q.withSubscription != nil {
 			_spec.Node.AddColumnOnce(subscriptionphase.FieldSubscriptionID)
 		}
 	}
-	if ps := spq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := spq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := spq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := spq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -483,33 +483,33 @@ func (spq *SubscriptionPhaseQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (spq *SubscriptionPhaseQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(spq.driver.Dialect())
+func (_q *SubscriptionPhaseQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(subscriptionphase.Table)
-	columns := spq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = subscriptionphase.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if spq.sql != nil {
-		selector = spq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if spq.ctx.Unique != nil && *spq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range spq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range spq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := spq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := spq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -522,41 +522,41 @@ type SubscriptionPhaseGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (spgb *SubscriptionPhaseGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseGroupBy {
-	spgb.fns = append(spgb.fns, fns...)
-	return spgb
+func (_g *SubscriptionPhaseGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (spgb *SubscriptionPhaseGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, spgb.build.ctx, ent.OpQueryGroupBy)
-	if err := spgb.build.prepareQuery(ctx); err != nil {
+func (_g *SubscriptionPhaseGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionPhaseQuery, *SubscriptionPhaseGroupBy](ctx, spgb.build, spgb, spgb.build.inters, v)
+	return scanWithInterceptors[*SubscriptionPhaseQuery, *SubscriptionPhaseGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (spgb *SubscriptionPhaseGroupBy) sqlScan(ctx context.Context, root *SubscriptionPhaseQuery, v any) error {
+func (_g *SubscriptionPhaseGroupBy) sqlScan(ctx context.Context, root *SubscriptionPhaseQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(spgb.fns))
-	for _, fn := range spgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*spgb.flds)+len(spgb.fns))
-		for _, f := range *spgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*spgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := spgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -570,27 +570,27 @@ type SubscriptionPhaseSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (sps *SubscriptionPhaseSelect) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseSelect {
-	sps.fns = append(sps.fns, fns...)
-	return sps
+func (_s *SubscriptionPhaseSelect) Aggregate(fns ...AggregateFunc) *SubscriptionPhaseSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (sps *SubscriptionPhaseSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, sps.ctx, ent.OpQuerySelect)
-	if err := sps.prepareQuery(ctx); err != nil {
+func (_s *SubscriptionPhaseSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionPhaseQuery, *SubscriptionPhaseSelect](ctx, sps.SubscriptionPhaseQuery, sps, sps.inters, v)
+	return scanWithInterceptors[*SubscriptionPhaseQuery, *SubscriptionPhaseSelect](ctx, _s.SubscriptionPhaseQuery, _s, _s.inters, v)
 }
 
-func (sps *SubscriptionPhaseSelect) sqlScan(ctx context.Context, root *SubscriptionPhaseQuery, v any) error {
+func (_s *SubscriptionPhaseSelect) sqlScan(ctx context.Context, root *SubscriptionPhaseQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(sps.fns))
-	for _, fn := range sps.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*sps.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -598,7 +598,7 @@ func (sps *SubscriptionPhaseSelect) sqlScan(ctx context.Context, root *Subscript
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := sps.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

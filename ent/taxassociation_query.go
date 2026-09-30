@@ -28,40 +28,40 @@ type TaxAssociationQuery struct {
 }
 
 // Where adds a new predicate for the TaxAssociationQuery builder.
-func (taq *TaxAssociationQuery) Where(ps ...predicate.TaxAssociation) *TaxAssociationQuery {
-	taq.predicates = append(taq.predicates, ps...)
-	return taq
+func (_q *TaxAssociationQuery) Where(ps ...predicate.TaxAssociation) *TaxAssociationQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (taq *TaxAssociationQuery) Limit(limit int) *TaxAssociationQuery {
-	taq.ctx.Limit = &limit
-	return taq
+func (_q *TaxAssociationQuery) Limit(limit int) *TaxAssociationQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (taq *TaxAssociationQuery) Offset(offset int) *TaxAssociationQuery {
-	taq.ctx.Offset = &offset
-	return taq
+func (_q *TaxAssociationQuery) Offset(offset int) *TaxAssociationQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (taq *TaxAssociationQuery) Unique(unique bool) *TaxAssociationQuery {
-	taq.ctx.Unique = &unique
-	return taq
+func (_q *TaxAssociationQuery) Unique(unique bool) *TaxAssociationQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (taq *TaxAssociationQuery) Order(o ...taxassociation.OrderOption) *TaxAssociationQuery {
-	taq.order = append(taq.order, o...)
-	return taq
+func (_q *TaxAssociationQuery) Order(o ...taxassociation.OrderOption) *TaxAssociationQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first TaxAssociation entity from the query.
 // Returns a *NotFoundError when no TaxAssociation was found.
-func (taq *TaxAssociationQuery) First(ctx context.Context) (*TaxAssociation, error) {
-	nodes, err := taq.Limit(1).All(setContextOp(ctx, taq.ctx, ent.OpQueryFirst))
+func (_q *TaxAssociationQuery) First(ctx context.Context) (*TaxAssociation, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (taq *TaxAssociationQuery) First(ctx context.Context) (*TaxAssociation, err
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (taq *TaxAssociationQuery) FirstX(ctx context.Context) *TaxAssociation {
-	node, err := taq.First(ctx)
+func (_q *TaxAssociationQuery) FirstX(ctx context.Context) *TaxAssociation {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (taq *TaxAssociationQuery) FirstX(ctx context.Context) *TaxAssociation {
 
 // FirstID returns the first TaxAssociation ID from the query.
 // Returns a *NotFoundError when no TaxAssociation ID was found.
-func (taq *TaxAssociationQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *TaxAssociationQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = taq.Limit(1).IDs(setContextOp(ctx, taq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (taq *TaxAssociationQuery) FirstID(ctx context.Context) (id string, err err
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (taq *TaxAssociationQuery) FirstIDX(ctx context.Context) string {
-	id, err := taq.FirstID(ctx)
+func (_q *TaxAssociationQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (taq *TaxAssociationQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single TaxAssociation entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one TaxAssociation entity is found.
 // Returns a *NotFoundError when no TaxAssociation entities are found.
-func (taq *TaxAssociationQuery) Only(ctx context.Context) (*TaxAssociation, error) {
-	nodes, err := taq.Limit(2).All(setContextOp(ctx, taq.ctx, ent.OpQueryOnly))
+func (_q *TaxAssociationQuery) Only(ctx context.Context) (*TaxAssociation, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (taq *TaxAssociationQuery) Only(ctx context.Context) (*TaxAssociation, erro
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (taq *TaxAssociationQuery) OnlyX(ctx context.Context) *TaxAssociation {
-	node, err := taq.Only(ctx)
+func (_q *TaxAssociationQuery) OnlyX(ctx context.Context) *TaxAssociation {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (taq *TaxAssociationQuery) OnlyX(ctx context.Context) *TaxAssociation {
 // OnlyID is like Only, but returns the only TaxAssociation ID in the query.
 // Returns a *NotSingularError when more than one TaxAssociation ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (taq *TaxAssociationQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *TaxAssociationQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = taq.Limit(2).IDs(setContextOp(ctx, taq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (taq *TaxAssociationQuery) OnlyID(ctx context.Context) (id string, err erro
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (taq *TaxAssociationQuery) OnlyIDX(ctx context.Context) string {
-	id, err := taq.OnlyID(ctx)
+func (_q *TaxAssociationQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (taq *TaxAssociationQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of TaxAssociations.
-func (taq *TaxAssociationQuery) All(ctx context.Context) ([]*TaxAssociation, error) {
-	ctx = setContextOp(ctx, taq.ctx, ent.OpQueryAll)
-	if err := taq.prepareQuery(ctx); err != nil {
+func (_q *TaxAssociationQuery) All(ctx context.Context) ([]*TaxAssociation, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*TaxAssociation, *TaxAssociationQuery]()
-	return withInterceptors[[]*TaxAssociation](ctx, taq, qr, taq.inters)
+	return withInterceptors[[]*TaxAssociation](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (taq *TaxAssociationQuery) AllX(ctx context.Context) []*TaxAssociation {
-	nodes, err := taq.All(ctx)
+func (_q *TaxAssociationQuery) AllX(ctx context.Context) []*TaxAssociation {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (taq *TaxAssociationQuery) AllX(ctx context.Context) []*TaxAssociation {
 }
 
 // IDs executes the query and returns a list of TaxAssociation IDs.
-func (taq *TaxAssociationQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if taq.ctx.Unique == nil && taq.path != nil {
-		taq.Unique(true)
+func (_q *TaxAssociationQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, taq.ctx, ent.OpQueryIDs)
-	if err = taq.Select(taxassociation.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(taxassociation.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (taq *TaxAssociationQuery) IDsX(ctx context.Context) []string {
-	ids, err := taq.IDs(ctx)
+func (_q *TaxAssociationQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (taq *TaxAssociationQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (taq *TaxAssociationQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, taq.ctx, ent.OpQueryCount)
-	if err := taq.prepareQuery(ctx); err != nil {
+func (_q *TaxAssociationQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, taq, querierCount[*TaxAssociationQuery](), taq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*TaxAssociationQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (taq *TaxAssociationQuery) CountX(ctx context.Context) int {
-	count, err := taq.Count(ctx)
+func (_q *TaxAssociationQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (taq *TaxAssociationQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (taq *TaxAssociationQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, taq.ctx, ent.OpQueryExist)
-	switch _, err := taq.FirstID(ctx); {
+func (_q *TaxAssociationQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (taq *TaxAssociationQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (taq *TaxAssociationQuery) ExistX(ctx context.Context) bool {
-	exist, err := taq.Exist(ctx)
+func (_q *TaxAssociationQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (taq *TaxAssociationQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the TaxAssociationQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (taq *TaxAssociationQuery) Clone() *TaxAssociationQuery {
-	if taq == nil {
+func (_q *TaxAssociationQuery) Clone() *TaxAssociationQuery {
+	if _q == nil {
 		return nil
 	}
 	return &TaxAssociationQuery{
-		config:     taq.config,
-		ctx:        taq.ctx.Clone(),
-		order:      append([]taxassociation.OrderOption{}, taq.order...),
-		inters:     append([]Interceptor{}, taq.inters...),
-		predicates: append([]predicate.TaxAssociation{}, taq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]taxassociation.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.TaxAssociation{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  taq.sql.Clone(),
-		path: taq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (taq *TaxAssociationQuery) Clone() *TaxAssociationQuery {
 //		GroupBy(taxassociation.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (taq *TaxAssociationQuery) GroupBy(field string, fields ...string) *TaxAssociationGroupBy {
-	taq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &TaxAssociationGroupBy{build: taq}
-	grbuild.flds = &taq.ctx.Fields
+func (_q *TaxAssociationQuery) GroupBy(field string, fields ...string) *TaxAssociationGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &TaxAssociationGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = taxassociation.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (taq *TaxAssociationQuery) GroupBy(field string, fields ...string) *TaxAsso
 //	client.TaxAssociation.Query().
 //		Select(taxassociation.FieldTenantID).
 //		Scan(ctx, &v)
-func (taq *TaxAssociationQuery) Select(fields ...string) *TaxAssociationSelect {
-	taq.ctx.Fields = append(taq.ctx.Fields, fields...)
-	sbuild := &TaxAssociationSelect{TaxAssociationQuery: taq}
+func (_q *TaxAssociationQuery) Select(fields ...string) *TaxAssociationSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &TaxAssociationSelect{TaxAssociationQuery: _q}
 	sbuild.label = taxassociation.Label
-	sbuild.flds, sbuild.scan = &taq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a TaxAssociationSelect configured with the given aggregations.
-func (taq *TaxAssociationQuery) Aggregate(fns ...AggregateFunc) *TaxAssociationSelect {
-	return taq.Select().Aggregate(fns...)
+func (_q *TaxAssociationQuery) Aggregate(fns ...AggregateFunc) *TaxAssociationSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (taq *TaxAssociationQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range taq.inters {
+func (_q *TaxAssociationQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, taq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range taq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !taxassociation.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if taq.path != nil {
-		prev, err := taq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		taq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (taq *TaxAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*TaxAssociation, error) {
+func (_q *TaxAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*TaxAssociation, error) {
 	var (
 		nodes = []*TaxAssociation{}
-		_spec = taq.querySpec()
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*TaxAssociation).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &TaxAssociation{config: taq.config}
+		node := &TaxAssociation{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, taq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (taq *TaxAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	return nodes, nil
 }
 
-func (taq *TaxAssociationQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := taq.querySpec()
-	_spec.Node.Columns = taq.ctx.Fields
-	if len(taq.ctx.Fields) > 0 {
-		_spec.Unique = taq.ctx.Unique != nil && *taq.ctx.Unique
+func (_q *TaxAssociationQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, taq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (taq *TaxAssociationQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *TaxAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(taxassociation.Table, taxassociation.Columns, sqlgraph.NewFieldSpec(taxassociation.FieldID, field.TypeString))
-	_spec.From = taq.sql
-	if unique := taq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if taq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := taq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, taxassociation.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (taq *TaxAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := taq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := taq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := taq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := taq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (taq *TaxAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (taq *TaxAssociationQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(taq.driver.Dialect())
+func (_q *TaxAssociationQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(taxassociation.Table)
-	columns := taq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = taxassociation.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if taq.sql != nil {
-		selector = taq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if taq.ctx.Unique != nil && *taq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range taq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range taq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := taq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := taq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type TaxAssociationGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (tagb *TaxAssociationGroupBy) Aggregate(fns ...AggregateFunc) *TaxAssociationGroupBy {
-	tagb.fns = append(tagb.fns, fns...)
-	return tagb
+func (_g *TaxAssociationGroupBy) Aggregate(fns ...AggregateFunc) *TaxAssociationGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (tagb *TaxAssociationGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, tagb.build.ctx, ent.OpQueryGroupBy)
-	if err := tagb.build.prepareQuery(ctx); err != nil {
+func (_g *TaxAssociationGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TaxAssociationQuery, *TaxAssociationGroupBy](ctx, tagb.build, tagb, tagb.build.inters, v)
+	return scanWithInterceptors[*TaxAssociationQuery, *TaxAssociationGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (tagb *TaxAssociationGroupBy) sqlScan(ctx context.Context, root *TaxAssociationQuery, v any) error {
+func (_g *TaxAssociationGroupBy) sqlScan(ctx context.Context, root *TaxAssociationQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(tagb.fns))
-	for _, fn := range tagb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*tagb.flds)+len(tagb.fns))
-		for _, f := range *tagb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*tagb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := tagb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type TaxAssociationSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (tas *TaxAssociationSelect) Aggregate(fns ...AggregateFunc) *TaxAssociationSelect {
-	tas.fns = append(tas.fns, fns...)
-	return tas
+func (_s *TaxAssociationSelect) Aggregate(fns ...AggregateFunc) *TaxAssociationSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (tas *TaxAssociationSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, tas.ctx, ent.OpQuerySelect)
-	if err := tas.prepareQuery(ctx); err != nil {
+func (_s *TaxAssociationSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TaxAssociationQuery, *TaxAssociationSelect](ctx, tas.TaxAssociationQuery, tas, tas.inters, v)
+	return scanWithInterceptors[*TaxAssociationQuery, *TaxAssociationSelect](ctx, _s.TaxAssociationQuery, _s, _s.inters, v)
 }
 
-func (tas *TaxAssociationSelect) sqlScan(ctx context.Context, root *TaxAssociationQuery, v any) error {
+func (_s *TaxAssociationSelect) sqlScan(ctx context.Context, root *TaxAssociationQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(tas.fns))
-	for _, fn := range tas.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*tas.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (tas *TaxAssociationSelect) sqlScan(ctx context.Context, root *TaxAssociati
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := tas.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

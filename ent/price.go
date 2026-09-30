@@ -168,7 +168,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Price fields.
-func (pr *Price) assignValues(columns []string, values []any) error {
+func (_m *Price) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -178,175 +178,175 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				pr.ID = value.String
+				_m.ID = value.String
 			}
 		case price.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				pr.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case price.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				pr.Status = value.String
+				_m.Status = value.String
 			}
 		case price.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				pr.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case price.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				pr.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case price.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				pr.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case price.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				pr.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case price.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				pr.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case price.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_name", values[i])
 			} else if value.Valid {
-				pr.DisplayName = value.String
+				_m.DisplayName = value.String
 			}
 		case price.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				pr.Amount = *value
+				_m.Amount = *value
 			}
 		case price.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				pr.Currency = value.String
+				_m.Currency = value.String
 			}
 		case price.FieldDisplayAmount:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_amount", values[i])
 			} else if value.Valid {
-				pr.DisplayAmount = value.String
+				_m.DisplayAmount = value.String
 			}
 		case price.FieldPriceUnitType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_type", values[i])
 			} else if value.Valid {
-				pr.PriceUnitType = types.PriceUnitType(value.String)
+				_m.PriceUnitType = types.PriceUnitType(value.String)
 			}
 		case price.FieldPriceUnitID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
 			} else if value.Valid {
-				pr.PriceUnitID = new(string)
-				*pr.PriceUnitID = value.String
+				_m.PriceUnitID = new(string)
+				*_m.PriceUnitID = value.String
 			}
 		case price.FieldPriceUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
 			} else if value.Valid {
-				pr.PriceUnit = new(string)
-				*pr.PriceUnit = value.String
+				_m.PriceUnit = new(string)
+				*_m.PriceUnit = value.String
 			}
 		case price.FieldPriceUnitAmount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
 			} else if value.Valid {
-				pr.PriceUnitAmount = new(decimal.Decimal)
-				*pr.PriceUnitAmount = *value.S.(*decimal.Decimal)
+				_m.PriceUnitAmount = new(decimal.Decimal)
+				*_m.PriceUnitAmount = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldDisplayPriceUnitAmount:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_price_unit_amount", values[i])
 			} else if value.Valid {
-				pr.DisplayPriceUnitAmount = value.String
+				_m.DisplayPriceUnitAmount = value.String
 			}
 		case price.FieldConversionRate:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
 			} else if value.Valid {
-				pr.ConversionRate = new(decimal.Decimal)
-				*pr.ConversionRate = *value.S.(*decimal.Decimal)
+				_m.ConversionRate = new(decimal.Decimal)
+				*_m.ConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldMinQuantity:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field min_quantity", values[i])
 			} else if value.Valid {
-				pr.MinQuantity = new(decimal.Decimal)
-				*pr.MinQuantity = *value.S.(*decimal.Decimal)
+				_m.MinQuantity = new(decimal.Decimal)
+				*_m.MinQuantity = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				pr.Type = types.PriceType(value.String)
+				_m.Type = types.PriceType(value.String)
 			}
 		case price.FieldBillingPeriod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period", values[i])
 			} else if value.Valid {
-				pr.BillingPeriod = types.BillingPeriod(value.String)
+				_m.BillingPeriod = types.BillingPeriod(value.String)
 			}
 		case price.FieldBillingPeriodCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period_count", values[i])
 			} else if value.Valid {
-				pr.BillingPeriodCount = int(value.Int64)
+				_m.BillingPeriodCount = int(value.Int64)
 			}
 		case price.FieldBillingModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_model", values[i])
 			} else if value.Valid {
-				pr.BillingModel = types.BillingModel(value.String)
+				_m.BillingModel = types.BillingModel(value.String)
 			}
 		case price.FieldBillingCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_cadence", values[i])
 			} else if value.Valid {
-				pr.BillingCadence = types.BillingCadence(value.String)
+				_m.BillingCadence = types.BillingCadence(value.String)
 			}
 		case price.FieldInvoiceCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_cadence", values[i])
 			} else if value.Valid {
-				pr.InvoiceCadence = types.InvoiceCadence(value.String)
+				_m.InvoiceCadence = types.InvoiceCadence(value.String)
 			}
 		case price.FieldTrialPeriodDays:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field trial_period_days", values[i])
 			} else if value.Valid {
-				pr.TrialPeriodDays = int(value.Int64)
+				_m.TrialPeriodDays = int(value.Int64)
 			}
 		case price.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
-				pr.MeterID = new(string)
-				*pr.MeterID = value.String
+				_m.MeterID = new(string)
+				*_m.MeterID = value.String
 			}
 		case price.FieldFilterValues:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field filter_values", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pr.FilterValues); err != nil {
+				if err := json.Unmarshal(*value, &_m.FilterValues); err != nil {
 					return fmt.Errorf("unmarshal field filter_values: %w", err)
 				}
 			}
@@ -354,20 +354,20 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tier_mode", values[i])
 			} else if value.Valid {
-				pr.TierMode = new(types.BillingTier)
-				*pr.TierMode = types.BillingTier(value.String)
+				_m.TierMode = new(types.BillingTier)
+				*_m.TierMode = types.BillingTier(value.String)
 			}
 		case price.FieldBucketSize:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field bucket_size", values[i])
 			} else if value.Valid {
-				pr.BucketSize = types.WindowSize(value.String)
+				_m.BucketSize = types.WindowSize(value.String)
 			}
 		case price.FieldTiers:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field tiers", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pr.Tiers); err != nil {
+				if err := json.Unmarshal(*value, &_m.Tiers); err != nil {
 					return fmt.Errorf("unmarshal field tiers: %w", err)
 				}
 			}
@@ -375,7 +375,7 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_tiers", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pr.PriceUnitTiers); err != nil {
+				if err := json.Unmarshal(*value, &_m.PriceUnitTiers); err != nil {
 					return fmt.Errorf("unmarshal field price_unit_tiers: %w", err)
 				}
 			}
@@ -383,7 +383,7 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field transform_quantity", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pr.TransformQuantity); err != nil {
+				if err := json.Unmarshal(*value, &_m.TransformQuantity); err != nil {
 					return fmt.Errorf("unmarshal field transform_quantity: %w", err)
 				}
 			}
@@ -391,19 +391,19 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field lookup_key", values[i])
 			} else if value.Valid {
-				pr.LookupKey = value.String
+				_m.LookupKey = value.String
 			}
 		case price.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				pr.Description = value.String
+				_m.Description = value.String
 			}
 		case price.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pr.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -411,50 +411,50 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				pr.EntityType = types.PriceEntityType(value.String)
+				_m.EntityType = types.PriceEntityType(value.String)
 			}
 		case price.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				pr.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case price.FieldParentPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_price_id", values[i])
 			} else if value.Valid {
-				pr.ParentPriceID = new(string)
-				*pr.ParentPriceID = value.String
+				_m.ParentPriceID = new(string)
+				*_m.ParentPriceID = value.String
 			}
 		case price.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				pr.StartDate = new(time.Time)
-				*pr.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case price.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				pr.EndDate = new(time.Time)
-				*pr.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case price.FieldGroupID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
-				pr.GroupID = new(string)
-				*pr.GroupID = value.String
+				_m.GroupID = new(string)
+				*_m.GroupID = value.String
 			}
 		case price.FieldSequence:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field sequence", values[i])
 			} else if value.Valid {
-				pr.Sequence = value.Int64
+				_m.Sequence = value.Int64
 			}
 		default:
-			pr.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -462,190 +462,190 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Price.
 // This includes values selected through modifiers, order, etc.
-func (pr *Price) Value(name string) (ent.Value, error) {
-	return pr.selectValues.Get(name)
+func (_m *Price) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryCostsheet queries the "costsheet" edge of the Price entity.
-func (pr *Price) QueryCostsheet() *CostsheetQuery {
-	return NewPriceClient(pr.config).QueryCostsheet(pr)
+func (_m *Price) QueryCostsheet() *CostsheetQuery {
+	return NewPriceClient(_m.config).QueryCostsheet(_m)
 }
 
 // QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
-func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
-	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
+func (_m *Price) QueryPriceUnitEdge() *PriceUnitQuery {
+	return NewPriceClient(_m.config).QueryPriceUnitEdge(_m)
 }
 
 // Update returns a builder for updating this Price.
 // Note that you need to call Price.Unwrap() before calling this method if this Price
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (pr *Price) Update() *PriceUpdateOne {
-	return NewPriceClient(pr.config).UpdateOne(pr)
+func (_m *Price) Update() *PriceUpdateOne {
+	return NewPriceClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Price entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (pr *Price) Unwrap() *Price {
-	_tx, ok := pr.config.driver.(*txDriver)
+func (_m *Price) Unwrap() *Price {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Price is not a transactional entity")
 	}
-	pr.config.driver = _tx.drv
-	return pr
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (pr *Price) String() string {
+func (_m *Price) String() string {
 	var builder strings.Builder
 	builder.WriteString("Price(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", pr.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(pr.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(pr.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(pr.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(pr.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(pr.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(pr.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(pr.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("display_name=")
-	builder.WriteString(pr.DisplayName)
+	builder.WriteString(_m.DisplayName)
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Amount))
+	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(pr.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("display_amount=")
-	builder.WriteString(pr.DisplayAmount)
+	builder.WriteString(_m.DisplayAmount)
 	builder.WriteString(", ")
 	builder.WriteString("price_unit_type=")
-	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitType))
+	builder.WriteString(fmt.Sprintf("%v", _m.PriceUnitType))
 	builder.WriteString(", ")
-	if v := pr.PriceUnitID; v != nil {
+	if v := _m.PriceUnitID; v != nil {
 		builder.WriteString("price_unit_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pr.PriceUnit; v != nil {
+	if v := _m.PriceUnit; v != nil {
 		builder.WriteString("price_unit=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pr.PriceUnitAmount; v != nil {
+	if v := _m.PriceUnitAmount; v != nil {
 		builder.WriteString("price_unit_amount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("display_price_unit_amount=")
-	builder.WriteString(pr.DisplayPriceUnitAmount)
+	builder.WriteString(_m.DisplayPriceUnitAmount)
 	builder.WriteString(", ")
-	if v := pr.ConversionRate; v != nil {
+	if v := _m.ConversionRate; v != nil {
 		builder.WriteString("conversion_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := pr.MinQuantity; v != nil {
+	if v := _m.MinQuantity; v != nil {
 		builder.WriteString("min_quantity=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Type))
+	builder.WriteString(fmt.Sprintf("%v", _m.Type))
 	builder.WriteString(", ")
 	builder.WriteString("billing_period=")
-	builder.WriteString(fmt.Sprintf("%v", pr.BillingPeriod))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingPeriod))
 	builder.WriteString(", ")
 	builder.WriteString("billing_period_count=")
-	builder.WriteString(fmt.Sprintf("%v", pr.BillingPeriodCount))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingPeriodCount))
 	builder.WriteString(", ")
 	builder.WriteString("billing_model=")
-	builder.WriteString(fmt.Sprintf("%v", pr.BillingModel))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingModel))
 	builder.WriteString(", ")
 	builder.WriteString("billing_cadence=")
-	builder.WriteString(fmt.Sprintf("%v", pr.BillingCadence))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingCadence))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_cadence=")
-	builder.WriteString(fmt.Sprintf("%v", pr.InvoiceCadence))
+	builder.WriteString(fmt.Sprintf("%v", _m.InvoiceCadence))
 	builder.WriteString(", ")
 	builder.WriteString("trial_period_days=")
-	builder.WriteString(fmt.Sprintf("%v", pr.TrialPeriodDays))
+	builder.WriteString(fmt.Sprintf("%v", _m.TrialPeriodDays))
 	builder.WriteString(", ")
-	if v := pr.MeterID; v != nil {
+	if v := _m.MeterID; v != nil {
 		builder.WriteString("meter_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("filter_values=")
-	builder.WriteString(fmt.Sprintf("%v", pr.FilterValues))
+	builder.WriteString(fmt.Sprintf("%v", _m.FilterValues))
 	builder.WriteString(", ")
-	if v := pr.TierMode; v != nil {
+	if v := _m.TierMode; v != nil {
 		builder.WriteString("tier_mode=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("bucket_size=")
-	builder.WriteString(fmt.Sprintf("%v", pr.BucketSize))
+	builder.WriteString(fmt.Sprintf("%v", _m.BucketSize))
 	builder.WriteString(", ")
 	builder.WriteString("tiers=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Tiers))
+	builder.WriteString(fmt.Sprintf("%v", _m.Tiers))
 	builder.WriteString(", ")
 	builder.WriteString("price_unit_tiers=")
-	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitTiers))
+	builder.WriteString(fmt.Sprintf("%v", _m.PriceUnitTiers))
 	builder.WriteString(", ")
 	builder.WriteString("transform_quantity=")
-	builder.WriteString(fmt.Sprintf("%v", pr.TransformQuantity))
+	builder.WriteString(fmt.Sprintf("%v", _m.TransformQuantity))
 	builder.WriteString(", ")
 	builder.WriteString("lookup_key=")
-	builder.WriteString(pr.LookupKey)
+	builder.WriteString(_m.LookupKey)
 	builder.WriteString(", ")
 	builder.WriteString("description=")
-	builder.WriteString(pr.Description)
+	builder.WriteString(_m.Description)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(fmt.Sprintf("%v", pr.EntityType))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntityType))
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(pr.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
-	if v := pr.ParentPriceID; v != nil {
+	if v := _m.ParentPriceID; v != nil {
 		builder.WriteString("parent_price_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pr.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pr.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pr.GroupID; v != nil {
+	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("sequence=")
-	builder.WriteString(fmt.Sprintf("%v", pr.Sequence))
+	builder.WriteString(fmt.Sprintf("%v", _m.Sequence))
 	builder.WriteByte(')')
 	return builder.String()
 }

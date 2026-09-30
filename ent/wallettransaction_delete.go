@@ -20,56 +20,56 @@ type WalletTransactionDelete struct {
 }
 
 // Where appends a list predicates to the WalletTransactionDelete builder.
-func (wtd *WalletTransactionDelete) Where(ps ...predicate.WalletTransaction) *WalletTransactionDelete {
-	wtd.mutation.Where(ps...)
-	return wtd
+func (_d *WalletTransactionDelete) Where(ps ...predicate.WalletTransaction) *WalletTransactionDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (wtd *WalletTransactionDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, wtd.sqlExec, wtd.mutation, wtd.hooks)
+func (_d *WalletTransactionDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wtd *WalletTransactionDelete) ExecX(ctx context.Context) int {
-	n, err := wtd.Exec(ctx)
+func (_d *WalletTransactionDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (wtd *WalletTransactionDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *WalletTransactionDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(wallettransaction.Table, sqlgraph.NewFieldSpec(wallettransaction.FieldID, field.TypeString))
-	if ps := wtd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, wtd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	wtd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // WalletTransactionDeleteOne is the builder for deleting a single WalletTransaction entity.
 type WalletTransactionDeleteOne struct {
-	wtd *WalletTransactionDelete
+	_d *WalletTransactionDelete
 }
 
 // Where appends a list predicates to the WalletTransactionDelete builder.
-func (wtdo *WalletTransactionDeleteOne) Where(ps ...predicate.WalletTransaction) *WalletTransactionDeleteOne {
-	wtdo.wtd.mutation.Where(ps...)
-	return wtdo
+func (_d *WalletTransactionDeleteOne) Where(ps ...predicate.WalletTransaction) *WalletTransactionDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (wtdo *WalletTransactionDeleteOne) Exec(ctx context.Context) error {
-	n, err := wtdo.wtd.Exec(ctx)
+func (_d *WalletTransactionDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (wtdo *WalletTransactionDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wtdo *WalletTransactionDeleteOne) ExecX(ctx context.Context) {
-	if err := wtdo.Exec(ctx); err != nil {
+func (_d *WalletTransactionDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

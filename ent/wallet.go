@@ -91,7 +91,7 @@ func (*Wallet) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Wallet fields.
-func (w *Wallet) assignValues(columns []string, values []any) error {
+func (_m *Wallet) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -101,79 +101,79 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				w.ID = value.String
+				_m.ID = value.String
 			}
 		case wallet.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				w.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case wallet.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				w.Status = value.String
+				_m.Status = value.String
 			}
 		case wallet.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				w.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case wallet.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				w.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case wallet.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				w.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case wallet.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				w.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case wallet.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				w.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case wallet.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				w.Name = value.String
+				_m.Name = value.String
 			}
 		case wallet.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				w.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case wallet.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				w.Currency = value.String
+				_m.Currency = value.String
 			}
 		case wallet.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				w.Description = value.String
+				_m.Description = value.String
 			}
 		case wallet.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &w.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -181,25 +181,25 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field balance", values[i])
 			} else if value != nil {
-				w.Balance = *value
+				_m.Balance = *value
 			}
 		case wallet.FieldCreditBalance:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_balance", values[i])
 			} else if value != nil {
-				w.CreditBalance = *value
+				_m.CreditBalance = *value
 			}
 		case wallet.FieldWalletStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field wallet_status", values[i])
 			} else if value.Valid {
-				w.WalletStatus = types.WalletStatus(value.String)
+				_m.WalletStatus = types.WalletStatus(value.String)
 			}
 		case wallet.FieldAutoTopup:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field auto_topup", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &w.AutoTopup); err != nil {
+				if err := json.Unmarshal(*value, &_m.AutoTopup); err != nil {
 					return fmt.Errorf("unmarshal field auto_topup: %w", err)
 				}
 			}
@@ -207,26 +207,26 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field wallet_type", values[i])
 			} else if value.Valid {
-				w.WalletType = types.WalletType(value.String)
+				_m.WalletType = types.WalletType(value.String)
 			}
 		case wallet.FieldConversionRate:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
 			} else if value != nil {
-				w.ConversionRate = *value
+				_m.ConversionRate = *value
 			}
 		case wallet.FieldTopupConversionRate:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field topup_conversion_rate", values[i])
 			} else if value.Valid {
-				w.TopupConversionRate = new(decimal.Decimal)
-				*w.TopupConversionRate = *value.S.(*decimal.Decimal)
+				_m.TopupConversionRate = new(decimal.Decimal)
+				*_m.TopupConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case wallet.FieldConfig:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field config", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &w.Config); err != nil {
+				if err := json.Unmarshal(*value, &_m.Config); err != nil {
 					return fmt.Errorf("unmarshal field config: %w", err)
 				}
 			}
@@ -234,7 +234,7 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field alert_settings", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &w.AlertSettings); err != nil {
+				if err := json.Unmarshal(*value, &_m.AlertSettings); err != nil {
 					return fmt.Errorf("unmarshal field alert_settings: %w", err)
 				}
 			}
@@ -242,10 +242,10 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field alert_state", values[i])
 			} else if value.Valid {
-				w.AlertState = types.AlertState(value.String)
+				_m.AlertState = types.AlertState(value.String)
 			}
 		default:
-			w.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -253,100 +253,100 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Wallet.
 // This includes values selected through modifiers, order, etc.
-func (w *Wallet) Value(name string) (ent.Value, error) {
-	return w.selectValues.Get(name)
+func (_m *Wallet) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Wallet.
 // Note that you need to call Wallet.Unwrap() before calling this method if this Wallet
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (w *Wallet) Update() *WalletUpdateOne {
-	return NewWalletClient(w.config).UpdateOne(w)
+func (_m *Wallet) Update() *WalletUpdateOne {
+	return NewWalletClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Wallet entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (w *Wallet) Unwrap() *Wallet {
-	_tx, ok := w.config.driver.(*txDriver)
+func (_m *Wallet) Unwrap() *Wallet {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Wallet is not a transactional entity")
 	}
-	w.config.driver = _tx.drv
-	return w
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (w *Wallet) String() string {
+func (_m *Wallet) String() string {
 	var builder strings.Builder
 	builder.WriteString("Wallet(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", w.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(w.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(w.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(w.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(w.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(w.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(w.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(w.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(w.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(w.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(w.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("description=")
-	builder.WriteString(w.Description)
+	builder.WriteString(_m.Description)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", w.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("balance=")
-	builder.WriteString(fmt.Sprintf("%v", w.Balance))
+	builder.WriteString(fmt.Sprintf("%v", _m.Balance))
 	builder.WriteString(", ")
 	builder.WriteString("credit_balance=")
-	builder.WriteString(fmt.Sprintf("%v", w.CreditBalance))
+	builder.WriteString(fmt.Sprintf("%v", _m.CreditBalance))
 	builder.WriteString(", ")
 	builder.WriteString("wallet_status=")
-	builder.WriteString(fmt.Sprintf("%v", w.WalletStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.WalletStatus))
 	builder.WriteString(", ")
 	builder.WriteString("auto_topup=")
-	builder.WriteString(fmt.Sprintf("%v", w.AutoTopup))
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoTopup))
 	builder.WriteString(", ")
 	builder.WriteString("wallet_type=")
-	builder.WriteString(fmt.Sprintf("%v", w.WalletType))
+	builder.WriteString(fmt.Sprintf("%v", _m.WalletType))
 	builder.WriteString(", ")
 	builder.WriteString("conversion_rate=")
-	builder.WriteString(fmt.Sprintf("%v", w.ConversionRate))
+	builder.WriteString(fmt.Sprintf("%v", _m.ConversionRate))
 	builder.WriteString(", ")
-	if v := w.TopupConversionRate; v != nil {
+	if v := _m.TopupConversionRate; v != nil {
 		builder.WriteString("topup_conversion_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("config=")
-	builder.WriteString(fmt.Sprintf("%v", w.Config))
+	builder.WriteString(fmt.Sprintf("%v", _m.Config))
 	builder.WriteString(", ")
 	builder.WriteString("alert_settings=")
-	builder.WriteString(fmt.Sprintf("%v", w.AlertSettings))
+	builder.WriteString(fmt.Sprintf("%v", _m.AlertSettings))
 	builder.WriteString(", ")
 	builder.WriteString("alert_state=")
-	builder.WriteString(fmt.Sprintf("%v", w.AlertState))
+	builder.WriteString(fmt.Sprintf("%v", _m.AlertState))
 	builder.WriteByte(')')
 	return builder.String()
 }

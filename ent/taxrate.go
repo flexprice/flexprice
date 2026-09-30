@@ -74,7 +74,7 @@ func (*TaxRate) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the TaxRate fields.
-func (tr *TaxRate) assignValues(columns []string, values []any) error {
+func (_m *TaxRate) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -84,103 +84,103 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				tr.ID = value.String
+				_m.ID = value.String
 			}
 		case taxrate.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				tr.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case taxrate.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				tr.Status = value.String
+				_m.Status = value.String
 			}
 		case taxrate.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				tr.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case taxrate.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				tr.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case taxrate.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				tr.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case taxrate.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				tr.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case taxrate.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				tr.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case taxrate.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				tr.Name = value.String
+				_m.Name = value.String
 			}
 		case taxrate.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				tr.Description = value.String
+				_m.Description = value.String
 			}
 		case taxrate.FieldCode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field code", values[i])
 			} else if value.Valid {
-				tr.Code = value.String
+				_m.Code = value.String
 			}
 		case taxrate.FieldTaxRateStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_rate_status", values[i])
 			} else if value.Valid {
-				tr.TaxRateStatus = value.String
+				_m.TaxRateStatus = value.String
 			}
 		case taxrate.FieldTaxRateType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_rate_type", values[i])
 			} else if value.Valid {
-				tr.TaxRateType = value.String
+				_m.TaxRateType = value.String
 			}
 		case taxrate.FieldScope:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field scope", values[i])
 			} else if value.Valid {
-				tr.Scope = value.String
+				_m.Scope = value.String
 			}
 		case taxrate.FieldPercentageValue:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field percentage_value", values[i])
 			} else if value.Valid {
-				tr.PercentageValue = new(decimal.Decimal)
-				*tr.PercentageValue = *value.S.(*decimal.Decimal)
+				_m.PercentageValue = new(decimal.Decimal)
+				*_m.PercentageValue = *value.S.(*decimal.Decimal)
 			}
 		case taxrate.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &tr.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			tr.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -188,79 +188,79 @@ func (tr *TaxRate) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the TaxRate.
 // This includes values selected through modifiers, order, etc.
-func (tr *TaxRate) Value(name string) (ent.Value, error) {
-	return tr.selectValues.Get(name)
+func (_m *TaxRate) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this TaxRate.
 // Note that you need to call TaxRate.Unwrap() before calling this method if this TaxRate
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (tr *TaxRate) Update() *TaxRateUpdateOne {
-	return NewTaxRateClient(tr.config).UpdateOne(tr)
+func (_m *TaxRate) Update() *TaxRateUpdateOne {
+	return NewTaxRateClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the TaxRate entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (tr *TaxRate) Unwrap() *TaxRate {
-	_tx, ok := tr.config.driver.(*txDriver)
+func (_m *TaxRate) Unwrap() *TaxRate {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: TaxRate is not a transactional entity")
 	}
-	tr.config.driver = _tx.drv
-	return tr
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (tr *TaxRate) String() string {
+func (_m *TaxRate) String() string {
 	var builder strings.Builder
 	builder.WriteString("TaxRate(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", tr.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(tr.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(tr.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(tr.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(tr.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(tr.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(tr.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(tr.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(tr.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("description=")
-	builder.WriteString(tr.Description)
+	builder.WriteString(_m.Description)
 	builder.WriteString(", ")
 	builder.WriteString("code=")
-	builder.WriteString(tr.Code)
+	builder.WriteString(_m.Code)
 	builder.WriteString(", ")
 	builder.WriteString("tax_rate_status=")
-	builder.WriteString(tr.TaxRateStatus)
+	builder.WriteString(_m.TaxRateStatus)
 	builder.WriteString(", ")
 	builder.WriteString("tax_rate_type=")
-	builder.WriteString(tr.TaxRateType)
+	builder.WriteString(_m.TaxRateType)
 	builder.WriteString(", ")
 	builder.WriteString("scope=")
-	builder.WriteString(tr.Scope)
+	builder.WriteString(_m.Scope)
 	builder.WriteString(", ")
-	if v := tr.PercentageValue; v != nil {
+	if v := _m.PercentageValue; v != nil {
 		builder.WriteString("percentage_value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", tr.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

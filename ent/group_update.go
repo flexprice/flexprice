@@ -23,111 +23,111 @@ type GroupUpdate struct {
 }
 
 // Where appends a list predicates to the GroupUpdate builder.
-func (gu *GroupUpdate) Where(ps ...predicate.Group) *GroupUpdate {
-	gu.mutation.Where(ps...)
-	return gu
+func (_u *GroupUpdate) Where(ps ...predicate.Group) *GroupUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (gu *GroupUpdate) SetStatus(s string) *GroupUpdate {
-	gu.mutation.SetStatus(s)
-	return gu
+func (_u *GroupUpdate) SetStatus(v string) *GroupUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (gu *GroupUpdate) SetNillableStatus(s *string) *GroupUpdate {
-	if s != nil {
-		gu.SetStatus(*s)
+func (_u *GroupUpdate) SetNillableStatus(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return gu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (gu *GroupUpdate) SetUpdatedAt(t time.Time) *GroupUpdate {
-	gu.mutation.SetUpdatedAt(t)
-	return gu
+func (_u *GroupUpdate) SetUpdatedAt(v time.Time) *GroupUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (gu *GroupUpdate) SetUpdatedBy(s string) *GroupUpdate {
-	gu.mutation.SetUpdatedBy(s)
-	return gu
+func (_u *GroupUpdate) SetUpdatedBy(v string) *GroupUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (gu *GroupUpdate) SetNillableUpdatedBy(s *string) *GroupUpdate {
-	if s != nil {
-		gu.SetUpdatedBy(*s)
+func (_u *GroupUpdate) SetNillableUpdatedBy(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return gu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (gu *GroupUpdate) ClearUpdatedBy() *GroupUpdate {
-	gu.mutation.ClearUpdatedBy()
-	return gu
+func (_u *GroupUpdate) ClearUpdatedBy() *GroupUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (gu *GroupUpdate) SetMetadata(m map[string]string) *GroupUpdate {
-	gu.mutation.SetMetadata(m)
-	return gu
+func (_u *GroupUpdate) SetMetadata(v map[string]string) *GroupUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (gu *GroupUpdate) ClearMetadata() *GroupUpdate {
-	gu.mutation.ClearMetadata()
-	return gu
+func (_u *GroupUpdate) ClearMetadata() *GroupUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (gu *GroupUpdate) SetName(s string) *GroupUpdate {
-	gu.mutation.SetName(s)
-	return gu
+func (_u *GroupUpdate) SetName(v string) *GroupUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (gu *GroupUpdate) SetNillableName(s *string) *GroupUpdate {
-	if s != nil {
-		gu.SetName(*s)
+func (_u *GroupUpdate) SetNillableName(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return gu
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (gu *GroupUpdate) SetLookupKey(s string) *GroupUpdate {
-	gu.mutation.SetLookupKey(s)
-	return gu
+func (_u *GroupUpdate) SetLookupKey(v string) *GroupUpdate {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (gu *GroupUpdate) SetNillableLookupKey(s *string) *GroupUpdate {
-	if s != nil {
-		gu.SetLookupKey(*s)
+func (_u *GroupUpdate) SetNillableLookupKey(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return gu
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (gu *GroupUpdate) ClearLookupKey() *GroupUpdate {
-	gu.mutation.ClearLookupKey()
-	return gu
+func (_u *GroupUpdate) ClearLookupKey() *GroupUpdate {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // Mutation returns the GroupMutation object of the builder.
-func (gu *GroupUpdate) Mutation() *GroupMutation {
-	return gu.mutation
+func (_u *GroupUpdate) Mutation() *GroupMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (gu *GroupUpdate) Save(ctx context.Context) (int, error) {
-	gu.defaults()
-	return withHooks(ctx, gu.sqlSave, gu.mutation, gu.hooks)
+func (_u *GroupUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (gu *GroupUpdate) SaveX(ctx context.Context) int {
-	affected, err := gu.Save(ctx)
+func (_u *GroupUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -135,29 +135,29 @@ func (gu *GroupUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (gu *GroupUpdate) Exec(ctx context.Context) error {
-	_, err := gu.Save(ctx)
+func (_u *GroupUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (gu *GroupUpdate) ExecX(ctx context.Context) {
-	if err := gu.Exec(ctx); err != nil {
+func (_u *GroupUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (gu *GroupUpdate) defaults() {
-	if _, ok := gu.mutation.UpdatedAt(); !ok {
+func (_u *GroupUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := group.UpdateDefaultUpdatedAt()
-		gu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (gu *GroupUpdate) check() error {
-	if v, ok := gu.mutation.Name(); ok {
+func (_u *GroupUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := group.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
@@ -165,52 +165,52 @@ func (gu *GroupUpdate) check() error {
 	return nil
 }
 
-func (gu *GroupUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := gu.check(); err != nil {
-		return n, err
+func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(group.Table, group.Columns, sqlgraph.NewFieldSpec(group.FieldID, field.TypeString))
-	if ps := gu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := gu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := gu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(group.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if gu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(group.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := gu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(group.FieldUpdatedBy, field.TypeString, value)
 	}
-	if gu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(group.FieldUpdatedBy, field.TypeString)
 	}
-	if gu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(group.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := gu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(group.FieldMetadata, field.TypeJSON, value)
 	}
-	if gu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(group.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := gu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
 	}
-	if value, ok := gu.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(group.FieldLookupKey, field.TypeString, value)
 	}
-	if gu.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(group.FieldLookupKey, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, gu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{group.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -218,8 +218,8 @@ func (gu *GroupUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	gu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // GroupUpdateOne is the builder for updating a single Group entity.
@@ -231,118 +231,118 @@ type GroupUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (guo *GroupUpdateOne) SetStatus(s string) *GroupUpdateOne {
-	guo.mutation.SetStatus(s)
-	return guo
+func (_u *GroupUpdateOne) SetStatus(v string) *GroupUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (guo *GroupUpdateOne) SetNillableStatus(s *string) *GroupUpdateOne {
-	if s != nil {
-		guo.SetStatus(*s)
+func (_u *GroupUpdateOne) SetNillableStatus(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return guo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (guo *GroupUpdateOne) SetUpdatedAt(t time.Time) *GroupUpdateOne {
-	guo.mutation.SetUpdatedAt(t)
-	return guo
+func (_u *GroupUpdateOne) SetUpdatedAt(v time.Time) *GroupUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (guo *GroupUpdateOne) SetUpdatedBy(s string) *GroupUpdateOne {
-	guo.mutation.SetUpdatedBy(s)
-	return guo
+func (_u *GroupUpdateOne) SetUpdatedBy(v string) *GroupUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (guo *GroupUpdateOne) SetNillableUpdatedBy(s *string) *GroupUpdateOne {
-	if s != nil {
-		guo.SetUpdatedBy(*s)
+func (_u *GroupUpdateOne) SetNillableUpdatedBy(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return guo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (guo *GroupUpdateOne) ClearUpdatedBy() *GroupUpdateOne {
-	guo.mutation.ClearUpdatedBy()
-	return guo
+func (_u *GroupUpdateOne) ClearUpdatedBy() *GroupUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (guo *GroupUpdateOne) SetMetadata(m map[string]string) *GroupUpdateOne {
-	guo.mutation.SetMetadata(m)
-	return guo
+func (_u *GroupUpdateOne) SetMetadata(v map[string]string) *GroupUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (guo *GroupUpdateOne) ClearMetadata() *GroupUpdateOne {
-	guo.mutation.ClearMetadata()
-	return guo
+func (_u *GroupUpdateOne) ClearMetadata() *GroupUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (guo *GroupUpdateOne) SetName(s string) *GroupUpdateOne {
-	guo.mutation.SetName(s)
-	return guo
+func (_u *GroupUpdateOne) SetName(v string) *GroupUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (guo *GroupUpdateOne) SetNillableName(s *string) *GroupUpdateOne {
-	if s != nil {
-		guo.SetName(*s)
+func (_u *GroupUpdateOne) SetNillableName(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return guo
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (guo *GroupUpdateOne) SetLookupKey(s string) *GroupUpdateOne {
-	guo.mutation.SetLookupKey(s)
-	return guo
+func (_u *GroupUpdateOne) SetLookupKey(v string) *GroupUpdateOne {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (guo *GroupUpdateOne) SetNillableLookupKey(s *string) *GroupUpdateOne {
-	if s != nil {
-		guo.SetLookupKey(*s)
+func (_u *GroupUpdateOne) SetNillableLookupKey(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return guo
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (guo *GroupUpdateOne) ClearLookupKey() *GroupUpdateOne {
-	guo.mutation.ClearLookupKey()
-	return guo
+func (_u *GroupUpdateOne) ClearLookupKey() *GroupUpdateOne {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // Mutation returns the GroupMutation object of the builder.
-func (guo *GroupUpdateOne) Mutation() *GroupMutation {
-	return guo.mutation
+func (_u *GroupUpdateOne) Mutation() *GroupMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the GroupUpdate builder.
-func (guo *GroupUpdateOne) Where(ps ...predicate.Group) *GroupUpdateOne {
-	guo.mutation.Where(ps...)
-	return guo
+func (_u *GroupUpdateOne) Where(ps ...predicate.Group) *GroupUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (guo *GroupUpdateOne) Select(field string, fields ...string) *GroupUpdateOne {
-	guo.fields = append([]string{field}, fields...)
-	return guo
+func (_u *GroupUpdateOne) Select(field string, fields ...string) *GroupUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Group entity.
-func (guo *GroupUpdateOne) Save(ctx context.Context) (*Group, error) {
-	guo.defaults()
-	return withHooks(ctx, guo.sqlSave, guo.mutation, guo.hooks)
+func (_u *GroupUpdateOne) Save(ctx context.Context) (*Group, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (guo *GroupUpdateOne) SaveX(ctx context.Context) *Group {
-	node, err := guo.Save(ctx)
+func (_u *GroupUpdateOne) SaveX(ctx context.Context) *Group {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -350,29 +350,29 @@ func (guo *GroupUpdateOne) SaveX(ctx context.Context) *Group {
 }
 
 // Exec executes the query on the entity.
-func (guo *GroupUpdateOne) Exec(ctx context.Context) error {
-	_, err := guo.Save(ctx)
+func (_u *GroupUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (guo *GroupUpdateOne) ExecX(ctx context.Context) {
-	if err := guo.Exec(ctx); err != nil {
+func (_u *GroupUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (guo *GroupUpdateOne) defaults() {
-	if _, ok := guo.mutation.UpdatedAt(); !ok {
+func (_u *GroupUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := group.UpdateDefaultUpdatedAt()
-		guo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (guo *GroupUpdateOne) check() error {
-	if v, ok := guo.mutation.Name(); ok {
+func (_u *GroupUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := group.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
@@ -380,17 +380,17 @@ func (guo *GroupUpdateOne) check() error {
 	return nil
 }
 
-func (guo *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error) {
-	if err := guo.check(); err != nil {
+func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(group.Table, group.Columns, sqlgraph.NewFieldSpec(group.FieldID, field.TypeString))
-	id, ok := guo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Group.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := guo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, group.FieldID)
 		for _, f := range fields {
@@ -402,50 +402,50 @@ func (guo *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error
 			}
 		}
 	}
-	if ps := guo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := guo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := guo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(group.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if guo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(group.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := guo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(group.FieldUpdatedBy, field.TypeString, value)
 	}
-	if guo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(group.FieldUpdatedBy, field.TypeString)
 	}
-	if guo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(group.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := guo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(group.FieldMetadata, field.TypeJSON, value)
 	}
-	if guo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(group.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := guo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
 	}
-	if value, ok := guo.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(group.FieldLookupKey, field.TypeString, value)
 	}
-	if guo.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(group.FieldLookupKey, field.TypeString)
 	}
-	_node = &Group{config: guo.config}
+	_node = &Group{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, guo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{group.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -453,6 +453,6 @@ func (guo *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error
 		}
 		return nil, err
 	}
-	guo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

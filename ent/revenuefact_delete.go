@@ -20,56 +20,56 @@ type RevenueFactDelete struct {
 }
 
 // Where appends a list predicates to the RevenueFactDelete builder.
-func (rfd *RevenueFactDelete) Where(ps ...predicate.RevenueFact) *RevenueFactDelete {
-	rfd.mutation.Where(ps...)
-	return rfd
+func (_d *RevenueFactDelete) Where(ps ...predicate.RevenueFact) *RevenueFactDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (rfd *RevenueFactDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, rfd.sqlExec, rfd.mutation, rfd.hooks)
+func (_d *RevenueFactDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfd *RevenueFactDelete) ExecX(ctx context.Context) int {
-	n, err := rfd.Exec(ctx)
+func (_d *RevenueFactDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (rfd *RevenueFactDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *RevenueFactDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(revenuefact.Table, sqlgraph.NewFieldSpec(revenuefact.FieldID, field.TypeString))
-	if ps := rfd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, rfd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	rfd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // RevenueFactDeleteOne is the builder for deleting a single RevenueFact entity.
 type RevenueFactDeleteOne struct {
-	rfd *RevenueFactDelete
+	_d *RevenueFactDelete
 }
 
 // Where appends a list predicates to the RevenueFactDelete builder.
-func (rfdo *RevenueFactDeleteOne) Where(ps ...predicate.RevenueFact) *RevenueFactDeleteOne {
-	rfdo.rfd.mutation.Where(ps...)
-	return rfdo
+func (_d *RevenueFactDeleteOne) Where(ps ...predicate.RevenueFact) *RevenueFactDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (rfdo *RevenueFactDeleteOne) Exec(ctx context.Context) error {
-	n, err := rfdo.rfd.Exec(ctx)
+func (_d *RevenueFactDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (rfdo *RevenueFactDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfdo *RevenueFactDeleteOne) ExecX(ctx context.Context) {
-	if err := rfdo.Exec(ctx); err != nil {
+func (_d *RevenueFactDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

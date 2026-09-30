@@ -165,7 +165,7 @@ func (*CouponApplication) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CouponApplication fields.
-func (ca *CouponApplication) assignValues(columns []string, values []any) error {
+func (_m *CouponApplication) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -175,125 +175,125 @@ func (ca *CouponApplication) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				ca.ID = value.String
+				_m.ID = value.String
 			}
 		case couponapplication.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				ca.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case couponapplication.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ca.Status = value.String
+				_m.Status = value.String
 			}
 		case couponapplication.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ca.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case couponapplication.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				ca.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case couponapplication.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				ca.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case couponapplication.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				ca.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case couponapplication.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				ca.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case couponapplication.FieldCouponID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field coupon_id", values[i])
 			} else if value.Valid {
-				ca.CouponID = value.String
+				_m.CouponID = value.String
 			}
 		case couponapplication.FieldCouponAssociationID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field coupon_association_id", values[i])
 			} else if value.Valid {
-				ca.CouponAssociationID = new(string)
-				*ca.CouponAssociationID = value.String
+				_m.CouponAssociationID = new(string)
+				*_m.CouponAssociationID = value.String
 			}
 		case couponapplication.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
 			} else if value.Valid {
-				ca.InvoiceID = value.String
+				_m.InvoiceID = value.String
 			}
 		case couponapplication.FieldInvoiceLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_line_item_id", values[i])
 			} else if value.Valid {
-				ca.InvoiceLineItemID = new(string)
-				*ca.InvoiceLineItemID = value.String
+				_m.InvoiceLineItemID = new(string)
+				*_m.InvoiceLineItemID = value.String
 			}
 		case couponapplication.FieldAppliedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field applied_at", values[i])
 			} else if value.Valid {
-				ca.AppliedAt = value.Time
+				_m.AppliedAt = value.Time
 			}
 		case couponapplication.FieldOriginalPrice:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field original_price", values[i])
 			} else if value != nil {
-				ca.OriginalPrice = *value
+				_m.OriginalPrice = *value
 			}
 		case couponapplication.FieldFinalPrice:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field final_price", values[i])
 			} else if value != nil {
-				ca.FinalPrice = *value
+				_m.FinalPrice = *value
 			}
 		case couponapplication.FieldDiscountedAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field discounted_amount", values[i])
 			} else if value != nil {
-				ca.DiscountedAmount = *value
+				_m.DiscountedAmount = *value
 			}
 		case couponapplication.FieldDiscountType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field discount_type", values[i])
 			} else if value.Valid {
-				ca.DiscountType = value.String
+				_m.DiscountType = value.String
 			}
 		case couponapplication.FieldDiscountPercentage:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field discount_percentage", values[i])
 			} else if value.Valid {
-				ca.DiscountPercentage = new(decimal.Decimal)
-				*ca.DiscountPercentage = *value.S.(*decimal.Decimal)
+				_m.DiscountPercentage = new(decimal.Decimal)
+				*_m.DiscountPercentage = *value.S.(*decimal.Decimal)
 			}
 		case couponapplication.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				ca.Currency = new(string)
-				*ca.Currency = value.String
+				_m.Currency = new(string)
+				*_m.Currency = value.String
 			}
 		case couponapplication.FieldCouponSnapshot:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field coupon_snapshot", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ca.CouponSnapshot); err != nil {
+				if err := json.Unmarshal(*value, &_m.CouponSnapshot); err != nil {
 					return fmt.Errorf("unmarshal field coupon_snapshot: %w", err)
 				}
 			}
@@ -301,7 +301,7 @@ func (ca *CouponApplication) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ca.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -309,11 +309,11 @@ func (ca *CouponApplication) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				ca.SubscriptionID = new(string)
-				*ca.SubscriptionID = value.String
+				_m.SubscriptionID = new(string)
+				*_m.SubscriptionID = value.String
 			}
 		default:
-			ca.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -321,127 +321,127 @@ func (ca *CouponApplication) assignValues(columns []string, values []any) error 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CouponApplication.
 // This includes values selected through modifiers, order, etc.
-func (ca *CouponApplication) Value(name string) (ent.Value, error) {
-	return ca.selectValues.Get(name)
+func (_m *CouponApplication) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryCoupon queries the "coupon" edge of the CouponApplication entity.
-func (ca *CouponApplication) QueryCoupon() *CouponQuery {
-	return NewCouponApplicationClient(ca.config).QueryCoupon(ca)
+func (_m *CouponApplication) QueryCoupon() *CouponQuery {
+	return NewCouponApplicationClient(_m.config).QueryCoupon(_m)
 }
 
 // QueryCouponAssociation queries the "coupon_association" edge of the CouponApplication entity.
-func (ca *CouponApplication) QueryCouponAssociation() *CouponAssociationQuery {
-	return NewCouponApplicationClient(ca.config).QueryCouponAssociation(ca)
+func (_m *CouponApplication) QueryCouponAssociation() *CouponAssociationQuery {
+	return NewCouponApplicationClient(_m.config).QueryCouponAssociation(_m)
 }
 
 // QueryInvoice queries the "invoice" edge of the CouponApplication entity.
-func (ca *CouponApplication) QueryInvoice() *InvoiceQuery {
-	return NewCouponApplicationClient(ca.config).QueryInvoice(ca)
+func (_m *CouponApplication) QueryInvoice() *InvoiceQuery {
+	return NewCouponApplicationClient(_m.config).QueryInvoice(_m)
 }
 
 // QueryInvoiceLineItem queries the "invoice_line_item" edge of the CouponApplication entity.
-func (ca *CouponApplication) QueryInvoiceLineItem() *InvoiceLineItemQuery {
-	return NewCouponApplicationClient(ca.config).QueryInvoiceLineItem(ca)
+func (_m *CouponApplication) QueryInvoiceLineItem() *InvoiceLineItemQuery {
+	return NewCouponApplicationClient(_m.config).QueryInvoiceLineItem(_m)
 }
 
 // QuerySubscription queries the "subscription" edge of the CouponApplication entity.
-func (ca *CouponApplication) QuerySubscription() *SubscriptionQuery {
-	return NewCouponApplicationClient(ca.config).QuerySubscription(ca)
+func (_m *CouponApplication) QuerySubscription() *SubscriptionQuery {
+	return NewCouponApplicationClient(_m.config).QuerySubscription(_m)
 }
 
 // Update returns a builder for updating this CouponApplication.
 // Note that you need to call CouponApplication.Unwrap() before calling this method if this CouponApplication
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (ca *CouponApplication) Update() *CouponApplicationUpdateOne {
-	return NewCouponApplicationClient(ca.config).UpdateOne(ca)
+func (_m *CouponApplication) Update() *CouponApplicationUpdateOne {
+	return NewCouponApplicationClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CouponApplication entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (ca *CouponApplication) Unwrap() *CouponApplication {
-	_tx, ok := ca.config.driver.(*txDriver)
+func (_m *CouponApplication) Unwrap() *CouponApplication {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CouponApplication is not a transactional entity")
 	}
-	ca.config.driver = _tx.drv
-	return ca
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (ca *CouponApplication) String() string {
+func (_m *CouponApplication) String() string {
 	var builder strings.Builder
 	builder.WriteString("CouponApplication(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", ca.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(ca.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(ca.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(ca.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(ca.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(ca.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(ca.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(ca.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("coupon_id=")
-	builder.WriteString(ca.CouponID)
+	builder.WriteString(_m.CouponID)
 	builder.WriteString(", ")
-	if v := ca.CouponAssociationID; v != nil {
+	if v := _m.CouponAssociationID; v != nil {
 		builder.WriteString("coupon_association_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("invoice_id=")
-	builder.WriteString(ca.InvoiceID)
+	builder.WriteString(_m.InvoiceID)
 	builder.WriteString(", ")
-	if v := ca.InvoiceLineItemID; v != nil {
+	if v := _m.InvoiceLineItemID; v != nil {
 		builder.WriteString("invoice_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("applied_at=")
-	builder.WriteString(ca.AppliedAt.Format(time.ANSIC))
+	builder.WriteString(_m.AppliedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("original_price=")
-	builder.WriteString(fmt.Sprintf("%v", ca.OriginalPrice))
+	builder.WriteString(fmt.Sprintf("%v", _m.OriginalPrice))
 	builder.WriteString(", ")
 	builder.WriteString("final_price=")
-	builder.WriteString(fmt.Sprintf("%v", ca.FinalPrice))
+	builder.WriteString(fmt.Sprintf("%v", _m.FinalPrice))
 	builder.WriteString(", ")
 	builder.WriteString("discounted_amount=")
-	builder.WriteString(fmt.Sprintf("%v", ca.DiscountedAmount))
+	builder.WriteString(fmt.Sprintf("%v", _m.DiscountedAmount))
 	builder.WriteString(", ")
 	builder.WriteString("discount_type=")
-	builder.WriteString(ca.DiscountType)
+	builder.WriteString(_m.DiscountType)
 	builder.WriteString(", ")
-	if v := ca.DiscountPercentage; v != nil {
+	if v := _m.DiscountPercentage; v != nil {
 		builder.WriteString("discount_percentage=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := ca.Currency; v != nil {
+	if v := _m.Currency; v != nil {
 		builder.WriteString("currency=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("coupon_snapshot=")
-	builder.WriteString(fmt.Sprintf("%v", ca.CouponSnapshot))
+	builder.WriteString(fmt.Sprintf("%v", _m.CouponSnapshot))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", ca.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := ca.SubscriptionID; v != nil {
+	if v := _m.SubscriptionID; v != nil {
 		builder.WriteString("subscription_id=")
 		builder.WriteString(*v)
 	}

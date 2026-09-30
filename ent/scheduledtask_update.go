@@ -24,153 +24,153 @@ type ScheduledTaskUpdate struct {
 }
 
 // Where appends a list predicates to the ScheduledTaskUpdate builder.
-func (stu *ScheduledTaskUpdate) Where(ps ...predicate.ScheduledTask) *ScheduledTaskUpdate {
-	stu.mutation.Where(ps...)
-	return stu
+func (_u *ScheduledTaskUpdate) Where(ps ...predicate.ScheduledTask) *ScheduledTaskUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (stu *ScheduledTaskUpdate) SetStatus(s string) *ScheduledTaskUpdate {
-	stu.mutation.SetStatus(s)
-	return stu
+func (_u *ScheduledTaskUpdate) SetStatus(v string) *ScheduledTaskUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableStatus(s *string) *ScheduledTaskUpdate {
-	if s != nil {
-		stu.SetStatus(*s)
+func (_u *ScheduledTaskUpdate) SetNillableStatus(v *string) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return stu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (stu *ScheduledTaskUpdate) SetUpdatedAt(t time.Time) *ScheduledTaskUpdate {
-	stu.mutation.SetUpdatedAt(t)
-	return stu
+func (_u *ScheduledTaskUpdate) SetUpdatedAt(v time.Time) *ScheduledTaskUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (stu *ScheduledTaskUpdate) SetUpdatedBy(s string) *ScheduledTaskUpdate {
-	stu.mutation.SetUpdatedBy(s)
-	return stu
+func (_u *ScheduledTaskUpdate) SetUpdatedBy(v string) *ScheduledTaskUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableUpdatedBy(s *string) *ScheduledTaskUpdate {
-	if s != nil {
-		stu.SetUpdatedBy(*s)
+func (_u *ScheduledTaskUpdate) SetNillableUpdatedBy(v *string) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return stu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (stu *ScheduledTaskUpdate) ClearUpdatedBy() *ScheduledTaskUpdate {
-	stu.mutation.ClearUpdatedBy()
-	return stu
+func (_u *ScheduledTaskUpdate) ClearUpdatedBy() *ScheduledTaskUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetConnectionID sets the "connection_id" field.
-func (stu *ScheduledTaskUpdate) SetConnectionID(s string) *ScheduledTaskUpdate {
-	stu.mutation.SetConnectionID(s)
-	return stu
+func (_u *ScheduledTaskUpdate) SetConnectionID(v string) *ScheduledTaskUpdate {
+	_u.mutation.SetConnectionID(v)
+	return _u
 }
 
 // SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableConnectionID(s *string) *ScheduledTaskUpdate {
-	if s != nil {
-		stu.SetConnectionID(*s)
+func (_u *ScheduledTaskUpdate) SetNillableConnectionID(v *string) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetConnectionID(*v)
 	}
-	return stu
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (stu *ScheduledTaskUpdate) SetEntityType(ttet types.ScheduledTaskEntityType) *ScheduledTaskUpdate {
-	stu.mutation.SetEntityType(ttet)
-	return stu
+func (_u *ScheduledTaskUpdate) SetEntityType(v types.ScheduledTaskEntityType) *ScheduledTaskUpdate {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableEntityType(ttet *types.ScheduledTaskEntityType) *ScheduledTaskUpdate {
-	if ttet != nil {
-		stu.SetEntityType(*ttet)
+func (_u *ScheduledTaskUpdate) SetNillableEntityType(v *types.ScheduledTaskEntityType) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return stu
+	return _u
 }
 
 // SetInterval sets the "interval" field.
-func (stu *ScheduledTaskUpdate) SetInterval(tti types.ScheduledTaskInterval) *ScheduledTaskUpdate {
-	stu.mutation.SetInterval(tti)
-	return stu
+func (_u *ScheduledTaskUpdate) SetInterval(v types.ScheduledTaskInterval) *ScheduledTaskUpdate {
+	_u.mutation.SetInterval(v)
+	return _u
 }
 
 // SetNillableInterval sets the "interval" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableInterval(tti *types.ScheduledTaskInterval) *ScheduledTaskUpdate {
-	if tti != nil {
-		stu.SetInterval(*tti)
+func (_u *ScheduledTaskUpdate) SetNillableInterval(v *types.ScheduledTaskInterval) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetInterval(*v)
 	}
-	return stu
+	return _u
 }
 
 // SetEnabled sets the "enabled" field.
-func (stu *ScheduledTaskUpdate) SetEnabled(b bool) *ScheduledTaskUpdate {
-	stu.mutation.SetEnabled(b)
-	return stu
+func (_u *ScheduledTaskUpdate) SetEnabled(v bool) *ScheduledTaskUpdate {
+	_u.mutation.SetEnabled(v)
+	return _u
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableEnabled(b *bool) *ScheduledTaskUpdate {
-	if b != nil {
-		stu.SetEnabled(*b)
+func (_u *ScheduledTaskUpdate) SetNillableEnabled(v *bool) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetEnabled(*v)
 	}
-	return stu
+	return _u
 }
 
 // SetJobConfig sets the "job_config" field.
-func (stu *ScheduledTaskUpdate) SetJobConfig(tc *types.S3JobConfig) *ScheduledTaskUpdate {
-	stu.mutation.SetJobConfig(tc)
-	return stu
+func (_u *ScheduledTaskUpdate) SetJobConfig(v *types.S3JobConfig) *ScheduledTaskUpdate {
+	_u.mutation.SetJobConfig(v)
+	return _u
 }
 
 // ClearJobConfig clears the value of the "job_config" field.
-func (stu *ScheduledTaskUpdate) ClearJobConfig() *ScheduledTaskUpdate {
-	stu.mutation.ClearJobConfig()
-	return stu
+func (_u *ScheduledTaskUpdate) ClearJobConfig() *ScheduledTaskUpdate {
+	_u.mutation.ClearJobConfig()
+	return _u
 }
 
 // SetTemporalScheduleID sets the "temporal_schedule_id" field.
-func (stu *ScheduledTaskUpdate) SetTemporalScheduleID(s string) *ScheduledTaskUpdate {
-	stu.mutation.SetTemporalScheduleID(s)
-	return stu
+func (_u *ScheduledTaskUpdate) SetTemporalScheduleID(v string) *ScheduledTaskUpdate {
+	_u.mutation.SetTemporalScheduleID(v)
+	return _u
 }
 
 // SetNillableTemporalScheduleID sets the "temporal_schedule_id" field if the given value is not nil.
-func (stu *ScheduledTaskUpdate) SetNillableTemporalScheduleID(s *string) *ScheduledTaskUpdate {
-	if s != nil {
-		stu.SetTemporalScheduleID(*s)
+func (_u *ScheduledTaskUpdate) SetNillableTemporalScheduleID(v *string) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetTemporalScheduleID(*v)
 	}
-	return stu
+	return _u
 }
 
 // ClearTemporalScheduleID clears the value of the "temporal_schedule_id" field.
-func (stu *ScheduledTaskUpdate) ClearTemporalScheduleID() *ScheduledTaskUpdate {
-	stu.mutation.ClearTemporalScheduleID()
-	return stu
+func (_u *ScheduledTaskUpdate) ClearTemporalScheduleID() *ScheduledTaskUpdate {
+	_u.mutation.ClearTemporalScheduleID()
+	return _u
 }
 
 // Mutation returns the ScheduledTaskMutation object of the builder.
-func (stu *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
-	return stu.mutation
+func (_u *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (stu *ScheduledTaskUpdate) Save(ctx context.Context) (int, error) {
-	stu.defaults()
-	return withHooks(ctx, stu.sqlSave, stu.mutation, stu.hooks)
+func (_u *ScheduledTaskUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (stu *ScheduledTaskUpdate) SaveX(ctx context.Context) int {
-	affected, err := stu.Save(ctx)
+func (_u *ScheduledTaskUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,44 +178,44 @@ func (stu *ScheduledTaskUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (stu *ScheduledTaskUpdate) Exec(ctx context.Context) error {
-	_, err := stu.Save(ctx)
+func (_u *ScheduledTaskUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (stu *ScheduledTaskUpdate) ExecX(ctx context.Context) {
-	if err := stu.Exec(ctx); err != nil {
+func (_u *ScheduledTaskUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (stu *ScheduledTaskUpdate) defaults() {
-	if _, ok := stu.mutation.UpdatedAt(); !ok {
+func (_u *ScheduledTaskUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := scheduledtask.UpdateDefaultUpdatedAt()
-		stu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (stu *ScheduledTaskUpdate) check() error {
-	if v, ok := stu.mutation.ConnectionID(); ok {
+func (_u *ScheduledTaskUpdate) check() error {
+	if v, ok := _u.mutation.ConnectionID(); ok {
 		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
 			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
 		}
 	}
-	if v, ok := stu.mutation.EntityType(); ok {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := scheduledtask.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := stu.mutation.Interval(); ok {
+	if v, ok := _u.mutation.Interval(); ok {
 		if err := scheduledtask.IntervalValidator(string(v)); err != nil {
 			return &ValidationError{Name: "interval", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.interval": %w`, err)}
 		}
 	}
-	if v, ok := stu.mutation.JobConfig(); ok {
+	if v, ok := _u.mutation.JobConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
 		}
@@ -223,61 +223,61 @@ func (stu *ScheduledTaskUpdate) check() error {
 	return nil
 }
 
-func (stu *ScheduledTaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := stu.check(); err != nil {
-		return n, err
+func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(scheduledtask.Table, scheduledtask.Columns, sqlgraph.NewFieldSpec(scheduledtask.FieldID, field.TypeString))
-	if ps := stu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := stu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(scheduledtask.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := stu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if stu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(scheduledtask.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := stu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedBy, field.TypeString, value)
 	}
-	if stu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(scheduledtask.FieldUpdatedBy, field.TypeString)
 	}
-	if stu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(scheduledtask.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := stu.mutation.ConnectionID(); ok {
+	if value, ok := _u.mutation.ConnectionID(); ok {
 		_spec.SetField(scheduledtask.FieldConnectionID, field.TypeString, value)
 	}
-	if value, ok := stu.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(scheduledtask.FieldEntityType, field.TypeString, value)
 	}
-	if value, ok := stu.mutation.Interval(); ok {
+	if value, ok := _u.mutation.Interval(); ok {
 		_spec.SetField(scheduledtask.FieldInterval, field.TypeString, value)
 	}
-	if value, ok := stu.mutation.Enabled(); ok {
+	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(scheduledtask.FieldEnabled, field.TypeBool, value)
 	}
-	if value, ok := stu.mutation.JobConfig(); ok {
+	if value, ok := _u.mutation.JobConfig(); ok {
 		_spec.SetField(scheduledtask.FieldJobConfig, field.TypeJSON, value)
 	}
-	if stu.mutation.JobConfigCleared() {
+	if _u.mutation.JobConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldJobConfig, field.TypeJSON)
 	}
-	if value, ok := stu.mutation.TemporalScheduleID(); ok {
+	if value, ok := _u.mutation.TemporalScheduleID(); ok {
 		_spec.SetField(scheduledtask.FieldTemporalScheduleID, field.TypeString, value)
 	}
-	if stu.mutation.TemporalScheduleIDCleared() {
+	if _u.mutation.TemporalScheduleIDCleared() {
 		_spec.ClearField(scheduledtask.FieldTemporalScheduleID, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, stu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{scheduledtask.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -285,8 +285,8 @@ func (stu *ScheduledTaskUpdate) sqlSave(ctx context.Context) (n int, err error) 
 		}
 		return 0, err
 	}
-	stu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // ScheduledTaskUpdateOne is the builder for updating a single ScheduledTask entity.
@@ -298,160 +298,160 @@ type ScheduledTaskUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (stuo *ScheduledTaskUpdateOne) SetStatus(s string) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetStatus(s)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetStatus(v string) *ScheduledTaskUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableStatus(s *string) *ScheduledTaskUpdateOne {
-	if s != nil {
-		stuo.SetStatus(*s)
+func (_u *ScheduledTaskUpdateOne) SetNillableStatus(v *string) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return stuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (stuo *ScheduledTaskUpdateOne) SetUpdatedAt(t time.Time) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetUpdatedAt(t)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetUpdatedAt(v time.Time) *ScheduledTaskUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (stuo *ScheduledTaskUpdateOne) SetUpdatedBy(s string) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetUpdatedBy(s)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetUpdatedBy(v string) *ScheduledTaskUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableUpdatedBy(s *string) *ScheduledTaskUpdateOne {
-	if s != nil {
-		stuo.SetUpdatedBy(*s)
+func (_u *ScheduledTaskUpdateOne) SetNillableUpdatedBy(v *string) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return stuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (stuo *ScheduledTaskUpdateOne) ClearUpdatedBy() *ScheduledTaskUpdateOne {
-	stuo.mutation.ClearUpdatedBy()
-	return stuo
+func (_u *ScheduledTaskUpdateOne) ClearUpdatedBy() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetConnectionID sets the "connection_id" field.
-func (stuo *ScheduledTaskUpdateOne) SetConnectionID(s string) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetConnectionID(s)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetConnectionID(v string) *ScheduledTaskUpdateOne {
+	_u.mutation.SetConnectionID(v)
+	return _u
 }
 
 // SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableConnectionID(s *string) *ScheduledTaskUpdateOne {
-	if s != nil {
-		stuo.SetConnectionID(*s)
+func (_u *ScheduledTaskUpdateOne) SetNillableConnectionID(v *string) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetConnectionID(*v)
 	}
-	return stuo
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (stuo *ScheduledTaskUpdateOne) SetEntityType(ttet types.ScheduledTaskEntityType) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetEntityType(ttet)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetEntityType(v types.ScheduledTaskEntityType) *ScheduledTaskUpdateOne {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableEntityType(ttet *types.ScheduledTaskEntityType) *ScheduledTaskUpdateOne {
-	if ttet != nil {
-		stuo.SetEntityType(*ttet)
+func (_u *ScheduledTaskUpdateOne) SetNillableEntityType(v *types.ScheduledTaskEntityType) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return stuo
+	return _u
 }
 
 // SetInterval sets the "interval" field.
-func (stuo *ScheduledTaskUpdateOne) SetInterval(tti types.ScheduledTaskInterval) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetInterval(tti)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetInterval(v types.ScheduledTaskInterval) *ScheduledTaskUpdateOne {
+	_u.mutation.SetInterval(v)
+	return _u
 }
 
 // SetNillableInterval sets the "interval" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableInterval(tti *types.ScheduledTaskInterval) *ScheduledTaskUpdateOne {
-	if tti != nil {
-		stuo.SetInterval(*tti)
+func (_u *ScheduledTaskUpdateOne) SetNillableInterval(v *types.ScheduledTaskInterval) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetInterval(*v)
 	}
-	return stuo
+	return _u
 }
 
 // SetEnabled sets the "enabled" field.
-func (stuo *ScheduledTaskUpdateOne) SetEnabled(b bool) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetEnabled(b)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetEnabled(v bool) *ScheduledTaskUpdateOne {
+	_u.mutation.SetEnabled(v)
+	return _u
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableEnabled(b *bool) *ScheduledTaskUpdateOne {
-	if b != nil {
-		stuo.SetEnabled(*b)
+func (_u *ScheduledTaskUpdateOne) SetNillableEnabled(v *bool) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetEnabled(*v)
 	}
-	return stuo
+	return _u
 }
 
 // SetJobConfig sets the "job_config" field.
-func (stuo *ScheduledTaskUpdateOne) SetJobConfig(tc *types.S3JobConfig) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetJobConfig(tc)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetJobConfig(v *types.S3JobConfig) *ScheduledTaskUpdateOne {
+	_u.mutation.SetJobConfig(v)
+	return _u
 }
 
 // ClearJobConfig clears the value of the "job_config" field.
-func (stuo *ScheduledTaskUpdateOne) ClearJobConfig() *ScheduledTaskUpdateOne {
-	stuo.mutation.ClearJobConfig()
-	return stuo
+func (_u *ScheduledTaskUpdateOne) ClearJobConfig() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearJobConfig()
+	return _u
 }
 
 // SetTemporalScheduleID sets the "temporal_schedule_id" field.
-func (stuo *ScheduledTaskUpdateOne) SetTemporalScheduleID(s string) *ScheduledTaskUpdateOne {
-	stuo.mutation.SetTemporalScheduleID(s)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) SetTemporalScheduleID(v string) *ScheduledTaskUpdateOne {
+	_u.mutation.SetTemporalScheduleID(v)
+	return _u
 }
 
 // SetNillableTemporalScheduleID sets the "temporal_schedule_id" field if the given value is not nil.
-func (stuo *ScheduledTaskUpdateOne) SetNillableTemporalScheduleID(s *string) *ScheduledTaskUpdateOne {
-	if s != nil {
-		stuo.SetTemporalScheduleID(*s)
+func (_u *ScheduledTaskUpdateOne) SetNillableTemporalScheduleID(v *string) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetTemporalScheduleID(*v)
 	}
-	return stuo
+	return _u
 }
 
 // ClearTemporalScheduleID clears the value of the "temporal_schedule_id" field.
-func (stuo *ScheduledTaskUpdateOne) ClearTemporalScheduleID() *ScheduledTaskUpdateOne {
-	stuo.mutation.ClearTemporalScheduleID()
-	return stuo
+func (_u *ScheduledTaskUpdateOne) ClearTemporalScheduleID() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearTemporalScheduleID()
+	return _u
 }
 
 // Mutation returns the ScheduledTaskMutation object of the builder.
-func (stuo *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
-	return stuo.mutation
+func (_u *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the ScheduledTaskUpdate builder.
-func (stuo *ScheduledTaskUpdateOne) Where(ps ...predicate.ScheduledTask) *ScheduledTaskUpdateOne {
-	stuo.mutation.Where(ps...)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) Where(ps ...predicate.ScheduledTask) *ScheduledTaskUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (stuo *ScheduledTaskUpdateOne) Select(field string, fields ...string) *ScheduledTaskUpdateOne {
-	stuo.fields = append([]string{field}, fields...)
-	return stuo
+func (_u *ScheduledTaskUpdateOne) Select(field string, fields ...string) *ScheduledTaskUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated ScheduledTask entity.
-func (stuo *ScheduledTaskUpdateOne) Save(ctx context.Context) (*ScheduledTask, error) {
-	stuo.defaults()
-	return withHooks(ctx, stuo.sqlSave, stuo.mutation, stuo.hooks)
+func (_u *ScheduledTaskUpdateOne) Save(ctx context.Context) (*ScheduledTask, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (stuo *ScheduledTaskUpdateOne) SaveX(ctx context.Context) *ScheduledTask {
-	node, err := stuo.Save(ctx)
+func (_u *ScheduledTaskUpdateOne) SaveX(ctx context.Context) *ScheduledTask {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -459,44 +459,44 @@ func (stuo *ScheduledTaskUpdateOne) SaveX(ctx context.Context) *ScheduledTask {
 }
 
 // Exec executes the query on the entity.
-func (stuo *ScheduledTaskUpdateOne) Exec(ctx context.Context) error {
-	_, err := stuo.Save(ctx)
+func (_u *ScheduledTaskUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (stuo *ScheduledTaskUpdateOne) ExecX(ctx context.Context) {
-	if err := stuo.Exec(ctx); err != nil {
+func (_u *ScheduledTaskUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (stuo *ScheduledTaskUpdateOne) defaults() {
-	if _, ok := stuo.mutation.UpdatedAt(); !ok {
+func (_u *ScheduledTaskUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := scheduledtask.UpdateDefaultUpdatedAt()
-		stuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (stuo *ScheduledTaskUpdateOne) check() error {
-	if v, ok := stuo.mutation.ConnectionID(); ok {
+func (_u *ScheduledTaskUpdateOne) check() error {
+	if v, ok := _u.mutation.ConnectionID(); ok {
 		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
 			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
 		}
 	}
-	if v, ok := stuo.mutation.EntityType(); ok {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := scheduledtask.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := stuo.mutation.Interval(); ok {
+	if v, ok := _u.mutation.Interval(); ok {
 		if err := scheduledtask.IntervalValidator(string(v)); err != nil {
 			return &ValidationError{Name: "interval", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.interval": %w`, err)}
 		}
 	}
-	if v, ok := stuo.mutation.JobConfig(); ok {
+	if v, ok := _u.mutation.JobConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
 		}
@@ -504,17 +504,17 @@ func (stuo *ScheduledTaskUpdateOne) check() error {
 	return nil
 }
 
-func (stuo *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *ScheduledTask, err error) {
-	if err := stuo.check(); err != nil {
+func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *ScheduledTask, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(scheduledtask.Table, scheduledtask.Columns, sqlgraph.NewFieldSpec(scheduledtask.FieldID, field.TypeString))
-	id, ok := stuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "ScheduledTask.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := stuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, scheduledtask.FieldID)
 		for _, f := range fields {
@@ -526,59 +526,59 @@ func (stuo *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Schedul
 			}
 		}
 	}
-	if ps := stuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := stuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(scheduledtask.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := stuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if stuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(scheduledtask.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := stuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedBy, field.TypeString, value)
 	}
-	if stuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(scheduledtask.FieldUpdatedBy, field.TypeString)
 	}
-	if stuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(scheduledtask.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := stuo.mutation.ConnectionID(); ok {
+	if value, ok := _u.mutation.ConnectionID(); ok {
 		_spec.SetField(scheduledtask.FieldConnectionID, field.TypeString, value)
 	}
-	if value, ok := stuo.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(scheduledtask.FieldEntityType, field.TypeString, value)
 	}
-	if value, ok := stuo.mutation.Interval(); ok {
+	if value, ok := _u.mutation.Interval(); ok {
 		_spec.SetField(scheduledtask.FieldInterval, field.TypeString, value)
 	}
-	if value, ok := stuo.mutation.Enabled(); ok {
+	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(scheduledtask.FieldEnabled, field.TypeBool, value)
 	}
-	if value, ok := stuo.mutation.JobConfig(); ok {
+	if value, ok := _u.mutation.JobConfig(); ok {
 		_spec.SetField(scheduledtask.FieldJobConfig, field.TypeJSON, value)
 	}
-	if stuo.mutation.JobConfigCleared() {
+	if _u.mutation.JobConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldJobConfig, field.TypeJSON)
 	}
-	if value, ok := stuo.mutation.TemporalScheduleID(); ok {
+	if value, ok := _u.mutation.TemporalScheduleID(); ok {
 		_spec.SetField(scheduledtask.FieldTemporalScheduleID, field.TypeString, value)
 	}
-	if stuo.mutation.TemporalScheduleIDCleared() {
+	if _u.mutation.TemporalScheduleIDCleared() {
 		_spec.ClearField(scheduledtask.FieldTemporalScheduleID, field.TypeString)
 	}
-	_node = &ScheduledTask{config: stuo.config}
+	_node = &ScheduledTask{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, stuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{scheduledtask.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -586,6 +586,6 @@ func (stuo *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Schedul
 		}
 		return nil, err
 	}
-	stuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

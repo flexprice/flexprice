@@ -160,7 +160,7 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the SubscriptionLineItem fields.
-func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) error {
+func (_m *SubscriptionLineItem) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -170,193 +170,193 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				sli.ID = value.String
+				_m.ID = value.String
 			}
 		case subscriptionlineitem.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				sli.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case subscriptionlineitem.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				sli.Status = value.String
+				_m.Status = value.String
 			}
 		case subscriptionlineitem.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				sli.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case subscriptionlineitem.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				sli.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case subscriptionlineitem.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				sli.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case subscriptionlineitem.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				sli.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case subscriptionlineitem.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				sli.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case subscriptionlineitem.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				sli.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case subscriptionlineitem.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				sli.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case subscriptionlineitem.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				sli.EntityID = new(string)
-				*sli.EntityID = value.String
+				_m.EntityID = new(string)
+				*_m.EntityID = value.String
 			}
 		case subscriptionlineitem.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				sli.EntityType = types.InvoiceLineItemEntityType(value.String)
+				_m.EntityType = types.InvoiceLineItemEntityType(value.String)
 			}
 		case subscriptionlineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_display_name", values[i])
 			} else if value.Valid {
-				sli.PlanDisplayName = new(string)
-				*sli.PlanDisplayName = value.String
+				_m.PlanDisplayName = new(string)
+				*_m.PlanDisplayName = value.String
 			}
 		case subscriptionlineitem.FieldPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_id", values[i])
 			} else if value.Valid {
-				sli.PriceID = value.String
+				_m.PriceID = value.String
 			}
 		case subscriptionlineitem.FieldPriceType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_type", values[i])
 			} else if value.Valid {
-				sli.PriceType = new(types.PriceType)
-				*sli.PriceType = types.PriceType(value.String)
+				_m.PriceType = new(types.PriceType)
+				*_m.PriceType = types.PriceType(value.String)
 			}
 		case subscriptionlineitem.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
-				sli.MeterID = new(string)
-				*sli.MeterID = value.String
+				_m.MeterID = new(string)
+				*_m.MeterID = value.String
 			}
 		case subscriptionlineitem.FieldMeterDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_display_name", values[i])
 			} else if value.Valid {
-				sli.MeterDisplayName = new(string)
-				*sli.MeterDisplayName = value.String
+				_m.MeterDisplayName = new(string)
+				*_m.MeterDisplayName = value.String
 			}
 		case subscriptionlineitem.FieldPriceUnitID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
 			} else if value.Valid {
-				sli.PriceUnitID = new(string)
-				*sli.PriceUnitID = value.String
+				_m.PriceUnitID = new(string)
+				*_m.PriceUnitID = value.String
 			}
 		case subscriptionlineitem.FieldPriceUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
 			} else if value.Valid {
-				sli.PriceUnit = new(string)
-				*sli.PriceUnit = value.String
+				_m.PriceUnit = new(string)
+				*_m.PriceUnit = value.String
 			}
 		case subscriptionlineitem.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_name", values[i])
 			} else if value.Valid {
-				sli.DisplayName = new(string)
-				*sli.DisplayName = value.String
+				_m.DisplayName = new(string)
+				*_m.DisplayName = value.String
 			}
 		case subscriptionlineitem.FieldQuantity:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field quantity", values[i])
 			} else if value != nil {
-				sli.Quantity = *value
+				_m.Quantity = *value
 			}
 		case subscriptionlineitem.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				sli.Currency = value.String
+				_m.Currency = value.String
 			}
 		case subscriptionlineitem.FieldBillingPeriod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period", values[i])
 			} else if value.Valid {
-				sli.BillingPeriod = types.BillingPeriod(value.String)
+				_m.BillingPeriod = types.BillingPeriod(value.String)
 			}
 		case subscriptionlineitem.FieldBillingPeriodCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period_count", values[i])
 			} else if value.Valid {
-				sli.BillingPeriodCount = int(value.Int64)
+				_m.BillingPeriodCount = int(value.Int64)
 			}
 		case subscriptionlineitem.FieldInvoiceCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_cadence", values[i])
 			} else if value.Valid {
-				sli.InvoiceCadence = types.InvoiceCadence(value.String)
+				_m.InvoiceCadence = types.InvoiceCadence(value.String)
 			}
 		case subscriptionlineitem.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				sli.StartDate = new(time.Time)
-				*sli.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case subscriptionlineitem.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				sli.EndDate = new(time.Time)
-				*sli.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case subscriptionlineitem.FieldSubscriptionPhaseID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_phase_id", values[i])
 			} else if value.Valid {
-				sli.SubscriptionPhaseID = new(string)
-				*sli.SubscriptionPhaseID = value.String
+				_m.SubscriptionPhaseID = new(string)
+				*_m.SubscriptionPhaseID = value.String
 			}
 		case subscriptionlineitem.FieldAddonAssociationID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_association_id", values[i])
 			} else if value.Valid {
-				sli.AddonAssociationID = new(string)
-				*sli.AddonAssociationID = value.String
+				_m.AddonAssociationID = new(string)
+				*_m.AddonAssociationID = value.String
 			}
 		case subscriptionlineitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sli.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -364,59 +364,59 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_amount", values[i])
 			} else if value.Valid {
-				sli.CommitmentAmount = new(decimal.Decimal)
-				*sli.CommitmentAmount = *value.S.(*decimal.Decimal)
+				_m.CommitmentAmount = new(decimal.Decimal)
+				*_m.CommitmentAmount = *value.S.(*decimal.Decimal)
 			}
 		case subscriptionlineitem.FieldCommitmentQuantity:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_quantity", values[i])
 			} else if value.Valid {
-				sli.CommitmentQuantity = new(decimal.Decimal)
-				*sli.CommitmentQuantity = *value.S.(*decimal.Decimal)
+				_m.CommitmentQuantity = new(decimal.Decimal)
+				*_m.CommitmentQuantity = *value.S.(*decimal.Decimal)
 			}
 		case subscriptionlineitem.FieldCommitmentType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_type", values[i])
 			} else if value.Valid {
-				sli.CommitmentType = new(string)
-				*sli.CommitmentType = value.String
+				_m.CommitmentType = new(string)
+				*_m.CommitmentType = value.String
 			}
 		case subscriptionlineitem.FieldCommitmentOverageFactor:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_overage_factor", values[i])
 			} else if value.Valid {
-				sli.CommitmentOverageFactor = new(decimal.Decimal)
-				*sli.CommitmentOverageFactor = *value.S.(*decimal.Decimal)
+				_m.CommitmentOverageFactor = new(decimal.Decimal)
+				*_m.CommitmentOverageFactor = *value.S.(*decimal.Decimal)
 			}
 		case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_true_up_enabled", values[i])
 			} else if value.Valid {
-				sli.CommitmentTrueUpEnabled = value.Bool
+				_m.CommitmentTrueUpEnabled = value.Bool
 			}
 		case subscriptionlineitem.FieldCommitmentWindowed:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_windowed", values[i])
 			} else if value.Valid {
-				sli.CommitmentWindowed = value.Bool
+				_m.CommitmentWindowed = value.Bool
 			}
 		case subscriptionlineitem.FieldCommitmentDuration:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_duration", values[i])
 			} else if value.Valid {
-				sli.CommitmentDuration = new(types.BillingPeriod)
-				*sli.CommitmentDuration = types.BillingPeriod(value.String)
+				_m.CommitmentDuration = new(types.BillingPeriod)
+				*_m.CommitmentDuration = types.BillingPeriod(value.String)
 			}
 		case subscriptionlineitem.FieldCommitmentTimeBuckets:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_time_buckets", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sli.CommitmentTimeBuckets); err != nil {
+				if err := json.Unmarshal(*value, &_m.CommitmentTimeBuckets); err != nil {
 					return fmt.Errorf("unmarshal field commitment_time_buckets: %w", err)
 				}
 			}
 		default:
-			sli.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -424,187 +424,187 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 
 // Value returns the ent.Value that was dynamically selected and assigned to the SubscriptionLineItem.
 // This includes values selected through modifiers, order, etc.
-func (sli *SubscriptionLineItem) Value(name string) (ent.Value, error) {
-	return sli.selectValues.Get(name)
+func (_m *SubscriptionLineItem) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QuerySubscription queries the "subscription" edge of the SubscriptionLineItem entity.
-func (sli *SubscriptionLineItem) QuerySubscription() *SubscriptionQuery {
-	return NewSubscriptionLineItemClient(sli.config).QuerySubscription(sli)
+func (_m *SubscriptionLineItem) QuerySubscription() *SubscriptionQuery {
+	return NewSubscriptionLineItemClient(_m.config).QuerySubscription(_m)
 }
 
 // QueryCouponAssociations queries the "coupon_associations" edge of the SubscriptionLineItem entity.
-func (sli *SubscriptionLineItem) QueryCouponAssociations() *CouponAssociationQuery {
-	return NewSubscriptionLineItemClient(sli.config).QueryCouponAssociations(sli)
+func (_m *SubscriptionLineItem) QueryCouponAssociations() *CouponAssociationQuery {
+	return NewSubscriptionLineItemClient(_m.config).QueryCouponAssociations(_m)
 }
 
 // Update returns a builder for updating this SubscriptionLineItem.
 // Note that you need to call SubscriptionLineItem.Unwrap() before calling this method if this SubscriptionLineItem
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (sli *SubscriptionLineItem) Update() *SubscriptionLineItemUpdateOne {
-	return NewSubscriptionLineItemClient(sli.config).UpdateOne(sli)
+func (_m *SubscriptionLineItem) Update() *SubscriptionLineItemUpdateOne {
+	return NewSubscriptionLineItemClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the SubscriptionLineItem entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (sli *SubscriptionLineItem) Unwrap() *SubscriptionLineItem {
-	_tx, ok := sli.config.driver.(*txDriver)
+func (_m *SubscriptionLineItem) Unwrap() *SubscriptionLineItem {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: SubscriptionLineItem is not a transactional entity")
 	}
-	sli.config.driver = _tx.drv
-	return sli
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (sli *SubscriptionLineItem) String() string {
+func (_m *SubscriptionLineItem) String() string {
 	var builder strings.Builder
 	builder.WriteString("SubscriptionLineItem(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", sli.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(sli.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(sli.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(sli.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(sli.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(sli.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(sli.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(sli.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(sli.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(sli.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
-	if v := sli.EntityID; v != nil {
+	if v := _m.EntityID; v != nil {
 		builder.WriteString("entity_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(fmt.Sprintf("%v", sli.EntityType))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntityType))
 	builder.WriteString(", ")
-	if v := sli.PlanDisplayName; v != nil {
+	if v := _m.PlanDisplayName; v != nil {
 		builder.WriteString("plan_display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("price_id=")
-	builder.WriteString(sli.PriceID)
+	builder.WriteString(_m.PriceID)
 	builder.WriteString(", ")
-	if v := sli.PriceType; v != nil {
+	if v := _m.PriceType; v != nil {
 		builder.WriteString("price_type=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := sli.MeterID; v != nil {
+	if v := _m.MeterID; v != nil {
 		builder.WriteString("meter_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.MeterDisplayName; v != nil {
+	if v := _m.MeterDisplayName; v != nil {
 		builder.WriteString("meter_display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.PriceUnitID; v != nil {
+	if v := _m.PriceUnitID; v != nil {
 		builder.WriteString("price_unit_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.PriceUnit; v != nil {
+	if v := _m.PriceUnit; v != nil {
 		builder.WriteString("price_unit=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.DisplayName; v != nil {
+	if v := _m.DisplayName; v != nil {
 		builder.WriteString("display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("quantity=")
-	builder.WriteString(fmt.Sprintf("%v", sli.Quantity))
+	builder.WriteString(fmt.Sprintf("%v", _m.Quantity))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(sli.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("billing_period=")
-	builder.WriteString(fmt.Sprintf("%v", sli.BillingPeriod))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingPeriod))
 	builder.WriteString(", ")
 	builder.WriteString("billing_period_count=")
-	builder.WriteString(fmt.Sprintf("%v", sli.BillingPeriodCount))
+	builder.WriteString(fmt.Sprintf("%v", _m.BillingPeriodCount))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_cadence=")
-	builder.WriteString(fmt.Sprintf("%v", sli.InvoiceCadence))
+	builder.WriteString(fmt.Sprintf("%v", _m.InvoiceCadence))
 	builder.WriteString(", ")
-	if v := sli.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := sli.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := sli.SubscriptionPhaseID; v != nil {
+	if v := _m.SubscriptionPhaseID; v != nil {
 		builder.WriteString("subscription_phase_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.AddonAssociationID; v != nil {
+	if v := _m.AddonAssociationID; v != nil {
 		builder.WriteString("addon_association_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", sli.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := sli.CommitmentAmount; v != nil {
+	if v := _m.CommitmentAmount; v != nil {
 		builder.WriteString("commitment_amount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := sli.CommitmentQuantity; v != nil {
+	if v := _m.CommitmentQuantity; v != nil {
 		builder.WriteString("commitment_quantity=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := sli.CommitmentType; v != nil {
+	if v := _m.CommitmentType; v != nil {
 		builder.WriteString("commitment_type=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := sli.CommitmentOverageFactor; v != nil {
+	if v := _m.CommitmentOverageFactor; v != nil {
 		builder.WriteString("commitment_overage_factor=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("commitment_true_up_enabled=")
-	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentTrueUpEnabled))
+	builder.WriteString(fmt.Sprintf("%v", _m.CommitmentTrueUpEnabled))
 	builder.WriteString(", ")
 	builder.WriteString("commitment_windowed=")
-	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentWindowed))
+	builder.WriteString(fmt.Sprintf("%v", _m.CommitmentWindowed))
 	builder.WriteString(", ")
-	if v := sli.CommitmentDuration; v != nil {
+	if v := _m.CommitmentDuration; v != nil {
 		builder.WriteString("commitment_duration=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("commitment_time_buckets=")
-	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentTimeBuckets))
+	builder.WriteString(fmt.Sprintf("%v", _m.CommitmentTimeBuckets))
 	builder.WriteByte(')')
 	return builder.String()
 }

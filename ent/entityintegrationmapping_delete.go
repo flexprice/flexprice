@@ -20,56 +20,56 @@ type EntityIntegrationMappingDelete struct {
 }
 
 // Where appends a list predicates to the EntityIntegrationMappingDelete builder.
-func (eimd *EntityIntegrationMappingDelete) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingDelete {
-	eimd.mutation.Where(ps...)
-	return eimd
+func (_d *EntityIntegrationMappingDelete) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (eimd *EntityIntegrationMappingDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, eimd.sqlExec, eimd.mutation, eimd.hooks)
+func (_d *EntityIntegrationMappingDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimd *EntityIntegrationMappingDelete) ExecX(ctx context.Context) int {
-	n, err := eimd.Exec(ctx)
+func (_d *EntityIntegrationMappingDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (eimd *EntityIntegrationMappingDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *EntityIntegrationMappingDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(entityintegrationmapping.Table, sqlgraph.NewFieldSpec(entityintegrationmapping.FieldID, field.TypeString))
-	if ps := eimd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, eimd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	eimd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // EntityIntegrationMappingDeleteOne is the builder for deleting a single EntityIntegrationMapping entity.
 type EntityIntegrationMappingDeleteOne struct {
-	eimd *EntityIntegrationMappingDelete
+	_d *EntityIntegrationMappingDelete
 }
 
 // Where appends a list predicates to the EntityIntegrationMappingDelete builder.
-func (eimdo *EntityIntegrationMappingDeleteOne) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingDeleteOne {
-	eimdo.eimd.mutation.Where(ps...)
-	return eimdo
+func (_d *EntityIntegrationMappingDeleteOne) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (eimdo *EntityIntegrationMappingDeleteOne) Exec(ctx context.Context) error {
-	n, err := eimdo.eimd.Exec(ctx)
+func (_d *EntityIntegrationMappingDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (eimdo *EntityIntegrationMappingDeleteOne) Exec(ctx context.Context) error 
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimdo *EntityIntegrationMappingDeleteOne) ExecX(ctx context.Context) {
-	if err := eimdo.Exec(ctx); err != nil {
+func (_d *EntityIntegrationMappingDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

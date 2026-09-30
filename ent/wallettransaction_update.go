@@ -25,282 +25,282 @@ type WalletTransactionUpdate struct {
 }
 
 // Where appends a list predicates to the WalletTransactionUpdate builder.
-func (wtu *WalletTransactionUpdate) Where(ps ...predicate.WalletTransaction) *WalletTransactionUpdate {
-	wtu.mutation.Where(ps...)
-	return wtu
+func (_u *WalletTransactionUpdate) Where(ps ...predicate.WalletTransaction) *WalletTransactionUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (wtu *WalletTransactionUpdate) SetStatus(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetStatus(s)
-	return wtu
+func (_u *WalletTransactionUpdate) SetStatus(v string) *WalletTransactionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableStatus(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetStatus(*s)
+func (_u *WalletTransactionUpdate) SetNillableStatus(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (wtu *WalletTransactionUpdate) SetUpdatedAt(t time.Time) *WalletTransactionUpdate {
-	wtu.mutation.SetUpdatedAt(t)
-	return wtu
+func (_u *WalletTransactionUpdate) SetUpdatedAt(v time.Time) *WalletTransactionUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (wtu *WalletTransactionUpdate) SetUpdatedBy(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetUpdatedBy(s)
-	return wtu
+func (_u *WalletTransactionUpdate) SetUpdatedBy(v string) *WalletTransactionUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableUpdatedBy(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetUpdatedBy(*s)
+func (_u *WalletTransactionUpdate) SetNillableUpdatedBy(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return wtu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (wtu *WalletTransactionUpdate) ClearUpdatedBy() *WalletTransactionUpdate {
-	wtu.mutation.ClearUpdatedBy()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearUpdatedBy() *WalletTransactionUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (wtu *WalletTransactionUpdate) SetCustomerID(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetCustomerID(s)
-	return wtu
+func (_u *WalletTransactionUpdate) SetCustomerID(v string) *WalletTransactionUpdate {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableCustomerID(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetCustomerID(*s)
+func (_u *WalletTransactionUpdate) SetNillableCustomerID(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return wtu
+	return _u
 }
 
 // ClearCustomerID clears the value of the "customer_id" field.
-func (wtu *WalletTransactionUpdate) ClearCustomerID() *WalletTransactionUpdate {
-	wtu.mutation.ClearCustomerID()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearCustomerID() *WalletTransactionUpdate {
+	_u.mutation.ClearCustomerID()
+	return _u
 }
 
 // SetType sets the "type" field.
-func (wtu *WalletTransactionUpdate) SetType(tt types.TransactionType) *WalletTransactionUpdate {
-	wtu.mutation.SetType(tt)
-	return wtu
+func (_u *WalletTransactionUpdate) SetType(v types.TransactionType) *WalletTransactionUpdate {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableType(tt *types.TransactionType) *WalletTransactionUpdate {
-	if tt != nil {
-		wtu.SetType(*tt)
+func (_u *WalletTransactionUpdate) SetNillableType(v *types.TransactionType) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (wtu *WalletTransactionUpdate) SetAmount(d decimal.Decimal) *WalletTransactionUpdate {
-	wtu.mutation.SetAmount(d)
-	return wtu
+func (_u *WalletTransactionUpdate) SetAmount(v decimal.Decimal) *WalletTransactionUpdate {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableAmount(d *decimal.Decimal) *WalletTransactionUpdate {
-	if d != nil {
-		wtu.SetAmount(*d)
+func (_u *WalletTransactionUpdate) SetNillableAmount(v *decimal.Decimal) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetCreditAmount sets the "credit_amount" field.
-func (wtu *WalletTransactionUpdate) SetCreditAmount(d decimal.Decimal) *WalletTransactionUpdate {
-	wtu.mutation.SetCreditAmount(d)
-	return wtu
+func (_u *WalletTransactionUpdate) SetCreditAmount(v decimal.Decimal) *WalletTransactionUpdate {
+	_u.mutation.SetCreditAmount(v)
+	return _u
 }
 
 // SetNillableCreditAmount sets the "credit_amount" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableCreditAmount(d *decimal.Decimal) *WalletTransactionUpdate {
-	if d != nil {
-		wtu.SetCreditAmount(*d)
+func (_u *WalletTransactionUpdate) SetNillableCreditAmount(v *decimal.Decimal) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetCreditAmount(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetCreditBalanceBefore sets the "credit_balance_before" field.
-func (wtu *WalletTransactionUpdate) SetCreditBalanceBefore(d decimal.Decimal) *WalletTransactionUpdate {
-	wtu.mutation.SetCreditBalanceBefore(d)
-	return wtu
+func (_u *WalletTransactionUpdate) SetCreditBalanceBefore(v decimal.Decimal) *WalletTransactionUpdate {
+	_u.mutation.SetCreditBalanceBefore(v)
+	return _u
 }
 
 // SetNillableCreditBalanceBefore sets the "credit_balance_before" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableCreditBalanceBefore(d *decimal.Decimal) *WalletTransactionUpdate {
-	if d != nil {
-		wtu.SetCreditBalanceBefore(*d)
+func (_u *WalletTransactionUpdate) SetNillableCreditBalanceBefore(v *decimal.Decimal) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetCreditBalanceBefore(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetCreditBalanceAfter sets the "credit_balance_after" field.
-func (wtu *WalletTransactionUpdate) SetCreditBalanceAfter(d decimal.Decimal) *WalletTransactionUpdate {
-	wtu.mutation.SetCreditBalanceAfter(d)
-	return wtu
+func (_u *WalletTransactionUpdate) SetCreditBalanceAfter(v decimal.Decimal) *WalletTransactionUpdate {
+	_u.mutation.SetCreditBalanceAfter(v)
+	return _u
 }
 
 // SetNillableCreditBalanceAfter sets the "credit_balance_after" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableCreditBalanceAfter(d *decimal.Decimal) *WalletTransactionUpdate {
-	if d != nil {
-		wtu.SetCreditBalanceAfter(*d)
+func (_u *WalletTransactionUpdate) SetNillableCreditBalanceAfter(v *decimal.Decimal) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetCreditBalanceAfter(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetReferenceType sets the "reference_type" field.
-func (wtu *WalletTransactionUpdate) SetReferenceType(ttrt types.WalletTxReferenceType) *WalletTransactionUpdate {
-	wtu.mutation.SetReferenceType(ttrt)
-	return wtu
+func (_u *WalletTransactionUpdate) SetReferenceType(v types.WalletTxReferenceType) *WalletTransactionUpdate {
+	_u.mutation.SetReferenceType(v)
+	return _u
 }
 
 // SetNillableReferenceType sets the "reference_type" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableReferenceType(ttrt *types.WalletTxReferenceType) *WalletTransactionUpdate {
-	if ttrt != nil {
-		wtu.SetReferenceType(*ttrt)
+func (_u *WalletTransactionUpdate) SetNillableReferenceType(v *types.WalletTxReferenceType) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetReferenceType(*v)
 	}
-	return wtu
+	return _u
 }
 
 // ClearReferenceType clears the value of the "reference_type" field.
-func (wtu *WalletTransactionUpdate) ClearReferenceType() *WalletTransactionUpdate {
-	wtu.mutation.ClearReferenceType()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearReferenceType() *WalletTransactionUpdate {
+	_u.mutation.ClearReferenceType()
+	return _u
 }
 
 // SetReferenceID sets the "reference_id" field.
-func (wtu *WalletTransactionUpdate) SetReferenceID(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetReferenceID(s)
-	return wtu
+func (_u *WalletTransactionUpdate) SetReferenceID(v string) *WalletTransactionUpdate {
+	_u.mutation.SetReferenceID(v)
+	return _u
 }
 
 // SetNillableReferenceID sets the "reference_id" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableReferenceID(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetReferenceID(*s)
+func (_u *WalletTransactionUpdate) SetNillableReferenceID(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetReferenceID(*v)
 	}
-	return wtu
+	return _u
 }
 
 // ClearReferenceID clears the value of the "reference_id" field.
-func (wtu *WalletTransactionUpdate) ClearReferenceID() *WalletTransactionUpdate {
-	wtu.mutation.ClearReferenceID()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearReferenceID() *WalletTransactionUpdate {
+	_u.mutation.ClearReferenceID()
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (wtu *WalletTransactionUpdate) SetDescription(s string) *WalletTransactionUpdate {
-	wtu.mutation.SetDescription(s)
-	return wtu
+func (_u *WalletTransactionUpdate) SetDescription(v string) *WalletTransactionUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableDescription(s *string) *WalletTransactionUpdate {
-	if s != nil {
-		wtu.SetDescription(*s)
+func (_u *WalletTransactionUpdate) SetNillableDescription(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return wtu
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (wtu *WalletTransactionUpdate) ClearDescription() *WalletTransactionUpdate {
-	wtu.mutation.ClearDescription()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearDescription() *WalletTransactionUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (wtu *WalletTransactionUpdate) SetMetadata(m map[string]string) *WalletTransactionUpdate {
-	wtu.mutation.SetMetadata(m)
-	return wtu
+func (_u *WalletTransactionUpdate) SetMetadata(v map[string]string) *WalletTransactionUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (wtu *WalletTransactionUpdate) ClearMetadata() *WalletTransactionUpdate {
-	wtu.mutation.ClearMetadata()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearMetadata() *WalletTransactionUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetTransactionStatus sets the "transaction_status" field.
-func (wtu *WalletTransactionUpdate) SetTransactionStatus(ts types.TransactionStatus) *WalletTransactionUpdate {
-	wtu.mutation.SetTransactionStatus(ts)
-	return wtu
+func (_u *WalletTransactionUpdate) SetTransactionStatus(v types.TransactionStatus) *WalletTransactionUpdate {
+	_u.mutation.SetTransactionStatus(v)
+	return _u
 }
 
 // SetNillableTransactionStatus sets the "transaction_status" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableTransactionStatus(ts *types.TransactionStatus) *WalletTransactionUpdate {
-	if ts != nil {
-		wtu.SetTransactionStatus(*ts)
+func (_u *WalletTransactionUpdate) SetNillableTransactionStatus(v *types.TransactionStatus) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetTransactionStatus(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetCreditsAvailable sets the "credits_available" field.
-func (wtu *WalletTransactionUpdate) SetCreditsAvailable(d decimal.Decimal) *WalletTransactionUpdate {
-	wtu.mutation.SetCreditsAvailable(d)
-	return wtu
+func (_u *WalletTransactionUpdate) SetCreditsAvailable(v decimal.Decimal) *WalletTransactionUpdate {
+	_u.mutation.SetCreditsAvailable(v)
+	return _u
 }
 
 // SetNillableCreditsAvailable sets the "credits_available" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillableCreditsAvailable(d *decimal.Decimal) *WalletTransactionUpdate {
-	if d != nil {
-		wtu.SetCreditsAvailable(*d)
+func (_u *WalletTransactionUpdate) SetNillableCreditsAvailable(v *decimal.Decimal) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetCreditsAvailable(*v)
 	}
-	return wtu
+	return _u
 }
 
 // SetPriority sets the "priority" field.
-func (wtu *WalletTransactionUpdate) SetPriority(i int) *WalletTransactionUpdate {
-	wtu.mutation.ResetPriority()
-	wtu.mutation.SetPriority(i)
-	return wtu
+func (_u *WalletTransactionUpdate) SetPriority(v int) *WalletTransactionUpdate {
+	_u.mutation.ResetPriority()
+	_u.mutation.SetPriority(v)
+	return _u
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (wtu *WalletTransactionUpdate) SetNillablePriority(i *int) *WalletTransactionUpdate {
-	if i != nil {
-		wtu.SetPriority(*i)
+func (_u *WalletTransactionUpdate) SetNillablePriority(v *int) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetPriority(*v)
 	}
-	return wtu
+	return _u
 }
 
-// AddPriority adds i to the "priority" field.
-func (wtu *WalletTransactionUpdate) AddPriority(i int) *WalletTransactionUpdate {
-	wtu.mutation.AddPriority(i)
-	return wtu
+// AddPriority adds value to the "priority" field.
+func (_u *WalletTransactionUpdate) AddPriority(v int) *WalletTransactionUpdate {
+	_u.mutation.AddPriority(v)
+	return _u
 }
 
 // ClearPriority clears the value of the "priority" field.
-func (wtu *WalletTransactionUpdate) ClearPriority() *WalletTransactionUpdate {
-	wtu.mutation.ClearPriority()
-	return wtu
+func (_u *WalletTransactionUpdate) ClearPriority() *WalletTransactionUpdate {
+	_u.mutation.ClearPriority()
+	return _u
 }
 
 // Mutation returns the WalletTransactionMutation object of the builder.
-func (wtu *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
-	return wtu.mutation
+func (_u *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (wtu *WalletTransactionUpdate) Save(ctx context.Context) (int, error) {
-	wtu.defaults()
-	return withHooks(ctx, wtu.sqlSave, wtu.mutation, wtu.hooks)
+func (_u *WalletTransactionUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (wtu *WalletTransactionUpdate) SaveX(ctx context.Context) int {
-	affected, err := wtu.Save(ctx)
+func (_u *WalletTransactionUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -308,39 +308,39 @@ func (wtu *WalletTransactionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (wtu *WalletTransactionUpdate) Exec(ctx context.Context) error {
-	_, err := wtu.Save(ctx)
+func (_u *WalletTransactionUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wtu *WalletTransactionUpdate) ExecX(ctx context.Context) {
-	if err := wtu.Exec(ctx); err != nil {
+func (_u *WalletTransactionUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (wtu *WalletTransactionUpdate) defaults() {
-	if _, ok := wtu.mutation.UpdatedAt(); !ok {
+func (_u *WalletTransactionUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := wallettransaction.UpdateDefaultUpdatedAt()
-		wtu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (wtu *WalletTransactionUpdate) check() error {
-	if v, ok := wtu.mutation.GetType(); ok {
+func (_u *WalletTransactionUpdate) check() error {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := wallettransaction.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.type": %w`, err)}
 		}
 	}
-	if v, ok := wtu.mutation.ReferenceType(); ok {
+	if v, ok := _u.mutation.ReferenceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "reference_type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.reference_type": %w`, err)}
 		}
 	}
-	if v, ok := wtu.mutation.TransactionStatus(); ok {
+	if v, ok := _u.mutation.TransactionStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "transaction_status", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.transaction_status": %w`, err)}
 		}
@@ -348,112 +348,112 @@ func (wtu *WalletTransactionUpdate) check() error {
 	return nil
 }
 
-func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := wtu.check(); err != nil {
-		return n, err
+func (_u *WalletTransactionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(wallettransaction.Table, wallettransaction.Columns, sqlgraph.NewFieldSpec(wallettransaction.FieldID, field.TypeString))
-	if ps := wtu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := wtu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := wtu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if wtu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := wtu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
 	}
-	if wtu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
 	}
-	if wtu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(wallettransaction.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := wtu.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(wallettransaction.FieldCustomerID, field.TypeString, value)
 	}
-	if wtu.mutation.CustomerIDCleared() {
+	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(wallettransaction.FieldCustomerID, field.TypeString)
 	}
-	if value, ok := wtu.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)
 	}
-	if value, ok := wtu.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(wallettransaction.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := wtu.mutation.CreditAmount(); ok {
+	if value, ok := _u.mutation.CreditAmount(); ok {
 		_spec.SetField(wallettransaction.FieldCreditAmount, field.TypeOther, value)
 	}
-	if value, ok := wtu.mutation.CreditBalanceBefore(); ok {
+	if value, ok := _u.mutation.CreditBalanceBefore(); ok {
 		_spec.SetField(wallettransaction.FieldCreditBalanceBefore, field.TypeOther, value)
 	}
-	if value, ok := wtu.mutation.CreditBalanceAfter(); ok {
+	if value, ok := _u.mutation.CreditBalanceAfter(); ok {
 		_spec.SetField(wallettransaction.FieldCreditBalanceAfter, field.TypeOther, value)
 	}
-	if value, ok := wtu.mutation.ReferenceType(); ok {
+	if value, ok := _u.mutation.ReferenceType(); ok {
 		_spec.SetField(wallettransaction.FieldReferenceType, field.TypeString, value)
 	}
-	if wtu.mutation.ReferenceTypeCleared() {
+	if _u.mutation.ReferenceTypeCleared() {
 		_spec.ClearField(wallettransaction.FieldReferenceType, field.TypeString)
 	}
-	if value, ok := wtu.mutation.ReferenceID(); ok {
+	if value, ok := _u.mutation.ReferenceID(); ok {
 		_spec.SetField(wallettransaction.FieldReferenceID, field.TypeString, value)
 	}
-	if wtu.mutation.ReferenceIDCleared() {
+	if _u.mutation.ReferenceIDCleared() {
 		_spec.ClearField(wallettransaction.FieldReferenceID, field.TypeString)
 	}
-	if value, ok := wtu.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(wallettransaction.FieldDescription, field.TypeString, value)
 	}
-	if wtu.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(wallettransaction.FieldDescription, field.TypeString)
 	}
-	if value, ok := wtu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(wallettransaction.FieldMetadata, field.TypeJSON, value)
 	}
-	if wtu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(wallettransaction.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := wtu.mutation.TransactionStatus(); ok {
+	if value, ok := _u.mutation.TransactionStatus(); ok {
 		_spec.SetField(wallettransaction.FieldTransactionStatus, field.TypeString, value)
 	}
-	if wtu.mutation.ExpiryDateCleared() {
+	if _u.mutation.ExpiryDateCleared() {
 		_spec.ClearField(wallettransaction.FieldExpiryDate, field.TypeTime)
 	}
-	if value, ok := wtu.mutation.CreditsAvailable(); ok {
+	if value, ok := _u.mutation.CreditsAvailable(); ok {
 		_spec.SetField(wallettransaction.FieldCreditsAvailable, field.TypeOther, value)
 	}
-	if wtu.mutation.ConversionRateCleared() {
+	if _u.mutation.ConversionRateCleared() {
 		_spec.ClearField(wallettransaction.FieldConversionRate, field.TypeOther)
 	}
-	if wtu.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(wallettransaction.FieldTopupConversionRate, field.TypeOther)
 	}
-	if wtu.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := wtu.mutation.Priority(); ok {
+	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
 	}
-	if value, ok := wtu.mutation.AddedPriority(); ok {
+	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(wallettransaction.FieldPriority, field.TypeInt, value)
 	}
-	if wtu.mutation.PriorityCleared() {
+	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
 	}
-	if wtu.mutation.ParentTransactionIDCleared() {
+	if _u.mutation.ParentTransactionIDCleared() {
 		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, wtu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallettransaction.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -461,8 +461,8 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		return 0, err
 	}
-	wtu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // WalletTransactionUpdateOne is the builder for updating a single WalletTransaction entity.
@@ -474,289 +474,289 @@ type WalletTransactionUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (wtuo *WalletTransactionUpdateOne) SetStatus(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetStatus(s)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetStatus(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableStatus(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetStatus(*s)
+func (_u *WalletTransactionUpdateOne) SetNillableStatus(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (wtuo *WalletTransactionUpdateOne) SetUpdatedAt(t time.Time) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetUpdatedAt(t)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetUpdatedAt(v time.Time) *WalletTransactionUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (wtuo *WalletTransactionUpdateOne) SetUpdatedBy(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetUpdatedBy(s)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetUpdatedBy(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableUpdatedBy(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetUpdatedBy(*s)
+func (_u *WalletTransactionUpdateOne) SetNillableUpdatedBy(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (wtuo *WalletTransactionUpdateOne) ClearUpdatedBy() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearUpdatedBy()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearUpdatedBy() *WalletTransactionUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (wtuo *WalletTransactionUpdateOne) SetCustomerID(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetCustomerID(s)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetCustomerID(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetCustomerID(v)
+	return _u
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableCustomerID(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetCustomerID(*s)
+func (_u *WalletTransactionUpdateOne) SetNillableCustomerID(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetCustomerID(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // ClearCustomerID clears the value of the "customer_id" field.
-func (wtuo *WalletTransactionUpdateOne) ClearCustomerID() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearCustomerID()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearCustomerID() *WalletTransactionUpdateOne {
+	_u.mutation.ClearCustomerID()
+	return _u
 }
 
 // SetType sets the "type" field.
-func (wtuo *WalletTransactionUpdateOne) SetType(tt types.TransactionType) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetType(tt)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetType(v types.TransactionType) *WalletTransactionUpdateOne {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableType(tt *types.TransactionType) *WalletTransactionUpdateOne {
-	if tt != nil {
-		wtuo.SetType(*tt)
+func (_u *WalletTransactionUpdateOne) SetNillableType(v *types.TransactionType) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (wtuo *WalletTransactionUpdateOne) SetAmount(d decimal.Decimal) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetAmount(d)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetAmount(v decimal.Decimal) *WalletTransactionUpdateOne {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableAmount(d *decimal.Decimal) *WalletTransactionUpdateOne {
-	if d != nil {
-		wtuo.SetAmount(*d)
+func (_u *WalletTransactionUpdateOne) SetNillableAmount(v *decimal.Decimal) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetCreditAmount sets the "credit_amount" field.
-func (wtuo *WalletTransactionUpdateOne) SetCreditAmount(d decimal.Decimal) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetCreditAmount(d)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetCreditAmount(v decimal.Decimal) *WalletTransactionUpdateOne {
+	_u.mutation.SetCreditAmount(v)
+	return _u
 }
 
 // SetNillableCreditAmount sets the "credit_amount" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableCreditAmount(d *decimal.Decimal) *WalletTransactionUpdateOne {
-	if d != nil {
-		wtuo.SetCreditAmount(*d)
+func (_u *WalletTransactionUpdateOne) SetNillableCreditAmount(v *decimal.Decimal) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetCreditAmount(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetCreditBalanceBefore sets the "credit_balance_before" field.
-func (wtuo *WalletTransactionUpdateOne) SetCreditBalanceBefore(d decimal.Decimal) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetCreditBalanceBefore(d)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetCreditBalanceBefore(v decimal.Decimal) *WalletTransactionUpdateOne {
+	_u.mutation.SetCreditBalanceBefore(v)
+	return _u
 }
 
 // SetNillableCreditBalanceBefore sets the "credit_balance_before" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableCreditBalanceBefore(d *decimal.Decimal) *WalletTransactionUpdateOne {
-	if d != nil {
-		wtuo.SetCreditBalanceBefore(*d)
+func (_u *WalletTransactionUpdateOne) SetNillableCreditBalanceBefore(v *decimal.Decimal) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetCreditBalanceBefore(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetCreditBalanceAfter sets the "credit_balance_after" field.
-func (wtuo *WalletTransactionUpdateOne) SetCreditBalanceAfter(d decimal.Decimal) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetCreditBalanceAfter(d)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetCreditBalanceAfter(v decimal.Decimal) *WalletTransactionUpdateOne {
+	_u.mutation.SetCreditBalanceAfter(v)
+	return _u
 }
 
 // SetNillableCreditBalanceAfter sets the "credit_balance_after" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableCreditBalanceAfter(d *decimal.Decimal) *WalletTransactionUpdateOne {
-	if d != nil {
-		wtuo.SetCreditBalanceAfter(*d)
+func (_u *WalletTransactionUpdateOne) SetNillableCreditBalanceAfter(v *decimal.Decimal) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetCreditBalanceAfter(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetReferenceType sets the "reference_type" field.
-func (wtuo *WalletTransactionUpdateOne) SetReferenceType(ttrt types.WalletTxReferenceType) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetReferenceType(ttrt)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetReferenceType(v types.WalletTxReferenceType) *WalletTransactionUpdateOne {
+	_u.mutation.SetReferenceType(v)
+	return _u
 }
 
 // SetNillableReferenceType sets the "reference_type" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableReferenceType(ttrt *types.WalletTxReferenceType) *WalletTransactionUpdateOne {
-	if ttrt != nil {
-		wtuo.SetReferenceType(*ttrt)
+func (_u *WalletTransactionUpdateOne) SetNillableReferenceType(v *types.WalletTxReferenceType) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetReferenceType(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // ClearReferenceType clears the value of the "reference_type" field.
-func (wtuo *WalletTransactionUpdateOne) ClearReferenceType() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearReferenceType()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearReferenceType() *WalletTransactionUpdateOne {
+	_u.mutation.ClearReferenceType()
+	return _u
 }
 
 // SetReferenceID sets the "reference_id" field.
-func (wtuo *WalletTransactionUpdateOne) SetReferenceID(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetReferenceID(s)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetReferenceID(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetReferenceID(v)
+	return _u
 }
 
 // SetNillableReferenceID sets the "reference_id" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableReferenceID(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetReferenceID(*s)
+func (_u *WalletTransactionUpdateOne) SetNillableReferenceID(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetReferenceID(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // ClearReferenceID clears the value of the "reference_id" field.
-func (wtuo *WalletTransactionUpdateOne) ClearReferenceID() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearReferenceID()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearReferenceID() *WalletTransactionUpdateOne {
+	_u.mutation.ClearReferenceID()
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (wtuo *WalletTransactionUpdateOne) SetDescription(s string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetDescription(s)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetDescription(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableDescription(s *string) *WalletTransactionUpdateOne {
-	if s != nil {
-		wtuo.SetDescription(*s)
+func (_u *WalletTransactionUpdateOne) SetNillableDescription(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (wtuo *WalletTransactionUpdateOne) ClearDescription() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearDescription()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearDescription() *WalletTransactionUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (wtuo *WalletTransactionUpdateOne) SetMetadata(m map[string]string) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetMetadata(m)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetMetadata(v map[string]string) *WalletTransactionUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (wtuo *WalletTransactionUpdateOne) ClearMetadata() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearMetadata()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearMetadata() *WalletTransactionUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetTransactionStatus sets the "transaction_status" field.
-func (wtuo *WalletTransactionUpdateOne) SetTransactionStatus(ts types.TransactionStatus) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetTransactionStatus(ts)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetTransactionStatus(v types.TransactionStatus) *WalletTransactionUpdateOne {
+	_u.mutation.SetTransactionStatus(v)
+	return _u
 }
 
 // SetNillableTransactionStatus sets the "transaction_status" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableTransactionStatus(ts *types.TransactionStatus) *WalletTransactionUpdateOne {
-	if ts != nil {
-		wtuo.SetTransactionStatus(*ts)
+func (_u *WalletTransactionUpdateOne) SetNillableTransactionStatus(v *types.TransactionStatus) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetTransactionStatus(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetCreditsAvailable sets the "credits_available" field.
-func (wtuo *WalletTransactionUpdateOne) SetCreditsAvailable(d decimal.Decimal) *WalletTransactionUpdateOne {
-	wtuo.mutation.SetCreditsAvailable(d)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetCreditsAvailable(v decimal.Decimal) *WalletTransactionUpdateOne {
+	_u.mutation.SetCreditsAvailable(v)
+	return _u
 }
 
 // SetNillableCreditsAvailable sets the "credits_available" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillableCreditsAvailable(d *decimal.Decimal) *WalletTransactionUpdateOne {
-	if d != nil {
-		wtuo.SetCreditsAvailable(*d)
+func (_u *WalletTransactionUpdateOne) SetNillableCreditsAvailable(v *decimal.Decimal) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetCreditsAvailable(*v)
 	}
-	return wtuo
+	return _u
 }
 
 // SetPriority sets the "priority" field.
-func (wtuo *WalletTransactionUpdateOne) SetPriority(i int) *WalletTransactionUpdateOne {
-	wtuo.mutation.ResetPriority()
-	wtuo.mutation.SetPriority(i)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) SetPriority(v int) *WalletTransactionUpdateOne {
+	_u.mutation.ResetPriority()
+	_u.mutation.SetPriority(v)
+	return _u
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (wtuo *WalletTransactionUpdateOne) SetNillablePriority(i *int) *WalletTransactionUpdateOne {
-	if i != nil {
-		wtuo.SetPriority(*i)
+func (_u *WalletTransactionUpdateOne) SetNillablePriority(v *int) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetPriority(*v)
 	}
-	return wtuo
+	return _u
 }
 
-// AddPriority adds i to the "priority" field.
-func (wtuo *WalletTransactionUpdateOne) AddPriority(i int) *WalletTransactionUpdateOne {
-	wtuo.mutation.AddPriority(i)
-	return wtuo
+// AddPriority adds value to the "priority" field.
+func (_u *WalletTransactionUpdateOne) AddPriority(v int) *WalletTransactionUpdateOne {
+	_u.mutation.AddPriority(v)
+	return _u
 }
 
 // ClearPriority clears the value of the "priority" field.
-func (wtuo *WalletTransactionUpdateOne) ClearPriority() *WalletTransactionUpdateOne {
-	wtuo.mutation.ClearPriority()
-	return wtuo
+func (_u *WalletTransactionUpdateOne) ClearPriority() *WalletTransactionUpdateOne {
+	_u.mutation.ClearPriority()
+	return _u
 }
 
 // Mutation returns the WalletTransactionMutation object of the builder.
-func (wtuo *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
-	return wtuo.mutation
+func (_u *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the WalletTransactionUpdate builder.
-func (wtuo *WalletTransactionUpdateOne) Where(ps ...predicate.WalletTransaction) *WalletTransactionUpdateOne {
-	wtuo.mutation.Where(ps...)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) Where(ps ...predicate.WalletTransaction) *WalletTransactionUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (wtuo *WalletTransactionUpdateOne) Select(field string, fields ...string) *WalletTransactionUpdateOne {
-	wtuo.fields = append([]string{field}, fields...)
-	return wtuo
+func (_u *WalletTransactionUpdateOne) Select(field string, fields ...string) *WalletTransactionUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated WalletTransaction entity.
-func (wtuo *WalletTransactionUpdateOne) Save(ctx context.Context) (*WalletTransaction, error) {
-	wtuo.defaults()
-	return withHooks(ctx, wtuo.sqlSave, wtuo.mutation, wtuo.hooks)
+func (_u *WalletTransactionUpdateOne) Save(ctx context.Context) (*WalletTransaction, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (wtuo *WalletTransactionUpdateOne) SaveX(ctx context.Context) *WalletTransaction {
-	node, err := wtuo.Save(ctx)
+func (_u *WalletTransactionUpdateOne) SaveX(ctx context.Context) *WalletTransaction {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -764,39 +764,39 @@ func (wtuo *WalletTransactionUpdateOne) SaveX(ctx context.Context) *WalletTransa
 }
 
 // Exec executes the query on the entity.
-func (wtuo *WalletTransactionUpdateOne) Exec(ctx context.Context) error {
-	_, err := wtuo.Save(ctx)
+func (_u *WalletTransactionUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wtuo *WalletTransactionUpdateOne) ExecX(ctx context.Context) {
-	if err := wtuo.Exec(ctx); err != nil {
+func (_u *WalletTransactionUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (wtuo *WalletTransactionUpdateOne) defaults() {
-	if _, ok := wtuo.mutation.UpdatedAt(); !ok {
+func (_u *WalletTransactionUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := wallettransaction.UpdateDefaultUpdatedAt()
-		wtuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (wtuo *WalletTransactionUpdateOne) check() error {
-	if v, ok := wtuo.mutation.GetType(); ok {
+func (_u *WalletTransactionUpdateOne) check() error {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := wallettransaction.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.type": %w`, err)}
 		}
 	}
-	if v, ok := wtuo.mutation.ReferenceType(); ok {
+	if v, ok := _u.mutation.ReferenceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "reference_type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.reference_type": %w`, err)}
 		}
 	}
-	if v, ok := wtuo.mutation.TransactionStatus(); ok {
+	if v, ok := _u.mutation.TransactionStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "transaction_status", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.transaction_status": %w`, err)}
 		}
@@ -804,17 +804,17 @@ func (wtuo *WalletTransactionUpdateOne) check() error {
 	return nil
 }
 
-func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *WalletTransaction, err error) {
-	if err := wtuo.check(); err != nil {
+func (_u *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *WalletTransaction, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(wallettransaction.Table, wallettransaction.Columns, sqlgraph.NewFieldSpec(wallettransaction.FieldID, field.TypeString))
-	id, ok := wtuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "WalletTransaction.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := wtuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, wallettransaction.FieldID)
 		for _, f := range fields {
@@ -826,110 +826,110 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 			}
 		}
 	}
-	if ps := wtuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := wtuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(wallettransaction.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := wtuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(wallettransaction.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if wtuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(wallettransaction.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(wallettransaction.FieldUpdatedBy, field.TypeString, value)
 	}
-	if wtuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(wallettransaction.FieldUpdatedBy, field.TypeString)
 	}
-	if wtuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(wallettransaction.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.CustomerID(); ok {
+	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(wallettransaction.FieldCustomerID, field.TypeString, value)
 	}
-	if wtuo.mutation.CustomerIDCleared() {
+	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(wallettransaction.FieldCustomerID, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)
 	}
-	if value, ok := wtuo.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(wallettransaction.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := wtuo.mutation.CreditAmount(); ok {
+	if value, ok := _u.mutation.CreditAmount(); ok {
 		_spec.SetField(wallettransaction.FieldCreditAmount, field.TypeOther, value)
 	}
-	if value, ok := wtuo.mutation.CreditBalanceBefore(); ok {
+	if value, ok := _u.mutation.CreditBalanceBefore(); ok {
 		_spec.SetField(wallettransaction.FieldCreditBalanceBefore, field.TypeOther, value)
 	}
-	if value, ok := wtuo.mutation.CreditBalanceAfter(); ok {
+	if value, ok := _u.mutation.CreditBalanceAfter(); ok {
 		_spec.SetField(wallettransaction.FieldCreditBalanceAfter, field.TypeOther, value)
 	}
-	if value, ok := wtuo.mutation.ReferenceType(); ok {
+	if value, ok := _u.mutation.ReferenceType(); ok {
 		_spec.SetField(wallettransaction.FieldReferenceType, field.TypeString, value)
 	}
-	if wtuo.mutation.ReferenceTypeCleared() {
+	if _u.mutation.ReferenceTypeCleared() {
 		_spec.ClearField(wallettransaction.FieldReferenceType, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.ReferenceID(); ok {
+	if value, ok := _u.mutation.ReferenceID(); ok {
 		_spec.SetField(wallettransaction.FieldReferenceID, field.TypeString, value)
 	}
-	if wtuo.mutation.ReferenceIDCleared() {
+	if _u.mutation.ReferenceIDCleared() {
 		_spec.ClearField(wallettransaction.FieldReferenceID, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(wallettransaction.FieldDescription, field.TypeString, value)
 	}
-	if wtuo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(wallettransaction.FieldDescription, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(wallettransaction.FieldMetadata, field.TypeJSON, value)
 	}
-	if wtuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(wallettransaction.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := wtuo.mutation.TransactionStatus(); ok {
+	if value, ok := _u.mutation.TransactionStatus(); ok {
 		_spec.SetField(wallettransaction.FieldTransactionStatus, field.TypeString, value)
 	}
-	if wtuo.mutation.ExpiryDateCleared() {
+	if _u.mutation.ExpiryDateCleared() {
 		_spec.ClearField(wallettransaction.FieldExpiryDate, field.TypeTime)
 	}
-	if value, ok := wtuo.mutation.CreditsAvailable(); ok {
+	if value, ok := _u.mutation.CreditsAvailable(); ok {
 		_spec.SetField(wallettransaction.FieldCreditsAvailable, field.TypeOther, value)
 	}
-	if wtuo.mutation.ConversionRateCleared() {
+	if _u.mutation.ConversionRateCleared() {
 		_spec.ClearField(wallettransaction.FieldConversionRate, field.TypeOther)
 	}
-	if wtuo.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(wallettransaction.FieldTopupConversionRate, field.TypeOther)
 	}
-	if wtuo.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(wallettransaction.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := wtuo.mutation.Priority(); ok {
+	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
 	}
-	if value, ok := wtuo.mutation.AddedPriority(); ok {
+	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(wallettransaction.FieldPriority, field.TypeInt, value)
 	}
-	if wtuo.mutation.PriorityCleared() {
+	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
 	}
-	if wtuo.mutation.ParentTransactionIDCleared() {
+	if _u.mutation.ParentTransactionIDCleared() {
 		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
 	}
-	_node = &WalletTransaction{config: wtuo.config}
+	_node = &WalletTransaction{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, wtuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallettransaction.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -937,6 +937,6 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 		}
 		return nil, err
 	}
-	wtuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

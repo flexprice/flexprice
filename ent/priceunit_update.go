@@ -24,141 +24,141 @@ type PriceUnitUpdate struct {
 }
 
 // Where appends a list predicates to the PriceUnitUpdate builder.
-func (puu *PriceUnitUpdate) Where(ps ...predicate.PriceUnit) *PriceUnitUpdate {
-	puu.mutation.Where(ps...)
-	return puu
+func (_u *PriceUnitUpdate) Where(ps ...predicate.PriceUnit) *PriceUnitUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (puu *PriceUnitUpdate) SetStatus(s string) *PriceUnitUpdate {
-	puu.mutation.SetStatus(s)
-	return puu
+func (_u *PriceUnitUpdate) SetStatus(v string) *PriceUnitUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (puu *PriceUnitUpdate) SetNillableStatus(s *string) *PriceUnitUpdate {
-	if s != nil {
-		puu.SetStatus(*s)
+func (_u *PriceUnitUpdate) SetNillableStatus(v *string) *PriceUnitUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return puu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (puu *PriceUnitUpdate) SetUpdatedAt(t time.Time) *PriceUnitUpdate {
-	puu.mutation.SetUpdatedAt(t)
-	return puu
+func (_u *PriceUnitUpdate) SetUpdatedAt(v time.Time) *PriceUnitUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (puu *PriceUnitUpdate) SetUpdatedBy(s string) *PriceUnitUpdate {
-	puu.mutation.SetUpdatedBy(s)
-	return puu
+func (_u *PriceUnitUpdate) SetUpdatedBy(v string) *PriceUnitUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (puu *PriceUnitUpdate) SetNillableUpdatedBy(s *string) *PriceUnitUpdate {
-	if s != nil {
-		puu.SetUpdatedBy(*s)
+func (_u *PriceUnitUpdate) SetNillableUpdatedBy(v *string) *PriceUnitUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return puu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (puu *PriceUnitUpdate) ClearUpdatedBy() *PriceUnitUpdate {
-	puu.mutation.ClearUpdatedBy()
-	return puu
+func (_u *PriceUnitUpdate) ClearUpdatedBy() *PriceUnitUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (puu *PriceUnitUpdate) SetMetadata(m map[string]string) *PriceUnitUpdate {
-	puu.mutation.SetMetadata(m)
-	return puu
+func (_u *PriceUnitUpdate) SetMetadata(v map[string]string) *PriceUnitUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (puu *PriceUnitUpdate) ClearMetadata() *PriceUnitUpdate {
-	puu.mutation.ClearMetadata()
-	return puu
+func (_u *PriceUnitUpdate) ClearMetadata() *PriceUnitUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (puu *PriceUnitUpdate) SetName(s string) *PriceUnitUpdate {
-	puu.mutation.SetName(s)
-	return puu
+func (_u *PriceUnitUpdate) SetName(v string) *PriceUnitUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (puu *PriceUnitUpdate) SetNillableName(s *string) *PriceUnitUpdate {
-	if s != nil {
-		puu.SetName(*s)
+func (_u *PriceUnitUpdate) SetNillableName(v *string) *PriceUnitUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return puu
+	return _u
 }
 
 // SetSymbol sets the "symbol" field.
-func (puu *PriceUnitUpdate) SetSymbol(s string) *PriceUnitUpdate {
-	puu.mutation.SetSymbol(s)
-	return puu
+func (_u *PriceUnitUpdate) SetSymbol(v string) *PriceUnitUpdate {
+	_u.mutation.SetSymbol(v)
+	return _u
 }
 
 // SetNillableSymbol sets the "symbol" field if the given value is not nil.
-func (puu *PriceUnitUpdate) SetNillableSymbol(s *string) *PriceUnitUpdate {
-	if s != nil {
-		puu.SetSymbol(*s)
+func (_u *PriceUnitUpdate) SetNillableSymbol(v *string) *PriceUnitUpdate {
+	if v != nil {
+		_u.SetSymbol(*v)
 	}
-	return puu
+	return _u
 }
 
 // AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (puu *PriceUnitUpdate) AddPriceIDs(ids ...string) *PriceUnitUpdate {
-	puu.mutation.AddPriceIDs(ids...)
-	return puu
+func (_u *PriceUnitUpdate) AddPriceIDs(ids ...string) *PriceUnitUpdate {
+	_u.mutation.AddPriceIDs(ids...)
+	return _u
 }
 
 // AddPrices adds the "prices" edges to the Price entity.
-func (puu *PriceUnitUpdate) AddPrices(p ...*Price) *PriceUnitUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
+func (_u *PriceUnitUpdate) AddPrices(v ...*Price) *PriceUnitUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puu.AddPriceIDs(ids...)
+	return _u.AddPriceIDs(ids...)
 }
 
 // Mutation returns the PriceUnitMutation object of the builder.
-func (puu *PriceUnitUpdate) Mutation() *PriceUnitMutation {
-	return puu.mutation
+func (_u *PriceUnitUpdate) Mutation() *PriceUnitMutation {
+	return _u.mutation
 }
 
 // ClearPrices clears all "prices" edges to the Price entity.
-func (puu *PriceUnitUpdate) ClearPrices() *PriceUnitUpdate {
-	puu.mutation.ClearPrices()
-	return puu
+func (_u *PriceUnitUpdate) ClearPrices() *PriceUnitUpdate {
+	_u.mutation.ClearPrices()
+	return _u
 }
 
 // RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (puu *PriceUnitUpdate) RemovePriceIDs(ids ...string) *PriceUnitUpdate {
-	puu.mutation.RemovePriceIDs(ids...)
-	return puu
+func (_u *PriceUnitUpdate) RemovePriceIDs(ids ...string) *PriceUnitUpdate {
+	_u.mutation.RemovePriceIDs(ids...)
+	return _u
 }
 
 // RemovePrices removes "prices" edges to Price entities.
-func (puu *PriceUnitUpdate) RemovePrices(p ...*Price) *PriceUnitUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
+func (_u *PriceUnitUpdate) RemovePrices(v ...*Price) *PriceUnitUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puu.RemovePriceIDs(ids...)
+	return _u.RemovePriceIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (puu *PriceUnitUpdate) Save(ctx context.Context) (int, error) {
-	puu.defaults()
-	return withHooks(ctx, puu.sqlSave, puu.mutation, puu.hooks)
+func (_u *PriceUnitUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (puu *PriceUnitUpdate) SaveX(ctx context.Context) int {
-	affected, err := puu.Save(ctx)
+func (_u *PriceUnitUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -166,34 +166,34 @@ func (puu *PriceUnitUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (puu *PriceUnitUpdate) Exec(ctx context.Context) error {
-	_, err := puu.Save(ctx)
+func (_u *PriceUnitUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (puu *PriceUnitUpdate) ExecX(ctx context.Context) {
-	if err := puu.Exec(ctx); err != nil {
+func (_u *PriceUnitUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (puu *PriceUnitUpdate) defaults() {
-	if _, ok := puu.mutation.UpdatedAt(); !ok {
+func (_u *PriceUnitUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := priceunit.UpdateDefaultUpdatedAt()
-		puu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (puu *PriceUnitUpdate) check() error {
-	if v, ok := puu.mutation.Name(); ok {
+func (_u *PriceUnitUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := priceunit.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "PriceUnit.name": %w`, err)}
 		}
 	}
-	if v, ok := puu.mutation.Symbol(); ok {
+	if v, ok := _u.mutation.Symbol(); ok {
 		if err := priceunit.SymbolValidator(v); err != nil {
 			return &ValidationError{Name: "symbol", err: fmt.Errorf(`ent: validator failed for field "PriceUnit.symbol": %w`, err)}
 		}
@@ -201,49 +201,49 @@ func (puu *PriceUnitUpdate) check() error {
 	return nil
 }
 
-func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := puu.check(); err != nil {
-		return n, err
+func (_u *PriceUnitUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(priceunit.Table, priceunit.Columns, sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString))
-	if ps := puu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := puu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(priceunit.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := puu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(priceunit.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if puu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(priceunit.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := puu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(priceunit.FieldUpdatedBy, field.TypeString, value)
 	}
-	if puu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(priceunit.FieldUpdatedBy, field.TypeString)
 	}
-	if puu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(priceunit.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := puu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(priceunit.FieldMetadata, field.TypeJSON, value)
 	}
-	if puu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(priceunit.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := puu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(priceunit.FieldName, field.TypeString, value)
 	}
-	if value, ok := puu.mutation.Symbol(); ok {
+	if value, ok := _u.mutation.Symbol(); ok {
 		_spec.SetField(priceunit.FieldSymbol, field.TypeString, value)
 	}
-	if puu.mutation.PricesCleared() {
+	if _u.mutation.PricesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -256,7 +256,7 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puu.mutation.RemovedPricesIDs(); len(nodes) > 0 && !puu.mutation.PricesCleared() {
+	if nodes := _u.mutation.RemovedPricesIDs(); len(nodes) > 0 && !_u.mutation.PricesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -272,7 +272,7 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puu.mutation.PricesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PricesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -288,7 +288,7 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, puu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{priceunit.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -296,8 +296,8 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	puu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // PriceUnitUpdateOne is the builder for updating a single PriceUnit entity.
@@ -309,148 +309,148 @@ type PriceUnitUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (puuo *PriceUnitUpdateOne) SetStatus(s string) *PriceUnitUpdateOne {
-	puuo.mutation.SetStatus(s)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetStatus(v string) *PriceUnitUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (puuo *PriceUnitUpdateOne) SetNillableStatus(s *string) *PriceUnitUpdateOne {
-	if s != nil {
-		puuo.SetStatus(*s)
+func (_u *PriceUnitUpdateOne) SetNillableStatus(v *string) *PriceUnitUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return puuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (puuo *PriceUnitUpdateOne) SetUpdatedAt(t time.Time) *PriceUnitUpdateOne {
-	puuo.mutation.SetUpdatedAt(t)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetUpdatedAt(v time.Time) *PriceUnitUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (puuo *PriceUnitUpdateOne) SetUpdatedBy(s string) *PriceUnitUpdateOne {
-	puuo.mutation.SetUpdatedBy(s)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetUpdatedBy(v string) *PriceUnitUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (puuo *PriceUnitUpdateOne) SetNillableUpdatedBy(s *string) *PriceUnitUpdateOne {
-	if s != nil {
-		puuo.SetUpdatedBy(*s)
+func (_u *PriceUnitUpdateOne) SetNillableUpdatedBy(v *string) *PriceUnitUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return puuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (puuo *PriceUnitUpdateOne) ClearUpdatedBy() *PriceUnitUpdateOne {
-	puuo.mutation.ClearUpdatedBy()
-	return puuo
+func (_u *PriceUnitUpdateOne) ClearUpdatedBy() *PriceUnitUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (puuo *PriceUnitUpdateOne) SetMetadata(m map[string]string) *PriceUnitUpdateOne {
-	puuo.mutation.SetMetadata(m)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetMetadata(v map[string]string) *PriceUnitUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (puuo *PriceUnitUpdateOne) ClearMetadata() *PriceUnitUpdateOne {
-	puuo.mutation.ClearMetadata()
-	return puuo
+func (_u *PriceUnitUpdateOne) ClearMetadata() *PriceUnitUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (puuo *PriceUnitUpdateOne) SetName(s string) *PriceUnitUpdateOne {
-	puuo.mutation.SetName(s)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetName(v string) *PriceUnitUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (puuo *PriceUnitUpdateOne) SetNillableName(s *string) *PriceUnitUpdateOne {
-	if s != nil {
-		puuo.SetName(*s)
+func (_u *PriceUnitUpdateOne) SetNillableName(v *string) *PriceUnitUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return puuo
+	return _u
 }
 
 // SetSymbol sets the "symbol" field.
-func (puuo *PriceUnitUpdateOne) SetSymbol(s string) *PriceUnitUpdateOne {
-	puuo.mutation.SetSymbol(s)
-	return puuo
+func (_u *PriceUnitUpdateOne) SetSymbol(v string) *PriceUnitUpdateOne {
+	_u.mutation.SetSymbol(v)
+	return _u
 }
 
 // SetNillableSymbol sets the "symbol" field if the given value is not nil.
-func (puuo *PriceUnitUpdateOne) SetNillableSymbol(s *string) *PriceUnitUpdateOne {
-	if s != nil {
-		puuo.SetSymbol(*s)
+func (_u *PriceUnitUpdateOne) SetNillableSymbol(v *string) *PriceUnitUpdateOne {
+	if v != nil {
+		_u.SetSymbol(*v)
 	}
-	return puuo
+	return _u
 }
 
 // AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (puuo *PriceUnitUpdateOne) AddPriceIDs(ids ...string) *PriceUnitUpdateOne {
-	puuo.mutation.AddPriceIDs(ids...)
-	return puuo
+func (_u *PriceUnitUpdateOne) AddPriceIDs(ids ...string) *PriceUnitUpdateOne {
+	_u.mutation.AddPriceIDs(ids...)
+	return _u
 }
 
 // AddPrices adds the "prices" edges to the Price entity.
-func (puuo *PriceUnitUpdateOne) AddPrices(p ...*Price) *PriceUnitUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
+func (_u *PriceUnitUpdateOne) AddPrices(v ...*Price) *PriceUnitUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puuo.AddPriceIDs(ids...)
+	return _u.AddPriceIDs(ids...)
 }
 
 // Mutation returns the PriceUnitMutation object of the builder.
-func (puuo *PriceUnitUpdateOne) Mutation() *PriceUnitMutation {
-	return puuo.mutation
+func (_u *PriceUnitUpdateOne) Mutation() *PriceUnitMutation {
+	return _u.mutation
 }
 
 // ClearPrices clears all "prices" edges to the Price entity.
-func (puuo *PriceUnitUpdateOne) ClearPrices() *PriceUnitUpdateOne {
-	puuo.mutation.ClearPrices()
-	return puuo
+func (_u *PriceUnitUpdateOne) ClearPrices() *PriceUnitUpdateOne {
+	_u.mutation.ClearPrices()
+	return _u
 }
 
 // RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (puuo *PriceUnitUpdateOne) RemovePriceIDs(ids ...string) *PriceUnitUpdateOne {
-	puuo.mutation.RemovePriceIDs(ids...)
-	return puuo
+func (_u *PriceUnitUpdateOne) RemovePriceIDs(ids ...string) *PriceUnitUpdateOne {
+	_u.mutation.RemovePriceIDs(ids...)
+	return _u
 }
 
 // RemovePrices removes "prices" edges to Price entities.
-func (puuo *PriceUnitUpdateOne) RemovePrices(p ...*Price) *PriceUnitUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
+func (_u *PriceUnitUpdateOne) RemovePrices(v ...*Price) *PriceUnitUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puuo.RemovePriceIDs(ids...)
+	return _u.RemovePriceIDs(ids...)
 }
 
 // Where appends a list predicates to the PriceUnitUpdate builder.
-func (puuo *PriceUnitUpdateOne) Where(ps ...predicate.PriceUnit) *PriceUnitUpdateOne {
-	puuo.mutation.Where(ps...)
-	return puuo
+func (_u *PriceUnitUpdateOne) Where(ps ...predicate.PriceUnit) *PriceUnitUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (puuo *PriceUnitUpdateOne) Select(field string, fields ...string) *PriceUnitUpdateOne {
-	puuo.fields = append([]string{field}, fields...)
-	return puuo
+func (_u *PriceUnitUpdateOne) Select(field string, fields ...string) *PriceUnitUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated PriceUnit entity.
-func (puuo *PriceUnitUpdateOne) Save(ctx context.Context) (*PriceUnit, error) {
-	puuo.defaults()
-	return withHooks(ctx, puuo.sqlSave, puuo.mutation, puuo.hooks)
+func (_u *PriceUnitUpdateOne) Save(ctx context.Context) (*PriceUnit, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (puuo *PriceUnitUpdateOne) SaveX(ctx context.Context) *PriceUnit {
-	node, err := puuo.Save(ctx)
+func (_u *PriceUnitUpdateOne) SaveX(ctx context.Context) *PriceUnit {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -458,34 +458,34 @@ func (puuo *PriceUnitUpdateOne) SaveX(ctx context.Context) *PriceUnit {
 }
 
 // Exec executes the query on the entity.
-func (puuo *PriceUnitUpdateOne) Exec(ctx context.Context) error {
-	_, err := puuo.Save(ctx)
+func (_u *PriceUnitUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (puuo *PriceUnitUpdateOne) ExecX(ctx context.Context) {
-	if err := puuo.Exec(ctx); err != nil {
+func (_u *PriceUnitUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (puuo *PriceUnitUpdateOne) defaults() {
-	if _, ok := puuo.mutation.UpdatedAt(); !ok {
+func (_u *PriceUnitUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := priceunit.UpdateDefaultUpdatedAt()
-		puuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (puuo *PriceUnitUpdateOne) check() error {
-	if v, ok := puuo.mutation.Name(); ok {
+func (_u *PriceUnitUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := priceunit.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "PriceUnit.name": %w`, err)}
 		}
 	}
-	if v, ok := puuo.mutation.Symbol(); ok {
+	if v, ok := _u.mutation.Symbol(); ok {
 		if err := priceunit.SymbolValidator(v); err != nil {
 			return &ValidationError{Name: "symbol", err: fmt.Errorf(`ent: validator failed for field "PriceUnit.symbol": %w`, err)}
 		}
@@ -493,17 +493,17 @@ func (puuo *PriceUnitUpdateOne) check() error {
 	return nil
 }
 
-func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, err error) {
-	if err := puuo.check(); err != nil {
+func (_u *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(priceunit.Table, priceunit.Columns, sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString))
-	id, ok := puuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "PriceUnit.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := puuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, priceunit.FieldID)
 		for _, f := range fields {
@@ -515,44 +515,44 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 			}
 		}
 	}
-	if ps := puuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := puuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(priceunit.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := puuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(priceunit.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if puuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(priceunit.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := puuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(priceunit.FieldUpdatedBy, field.TypeString, value)
 	}
-	if puuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(priceunit.FieldUpdatedBy, field.TypeString)
 	}
-	if puuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(priceunit.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := puuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(priceunit.FieldMetadata, field.TypeJSON, value)
 	}
-	if puuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(priceunit.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := puuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(priceunit.FieldName, field.TypeString, value)
 	}
-	if value, ok := puuo.mutation.Symbol(); ok {
+	if value, ok := _u.mutation.Symbol(); ok {
 		_spec.SetField(priceunit.FieldSymbol, field.TypeString, value)
 	}
-	if puuo.mutation.PricesCleared() {
+	if _u.mutation.PricesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -565,7 +565,7 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puuo.mutation.RemovedPricesIDs(); len(nodes) > 0 && !puuo.mutation.PricesCleared() {
+	if nodes := _u.mutation.RemovedPricesIDs(); len(nodes) > 0 && !_u.mutation.PricesCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -581,7 +581,7 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puuo.mutation.PricesIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PricesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: true,
@@ -597,10 +597,10 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &PriceUnit{config: puuo.config}
+	_node = &PriceUnit{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, puuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{priceunit.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -608,6 +608,6 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 		}
 		return nil, err
 	}
-	puuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

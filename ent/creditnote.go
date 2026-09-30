@@ -110,7 +110,7 @@ func (*CreditNote) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CreditNote fields.
-func (cn *CreditNote) assignValues(columns []string, values []any) error {
+func (_m *CreditNote) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -120,138 +120,138 @@ func (cn *CreditNote) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				cn.ID = value.String
+				_m.ID = value.String
 			}
 		case creditnote.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				cn.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case creditnote.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				cn.Status = value.String
+				_m.Status = value.String
 			}
 		case creditnote.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				cn.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case creditnote.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				cn.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case creditnote.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				cn.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case creditnote.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				cn.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case creditnote.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				cn.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case creditnote.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
 			} else if value.Valid {
-				cn.InvoiceID = value.String
+				_m.InvoiceID = value.String
 			}
 		case creditnote.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				cn.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case creditnote.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				cn.SubscriptionID = new(string)
-				*cn.SubscriptionID = value.String
+				_m.SubscriptionID = new(string)
+				*_m.SubscriptionID = value.String
 			}
 		case creditnote.FieldCreditNoteNumber:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_note_number", values[i])
 			} else if value.Valid {
-				cn.CreditNoteNumber = value.String
+				_m.CreditNoteNumber = value.String
 			}
 		case creditnote.FieldCreditNoteStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_note_status", values[i])
 			} else if value.Valid {
-				cn.CreditNoteStatus = types.CreditNoteStatus(value.String)
+				_m.CreditNoteStatus = types.CreditNoteStatus(value.String)
 			}
 		case creditnote.FieldCreditNoteType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_note_type", values[i])
 			} else if value.Valid {
-				cn.CreditNoteType = types.CreditNoteType(value.String)
+				_m.CreditNoteType = types.CreditNoteType(value.String)
 			}
 		case creditnote.FieldRefundStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field refund_status", values[i])
 			} else if value.Valid {
-				cn.RefundStatus = new(types.PaymentStatus)
-				*cn.RefundStatus = types.PaymentStatus(value.String)
+				_m.RefundStatus = new(types.PaymentStatus)
+				*_m.RefundStatus = types.PaymentStatus(value.String)
 			}
 		case creditnote.FieldReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reason", values[i])
 			} else if value.Valid {
-				cn.Reason = types.CreditNoteReason(value.String)
+				_m.Reason = types.CreditNoteReason(value.String)
 			}
 		case creditnote.FieldMemo:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field memo", values[i])
 			} else if value.Valid {
-				cn.Memo = value.String
+				_m.Memo = value.String
 			}
 		case creditnote.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				cn.Currency = value.String
+				_m.Currency = value.String
 			}
 		case creditnote.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
-				cn.IdempotencyKey = new(string)
-				*cn.IdempotencyKey = value.String
+				_m.IdempotencyKey = new(string)
+				*_m.IdempotencyKey = value.String
 			}
 		case creditnote.FieldVoidedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field voided_at", values[i])
 			} else if value.Valid {
-				cn.VoidedAt = new(time.Time)
-				*cn.VoidedAt = value.Time
+				_m.VoidedAt = new(time.Time)
+				*_m.VoidedAt = value.Time
 			}
 		case creditnote.FieldFinalizedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field finalized_at", values[i])
 			} else if value.Valid {
-				cn.FinalizedAt = new(time.Time)
-				*cn.FinalizedAt = value.Time
+				_m.FinalizedAt = new(time.Time)
+				*_m.FinalizedAt = value.Time
 			}
 		case creditnote.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cn.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -259,10 +259,10 @@ func (cn *CreditNote) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field total_amount", values[i])
 			} else if value != nil {
-				cn.TotalAmount = *value
+				_m.TotalAmount = *value
 			}
 		default:
-			cn.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -270,113 +270,113 @@ func (cn *CreditNote) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CreditNote.
 // This includes values selected through modifiers, order, etc.
-func (cn *CreditNote) Value(name string) (ent.Value, error) {
-	return cn.selectValues.Get(name)
+func (_m *CreditNote) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryLineItems queries the "line_items" edge of the CreditNote entity.
-func (cn *CreditNote) QueryLineItems() *CreditNoteLineItemQuery {
-	return NewCreditNoteClient(cn.config).QueryLineItems(cn)
+func (_m *CreditNote) QueryLineItems() *CreditNoteLineItemQuery {
+	return NewCreditNoteClient(_m.config).QueryLineItems(_m)
 }
 
 // Update returns a builder for updating this CreditNote.
 // Note that you need to call CreditNote.Unwrap() before calling this method if this CreditNote
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (cn *CreditNote) Update() *CreditNoteUpdateOne {
-	return NewCreditNoteClient(cn.config).UpdateOne(cn)
+func (_m *CreditNote) Update() *CreditNoteUpdateOne {
+	return NewCreditNoteClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CreditNote entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (cn *CreditNote) Unwrap() *CreditNote {
-	_tx, ok := cn.config.driver.(*txDriver)
+func (_m *CreditNote) Unwrap() *CreditNote {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CreditNote is not a transactional entity")
 	}
-	cn.config.driver = _tx.drv
-	return cn
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (cn *CreditNote) String() string {
+func (_m *CreditNote) String() string {
 	var builder strings.Builder
 	builder.WriteString("CreditNote(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", cn.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(cn.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(cn.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(cn.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(cn.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(cn.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(cn.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(cn.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("invoice_id=")
-	builder.WriteString(cn.InvoiceID)
+	builder.WriteString(_m.InvoiceID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(cn.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
-	if v := cn.SubscriptionID; v != nil {
+	if v := _m.SubscriptionID; v != nil {
 		builder.WriteString("subscription_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("credit_note_number=")
-	builder.WriteString(cn.CreditNoteNumber)
+	builder.WriteString(_m.CreditNoteNumber)
 	builder.WriteString(", ")
 	builder.WriteString("credit_note_status=")
-	builder.WriteString(fmt.Sprintf("%v", cn.CreditNoteStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.CreditNoteStatus))
 	builder.WriteString(", ")
 	builder.WriteString("credit_note_type=")
-	builder.WriteString(fmt.Sprintf("%v", cn.CreditNoteType))
+	builder.WriteString(fmt.Sprintf("%v", _m.CreditNoteType))
 	builder.WriteString(", ")
-	if v := cn.RefundStatus; v != nil {
+	if v := _m.RefundStatus; v != nil {
 		builder.WriteString("refund_status=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("reason=")
-	builder.WriteString(fmt.Sprintf("%v", cn.Reason))
+	builder.WriteString(fmt.Sprintf("%v", _m.Reason))
 	builder.WriteString(", ")
 	builder.WriteString("memo=")
-	builder.WriteString(cn.Memo)
+	builder.WriteString(_m.Memo)
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(cn.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
-	if v := cn.IdempotencyKey; v != nil {
+	if v := _m.IdempotencyKey; v != nil {
 		builder.WriteString("idempotency_key=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cn.VoidedAt; v != nil {
+	if v := _m.VoidedAt; v != nil {
 		builder.WriteString("voided_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cn.FinalizedAt; v != nil {
+	if v := _m.FinalizedAt; v != nil {
 		builder.WriteString("finalized_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", cn.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("total_amount=")
-	builder.WriteString(fmt.Sprintf("%v", cn.TotalAmount))
+	builder.WriteString(fmt.Sprintf("%v", _m.TotalAmount))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -20,56 +20,56 @@ type PriceDelete struct {
 }
 
 // Where appends a list predicates to the PriceDelete builder.
-func (pd *PriceDelete) Where(ps ...predicate.Price) *PriceDelete {
-	pd.mutation.Where(ps...)
-	return pd
+func (_d *PriceDelete) Where(ps ...predicate.Price) *PriceDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (pd *PriceDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, pd.sqlExec, pd.mutation, pd.hooks)
+func (_d *PriceDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pd *PriceDelete) ExecX(ctx context.Context) int {
-	n, err := pd.Exec(ctx)
+func (_d *PriceDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (pd *PriceDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *PriceDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(price.Table, sqlgraph.NewFieldSpec(price.FieldID, field.TypeString))
-	if ps := pd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, pd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	pd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // PriceDeleteOne is the builder for deleting a single Price entity.
 type PriceDeleteOne struct {
-	pd *PriceDelete
+	_d *PriceDelete
 }
 
 // Where appends a list predicates to the PriceDelete builder.
-func (pdo *PriceDeleteOne) Where(ps ...predicate.Price) *PriceDeleteOne {
-	pdo.pd.mutation.Where(ps...)
-	return pdo
+func (_d *PriceDeleteOne) Where(ps ...predicate.Price) *PriceDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (pdo *PriceDeleteOne) Exec(ctx context.Context) error {
-	n, err := pdo.pd.Exec(ctx)
+func (_d *PriceDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (pdo *PriceDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pdo *PriceDeleteOne) ExecX(ctx context.Context) {
-	if err := pdo.Exec(ctx); err != nil {
+func (_d *PriceDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

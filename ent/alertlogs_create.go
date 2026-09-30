@@ -22,201 +22,201 @@ type AlertLogsCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (alc *AlertLogsCreate) SetTenantID(s string) *AlertLogsCreate {
-	alc.mutation.SetTenantID(s)
-	return alc
+func (_c *AlertLogsCreate) SetTenantID(v string) *AlertLogsCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (alc *AlertLogsCreate) SetStatus(s string) *AlertLogsCreate {
-	alc.mutation.SetStatus(s)
-	return alc
+func (_c *AlertLogsCreate) SetStatus(v string) *AlertLogsCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableStatus(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetStatus(*s)
+func (_c *AlertLogsCreate) SetNillableStatus(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (alc *AlertLogsCreate) SetCreatedAt(t time.Time) *AlertLogsCreate {
-	alc.mutation.SetCreatedAt(t)
-	return alc
+func (_c *AlertLogsCreate) SetCreatedAt(v time.Time) *AlertLogsCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableCreatedAt(t *time.Time) *AlertLogsCreate {
-	if t != nil {
-		alc.SetCreatedAt(*t)
+func (_c *AlertLogsCreate) SetNillableCreatedAt(v *time.Time) *AlertLogsCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (alc *AlertLogsCreate) SetUpdatedAt(t time.Time) *AlertLogsCreate {
-	alc.mutation.SetUpdatedAt(t)
-	return alc
+func (_c *AlertLogsCreate) SetUpdatedAt(v time.Time) *AlertLogsCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableUpdatedAt(t *time.Time) *AlertLogsCreate {
-	if t != nil {
-		alc.SetUpdatedAt(*t)
+func (_c *AlertLogsCreate) SetNillableUpdatedAt(v *time.Time) *AlertLogsCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (alc *AlertLogsCreate) SetCreatedBy(s string) *AlertLogsCreate {
-	alc.mutation.SetCreatedBy(s)
-	return alc
+func (_c *AlertLogsCreate) SetCreatedBy(v string) *AlertLogsCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableCreatedBy(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetCreatedBy(*s)
+func (_c *AlertLogsCreate) SetNillableCreatedBy(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (alc *AlertLogsCreate) SetUpdatedBy(s string) *AlertLogsCreate {
-	alc.mutation.SetUpdatedBy(s)
-	return alc
+func (_c *AlertLogsCreate) SetUpdatedBy(v string) *AlertLogsCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableUpdatedBy(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetUpdatedBy(*s)
+func (_c *AlertLogsCreate) SetNillableUpdatedBy(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (alc *AlertLogsCreate) SetEnvironmentID(s string) *AlertLogsCreate {
-	alc.mutation.SetEnvironmentID(s)
-	return alc
+func (_c *AlertLogsCreate) SetEnvironmentID(v string) *AlertLogsCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableEnvironmentID(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetEnvironmentID(*s)
+func (_c *AlertLogsCreate) SetNillableEnvironmentID(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (alc *AlertLogsCreate) SetEntityType(s string) *AlertLogsCreate {
-	alc.mutation.SetEntityType(s)
-	return alc
+func (_c *AlertLogsCreate) SetEntityType(v string) *AlertLogsCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (alc *AlertLogsCreate) SetEntityID(s string) *AlertLogsCreate {
-	alc.mutation.SetEntityID(s)
-	return alc
+func (_c *AlertLogsCreate) SetEntityID(v string) *AlertLogsCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetParentEntityType sets the "parent_entity_type" field.
-func (alc *AlertLogsCreate) SetParentEntityType(s string) *AlertLogsCreate {
-	alc.mutation.SetParentEntityType(s)
-	return alc
+func (_c *AlertLogsCreate) SetParentEntityType(v string) *AlertLogsCreate {
+	_c.mutation.SetParentEntityType(v)
+	return _c
 }
 
 // SetNillableParentEntityType sets the "parent_entity_type" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableParentEntityType(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetParentEntityType(*s)
+func (_c *AlertLogsCreate) SetNillableParentEntityType(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetParentEntityType(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetParentEntityID sets the "parent_entity_id" field.
-func (alc *AlertLogsCreate) SetParentEntityID(s string) *AlertLogsCreate {
-	alc.mutation.SetParentEntityID(s)
-	return alc
+func (_c *AlertLogsCreate) SetParentEntityID(v string) *AlertLogsCreate {
+	_c.mutation.SetParentEntityID(v)
+	return _c
 }
 
 // SetNillableParentEntityID sets the "parent_entity_id" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableParentEntityID(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetParentEntityID(*s)
+func (_c *AlertLogsCreate) SetNillableParentEntityID(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetParentEntityID(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (alc *AlertLogsCreate) SetCustomerID(s string) *AlertLogsCreate {
-	alc.mutation.SetCustomerID(s)
-	return alc
+func (_c *AlertLogsCreate) SetCustomerID(v string) *AlertLogsCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableCustomerID(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetCustomerID(*s)
+func (_c *AlertLogsCreate) SetNillableCustomerID(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetCustomerID(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetAlertType sets the "alert_type" field.
-func (alc *AlertLogsCreate) SetAlertType(s string) *AlertLogsCreate {
-	alc.mutation.SetAlertType(s)
-	return alc
+func (_c *AlertLogsCreate) SetAlertType(v string) *AlertLogsCreate {
+	_c.mutation.SetAlertType(v)
+	return _c
 }
 
 // SetAlertStatus sets the "alert_status" field.
-func (alc *AlertLogsCreate) SetAlertStatus(s string) *AlertLogsCreate {
-	alc.mutation.SetAlertStatus(s)
-	return alc
+func (_c *AlertLogsCreate) SetAlertStatus(v string) *AlertLogsCreate {
+	_c.mutation.SetAlertStatus(v)
+	return _c
 }
 
 // SetAlertInfo sets the "alert_info" field.
-func (alc *AlertLogsCreate) SetAlertInfo(ti types.AlertInfo) *AlertLogsCreate {
-	alc.mutation.SetAlertInfo(ti)
-	return alc
+func (_c *AlertLogsCreate) SetAlertInfo(v types.AlertInfo) *AlertLogsCreate {
+	_c.mutation.SetAlertInfo(v)
+	return _c
 }
 
 // SetAlertSettingID sets the "alert_setting_id" field.
-func (alc *AlertLogsCreate) SetAlertSettingID(s string) *AlertLogsCreate {
-	alc.mutation.SetAlertSettingID(s)
-	return alc
+func (_c *AlertLogsCreate) SetAlertSettingID(v string) *AlertLogsCreate {
+	_c.mutation.SetAlertSettingID(v)
+	return _c
 }
 
 // SetNillableAlertSettingID sets the "alert_setting_id" field if the given value is not nil.
-func (alc *AlertLogsCreate) SetNillableAlertSettingID(s *string) *AlertLogsCreate {
-	if s != nil {
-		alc.SetAlertSettingID(*s)
+func (_c *AlertLogsCreate) SetNillableAlertSettingID(v *string) *AlertLogsCreate {
+	if v != nil {
+		_c.SetAlertSettingID(*v)
 	}
-	return alc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (alc *AlertLogsCreate) SetID(s string) *AlertLogsCreate {
-	alc.mutation.SetID(s)
-	return alc
+func (_c *AlertLogsCreate) SetID(v string) *AlertLogsCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the AlertLogsMutation object of the builder.
-func (alc *AlertLogsCreate) Mutation() *AlertLogsMutation {
-	return alc.mutation
+func (_c *AlertLogsCreate) Mutation() *AlertLogsMutation {
+	return _c.mutation
 }
 
 // Save creates the AlertLogs in the database.
-func (alc *AlertLogsCreate) Save(ctx context.Context) (*AlertLogs, error) {
-	alc.defaults()
-	return withHooks(ctx, alc.sqlSave, alc.mutation, alc.hooks)
+func (_c *AlertLogsCreate) Save(ctx context.Context) (*AlertLogs, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (alc *AlertLogsCreate) SaveX(ctx context.Context) *AlertLogs {
-	v, err := alc.Save(ctx)
+func (_c *AlertLogsCreate) SaveX(ctx context.Context) *AlertLogs {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -224,101 +224,101 @@ func (alc *AlertLogsCreate) SaveX(ctx context.Context) *AlertLogs {
 }
 
 // Exec executes the query.
-func (alc *AlertLogsCreate) Exec(ctx context.Context) error {
-	_, err := alc.Save(ctx)
+func (_c *AlertLogsCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (alc *AlertLogsCreate) ExecX(ctx context.Context) {
-	if err := alc.Exec(ctx); err != nil {
+func (_c *AlertLogsCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (alc *AlertLogsCreate) defaults() {
-	if _, ok := alc.mutation.Status(); !ok {
+func (_c *AlertLogsCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := alertlogs.DefaultStatus
-		alc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := alc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := alertlogs.DefaultCreatedAt()
-		alc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := alc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := alertlogs.DefaultUpdatedAt()
-		alc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := alc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := alertlogs.DefaultEnvironmentID
-		alc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (alc *AlertLogsCreate) check() error {
-	if _, ok := alc.mutation.TenantID(); !ok {
+func (_c *AlertLogsCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "AlertLogs.tenant_id"`)}
 	}
-	if v, ok := alc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := alertlogs.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "AlertLogs.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := alc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "AlertLogs.status"`)}
 	}
-	if _, ok := alc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AlertLogs.created_at"`)}
 	}
-	if _, ok := alc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "AlertLogs.updated_at"`)}
 	}
-	if _, ok := alc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "AlertLogs.entity_type"`)}
 	}
-	if v, ok := alc.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := alertlogs.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "AlertLogs.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := alc.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "AlertLogs.entity_id"`)}
 	}
-	if v, ok := alc.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := alertlogs.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "AlertLogs.entity_id": %w`, err)}
 		}
 	}
-	if _, ok := alc.mutation.AlertType(); !ok {
+	if _, ok := _c.mutation.AlertType(); !ok {
 		return &ValidationError{Name: "alert_type", err: errors.New(`ent: missing required field "AlertLogs.alert_type"`)}
 	}
-	if v, ok := alc.mutation.AlertType(); ok {
+	if v, ok := _c.mutation.AlertType(); ok {
 		if err := alertlogs.AlertTypeValidator(v); err != nil {
 			return &ValidationError{Name: "alert_type", err: fmt.Errorf(`ent: validator failed for field "AlertLogs.alert_type": %w`, err)}
 		}
 	}
-	if _, ok := alc.mutation.AlertStatus(); !ok {
+	if _, ok := _c.mutation.AlertStatus(); !ok {
 		return &ValidationError{Name: "alert_status", err: errors.New(`ent: missing required field "AlertLogs.alert_status"`)}
 	}
-	if v, ok := alc.mutation.AlertStatus(); ok {
+	if v, ok := _c.mutation.AlertStatus(); ok {
 		if err := alertlogs.AlertStatusValidator(v); err != nil {
 			return &ValidationError{Name: "alert_status", err: fmt.Errorf(`ent: validator failed for field "AlertLogs.alert_status": %w`, err)}
 		}
 	}
-	if _, ok := alc.mutation.AlertInfo(); !ok {
+	if _, ok := _c.mutation.AlertInfo(); !ok {
 		return &ValidationError{Name: "alert_info", err: errors.New(`ent: missing required field "AlertLogs.alert_info"`)}
 	}
 	return nil
 }
 
-func (alc *AlertLogsCreate) sqlSave(ctx context.Context) (*AlertLogs, error) {
-	if err := alc.check(); err != nil {
+func (_c *AlertLogsCreate) sqlSave(ctx context.Context) (*AlertLogs, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := alc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, alc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -331,81 +331,81 @@ func (alc *AlertLogsCreate) sqlSave(ctx context.Context) (*AlertLogs, error) {
 			return nil, fmt.Errorf("unexpected AlertLogs.ID type: %T", _spec.ID.Value)
 		}
 	}
-	alc.mutation.id = &_node.ID
-	alc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (alc *AlertLogsCreate) createSpec() (*AlertLogs, *sqlgraph.CreateSpec) {
+func (_c *AlertLogsCreate) createSpec() (*AlertLogs, *sqlgraph.CreateSpec) {
 	var (
-		_node = &AlertLogs{config: alc.config}
+		_node = &AlertLogs{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(alertlogs.Table, sqlgraph.NewFieldSpec(alertlogs.FieldID, field.TypeString))
 	)
-	if id, ok := alc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := alc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(alertlogs.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := alc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(alertlogs.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := alc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(alertlogs.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := alc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := alc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(alertlogs.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := alc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := alc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(alertlogs.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := alc.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(alertlogs.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := alc.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(alertlogs.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := alc.mutation.ParentEntityType(); ok {
+	if value, ok := _c.mutation.ParentEntityType(); ok {
 		_spec.SetField(alertlogs.FieldParentEntityType, field.TypeString, value)
 		_node.ParentEntityType = &value
 	}
-	if value, ok := alc.mutation.ParentEntityID(); ok {
+	if value, ok := _c.mutation.ParentEntityID(); ok {
 		_spec.SetField(alertlogs.FieldParentEntityID, field.TypeString, value)
 		_node.ParentEntityID = &value
 	}
-	if value, ok := alc.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(alertlogs.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = &value
 	}
-	if value, ok := alc.mutation.AlertType(); ok {
+	if value, ok := _c.mutation.AlertType(); ok {
 		_spec.SetField(alertlogs.FieldAlertType, field.TypeString, value)
 		_node.AlertType = value
 	}
-	if value, ok := alc.mutation.AlertStatus(); ok {
+	if value, ok := _c.mutation.AlertStatus(); ok {
 		_spec.SetField(alertlogs.FieldAlertStatus, field.TypeString, value)
 		_node.AlertStatus = value
 	}
-	if value, ok := alc.mutation.AlertInfo(); ok {
+	if value, ok := _c.mutation.AlertInfo(); ok {
 		_spec.SetField(alertlogs.FieldAlertInfo, field.TypeJSON, value)
 		_node.AlertInfo = value
 	}
-	if value, ok := alc.mutation.AlertSettingID(); ok {
+	if value, ok := _c.mutation.AlertSettingID(); ok {
 		_spec.SetField(alertlogs.FieldAlertSettingID, field.TypeString, value)
 		_node.AlertSettingID = &value
 	}
@@ -420,16 +420,16 @@ type AlertLogsCreateBulk struct {
 }
 
 // Save creates the AlertLogs entities in the database.
-func (alcb *AlertLogsCreateBulk) Save(ctx context.Context) ([]*AlertLogs, error) {
-	if alcb.err != nil {
-		return nil, alcb.err
+func (_c *AlertLogsCreateBulk) Save(ctx context.Context) ([]*AlertLogs, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(alcb.builders))
-	nodes := make([]*AlertLogs, len(alcb.builders))
-	mutators := make([]Mutator, len(alcb.builders))
-	for i := range alcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*AlertLogs, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := alcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AlertLogsMutation)
@@ -443,11 +443,11 @@ func (alcb *AlertLogsCreateBulk) Save(ctx context.Context) ([]*AlertLogs, error)
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, alcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, alcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -467,7 +467,7 @@ func (alcb *AlertLogsCreateBulk) Save(ctx context.Context) ([]*AlertLogs, error)
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, alcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -475,8 +475,8 @@ func (alcb *AlertLogsCreateBulk) Save(ctx context.Context) ([]*AlertLogs, error)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (alcb *AlertLogsCreateBulk) SaveX(ctx context.Context) []*AlertLogs {
-	v, err := alcb.Save(ctx)
+func (_c *AlertLogsCreateBulk) SaveX(ctx context.Context) []*AlertLogs {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -484,14 +484,14 @@ func (alcb *AlertLogsCreateBulk) SaveX(ctx context.Context) []*AlertLogs {
 }
 
 // Exec executes the query.
-func (alcb *AlertLogsCreateBulk) Exec(ctx context.Context) error {
-	_, err := alcb.Save(ctx)
+func (_c *AlertLogsCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (alcb *AlertLogsCreateBulk) ExecX(ctx context.Context) {
-	if err := alcb.Exec(ctx); err != nil {
+func (_c *AlertLogsCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

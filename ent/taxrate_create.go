@@ -22,187 +22,187 @@ type TaxRateCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (trc *TaxRateCreate) SetTenantID(s string) *TaxRateCreate {
-	trc.mutation.SetTenantID(s)
-	return trc
+func (_c *TaxRateCreate) SetTenantID(v string) *TaxRateCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (trc *TaxRateCreate) SetStatus(s string) *TaxRateCreate {
-	trc.mutation.SetStatus(s)
-	return trc
+func (_c *TaxRateCreate) SetStatus(v string) *TaxRateCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableStatus(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetStatus(*s)
+func (_c *TaxRateCreate) SetNillableStatus(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (trc *TaxRateCreate) SetCreatedAt(t time.Time) *TaxRateCreate {
-	trc.mutation.SetCreatedAt(t)
-	return trc
+func (_c *TaxRateCreate) SetCreatedAt(v time.Time) *TaxRateCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableCreatedAt(t *time.Time) *TaxRateCreate {
-	if t != nil {
-		trc.SetCreatedAt(*t)
+func (_c *TaxRateCreate) SetNillableCreatedAt(v *time.Time) *TaxRateCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (trc *TaxRateCreate) SetUpdatedAt(t time.Time) *TaxRateCreate {
-	trc.mutation.SetUpdatedAt(t)
-	return trc
+func (_c *TaxRateCreate) SetUpdatedAt(v time.Time) *TaxRateCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableUpdatedAt(t *time.Time) *TaxRateCreate {
-	if t != nil {
-		trc.SetUpdatedAt(*t)
+func (_c *TaxRateCreate) SetNillableUpdatedAt(v *time.Time) *TaxRateCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (trc *TaxRateCreate) SetCreatedBy(s string) *TaxRateCreate {
-	trc.mutation.SetCreatedBy(s)
-	return trc
+func (_c *TaxRateCreate) SetCreatedBy(v string) *TaxRateCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableCreatedBy(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetCreatedBy(*s)
+func (_c *TaxRateCreate) SetNillableCreatedBy(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (trc *TaxRateCreate) SetUpdatedBy(s string) *TaxRateCreate {
-	trc.mutation.SetUpdatedBy(s)
-	return trc
+func (_c *TaxRateCreate) SetUpdatedBy(v string) *TaxRateCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableUpdatedBy(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetUpdatedBy(*s)
+func (_c *TaxRateCreate) SetNillableUpdatedBy(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (trc *TaxRateCreate) SetEnvironmentID(s string) *TaxRateCreate {
-	trc.mutation.SetEnvironmentID(s)
-	return trc
+func (_c *TaxRateCreate) SetEnvironmentID(v string) *TaxRateCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableEnvironmentID(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetEnvironmentID(*s)
+func (_c *TaxRateCreate) SetNillableEnvironmentID(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetName sets the "name" field.
-func (trc *TaxRateCreate) SetName(s string) *TaxRateCreate {
-	trc.mutation.SetName(s)
-	return trc
+func (_c *TaxRateCreate) SetName(v string) *TaxRateCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetDescription sets the "description" field.
-func (trc *TaxRateCreate) SetDescription(s string) *TaxRateCreate {
-	trc.mutation.SetDescription(s)
-	return trc
+func (_c *TaxRateCreate) SetDescription(v string) *TaxRateCreate {
+	_c.mutation.SetDescription(v)
+	return _c
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableDescription(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetDescription(*s)
+func (_c *TaxRateCreate) SetNillableDescription(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetDescription(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetCode sets the "code" field.
-func (trc *TaxRateCreate) SetCode(s string) *TaxRateCreate {
-	trc.mutation.SetCode(s)
-	return trc
+func (_c *TaxRateCreate) SetCode(v string) *TaxRateCreate {
+	_c.mutation.SetCode(v)
+	return _c
 }
 
 // SetTaxRateStatus sets the "tax_rate_status" field.
-func (trc *TaxRateCreate) SetTaxRateStatus(s string) *TaxRateCreate {
-	trc.mutation.SetTaxRateStatus(s)
-	return trc
+func (_c *TaxRateCreate) SetTaxRateStatus(v string) *TaxRateCreate {
+	_c.mutation.SetTaxRateStatus(v)
+	return _c
 }
 
 // SetTaxRateType sets the "tax_rate_type" field.
-func (trc *TaxRateCreate) SetTaxRateType(s string) *TaxRateCreate {
-	trc.mutation.SetTaxRateType(s)
-	return trc
+func (_c *TaxRateCreate) SetTaxRateType(v string) *TaxRateCreate {
+	_c.mutation.SetTaxRateType(v)
+	return _c
 }
 
 // SetNillableTaxRateType sets the "tax_rate_type" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillableTaxRateType(s *string) *TaxRateCreate {
-	if s != nil {
-		trc.SetTaxRateType(*s)
+func (_c *TaxRateCreate) SetNillableTaxRateType(v *string) *TaxRateCreate {
+	if v != nil {
+		_c.SetTaxRateType(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetScope sets the "scope" field.
-func (trc *TaxRateCreate) SetScope(s string) *TaxRateCreate {
-	trc.mutation.SetScope(s)
-	return trc
+func (_c *TaxRateCreate) SetScope(v string) *TaxRateCreate {
+	_c.mutation.SetScope(v)
+	return _c
 }
 
 // SetPercentageValue sets the "percentage_value" field.
-func (trc *TaxRateCreate) SetPercentageValue(d decimal.Decimal) *TaxRateCreate {
-	trc.mutation.SetPercentageValue(d)
-	return trc
+func (_c *TaxRateCreate) SetPercentageValue(v decimal.Decimal) *TaxRateCreate {
+	_c.mutation.SetPercentageValue(v)
+	return _c
 }
 
 // SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
-func (trc *TaxRateCreate) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateCreate {
-	if d != nil {
-		trc.SetPercentageValue(*d)
+func (_c *TaxRateCreate) SetNillablePercentageValue(v *decimal.Decimal) *TaxRateCreate {
+	if v != nil {
+		_c.SetPercentageValue(*v)
 	}
-	return trc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (trc *TaxRateCreate) SetMetadata(m map[string]string) *TaxRateCreate {
-	trc.mutation.SetMetadata(m)
-	return trc
+func (_c *TaxRateCreate) SetMetadata(v map[string]string) *TaxRateCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (trc *TaxRateCreate) SetID(s string) *TaxRateCreate {
-	trc.mutation.SetID(s)
-	return trc
+func (_c *TaxRateCreate) SetID(v string) *TaxRateCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the TaxRateMutation object of the builder.
-func (trc *TaxRateCreate) Mutation() *TaxRateMutation {
-	return trc.mutation
+func (_c *TaxRateCreate) Mutation() *TaxRateMutation {
+	return _c.mutation
 }
 
 // Save creates the TaxRate in the database.
-func (trc *TaxRateCreate) Save(ctx context.Context) (*TaxRate, error) {
-	trc.defaults()
-	return withHooks(ctx, trc.sqlSave, trc.mutation, trc.hooks)
+func (_c *TaxRateCreate) Save(ctx context.Context) (*TaxRate, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (trc *TaxRateCreate) SaveX(ctx context.Context) *TaxRate {
-	v, err := trc.Save(ctx)
+func (_c *TaxRateCreate) SaveX(ctx context.Context) *TaxRate {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -210,101 +210,101 @@ func (trc *TaxRateCreate) SaveX(ctx context.Context) *TaxRate {
 }
 
 // Exec executes the query.
-func (trc *TaxRateCreate) Exec(ctx context.Context) error {
-	_, err := trc.Save(ctx)
+func (_c *TaxRateCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (trc *TaxRateCreate) ExecX(ctx context.Context) {
-	if err := trc.Exec(ctx); err != nil {
+func (_c *TaxRateCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (trc *TaxRateCreate) defaults() {
-	if _, ok := trc.mutation.Status(); !ok {
+func (_c *TaxRateCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := taxrate.DefaultStatus
-		trc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := trc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := taxrate.DefaultCreatedAt()
-		trc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := trc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := taxrate.DefaultUpdatedAt()
-		trc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := trc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := taxrate.DefaultEnvironmentID
-		trc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := trc.mutation.TaxRateType(); !ok {
+	if _, ok := _c.mutation.TaxRateType(); !ok {
 		v := taxrate.DefaultTaxRateType
-		trc.mutation.SetTaxRateType(v)
+		_c.mutation.SetTaxRateType(v)
 	}
-	if _, ok := trc.mutation.PercentageValue(); !ok {
+	if _, ok := _c.mutation.PercentageValue(); !ok {
 		v := taxrate.DefaultPercentageValue
-		trc.mutation.SetPercentageValue(v)
+		_c.mutation.SetPercentageValue(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (trc *TaxRateCreate) check() error {
-	if _, ok := trc.mutation.TenantID(); !ok {
+func (_c *TaxRateCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "TaxRate.tenant_id"`)}
 	}
-	if v, ok := trc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := taxrate.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "TaxRate.status"`)}
 	}
-	if _, ok := trc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TaxRate.created_at"`)}
 	}
-	if _, ok := trc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "TaxRate.updated_at"`)}
 	}
-	if _, ok := trc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "TaxRate.name"`)}
 	}
-	if v, ok := trc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := taxrate.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "TaxRate.name": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.Code(); !ok {
+	if _, ok := _c.mutation.Code(); !ok {
 		return &ValidationError{Name: "code", err: errors.New(`ent: missing required field "TaxRate.code"`)}
 	}
-	if v, ok := trc.mutation.Code(); ok {
+	if v, ok := _c.mutation.Code(); ok {
 		if err := taxrate.CodeValidator(v); err != nil {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.TaxRateStatus(); !ok {
+	if _, ok := _c.mutation.TaxRateStatus(); !ok {
 		return &ValidationError{Name: "tax_rate_status", err: errors.New(`ent: missing required field "TaxRate.tax_rate_status"`)}
 	}
-	if v, ok := trc.mutation.TaxRateStatus(); ok {
+	if v, ok := _c.mutation.TaxRateStatus(); ok {
 		if err := taxrate.TaxRateStatusValidator(v); err != nil {
 			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.TaxRateType(); !ok {
+	if _, ok := _c.mutation.TaxRateType(); !ok {
 		return &ValidationError{Name: "tax_rate_type", err: errors.New(`ent: missing required field "TaxRate.tax_rate_type"`)}
 	}
-	if v, ok := trc.mutation.TaxRateType(); ok {
+	if v, ok := _c.mutation.TaxRateType(); ok {
 		if err := taxrate.TaxRateTypeValidator(v); err != nil {
 			return &ValidationError{Name: "tax_rate_type", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_type": %w`, err)}
 		}
 	}
-	if _, ok := trc.mutation.Scope(); !ok {
+	if _, ok := _c.mutation.Scope(); !ok {
 		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "TaxRate.scope"`)}
 	}
-	if v, ok := trc.mutation.Scope(); ok {
+	if v, ok := _c.mutation.Scope(); ok {
 		if err := taxrate.ScopeValidator(v); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
 		}
@@ -312,12 +312,12 @@ func (trc *TaxRateCreate) check() error {
 	return nil
 }
 
-func (trc *TaxRateCreate) sqlSave(ctx context.Context) (*TaxRate, error) {
-	if err := trc.check(); err != nil {
+func (_c *TaxRateCreate) sqlSave(ctx context.Context) (*TaxRate, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := trc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, trc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -330,77 +330,77 @@ func (trc *TaxRateCreate) sqlSave(ctx context.Context) (*TaxRate, error) {
 			return nil, fmt.Errorf("unexpected TaxRate.ID type: %T", _spec.ID.Value)
 		}
 	}
-	trc.mutation.id = &_node.ID
-	trc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (trc *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
+func (_c *TaxRateCreate) createSpec() (*TaxRate, *sqlgraph.CreateSpec) {
 	var (
-		_node = &TaxRate{config: trc.config}
+		_node = &TaxRate{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(taxrate.Table, sqlgraph.NewFieldSpec(taxrate.FieldID, field.TypeString))
 	)
-	if id, ok := trc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := trc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(taxrate.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := trc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(taxrate.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := trc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(taxrate.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := trc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxrate.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := trc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(taxrate.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := trc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxrate.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := trc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(taxrate.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := trc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(taxrate.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := trc.mutation.Description(); ok {
+	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(taxrate.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
-	if value, ok := trc.mutation.Code(); ok {
+	if value, ok := _c.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 		_node.Code = value
 	}
-	if value, ok := trc.mutation.TaxRateStatus(); ok {
+	if value, ok := _c.mutation.TaxRateStatus(); ok {
 		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
 		_node.TaxRateStatus = value
 	}
-	if value, ok := trc.mutation.TaxRateType(); ok {
+	if value, ok := _c.mutation.TaxRateType(); ok {
 		_spec.SetField(taxrate.FieldTaxRateType, field.TypeString, value)
 		_node.TaxRateType = value
 	}
-	if value, ok := trc.mutation.Scope(); ok {
+	if value, ok := _c.mutation.Scope(); ok {
 		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
 		_node.Scope = value
 	}
-	if value, ok := trc.mutation.PercentageValue(); ok {
+	if value, ok := _c.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
 		_node.PercentageValue = &value
 	}
-	if value, ok := trc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
@@ -415,16 +415,16 @@ type TaxRateCreateBulk struct {
 }
 
 // Save creates the TaxRate entities in the database.
-func (trcb *TaxRateCreateBulk) Save(ctx context.Context) ([]*TaxRate, error) {
-	if trcb.err != nil {
-		return nil, trcb.err
+func (_c *TaxRateCreateBulk) Save(ctx context.Context) ([]*TaxRate, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(trcb.builders))
-	nodes := make([]*TaxRate, len(trcb.builders))
-	mutators := make([]Mutator, len(trcb.builders))
-	for i := range trcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*TaxRate, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := trcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*TaxRateMutation)
@@ -438,11 +438,11 @@ func (trcb *TaxRateCreateBulk) Save(ctx context.Context) ([]*TaxRate, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, trcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, trcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -462,7 +462,7 @@ func (trcb *TaxRateCreateBulk) Save(ctx context.Context) ([]*TaxRate, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, trcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -470,8 +470,8 @@ func (trcb *TaxRateCreateBulk) Save(ctx context.Context) ([]*TaxRate, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (trcb *TaxRateCreateBulk) SaveX(ctx context.Context) []*TaxRate {
-	v, err := trcb.Save(ctx)
+func (_c *TaxRateCreateBulk) SaveX(ctx context.Context) []*TaxRate {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -479,14 +479,14 @@ func (trcb *TaxRateCreateBulk) SaveX(ctx context.Context) []*TaxRate {
 }
 
 // Exec executes the query.
-func (trcb *TaxRateCreateBulk) Exec(ctx context.Context) error {
-	_, err := trcb.Save(ctx)
+func (_c *TaxRateCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (trcb *TaxRateCreateBulk) ExecX(ctx context.Context) {
-	if err := trcb.Exec(ctx); err != nil {
+func (_c *TaxRateCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

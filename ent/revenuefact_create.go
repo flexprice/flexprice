@@ -23,377 +23,377 @@ type RevenueFactCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (rfc *RevenueFactCreate) SetTenantID(s string) *RevenueFactCreate {
-	rfc.mutation.SetTenantID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetTenantID(v string) *RevenueFactCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (rfc *RevenueFactCreate) SetEnvironmentID(s string) *RevenueFactCreate {
-	rfc.mutation.SetEnvironmentID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetEnvironmentID(v string) *RevenueFactCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (rfc *RevenueFactCreate) SetCustomerID(s string) *RevenueFactCreate {
-	rfc.mutation.SetCustomerID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetCustomerID(v string) *RevenueFactCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (rfc *RevenueFactCreate) SetSubscriptionID(s string) *RevenueFactCreate {
-	rfc.mutation.SetSubscriptionID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetSubscriptionID(v string) *RevenueFactCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetSubLineItemID sets the "sub_line_item_id" field.
-func (rfc *RevenueFactCreate) SetSubLineItemID(s string) *RevenueFactCreate {
-	rfc.mutation.SetSubLineItemID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetSubLineItemID(v string) *RevenueFactCreate {
+	_c.mutation.SetSubLineItemID(v)
+	return _c
 }
 
 // SetNillableSubLineItemID sets the "sub_line_item_id" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableSubLineItemID(s *string) *RevenueFactCreate {
-	if s != nil {
-		rfc.SetSubLineItemID(*s)
+func (_c *RevenueFactCreate) SetNillableSubLineItemID(v *string) *RevenueFactCreate {
+	if v != nil {
+		_c.SetSubLineItemID(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetPriceID sets the "price_id" field.
-func (rfc *RevenueFactCreate) SetPriceID(s string) *RevenueFactCreate {
-	rfc.mutation.SetPriceID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetPriceID(v string) *RevenueFactCreate {
+	_c.mutation.SetPriceID(v)
+	return _c
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillablePriceID(s *string) *RevenueFactCreate {
-	if s != nil {
-		rfc.SetPriceID(*s)
+func (_c *RevenueFactCreate) SetNillablePriceID(v *string) *RevenueFactCreate {
+	if v != nil {
+		_c.SetPriceID(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetMeterID sets the "meter_id" field.
-func (rfc *RevenueFactCreate) SetMeterID(s string) *RevenueFactCreate {
-	rfc.mutation.SetMeterID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetMeterID(v string) *RevenueFactCreate {
+	_c.mutation.SetMeterID(v)
+	return _c
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableMeterID(s *string) *RevenueFactCreate {
-	if s != nil {
-		rfc.SetMeterID(*s)
+func (_c *RevenueFactCreate) SetNillableMeterID(v *string) *RevenueFactCreate {
+	if v != nil {
+		_c.SetMeterID(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetAggregationType sets the "aggregation_type" field.
-func (rfc *RevenueFactCreate) SetAggregationType(tt types.AggregationType) *RevenueFactCreate {
-	rfc.mutation.SetAggregationType(tt)
-	return rfc
+func (_c *RevenueFactCreate) SetAggregationType(v types.AggregationType) *RevenueFactCreate {
+	_c.mutation.SetAggregationType(v)
+	return _c
 }
 
 // SetNillableAggregationType sets the "aggregation_type" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableAggregationType(tt *types.AggregationType) *RevenueFactCreate {
-	if tt != nil {
-		rfc.SetAggregationType(*tt)
+func (_c *RevenueFactCreate) SetNillableAggregationType(v *types.AggregationType) *RevenueFactCreate {
+	if v != nil {
+		_c.SetAggregationType(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetRevenueSource sets the "revenue_source" field.
-func (rfc *RevenueFactCreate) SetRevenueSource(ts types.RevenueSource) *RevenueFactCreate {
-	rfc.mutation.SetRevenueSource(ts)
-	return rfc
+func (_c *RevenueFactCreate) SetRevenueSource(v types.RevenueSource) *RevenueFactCreate {
+	_c.mutation.SetRevenueSource(v)
+	return _c
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (rfc *RevenueFactCreate) SetPeriodStart(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetPeriodStart(t)
-	return rfc
+func (_c *RevenueFactCreate) SetPeriodStart(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (rfc *RevenueFactCreate) SetPeriodEnd(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetPeriodEnd(t)
-	return rfc
+func (_c *RevenueFactCreate) SetPeriodEnd(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetPeriodEnd(v)
+	return _c
 }
 
 // SetDay sets the "day" field.
-func (rfc *RevenueFactCreate) SetDay(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetDay(t)
-	return rfc
+func (_c *RevenueFactCreate) SetDay(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetDay(v)
+	return _c
 }
 
 // SetServiceStart sets the "service_start" field.
-func (rfc *RevenueFactCreate) SetServiceStart(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetServiceStart(t)
-	return rfc
+func (_c *RevenueFactCreate) SetServiceStart(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetServiceStart(v)
+	return _c
 }
 
 // SetNillableServiceStart sets the "service_start" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableServiceStart(t *time.Time) *RevenueFactCreate {
-	if t != nil {
-		rfc.SetServiceStart(*t)
+func (_c *RevenueFactCreate) SetNillableServiceStart(v *time.Time) *RevenueFactCreate {
+	if v != nil {
+		_c.SetServiceStart(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetServiceEnd sets the "service_end" field.
-func (rfc *RevenueFactCreate) SetServiceEnd(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetServiceEnd(t)
-	return rfc
+func (_c *RevenueFactCreate) SetServiceEnd(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetServiceEnd(v)
+	return _c
 }
 
 // SetNillableServiceEnd sets the "service_end" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableServiceEnd(t *time.Time) *RevenueFactCreate {
-	if t != nil {
-		rfc.SetServiceEnd(*t)
+func (_c *RevenueFactCreate) SetNillableServiceEnd(v *time.Time) *RevenueFactCreate {
+	if v != nil {
+		_c.SetServiceEnd(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetRecognitionMethod sets the "recognition_method" field.
-func (rfc *RevenueFactCreate) SetRecognitionMethod(tm types.RecognitionMethod) *RevenueFactCreate {
-	rfc.mutation.SetRecognitionMethod(tm)
-	return rfc
+func (_c *RevenueFactCreate) SetRecognitionMethod(v types.RecognitionMethod) *RevenueFactCreate {
+	_c.mutation.SetRecognitionMethod(v)
+	return _c
 }
 
 // SetNillableRecognitionMethod sets the "recognition_method" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableRecognitionMethod(tm *types.RecognitionMethod) *RevenueFactCreate {
-	if tm != nil {
-		rfc.SetRecognitionMethod(*tm)
+func (_c *RevenueFactCreate) SetNillableRecognitionMethod(v *types.RecognitionMethod) *RevenueFactCreate {
+	if v != nil {
+		_c.SetRecognitionMethod(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetUsageAtListRate sets the "usage_at_list_rate" field.
-func (rfc *RevenueFactCreate) SetUsageAtListRate(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetUsageAtListRate(d)
-	return rfc
+func (_c *RevenueFactCreate) SetUsageAtListRate(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetUsageAtListRate(v)
+	return _c
 }
 
 // SetNillableUsageAtListRate sets the "usage_at_list_rate" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableUsageAtListRate(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetUsageAtListRate(*d)
+func (_c *RevenueFactCreate) SetNillableUsageAtListRate(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetUsageAtListRate(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetTierDelta sets the "tier_delta" field.
-func (rfc *RevenueFactCreate) SetTierDelta(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetTierDelta(d)
-	return rfc
+func (_c *RevenueFactCreate) SetTierDelta(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetTierDelta(v)
+	return _c
 }
 
 // SetNillableTierDelta sets the "tier_delta" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableTierDelta(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetTierDelta(*d)
+func (_c *RevenueFactCreate) SetNillableTierDelta(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetTierDelta(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetEntitlementAmount sets the "entitlement_amount" field.
-func (rfc *RevenueFactCreate) SetEntitlementAmount(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetEntitlementAmount(d)
-	return rfc
+func (_c *RevenueFactCreate) SetEntitlementAmount(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetEntitlementAmount(v)
+	return _c
 }
 
 // SetNillableEntitlementAmount sets the "entitlement_amount" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableEntitlementAmount(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetEntitlementAmount(*d)
+func (_c *RevenueFactCreate) SetNillableEntitlementAmount(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetEntitlementAmount(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetLineDiscount sets the "line_discount" field.
-func (rfc *RevenueFactCreate) SetLineDiscount(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetLineDiscount(d)
-	return rfc
+func (_c *RevenueFactCreate) SetLineDiscount(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetLineDiscount(v)
+	return _c
 }
 
 // SetNillableLineDiscount sets the "line_discount" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableLineDiscount(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetLineDiscount(*d)
+func (_c *RevenueFactCreate) SetNillableLineDiscount(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetLineDiscount(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetInvoiceDiscount sets the "invoice_discount" field.
-func (rfc *RevenueFactCreate) SetInvoiceDiscount(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetInvoiceDiscount(d)
-	return rfc
+func (_c *RevenueFactCreate) SetInvoiceDiscount(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetInvoiceDiscount(v)
+	return _c
 }
 
 // SetNillableInvoiceDiscount sets the "invoice_discount" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableInvoiceDiscount(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetInvoiceDiscount(*d)
+func (_c *RevenueFactCreate) SetNillableInvoiceDiscount(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetInvoiceDiscount(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetNetAmount sets the "net_amount" field.
-func (rfc *RevenueFactCreate) SetNetAmount(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetNetAmount(d)
-	return rfc
+func (_c *RevenueFactCreate) SetNetAmount(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetNetAmount(v)
+	return _c
 }
 
 // SetBillableQty sets the "billable_qty" field.
-func (rfc *RevenueFactCreate) SetBillableQty(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetBillableQty(d)
-	return rfc
+func (_c *RevenueFactCreate) SetBillableQty(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetBillableQty(v)
+	return _c
 }
 
 // SetNillableBillableQty sets the "billable_qty" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableBillableQty(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetBillableQty(*d)
+func (_c *RevenueFactCreate) SetNillableBillableQty(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetBillableQty(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetEntitlementQty sets the "entitlement_qty" field.
-func (rfc *RevenueFactCreate) SetEntitlementQty(d decimal.Decimal) *RevenueFactCreate {
-	rfc.mutation.SetEntitlementQty(d)
-	return rfc
+func (_c *RevenueFactCreate) SetEntitlementQty(v decimal.Decimal) *RevenueFactCreate {
+	_c.mutation.SetEntitlementQty(v)
+	return _c
 }
 
 // SetNillableEntitlementQty sets the "entitlement_qty" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableEntitlementQty(d *decimal.Decimal) *RevenueFactCreate {
-	if d != nil {
-		rfc.SetEntitlementQty(*d)
+func (_c *RevenueFactCreate) SetNillableEntitlementQty(v *decimal.Decimal) *RevenueFactCreate {
+	if v != nil {
+		_c.SetEntitlementQty(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetDecompositionMode sets the "decomposition_mode" field.
-func (rfc *RevenueFactCreate) SetDecompositionMode(tm types.DecompositionMode) *RevenueFactCreate {
-	rfc.mutation.SetDecompositionMode(tm)
-	return rfc
+func (_c *RevenueFactCreate) SetDecompositionMode(v types.DecompositionMode) *RevenueFactCreate {
+	_c.mutation.SetDecompositionMode(v)
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (rfc *RevenueFactCreate) SetCurrency(s string) *RevenueFactCreate {
-	rfc.mutation.SetCurrency(s)
-	return rfc
+func (_c *RevenueFactCreate) SetCurrency(v string) *RevenueFactCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (rfc *RevenueFactCreate) SetStatus(ts types.FactStatus) *RevenueFactCreate {
-	rfc.mutation.SetStatus(ts)
-	return rfc
+func (_c *RevenueFactCreate) SetStatus(v types.FactStatus) *RevenueFactCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetIsRevert sets the "is_revert" field.
-func (rfc *RevenueFactCreate) SetIsRevert(b bool) *RevenueFactCreate {
-	rfc.mutation.SetIsRevert(b)
-	return rfc
+func (_c *RevenueFactCreate) SetIsRevert(v bool) *RevenueFactCreate {
+	_c.mutation.SetIsRevert(v)
+	return _c
 }
 
 // SetNillableIsRevert sets the "is_revert" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableIsRevert(b *bool) *RevenueFactCreate {
-	if b != nil {
-		rfc.SetIsRevert(*b)
+func (_c *RevenueFactCreate) SetNillableIsRevert(v *bool) *RevenueFactCreate {
+	if v != nil {
+		_c.SetIsRevert(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (rfc *RevenueFactCreate) SetInvoiceID(s string) *RevenueFactCreate {
-	rfc.mutation.SetInvoiceID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetInvoiceID(v string) *RevenueFactCreate {
+	_c.mutation.SetInvoiceID(v)
+	return _c
 }
 
 // SetNillableInvoiceID sets the "invoice_id" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableInvoiceID(s *string) *RevenueFactCreate {
-	if s != nil {
-		rfc.SetInvoiceID(*s)
+func (_c *RevenueFactCreate) SetNillableInvoiceID(v *string) *RevenueFactCreate {
+	if v != nil {
+		_c.SetInvoiceID(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetInvoiceLineItemID sets the "invoice_line_item_id" field.
-func (rfc *RevenueFactCreate) SetInvoiceLineItemID(s string) *RevenueFactCreate {
-	rfc.mutation.SetInvoiceLineItemID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetInvoiceLineItemID(v string) *RevenueFactCreate {
+	_c.mutation.SetInvoiceLineItemID(v)
+	return _c
 }
 
 // SetNillableInvoiceLineItemID sets the "invoice_line_item_id" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableInvoiceLineItemID(s *string) *RevenueFactCreate {
-	if s != nil {
-		rfc.SetInvoiceLineItemID(*s)
+func (_c *RevenueFactCreate) SetNillableInvoiceLineItemID(v *string) *RevenueFactCreate {
+	if v != nil {
+		_c.SetInvoiceLineItemID(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetLockAdjustedDay sets the "lock_adjusted_day" field.
-func (rfc *RevenueFactCreate) SetLockAdjustedDay(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetLockAdjustedDay(t)
-	return rfc
+func (_c *RevenueFactCreate) SetLockAdjustedDay(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetLockAdjustedDay(v)
+	return _c
 }
 
 // SetNillableLockAdjustedDay sets the "lock_adjusted_day" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableLockAdjustedDay(t *time.Time) *RevenueFactCreate {
-	if t != nil {
-		rfc.SetLockAdjustedDay(*t)
+func (_c *RevenueFactCreate) SetNillableLockAdjustedDay(v *time.Time) *RevenueFactCreate {
+	if v != nil {
+		_c.SetLockAdjustedDay(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetComputedAt sets the "computed_at" field.
-func (rfc *RevenueFactCreate) SetComputedAt(t time.Time) *RevenueFactCreate {
-	rfc.mutation.SetComputedAt(t)
-	return rfc
+func (_c *RevenueFactCreate) SetComputedAt(v time.Time) *RevenueFactCreate {
+	_c.mutation.SetComputedAt(v)
+	return _c
 }
 
 // SetNillableComputedAt sets the "computed_at" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableComputedAt(t *time.Time) *RevenueFactCreate {
-	if t != nil {
-		rfc.SetComputedAt(*t)
+func (_c *RevenueFactCreate) SetNillableComputedAt(v *time.Time) *RevenueFactCreate {
+	if v != nil {
+		_c.SetComputedAt(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetVersion sets the "version" field.
-func (rfc *RevenueFactCreate) SetVersion(i int64) *RevenueFactCreate {
-	rfc.mutation.SetVersion(i)
-	return rfc
+func (_c *RevenueFactCreate) SetVersion(v int64) *RevenueFactCreate {
+	_c.mutation.SetVersion(v)
+	return _c
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (rfc *RevenueFactCreate) SetNillableVersion(i *int64) *RevenueFactCreate {
-	if i != nil {
-		rfc.SetVersion(*i)
+func (_c *RevenueFactCreate) SetNillableVersion(v *int64) *RevenueFactCreate {
+	if v != nil {
+		_c.SetVersion(*v)
 	}
-	return rfc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (rfc *RevenueFactCreate) SetID(s string) *RevenueFactCreate {
-	rfc.mutation.SetID(s)
-	return rfc
+func (_c *RevenueFactCreate) SetID(v string) *RevenueFactCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the RevenueFactMutation object of the builder.
-func (rfc *RevenueFactCreate) Mutation() *RevenueFactMutation {
-	return rfc.mutation
+func (_c *RevenueFactCreate) Mutation() *RevenueFactMutation {
+	return _c.mutation
 }
 
 // Save creates the RevenueFact in the database.
-func (rfc *RevenueFactCreate) Save(ctx context.Context) (*RevenueFact, error) {
-	rfc.defaults()
-	return withHooks(ctx, rfc.sqlSave, rfc.mutation, rfc.hooks)
+func (_c *RevenueFactCreate) Save(ctx context.Context) (*RevenueFact, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (rfc *RevenueFactCreate) SaveX(ctx context.Context) *RevenueFact {
-	v, err := rfc.Save(ctx)
+func (_c *RevenueFactCreate) SaveX(ctx context.Context) *RevenueFact {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -401,159 +401,159 @@ func (rfc *RevenueFactCreate) SaveX(ctx context.Context) *RevenueFact {
 }
 
 // Exec executes the query.
-func (rfc *RevenueFactCreate) Exec(ctx context.Context) error {
-	_, err := rfc.Save(ctx)
+func (_c *RevenueFactCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfc *RevenueFactCreate) ExecX(ctx context.Context) {
-	if err := rfc.Exec(ctx); err != nil {
+func (_c *RevenueFactCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (rfc *RevenueFactCreate) defaults() {
-	if _, ok := rfc.mutation.UsageAtListRate(); !ok {
+func (_c *RevenueFactCreate) defaults() {
+	if _, ok := _c.mutation.UsageAtListRate(); !ok {
 		v := revenuefact.DefaultUsageAtListRate
-		rfc.mutation.SetUsageAtListRate(v)
+		_c.mutation.SetUsageAtListRate(v)
 	}
-	if _, ok := rfc.mutation.TierDelta(); !ok {
+	if _, ok := _c.mutation.TierDelta(); !ok {
 		v := revenuefact.DefaultTierDelta
-		rfc.mutation.SetTierDelta(v)
+		_c.mutation.SetTierDelta(v)
 	}
-	if _, ok := rfc.mutation.EntitlementAmount(); !ok {
+	if _, ok := _c.mutation.EntitlementAmount(); !ok {
 		v := revenuefact.DefaultEntitlementAmount
-		rfc.mutation.SetEntitlementAmount(v)
+		_c.mutation.SetEntitlementAmount(v)
 	}
-	if _, ok := rfc.mutation.LineDiscount(); !ok {
+	if _, ok := _c.mutation.LineDiscount(); !ok {
 		v := revenuefact.DefaultLineDiscount
-		rfc.mutation.SetLineDiscount(v)
+		_c.mutation.SetLineDiscount(v)
 	}
-	if _, ok := rfc.mutation.InvoiceDiscount(); !ok {
+	if _, ok := _c.mutation.InvoiceDiscount(); !ok {
 		v := revenuefact.DefaultInvoiceDiscount
-		rfc.mutation.SetInvoiceDiscount(v)
+		_c.mutation.SetInvoiceDiscount(v)
 	}
-	if _, ok := rfc.mutation.BillableQty(); !ok {
+	if _, ok := _c.mutation.BillableQty(); !ok {
 		v := revenuefact.DefaultBillableQty
-		rfc.mutation.SetBillableQty(v)
+		_c.mutation.SetBillableQty(v)
 	}
-	if _, ok := rfc.mutation.EntitlementQty(); !ok {
+	if _, ok := _c.mutation.EntitlementQty(); !ok {
 		v := revenuefact.DefaultEntitlementQty
-		rfc.mutation.SetEntitlementQty(v)
+		_c.mutation.SetEntitlementQty(v)
 	}
-	if _, ok := rfc.mutation.IsRevert(); !ok {
+	if _, ok := _c.mutation.IsRevert(); !ok {
 		v := revenuefact.DefaultIsRevert
-		rfc.mutation.SetIsRevert(v)
+		_c.mutation.SetIsRevert(v)
 	}
-	if _, ok := rfc.mutation.ComputedAt(); !ok {
+	if _, ok := _c.mutation.ComputedAt(); !ok {
 		v := revenuefact.DefaultComputedAt()
-		rfc.mutation.SetComputedAt(v)
+		_c.mutation.SetComputedAt(v)
 	}
-	if _, ok := rfc.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		v := revenuefact.DefaultVersion
-		rfc.mutation.SetVersion(v)
+		_c.mutation.SetVersion(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (rfc *RevenueFactCreate) check() error {
-	if _, ok := rfc.mutation.TenantID(); !ok {
+func (_c *RevenueFactCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "RevenueFact.tenant_id"`)}
 	}
-	if _, ok := rfc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		return &ValidationError{Name: "environment_id", err: errors.New(`ent: missing required field "RevenueFact.environment_id"`)}
 	}
-	if _, ok := rfc.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "RevenueFact.customer_id"`)}
 	}
-	if _, ok := rfc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "RevenueFact.subscription_id"`)}
 	}
-	if _, ok := rfc.mutation.RevenueSource(); !ok {
+	if _, ok := _c.mutation.RevenueSource(); !ok {
 		return &ValidationError{Name: "revenue_source", err: errors.New(`ent: missing required field "RevenueFact.revenue_source"`)}
 	}
-	if v, ok := rfc.mutation.RevenueSource(); ok {
+	if v, ok := _c.mutation.RevenueSource(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "revenue_source", err: fmt.Errorf(`ent: validator failed for field "RevenueFact.revenue_source": %w`, err)}
 		}
 	}
-	if _, ok := rfc.mutation.PeriodStart(); !ok {
+	if _, ok := _c.mutation.PeriodStart(); !ok {
 		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "RevenueFact.period_start"`)}
 	}
-	if _, ok := rfc.mutation.PeriodEnd(); !ok {
+	if _, ok := _c.mutation.PeriodEnd(); !ok {
 		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "RevenueFact.period_end"`)}
 	}
-	if _, ok := rfc.mutation.Day(); !ok {
+	if _, ok := _c.mutation.Day(); !ok {
 		return &ValidationError{Name: "day", err: errors.New(`ent: missing required field "RevenueFact.day"`)}
 	}
-	if v, ok := rfc.mutation.RecognitionMethod(); ok {
+	if v, ok := _c.mutation.RecognitionMethod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "recognition_method", err: fmt.Errorf(`ent: validator failed for field "RevenueFact.recognition_method": %w`, err)}
 		}
 	}
-	if _, ok := rfc.mutation.UsageAtListRate(); !ok {
+	if _, ok := _c.mutation.UsageAtListRate(); !ok {
 		return &ValidationError{Name: "usage_at_list_rate", err: errors.New(`ent: missing required field "RevenueFact.usage_at_list_rate"`)}
 	}
-	if _, ok := rfc.mutation.TierDelta(); !ok {
+	if _, ok := _c.mutation.TierDelta(); !ok {
 		return &ValidationError{Name: "tier_delta", err: errors.New(`ent: missing required field "RevenueFact.tier_delta"`)}
 	}
-	if _, ok := rfc.mutation.EntitlementAmount(); !ok {
+	if _, ok := _c.mutation.EntitlementAmount(); !ok {
 		return &ValidationError{Name: "entitlement_amount", err: errors.New(`ent: missing required field "RevenueFact.entitlement_amount"`)}
 	}
-	if _, ok := rfc.mutation.LineDiscount(); !ok {
+	if _, ok := _c.mutation.LineDiscount(); !ok {
 		return &ValidationError{Name: "line_discount", err: errors.New(`ent: missing required field "RevenueFact.line_discount"`)}
 	}
-	if _, ok := rfc.mutation.InvoiceDiscount(); !ok {
+	if _, ok := _c.mutation.InvoiceDiscount(); !ok {
 		return &ValidationError{Name: "invoice_discount", err: errors.New(`ent: missing required field "RevenueFact.invoice_discount"`)}
 	}
-	if _, ok := rfc.mutation.NetAmount(); !ok {
+	if _, ok := _c.mutation.NetAmount(); !ok {
 		return &ValidationError{Name: "net_amount", err: errors.New(`ent: missing required field "RevenueFact.net_amount"`)}
 	}
-	if _, ok := rfc.mutation.BillableQty(); !ok {
+	if _, ok := _c.mutation.BillableQty(); !ok {
 		return &ValidationError{Name: "billable_qty", err: errors.New(`ent: missing required field "RevenueFact.billable_qty"`)}
 	}
-	if _, ok := rfc.mutation.EntitlementQty(); !ok {
+	if _, ok := _c.mutation.EntitlementQty(); !ok {
 		return &ValidationError{Name: "entitlement_qty", err: errors.New(`ent: missing required field "RevenueFact.entitlement_qty"`)}
 	}
-	if _, ok := rfc.mutation.DecompositionMode(); !ok {
+	if _, ok := _c.mutation.DecompositionMode(); !ok {
 		return &ValidationError{Name: "decomposition_mode", err: errors.New(`ent: missing required field "RevenueFact.decomposition_mode"`)}
 	}
-	if v, ok := rfc.mutation.DecompositionMode(); ok {
+	if v, ok := _c.mutation.DecompositionMode(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "decomposition_mode", err: fmt.Errorf(`ent: validator failed for field "RevenueFact.decomposition_mode": %w`, err)}
 		}
 	}
-	if _, ok := rfc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "RevenueFact.currency"`)}
 	}
-	if _, ok := rfc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "RevenueFact.status"`)}
 	}
-	if v, ok := rfc.mutation.Status(); ok {
+	if v, ok := _c.mutation.Status(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RevenueFact.status": %w`, err)}
 		}
 	}
-	if _, ok := rfc.mutation.IsRevert(); !ok {
+	if _, ok := _c.mutation.IsRevert(); !ok {
 		return &ValidationError{Name: "is_revert", err: errors.New(`ent: missing required field "RevenueFact.is_revert"`)}
 	}
-	if _, ok := rfc.mutation.ComputedAt(); !ok {
+	if _, ok := _c.mutation.ComputedAt(); !ok {
 		return &ValidationError{Name: "computed_at", err: errors.New(`ent: missing required field "RevenueFact.computed_at"`)}
 	}
-	if _, ok := rfc.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "RevenueFact.version"`)}
 	}
 	return nil
 }
 
-func (rfc *RevenueFactCreate) sqlSave(ctx context.Context) (*RevenueFact, error) {
-	if err := rfc.check(); err != nil {
+func (_c *RevenueFactCreate) sqlSave(ctx context.Context) (*RevenueFact, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := rfc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, rfc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -566,145 +566,145 @@ func (rfc *RevenueFactCreate) sqlSave(ctx context.Context) (*RevenueFact, error)
 			return nil, fmt.Errorf("unexpected RevenueFact.ID type: %T", _spec.ID.Value)
 		}
 	}
-	rfc.mutation.id = &_node.ID
-	rfc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (rfc *RevenueFactCreate) createSpec() (*RevenueFact, *sqlgraph.CreateSpec) {
+func (_c *RevenueFactCreate) createSpec() (*RevenueFact, *sqlgraph.CreateSpec) {
 	var (
-		_node = &RevenueFact{config: rfc.config}
+		_node = &RevenueFact{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(revenuefact.Table, sqlgraph.NewFieldSpec(revenuefact.FieldID, field.TypeString))
 	)
-	if id, ok := rfc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := rfc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(revenuefact.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := rfc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(revenuefact.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := rfc.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(revenuefact.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := rfc.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(revenuefact.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = value
 	}
-	if value, ok := rfc.mutation.SubLineItemID(); ok {
+	if value, ok := _c.mutation.SubLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldSubLineItemID, field.TypeString, value)
 		_node.SubLineItemID = &value
 	}
-	if value, ok := rfc.mutation.PriceID(); ok {
+	if value, ok := _c.mutation.PriceID(); ok {
 		_spec.SetField(revenuefact.FieldPriceID, field.TypeString, value)
 		_node.PriceID = &value
 	}
-	if value, ok := rfc.mutation.MeterID(); ok {
+	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(revenuefact.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
 	}
-	if value, ok := rfc.mutation.AggregationType(); ok {
+	if value, ok := _c.mutation.AggregationType(); ok {
 		_spec.SetField(revenuefact.FieldAggregationType, field.TypeString, value)
 		_node.AggregationType = &value
 	}
-	if value, ok := rfc.mutation.RevenueSource(); ok {
+	if value, ok := _c.mutation.RevenueSource(); ok {
 		_spec.SetField(revenuefact.FieldRevenueSource, field.TypeString, value)
 		_node.RevenueSource = value
 	}
-	if value, ok := rfc.mutation.PeriodStart(); ok {
+	if value, ok := _c.mutation.PeriodStart(); ok {
 		_spec.SetField(revenuefact.FieldPeriodStart, field.TypeTime, value)
 		_node.PeriodStart = value
 	}
-	if value, ok := rfc.mutation.PeriodEnd(); ok {
+	if value, ok := _c.mutation.PeriodEnd(); ok {
 		_spec.SetField(revenuefact.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = value
 	}
-	if value, ok := rfc.mutation.Day(); ok {
+	if value, ok := _c.mutation.Day(); ok {
 		_spec.SetField(revenuefact.FieldDay, field.TypeTime, value)
 		_node.Day = value
 	}
-	if value, ok := rfc.mutation.ServiceStart(); ok {
+	if value, ok := _c.mutation.ServiceStart(); ok {
 		_spec.SetField(revenuefact.FieldServiceStart, field.TypeTime, value)
 		_node.ServiceStart = &value
 	}
-	if value, ok := rfc.mutation.ServiceEnd(); ok {
+	if value, ok := _c.mutation.ServiceEnd(); ok {
 		_spec.SetField(revenuefact.FieldServiceEnd, field.TypeTime, value)
 		_node.ServiceEnd = &value
 	}
-	if value, ok := rfc.mutation.RecognitionMethod(); ok {
+	if value, ok := _c.mutation.RecognitionMethod(); ok {
 		_spec.SetField(revenuefact.FieldRecognitionMethod, field.TypeString, value)
 		_node.RecognitionMethod = &value
 	}
-	if value, ok := rfc.mutation.UsageAtListRate(); ok {
+	if value, ok := _c.mutation.UsageAtListRate(); ok {
 		_spec.SetField(revenuefact.FieldUsageAtListRate, field.TypeOther, value)
 		_node.UsageAtListRate = value
 	}
-	if value, ok := rfc.mutation.TierDelta(); ok {
+	if value, ok := _c.mutation.TierDelta(); ok {
 		_spec.SetField(revenuefact.FieldTierDelta, field.TypeOther, value)
 		_node.TierDelta = value
 	}
-	if value, ok := rfc.mutation.EntitlementAmount(); ok {
+	if value, ok := _c.mutation.EntitlementAmount(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementAmount, field.TypeOther, value)
 		_node.EntitlementAmount = value
 	}
-	if value, ok := rfc.mutation.LineDiscount(); ok {
+	if value, ok := _c.mutation.LineDiscount(); ok {
 		_spec.SetField(revenuefact.FieldLineDiscount, field.TypeOther, value)
 		_node.LineDiscount = value
 	}
-	if value, ok := rfc.mutation.InvoiceDiscount(); ok {
+	if value, ok := _c.mutation.InvoiceDiscount(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceDiscount, field.TypeOther, value)
 		_node.InvoiceDiscount = value
 	}
-	if value, ok := rfc.mutation.NetAmount(); ok {
+	if value, ok := _c.mutation.NetAmount(); ok {
 		_spec.SetField(revenuefact.FieldNetAmount, field.TypeOther, value)
 		_node.NetAmount = value
 	}
-	if value, ok := rfc.mutation.BillableQty(); ok {
+	if value, ok := _c.mutation.BillableQty(); ok {
 		_spec.SetField(revenuefact.FieldBillableQty, field.TypeOther, value)
 		_node.BillableQty = value
 	}
-	if value, ok := rfc.mutation.EntitlementQty(); ok {
+	if value, ok := _c.mutation.EntitlementQty(); ok {
 		_spec.SetField(revenuefact.FieldEntitlementQty, field.TypeOther, value)
 		_node.EntitlementQty = value
 	}
-	if value, ok := rfc.mutation.DecompositionMode(); ok {
+	if value, ok := _c.mutation.DecompositionMode(); ok {
 		_spec.SetField(revenuefact.FieldDecompositionMode, field.TypeString, value)
 		_node.DecompositionMode = value
 	}
-	if value, ok := rfc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(revenuefact.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := rfc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(revenuefact.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := rfc.mutation.IsRevert(); ok {
+	if value, ok := _c.mutation.IsRevert(); ok {
 		_spec.SetField(revenuefact.FieldIsRevert, field.TypeBool, value)
 		_node.IsRevert = value
 	}
-	if value, ok := rfc.mutation.InvoiceID(); ok {
+	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceID, field.TypeString, value)
 		_node.InvoiceID = &value
 	}
-	if value, ok := rfc.mutation.InvoiceLineItemID(); ok {
+	if value, ok := _c.mutation.InvoiceLineItemID(); ok {
 		_spec.SetField(revenuefact.FieldInvoiceLineItemID, field.TypeString, value)
 		_node.InvoiceLineItemID = &value
 	}
-	if value, ok := rfc.mutation.LockAdjustedDay(); ok {
+	if value, ok := _c.mutation.LockAdjustedDay(); ok {
 		_spec.SetField(revenuefact.FieldLockAdjustedDay, field.TypeTime, value)
 		_node.LockAdjustedDay = &value
 	}
-	if value, ok := rfc.mutation.ComputedAt(); ok {
+	if value, ok := _c.mutation.ComputedAt(); ok {
 		_spec.SetField(revenuefact.FieldComputedAt, field.TypeTime, value)
 		_node.ComputedAt = value
 	}
-	if value, ok := rfc.mutation.Version(); ok {
+	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(revenuefact.FieldVersion, field.TypeInt64, value)
 		_node.Version = value
 	}
@@ -719,16 +719,16 @@ type RevenueFactCreateBulk struct {
 }
 
 // Save creates the RevenueFact entities in the database.
-func (rfcb *RevenueFactCreateBulk) Save(ctx context.Context) ([]*RevenueFact, error) {
-	if rfcb.err != nil {
-		return nil, rfcb.err
+func (_c *RevenueFactCreateBulk) Save(ctx context.Context) ([]*RevenueFact, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(rfcb.builders))
-	nodes := make([]*RevenueFact, len(rfcb.builders))
-	mutators := make([]Mutator, len(rfcb.builders))
-	for i := range rfcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*RevenueFact, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := rfcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*RevenueFactMutation)
@@ -742,11 +742,11 @@ func (rfcb *RevenueFactCreateBulk) Save(ctx context.Context) ([]*RevenueFact, er
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, rfcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, rfcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -766,7 +766,7 @@ func (rfcb *RevenueFactCreateBulk) Save(ctx context.Context) ([]*RevenueFact, er
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, rfcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -774,8 +774,8 @@ func (rfcb *RevenueFactCreateBulk) Save(ctx context.Context) ([]*RevenueFact, er
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (rfcb *RevenueFactCreateBulk) SaveX(ctx context.Context) []*RevenueFact {
-	v, err := rfcb.Save(ctx)
+func (_c *RevenueFactCreateBulk) SaveX(ctx context.Context) []*RevenueFact {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -783,14 +783,14 @@ func (rfcb *RevenueFactCreateBulk) SaveX(ctx context.Context) []*RevenueFact {
 }
 
 // Exec executes the query.
-func (rfcb *RevenueFactCreateBulk) Exec(ctx context.Context) error {
-	_, err := rfcb.Save(ctx)
+func (_c *RevenueFactCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rfcb *RevenueFactCreateBulk) ExecX(ctx context.Context) {
-	if err := rfcb.Exec(ctx); err != nil {
+func (_c *RevenueFactCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

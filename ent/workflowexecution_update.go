@@ -24,248 +24,248 @@ type WorkflowExecutionUpdate struct {
 }
 
 // Where appends a list predicates to the WorkflowExecutionUpdate builder.
-func (weu *WorkflowExecutionUpdate) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionUpdate {
-	weu.mutation.Where(ps...)
-	return weu
+func (_u *WorkflowExecutionUpdate) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (weu *WorkflowExecutionUpdate) SetStatus(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetStatus(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetStatus(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableStatus(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetStatus(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableStatus(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (weu *WorkflowExecutionUpdate) SetUpdatedAt(t time.Time) *WorkflowExecutionUpdate {
-	weu.mutation.SetUpdatedAt(t)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetUpdatedAt(v time.Time) *WorkflowExecutionUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (weu *WorkflowExecutionUpdate) SetUpdatedBy(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetUpdatedBy(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetUpdatedBy(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableUpdatedBy(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetUpdatedBy(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableUpdatedBy(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return weu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (weu *WorkflowExecutionUpdate) ClearUpdatedBy() *WorkflowExecutionUpdate {
-	weu.mutation.ClearUpdatedBy()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearUpdatedBy() *WorkflowExecutionUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetWorkflowID sets the "workflow_id" field.
-func (weu *WorkflowExecutionUpdate) SetWorkflowID(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetWorkflowID(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetWorkflowID(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetWorkflowID(v)
+	return _u
 }
 
 // SetNillableWorkflowID sets the "workflow_id" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableWorkflowID(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetWorkflowID(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableWorkflowID(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetWorkflowID(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetRunID sets the "run_id" field.
-func (weu *WorkflowExecutionUpdate) SetRunID(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetRunID(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetRunID(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetRunID(v)
+	return _u
 }
 
 // SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableRunID(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetRunID(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableRunID(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetRunID(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetWorkflowType sets the "workflow_type" field.
-func (weu *WorkflowExecutionUpdate) SetWorkflowType(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetWorkflowType(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetWorkflowType(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetWorkflowType(v)
+	return _u
 }
 
 // SetNillableWorkflowType sets the "workflow_type" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableWorkflowType(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetWorkflowType(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableWorkflowType(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetWorkflowType(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetTaskQueue sets the "task_queue" field.
-func (weu *WorkflowExecutionUpdate) SetTaskQueue(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetTaskQueue(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetTaskQueue(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetTaskQueue(v)
+	return _u
 }
 
 // SetNillableTaskQueue sets the "task_queue" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableTaskQueue(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetTaskQueue(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableTaskQueue(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetTaskQueue(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetStartTime sets the "start_time" field.
-func (weu *WorkflowExecutionUpdate) SetStartTime(t time.Time) *WorkflowExecutionUpdate {
-	weu.mutation.SetStartTime(t)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetStartTime(v time.Time) *WorkflowExecutionUpdate {
+	_u.mutation.SetStartTime(v)
+	return _u
 }
 
 // SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableStartTime(t *time.Time) *WorkflowExecutionUpdate {
-	if t != nil {
-		weu.SetStartTime(*t)
+func (_u *WorkflowExecutionUpdate) SetNillableStartTime(v *time.Time) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetStartTime(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetEndTime sets the "end_time" field.
-func (weu *WorkflowExecutionUpdate) SetEndTime(t time.Time) *WorkflowExecutionUpdate {
-	weu.mutation.SetEndTime(t)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetEndTime(v time.Time) *WorkflowExecutionUpdate {
+	_u.mutation.SetEndTime(v)
+	return _u
 }
 
 // SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableEndTime(t *time.Time) *WorkflowExecutionUpdate {
-	if t != nil {
-		weu.SetEndTime(*t)
+func (_u *WorkflowExecutionUpdate) SetNillableEndTime(v *time.Time) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetEndTime(*v)
 	}
-	return weu
+	return _u
 }
 
 // ClearEndTime clears the value of the "end_time" field.
-func (weu *WorkflowExecutionUpdate) ClearEndTime() *WorkflowExecutionUpdate {
-	weu.mutation.ClearEndTime()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearEndTime() *WorkflowExecutionUpdate {
+	_u.mutation.ClearEndTime()
+	return _u
 }
 
 // SetDurationMs sets the "duration_ms" field.
-func (weu *WorkflowExecutionUpdate) SetDurationMs(i int64) *WorkflowExecutionUpdate {
-	weu.mutation.ResetDurationMs()
-	weu.mutation.SetDurationMs(i)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetDurationMs(v int64) *WorkflowExecutionUpdate {
+	_u.mutation.ResetDurationMs()
+	_u.mutation.SetDurationMs(v)
+	return _u
 }
 
 // SetNillableDurationMs sets the "duration_ms" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableDurationMs(i *int64) *WorkflowExecutionUpdate {
-	if i != nil {
-		weu.SetDurationMs(*i)
+func (_u *WorkflowExecutionUpdate) SetNillableDurationMs(v *int64) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetDurationMs(*v)
 	}
-	return weu
+	return _u
 }
 
-// AddDurationMs adds i to the "duration_ms" field.
-func (weu *WorkflowExecutionUpdate) AddDurationMs(i int64) *WorkflowExecutionUpdate {
-	weu.mutation.AddDurationMs(i)
-	return weu
+// AddDurationMs adds value to the "duration_ms" field.
+func (_u *WorkflowExecutionUpdate) AddDurationMs(v int64) *WorkflowExecutionUpdate {
+	_u.mutation.AddDurationMs(v)
+	return _u
 }
 
 // ClearDurationMs clears the value of the "duration_ms" field.
-func (weu *WorkflowExecutionUpdate) ClearDurationMs() *WorkflowExecutionUpdate {
-	weu.mutation.ClearDurationMs()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearDurationMs() *WorkflowExecutionUpdate {
+	_u.mutation.ClearDurationMs()
+	return _u
 }
 
 // SetWorkflowStatus sets the "workflow_status" field.
-func (weu *WorkflowExecutionUpdate) SetWorkflowStatus(tes types.WorkflowExecutionStatus) *WorkflowExecutionUpdate {
-	weu.mutation.SetWorkflowStatus(tes)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetWorkflowStatus(v types.WorkflowExecutionStatus) *WorkflowExecutionUpdate {
+	_u.mutation.SetWorkflowStatus(v)
+	return _u
 }
 
 // SetNillableWorkflowStatus sets the "workflow_status" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableWorkflowStatus(tes *types.WorkflowExecutionStatus) *WorkflowExecutionUpdate {
-	if tes != nil {
-		weu.SetWorkflowStatus(*tes)
+func (_u *WorkflowExecutionUpdate) SetNillableWorkflowStatus(v *types.WorkflowExecutionStatus) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetWorkflowStatus(*v)
 	}
-	return weu
+	return _u
 }
 
 // SetEntity sets the "entity" field.
-func (weu *WorkflowExecutionUpdate) SetEntity(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetEntity(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetEntity(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetEntity(v)
+	return _u
 }
 
 // SetNillableEntity sets the "entity" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableEntity(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetEntity(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableEntity(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetEntity(*v)
 	}
-	return weu
+	return _u
 }
 
 // ClearEntity clears the value of the "entity" field.
-func (weu *WorkflowExecutionUpdate) ClearEntity() *WorkflowExecutionUpdate {
-	weu.mutation.ClearEntity()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearEntity() *WorkflowExecutionUpdate {
+	_u.mutation.ClearEntity()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (weu *WorkflowExecutionUpdate) SetEntityID(s string) *WorkflowExecutionUpdate {
-	weu.mutation.SetEntityID(s)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetEntityID(v string) *WorkflowExecutionUpdate {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (weu *WorkflowExecutionUpdate) SetNillableEntityID(s *string) *WorkflowExecutionUpdate {
-	if s != nil {
-		weu.SetEntityID(*s)
+func (_u *WorkflowExecutionUpdate) SetNillableEntityID(v *string) *WorkflowExecutionUpdate {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return weu
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (weu *WorkflowExecutionUpdate) ClearEntityID() *WorkflowExecutionUpdate {
-	weu.mutation.ClearEntityID()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearEntityID() *WorkflowExecutionUpdate {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (weu *WorkflowExecutionUpdate) SetMetadata(m map[string]interface{}) *WorkflowExecutionUpdate {
-	weu.mutation.SetMetadata(m)
-	return weu
+func (_u *WorkflowExecutionUpdate) SetMetadata(v map[string]interface{}) *WorkflowExecutionUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (weu *WorkflowExecutionUpdate) ClearMetadata() *WorkflowExecutionUpdate {
-	weu.mutation.ClearMetadata()
-	return weu
+func (_u *WorkflowExecutionUpdate) ClearMetadata() *WorkflowExecutionUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the WorkflowExecutionMutation object of the builder.
-func (weu *WorkflowExecutionUpdate) Mutation() *WorkflowExecutionMutation {
-	return weu.mutation
+func (_u *WorkflowExecutionUpdate) Mutation() *WorkflowExecutionMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (weu *WorkflowExecutionUpdate) Save(ctx context.Context) (int, error) {
-	weu.defaults()
-	return withHooks(ctx, weu.sqlSave, weu.mutation, weu.hooks)
+func (_u *WorkflowExecutionUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (weu *WorkflowExecutionUpdate) SaveX(ctx context.Context) int {
-	affected, err := weu.Save(ctx)
+func (_u *WorkflowExecutionUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -273,44 +273,44 @@ func (weu *WorkflowExecutionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (weu *WorkflowExecutionUpdate) Exec(ctx context.Context) error {
-	_, err := weu.Save(ctx)
+func (_u *WorkflowExecutionUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (weu *WorkflowExecutionUpdate) ExecX(ctx context.Context) {
-	if err := weu.Exec(ctx); err != nil {
+func (_u *WorkflowExecutionUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (weu *WorkflowExecutionUpdate) defaults() {
-	if _, ok := weu.mutation.UpdatedAt(); !ok {
+func (_u *WorkflowExecutionUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := workflowexecution.UpdateDefaultUpdatedAt()
-		weu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (weu *WorkflowExecutionUpdate) check() error {
-	if v, ok := weu.mutation.WorkflowID(); ok {
+func (_u *WorkflowExecutionUpdate) check() error {
+	if v, ok := _u.mutation.WorkflowID(); ok {
 		if err := workflowexecution.WorkflowIDValidator(v); err != nil {
 			return &ValidationError{Name: "workflow_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.workflow_id": %w`, err)}
 		}
 	}
-	if v, ok := weu.mutation.RunID(); ok {
+	if v, ok := _u.mutation.RunID(); ok {
 		if err := workflowexecution.RunIDValidator(v); err != nil {
 			return &ValidationError{Name: "run_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.run_id": %w`, err)}
 		}
 	}
-	if v, ok := weu.mutation.WorkflowType(); ok {
+	if v, ok := _u.mutation.WorkflowType(); ok {
 		if err := workflowexecution.WorkflowTypeValidator(v); err != nil {
 			return &ValidationError{Name: "workflow_type", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.workflow_type": %w`, err)}
 		}
 	}
-	if v, ok := weu.mutation.TaskQueue(); ok {
+	if v, ok := _u.mutation.TaskQueue(); ok {
 		if err := workflowexecution.TaskQueueValidator(v); err != nil {
 			return &ValidationError{Name: "task_queue", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.task_queue": %w`, err)}
 		}
@@ -318,88 +318,88 @@ func (weu *WorkflowExecutionUpdate) check() error {
 	return nil
 }
 
-func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := weu.check(); err != nil {
-		return n, err
+func (_u *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(workflowexecution.Table, workflowexecution.Columns, sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString))
-	if ps := weu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := weu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(workflowexecution.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if weu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(workflowexecution.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := weu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(workflowexecution.FieldUpdatedBy, field.TypeString, value)
 	}
-	if weu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(workflowexecution.FieldUpdatedBy, field.TypeString)
 	}
-	if weu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(workflowexecution.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := weu.mutation.WorkflowID(); ok {
+	if value, ok := _u.mutation.WorkflowID(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowID, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.RunID(); ok {
+	if value, ok := _u.mutation.RunID(); ok {
 		_spec.SetField(workflowexecution.FieldRunID, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.WorkflowType(); ok {
+	if value, ok := _u.mutation.WorkflowType(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowType, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.TaskQueue(); ok {
+	if value, ok := _u.mutation.TaskQueue(); ok {
 		_spec.SetField(workflowexecution.FieldTaskQueue, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.StartTime(); ok {
+	if value, ok := _u.mutation.StartTime(); ok {
 		_spec.SetField(workflowexecution.FieldStartTime, field.TypeTime, value)
 	}
-	if value, ok := weu.mutation.EndTime(); ok {
+	if value, ok := _u.mutation.EndTime(); ok {
 		_spec.SetField(workflowexecution.FieldEndTime, field.TypeTime, value)
 	}
-	if weu.mutation.EndTimeCleared() {
+	if _u.mutation.EndTimeCleared() {
 		_spec.ClearField(workflowexecution.FieldEndTime, field.TypeTime)
 	}
-	if value, ok := weu.mutation.DurationMs(); ok {
+	if value, ok := _u.mutation.DurationMs(); ok {
 		_spec.SetField(workflowexecution.FieldDurationMs, field.TypeInt64, value)
 	}
-	if value, ok := weu.mutation.AddedDurationMs(); ok {
+	if value, ok := _u.mutation.AddedDurationMs(); ok {
 		_spec.AddField(workflowexecution.FieldDurationMs, field.TypeInt64, value)
 	}
-	if weu.mutation.DurationMsCleared() {
+	if _u.mutation.DurationMsCleared() {
 		_spec.ClearField(workflowexecution.FieldDurationMs, field.TypeInt64)
 	}
-	if value, ok := weu.mutation.WorkflowStatus(); ok {
+	if value, ok := _u.mutation.WorkflowStatus(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowStatus, field.TypeString, value)
 	}
-	if value, ok := weu.mutation.Entity(); ok {
+	if value, ok := _u.mutation.Entity(); ok {
 		_spec.SetField(workflowexecution.FieldEntity, field.TypeString, value)
 	}
-	if weu.mutation.EntityCleared() {
+	if _u.mutation.EntityCleared() {
 		_spec.ClearField(workflowexecution.FieldEntity, field.TypeString)
 	}
-	if value, ok := weu.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(workflowexecution.FieldEntityID, field.TypeString, value)
 	}
-	if weu.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(workflowexecution.FieldEntityID, field.TypeString)
 	}
-	if value, ok := weu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(workflowexecution.FieldMetadata, field.TypeJSON, value)
 	}
-	if weu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(workflowexecution.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, weu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{workflowexecution.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -407,8 +407,8 @@ func (weu *WorkflowExecutionUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		return 0, err
 	}
-	weu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // WorkflowExecutionUpdateOne is the builder for updating a single WorkflowExecution entity.
@@ -420,255 +420,255 @@ type WorkflowExecutionUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (weuo *WorkflowExecutionUpdateOne) SetStatus(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetStatus(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetStatus(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableStatus(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetStatus(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableStatus(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (weuo *WorkflowExecutionUpdateOne) SetUpdatedAt(t time.Time) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetUpdatedAt(t)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetUpdatedAt(v time.Time) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (weuo *WorkflowExecutionUpdateOne) SetUpdatedBy(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetUpdatedBy(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetUpdatedBy(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableUpdatedBy(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetUpdatedBy(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableUpdatedBy(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return weuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearUpdatedBy() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearUpdatedBy()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearUpdatedBy() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetWorkflowID sets the "workflow_id" field.
-func (weuo *WorkflowExecutionUpdateOne) SetWorkflowID(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetWorkflowID(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetWorkflowID(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetWorkflowID(v)
+	return _u
 }
 
 // SetNillableWorkflowID sets the "workflow_id" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableWorkflowID(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetWorkflowID(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableWorkflowID(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetWorkflowID(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetRunID sets the "run_id" field.
-func (weuo *WorkflowExecutionUpdateOne) SetRunID(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetRunID(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetRunID(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetRunID(v)
+	return _u
 }
 
 // SetNillableRunID sets the "run_id" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableRunID(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetRunID(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableRunID(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetRunID(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetWorkflowType sets the "workflow_type" field.
-func (weuo *WorkflowExecutionUpdateOne) SetWorkflowType(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetWorkflowType(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetWorkflowType(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetWorkflowType(v)
+	return _u
 }
 
 // SetNillableWorkflowType sets the "workflow_type" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableWorkflowType(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetWorkflowType(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableWorkflowType(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetWorkflowType(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetTaskQueue sets the "task_queue" field.
-func (weuo *WorkflowExecutionUpdateOne) SetTaskQueue(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetTaskQueue(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetTaskQueue(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetTaskQueue(v)
+	return _u
 }
 
 // SetNillableTaskQueue sets the "task_queue" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableTaskQueue(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetTaskQueue(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableTaskQueue(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetTaskQueue(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetStartTime sets the "start_time" field.
-func (weuo *WorkflowExecutionUpdateOne) SetStartTime(t time.Time) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetStartTime(t)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetStartTime(v time.Time) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetStartTime(v)
+	return _u
 }
 
 // SetNillableStartTime sets the "start_time" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableStartTime(t *time.Time) *WorkflowExecutionUpdateOne {
-	if t != nil {
-		weuo.SetStartTime(*t)
+func (_u *WorkflowExecutionUpdateOne) SetNillableStartTime(v *time.Time) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetStartTime(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetEndTime sets the "end_time" field.
-func (weuo *WorkflowExecutionUpdateOne) SetEndTime(t time.Time) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetEndTime(t)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetEndTime(v time.Time) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetEndTime(v)
+	return _u
 }
 
 // SetNillableEndTime sets the "end_time" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableEndTime(t *time.Time) *WorkflowExecutionUpdateOne {
-	if t != nil {
-		weuo.SetEndTime(*t)
+func (_u *WorkflowExecutionUpdateOne) SetNillableEndTime(v *time.Time) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetEndTime(*v)
 	}
-	return weuo
+	return _u
 }
 
 // ClearEndTime clears the value of the "end_time" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearEndTime() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearEndTime()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearEndTime() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearEndTime()
+	return _u
 }
 
 // SetDurationMs sets the "duration_ms" field.
-func (weuo *WorkflowExecutionUpdateOne) SetDurationMs(i int64) *WorkflowExecutionUpdateOne {
-	weuo.mutation.ResetDurationMs()
-	weuo.mutation.SetDurationMs(i)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetDurationMs(v int64) *WorkflowExecutionUpdateOne {
+	_u.mutation.ResetDurationMs()
+	_u.mutation.SetDurationMs(v)
+	return _u
 }
 
 // SetNillableDurationMs sets the "duration_ms" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableDurationMs(i *int64) *WorkflowExecutionUpdateOne {
-	if i != nil {
-		weuo.SetDurationMs(*i)
+func (_u *WorkflowExecutionUpdateOne) SetNillableDurationMs(v *int64) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetDurationMs(*v)
 	}
-	return weuo
+	return _u
 }
 
-// AddDurationMs adds i to the "duration_ms" field.
-func (weuo *WorkflowExecutionUpdateOne) AddDurationMs(i int64) *WorkflowExecutionUpdateOne {
-	weuo.mutation.AddDurationMs(i)
-	return weuo
+// AddDurationMs adds value to the "duration_ms" field.
+func (_u *WorkflowExecutionUpdateOne) AddDurationMs(v int64) *WorkflowExecutionUpdateOne {
+	_u.mutation.AddDurationMs(v)
+	return _u
 }
 
 // ClearDurationMs clears the value of the "duration_ms" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearDurationMs() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearDurationMs()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearDurationMs() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearDurationMs()
+	return _u
 }
 
 // SetWorkflowStatus sets the "workflow_status" field.
-func (weuo *WorkflowExecutionUpdateOne) SetWorkflowStatus(tes types.WorkflowExecutionStatus) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetWorkflowStatus(tes)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetWorkflowStatus(v types.WorkflowExecutionStatus) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetWorkflowStatus(v)
+	return _u
 }
 
 // SetNillableWorkflowStatus sets the "workflow_status" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableWorkflowStatus(tes *types.WorkflowExecutionStatus) *WorkflowExecutionUpdateOne {
-	if tes != nil {
-		weuo.SetWorkflowStatus(*tes)
+func (_u *WorkflowExecutionUpdateOne) SetNillableWorkflowStatus(v *types.WorkflowExecutionStatus) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetWorkflowStatus(*v)
 	}
-	return weuo
+	return _u
 }
 
 // SetEntity sets the "entity" field.
-func (weuo *WorkflowExecutionUpdateOne) SetEntity(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetEntity(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetEntity(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetEntity(v)
+	return _u
 }
 
 // SetNillableEntity sets the "entity" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableEntity(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetEntity(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableEntity(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetEntity(*v)
 	}
-	return weuo
+	return _u
 }
 
 // ClearEntity clears the value of the "entity" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearEntity() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearEntity()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearEntity() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearEntity()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (weuo *WorkflowExecutionUpdateOne) SetEntityID(s string) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetEntityID(s)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetEntityID(v string) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (weuo *WorkflowExecutionUpdateOne) SetNillableEntityID(s *string) *WorkflowExecutionUpdateOne {
-	if s != nil {
-		weuo.SetEntityID(*s)
+func (_u *WorkflowExecutionUpdateOne) SetNillableEntityID(v *string) *WorkflowExecutionUpdateOne {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return weuo
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearEntityID() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearEntityID()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearEntityID() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (weuo *WorkflowExecutionUpdateOne) SetMetadata(m map[string]interface{}) *WorkflowExecutionUpdateOne {
-	weuo.mutation.SetMetadata(m)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) SetMetadata(v map[string]interface{}) *WorkflowExecutionUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (weuo *WorkflowExecutionUpdateOne) ClearMetadata() *WorkflowExecutionUpdateOne {
-	weuo.mutation.ClearMetadata()
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) ClearMetadata() *WorkflowExecutionUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the WorkflowExecutionMutation object of the builder.
-func (weuo *WorkflowExecutionUpdateOne) Mutation() *WorkflowExecutionMutation {
-	return weuo.mutation
+func (_u *WorkflowExecutionUpdateOne) Mutation() *WorkflowExecutionMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the WorkflowExecutionUpdate builder.
-func (weuo *WorkflowExecutionUpdateOne) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionUpdateOne {
-	weuo.mutation.Where(ps...)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (weuo *WorkflowExecutionUpdateOne) Select(field string, fields ...string) *WorkflowExecutionUpdateOne {
-	weuo.fields = append([]string{field}, fields...)
-	return weuo
+func (_u *WorkflowExecutionUpdateOne) Select(field string, fields ...string) *WorkflowExecutionUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated WorkflowExecution entity.
-func (weuo *WorkflowExecutionUpdateOne) Save(ctx context.Context) (*WorkflowExecution, error) {
-	weuo.defaults()
-	return withHooks(ctx, weuo.sqlSave, weuo.mutation, weuo.hooks)
+func (_u *WorkflowExecutionUpdateOne) Save(ctx context.Context) (*WorkflowExecution, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (weuo *WorkflowExecutionUpdateOne) SaveX(ctx context.Context) *WorkflowExecution {
-	node, err := weuo.Save(ctx)
+func (_u *WorkflowExecutionUpdateOne) SaveX(ctx context.Context) *WorkflowExecution {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -676,44 +676,44 @@ func (weuo *WorkflowExecutionUpdateOne) SaveX(ctx context.Context) *WorkflowExec
 }
 
 // Exec executes the query on the entity.
-func (weuo *WorkflowExecutionUpdateOne) Exec(ctx context.Context) error {
-	_, err := weuo.Save(ctx)
+func (_u *WorkflowExecutionUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (weuo *WorkflowExecutionUpdateOne) ExecX(ctx context.Context) {
-	if err := weuo.Exec(ctx); err != nil {
+func (_u *WorkflowExecutionUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (weuo *WorkflowExecutionUpdateOne) defaults() {
-	if _, ok := weuo.mutation.UpdatedAt(); !ok {
+func (_u *WorkflowExecutionUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := workflowexecution.UpdateDefaultUpdatedAt()
-		weuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (weuo *WorkflowExecutionUpdateOne) check() error {
-	if v, ok := weuo.mutation.WorkflowID(); ok {
+func (_u *WorkflowExecutionUpdateOne) check() error {
+	if v, ok := _u.mutation.WorkflowID(); ok {
 		if err := workflowexecution.WorkflowIDValidator(v); err != nil {
 			return &ValidationError{Name: "workflow_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.workflow_id": %w`, err)}
 		}
 	}
-	if v, ok := weuo.mutation.RunID(); ok {
+	if v, ok := _u.mutation.RunID(); ok {
 		if err := workflowexecution.RunIDValidator(v); err != nil {
 			return &ValidationError{Name: "run_id", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.run_id": %w`, err)}
 		}
 	}
-	if v, ok := weuo.mutation.WorkflowType(); ok {
+	if v, ok := _u.mutation.WorkflowType(); ok {
 		if err := workflowexecution.WorkflowTypeValidator(v); err != nil {
 			return &ValidationError{Name: "workflow_type", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.workflow_type": %w`, err)}
 		}
 	}
-	if v, ok := weuo.mutation.TaskQueue(); ok {
+	if v, ok := _u.mutation.TaskQueue(); ok {
 		if err := workflowexecution.TaskQueueValidator(v); err != nil {
 			return &ValidationError{Name: "task_queue", err: fmt.Errorf(`ent: validator failed for field "WorkflowExecution.task_queue": %w`, err)}
 		}
@@ -721,17 +721,17 @@ func (weuo *WorkflowExecutionUpdateOne) check() error {
 	return nil
 }
 
-func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowExecution, err error) {
-	if err := weuo.check(); err != nil {
+func (_u *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *WorkflowExecution, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(workflowexecution.Table, workflowexecution.Columns, sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString))
-	id, ok := weuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "WorkflowExecution.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := weuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, workflowexecution.FieldID)
 		for _, f := range fields {
@@ -743,86 +743,86 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 			}
 		}
 	}
-	if ps := weuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := weuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(workflowexecution.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(workflowexecution.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if weuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(workflowexecution.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := weuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(workflowexecution.FieldUpdatedBy, field.TypeString, value)
 	}
-	if weuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(workflowexecution.FieldUpdatedBy, field.TypeString)
 	}
-	if weuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(workflowexecution.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := weuo.mutation.WorkflowID(); ok {
+	if value, ok := _u.mutation.WorkflowID(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowID, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.RunID(); ok {
+	if value, ok := _u.mutation.RunID(); ok {
 		_spec.SetField(workflowexecution.FieldRunID, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.WorkflowType(); ok {
+	if value, ok := _u.mutation.WorkflowType(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowType, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.TaskQueue(); ok {
+	if value, ok := _u.mutation.TaskQueue(); ok {
 		_spec.SetField(workflowexecution.FieldTaskQueue, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.StartTime(); ok {
+	if value, ok := _u.mutation.StartTime(); ok {
 		_spec.SetField(workflowexecution.FieldStartTime, field.TypeTime, value)
 	}
-	if value, ok := weuo.mutation.EndTime(); ok {
+	if value, ok := _u.mutation.EndTime(); ok {
 		_spec.SetField(workflowexecution.FieldEndTime, field.TypeTime, value)
 	}
-	if weuo.mutation.EndTimeCleared() {
+	if _u.mutation.EndTimeCleared() {
 		_spec.ClearField(workflowexecution.FieldEndTime, field.TypeTime)
 	}
-	if value, ok := weuo.mutation.DurationMs(); ok {
+	if value, ok := _u.mutation.DurationMs(); ok {
 		_spec.SetField(workflowexecution.FieldDurationMs, field.TypeInt64, value)
 	}
-	if value, ok := weuo.mutation.AddedDurationMs(); ok {
+	if value, ok := _u.mutation.AddedDurationMs(); ok {
 		_spec.AddField(workflowexecution.FieldDurationMs, field.TypeInt64, value)
 	}
-	if weuo.mutation.DurationMsCleared() {
+	if _u.mutation.DurationMsCleared() {
 		_spec.ClearField(workflowexecution.FieldDurationMs, field.TypeInt64)
 	}
-	if value, ok := weuo.mutation.WorkflowStatus(); ok {
+	if value, ok := _u.mutation.WorkflowStatus(); ok {
 		_spec.SetField(workflowexecution.FieldWorkflowStatus, field.TypeString, value)
 	}
-	if value, ok := weuo.mutation.Entity(); ok {
+	if value, ok := _u.mutation.Entity(); ok {
 		_spec.SetField(workflowexecution.FieldEntity, field.TypeString, value)
 	}
-	if weuo.mutation.EntityCleared() {
+	if _u.mutation.EntityCleared() {
 		_spec.ClearField(workflowexecution.FieldEntity, field.TypeString)
 	}
-	if value, ok := weuo.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(workflowexecution.FieldEntityID, field.TypeString, value)
 	}
-	if weuo.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(workflowexecution.FieldEntityID, field.TypeString)
 	}
-	if value, ok := weuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(workflowexecution.FieldMetadata, field.TypeJSON, value)
 	}
-	if weuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(workflowexecution.FieldMetadata, field.TypeJSON)
 	}
-	_node = &WorkflowExecution{config: weuo.config}
+	_node = &WorkflowExecution{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, weuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{workflowexecution.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -830,6 +830,6 @@ func (weuo *WorkflowExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Wor
 		}
 		return nil, err
 	}
-	weuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

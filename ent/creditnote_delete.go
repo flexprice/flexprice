@@ -20,56 +20,56 @@ type CreditNoteDelete struct {
 }
 
 // Where appends a list predicates to the CreditNoteDelete builder.
-func (cnd *CreditNoteDelete) Where(ps ...predicate.CreditNote) *CreditNoteDelete {
-	cnd.mutation.Where(ps...)
-	return cnd
+func (_d *CreditNoteDelete) Where(ps ...predicate.CreditNote) *CreditNoteDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cnd *CreditNoteDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cnd.sqlExec, cnd.mutation, cnd.hooks)
+func (_d *CreditNoteDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnd *CreditNoteDelete) ExecX(ctx context.Context) int {
-	n, err := cnd.Exec(ctx)
+func (_d *CreditNoteDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cnd *CreditNoteDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CreditNoteDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(creditnote.Table, sqlgraph.NewFieldSpec(creditnote.FieldID, field.TypeString))
-	if ps := cnd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cnd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cnd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CreditNoteDeleteOne is the builder for deleting a single CreditNote entity.
 type CreditNoteDeleteOne struct {
-	cnd *CreditNoteDelete
+	_d *CreditNoteDelete
 }
 
 // Where appends a list predicates to the CreditNoteDelete builder.
-func (cndo *CreditNoteDeleteOne) Where(ps ...predicate.CreditNote) *CreditNoteDeleteOne {
-	cndo.cnd.mutation.Where(ps...)
-	return cndo
+func (_d *CreditNoteDeleteOne) Where(ps ...predicate.CreditNote) *CreditNoteDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cndo *CreditNoteDeleteOne) Exec(ctx context.Context) error {
-	n, err := cndo.cnd.Exec(ctx)
+func (_d *CreditNoteDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cndo *CreditNoteDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cndo *CreditNoteDeleteOne) ExecX(ctx context.Context) {
-	if err := cndo.Exec(ctx); err != nil {
+func (_d *CreditNoteDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -25,165 +25,165 @@ type TaxAppliedUpdate struct {
 }
 
 // Where appends a list predicates to the TaxAppliedUpdate builder.
-func (tau *TaxAppliedUpdate) Where(ps ...predicate.TaxApplied) *TaxAppliedUpdate {
-	tau.mutation.Where(ps...)
-	return tau
+func (_u *TaxAppliedUpdate) Where(ps ...predicate.TaxApplied) *TaxAppliedUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (tau *TaxAppliedUpdate) SetStatus(s string) *TaxAppliedUpdate {
-	tau.mutation.SetStatus(s)
-	return tau
+func (_u *TaxAppliedUpdate) SetStatus(v string) *TaxAppliedUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableStatus(s *string) *TaxAppliedUpdate {
-	if s != nil {
-		tau.SetStatus(*s)
+func (_u *TaxAppliedUpdate) SetNillableStatus(v *string) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return tau
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (tau *TaxAppliedUpdate) SetUpdatedAt(t time.Time) *TaxAppliedUpdate {
-	tau.mutation.SetUpdatedAt(t)
-	return tau
+func (_u *TaxAppliedUpdate) SetUpdatedAt(v time.Time) *TaxAppliedUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (tau *TaxAppliedUpdate) SetUpdatedBy(s string) *TaxAppliedUpdate {
-	tau.mutation.SetUpdatedBy(s)
-	return tau
+func (_u *TaxAppliedUpdate) SetUpdatedBy(v string) *TaxAppliedUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableUpdatedBy(s *string) *TaxAppliedUpdate {
-	if s != nil {
-		tau.SetUpdatedBy(*s)
+func (_u *TaxAppliedUpdate) SetNillableUpdatedBy(v *string) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return tau
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (tau *TaxAppliedUpdate) ClearUpdatedBy() *TaxAppliedUpdate {
-	tau.mutation.ClearUpdatedBy()
-	return tau
+func (_u *TaxAppliedUpdate) ClearUpdatedBy() *TaxAppliedUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetTaxAssociationID sets the "tax_association_id" field.
-func (tau *TaxAppliedUpdate) SetTaxAssociationID(s string) *TaxAppliedUpdate {
-	tau.mutation.SetTaxAssociationID(s)
-	return tau
+func (_u *TaxAppliedUpdate) SetTaxAssociationID(v string) *TaxAppliedUpdate {
+	_u.mutation.SetTaxAssociationID(v)
+	return _u
 }
 
 // SetNillableTaxAssociationID sets the "tax_association_id" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableTaxAssociationID(s *string) *TaxAppliedUpdate {
-	if s != nil {
-		tau.SetTaxAssociationID(*s)
+func (_u *TaxAppliedUpdate) SetNillableTaxAssociationID(v *string) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetTaxAssociationID(*v)
 	}
-	return tau
+	return _u
 }
 
 // ClearTaxAssociationID clears the value of the "tax_association_id" field.
-func (tau *TaxAppliedUpdate) ClearTaxAssociationID() *TaxAppliedUpdate {
-	tau.mutation.ClearTaxAssociationID()
-	return tau
+func (_u *TaxAppliedUpdate) ClearTaxAssociationID() *TaxAppliedUpdate {
+	_u.mutation.ClearTaxAssociationID()
+	return _u
 }
 
 // SetTaxableAmount sets the "taxable_amount" field.
-func (tau *TaxAppliedUpdate) SetTaxableAmount(d decimal.Decimal) *TaxAppliedUpdate {
-	tau.mutation.SetTaxableAmount(d)
-	return tau
+func (_u *TaxAppliedUpdate) SetTaxableAmount(v decimal.Decimal) *TaxAppliedUpdate {
+	_u.mutation.SetTaxableAmount(v)
+	return _u
 }
 
 // SetNillableTaxableAmount sets the "taxable_amount" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableTaxableAmount(d *decimal.Decimal) *TaxAppliedUpdate {
-	if d != nil {
-		tau.SetTaxableAmount(*d)
+func (_u *TaxAppliedUpdate) SetNillableTaxableAmount(v *decimal.Decimal) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetTaxableAmount(*v)
 	}
-	return tau
+	return _u
 }
 
 // SetTaxAmount sets the "tax_amount" field.
-func (tau *TaxAppliedUpdate) SetTaxAmount(d decimal.Decimal) *TaxAppliedUpdate {
-	tau.mutation.SetTaxAmount(d)
-	return tau
+func (_u *TaxAppliedUpdate) SetTaxAmount(v decimal.Decimal) *TaxAppliedUpdate {
+	_u.mutation.SetTaxAmount(v)
+	return _u
 }
 
 // SetNillableTaxAmount sets the "tax_amount" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableTaxAmount(d *decimal.Decimal) *TaxAppliedUpdate {
-	if d != nil {
-		tau.SetTaxAmount(*d)
+func (_u *TaxAppliedUpdate) SetNillableTaxAmount(v *decimal.Decimal) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetTaxAmount(*v)
 	}
-	return tau
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (tau *TaxAppliedUpdate) SetMetadata(m map[string]string) *TaxAppliedUpdate {
-	tau.mutation.SetMetadata(m)
-	return tau
+func (_u *TaxAppliedUpdate) SetMetadata(v map[string]string) *TaxAppliedUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (tau *TaxAppliedUpdate) ClearMetadata() *TaxAppliedUpdate {
-	tau.mutation.ClearMetadata()
-	return tau
+func (_u *TaxAppliedUpdate) ClearMetadata() *TaxAppliedUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (tau *TaxAppliedUpdate) SetIdempotencyKey(s string) *TaxAppliedUpdate {
-	tau.mutation.SetIdempotencyKey(s)
-	return tau
+func (_u *TaxAppliedUpdate) SetIdempotencyKey(v string) *TaxAppliedUpdate {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableIdempotencyKey(s *string) *TaxAppliedUpdate {
-	if s != nil {
-		tau.SetIdempotencyKey(*s)
+func (_u *TaxAppliedUpdate) SetNillableIdempotencyKey(v *string) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
 	}
-	return tau
+	return _u
 }
 
 // ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (tau *TaxAppliedUpdate) ClearIdempotencyKey() *TaxAppliedUpdate {
-	tau.mutation.ClearIdempotencyKey()
-	return tau
+func (_u *TaxAppliedUpdate) ClearIdempotencyKey() *TaxAppliedUpdate {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
 }
 
 // SetTaxBehavior sets the "tax_behavior" field.
-func (tau *TaxAppliedUpdate) SetTaxBehavior(tb types.TaxBehavior) *TaxAppliedUpdate {
-	tau.mutation.SetTaxBehavior(tb)
-	return tau
+func (_u *TaxAppliedUpdate) SetTaxBehavior(v types.TaxBehavior) *TaxAppliedUpdate {
+	_u.mutation.SetTaxBehavior(v)
+	return _u
 }
 
 // SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
-func (tau *TaxAppliedUpdate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAppliedUpdate {
-	if tb != nil {
-		tau.SetTaxBehavior(*tb)
+func (_u *TaxAppliedUpdate) SetNillableTaxBehavior(v *types.TaxBehavior) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetTaxBehavior(*v)
 	}
-	return tau
+	return _u
 }
 
 // ClearTaxBehavior clears the value of the "tax_behavior" field.
-func (tau *TaxAppliedUpdate) ClearTaxBehavior() *TaxAppliedUpdate {
-	tau.mutation.ClearTaxBehavior()
-	return tau
+func (_u *TaxAppliedUpdate) ClearTaxBehavior() *TaxAppliedUpdate {
+	_u.mutation.ClearTaxBehavior()
+	return _u
 }
 
 // Mutation returns the TaxAppliedMutation object of the builder.
-func (tau *TaxAppliedUpdate) Mutation() *TaxAppliedMutation {
-	return tau.mutation
+func (_u *TaxAppliedUpdate) Mutation() *TaxAppliedMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (tau *TaxAppliedUpdate) Save(ctx context.Context) (int, error) {
-	tau.defaults()
-	return withHooks(ctx, tau.sqlSave, tau.mutation, tau.hooks)
+func (_u *TaxAppliedUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (tau *TaxAppliedUpdate) SaveX(ctx context.Context) int {
-	affected, err := tau.Save(ctx)
+func (_u *TaxAppliedUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -191,84 +191,84 @@ func (tau *TaxAppliedUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (tau *TaxAppliedUpdate) Exec(ctx context.Context) error {
-	_, err := tau.Save(ctx)
+func (_u *TaxAppliedUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tau *TaxAppliedUpdate) ExecX(ctx context.Context) {
-	if err := tau.Exec(ctx); err != nil {
+func (_u *TaxAppliedUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (tau *TaxAppliedUpdate) defaults() {
-	if _, ok := tau.mutation.UpdatedAt(); !ok {
+func (_u *TaxAppliedUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := taxapplied.UpdateDefaultUpdatedAt()
-		tau.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *TaxAppliedUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(taxapplied.Table, taxapplied.Columns, sqlgraph.NewFieldSpec(taxapplied.FieldID, field.TypeString))
-	if ps := tau.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := tau.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(taxapplied.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := tau.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxapplied.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if tau.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(taxapplied.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := tau.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxapplied.FieldUpdatedBy, field.TypeString, value)
 	}
-	if tau.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(taxapplied.FieldUpdatedBy, field.TypeString)
 	}
-	if tau.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := tau.mutation.TaxAssociationID(); ok {
+	if value, ok := _u.mutation.TaxAssociationID(); ok {
 		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
 	}
-	if tau.mutation.TaxAssociationIDCleared() {
+	if _u.mutation.TaxAssociationIDCleared() {
 		_spec.ClearField(taxapplied.FieldTaxAssociationID, field.TypeString)
 	}
-	if value, ok := tau.mutation.TaxableAmount(); ok {
+	if value, ok := _u.mutation.TaxableAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxableAmount, field.TypeOther, value)
 	}
-	if value, ok := tau.mutation.TaxAmount(); ok {
+	if value, ok := _u.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
 	}
-	if value, ok := tau.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
 	}
-	if tau.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(taxapplied.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := tau.mutation.IdempotencyKey(); ok {
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
 		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
 	}
-	if tau.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := tau.mutation.TaxBehavior(); ok {
+	if value, ok := _u.mutation.TaxBehavior(); ok {
 		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
 	}
-	if tau.mutation.TaxBehaviorCleared() {
+	if _u.mutation.TaxBehaviorCleared() {
 		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{taxapplied.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -276,8 +276,8 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	tau.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // TaxAppliedUpdateOne is the builder for updating a single TaxApplied entity.
@@ -289,172 +289,172 @@ type TaxAppliedUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (tauo *TaxAppliedUpdateOne) SetStatus(s string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetStatus(s)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetStatus(v string) *TaxAppliedUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableStatus(s *string) *TaxAppliedUpdateOne {
-	if s != nil {
-		tauo.SetStatus(*s)
+func (_u *TaxAppliedUpdateOne) SetNillableStatus(v *string) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return tauo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (tauo *TaxAppliedUpdateOne) SetUpdatedAt(t time.Time) *TaxAppliedUpdateOne {
-	tauo.mutation.SetUpdatedAt(t)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetUpdatedAt(v time.Time) *TaxAppliedUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (tauo *TaxAppliedUpdateOne) SetUpdatedBy(s string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetUpdatedBy(s)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetUpdatedBy(v string) *TaxAppliedUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableUpdatedBy(s *string) *TaxAppliedUpdateOne {
-	if s != nil {
-		tauo.SetUpdatedBy(*s)
+func (_u *TaxAppliedUpdateOne) SetNillableUpdatedBy(v *string) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return tauo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (tauo *TaxAppliedUpdateOne) ClearUpdatedBy() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearUpdatedBy()
-	return tauo
+func (_u *TaxAppliedUpdateOne) ClearUpdatedBy() *TaxAppliedUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetTaxAssociationID sets the "tax_association_id" field.
-func (tauo *TaxAppliedUpdateOne) SetTaxAssociationID(s string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetTaxAssociationID(s)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetTaxAssociationID(v string) *TaxAppliedUpdateOne {
+	_u.mutation.SetTaxAssociationID(v)
+	return _u
 }
 
 // SetNillableTaxAssociationID sets the "tax_association_id" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableTaxAssociationID(s *string) *TaxAppliedUpdateOne {
-	if s != nil {
-		tauo.SetTaxAssociationID(*s)
+func (_u *TaxAppliedUpdateOne) SetNillableTaxAssociationID(v *string) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetTaxAssociationID(*v)
 	}
-	return tauo
+	return _u
 }
 
 // ClearTaxAssociationID clears the value of the "tax_association_id" field.
-func (tauo *TaxAppliedUpdateOne) ClearTaxAssociationID() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearTaxAssociationID()
-	return tauo
+func (_u *TaxAppliedUpdateOne) ClearTaxAssociationID() *TaxAppliedUpdateOne {
+	_u.mutation.ClearTaxAssociationID()
+	return _u
 }
 
 // SetTaxableAmount sets the "taxable_amount" field.
-func (tauo *TaxAppliedUpdateOne) SetTaxableAmount(d decimal.Decimal) *TaxAppliedUpdateOne {
-	tauo.mutation.SetTaxableAmount(d)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetTaxableAmount(v decimal.Decimal) *TaxAppliedUpdateOne {
+	_u.mutation.SetTaxableAmount(v)
+	return _u
 }
 
 // SetNillableTaxableAmount sets the "taxable_amount" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableTaxableAmount(d *decimal.Decimal) *TaxAppliedUpdateOne {
-	if d != nil {
-		tauo.SetTaxableAmount(*d)
+func (_u *TaxAppliedUpdateOne) SetNillableTaxableAmount(v *decimal.Decimal) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetTaxableAmount(*v)
 	}
-	return tauo
+	return _u
 }
 
 // SetTaxAmount sets the "tax_amount" field.
-func (tauo *TaxAppliedUpdateOne) SetTaxAmount(d decimal.Decimal) *TaxAppliedUpdateOne {
-	tauo.mutation.SetTaxAmount(d)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetTaxAmount(v decimal.Decimal) *TaxAppliedUpdateOne {
+	_u.mutation.SetTaxAmount(v)
+	return _u
 }
 
 // SetNillableTaxAmount sets the "tax_amount" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableTaxAmount(d *decimal.Decimal) *TaxAppliedUpdateOne {
-	if d != nil {
-		tauo.SetTaxAmount(*d)
+func (_u *TaxAppliedUpdateOne) SetNillableTaxAmount(v *decimal.Decimal) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetTaxAmount(*v)
 	}
-	return tauo
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (tauo *TaxAppliedUpdateOne) SetMetadata(m map[string]string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetMetadata(m)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetMetadata(v map[string]string) *TaxAppliedUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (tauo *TaxAppliedUpdateOne) ClearMetadata() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearMetadata()
-	return tauo
+func (_u *TaxAppliedUpdateOne) ClearMetadata() *TaxAppliedUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (tauo *TaxAppliedUpdateOne) SetIdempotencyKey(s string) *TaxAppliedUpdateOne {
-	tauo.mutation.SetIdempotencyKey(s)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetIdempotencyKey(v string) *TaxAppliedUpdateOne {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableIdempotencyKey(s *string) *TaxAppliedUpdateOne {
-	if s != nil {
-		tauo.SetIdempotencyKey(*s)
+func (_u *TaxAppliedUpdateOne) SetNillableIdempotencyKey(v *string) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
 	}
-	return tauo
+	return _u
 }
 
 // ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (tauo *TaxAppliedUpdateOne) ClearIdempotencyKey() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearIdempotencyKey()
-	return tauo
+func (_u *TaxAppliedUpdateOne) ClearIdempotencyKey() *TaxAppliedUpdateOne {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
 }
 
 // SetTaxBehavior sets the "tax_behavior" field.
-func (tauo *TaxAppliedUpdateOne) SetTaxBehavior(tb types.TaxBehavior) *TaxAppliedUpdateOne {
-	tauo.mutation.SetTaxBehavior(tb)
-	return tauo
+func (_u *TaxAppliedUpdateOne) SetTaxBehavior(v types.TaxBehavior) *TaxAppliedUpdateOne {
+	_u.mutation.SetTaxBehavior(v)
+	return _u
 }
 
 // SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
-func (tauo *TaxAppliedUpdateOne) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAppliedUpdateOne {
-	if tb != nil {
-		tauo.SetTaxBehavior(*tb)
+func (_u *TaxAppliedUpdateOne) SetNillableTaxBehavior(v *types.TaxBehavior) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetTaxBehavior(*v)
 	}
-	return tauo
+	return _u
 }
 
 // ClearTaxBehavior clears the value of the "tax_behavior" field.
-func (tauo *TaxAppliedUpdateOne) ClearTaxBehavior() *TaxAppliedUpdateOne {
-	tauo.mutation.ClearTaxBehavior()
-	return tauo
+func (_u *TaxAppliedUpdateOne) ClearTaxBehavior() *TaxAppliedUpdateOne {
+	_u.mutation.ClearTaxBehavior()
+	return _u
 }
 
 // Mutation returns the TaxAppliedMutation object of the builder.
-func (tauo *TaxAppliedUpdateOne) Mutation() *TaxAppliedMutation {
-	return tauo.mutation
+func (_u *TaxAppliedUpdateOne) Mutation() *TaxAppliedMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the TaxAppliedUpdate builder.
-func (tauo *TaxAppliedUpdateOne) Where(ps ...predicate.TaxApplied) *TaxAppliedUpdateOne {
-	tauo.mutation.Where(ps...)
-	return tauo
+func (_u *TaxAppliedUpdateOne) Where(ps ...predicate.TaxApplied) *TaxAppliedUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (tauo *TaxAppliedUpdateOne) Select(field string, fields ...string) *TaxAppliedUpdateOne {
-	tauo.fields = append([]string{field}, fields...)
-	return tauo
+func (_u *TaxAppliedUpdateOne) Select(field string, fields ...string) *TaxAppliedUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated TaxApplied entity.
-func (tauo *TaxAppliedUpdateOne) Save(ctx context.Context) (*TaxApplied, error) {
-	tauo.defaults()
-	return withHooks(ctx, tauo.sqlSave, tauo.mutation, tauo.hooks)
+func (_u *TaxAppliedUpdateOne) Save(ctx context.Context) (*TaxApplied, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (tauo *TaxAppliedUpdateOne) SaveX(ctx context.Context) *TaxApplied {
-	node, err := tauo.Save(ctx)
+func (_u *TaxAppliedUpdateOne) SaveX(ctx context.Context) *TaxApplied {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -462,34 +462,34 @@ func (tauo *TaxAppliedUpdateOne) SaveX(ctx context.Context) *TaxApplied {
 }
 
 // Exec executes the query on the entity.
-func (tauo *TaxAppliedUpdateOne) Exec(ctx context.Context) error {
-	_, err := tauo.Save(ctx)
+func (_u *TaxAppliedUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tauo *TaxAppliedUpdateOne) ExecX(ctx context.Context) {
-	if err := tauo.Exec(ctx); err != nil {
+func (_u *TaxAppliedUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (tauo *TaxAppliedUpdateOne) defaults() {
-	if _, ok := tauo.mutation.UpdatedAt(); !ok {
+func (_u *TaxAppliedUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := taxapplied.UpdateDefaultUpdatedAt()
-		tauo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied, err error) {
+func (_u *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied, err error) {
 	_spec := sqlgraph.NewUpdateSpec(taxapplied.Table, taxapplied.Columns, sqlgraph.NewFieldSpec(taxapplied.FieldID, field.TypeString))
-	id, ok := tauo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "TaxApplied.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := tauo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, taxapplied.FieldID)
 		for _, f := range fields {
@@ -501,65 +501,65 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 			}
 		}
 	}
-	if ps := tauo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := tauo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(taxapplied.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := tauo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxapplied.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if tauo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(taxapplied.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := tauo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxapplied.FieldUpdatedBy, field.TypeString, value)
 	}
-	if tauo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(taxapplied.FieldUpdatedBy, field.TypeString)
 	}
-	if tauo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := tauo.mutation.TaxAssociationID(); ok {
+	if value, ok := _u.mutation.TaxAssociationID(); ok {
 		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
 	}
-	if tauo.mutation.TaxAssociationIDCleared() {
+	if _u.mutation.TaxAssociationIDCleared() {
 		_spec.ClearField(taxapplied.FieldTaxAssociationID, field.TypeString)
 	}
-	if value, ok := tauo.mutation.TaxableAmount(); ok {
+	if value, ok := _u.mutation.TaxableAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxableAmount, field.TypeOther, value)
 	}
-	if value, ok := tauo.mutation.TaxAmount(); ok {
+	if value, ok := _u.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
 	}
-	if value, ok := tauo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
 	}
-	if tauo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(taxapplied.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := tauo.mutation.IdempotencyKey(); ok {
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
 		_spec.SetField(taxapplied.FieldIdempotencyKey, field.TypeString, value)
 	}
-	if tauo.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(taxapplied.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := tauo.mutation.TaxBehavior(); ok {
+	if value, ok := _u.mutation.TaxBehavior(); ok {
 		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
 	}
-	if tauo.mutation.TaxBehaviorCleared() {
+	if _u.mutation.TaxBehaviorCleared() {
 		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
 	}
-	_node = &TaxApplied{config: tauo.config}
+	_node = &TaxApplied{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, tauo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{taxapplied.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -567,6 +567,6 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 		}
 		return nil, err
 	}
-	tauo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

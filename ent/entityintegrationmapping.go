@@ -65,7 +65,7 @@ func (*EntityIntegrationMapping) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the EntityIntegrationMapping fields.
-func (eim *EntityIntegrationMapping) assignValues(columns []string, values []any) error {
+func (_m *EntityIntegrationMapping) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -75,84 +75,84 @@ func (eim *EntityIntegrationMapping) assignValues(columns []string, values []any
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				eim.ID = value.String
+				_m.ID = value.String
 			}
 		case entityintegrationmapping.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				eim.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case entityintegrationmapping.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				eim.Status = value.String
+				_m.Status = value.String
 			}
 		case entityintegrationmapping.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				eim.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case entityintegrationmapping.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				eim.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case entityintegrationmapping.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				eim.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case entityintegrationmapping.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				eim.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case entityintegrationmapping.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				eim.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case entityintegrationmapping.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				eim.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case entityintegrationmapping.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				eim.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case entityintegrationmapping.FieldProviderType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider_type", values[i])
 			} else if value.Valid {
-				eim.ProviderType = value.String
+				_m.ProviderType = value.String
 			}
 		case entityintegrationmapping.FieldProviderEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider_entity_id", values[i])
 			} else if value.Valid {
-				eim.ProviderEntityID = value.String
+				_m.ProviderEntityID = value.String
 			}
 		case entityintegrationmapping.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &eim.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			eim.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -160,68 +160,68 @@ func (eim *EntityIntegrationMapping) assignValues(columns []string, values []any
 
 // Value returns the ent.Value that was dynamically selected and assigned to the EntityIntegrationMapping.
 // This includes values selected through modifiers, order, etc.
-func (eim *EntityIntegrationMapping) Value(name string) (ent.Value, error) {
-	return eim.selectValues.Get(name)
+func (_m *EntityIntegrationMapping) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this EntityIntegrationMapping.
 // Note that you need to call EntityIntegrationMapping.Unwrap() before calling this method if this EntityIntegrationMapping
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (eim *EntityIntegrationMapping) Update() *EntityIntegrationMappingUpdateOne {
-	return NewEntityIntegrationMappingClient(eim.config).UpdateOne(eim)
+func (_m *EntityIntegrationMapping) Update() *EntityIntegrationMappingUpdateOne {
+	return NewEntityIntegrationMappingClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the EntityIntegrationMapping entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (eim *EntityIntegrationMapping) Unwrap() *EntityIntegrationMapping {
-	_tx, ok := eim.config.driver.(*txDriver)
+func (_m *EntityIntegrationMapping) Unwrap() *EntityIntegrationMapping {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: EntityIntegrationMapping is not a transactional entity")
 	}
-	eim.config.driver = _tx.drv
-	return eim
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (eim *EntityIntegrationMapping) String() string {
+func (_m *EntityIntegrationMapping) String() string {
 	var builder strings.Builder
 	builder.WriteString("EntityIntegrationMapping(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", eim.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(eim.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(eim.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(eim.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(eim.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(eim.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(eim.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(eim.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(eim.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(eim.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("provider_type=")
-	builder.WriteString(eim.ProviderType)
+	builder.WriteString(_m.ProviderType)
 	builder.WriteString(", ")
 	builder.WriteString("provider_entity_id=")
-	builder.WriteString(eim.ProviderEntityID)
+	builder.WriteString(_m.ProviderEntityID)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", eim.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

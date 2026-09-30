@@ -29,40 +29,40 @@ type CostsheetQuery struct {
 }
 
 // Where adds a new predicate for the CostsheetQuery builder.
-func (cq *CostsheetQuery) Where(ps ...predicate.Costsheet) *CostsheetQuery {
-	cq.predicates = append(cq.predicates, ps...)
-	return cq
+func (_q *CostsheetQuery) Where(ps ...predicate.Costsheet) *CostsheetQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (cq *CostsheetQuery) Limit(limit int) *CostsheetQuery {
-	cq.ctx.Limit = &limit
-	return cq
+func (_q *CostsheetQuery) Limit(limit int) *CostsheetQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (cq *CostsheetQuery) Offset(offset int) *CostsheetQuery {
-	cq.ctx.Offset = &offset
-	return cq
+func (_q *CostsheetQuery) Offset(offset int) *CostsheetQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (cq *CostsheetQuery) Unique(unique bool) *CostsheetQuery {
-	cq.ctx.Unique = &unique
-	return cq
+func (_q *CostsheetQuery) Unique(unique bool) *CostsheetQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (cq *CostsheetQuery) Order(o ...costsheet.OrderOption) *CostsheetQuery {
-	cq.order = append(cq.order, o...)
-	return cq
+func (_q *CostsheetQuery) Order(o ...costsheet.OrderOption) *CostsheetQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first Costsheet entity from the query.
 // Returns a *NotFoundError when no Costsheet was found.
-func (cq *CostsheetQuery) First(ctx context.Context) (*Costsheet, error) {
-	nodes, err := cq.Limit(1).All(setContextOp(ctx, cq.ctx, ent.OpQueryFirst))
+func (_q *CostsheetQuery) First(ctx context.Context) (*Costsheet, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +73,8 @@ func (cq *CostsheetQuery) First(ctx context.Context) (*Costsheet, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (cq *CostsheetQuery) FirstX(ctx context.Context) *Costsheet {
-	node, err := cq.First(ctx)
+func (_q *CostsheetQuery) FirstX(ctx context.Context) *Costsheet {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -83,9 +83,9 @@ func (cq *CostsheetQuery) FirstX(ctx context.Context) *Costsheet {
 
 // FirstID returns the first Costsheet ID from the query.
 // Returns a *NotFoundError when no Costsheet ID was found.
-func (cq *CostsheetQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *CostsheetQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cq.Limit(1).IDs(setContextOp(ctx, cq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -96,8 +96,8 @@ func (cq *CostsheetQuery) FirstID(ctx context.Context) (id string, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (cq *CostsheetQuery) FirstIDX(ctx context.Context) string {
-	id, err := cq.FirstID(ctx)
+func (_q *CostsheetQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -107,8 +107,8 @@ func (cq *CostsheetQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single Costsheet entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one Costsheet entity is found.
 // Returns a *NotFoundError when no Costsheet entities are found.
-func (cq *CostsheetQuery) Only(ctx context.Context) (*Costsheet, error) {
-	nodes, err := cq.Limit(2).All(setContextOp(ctx, cq.ctx, ent.OpQueryOnly))
+func (_q *CostsheetQuery) Only(ctx context.Context) (*Costsheet, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +123,8 @@ func (cq *CostsheetQuery) Only(ctx context.Context) (*Costsheet, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (cq *CostsheetQuery) OnlyX(ctx context.Context) *Costsheet {
-	node, err := cq.Only(ctx)
+func (_q *CostsheetQuery) OnlyX(ctx context.Context) *Costsheet {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -134,9 +134,9 @@ func (cq *CostsheetQuery) OnlyX(ctx context.Context) *Costsheet {
 // OnlyID is like Only, but returns the only Costsheet ID in the query.
 // Returns a *NotSingularError when more than one Costsheet ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (cq *CostsheetQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *CostsheetQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cq.Limit(2).IDs(setContextOp(ctx, cq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -151,8 +151,8 @@ func (cq *CostsheetQuery) OnlyID(ctx context.Context) (id string, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (cq *CostsheetQuery) OnlyIDX(ctx context.Context) string {
-	id, err := cq.OnlyID(ctx)
+func (_q *CostsheetQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -160,18 +160,18 @@ func (cq *CostsheetQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of Costsheets.
-func (cq *CostsheetQuery) All(ctx context.Context) ([]*Costsheet, error) {
-	ctx = setContextOp(ctx, cq.ctx, ent.OpQueryAll)
-	if err := cq.prepareQuery(ctx); err != nil {
+func (_q *CostsheetQuery) All(ctx context.Context) ([]*Costsheet, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*Costsheet, *CostsheetQuery]()
-	return withInterceptors[[]*Costsheet](ctx, cq, qr, cq.inters)
+	return withInterceptors[[]*Costsheet](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (cq *CostsheetQuery) AllX(ctx context.Context) []*Costsheet {
-	nodes, err := cq.All(ctx)
+func (_q *CostsheetQuery) AllX(ctx context.Context) []*Costsheet {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -179,20 +179,20 @@ func (cq *CostsheetQuery) AllX(ctx context.Context) []*Costsheet {
 }
 
 // IDs executes the query and returns a list of Costsheet IDs.
-func (cq *CostsheetQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if cq.ctx.Unique == nil && cq.path != nil {
-		cq.Unique(true)
+func (_q *CostsheetQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, cq.ctx, ent.OpQueryIDs)
-	if err = cq.Select(costsheet.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(costsheet.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (cq *CostsheetQuery) IDsX(ctx context.Context) []string {
-	ids, err := cq.IDs(ctx)
+func (_q *CostsheetQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -200,17 +200,17 @@ func (cq *CostsheetQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (cq *CostsheetQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, cq.ctx, ent.OpQueryCount)
-	if err := cq.prepareQuery(ctx); err != nil {
+func (_q *CostsheetQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, cq, querierCount[*CostsheetQuery](), cq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*CostsheetQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (cq *CostsheetQuery) CountX(ctx context.Context) int {
-	count, err := cq.Count(ctx)
+func (_q *CostsheetQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -218,9 +218,9 @@ func (cq *CostsheetQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (cq *CostsheetQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, cq.ctx, ent.OpQueryExist)
-	switch _, err := cq.FirstID(ctx); {
+func (_q *CostsheetQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -231,8 +231,8 @@ func (cq *CostsheetQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (cq *CostsheetQuery) ExistX(ctx context.Context) bool {
-	exist, err := cq.Exist(ctx)
+func (_q *CostsheetQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -241,19 +241,19 @@ func (cq *CostsheetQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the CostsheetQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (cq *CostsheetQuery) Clone() *CostsheetQuery {
-	if cq == nil {
+func (_q *CostsheetQuery) Clone() *CostsheetQuery {
+	if _q == nil {
 		return nil
 	}
 	return &CostsheetQuery{
-		config:     cq.config,
-		ctx:        cq.ctx.Clone(),
-		order:      append([]costsheet.OrderOption{}, cq.order...),
-		inters:     append([]Interceptor{}, cq.inters...),
-		predicates: append([]predicate.Costsheet{}, cq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]costsheet.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.Costsheet{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  cq.sql.Clone(),
-		path: cq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -271,10 +271,10 @@ func (cq *CostsheetQuery) Clone() *CostsheetQuery {
 //		GroupBy(costsheet.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (cq *CostsheetQuery) GroupBy(field string, fields ...string) *CostsheetGroupBy {
-	cq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &CostsheetGroupBy{build: cq}
-	grbuild.flds = &cq.ctx.Fields
+func (_q *CostsheetQuery) GroupBy(field string, fields ...string) *CostsheetGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &CostsheetGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = costsheet.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -292,50 +292,50 @@ func (cq *CostsheetQuery) GroupBy(field string, fields ...string) *CostsheetGrou
 //	client.Costsheet.Query().
 //		Select(costsheet.FieldTenantID).
 //		Scan(ctx, &v)
-func (cq *CostsheetQuery) Select(fields ...string) *CostsheetSelect {
-	cq.ctx.Fields = append(cq.ctx.Fields, fields...)
-	sbuild := &CostsheetSelect{CostsheetQuery: cq}
+func (_q *CostsheetQuery) Select(fields ...string) *CostsheetSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &CostsheetSelect{CostsheetQuery: _q}
 	sbuild.label = costsheet.Label
-	sbuild.flds, sbuild.scan = &cq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a CostsheetSelect configured with the given aggregations.
-func (cq *CostsheetQuery) Aggregate(fns ...AggregateFunc) *CostsheetSelect {
-	return cq.Select().Aggregate(fns...)
+func (_q *CostsheetQuery) Aggregate(fns ...AggregateFunc) *CostsheetSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (cq *CostsheetQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range cq.inters {
+func (_q *CostsheetQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, cq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range cq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !costsheet.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if cq.path != nil {
-		prev, err := cq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		cq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Costsheet, error) {
+func (_q *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Costsheet, error) {
 	var (
 		nodes   = []*Costsheet{}
-		withFKs = cq.withFKs
-		_spec   = cq.querySpec()
+		withFKs = _q.withFKs
+		_spec   = _q.querySpec()
 	)
 	if withFKs {
 		_spec.Node.Columns = append(_spec.Node.Columns, costsheet.ForeignKeys...)
@@ -344,14 +344,14 @@ func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Co
 		return (*Costsheet).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Costsheet{config: cq.config}
+		node := &Costsheet{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, cq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -360,24 +360,24 @@ func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Co
 	return nodes, nil
 }
 
-func (cq *CostsheetQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := cq.querySpec()
-	_spec.Node.Columns = cq.ctx.Fields
-	if len(cq.ctx.Fields) > 0 {
-		_spec.Unique = cq.ctx.Unique != nil && *cq.ctx.Unique
+func (_q *CostsheetQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, cq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (cq *CostsheetQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *CostsheetQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(costsheet.Table, costsheet.Columns, sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString))
-	_spec.From = cq.sql
-	if unique := cq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if cq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := cq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, costsheet.FieldID)
 		for i := range fields {
@@ -386,20 +386,20 @@ func (cq *CostsheetQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := cq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := cq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := cq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := cq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -409,33 +409,33 @@ func (cq *CostsheetQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (cq *CostsheetQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(cq.driver.Dialect())
+func (_q *CostsheetQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(costsheet.Table)
-	columns := cq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = costsheet.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if cq.sql != nil {
-		selector = cq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if cq.ctx.Unique != nil && *cq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range cq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range cq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := cq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := cq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -448,41 +448,41 @@ type CostsheetGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (cgb *CostsheetGroupBy) Aggregate(fns ...AggregateFunc) *CostsheetGroupBy {
-	cgb.fns = append(cgb.fns, fns...)
-	return cgb
+func (_g *CostsheetGroupBy) Aggregate(fns ...AggregateFunc) *CostsheetGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cgb *CostsheetGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cgb.build.ctx, ent.OpQueryGroupBy)
-	if err := cgb.build.prepareQuery(ctx); err != nil {
+func (_g *CostsheetGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CostsheetQuery, *CostsheetGroupBy](ctx, cgb.build, cgb, cgb.build.inters, v)
+	return scanWithInterceptors[*CostsheetQuery, *CostsheetGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (cgb *CostsheetGroupBy) sqlScan(ctx context.Context, root *CostsheetQuery, v any) error {
+func (_g *CostsheetGroupBy) sqlScan(ctx context.Context, root *CostsheetQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(cgb.fns))
-	for _, fn := range cgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*cgb.flds)+len(cgb.fns))
-		for _, f := range *cgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*cgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -496,27 +496,27 @@ type CostsheetSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (cs *CostsheetSelect) Aggregate(fns ...AggregateFunc) *CostsheetSelect {
-	cs.fns = append(cs.fns, fns...)
-	return cs
+func (_s *CostsheetSelect) Aggregate(fns ...AggregateFunc) *CostsheetSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cs *CostsheetSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cs.ctx, ent.OpQuerySelect)
-	if err := cs.prepareQuery(ctx); err != nil {
+func (_s *CostsheetSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CostsheetQuery, *CostsheetSelect](ctx, cs.CostsheetQuery, cs, cs.inters, v)
+	return scanWithInterceptors[*CostsheetQuery, *CostsheetSelect](ctx, _s.CostsheetQuery, _s, _s.inters, v)
 }
 
-func (cs *CostsheetSelect) sqlScan(ctx context.Context, root *CostsheetQuery, v any) error {
+func (_s *CostsheetSelect) sqlScan(ctx context.Context, root *CostsheetQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(cs.fns))
-	for _, fn := range cs.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*cs.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -524,7 +524,7 @@ func (cs *CostsheetSelect) sqlScan(ctx context.Context, root *CostsheetQuery, v 
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cs.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

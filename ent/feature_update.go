@@ -25,271 +25,271 @@ type FeatureUpdate struct {
 }
 
 // Where appends a list predicates to the FeatureUpdate builder.
-func (fu *FeatureUpdate) Where(ps ...predicate.Feature) *FeatureUpdate {
-	fu.mutation.Where(ps...)
-	return fu
+func (_u *FeatureUpdate) Where(ps ...predicate.Feature) *FeatureUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (fu *FeatureUpdate) SetStatus(s string) *FeatureUpdate {
-	fu.mutation.SetStatus(s)
-	return fu
+func (_u *FeatureUpdate) SetStatus(v string) *FeatureUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableStatus(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetStatus(*s)
+func (_u *FeatureUpdate) SetNillableStatus(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return fu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (fu *FeatureUpdate) SetUpdatedAt(t time.Time) *FeatureUpdate {
-	fu.mutation.SetUpdatedAt(t)
-	return fu
+func (_u *FeatureUpdate) SetUpdatedAt(v time.Time) *FeatureUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (fu *FeatureUpdate) SetUpdatedBy(s string) *FeatureUpdate {
-	fu.mutation.SetUpdatedBy(s)
-	return fu
+func (_u *FeatureUpdate) SetUpdatedBy(v string) *FeatureUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableUpdatedBy(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetUpdatedBy(*s)
+func (_u *FeatureUpdate) SetNillableUpdatedBy(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (fu *FeatureUpdate) ClearUpdatedBy() *FeatureUpdate {
-	fu.mutation.ClearUpdatedBy()
-	return fu
+func (_u *FeatureUpdate) ClearUpdatedBy() *FeatureUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (fu *FeatureUpdate) SetName(s string) *FeatureUpdate {
-	fu.mutation.SetName(s)
-	return fu
+func (_u *FeatureUpdate) SetName(v string) *FeatureUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableName(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetName(*s)
+func (_u *FeatureUpdate) SetNillableName(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return fu
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (fu *FeatureUpdate) SetDescription(s string) *FeatureUpdate {
-	fu.mutation.SetDescription(s)
-	return fu
+func (_u *FeatureUpdate) SetDescription(v string) *FeatureUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableDescription(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetDescription(*s)
+func (_u *FeatureUpdate) SetNillableDescription(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (fu *FeatureUpdate) ClearDescription() *FeatureUpdate {
-	fu.mutation.ClearDescription()
-	return fu
+func (_u *FeatureUpdate) ClearDescription() *FeatureUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (fu *FeatureUpdate) SetMeterID(s string) *FeatureUpdate {
-	fu.mutation.SetMeterID(s)
-	return fu
+func (_u *FeatureUpdate) SetMeterID(v string) *FeatureUpdate {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableMeterID(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetMeterID(*s)
+func (_u *FeatureUpdate) SetNillableMeterID(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (fu *FeatureUpdate) ClearMeterID() *FeatureUpdate {
-	fu.mutation.ClearMeterID()
-	return fu
+func (_u *FeatureUpdate) ClearMeterID() *FeatureUpdate {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (fu *FeatureUpdate) SetMetadata(m map[string]string) *FeatureUpdate {
-	fu.mutation.SetMetadata(m)
-	return fu
+func (_u *FeatureUpdate) SetMetadata(v map[string]string) *FeatureUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (fu *FeatureUpdate) ClearMetadata() *FeatureUpdate {
-	fu.mutation.ClearMetadata()
-	return fu
+func (_u *FeatureUpdate) ClearMetadata() *FeatureUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetUnitSingular sets the "unit_singular" field.
-func (fu *FeatureUpdate) SetUnitSingular(s string) *FeatureUpdate {
-	fu.mutation.SetUnitSingular(s)
-	return fu
+func (_u *FeatureUpdate) SetUnitSingular(v string) *FeatureUpdate {
+	_u.mutation.SetUnitSingular(v)
+	return _u
 }
 
 // SetNillableUnitSingular sets the "unit_singular" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableUnitSingular(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetUnitSingular(*s)
+func (_u *FeatureUpdate) SetNillableUnitSingular(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetUnitSingular(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearUnitSingular clears the value of the "unit_singular" field.
-func (fu *FeatureUpdate) ClearUnitSingular() *FeatureUpdate {
-	fu.mutation.ClearUnitSingular()
-	return fu
+func (_u *FeatureUpdate) ClearUnitSingular() *FeatureUpdate {
+	_u.mutation.ClearUnitSingular()
+	return _u
 }
 
 // SetUnitPlural sets the "unit_plural" field.
-func (fu *FeatureUpdate) SetUnitPlural(s string) *FeatureUpdate {
-	fu.mutation.SetUnitPlural(s)
-	return fu
+func (_u *FeatureUpdate) SetUnitPlural(v string) *FeatureUpdate {
+	_u.mutation.SetUnitPlural(v)
+	return _u
 }
 
 // SetNillableUnitPlural sets the "unit_plural" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableUnitPlural(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetUnitPlural(*s)
+func (_u *FeatureUpdate) SetNillableUnitPlural(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetUnitPlural(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearUnitPlural clears the value of the "unit_plural" field.
-func (fu *FeatureUpdate) ClearUnitPlural() *FeatureUpdate {
-	fu.mutation.ClearUnitPlural()
-	return fu
+func (_u *FeatureUpdate) ClearUnitPlural() *FeatureUpdate {
+	_u.mutation.ClearUnitPlural()
+	return _u
 }
 
 // SetReportingUnitSingular sets the "reporting_unit_singular" field.
-func (fu *FeatureUpdate) SetReportingUnitSingular(s string) *FeatureUpdate {
-	fu.mutation.SetReportingUnitSingular(s)
-	return fu
+func (_u *FeatureUpdate) SetReportingUnitSingular(v string) *FeatureUpdate {
+	_u.mutation.SetReportingUnitSingular(v)
+	return _u
 }
 
 // SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableReportingUnitSingular(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetReportingUnitSingular(*s)
+func (_u *FeatureUpdate) SetNillableReportingUnitSingular(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetReportingUnitSingular(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearReportingUnitSingular clears the value of the "reporting_unit_singular" field.
-func (fu *FeatureUpdate) ClearReportingUnitSingular() *FeatureUpdate {
-	fu.mutation.ClearReportingUnitSingular()
-	return fu
+func (_u *FeatureUpdate) ClearReportingUnitSingular() *FeatureUpdate {
+	_u.mutation.ClearReportingUnitSingular()
+	return _u
 }
 
 // SetReportingUnitPlural sets the "reporting_unit_plural" field.
-func (fu *FeatureUpdate) SetReportingUnitPlural(s string) *FeatureUpdate {
-	fu.mutation.SetReportingUnitPlural(s)
-	return fu
+func (_u *FeatureUpdate) SetReportingUnitPlural(v string) *FeatureUpdate {
+	_u.mutation.SetReportingUnitPlural(v)
+	return _u
 }
 
 // SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableReportingUnitPlural(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetReportingUnitPlural(*s)
+func (_u *FeatureUpdate) SetNillableReportingUnitPlural(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetReportingUnitPlural(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearReportingUnitPlural clears the value of the "reporting_unit_plural" field.
-func (fu *FeatureUpdate) ClearReportingUnitPlural() *FeatureUpdate {
-	fu.mutation.ClearReportingUnitPlural()
-	return fu
+func (_u *FeatureUpdate) ClearReportingUnitPlural() *FeatureUpdate {
+	_u.mutation.ClearReportingUnitPlural()
+	return _u
 }
 
 // SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
-func (fu *FeatureUpdate) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureUpdate {
-	fu.mutation.SetReportingUnitConversionRate(d)
-	return fu
+func (_u *FeatureUpdate) SetReportingUnitConversionRate(v decimal.Decimal) *FeatureUpdate {
+	_u.mutation.SetReportingUnitConversionRate(v)
+	return _u
 }
 
 // SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureUpdate {
-	if d != nil {
-		fu.SetReportingUnitConversionRate(*d)
+func (_u *FeatureUpdate) SetNillableReportingUnitConversionRate(v *decimal.Decimal) *FeatureUpdate {
+	if v != nil {
+		_u.SetReportingUnitConversionRate(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearReportingUnitConversionRate clears the value of the "reporting_unit_conversion_rate" field.
-func (fu *FeatureUpdate) ClearReportingUnitConversionRate() *FeatureUpdate {
-	fu.mutation.ClearReportingUnitConversionRate()
-	return fu
+func (_u *FeatureUpdate) ClearReportingUnitConversionRate() *FeatureUpdate {
+	_u.mutation.ClearReportingUnitConversionRate()
+	return _u
 }
 
 // SetAlertSettings sets the "alert_settings" field.
-func (fu *FeatureUpdate) SetAlertSettings(ts types.AlertSettings) *FeatureUpdate {
-	fu.mutation.SetAlertSettings(ts)
-	return fu
+func (_u *FeatureUpdate) SetAlertSettings(v types.AlertSettings) *FeatureUpdate {
+	_u.mutation.SetAlertSettings(v)
+	return _u
 }
 
 // SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableAlertSettings(ts *types.AlertSettings) *FeatureUpdate {
-	if ts != nil {
-		fu.SetAlertSettings(*ts)
+func (_u *FeatureUpdate) SetNillableAlertSettings(v *types.AlertSettings) *FeatureUpdate {
+	if v != nil {
+		_u.SetAlertSettings(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearAlertSettings clears the value of the "alert_settings" field.
-func (fu *FeatureUpdate) ClearAlertSettings() *FeatureUpdate {
-	fu.mutation.ClearAlertSettings()
-	return fu
+func (_u *FeatureUpdate) ClearAlertSettings() *FeatureUpdate {
+	_u.mutation.ClearAlertSettings()
+	return _u
 }
 
 // SetGroupID sets the "group_id" field.
-func (fu *FeatureUpdate) SetGroupID(s string) *FeatureUpdate {
-	fu.mutation.SetGroupID(s)
-	return fu
+func (_u *FeatureUpdate) SetGroupID(v string) *FeatureUpdate {
+	_u.mutation.SetGroupID(v)
+	return _u
 }
 
 // SetNillableGroupID sets the "group_id" field if the given value is not nil.
-func (fu *FeatureUpdate) SetNillableGroupID(s *string) *FeatureUpdate {
-	if s != nil {
-		fu.SetGroupID(*s)
+func (_u *FeatureUpdate) SetNillableGroupID(v *string) *FeatureUpdate {
+	if v != nil {
+		_u.SetGroupID(*v)
 	}
-	return fu
+	return _u
 }
 
 // ClearGroupID clears the value of the "group_id" field.
-func (fu *FeatureUpdate) ClearGroupID() *FeatureUpdate {
-	fu.mutation.ClearGroupID()
-	return fu
+func (_u *FeatureUpdate) ClearGroupID() *FeatureUpdate {
+	_u.mutation.ClearGroupID()
+	return _u
 }
 
 // Mutation returns the FeatureMutation object of the builder.
-func (fu *FeatureUpdate) Mutation() *FeatureMutation {
-	return fu.mutation
+func (_u *FeatureUpdate) Mutation() *FeatureMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (fu *FeatureUpdate) Save(ctx context.Context) (int, error) {
-	fu.defaults()
-	return withHooks(ctx, fu.sqlSave, fu.mutation, fu.hooks)
+func (_u *FeatureUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (fu *FeatureUpdate) SaveX(ctx context.Context) int {
-	affected, err := fu.Save(ctx)
+func (_u *FeatureUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -297,34 +297,34 @@ func (fu *FeatureUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (fu *FeatureUpdate) Exec(ctx context.Context) error {
-	_, err := fu.Save(ctx)
+func (_u *FeatureUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (fu *FeatureUpdate) ExecX(ctx context.Context) {
-	if err := fu.Exec(ctx); err != nil {
+func (_u *FeatureUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (fu *FeatureUpdate) defaults() {
-	if _, ok := fu.mutation.UpdatedAt(); !ok {
+func (_u *FeatureUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := feature.UpdateDefaultUpdatedAt()
-		fu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (fu *FeatureUpdate) check() error {
-	if v, ok := fu.mutation.Name(); ok {
+func (_u *FeatureUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := feature.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Feature.name": %w`, err)}
 		}
 	}
-	if v, ok := fu.mutation.AlertSettings(); ok {
+	if v, ok := _u.mutation.AlertSettings(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
 		}
@@ -332,100 +332,100 @@ func (fu *FeatureUpdate) check() error {
 	return nil
 }
 
-func (fu *FeatureUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := fu.check(); err != nil {
-		return n, err
+func (_u *FeatureUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(feature.Table, feature.Columns, sqlgraph.NewFieldSpec(feature.FieldID, field.TypeString))
-	if ps := fu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := fu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(feature.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := fu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(feature.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if fu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(feature.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := fu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(feature.FieldUpdatedBy, field.TypeString, value)
 	}
-	if fu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(feature.FieldUpdatedBy, field.TypeString)
 	}
-	if fu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(feature.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := fu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(feature.FieldName, field.TypeString, value)
 	}
-	if value, ok := fu.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(feature.FieldDescription, field.TypeString, value)
 	}
-	if fu.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(feature.FieldDescription, field.TypeString)
 	}
-	if value, ok := fu.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(feature.FieldMeterID, field.TypeString, value)
 	}
-	if fu.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(feature.FieldMeterID, field.TypeString)
 	}
-	if value, ok := fu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(feature.FieldMetadata, field.TypeJSON, value)
 	}
-	if fu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(feature.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := fu.mutation.UnitSingular(); ok {
+	if value, ok := _u.mutation.UnitSingular(); ok {
 		_spec.SetField(feature.FieldUnitSingular, field.TypeString, value)
 	}
-	if fu.mutation.UnitSingularCleared() {
+	if _u.mutation.UnitSingularCleared() {
 		_spec.ClearField(feature.FieldUnitSingular, field.TypeString)
 	}
-	if value, ok := fu.mutation.UnitPlural(); ok {
+	if value, ok := _u.mutation.UnitPlural(); ok {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 	}
-	if fu.mutation.UnitPluralCleared() {
+	if _u.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
 	}
-	if value, ok := fu.mutation.ReportingUnitSingular(); ok {
+	if value, ok := _u.mutation.ReportingUnitSingular(); ok {
 		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
 	}
-	if fu.mutation.ReportingUnitSingularCleared() {
+	if _u.mutation.ReportingUnitSingularCleared() {
 		_spec.ClearField(feature.FieldReportingUnitSingular, field.TypeString)
 	}
-	if value, ok := fu.mutation.ReportingUnitPlural(); ok {
+	if value, ok := _u.mutation.ReportingUnitPlural(); ok {
 		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
 	}
-	if fu.mutation.ReportingUnitPluralCleared() {
+	if _u.mutation.ReportingUnitPluralCleared() {
 		_spec.ClearField(feature.FieldReportingUnitPlural, field.TypeString)
 	}
-	if value, ok := fu.mutation.ReportingUnitConversionRate(); ok {
+	if value, ok := _u.mutation.ReportingUnitConversionRate(); ok {
 		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
 	}
-	if fu.mutation.ReportingUnitConversionRateCleared() {
+	if _u.mutation.ReportingUnitConversionRateCleared() {
 		_spec.ClearField(feature.FieldReportingUnitConversionRate, field.TypeOther)
 	}
-	if value, ok := fu.mutation.AlertSettings(); ok {
+	if value, ok := _u.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 	}
-	if fu.mutation.AlertSettingsCleared() {
+	if _u.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
 	}
-	if value, ok := fu.mutation.GroupID(); ok {
+	if value, ok := _u.mutation.GroupID(); ok {
 		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
 	}
-	if fu.mutation.GroupIDCleared() {
+	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, fu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{feature.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -433,8 +433,8 @@ func (fu *FeatureUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	fu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // FeatureUpdateOne is the builder for updating a single Feature entity.
@@ -446,278 +446,278 @@ type FeatureUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (fuo *FeatureUpdateOne) SetStatus(s string) *FeatureUpdateOne {
-	fuo.mutation.SetStatus(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetStatus(v string) *FeatureUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableStatus(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetStatus(*s)
+func (_u *FeatureUpdateOne) SetNillableStatus(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return fuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (fuo *FeatureUpdateOne) SetUpdatedAt(t time.Time) *FeatureUpdateOne {
-	fuo.mutation.SetUpdatedAt(t)
-	return fuo
+func (_u *FeatureUpdateOne) SetUpdatedAt(v time.Time) *FeatureUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (fuo *FeatureUpdateOne) SetUpdatedBy(s string) *FeatureUpdateOne {
-	fuo.mutation.SetUpdatedBy(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetUpdatedBy(v string) *FeatureUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableUpdatedBy(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetUpdatedBy(*s)
+func (_u *FeatureUpdateOne) SetNillableUpdatedBy(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (fuo *FeatureUpdateOne) ClearUpdatedBy() *FeatureUpdateOne {
-	fuo.mutation.ClearUpdatedBy()
-	return fuo
+func (_u *FeatureUpdateOne) ClearUpdatedBy() *FeatureUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (fuo *FeatureUpdateOne) SetName(s string) *FeatureUpdateOne {
-	fuo.mutation.SetName(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetName(v string) *FeatureUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableName(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetName(*s)
+func (_u *FeatureUpdateOne) SetNillableName(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return fuo
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (fuo *FeatureUpdateOne) SetDescription(s string) *FeatureUpdateOne {
-	fuo.mutation.SetDescription(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetDescription(v string) *FeatureUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableDescription(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetDescription(*s)
+func (_u *FeatureUpdateOne) SetNillableDescription(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (fuo *FeatureUpdateOne) ClearDescription() *FeatureUpdateOne {
-	fuo.mutation.ClearDescription()
-	return fuo
+func (_u *FeatureUpdateOne) ClearDescription() *FeatureUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (fuo *FeatureUpdateOne) SetMeterID(s string) *FeatureUpdateOne {
-	fuo.mutation.SetMeterID(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetMeterID(v string) *FeatureUpdateOne {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableMeterID(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetMeterID(*s)
+func (_u *FeatureUpdateOne) SetNillableMeterID(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (fuo *FeatureUpdateOne) ClearMeterID() *FeatureUpdateOne {
-	fuo.mutation.ClearMeterID()
-	return fuo
+func (_u *FeatureUpdateOne) ClearMeterID() *FeatureUpdateOne {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (fuo *FeatureUpdateOne) SetMetadata(m map[string]string) *FeatureUpdateOne {
-	fuo.mutation.SetMetadata(m)
-	return fuo
+func (_u *FeatureUpdateOne) SetMetadata(v map[string]string) *FeatureUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (fuo *FeatureUpdateOne) ClearMetadata() *FeatureUpdateOne {
-	fuo.mutation.ClearMetadata()
-	return fuo
+func (_u *FeatureUpdateOne) ClearMetadata() *FeatureUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetUnitSingular sets the "unit_singular" field.
-func (fuo *FeatureUpdateOne) SetUnitSingular(s string) *FeatureUpdateOne {
-	fuo.mutation.SetUnitSingular(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetUnitSingular(v string) *FeatureUpdateOne {
+	_u.mutation.SetUnitSingular(v)
+	return _u
 }
 
 // SetNillableUnitSingular sets the "unit_singular" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableUnitSingular(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetUnitSingular(*s)
+func (_u *FeatureUpdateOne) SetNillableUnitSingular(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetUnitSingular(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearUnitSingular clears the value of the "unit_singular" field.
-func (fuo *FeatureUpdateOne) ClearUnitSingular() *FeatureUpdateOne {
-	fuo.mutation.ClearUnitSingular()
-	return fuo
+func (_u *FeatureUpdateOne) ClearUnitSingular() *FeatureUpdateOne {
+	_u.mutation.ClearUnitSingular()
+	return _u
 }
 
 // SetUnitPlural sets the "unit_plural" field.
-func (fuo *FeatureUpdateOne) SetUnitPlural(s string) *FeatureUpdateOne {
-	fuo.mutation.SetUnitPlural(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetUnitPlural(v string) *FeatureUpdateOne {
+	_u.mutation.SetUnitPlural(v)
+	return _u
 }
 
 // SetNillableUnitPlural sets the "unit_plural" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableUnitPlural(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetUnitPlural(*s)
+func (_u *FeatureUpdateOne) SetNillableUnitPlural(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetUnitPlural(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearUnitPlural clears the value of the "unit_plural" field.
-func (fuo *FeatureUpdateOne) ClearUnitPlural() *FeatureUpdateOne {
-	fuo.mutation.ClearUnitPlural()
-	return fuo
+func (_u *FeatureUpdateOne) ClearUnitPlural() *FeatureUpdateOne {
+	_u.mutation.ClearUnitPlural()
+	return _u
 }
 
 // SetReportingUnitSingular sets the "reporting_unit_singular" field.
-func (fuo *FeatureUpdateOne) SetReportingUnitSingular(s string) *FeatureUpdateOne {
-	fuo.mutation.SetReportingUnitSingular(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetReportingUnitSingular(v string) *FeatureUpdateOne {
+	_u.mutation.SetReportingUnitSingular(v)
+	return _u
 }
 
 // SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableReportingUnitSingular(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetReportingUnitSingular(*s)
+func (_u *FeatureUpdateOne) SetNillableReportingUnitSingular(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetReportingUnitSingular(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearReportingUnitSingular clears the value of the "reporting_unit_singular" field.
-func (fuo *FeatureUpdateOne) ClearReportingUnitSingular() *FeatureUpdateOne {
-	fuo.mutation.ClearReportingUnitSingular()
-	return fuo
+func (_u *FeatureUpdateOne) ClearReportingUnitSingular() *FeatureUpdateOne {
+	_u.mutation.ClearReportingUnitSingular()
+	return _u
 }
 
 // SetReportingUnitPlural sets the "reporting_unit_plural" field.
-func (fuo *FeatureUpdateOne) SetReportingUnitPlural(s string) *FeatureUpdateOne {
-	fuo.mutation.SetReportingUnitPlural(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetReportingUnitPlural(v string) *FeatureUpdateOne {
+	_u.mutation.SetReportingUnitPlural(v)
+	return _u
 }
 
 // SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableReportingUnitPlural(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetReportingUnitPlural(*s)
+func (_u *FeatureUpdateOne) SetNillableReportingUnitPlural(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetReportingUnitPlural(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearReportingUnitPlural clears the value of the "reporting_unit_plural" field.
-func (fuo *FeatureUpdateOne) ClearReportingUnitPlural() *FeatureUpdateOne {
-	fuo.mutation.ClearReportingUnitPlural()
-	return fuo
+func (_u *FeatureUpdateOne) ClearReportingUnitPlural() *FeatureUpdateOne {
+	_u.mutation.ClearReportingUnitPlural()
+	return _u
 }
 
 // SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
-func (fuo *FeatureUpdateOne) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureUpdateOne {
-	fuo.mutation.SetReportingUnitConversionRate(d)
-	return fuo
+func (_u *FeatureUpdateOne) SetReportingUnitConversionRate(v decimal.Decimal) *FeatureUpdateOne {
+	_u.mutation.SetReportingUnitConversionRate(v)
+	return _u
 }
 
 // SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureUpdateOne {
-	if d != nil {
-		fuo.SetReportingUnitConversionRate(*d)
+func (_u *FeatureUpdateOne) SetNillableReportingUnitConversionRate(v *decimal.Decimal) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetReportingUnitConversionRate(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearReportingUnitConversionRate clears the value of the "reporting_unit_conversion_rate" field.
-func (fuo *FeatureUpdateOne) ClearReportingUnitConversionRate() *FeatureUpdateOne {
-	fuo.mutation.ClearReportingUnitConversionRate()
-	return fuo
+func (_u *FeatureUpdateOne) ClearReportingUnitConversionRate() *FeatureUpdateOne {
+	_u.mutation.ClearReportingUnitConversionRate()
+	return _u
 }
 
 // SetAlertSettings sets the "alert_settings" field.
-func (fuo *FeatureUpdateOne) SetAlertSettings(ts types.AlertSettings) *FeatureUpdateOne {
-	fuo.mutation.SetAlertSettings(ts)
-	return fuo
+func (_u *FeatureUpdateOne) SetAlertSettings(v types.AlertSettings) *FeatureUpdateOne {
+	_u.mutation.SetAlertSettings(v)
+	return _u
 }
 
 // SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableAlertSettings(ts *types.AlertSettings) *FeatureUpdateOne {
-	if ts != nil {
-		fuo.SetAlertSettings(*ts)
+func (_u *FeatureUpdateOne) SetNillableAlertSettings(v *types.AlertSettings) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetAlertSettings(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearAlertSettings clears the value of the "alert_settings" field.
-func (fuo *FeatureUpdateOne) ClearAlertSettings() *FeatureUpdateOne {
-	fuo.mutation.ClearAlertSettings()
-	return fuo
+func (_u *FeatureUpdateOne) ClearAlertSettings() *FeatureUpdateOne {
+	_u.mutation.ClearAlertSettings()
+	return _u
 }
 
 // SetGroupID sets the "group_id" field.
-func (fuo *FeatureUpdateOne) SetGroupID(s string) *FeatureUpdateOne {
-	fuo.mutation.SetGroupID(s)
-	return fuo
+func (_u *FeatureUpdateOne) SetGroupID(v string) *FeatureUpdateOne {
+	_u.mutation.SetGroupID(v)
+	return _u
 }
 
 // SetNillableGroupID sets the "group_id" field if the given value is not nil.
-func (fuo *FeatureUpdateOne) SetNillableGroupID(s *string) *FeatureUpdateOne {
-	if s != nil {
-		fuo.SetGroupID(*s)
+func (_u *FeatureUpdateOne) SetNillableGroupID(v *string) *FeatureUpdateOne {
+	if v != nil {
+		_u.SetGroupID(*v)
 	}
-	return fuo
+	return _u
 }
 
 // ClearGroupID clears the value of the "group_id" field.
-func (fuo *FeatureUpdateOne) ClearGroupID() *FeatureUpdateOne {
-	fuo.mutation.ClearGroupID()
-	return fuo
+func (_u *FeatureUpdateOne) ClearGroupID() *FeatureUpdateOne {
+	_u.mutation.ClearGroupID()
+	return _u
 }
 
 // Mutation returns the FeatureMutation object of the builder.
-func (fuo *FeatureUpdateOne) Mutation() *FeatureMutation {
-	return fuo.mutation
+func (_u *FeatureUpdateOne) Mutation() *FeatureMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the FeatureUpdate builder.
-func (fuo *FeatureUpdateOne) Where(ps ...predicate.Feature) *FeatureUpdateOne {
-	fuo.mutation.Where(ps...)
-	return fuo
+func (_u *FeatureUpdateOne) Where(ps ...predicate.Feature) *FeatureUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (fuo *FeatureUpdateOne) Select(field string, fields ...string) *FeatureUpdateOne {
-	fuo.fields = append([]string{field}, fields...)
-	return fuo
+func (_u *FeatureUpdateOne) Select(field string, fields ...string) *FeatureUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Feature entity.
-func (fuo *FeatureUpdateOne) Save(ctx context.Context) (*Feature, error) {
-	fuo.defaults()
-	return withHooks(ctx, fuo.sqlSave, fuo.mutation, fuo.hooks)
+func (_u *FeatureUpdateOne) Save(ctx context.Context) (*Feature, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (fuo *FeatureUpdateOne) SaveX(ctx context.Context) *Feature {
-	node, err := fuo.Save(ctx)
+func (_u *FeatureUpdateOne) SaveX(ctx context.Context) *Feature {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -725,34 +725,34 @@ func (fuo *FeatureUpdateOne) SaveX(ctx context.Context) *Feature {
 }
 
 // Exec executes the query on the entity.
-func (fuo *FeatureUpdateOne) Exec(ctx context.Context) error {
-	_, err := fuo.Save(ctx)
+func (_u *FeatureUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (fuo *FeatureUpdateOne) ExecX(ctx context.Context) {
-	if err := fuo.Exec(ctx); err != nil {
+func (_u *FeatureUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (fuo *FeatureUpdateOne) defaults() {
-	if _, ok := fuo.mutation.UpdatedAt(); !ok {
+func (_u *FeatureUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := feature.UpdateDefaultUpdatedAt()
-		fuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (fuo *FeatureUpdateOne) check() error {
-	if v, ok := fuo.mutation.Name(); ok {
+func (_u *FeatureUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := feature.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Feature.name": %w`, err)}
 		}
 	}
-	if v, ok := fuo.mutation.AlertSettings(); ok {
+	if v, ok := _u.mutation.AlertSettings(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
 		}
@@ -760,17 +760,17 @@ func (fuo *FeatureUpdateOne) check() error {
 	return nil
 }
 
-func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err error) {
-	if err := fuo.check(); err != nil {
+func (_u *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(feature.Table, feature.Columns, sqlgraph.NewFieldSpec(feature.FieldID, field.TypeString))
-	id, ok := fuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Feature.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := fuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, feature.FieldID)
 		for _, f := range fields {
@@ -782,98 +782,98 @@ func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err e
 			}
 		}
 	}
-	if ps := fuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := fuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(feature.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := fuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(feature.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if fuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(feature.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := fuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(feature.FieldUpdatedBy, field.TypeString, value)
 	}
-	if fuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(feature.FieldUpdatedBy, field.TypeString)
 	}
-	if fuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(feature.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := fuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(feature.FieldName, field.TypeString, value)
 	}
-	if value, ok := fuo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(feature.FieldDescription, field.TypeString, value)
 	}
-	if fuo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(feature.FieldDescription, field.TypeString)
 	}
-	if value, ok := fuo.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(feature.FieldMeterID, field.TypeString, value)
 	}
-	if fuo.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(feature.FieldMeterID, field.TypeString)
 	}
-	if value, ok := fuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(feature.FieldMetadata, field.TypeJSON, value)
 	}
-	if fuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(feature.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := fuo.mutation.UnitSingular(); ok {
+	if value, ok := _u.mutation.UnitSingular(); ok {
 		_spec.SetField(feature.FieldUnitSingular, field.TypeString, value)
 	}
-	if fuo.mutation.UnitSingularCleared() {
+	if _u.mutation.UnitSingularCleared() {
 		_spec.ClearField(feature.FieldUnitSingular, field.TypeString)
 	}
-	if value, ok := fuo.mutation.UnitPlural(); ok {
+	if value, ok := _u.mutation.UnitPlural(); ok {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 	}
-	if fuo.mutation.UnitPluralCleared() {
+	if _u.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
 	}
-	if value, ok := fuo.mutation.ReportingUnitSingular(); ok {
+	if value, ok := _u.mutation.ReportingUnitSingular(); ok {
 		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
 	}
-	if fuo.mutation.ReportingUnitSingularCleared() {
+	if _u.mutation.ReportingUnitSingularCleared() {
 		_spec.ClearField(feature.FieldReportingUnitSingular, field.TypeString)
 	}
-	if value, ok := fuo.mutation.ReportingUnitPlural(); ok {
+	if value, ok := _u.mutation.ReportingUnitPlural(); ok {
 		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
 	}
-	if fuo.mutation.ReportingUnitPluralCleared() {
+	if _u.mutation.ReportingUnitPluralCleared() {
 		_spec.ClearField(feature.FieldReportingUnitPlural, field.TypeString)
 	}
-	if value, ok := fuo.mutation.ReportingUnitConversionRate(); ok {
+	if value, ok := _u.mutation.ReportingUnitConversionRate(); ok {
 		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
 	}
-	if fuo.mutation.ReportingUnitConversionRateCleared() {
+	if _u.mutation.ReportingUnitConversionRateCleared() {
 		_spec.ClearField(feature.FieldReportingUnitConversionRate, field.TypeOther)
 	}
-	if value, ok := fuo.mutation.AlertSettings(); ok {
+	if value, ok := _u.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 	}
-	if fuo.mutation.AlertSettingsCleared() {
+	if _u.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
 	}
-	if value, ok := fuo.mutation.GroupID(); ok {
+	if value, ok := _u.mutation.GroupID(); ok {
 		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
 	}
-	if fuo.mutation.GroupIDCleared() {
+	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
-	_node = &Feature{config: fuo.config}
+	_node = &Feature{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, fuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{feature.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -881,6 +881,6 @@ func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err e
 		}
 		return nil, err
 	}
-	fuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

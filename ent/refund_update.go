@@ -24,340 +24,340 @@ type RefundUpdate struct {
 }
 
 // Where appends a list predicates to the RefundUpdate builder.
-func (ru *RefundUpdate) Where(ps ...predicate.Refund) *RefundUpdate {
-	ru.mutation.Where(ps...)
-	return ru
+func (_u *RefundUpdate) Where(ps ...predicate.Refund) *RefundUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (ru *RefundUpdate) SetStatus(s string) *RefundUpdate {
-	ru.mutation.SetStatus(s)
-	return ru
+func (_u *RefundUpdate) SetStatus(v string) *RefundUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableStatus(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetStatus(*s)
+func (_u *RefundUpdate) SetNillableStatus(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ru *RefundUpdate) SetUpdatedAt(t time.Time) *RefundUpdate {
-	ru.mutation.SetUpdatedAt(t)
-	return ru
+func (_u *RefundUpdate) SetUpdatedAt(v time.Time) *RefundUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ru *RefundUpdate) SetUpdatedBy(s string) *RefundUpdate {
-	ru.mutation.SetUpdatedBy(s)
-	return ru
+func (_u *RefundUpdate) SetUpdatedBy(v string) *RefundUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableUpdatedBy(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetUpdatedBy(*s)
+func (_u *RefundUpdate) SetNillableUpdatedBy(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (ru *RefundUpdate) ClearUpdatedBy() *RefundUpdate {
-	ru.mutation.ClearUpdatedBy()
-	return ru
+func (_u *RefundUpdate) ClearUpdatedBy() *RefundUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetGatewayRefundID sets the "gateway_refund_id" field.
-func (ru *RefundUpdate) SetGatewayRefundID(s string) *RefundUpdate {
-	ru.mutation.SetGatewayRefundID(s)
-	return ru
+func (_u *RefundUpdate) SetGatewayRefundID(v string) *RefundUpdate {
+	_u.mutation.SetGatewayRefundID(v)
+	return _u
 }
 
 // SetNillableGatewayRefundID sets the "gateway_refund_id" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableGatewayRefundID(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetGatewayRefundID(*s)
+func (_u *RefundUpdate) SetNillableGatewayRefundID(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetGatewayRefundID(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearGatewayRefundID clears the value of the "gateway_refund_id" field.
-func (ru *RefundUpdate) ClearGatewayRefundID() *RefundUpdate {
-	ru.mutation.ClearGatewayRefundID()
-	return ru
+func (_u *RefundUpdate) ClearGatewayRefundID() *RefundUpdate {
+	_u.mutation.ClearGatewayRefundID()
+	return _u
 }
 
 // SetGatewayTrackingID sets the "gateway_tracking_id" field.
-func (ru *RefundUpdate) SetGatewayTrackingID(s string) *RefundUpdate {
-	ru.mutation.SetGatewayTrackingID(s)
-	return ru
+func (_u *RefundUpdate) SetGatewayTrackingID(v string) *RefundUpdate {
+	_u.mutation.SetGatewayTrackingID(v)
+	return _u
 }
 
 // SetNillableGatewayTrackingID sets the "gateway_tracking_id" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableGatewayTrackingID(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetGatewayTrackingID(*s)
+func (_u *RefundUpdate) SetNillableGatewayTrackingID(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetGatewayTrackingID(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearGatewayTrackingID clears the value of the "gateway_tracking_id" field.
-func (ru *RefundUpdate) ClearGatewayTrackingID() *RefundUpdate {
-	ru.mutation.ClearGatewayTrackingID()
-	return ru
+func (_u *RefundUpdate) ClearGatewayTrackingID() *RefundUpdate {
+	_u.mutation.ClearGatewayTrackingID()
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (ru *RefundUpdate) SetAmount(d decimal.Decimal) *RefundUpdate {
-	ru.mutation.SetAmount(d)
-	return ru
+func (_u *RefundUpdate) SetAmount(v decimal.Decimal) *RefundUpdate {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableAmount(d *decimal.Decimal) *RefundUpdate {
-	if d != nil {
-		ru.SetAmount(*d)
+func (_u *RefundUpdate) SetNillableAmount(v *decimal.Decimal) *RefundUpdate {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetSettledAmount sets the "settled_amount" field.
-func (ru *RefundUpdate) SetSettledAmount(d decimal.Decimal) *RefundUpdate {
-	ru.mutation.SetSettledAmount(d)
-	return ru
+func (_u *RefundUpdate) SetSettledAmount(v decimal.Decimal) *RefundUpdate {
+	_u.mutation.SetSettledAmount(v)
+	return _u
 }
 
 // SetNillableSettledAmount sets the "settled_amount" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableSettledAmount(d *decimal.Decimal) *RefundUpdate {
-	if d != nil {
-		ru.SetSettledAmount(*d)
+func (_u *RefundUpdate) SetNillableSettledAmount(v *decimal.Decimal) *RefundUpdate {
+	if v != nil {
+		_u.SetSettledAmount(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (ru *RefundUpdate) SetRefundStatus(s string) *RefundUpdate {
-	ru.mutation.SetRefundStatus(s)
-	return ru
+func (_u *RefundUpdate) SetRefundStatus(v string) *RefundUpdate {
+	_u.mutation.SetRefundStatus(v)
+	return _u
 }
 
 // SetNillableRefundStatus sets the "refund_status" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableRefundStatus(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetRefundStatus(*s)
+func (_u *RefundUpdate) SetNillableRefundStatus(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetRefundStatus(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetRefundReason sets the "refund_reason" field.
-func (ru *RefundUpdate) SetRefundReason(s string) *RefundUpdate {
-	ru.mutation.SetRefundReason(s)
-	return ru
+func (_u *RefundUpdate) SetRefundReason(v string) *RefundUpdate {
+	_u.mutation.SetRefundReason(v)
+	return _u
 }
 
 // SetNillableRefundReason sets the "refund_reason" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableRefundReason(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetRefundReason(*s)
+func (_u *RefundUpdate) SetNillableRefundReason(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetRefundReason(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetRefundDestination sets the "refund_destination" field.
-func (ru *RefundUpdate) SetRefundDestination(s string) *RefundUpdate {
-	ru.mutation.SetRefundDestination(s)
-	return ru
+func (_u *RefundUpdate) SetRefundDestination(v string) *RefundUpdate {
+	_u.mutation.SetRefundDestination(v)
+	return _u
 }
 
 // SetNillableRefundDestination sets the "refund_destination" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableRefundDestination(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetRefundDestination(*s)
+func (_u *RefundUpdate) SetNillableRefundDestination(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetRefundDestination(*v)
 	}
-	return ru
+	return _u
 }
 
 // SetRefundDestinationID sets the "refund_destination_id" field.
-func (ru *RefundUpdate) SetRefundDestinationID(s string) *RefundUpdate {
-	ru.mutation.SetRefundDestinationID(s)
-	return ru
+func (_u *RefundUpdate) SetRefundDestinationID(v string) *RefundUpdate {
+	_u.mutation.SetRefundDestinationID(v)
+	return _u
 }
 
 // SetNillableRefundDestinationID sets the "refund_destination_id" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableRefundDestinationID(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetRefundDestinationID(*s)
+func (_u *RefundUpdate) SetNillableRefundDestinationID(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetRefundDestinationID(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearRefundDestinationID clears the value of the "refund_destination_id" field.
-func (ru *RefundUpdate) ClearRefundDestinationID() *RefundUpdate {
-	ru.mutation.ClearRefundDestinationID()
-	return ru
+func (_u *RefundUpdate) ClearRefundDestinationID() *RefundUpdate {
+	_u.mutation.ClearRefundDestinationID()
+	return _u
 }
 
 // SetAttempt sets the "attempt" field.
-func (ru *RefundUpdate) SetAttempt(i int) *RefundUpdate {
-	ru.mutation.ResetAttempt()
-	ru.mutation.SetAttempt(i)
-	return ru
+func (_u *RefundUpdate) SetAttempt(v int) *RefundUpdate {
+	_u.mutation.ResetAttempt()
+	_u.mutation.SetAttempt(v)
+	return _u
 }
 
 // SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableAttempt(i *int) *RefundUpdate {
-	if i != nil {
-		ru.SetAttempt(*i)
+func (_u *RefundUpdate) SetNillableAttempt(v *int) *RefundUpdate {
+	if v != nil {
+		_u.SetAttempt(*v)
 	}
-	return ru
+	return _u
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (ru *RefundUpdate) AddAttempt(i int) *RefundUpdate {
-	ru.mutation.AddAttempt(i)
-	return ru
+// AddAttempt adds value to the "attempt" field.
+func (_u *RefundUpdate) AddAttempt(v int) *RefundUpdate {
+	_u.mutation.AddAttempt(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (ru *RefundUpdate) SetFailureReason(s string) *RefundUpdate {
-	ru.mutation.SetFailureReason(s)
-	return ru
+func (_u *RefundUpdate) SetFailureReason(v string) *RefundUpdate {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableFailureReason(s *string) *RefundUpdate {
-	if s != nil {
-		ru.SetFailureReason(*s)
+func (_u *RefundUpdate) SetNillableFailureReason(v *string) *RefundUpdate {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (ru *RefundUpdate) ClearFailureReason() *RefundUpdate {
-	ru.mutation.ClearFailureReason()
-	return ru
+func (_u *RefundUpdate) ClearFailureReason() *RefundUpdate {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (ru *RefundUpdate) SetMetadata(m map[string]string) *RefundUpdate {
-	ru.mutation.SetMetadata(m)
-	return ru
+func (_u *RefundUpdate) SetMetadata(v map[string]string) *RefundUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (ru *RefundUpdate) ClearMetadata() *RefundUpdate {
-	ru.mutation.ClearMetadata()
-	return ru
+func (_u *RefundUpdate) ClearMetadata() *RefundUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetGatewayMetadata sets the "gateway_metadata" field.
-func (ru *RefundUpdate) SetGatewayMetadata(m map[string]interface{}) *RefundUpdate {
-	ru.mutation.SetGatewayMetadata(m)
-	return ru
+func (_u *RefundUpdate) SetGatewayMetadata(v map[string]interface{}) *RefundUpdate {
+	_u.mutation.SetGatewayMetadata(v)
+	return _u
 }
 
 // ClearGatewayMetadata clears the value of the "gateway_metadata" field.
-func (ru *RefundUpdate) ClearGatewayMetadata() *RefundUpdate {
-	ru.mutation.ClearGatewayMetadata()
-	return ru
+func (_u *RefundUpdate) ClearGatewayMetadata() *RefundUpdate {
+	_u.mutation.ClearGatewayMetadata()
+	return _u
 }
 
 // SetInitiatedAt sets the "initiated_at" field.
-func (ru *RefundUpdate) SetInitiatedAt(t time.Time) *RefundUpdate {
-	ru.mutation.SetInitiatedAt(t)
-	return ru
+func (_u *RefundUpdate) SetInitiatedAt(v time.Time) *RefundUpdate {
+	_u.mutation.SetInitiatedAt(v)
+	return _u
 }
 
 // SetNillableInitiatedAt sets the "initiated_at" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableInitiatedAt(t *time.Time) *RefundUpdate {
-	if t != nil {
-		ru.SetInitiatedAt(*t)
+func (_u *RefundUpdate) SetNillableInitiatedAt(v *time.Time) *RefundUpdate {
+	if v != nil {
+		_u.SetInitiatedAt(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearInitiatedAt clears the value of the "initiated_at" field.
-func (ru *RefundUpdate) ClearInitiatedAt() *RefundUpdate {
-	ru.mutation.ClearInitiatedAt()
-	return ru
+func (_u *RefundUpdate) ClearInitiatedAt() *RefundUpdate {
+	_u.mutation.ClearInitiatedAt()
+	return _u
 }
 
 // SetSucceededAt sets the "succeeded_at" field.
-func (ru *RefundUpdate) SetSucceededAt(t time.Time) *RefundUpdate {
-	ru.mutation.SetSucceededAt(t)
-	return ru
+func (_u *RefundUpdate) SetSucceededAt(v time.Time) *RefundUpdate {
+	_u.mutation.SetSucceededAt(v)
+	return _u
 }
 
 // SetNillableSucceededAt sets the "succeeded_at" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableSucceededAt(t *time.Time) *RefundUpdate {
-	if t != nil {
-		ru.SetSucceededAt(*t)
+func (_u *RefundUpdate) SetNillableSucceededAt(v *time.Time) *RefundUpdate {
+	if v != nil {
+		_u.SetSucceededAt(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearSucceededAt clears the value of the "succeeded_at" field.
-func (ru *RefundUpdate) ClearSucceededAt() *RefundUpdate {
-	ru.mutation.ClearSucceededAt()
-	return ru
+func (_u *RefundUpdate) ClearSucceededAt() *RefundUpdate {
+	_u.mutation.ClearSucceededAt()
+	return _u
 }
 
 // SetFailedAt sets the "failed_at" field.
-func (ru *RefundUpdate) SetFailedAt(t time.Time) *RefundUpdate {
-	ru.mutation.SetFailedAt(t)
-	return ru
+func (_u *RefundUpdate) SetFailedAt(v time.Time) *RefundUpdate {
+	_u.mutation.SetFailedAt(v)
+	return _u
 }
 
 // SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableFailedAt(t *time.Time) *RefundUpdate {
-	if t != nil {
-		ru.SetFailedAt(*t)
+func (_u *RefundUpdate) SetNillableFailedAt(v *time.Time) *RefundUpdate {
+	if v != nil {
+		_u.SetFailedAt(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearFailedAt clears the value of the "failed_at" field.
-func (ru *RefundUpdate) ClearFailedAt() *RefundUpdate {
-	ru.mutation.ClearFailedAt()
-	return ru
+func (_u *RefundUpdate) ClearFailedAt() *RefundUpdate {
+	_u.mutation.ClearFailedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (ru *RefundUpdate) SetCancelledAt(t time.Time) *RefundUpdate {
-	ru.mutation.SetCancelledAt(t)
-	return ru
+func (_u *RefundUpdate) SetCancelledAt(v time.Time) *RefundUpdate {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (ru *RefundUpdate) SetNillableCancelledAt(t *time.Time) *RefundUpdate {
-	if t != nil {
-		ru.SetCancelledAt(*t)
+func (_u *RefundUpdate) SetNillableCancelledAt(v *time.Time) *RefundUpdate {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return ru
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (ru *RefundUpdate) ClearCancelledAt() *RefundUpdate {
-	ru.mutation.ClearCancelledAt()
-	return ru
+func (_u *RefundUpdate) ClearCancelledAt() *RefundUpdate {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // Mutation returns the RefundMutation object of the builder.
-func (ru *RefundUpdate) Mutation() *RefundMutation {
-	return ru.mutation
+func (_u *RefundUpdate) Mutation() *RefundMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (ru *RefundUpdate) Save(ctx context.Context) (int, error) {
-	ru.defaults()
-	return withHooks(ctx, ru.sqlSave, ru.mutation, ru.hooks)
+func (_u *RefundUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ru *RefundUpdate) SaveX(ctx context.Context) int {
-	affected, err := ru.Save(ctx)
+func (_u *RefundUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -365,34 +365,34 @@ func (ru *RefundUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (ru *RefundUpdate) Exec(ctx context.Context) error {
-	_, err := ru.Save(ctx)
+func (_u *RefundUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ru *RefundUpdate) ExecX(ctx context.Context) {
-	if err := ru.Exec(ctx); err != nil {
+func (_u *RefundUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ru *RefundUpdate) defaults() {
-	if _, ok := ru.mutation.UpdatedAt(); !ok {
+func (_u *RefundUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := refund.UpdateDefaultUpdatedAt()
-		ru.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ru *RefundUpdate) check() error {
-	if v, ok := ru.mutation.RefundStatus(); ok {
+func (_u *RefundUpdate) check() error {
+	if v, ok := _u.mutation.RefundStatus(); ok {
 		if err := refund.RefundStatusValidator(v); err != nil {
 			return &ValidationError{Name: "refund_status", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_status": %w`, err)}
 		}
 	}
-	if v, ok := ru.mutation.RefundReason(); ok {
+	if v, ok := _u.mutation.RefundReason(); ok {
 		if err := refund.RefundReasonValidator(v); err != nil {
 			return &ValidationError{Name: "refund_reason", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_reason": %w`, err)}
 		}
@@ -400,130 +400,130 @@ func (ru *RefundUpdate) check() error {
 	return nil
 }
 
-func (ru *RefundUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := ru.check(); err != nil {
-		return n, err
+func (_u *RefundUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(refund.Table, refund.Columns, sqlgraph.NewFieldSpec(refund.FieldID, field.TypeString))
-	if ps := ru.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := ru.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(refund.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := ru.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(refund.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ru.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(refund.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := ru.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(refund.FieldUpdatedBy, field.TypeString, value)
 	}
-	if ru.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(refund.FieldUpdatedBy, field.TypeString)
 	}
-	if ru.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(refund.FieldEnvironmentID, field.TypeString)
 	}
-	if ru.mutation.PaymentIDCleared() {
+	if _u.mutation.PaymentIDCleared() {
 		_spec.ClearField(refund.FieldPaymentID, field.TypeString)
 	}
-	if ru.mutation.CreditNoteIDCleared() {
+	if _u.mutation.CreditNoteIDCleared() {
 		_spec.ClearField(refund.FieldCreditNoteID, field.TypeString)
 	}
-	if ru.mutation.PaymentGatewayCleared() {
+	if _u.mutation.PaymentGatewayCleared() {
 		_spec.ClearField(refund.FieldPaymentGateway, field.TypeString)
 	}
-	if value, ok := ru.mutation.GatewayRefundID(); ok {
+	if value, ok := _u.mutation.GatewayRefundID(); ok {
 		_spec.SetField(refund.FieldGatewayRefundID, field.TypeString, value)
 	}
-	if ru.mutation.GatewayRefundIDCleared() {
+	if _u.mutation.GatewayRefundIDCleared() {
 		_spec.ClearField(refund.FieldGatewayRefundID, field.TypeString)
 	}
-	if value, ok := ru.mutation.GatewayTrackingID(); ok {
+	if value, ok := _u.mutation.GatewayTrackingID(); ok {
 		_spec.SetField(refund.FieldGatewayTrackingID, field.TypeString, value)
 	}
-	if ru.mutation.GatewayTrackingIDCleared() {
+	if _u.mutation.GatewayTrackingIDCleared() {
 		_spec.ClearField(refund.FieldGatewayTrackingID, field.TypeString)
 	}
-	if value, ok := ru.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(refund.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := ru.mutation.SettledAmount(); ok {
+	if value, ok := _u.mutation.SettledAmount(); ok {
 		_spec.SetField(refund.FieldSettledAmount, field.TypeOther, value)
 	}
-	if value, ok := ru.mutation.RefundStatus(); ok {
+	if value, ok := _u.mutation.RefundStatus(); ok {
 		_spec.SetField(refund.FieldRefundStatus, field.TypeString, value)
 	}
-	if value, ok := ru.mutation.RefundReason(); ok {
+	if value, ok := _u.mutation.RefundReason(); ok {
 		_spec.SetField(refund.FieldRefundReason, field.TypeString, value)
 	}
-	if value, ok := ru.mutation.RefundDestination(); ok {
+	if value, ok := _u.mutation.RefundDestination(); ok {
 		_spec.SetField(refund.FieldRefundDestination, field.TypeString, value)
 	}
-	if value, ok := ru.mutation.RefundDestinationID(); ok {
+	if value, ok := _u.mutation.RefundDestinationID(); ok {
 		_spec.SetField(refund.FieldRefundDestinationID, field.TypeString, value)
 	}
-	if ru.mutation.RefundDestinationIDCleared() {
+	if _u.mutation.RefundDestinationIDCleared() {
 		_spec.ClearField(refund.FieldRefundDestinationID, field.TypeString)
 	}
-	if value, ok := ru.mutation.Attempt(); ok {
+	if value, ok := _u.mutation.Attempt(); ok {
 		_spec.SetField(refund.FieldAttempt, field.TypeInt, value)
 	}
-	if value, ok := ru.mutation.AddedAttempt(); ok {
+	if value, ok := _u.mutation.AddedAttempt(); ok {
 		_spec.AddField(refund.FieldAttempt, field.TypeInt, value)
 	}
-	if ru.mutation.GatewayIdempotencyTokenCleared() {
+	if _u.mutation.GatewayIdempotencyTokenCleared() {
 		_spec.ClearField(refund.FieldGatewayIdempotencyToken, field.TypeString)
 	}
-	if value, ok := ru.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(refund.FieldFailureReason, field.TypeString, value)
 	}
-	if ru.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(refund.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := ru.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(refund.FieldMetadata, field.TypeJSON, value)
 	}
-	if ru.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(refund.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := ru.mutation.GatewayMetadata(); ok {
+	if value, ok := _u.mutation.GatewayMetadata(); ok {
 		_spec.SetField(refund.FieldGatewayMetadata, field.TypeJSON, value)
 	}
-	if ru.mutation.GatewayMetadataCleared() {
+	if _u.mutation.GatewayMetadataCleared() {
 		_spec.ClearField(refund.FieldGatewayMetadata, field.TypeJSON)
 	}
-	if value, ok := ru.mutation.InitiatedAt(); ok {
+	if value, ok := _u.mutation.InitiatedAt(); ok {
 		_spec.SetField(refund.FieldInitiatedAt, field.TypeTime, value)
 	}
-	if ru.mutation.InitiatedAtCleared() {
+	if _u.mutation.InitiatedAtCleared() {
 		_spec.ClearField(refund.FieldInitiatedAt, field.TypeTime)
 	}
-	if value, ok := ru.mutation.SucceededAt(); ok {
+	if value, ok := _u.mutation.SucceededAt(); ok {
 		_spec.SetField(refund.FieldSucceededAt, field.TypeTime, value)
 	}
-	if ru.mutation.SucceededAtCleared() {
+	if _u.mutation.SucceededAtCleared() {
 		_spec.ClearField(refund.FieldSucceededAt, field.TypeTime)
 	}
-	if value, ok := ru.mutation.FailedAt(); ok {
+	if value, ok := _u.mutation.FailedAt(); ok {
 		_spec.SetField(refund.FieldFailedAt, field.TypeTime, value)
 	}
-	if ru.mutation.FailedAtCleared() {
+	if _u.mutation.FailedAtCleared() {
 		_spec.ClearField(refund.FieldFailedAt, field.TypeTime)
 	}
-	if value, ok := ru.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(refund.FieldCancelledAt, field.TypeTime, value)
 	}
-	if ru.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(refund.FieldCancelledAt, field.TypeTime)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, ru.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{refund.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -531,8 +531,8 @@ func (ru *RefundUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	ru.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // RefundUpdateOne is the builder for updating a single Refund entity.
@@ -544,347 +544,347 @@ type RefundUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (ruo *RefundUpdateOne) SetStatus(s string) *RefundUpdateOne {
-	ruo.mutation.SetStatus(s)
-	return ruo
+func (_u *RefundUpdateOne) SetStatus(v string) *RefundUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableStatus(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetStatus(*s)
+func (_u *RefundUpdateOne) SetNillableStatus(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ruo *RefundUpdateOne) SetUpdatedAt(t time.Time) *RefundUpdateOne {
-	ruo.mutation.SetUpdatedAt(t)
-	return ruo
+func (_u *RefundUpdateOne) SetUpdatedAt(v time.Time) *RefundUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ruo *RefundUpdateOne) SetUpdatedBy(s string) *RefundUpdateOne {
-	ruo.mutation.SetUpdatedBy(s)
-	return ruo
+func (_u *RefundUpdateOne) SetUpdatedBy(v string) *RefundUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableUpdatedBy(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetUpdatedBy(*s)
+func (_u *RefundUpdateOne) SetNillableUpdatedBy(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (ruo *RefundUpdateOne) ClearUpdatedBy() *RefundUpdateOne {
-	ruo.mutation.ClearUpdatedBy()
-	return ruo
+func (_u *RefundUpdateOne) ClearUpdatedBy() *RefundUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetGatewayRefundID sets the "gateway_refund_id" field.
-func (ruo *RefundUpdateOne) SetGatewayRefundID(s string) *RefundUpdateOne {
-	ruo.mutation.SetGatewayRefundID(s)
-	return ruo
+func (_u *RefundUpdateOne) SetGatewayRefundID(v string) *RefundUpdateOne {
+	_u.mutation.SetGatewayRefundID(v)
+	return _u
 }
 
 // SetNillableGatewayRefundID sets the "gateway_refund_id" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableGatewayRefundID(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetGatewayRefundID(*s)
+func (_u *RefundUpdateOne) SetNillableGatewayRefundID(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetGatewayRefundID(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearGatewayRefundID clears the value of the "gateway_refund_id" field.
-func (ruo *RefundUpdateOne) ClearGatewayRefundID() *RefundUpdateOne {
-	ruo.mutation.ClearGatewayRefundID()
-	return ruo
+func (_u *RefundUpdateOne) ClearGatewayRefundID() *RefundUpdateOne {
+	_u.mutation.ClearGatewayRefundID()
+	return _u
 }
 
 // SetGatewayTrackingID sets the "gateway_tracking_id" field.
-func (ruo *RefundUpdateOne) SetGatewayTrackingID(s string) *RefundUpdateOne {
-	ruo.mutation.SetGatewayTrackingID(s)
-	return ruo
+func (_u *RefundUpdateOne) SetGatewayTrackingID(v string) *RefundUpdateOne {
+	_u.mutation.SetGatewayTrackingID(v)
+	return _u
 }
 
 // SetNillableGatewayTrackingID sets the "gateway_tracking_id" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableGatewayTrackingID(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetGatewayTrackingID(*s)
+func (_u *RefundUpdateOne) SetNillableGatewayTrackingID(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetGatewayTrackingID(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearGatewayTrackingID clears the value of the "gateway_tracking_id" field.
-func (ruo *RefundUpdateOne) ClearGatewayTrackingID() *RefundUpdateOne {
-	ruo.mutation.ClearGatewayTrackingID()
-	return ruo
+func (_u *RefundUpdateOne) ClearGatewayTrackingID() *RefundUpdateOne {
+	_u.mutation.ClearGatewayTrackingID()
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (ruo *RefundUpdateOne) SetAmount(d decimal.Decimal) *RefundUpdateOne {
-	ruo.mutation.SetAmount(d)
-	return ruo
+func (_u *RefundUpdateOne) SetAmount(v decimal.Decimal) *RefundUpdateOne {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableAmount(d *decimal.Decimal) *RefundUpdateOne {
-	if d != nil {
-		ruo.SetAmount(*d)
+func (_u *RefundUpdateOne) SetNillableAmount(v *decimal.Decimal) *RefundUpdateOne {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetSettledAmount sets the "settled_amount" field.
-func (ruo *RefundUpdateOne) SetSettledAmount(d decimal.Decimal) *RefundUpdateOne {
-	ruo.mutation.SetSettledAmount(d)
-	return ruo
+func (_u *RefundUpdateOne) SetSettledAmount(v decimal.Decimal) *RefundUpdateOne {
+	_u.mutation.SetSettledAmount(v)
+	return _u
 }
 
 // SetNillableSettledAmount sets the "settled_amount" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableSettledAmount(d *decimal.Decimal) *RefundUpdateOne {
-	if d != nil {
-		ruo.SetSettledAmount(*d)
+func (_u *RefundUpdateOne) SetNillableSettledAmount(v *decimal.Decimal) *RefundUpdateOne {
+	if v != nil {
+		_u.SetSettledAmount(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (ruo *RefundUpdateOne) SetRefundStatus(s string) *RefundUpdateOne {
-	ruo.mutation.SetRefundStatus(s)
-	return ruo
+func (_u *RefundUpdateOne) SetRefundStatus(v string) *RefundUpdateOne {
+	_u.mutation.SetRefundStatus(v)
+	return _u
 }
 
 // SetNillableRefundStatus sets the "refund_status" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableRefundStatus(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetRefundStatus(*s)
+func (_u *RefundUpdateOne) SetNillableRefundStatus(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetRefundStatus(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetRefundReason sets the "refund_reason" field.
-func (ruo *RefundUpdateOne) SetRefundReason(s string) *RefundUpdateOne {
-	ruo.mutation.SetRefundReason(s)
-	return ruo
+func (_u *RefundUpdateOne) SetRefundReason(v string) *RefundUpdateOne {
+	_u.mutation.SetRefundReason(v)
+	return _u
 }
 
 // SetNillableRefundReason sets the "refund_reason" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableRefundReason(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetRefundReason(*s)
+func (_u *RefundUpdateOne) SetNillableRefundReason(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetRefundReason(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetRefundDestination sets the "refund_destination" field.
-func (ruo *RefundUpdateOne) SetRefundDestination(s string) *RefundUpdateOne {
-	ruo.mutation.SetRefundDestination(s)
-	return ruo
+func (_u *RefundUpdateOne) SetRefundDestination(v string) *RefundUpdateOne {
+	_u.mutation.SetRefundDestination(v)
+	return _u
 }
 
 // SetNillableRefundDestination sets the "refund_destination" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableRefundDestination(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetRefundDestination(*s)
+func (_u *RefundUpdateOne) SetNillableRefundDestination(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetRefundDestination(*v)
 	}
-	return ruo
+	return _u
 }
 
 // SetRefundDestinationID sets the "refund_destination_id" field.
-func (ruo *RefundUpdateOne) SetRefundDestinationID(s string) *RefundUpdateOne {
-	ruo.mutation.SetRefundDestinationID(s)
-	return ruo
+func (_u *RefundUpdateOne) SetRefundDestinationID(v string) *RefundUpdateOne {
+	_u.mutation.SetRefundDestinationID(v)
+	return _u
 }
 
 // SetNillableRefundDestinationID sets the "refund_destination_id" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableRefundDestinationID(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetRefundDestinationID(*s)
+func (_u *RefundUpdateOne) SetNillableRefundDestinationID(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetRefundDestinationID(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearRefundDestinationID clears the value of the "refund_destination_id" field.
-func (ruo *RefundUpdateOne) ClearRefundDestinationID() *RefundUpdateOne {
-	ruo.mutation.ClearRefundDestinationID()
-	return ruo
+func (_u *RefundUpdateOne) ClearRefundDestinationID() *RefundUpdateOne {
+	_u.mutation.ClearRefundDestinationID()
+	return _u
 }
 
 // SetAttempt sets the "attempt" field.
-func (ruo *RefundUpdateOne) SetAttempt(i int) *RefundUpdateOne {
-	ruo.mutation.ResetAttempt()
-	ruo.mutation.SetAttempt(i)
-	return ruo
+func (_u *RefundUpdateOne) SetAttempt(v int) *RefundUpdateOne {
+	_u.mutation.ResetAttempt()
+	_u.mutation.SetAttempt(v)
+	return _u
 }
 
 // SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableAttempt(i *int) *RefundUpdateOne {
-	if i != nil {
-		ruo.SetAttempt(*i)
+func (_u *RefundUpdateOne) SetNillableAttempt(v *int) *RefundUpdateOne {
+	if v != nil {
+		_u.SetAttempt(*v)
 	}
-	return ruo
+	return _u
 }
 
-// AddAttempt adds i to the "attempt" field.
-func (ruo *RefundUpdateOne) AddAttempt(i int) *RefundUpdateOne {
-	ruo.mutation.AddAttempt(i)
-	return ruo
+// AddAttempt adds value to the "attempt" field.
+func (_u *RefundUpdateOne) AddAttempt(v int) *RefundUpdateOne {
+	_u.mutation.AddAttempt(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (ruo *RefundUpdateOne) SetFailureReason(s string) *RefundUpdateOne {
-	ruo.mutation.SetFailureReason(s)
-	return ruo
+func (_u *RefundUpdateOne) SetFailureReason(v string) *RefundUpdateOne {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableFailureReason(s *string) *RefundUpdateOne {
-	if s != nil {
-		ruo.SetFailureReason(*s)
+func (_u *RefundUpdateOne) SetNillableFailureReason(v *string) *RefundUpdateOne {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (ruo *RefundUpdateOne) ClearFailureReason() *RefundUpdateOne {
-	ruo.mutation.ClearFailureReason()
-	return ruo
+func (_u *RefundUpdateOne) ClearFailureReason() *RefundUpdateOne {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (ruo *RefundUpdateOne) SetMetadata(m map[string]string) *RefundUpdateOne {
-	ruo.mutation.SetMetadata(m)
-	return ruo
+func (_u *RefundUpdateOne) SetMetadata(v map[string]string) *RefundUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (ruo *RefundUpdateOne) ClearMetadata() *RefundUpdateOne {
-	ruo.mutation.ClearMetadata()
-	return ruo
+func (_u *RefundUpdateOne) ClearMetadata() *RefundUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetGatewayMetadata sets the "gateway_metadata" field.
-func (ruo *RefundUpdateOne) SetGatewayMetadata(m map[string]interface{}) *RefundUpdateOne {
-	ruo.mutation.SetGatewayMetadata(m)
-	return ruo
+func (_u *RefundUpdateOne) SetGatewayMetadata(v map[string]interface{}) *RefundUpdateOne {
+	_u.mutation.SetGatewayMetadata(v)
+	return _u
 }
 
 // ClearGatewayMetadata clears the value of the "gateway_metadata" field.
-func (ruo *RefundUpdateOne) ClearGatewayMetadata() *RefundUpdateOne {
-	ruo.mutation.ClearGatewayMetadata()
-	return ruo
+func (_u *RefundUpdateOne) ClearGatewayMetadata() *RefundUpdateOne {
+	_u.mutation.ClearGatewayMetadata()
+	return _u
 }
 
 // SetInitiatedAt sets the "initiated_at" field.
-func (ruo *RefundUpdateOne) SetInitiatedAt(t time.Time) *RefundUpdateOne {
-	ruo.mutation.SetInitiatedAt(t)
-	return ruo
+func (_u *RefundUpdateOne) SetInitiatedAt(v time.Time) *RefundUpdateOne {
+	_u.mutation.SetInitiatedAt(v)
+	return _u
 }
 
 // SetNillableInitiatedAt sets the "initiated_at" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableInitiatedAt(t *time.Time) *RefundUpdateOne {
-	if t != nil {
-		ruo.SetInitiatedAt(*t)
+func (_u *RefundUpdateOne) SetNillableInitiatedAt(v *time.Time) *RefundUpdateOne {
+	if v != nil {
+		_u.SetInitiatedAt(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearInitiatedAt clears the value of the "initiated_at" field.
-func (ruo *RefundUpdateOne) ClearInitiatedAt() *RefundUpdateOne {
-	ruo.mutation.ClearInitiatedAt()
-	return ruo
+func (_u *RefundUpdateOne) ClearInitiatedAt() *RefundUpdateOne {
+	_u.mutation.ClearInitiatedAt()
+	return _u
 }
 
 // SetSucceededAt sets the "succeeded_at" field.
-func (ruo *RefundUpdateOne) SetSucceededAt(t time.Time) *RefundUpdateOne {
-	ruo.mutation.SetSucceededAt(t)
-	return ruo
+func (_u *RefundUpdateOne) SetSucceededAt(v time.Time) *RefundUpdateOne {
+	_u.mutation.SetSucceededAt(v)
+	return _u
 }
 
 // SetNillableSucceededAt sets the "succeeded_at" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableSucceededAt(t *time.Time) *RefundUpdateOne {
-	if t != nil {
-		ruo.SetSucceededAt(*t)
+func (_u *RefundUpdateOne) SetNillableSucceededAt(v *time.Time) *RefundUpdateOne {
+	if v != nil {
+		_u.SetSucceededAt(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearSucceededAt clears the value of the "succeeded_at" field.
-func (ruo *RefundUpdateOne) ClearSucceededAt() *RefundUpdateOne {
-	ruo.mutation.ClearSucceededAt()
-	return ruo
+func (_u *RefundUpdateOne) ClearSucceededAt() *RefundUpdateOne {
+	_u.mutation.ClearSucceededAt()
+	return _u
 }
 
 // SetFailedAt sets the "failed_at" field.
-func (ruo *RefundUpdateOne) SetFailedAt(t time.Time) *RefundUpdateOne {
-	ruo.mutation.SetFailedAt(t)
-	return ruo
+func (_u *RefundUpdateOne) SetFailedAt(v time.Time) *RefundUpdateOne {
+	_u.mutation.SetFailedAt(v)
+	return _u
 }
 
 // SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableFailedAt(t *time.Time) *RefundUpdateOne {
-	if t != nil {
-		ruo.SetFailedAt(*t)
+func (_u *RefundUpdateOne) SetNillableFailedAt(v *time.Time) *RefundUpdateOne {
+	if v != nil {
+		_u.SetFailedAt(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearFailedAt clears the value of the "failed_at" field.
-func (ruo *RefundUpdateOne) ClearFailedAt() *RefundUpdateOne {
-	ruo.mutation.ClearFailedAt()
-	return ruo
+func (_u *RefundUpdateOne) ClearFailedAt() *RefundUpdateOne {
+	_u.mutation.ClearFailedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (ruo *RefundUpdateOne) SetCancelledAt(t time.Time) *RefundUpdateOne {
-	ruo.mutation.SetCancelledAt(t)
-	return ruo
+func (_u *RefundUpdateOne) SetCancelledAt(v time.Time) *RefundUpdateOne {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (ruo *RefundUpdateOne) SetNillableCancelledAt(t *time.Time) *RefundUpdateOne {
-	if t != nil {
-		ruo.SetCancelledAt(*t)
+func (_u *RefundUpdateOne) SetNillableCancelledAt(v *time.Time) *RefundUpdateOne {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return ruo
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (ruo *RefundUpdateOne) ClearCancelledAt() *RefundUpdateOne {
-	ruo.mutation.ClearCancelledAt()
-	return ruo
+func (_u *RefundUpdateOne) ClearCancelledAt() *RefundUpdateOne {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // Mutation returns the RefundMutation object of the builder.
-func (ruo *RefundUpdateOne) Mutation() *RefundMutation {
-	return ruo.mutation
+func (_u *RefundUpdateOne) Mutation() *RefundMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the RefundUpdate builder.
-func (ruo *RefundUpdateOne) Where(ps ...predicate.Refund) *RefundUpdateOne {
-	ruo.mutation.Where(ps...)
-	return ruo
+func (_u *RefundUpdateOne) Where(ps ...predicate.Refund) *RefundUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (ruo *RefundUpdateOne) Select(field string, fields ...string) *RefundUpdateOne {
-	ruo.fields = append([]string{field}, fields...)
-	return ruo
+func (_u *RefundUpdateOne) Select(field string, fields ...string) *RefundUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Refund entity.
-func (ruo *RefundUpdateOne) Save(ctx context.Context) (*Refund, error) {
-	ruo.defaults()
-	return withHooks(ctx, ruo.sqlSave, ruo.mutation, ruo.hooks)
+func (_u *RefundUpdateOne) Save(ctx context.Context) (*Refund, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ruo *RefundUpdateOne) SaveX(ctx context.Context) *Refund {
-	node, err := ruo.Save(ctx)
+func (_u *RefundUpdateOne) SaveX(ctx context.Context) *Refund {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -892,34 +892,34 @@ func (ruo *RefundUpdateOne) SaveX(ctx context.Context) *Refund {
 }
 
 // Exec executes the query on the entity.
-func (ruo *RefundUpdateOne) Exec(ctx context.Context) error {
-	_, err := ruo.Save(ctx)
+func (_u *RefundUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ruo *RefundUpdateOne) ExecX(ctx context.Context) {
-	if err := ruo.Exec(ctx); err != nil {
+func (_u *RefundUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ruo *RefundUpdateOne) defaults() {
-	if _, ok := ruo.mutation.UpdatedAt(); !ok {
+func (_u *RefundUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := refund.UpdateDefaultUpdatedAt()
-		ruo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ruo *RefundUpdateOne) check() error {
-	if v, ok := ruo.mutation.RefundStatus(); ok {
+func (_u *RefundUpdateOne) check() error {
+	if v, ok := _u.mutation.RefundStatus(); ok {
 		if err := refund.RefundStatusValidator(v); err != nil {
 			return &ValidationError{Name: "refund_status", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_status": %w`, err)}
 		}
 	}
-	if v, ok := ruo.mutation.RefundReason(); ok {
+	if v, ok := _u.mutation.RefundReason(); ok {
 		if err := refund.RefundReasonValidator(v); err != nil {
 			return &ValidationError{Name: "refund_reason", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_reason": %w`, err)}
 		}
@@ -927,17 +927,17 @@ func (ruo *RefundUpdateOne) check() error {
 	return nil
 }
 
-func (ruo *RefundUpdateOne) sqlSave(ctx context.Context) (_node *Refund, err error) {
-	if err := ruo.check(); err != nil {
+func (_u *RefundUpdateOne) sqlSave(ctx context.Context) (_node *Refund, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(refund.Table, refund.Columns, sqlgraph.NewFieldSpec(refund.FieldID, field.TypeString))
-	id, ok := ruo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Refund.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := ruo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, refund.FieldID)
 		for _, f := range fields {
@@ -949,128 +949,128 @@ func (ruo *RefundUpdateOne) sqlSave(ctx context.Context) (_node *Refund, err err
 			}
 		}
 	}
-	if ps := ruo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := ruo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(refund.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := ruo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(refund.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ruo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(refund.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := ruo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(refund.FieldUpdatedBy, field.TypeString, value)
 	}
-	if ruo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(refund.FieldUpdatedBy, field.TypeString)
 	}
-	if ruo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(refund.FieldEnvironmentID, field.TypeString)
 	}
-	if ruo.mutation.PaymentIDCleared() {
+	if _u.mutation.PaymentIDCleared() {
 		_spec.ClearField(refund.FieldPaymentID, field.TypeString)
 	}
-	if ruo.mutation.CreditNoteIDCleared() {
+	if _u.mutation.CreditNoteIDCleared() {
 		_spec.ClearField(refund.FieldCreditNoteID, field.TypeString)
 	}
-	if ruo.mutation.PaymentGatewayCleared() {
+	if _u.mutation.PaymentGatewayCleared() {
 		_spec.ClearField(refund.FieldPaymentGateway, field.TypeString)
 	}
-	if value, ok := ruo.mutation.GatewayRefundID(); ok {
+	if value, ok := _u.mutation.GatewayRefundID(); ok {
 		_spec.SetField(refund.FieldGatewayRefundID, field.TypeString, value)
 	}
-	if ruo.mutation.GatewayRefundIDCleared() {
+	if _u.mutation.GatewayRefundIDCleared() {
 		_spec.ClearField(refund.FieldGatewayRefundID, field.TypeString)
 	}
-	if value, ok := ruo.mutation.GatewayTrackingID(); ok {
+	if value, ok := _u.mutation.GatewayTrackingID(); ok {
 		_spec.SetField(refund.FieldGatewayTrackingID, field.TypeString, value)
 	}
-	if ruo.mutation.GatewayTrackingIDCleared() {
+	if _u.mutation.GatewayTrackingIDCleared() {
 		_spec.ClearField(refund.FieldGatewayTrackingID, field.TypeString)
 	}
-	if value, ok := ruo.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(refund.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := ruo.mutation.SettledAmount(); ok {
+	if value, ok := _u.mutation.SettledAmount(); ok {
 		_spec.SetField(refund.FieldSettledAmount, field.TypeOther, value)
 	}
-	if value, ok := ruo.mutation.RefundStatus(); ok {
+	if value, ok := _u.mutation.RefundStatus(); ok {
 		_spec.SetField(refund.FieldRefundStatus, field.TypeString, value)
 	}
-	if value, ok := ruo.mutation.RefundReason(); ok {
+	if value, ok := _u.mutation.RefundReason(); ok {
 		_spec.SetField(refund.FieldRefundReason, field.TypeString, value)
 	}
-	if value, ok := ruo.mutation.RefundDestination(); ok {
+	if value, ok := _u.mutation.RefundDestination(); ok {
 		_spec.SetField(refund.FieldRefundDestination, field.TypeString, value)
 	}
-	if value, ok := ruo.mutation.RefundDestinationID(); ok {
+	if value, ok := _u.mutation.RefundDestinationID(); ok {
 		_spec.SetField(refund.FieldRefundDestinationID, field.TypeString, value)
 	}
-	if ruo.mutation.RefundDestinationIDCleared() {
+	if _u.mutation.RefundDestinationIDCleared() {
 		_spec.ClearField(refund.FieldRefundDestinationID, field.TypeString)
 	}
-	if value, ok := ruo.mutation.Attempt(); ok {
+	if value, ok := _u.mutation.Attempt(); ok {
 		_spec.SetField(refund.FieldAttempt, field.TypeInt, value)
 	}
-	if value, ok := ruo.mutation.AddedAttempt(); ok {
+	if value, ok := _u.mutation.AddedAttempt(); ok {
 		_spec.AddField(refund.FieldAttempt, field.TypeInt, value)
 	}
-	if ruo.mutation.GatewayIdempotencyTokenCleared() {
+	if _u.mutation.GatewayIdempotencyTokenCleared() {
 		_spec.ClearField(refund.FieldGatewayIdempotencyToken, field.TypeString)
 	}
-	if value, ok := ruo.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(refund.FieldFailureReason, field.TypeString, value)
 	}
-	if ruo.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(refund.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := ruo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(refund.FieldMetadata, field.TypeJSON, value)
 	}
-	if ruo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(refund.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := ruo.mutation.GatewayMetadata(); ok {
+	if value, ok := _u.mutation.GatewayMetadata(); ok {
 		_spec.SetField(refund.FieldGatewayMetadata, field.TypeJSON, value)
 	}
-	if ruo.mutation.GatewayMetadataCleared() {
+	if _u.mutation.GatewayMetadataCleared() {
 		_spec.ClearField(refund.FieldGatewayMetadata, field.TypeJSON)
 	}
-	if value, ok := ruo.mutation.InitiatedAt(); ok {
+	if value, ok := _u.mutation.InitiatedAt(); ok {
 		_spec.SetField(refund.FieldInitiatedAt, field.TypeTime, value)
 	}
-	if ruo.mutation.InitiatedAtCleared() {
+	if _u.mutation.InitiatedAtCleared() {
 		_spec.ClearField(refund.FieldInitiatedAt, field.TypeTime)
 	}
-	if value, ok := ruo.mutation.SucceededAt(); ok {
+	if value, ok := _u.mutation.SucceededAt(); ok {
 		_spec.SetField(refund.FieldSucceededAt, field.TypeTime, value)
 	}
-	if ruo.mutation.SucceededAtCleared() {
+	if _u.mutation.SucceededAtCleared() {
 		_spec.ClearField(refund.FieldSucceededAt, field.TypeTime)
 	}
-	if value, ok := ruo.mutation.FailedAt(); ok {
+	if value, ok := _u.mutation.FailedAt(); ok {
 		_spec.SetField(refund.FieldFailedAt, field.TypeTime, value)
 	}
-	if ruo.mutation.FailedAtCleared() {
+	if _u.mutation.FailedAtCleared() {
 		_spec.ClearField(refund.FieldFailedAt, field.TypeTime)
 	}
-	if value, ok := ruo.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(refund.FieldCancelledAt, field.TypeTime, value)
 	}
-	if ruo.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(refund.FieldCancelledAt, field.TypeTime)
 	}
-	_node = &Refund{config: ruo.config}
+	_node = &Refund{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, ruo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{refund.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1078,6 +1078,6 @@ func (ruo *RefundUpdateOne) sqlSave(ctx context.Context) (_node *Refund, err err
 		}
 		return nil, err
 	}
-	ruo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

@@ -20,56 +20,56 @@ type AlertSettingsDelete struct {
 }
 
 // Where appends a list predicates to the AlertSettingsDelete builder.
-func (asd *AlertSettingsDelete) Where(ps ...predicate.AlertSettings) *AlertSettingsDelete {
-	asd.mutation.Where(ps...)
-	return asd
+func (_d *AlertSettingsDelete) Where(ps ...predicate.AlertSettings) *AlertSettingsDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (asd *AlertSettingsDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, asd.sqlExec, asd.mutation, asd.hooks)
+func (_d *AlertSettingsDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (asd *AlertSettingsDelete) ExecX(ctx context.Context) int {
-	n, err := asd.Exec(ctx)
+func (_d *AlertSettingsDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (asd *AlertSettingsDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *AlertSettingsDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(alertsettings.Table, sqlgraph.NewFieldSpec(alertsettings.FieldID, field.TypeString))
-	if ps := asd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, asd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	asd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // AlertSettingsDeleteOne is the builder for deleting a single AlertSettings entity.
 type AlertSettingsDeleteOne struct {
-	asd *AlertSettingsDelete
+	_d *AlertSettingsDelete
 }
 
 // Where appends a list predicates to the AlertSettingsDelete builder.
-func (asdo *AlertSettingsDeleteOne) Where(ps ...predicate.AlertSettings) *AlertSettingsDeleteOne {
-	asdo.asd.mutation.Where(ps...)
-	return asdo
+func (_d *AlertSettingsDeleteOne) Where(ps ...predicate.AlertSettings) *AlertSettingsDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (asdo *AlertSettingsDeleteOne) Exec(ctx context.Context) error {
-	n, err := asdo.asd.Exec(ctx)
+func (_d *AlertSettingsDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (asdo *AlertSettingsDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (asdo *AlertSettingsDeleteOne) ExecX(ctx context.Context) {
-	if err := asdo.Exec(ctx); err != nil {
+func (_d *AlertSettingsDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

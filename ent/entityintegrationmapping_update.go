@@ -23,133 +23,133 @@ type EntityIntegrationMappingUpdate struct {
 }
 
 // Where appends a list predicates to the EntityIntegrationMappingUpdate builder.
-func (eimu *EntityIntegrationMappingUpdate) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingUpdate {
-	eimu.mutation.Where(ps...)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (eimu *EntityIntegrationMappingUpdate) SetStatus(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetStatus(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetStatus(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableStatus(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetStatus(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableStatus(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return eimu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (eimu *EntityIntegrationMappingUpdate) SetUpdatedAt(t time.Time) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetUpdatedAt(t)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetUpdatedAt(v time.Time) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (eimu *EntityIntegrationMappingUpdate) SetUpdatedBy(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetUpdatedBy(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetUpdatedBy(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableUpdatedBy(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetUpdatedBy(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableUpdatedBy(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return eimu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (eimu *EntityIntegrationMappingUpdate) ClearUpdatedBy() *EntityIntegrationMappingUpdate {
-	eimu.mutation.ClearUpdatedBy()
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) ClearUpdatedBy() *EntityIntegrationMappingUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (eimu *EntityIntegrationMappingUpdate) SetEntityID(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetEntityID(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetEntityID(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableEntityID(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetEntityID(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableEntityID(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return eimu
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (eimu *EntityIntegrationMappingUpdate) SetEntityType(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetEntityType(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetEntityType(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableEntityType(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetEntityType(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableEntityType(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return eimu
+	return _u
 }
 
 // SetProviderType sets the "provider_type" field.
-func (eimu *EntityIntegrationMappingUpdate) SetProviderType(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetProviderType(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetProviderType(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetProviderType(v)
+	return _u
 }
 
 // SetNillableProviderType sets the "provider_type" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableProviderType(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetProviderType(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableProviderType(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetProviderType(*v)
 	}
-	return eimu
+	return _u
 }
 
 // SetProviderEntityID sets the "provider_entity_id" field.
-func (eimu *EntityIntegrationMappingUpdate) SetProviderEntityID(s string) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetProviderEntityID(s)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetProviderEntityID(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetProviderEntityID(v)
+	return _u
 }
 
 // SetNillableProviderEntityID sets the "provider_entity_id" field if the given value is not nil.
-func (eimu *EntityIntegrationMappingUpdate) SetNillableProviderEntityID(s *string) *EntityIntegrationMappingUpdate {
-	if s != nil {
-		eimu.SetProviderEntityID(*s)
+func (_u *EntityIntegrationMappingUpdate) SetNillableProviderEntityID(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetProviderEntityID(*v)
 	}
-	return eimu
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (eimu *EntityIntegrationMappingUpdate) SetMetadata(m map[string]interface{}) *EntityIntegrationMappingUpdate {
-	eimu.mutation.SetMetadata(m)
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) SetMetadata(v map[string]interface{}) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (eimu *EntityIntegrationMappingUpdate) ClearMetadata() *EntityIntegrationMappingUpdate {
-	eimu.mutation.ClearMetadata()
-	return eimu
+func (_u *EntityIntegrationMappingUpdate) ClearMetadata() *EntityIntegrationMappingUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the EntityIntegrationMappingMutation object of the builder.
-func (eimu *EntityIntegrationMappingUpdate) Mutation() *EntityIntegrationMappingMutation {
-	return eimu.mutation
+func (_u *EntityIntegrationMappingUpdate) Mutation() *EntityIntegrationMappingMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (eimu *EntityIntegrationMappingUpdate) Save(ctx context.Context) (int, error) {
-	eimu.defaults()
-	return withHooks(ctx, eimu.sqlSave, eimu.mutation, eimu.hooks)
+func (_u *EntityIntegrationMappingUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (eimu *EntityIntegrationMappingUpdate) SaveX(ctx context.Context) int {
-	affected, err := eimu.Save(ctx)
+func (_u *EntityIntegrationMappingUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -157,44 +157,44 @@ func (eimu *EntityIntegrationMappingUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (eimu *EntityIntegrationMappingUpdate) Exec(ctx context.Context) error {
-	_, err := eimu.Save(ctx)
+func (_u *EntityIntegrationMappingUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimu *EntityIntegrationMappingUpdate) ExecX(ctx context.Context) {
-	if err := eimu.Exec(ctx); err != nil {
+func (_u *EntityIntegrationMappingUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (eimu *EntityIntegrationMappingUpdate) defaults() {
-	if _, ok := eimu.mutation.UpdatedAt(); !ok {
+func (_u *EntityIntegrationMappingUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entityintegrationmapping.UpdateDefaultUpdatedAt()
-		eimu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (eimu *EntityIntegrationMappingUpdate) check() error {
-	if v, ok := eimu.mutation.EntityID(); ok {
+func (_u *EntityIntegrationMappingUpdate) check() error {
+	if v, ok := _u.mutation.EntityID(); ok {
 		if err := entityintegrationmapping.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_id": %w`, err)}
 		}
 	}
-	if v, ok := eimu.mutation.EntityType(); ok {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := entityintegrationmapping.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := eimu.mutation.ProviderType(); ok {
+	if v, ok := _u.mutation.ProviderType(); ok {
 		if err := entityintegrationmapping.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_type": %w`, err)}
 		}
 	}
-	if v, ok := eimu.mutation.ProviderEntityID(); ok {
+	if v, ok := _u.mutation.ProviderEntityID(); ok {
 		if err := entityintegrationmapping.ProviderEntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_entity_id": %w`, err)}
 		}
@@ -202,55 +202,55 @@ func (eimu *EntityIntegrationMappingUpdate) check() error {
 	return nil
 }
 
-func (eimu *EntityIntegrationMappingUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := eimu.check(); err != nil {
-		return n, err
+func (_u *EntityIntegrationMappingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(entityintegrationmapping.Table, entityintegrationmapping.Columns, sqlgraph.NewFieldSpec(entityintegrationmapping.FieldID, field.TypeString))
-	if ps := eimu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := eimu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entityintegrationmapping.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := eimu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if eimu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := eimu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedBy, field.TypeString, value)
 	}
-	if eimu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldUpdatedBy, field.TypeString)
 	}
-	if eimu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := eimu.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityID, field.TypeString, value)
 	}
-	if value, ok := eimu.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityType, field.TypeString, value)
 	}
-	if value, ok := eimu.mutation.ProviderType(); ok {
+	if value, ok := _u.mutation.ProviderType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderType, field.TypeString, value)
 	}
-	if value, ok := eimu.mutation.ProviderEntityID(); ok {
+	if value, ok := _u.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
 	}
-	if value, ok := eimu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)
 	}
-	if eimu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, eimu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entityintegrationmapping.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -258,8 +258,8 @@ func (eimu *EntityIntegrationMappingUpdate) sqlSave(ctx context.Context) (n int,
 		}
 		return 0, err
 	}
-	eimu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // EntityIntegrationMappingUpdateOne is the builder for updating a single EntityIntegrationMapping entity.
@@ -271,140 +271,140 @@ type EntityIntegrationMappingUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetStatus(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetStatus(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetStatus(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableStatus(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetStatus(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableStatus(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetUpdatedAt(t time.Time) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetUpdatedAt(t)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetUpdatedAt(v time.Time) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetUpdatedBy(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetUpdatedBy(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetUpdatedBy(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableUpdatedBy(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetUpdatedBy(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableUpdatedBy(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) ClearUpdatedBy() *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.ClearUpdatedBy()
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) ClearUpdatedBy() *EntityIntegrationMappingUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetEntityID(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetEntityID(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetEntityID(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableEntityID(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetEntityID(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableEntityID(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetEntityType(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetEntityType(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetEntityType(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableEntityType(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetEntityType(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableEntityType(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // SetProviderType sets the "provider_type" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetProviderType(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetProviderType(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetProviderType(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetProviderType(v)
+	return _u
 }
 
 // SetNillableProviderType sets the "provider_type" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableProviderType(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetProviderType(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableProviderType(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetProviderType(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // SetProviderEntityID sets the "provider_entity_id" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetProviderEntityID(s string) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetProviderEntityID(s)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetProviderEntityID(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetProviderEntityID(v)
+	return _u
 }
 
 // SetNillableProviderEntityID sets the "provider_entity_id" field if the given value is not nil.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetNillableProviderEntityID(s *string) *EntityIntegrationMappingUpdateOne {
-	if s != nil {
-		eimuo.SetProviderEntityID(*s)
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableProviderEntityID(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetProviderEntityID(*v)
 	}
-	return eimuo
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) SetMetadata(m map[string]interface{}) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.SetMetadata(m)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) SetMetadata(v map[string]interface{}) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (eimuo *EntityIntegrationMappingUpdateOne) ClearMetadata() *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.ClearMetadata()
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) ClearMetadata() *EntityIntegrationMappingUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the EntityIntegrationMappingMutation object of the builder.
-func (eimuo *EntityIntegrationMappingUpdateOne) Mutation() *EntityIntegrationMappingMutation {
-	return eimuo.mutation
+func (_u *EntityIntegrationMappingUpdateOne) Mutation() *EntityIntegrationMappingMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the EntityIntegrationMappingUpdate builder.
-func (eimuo *EntityIntegrationMappingUpdateOne) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingUpdateOne {
-	eimuo.mutation.Where(ps...)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) Where(ps ...predicate.EntityIntegrationMapping) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (eimuo *EntityIntegrationMappingUpdateOne) Select(field string, fields ...string) *EntityIntegrationMappingUpdateOne {
-	eimuo.fields = append([]string{field}, fields...)
-	return eimuo
+func (_u *EntityIntegrationMappingUpdateOne) Select(field string, fields ...string) *EntityIntegrationMappingUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated EntityIntegrationMapping entity.
-func (eimuo *EntityIntegrationMappingUpdateOne) Save(ctx context.Context) (*EntityIntegrationMapping, error) {
-	eimuo.defaults()
-	return withHooks(ctx, eimuo.sqlSave, eimuo.mutation, eimuo.hooks)
+func (_u *EntityIntegrationMappingUpdateOne) Save(ctx context.Context) (*EntityIntegrationMapping, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (eimuo *EntityIntegrationMappingUpdateOne) SaveX(ctx context.Context) *EntityIntegrationMapping {
-	node, err := eimuo.Save(ctx)
+func (_u *EntityIntegrationMappingUpdateOne) SaveX(ctx context.Context) *EntityIntegrationMapping {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -412,44 +412,44 @@ func (eimuo *EntityIntegrationMappingUpdateOne) SaveX(ctx context.Context) *Enti
 }
 
 // Exec executes the query on the entity.
-func (eimuo *EntityIntegrationMappingUpdateOne) Exec(ctx context.Context) error {
-	_, err := eimuo.Save(ctx)
+func (_u *EntityIntegrationMappingUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimuo *EntityIntegrationMappingUpdateOne) ExecX(ctx context.Context) {
-	if err := eimuo.Exec(ctx); err != nil {
+func (_u *EntityIntegrationMappingUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (eimuo *EntityIntegrationMappingUpdateOne) defaults() {
-	if _, ok := eimuo.mutation.UpdatedAt(); !ok {
+func (_u *EntityIntegrationMappingUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entityintegrationmapping.UpdateDefaultUpdatedAt()
-		eimuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (eimuo *EntityIntegrationMappingUpdateOne) check() error {
-	if v, ok := eimuo.mutation.EntityID(); ok {
+func (_u *EntityIntegrationMappingUpdateOne) check() error {
+	if v, ok := _u.mutation.EntityID(); ok {
 		if err := entityintegrationmapping.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_id": %w`, err)}
 		}
 	}
-	if v, ok := eimuo.mutation.EntityType(); ok {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := entityintegrationmapping.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := eimuo.mutation.ProviderType(); ok {
+	if v, ok := _u.mutation.ProviderType(); ok {
 		if err := entityintegrationmapping.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_type": %w`, err)}
 		}
 	}
-	if v, ok := eimuo.mutation.ProviderEntityID(); ok {
+	if v, ok := _u.mutation.ProviderEntityID(); ok {
 		if err := entityintegrationmapping.ProviderEntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_entity_id": %w`, err)}
 		}
@@ -457,17 +457,17 @@ func (eimuo *EntityIntegrationMappingUpdateOne) check() error {
 	return nil
 }
 
-func (eimuo *EntityIntegrationMappingUpdateOne) sqlSave(ctx context.Context) (_node *EntityIntegrationMapping, err error) {
-	if err := eimuo.check(); err != nil {
+func (_u *EntityIntegrationMappingUpdateOne) sqlSave(ctx context.Context) (_node *EntityIntegrationMapping, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(entityintegrationmapping.Table, entityintegrationmapping.Columns, sqlgraph.NewFieldSpec(entityintegrationmapping.FieldID, field.TypeString))
-	id, ok := eimuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "EntityIntegrationMapping.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := eimuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, entityintegrationmapping.FieldID)
 		for _, f := range fields {
@@ -479,53 +479,53 @@ func (eimuo *EntityIntegrationMappingUpdateOne) sqlSave(ctx context.Context) (_n
 			}
 		}
 	}
-	if ps := eimuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := eimuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entityintegrationmapping.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := eimuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if eimuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := eimuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedBy, field.TypeString, value)
 	}
-	if eimuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldUpdatedBy, field.TypeString)
 	}
-	if eimuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := eimuo.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityID, field.TypeString, value)
 	}
-	if value, ok := eimuo.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityType, field.TypeString, value)
 	}
-	if value, ok := eimuo.mutation.ProviderType(); ok {
+	if value, ok := _u.mutation.ProviderType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderType, field.TypeString, value)
 	}
-	if value, ok := eimuo.mutation.ProviderEntityID(); ok {
+	if value, ok := _u.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
 	}
-	if value, ok := eimuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)
 	}
-	if eimuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(entityintegrationmapping.FieldMetadata, field.TypeJSON)
 	}
-	_node = &EntityIntegrationMapping{config: eimuo.config}
+	_node = &EntityIntegrationMapping{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, eimuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entityintegrationmapping.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -533,6 +533,6 @@ func (eimuo *EntityIntegrationMappingUpdateOne) sqlSave(ctx context.Context) (_n
 		}
 		return nil, err
 	}
-	eimuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

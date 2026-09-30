@@ -20,56 +20,56 @@ type TaxRateDelete struct {
 }
 
 // Where appends a list predicates to the TaxRateDelete builder.
-func (trd *TaxRateDelete) Where(ps ...predicate.TaxRate) *TaxRateDelete {
-	trd.mutation.Where(ps...)
-	return trd
+func (_d *TaxRateDelete) Where(ps ...predicate.TaxRate) *TaxRateDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (trd *TaxRateDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, trd.sqlExec, trd.mutation, trd.hooks)
+func (_d *TaxRateDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (trd *TaxRateDelete) ExecX(ctx context.Context) int {
-	n, err := trd.Exec(ctx)
+func (_d *TaxRateDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (trd *TaxRateDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *TaxRateDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(taxrate.Table, sqlgraph.NewFieldSpec(taxrate.FieldID, field.TypeString))
-	if ps := trd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, trd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	trd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // TaxRateDeleteOne is the builder for deleting a single TaxRate entity.
 type TaxRateDeleteOne struct {
-	trd *TaxRateDelete
+	_d *TaxRateDelete
 }
 
 // Where appends a list predicates to the TaxRateDelete builder.
-func (trdo *TaxRateDeleteOne) Where(ps ...predicate.TaxRate) *TaxRateDeleteOne {
-	trdo.trd.mutation.Where(ps...)
-	return trdo
+func (_d *TaxRateDeleteOne) Where(ps ...predicate.TaxRate) *TaxRateDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (trdo *TaxRateDeleteOne) Exec(ctx context.Context) error {
-	n, err := trdo.trd.Exec(ctx)
+func (_d *TaxRateDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (trdo *TaxRateDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (trdo *TaxRateDeleteOne) ExecX(ctx context.Context) {
-	if err := trdo.Exec(ctx); err != nil {
+func (_d *TaxRateDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

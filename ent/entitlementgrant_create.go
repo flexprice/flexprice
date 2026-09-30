@@ -23,253 +23,253 @@ type EntitlementGrantCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (egc *EntitlementGrantCreate) SetTenantID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetTenantID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetTenantID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (egc *EntitlementGrantCreate) SetStatus(s string) *EntitlementGrantCreate {
-	egc.mutation.SetStatus(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetStatus(v string) *EntitlementGrantCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableStatus(s *string) *EntitlementGrantCreate {
-	if s != nil {
-		egc.SetStatus(*s)
+func (_c *EntitlementGrantCreate) SetNillableStatus(v *string) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (egc *EntitlementGrantCreate) SetCreatedAt(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetCreatedAt(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetCreatedAt(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableCreatedAt(t *time.Time) *EntitlementGrantCreate {
-	if t != nil {
-		egc.SetCreatedAt(*t)
+func (_c *EntitlementGrantCreate) SetNillableCreatedAt(v *time.Time) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (egc *EntitlementGrantCreate) SetUpdatedAt(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetUpdatedAt(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetUpdatedAt(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableUpdatedAt(t *time.Time) *EntitlementGrantCreate {
-	if t != nil {
-		egc.SetUpdatedAt(*t)
+func (_c *EntitlementGrantCreate) SetNillableUpdatedAt(v *time.Time) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (egc *EntitlementGrantCreate) SetCreatedBy(s string) *EntitlementGrantCreate {
-	egc.mutation.SetCreatedBy(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetCreatedBy(v string) *EntitlementGrantCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableCreatedBy(s *string) *EntitlementGrantCreate {
-	if s != nil {
-		egc.SetCreatedBy(*s)
+func (_c *EntitlementGrantCreate) SetNillableCreatedBy(v *string) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (egc *EntitlementGrantCreate) SetUpdatedBy(s string) *EntitlementGrantCreate {
-	egc.mutation.SetUpdatedBy(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetUpdatedBy(v string) *EntitlementGrantCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableUpdatedBy(s *string) *EntitlementGrantCreate {
-	if s != nil {
-		egc.SetUpdatedBy(*s)
+func (_c *EntitlementGrantCreate) SetNillableUpdatedBy(v *string) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (egc *EntitlementGrantCreate) SetEnvironmentID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetEnvironmentID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetEnvironmentID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableEnvironmentID(s *string) *EntitlementGrantCreate {
-	if s != nil {
-		egc.SetEnvironmentID(*s)
+func (_c *EntitlementGrantCreate) SetNillableEnvironmentID(v *string) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetEntitlementConfigID sets the "entitlement_config_id" field.
-func (egc *EntitlementGrantCreate) SetEntitlementConfigID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetEntitlementConfigID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetEntitlementConfigID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetEntitlementConfigID(v)
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (egc *EntitlementGrantCreate) SetCustomerID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetCustomerID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetCustomerID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (egc *EntitlementGrantCreate) SetSubscriptionID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetSubscriptionID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetSubscriptionID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetScopeEntityType sets the "scope_entity_type" field.
-func (egc *EntitlementGrantCreate) SetScopeEntityType(tgset types.EntitlementGrantScopeEntityType) *EntitlementGrantCreate {
-	egc.mutation.SetScopeEntityType(tgset)
-	return egc
+func (_c *EntitlementGrantCreate) SetScopeEntityType(v types.EntitlementGrantScopeEntityType) *EntitlementGrantCreate {
+	_c.mutation.SetScopeEntityType(v)
+	return _c
 }
 
 // SetNillableScopeEntityType sets the "scope_entity_type" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableScopeEntityType(tgset *types.EntitlementGrantScopeEntityType) *EntitlementGrantCreate {
-	if tgset != nil {
-		egc.SetScopeEntityType(*tgset)
+func (_c *EntitlementGrantCreate) SetNillableScopeEntityType(v *types.EntitlementGrantScopeEntityType) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetScopeEntityType(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetScopeEntityID sets the "scope_entity_id" field.
-func (egc *EntitlementGrantCreate) SetScopeEntityID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetScopeEntityID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetScopeEntityID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetScopeEntityID(v)
+	return _c
 }
 
 // SetMeasure sets the "measure" field.
-func (egc *EntitlementGrantCreate) SetMeasure(tgm types.EntitlementGrantMeasure) *EntitlementGrantCreate {
-	egc.mutation.SetMeasure(tgm)
-	return egc
+func (_c *EntitlementGrantCreate) SetMeasure(v types.EntitlementGrantMeasure) *EntitlementGrantCreate {
+	_c.mutation.SetMeasure(v)
+	return _c
 }
 
 // SetQuota sets the "quota" field.
-func (egc *EntitlementGrantCreate) SetQuota(d decimal.Decimal) *EntitlementGrantCreate {
-	egc.mutation.SetQuota(d)
-	return egc
+func (_c *EntitlementGrantCreate) SetQuota(v decimal.Decimal) *EntitlementGrantCreate {
+	_c.mutation.SetQuota(v)
+	return _c
 }
 
 // SetUnlimited sets the "unlimited" field.
-func (egc *EntitlementGrantCreate) SetUnlimited(b bool) *EntitlementGrantCreate {
-	egc.mutation.SetUnlimited(b)
-	return egc
+func (_c *EntitlementGrantCreate) SetUnlimited(v bool) *EntitlementGrantCreate {
+	_c.mutation.SetUnlimited(v)
+	return _c
 }
 
 // SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableUnlimited(b *bool) *EntitlementGrantCreate {
-	if b != nil {
-		egc.SetUnlimited(*b)
+func (_c *EntitlementGrantCreate) SetNillableUnlimited(v *bool) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetUnlimited(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetUsage sets the "usage" field.
-func (egc *EntitlementGrantCreate) SetUsage(d decimal.Decimal) *EntitlementGrantCreate {
-	egc.mutation.SetUsage(d)
-	return egc
+func (_c *EntitlementGrantCreate) SetUsage(v decimal.Decimal) *EntitlementGrantCreate {
+	_c.mutation.SetUsage(v)
+	return _c
 }
 
 // SetNillableUsage sets the "usage" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableUsage(d *decimal.Decimal) *EntitlementGrantCreate {
-	if d != nil {
-		egc.SetUsage(*d)
+func (_c *EntitlementGrantCreate) SetNillableUsage(v *decimal.Decimal) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetUsage(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetValidFrom sets the "valid_from" field.
-func (egc *EntitlementGrantCreate) SetValidFrom(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetValidFrom(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetValidFrom(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetValidFrom(v)
+	return _c
 }
 
 // SetValidTo sets the "valid_to" field.
-func (egc *EntitlementGrantCreate) SetValidTo(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetValidTo(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetValidTo(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetValidTo(v)
+	return _c
 }
 
 // SetGrantStatus sets the "grant_status" field.
-func (egc *EntitlementGrantCreate) SetGrantStatus(tgs types.EntitlementGrantStatus) *EntitlementGrantCreate {
-	egc.mutation.SetGrantStatus(tgs)
-	return egc
+func (_c *EntitlementGrantCreate) SetGrantStatus(v types.EntitlementGrantStatus) *EntitlementGrantCreate {
+	_c.mutation.SetGrantStatus(v)
+	return _c
 }
 
 // SetNillableGrantStatus sets the "grant_status" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableGrantStatus(tgs *types.EntitlementGrantStatus) *EntitlementGrantCreate {
-	if tgs != nil {
-		egc.SetGrantStatus(*tgs)
+func (_c *EntitlementGrantCreate) SetNillableGrantStatus(v *types.EntitlementGrantStatus) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetGrantStatus(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetLastComputedAt sets the "last_computed_at" field.
-func (egc *EntitlementGrantCreate) SetLastComputedAt(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetLastComputedAt(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetLastComputedAt(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetLastComputedAt(v)
+	return _c
 }
 
 // SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableLastComputedAt(t *time.Time) *EntitlementGrantCreate {
-	if t != nil {
-		egc.SetLastComputedAt(*t)
+func (_c *EntitlementGrantCreate) SetNillableLastComputedAt(v *time.Time) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetLastComputedAt(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetQuotaCrossedAt sets the "quota_crossed_at" field.
-func (egc *EntitlementGrantCreate) SetQuotaCrossedAt(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetQuotaCrossedAt(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetQuotaCrossedAt(v time.Time) *EntitlementGrantCreate {
+	_c.mutation.SetQuotaCrossedAt(v)
+	return _c
 }
 
 // SetNillableQuotaCrossedAt sets the "quota_crossed_at" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableQuotaCrossedAt(t *time.Time) *EntitlementGrantCreate {
-	if t != nil {
-		egc.SetQuotaCrossedAt(*t)
+func (_c *EntitlementGrantCreate) SetNillableQuotaCrossedAt(v *time.Time) *EntitlementGrantCreate {
+	if v != nil {
+		_c.SetQuotaCrossedAt(*v)
 	}
-	return egc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (egc *EntitlementGrantCreate) SetMetadata(t types.Metadata) *EntitlementGrantCreate {
-	egc.mutation.SetMetadata(t)
-	return egc
+func (_c *EntitlementGrantCreate) SetMetadata(v types.Metadata) *EntitlementGrantCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (egc *EntitlementGrantCreate) SetID(s string) *EntitlementGrantCreate {
-	egc.mutation.SetID(s)
-	return egc
+func (_c *EntitlementGrantCreate) SetID(v string) *EntitlementGrantCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the EntitlementGrantMutation object of the builder.
-func (egc *EntitlementGrantCreate) Mutation() *EntitlementGrantMutation {
-	return egc.mutation
+func (_c *EntitlementGrantCreate) Mutation() *EntitlementGrantMutation {
+	return _c.mutation
 }
 
 // Save creates the EntitlementGrant in the database.
-func (egc *EntitlementGrantCreate) Save(ctx context.Context) (*EntitlementGrant, error) {
-	egc.defaults()
-	return withHooks(ctx, egc.sqlSave, egc.mutation, egc.hooks)
+func (_c *EntitlementGrantCreate) Save(ctx context.Context) (*EntitlementGrant, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (egc *EntitlementGrantCreate) SaveX(ctx context.Context) *EntitlementGrant {
-	v, err := egc.Save(ctx)
+func (_c *EntitlementGrantCreate) SaveX(ctx context.Context) *EntitlementGrant {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -277,144 +277,144 @@ func (egc *EntitlementGrantCreate) SaveX(ctx context.Context) *EntitlementGrant 
 }
 
 // Exec executes the query.
-func (egc *EntitlementGrantCreate) Exec(ctx context.Context) error {
-	_, err := egc.Save(ctx)
+func (_c *EntitlementGrantCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (egc *EntitlementGrantCreate) ExecX(ctx context.Context) {
-	if err := egc.Exec(ctx); err != nil {
+func (_c *EntitlementGrantCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (egc *EntitlementGrantCreate) defaults() {
-	if _, ok := egc.mutation.Status(); !ok {
+func (_c *EntitlementGrantCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := entitlementgrant.DefaultStatus
-		egc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := egc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := entitlementgrant.DefaultCreatedAt()
-		egc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := egc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := entitlementgrant.DefaultUpdatedAt()
-		egc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := egc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := entitlementgrant.DefaultEnvironmentID
-		egc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := egc.mutation.ScopeEntityType(); !ok {
+	if _, ok := _c.mutation.ScopeEntityType(); !ok {
 		v := entitlementgrant.DefaultScopeEntityType
-		egc.mutation.SetScopeEntityType(v)
+		_c.mutation.SetScopeEntityType(v)
 	}
-	if _, ok := egc.mutation.Unlimited(); !ok {
+	if _, ok := _c.mutation.Unlimited(); !ok {
 		v := entitlementgrant.DefaultUnlimited
-		egc.mutation.SetUnlimited(v)
+		_c.mutation.SetUnlimited(v)
 	}
-	if _, ok := egc.mutation.Usage(); !ok {
+	if _, ok := _c.mutation.Usage(); !ok {
 		v := entitlementgrant.DefaultUsage
-		egc.mutation.SetUsage(v)
+		_c.mutation.SetUsage(v)
 	}
-	if _, ok := egc.mutation.GrantStatus(); !ok {
+	if _, ok := _c.mutation.GrantStatus(); !ok {
 		v := entitlementgrant.DefaultGrantStatus
-		egc.mutation.SetGrantStatus(v)
+		_c.mutation.SetGrantStatus(v)
 	}
-	if _, ok := egc.mutation.Metadata(); !ok {
+	if _, ok := _c.mutation.Metadata(); !ok {
 		v := entitlementgrant.DefaultMetadata
-		egc.mutation.SetMetadata(v)
+		_c.mutation.SetMetadata(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (egc *EntitlementGrantCreate) check() error {
-	if _, ok := egc.mutation.TenantID(); !ok {
+func (_c *EntitlementGrantCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "EntitlementGrant.tenant_id"`)}
 	}
-	if v, ok := egc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := entitlementgrant.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "EntitlementGrant.status"`)}
 	}
-	if _, ok := egc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "EntitlementGrant.created_at"`)}
 	}
-	if _, ok := egc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "EntitlementGrant.updated_at"`)}
 	}
-	if _, ok := egc.mutation.EntitlementConfigID(); !ok {
+	if _, ok := _c.mutation.EntitlementConfigID(); !ok {
 		return &ValidationError{Name: "entitlement_config_id", err: errors.New(`ent: missing required field "EntitlementGrant.entitlement_config_id"`)}
 	}
-	if v, ok := egc.mutation.EntitlementConfigID(); ok {
+	if v, ok := _c.mutation.EntitlementConfigID(); ok {
 		if err := entitlementgrant.EntitlementConfigIDValidator(v); err != nil {
 			return &ValidationError{Name: "entitlement_config_id", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.entitlement_config_id": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "EntitlementGrant.customer_id"`)}
 	}
-	if v, ok := egc.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := entitlementgrant.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "EntitlementGrant.subscription_id"`)}
 	}
-	if v, ok := egc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := entitlementgrant.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.ScopeEntityType(); !ok {
+	if _, ok := _c.mutation.ScopeEntityType(); !ok {
 		return &ValidationError{Name: "scope_entity_type", err: errors.New(`ent: missing required field "EntitlementGrant.scope_entity_type"`)}
 	}
-	if v, ok := egc.mutation.ScopeEntityType(); ok {
+	if v, ok := _c.mutation.ScopeEntityType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "scope_entity_type", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.scope_entity_type": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.ScopeEntityID(); !ok {
+	if _, ok := _c.mutation.ScopeEntityID(); !ok {
 		return &ValidationError{Name: "scope_entity_id", err: errors.New(`ent: missing required field "EntitlementGrant.scope_entity_id"`)}
 	}
-	if v, ok := egc.mutation.ScopeEntityID(); ok {
+	if v, ok := _c.mutation.ScopeEntityID(); ok {
 		if err := entitlementgrant.ScopeEntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "scope_entity_id", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.scope_entity_id": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.Measure(); !ok {
+	if _, ok := _c.mutation.Measure(); !ok {
 		return &ValidationError{Name: "measure", err: errors.New(`ent: missing required field "EntitlementGrant.measure"`)}
 	}
-	if v, ok := egc.mutation.Measure(); ok {
+	if v, ok := _c.mutation.Measure(); ok {
 		if err := entitlementgrant.MeasureValidator(string(v)); err != nil {
 			return &ValidationError{Name: "measure", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.measure": %w`, err)}
 		}
 	}
-	if _, ok := egc.mutation.Quota(); !ok {
+	if _, ok := _c.mutation.Quota(); !ok {
 		return &ValidationError{Name: "quota", err: errors.New(`ent: missing required field "EntitlementGrant.quota"`)}
 	}
-	if _, ok := egc.mutation.Unlimited(); !ok {
+	if _, ok := _c.mutation.Unlimited(); !ok {
 		return &ValidationError{Name: "unlimited", err: errors.New(`ent: missing required field "EntitlementGrant.unlimited"`)}
 	}
-	if _, ok := egc.mutation.Usage(); !ok {
+	if _, ok := _c.mutation.Usage(); !ok {
 		return &ValidationError{Name: "usage", err: errors.New(`ent: missing required field "EntitlementGrant.usage"`)}
 	}
-	if _, ok := egc.mutation.ValidFrom(); !ok {
+	if _, ok := _c.mutation.ValidFrom(); !ok {
 		return &ValidationError{Name: "valid_from", err: errors.New(`ent: missing required field "EntitlementGrant.valid_from"`)}
 	}
-	if _, ok := egc.mutation.ValidTo(); !ok {
+	if _, ok := _c.mutation.ValidTo(); !ok {
 		return &ValidationError{Name: "valid_to", err: errors.New(`ent: missing required field "EntitlementGrant.valid_to"`)}
 	}
-	if _, ok := egc.mutation.GrantStatus(); !ok {
+	if _, ok := _c.mutation.GrantStatus(); !ok {
 		return &ValidationError{Name: "grant_status", err: errors.New(`ent: missing required field "EntitlementGrant.grant_status"`)}
 	}
-	if v, ok := egc.mutation.GrantStatus(); ok {
+	if v, ok := _c.mutation.GrantStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_status", err: fmt.Errorf(`ent: validator failed for field "EntitlementGrant.grant_status": %w`, err)}
 		}
@@ -422,12 +422,12 @@ func (egc *EntitlementGrantCreate) check() error {
 	return nil
 }
 
-func (egc *EntitlementGrantCreate) sqlSave(ctx context.Context) (*EntitlementGrant, error) {
-	if err := egc.check(); err != nil {
+func (_c *EntitlementGrantCreate) sqlSave(ctx context.Context) (*EntitlementGrant, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := egc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, egc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -440,105 +440,105 @@ func (egc *EntitlementGrantCreate) sqlSave(ctx context.Context) (*EntitlementGra
 			return nil, fmt.Errorf("unexpected EntitlementGrant.ID type: %T", _spec.ID.Value)
 		}
 	}
-	egc.mutation.id = &_node.ID
-	egc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (egc *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.CreateSpec) {
+func (_c *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.CreateSpec) {
 	var (
-		_node = &EntitlementGrant{config: egc.config}
+		_node = &EntitlementGrant{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(entitlementgrant.Table, sqlgraph.NewFieldSpec(entitlementgrant.FieldID, field.TypeString))
 	)
-	if id, ok := egc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := egc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(entitlementgrant.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := egc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(entitlementgrant.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := egc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := egc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := egc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(entitlementgrant.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := egc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := egc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(entitlementgrant.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := egc.mutation.EntitlementConfigID(); ok {
+	if value, ok := _c.mutation.EntitlementConfigID(); ok {
 		_spec.SetField(entitlementgrant.FieldEntitlementConfigID, field.TypeString, value)
 		_node.EntitlementConfigID = value
 	}
-	if value, ok := egc.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(entitlementgrant.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := egc.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(entitlementgrant.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = value
 	}
-	if value, ok := egc.mutation.ScopeEntityType(); ok {
+	if value, ok := _c.mutation.ScopeEntityType(); ok {
 		_spec.SetField(entitlementgrant.FieldScopeEntityType, field.TypeString, value)
 		_node.ScopeEntityType = value
 	}
-	if value, ok := egc.mutation.ScopeEntityID(); ok {
+	if value, ok := _c.mutation.ScopeEntityID(); ok {
 		_spec.SetField(entitlementgrant.FieldScopeEntityID, field.TypeString, value)
 		_node.ScopeEntityID = value
 	}
-	if value, ok := egc.mutation.Measure(); ok {
+	if value, ok := _c.mutation.Measure(); ok {
 		_spec.SetField(entitlementgrant.FieldMeasure, field.TypeString, value)
 		_node.Measure = value
 	}
-	if value, ok := egc.mutation.Quota(); ok {
+	if value, ok := _c.mutation.Quota(); ok {
 		_spec.SetField(entitlementgrant.FieldQuota, field.TypeOther, value)
 		_node.Quota = value
 	}
-	if value, ok := egc.mutation.Unlimited(); ok {
+	if value, ok := _c.mutation.Unlimited(); ok {
 		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
 		_node.Unlimited = value
 	}
-	if value, ok := egc.mutation.Usage(); ok {
+	if value, ok := _c.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 		_node.Usage = value
 	}
-	if value, ok := egc.mutation.ValidFrom(); ok {
+	if value, ok := _c.mutation.ValidFrom(); ok {
 		_spec.SetField(entitlementgrant.FieldValidFrom, field.TypeTime, value)
 		_node.ValidFrom = value
 	}
-	if value, ok := egc.mutation.ValidTo(); ok {
+	if value, ok := _c.mutation.ValidTo(); ok {
 		_spec.SetField(entitlementgrant.FieldValidTo, field.TypeTime, value)
 		_node.ValidTo = value
 	}
-	if value, ok := egc.mutation.GrantStatus(); ok {
+	if value, ok := _c.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
 		_node.GrantStatus = value
 	}
-	if value, ok := egc.mutation.LastComputedAt(); ok {
+	if value, ok := _c.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)
 		_node.LastComputedAt = &value
 	}
-	if value, ok := egc.mutation.QuotaCrossedAt(); ok {
+	if value, ok := _c.mutation.QuotaCrossedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime, value)
 		_node.QuotaCrossedAt = &value
 	}
-	if value, ok := egc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
 		_node.Metadata = value
 	}
@@ -553,16 +553,16 @@ type EntitlementGrantCreateBulk struct {
 }
 
 // Save creates the EntitlementGrant entities in the database.
-func (egcb *EntitlementGrantCreateBulk) Save(ctx context.Context) ([]*EntitlementGrant, error) {
-	if egcb.err != nil {
-		return nil, egcb.err
+func (_c *EntitlementGrantCreateBulk) Save(ctx context.Context) ([]*EntitlementGrant, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(egcb.builders))
-	nodes := make([]*EntitlementGrant, len(egcb.builders))
-	mutators := make([]Mutator, len(egcb.builders))
-	for i := range egcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*EntitlementGrant, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := egcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*EntitlementGrantMutation)
@@ -576,11 +576,11 @@ func (egcb *EntitlementGrantCreateBulk) Save(ctx context.Context) ([]*Entitlemen
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, egcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, egcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -600,7 +600,7 @@ func (egcb *EntitlementGrantCreateBulk) Save(ctx context.Context) ([]*Entitlemen
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, egcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -608,8 +608,8 @@ func (egcb *EntitlementGrantCreateBulk) Save(ctx context.Context) ([]*Entitlemen
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (egcb *EntitlementGrantCreateBulk) SaveX(ctx context.Context) []*EntitlementGrant {
-	v, err := egcb.Save(ctx)
+func (_c *EntitlementGrantCreateBulk) SaveX(ctx context.Context) []*EntitlementGrant {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -617,14 +617,14 @@ func (egcb *EntitlementGrantCreateBulk) SaveX(ctx context.Context) []*Entitlemen
 }
 
 // Exec executes the query.
-func (egcb *EntitlementGrantCreateBulk) Exec(ctx context.Context) error {
-	_, err := egcb.Save(ctx)
+func (_c *EntitlementGrantCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (egcb *EntitlementGrantCreateBulk) ExecX(ctx context.Context) {
-	if err := egcb.Exec(ctx); err != nil {
+func (_c *EntitlementGrantCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

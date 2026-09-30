@@ -25,207 +25,207 @@ type CreditNoteUpdate struct {
 }
 
 // Where appends a list predicates to the CreditNoteUpdate builder.
-func (cnu *CreditNoteUpdate) Where(ps ...predicate.CreditNote) *CreditNoteUpdate {
-	cnu.mutation.Where(ps...)
-	return cnu
+func (_u *CreditNoteUpdate) Where(ps ...predicate.CreditNote) *CreditNoteUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cnu *CreditNoteUpdate) SetStatus(s string) *CreditNoteUpdate {
-	cnu.mutation.SetStatus(s)
-	return cnu
+func (_u *CreditNoteUpdate) SetStatus(v string) *CreditNoteUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableStatus(s *string) *CreditNoteUpdate {
-	if s != nil {
-		cnu.SetStatus(*s)
+func (_u *CreditNoteUpdate) SetNillableStatus(v *string) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cnu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cnu *CreditNoteUpdate) SetUpdatedAt(t time.Time) *CreditNoteUpdate {
-	cnu.mutation.SetUpdatedAt(t)
-	return cnu
+func (_u *CreditNoteUpdate) SetUpdatedAt(v time.Time) *CreditNoteUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cnu *CreditNoteUpdate) SetUpdatedBy(s string) *CreditNoteUpdate {
-	cnu.mutation.SetUpdatedBy(s)
-	return cnu
+func (_u *CreditNoteUpdate) SetUpdatedBy(v string) *CreditNoteUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableUpdatedBy(s *string) *CreditNoteUpdate {
-	if s != nil {
-		cnu.SetUpdatedBy(*s)
+func (_u *CreditNoteUpdate) SetNillableUpdatedBy(v *string) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cnu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cnu *CreditNoteUpdate) ClearUpdatedBy() *CreditNoteUpdate {
-	cnu.mutation.ClearUpdatedBy()
-	return cnu
+func (_u *CreditNoteUpdate) ClearUpdatedBy() *CreditNoteUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cnu *CreditNoteUpdate) SetSubscriptionID(s string) *CreditNoteUpdate {
-	cnu.mutation.SetSubscriptionID(s)
-	return cnu
+func (_u *CreditNoteUpdate) SetSubscriptionID(v string) *CreditNoteUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableSubscriptionID(s *string) *CreditNoteUpdate {
-	if s != nil {
-		cnu.SetSubscriptionID(*s)
+func (_u *CreditNoteUpdate) SetNillableSubscriptionID(v *string) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return cnu
+	return _u
 }
 
 // ClearSubscriptionID clears the value of the "subscription_id" field.
-func (cnu *CreditNoteUpdate) ClearSubscriptionID() *CreditNoteUpdate {
-	cnu.mutation.ClearSubscriptionID()
-	return cnu
+func (_u *CreditNoteUpdate) ClearSubscriptionID() *CreditNoteUpdate {
+	_u.mutation.ClearSubscriptionID()
+	return _u
 }
 
 // SetCreditNoteStatus sets the "credit_note_status" field.
-func (cnu *CreditNoteUpdate) SetCreditNoteStatus(tns types.CreditNoteStatus) *CreditNoteUpdate {
-	cnu.mutation.SetCreditNoteStatus(tns)
-	return cnu
+func (_u *CreditNoteUpdate) SetCreditNoteStatus(v types.CreditNoteStatus) *CreditNoteUpdate {
+	_u.mutation.SetCreditNoteStatus(v)
+	return _u
 }
 
 // SetNillableCreditNoteStatus sets the "credit_note_status" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableCreditNoteStatus(tns *types.CreditNoteStatus) *CreditNoteUpdate {
-	if tns != nil {
-		cnu.SetCreditNoteStatus(*tns)
+func (_u *CreditNoteUpdate) SetNillableCreditNoteStatus(v *types.CreditNoteStatus) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetCreditNoteStatus(*v)
 	}
-	return cnu
+	return _u
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (cnu *CreditNoteUpdate) SetRefundStatus(ts types.PaymentStatus) *CreditNoteUpdate {
-	cnu.mutation.SetRefundStatus(ts)
-	return cnu
+func (_u *CreditNoteUpdate) SetRefundStatus(v types.PaymentStatus) *CreditNoteUpdate {
+	_u.mutation.SetRefundStatus(v)
+	return _u
 }
 
 // SetNillableRefundStatus sets the "refund_status" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableRefundStatus(ts *types.PaymentStatus) *CreditNoteUpdate {
-	if ts != nil {
-		cnu.SetRefundStatus(*ts)
+func (_u *CreditNoteUpdate) SetNillableRefundStatus(v *types.PaymentStatus) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetRefundStatus(*v)
 	}
-	return cnu
+	return _u
 }
 
 // ClearRefundStatus clears the value of the "refund_status" field.
-func (cnu *CreditNoteUpdate) ClearRefundStatus() *CreditNoteUpdate {
-	cnu.mutation.ClearRefundStatus()
-	return cnu
+func (_u *CreditNoteUpdate) ClearRefundStatus() *CreditNoteUpdate {
+	_u.mutation.ClearRefundStatus()
+	return _u
 }
 
 // SetVoidedAt sets the "voided_at" field.
-func (cnu *CreditNoteUpdate) SetVoidedAt(t time.Time) *CreditNoteUpdate {
-	cnu.mutation.SetVoidedAt(t)
-	return cnu
+func (_u *CreditNoteUpdate) SetVoidedAt(v time.Time) *CreditNoteUpdate {
+	_u.mutation.SetVoidedAt(v)
+	return _u
 }
 
 // SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableVoidedAt(t *time.Time) *CreditNoteUpdate {
-	if t != nil {
-		cnu.SetVoidedAt(*t)
+func (_u *CreditNoteUpdate) SetNillableVoidedAt(v *time.Time) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetVoidedAt(*v)
 	}
-	return cnu
+	return _u
 }
 
 // ClearVoidedAt clears the value of the "voided_at" field.
-func (cnu *CreditNoteUpdate) ClearVoidedAt() *CreditNoteUpdate {
-	cnu.mutation.ClearVoidedAt()
-	return cnu
+func (_u *CreditNoteUpdate) ClearVoidedAt() *CreditNoteUpdate {
+	_u.mutation.ClearVoidedAt()
+	return _u
 }
 
 // SetFinalizedAt sets the "finalized_at" field.
-func (cnu *CreditNoteUpdate) SetFinalizedAt(t time.Time) *CreditNoteUpdate {
-	cnu.mutation.SetFinalizedAt(t)
-	return cnu
+func (_u *CreditNoteUpdate) SetFinalizedAt(v time.Time) *CreditNoteUpdate {
+	_u.mutation.SetFinalizedAt(v)
+	return _u
 }
 
 // SetNillableFinalizedAt sets the "finalized_at" field if the given value is not nil.
-func (cnu *CreditNoteUpdate) SetNillableFinalizedAt(t *time.Time) *CreditNoteUpdate {
-	if t != nil {
-		cnu.SetFinalizedAt(*t)
+func (_u *CreditNoteUpdate) SetNillableFinalizedAt(v *time.Time) *CreditNoteUpdate {
+	if v != nil {
+		_u.SetFinalizedAt(*v)
 	}
-	return cnu
+	return _u
 }
 
 // ClearFinalizedAt clears the value of the "finalized_at" field.
-func (cnu *CreditNoteUpdate) ClearFinalizedAt() *CreditNoteUpdate {
-	cnu.mutation.ClearFinalizedAt()
-	return cnu
+func (_u *CreditNoteUpdate) ClearFinalizedAt() *CreditNoteUpdate {
+	_u.mutation.ClearFinalizedAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cnu *CreditNoteUpdate) SetMetadata(m map[string]string) *CreditNoteUpdate {
-	cnu.mutation.SetMetadata(m)
-	return cnu
+func (_u *CreditNoteUpdate) SetMetadata(v map[string]string) *CreditNoteUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cnu *CreditNoteUpdate) ClearMetadata() *CreditNoteUpdate {
-	cnu.mutation.ClearMetadata()
-	return cnu
+func (_u *CreditNoteUpdate) ClearMetadata() *CreditNoteUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // AddLineItemIDs adds the "line_items" edge to the CreditNoteLineItem entity by IDs.
-func (cnu *CreditNoteUpdate) AddLineItemIDs(ids ...string) *CreditNoteUpdate {
-	cnu.mutation.AddLineItemIDs(ids...)
-	return cnu
+func (_u *CreditNoteUpdate) AddLineItemIDs(ids ...string) *CreditNoteUpdate {
+	_u.mutation.AddLineItemIDs(ids...)
+	return _u
 }
 
 // AddLineItems adds the "line_items" edges to the CreditNoteLineItem entity.
-func (cnu *CreditNoteUpdate) AddLineItems(c ...*CreditNoteLineItem) *CreditNoteUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CreditNoteUpdate) AddLineItems(v ...*CreditNoteLineItem) *CreditNoteUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cnu.AddLineItemIDs(ids...)
+	return _u.AddLineItemIDs(ids...)
 }
 
 // Mutation returns the CreditNoteMutation object of the builder.
-func (cnu *CreditNoteUpdate) Mutation() *CreditNoteMutation {
-	return cnu.mutation
+func (_u *CreditNoteUpdate) Mutation() *CreditNoteMutation {
+	return _u.mutation
 }
 
 // ClearLineItems clears all "line_items" edges to the CreditNoteLineItem entity.
-func (cnu *CreditNoteUpdate) ClearLineItems() *CreditNoteUpdate {
-	cnu.mutation.ClearLineItems()
-	return cnu
+func (_u *CreditNoteUpdate) ClearLineItems() *CreditNoteUpdate {
+	_u.mutation.ClearLineItems()
+	return _u
 }
 
 // RemoveLineItemIDs removes the "line_items" edge to CreditNoteLineItem entities by IDs.
-func (cnu *CreditNoteUpdate) RemoveLineItemIDs(ids ...string) *CreditNoteUpdate {
-	cnu.mutation.RemoveLineItemIDs(ids...)
-	return cnu
+func (_u *CreditNoteUpdate) RemoveLineItemIDs(ids ...string) *CreditNoteUpdate {
+	_u.mutation.RemoveLineItemIDs(ids...)
+	return _u
 }
 
 // RemoveLineItems removes "line_items" edges to CreditNoteLineItem entities.
-func (cnu *CreditNoteUpdate) RemoveLineItems(c ...*CreditNoteLineItem) *CreditNoteUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CreditNoteUpdate) RemoveLineItems(v ...*CreditNoteLineItem) *CreditNoteUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cnu.RemoveLineItemIDs(ids...)
+	return _u.RemoveLineItemIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cnu *CreditNoteUpdate) Save(ctx context.Context) (int, error) {
-	cnu.defaults()
-	return withHooks(ctx, cnu.sqlSave, cnu.mutation, cnu.hooks)
+func (_u *CreditNoteUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cnu *CreditNoteUpdate) SaveX(ctx context.Context) int {
-	affected, err := cnu.Save(ctx)
+func (_u *CreditNoteUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -233,90 +233,90 @@ func (cnu *CreditNoteUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cnu *CreditNoteUpdate) Exec(ctx context.Context) error {
-	_, err := cnu.Save(ctx)
+func (_u *CreditNoteUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnu *CreditNoteUpdate) ExecX(ctx context.Context) {
-	if err := cnu.Exec(ctx); err != nil {
+func (_u *CreditNoteUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cnu *CreditNoteUpdate) defaults() {
-	if _, ok := cnu.mutation.UpdatedAt(); !ok {
+func (_u *CreditNoteUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditnote.UpdateDefaultUpdatedAt()
-		cnu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *CreditNoteUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(creditnote.Table, creditnote.Columns, sqlgraph.NewFieldSpec(creditnote.FieldID, field.TypeString))
-	if ps := cnu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cnu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditnote.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cnu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditnote.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cnu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditnote.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cnu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditnote.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cnu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditnote.FieldUpdatedBy, field.TypeString)
 	}
-	if cnu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditnote.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cnu.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(creditnote.FieldSubscriptionID, field.TypeString, value)
 	}
-	if cnu.mutation.SubscriptionIDCleared() {
+	if _u.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(creditnote.FieldSubscriptionID, field.TypeString)
 	}
-	if value, ok := cnu.mutation.CreditNoteStatus(); ok {
+	if value, ok := _u.mutation.CreditNoteStatus(); ok {
 		_spec.SetField(creditnote.FieldCreditNoteStatus, field.TypeString, value)
 	}
-	if value, ok := cnu.mutation.RefundStatus(); ok {
+	if value, ok := _u.mutation.RefundStatus(); ok {
 		_spec.SetField(creditnote.FieldRefundStatus, field.TypeString, value)
 	}
-	if cnu.mutation.RefundStatusCleared() {
+	if _u.mutation.RefundStatusCleared() {
 		_spec.ClearField(creditnote.FieldRefundStatus, field.TypeString)
 	}
-	if cnu.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(creditnote.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := cnu.mutation.VoidedAt(); ok {
+	if value, ok := _u.mutation.VoidedAt(); ok {
 		_spec.SetField(creditnote.FieldVoidedAt, field.TypeTime, value)
 	}
-	if cnu.mutation.VoidedAtCleared() {
+	if _u.mutation.VoidedAtCleared() {
 		_spec.ClearField(creditnote.FieldVoidedAt, field.TypeTime)
 	}
-	if value, ok := cnu.mutation.FinalizedAt(); ok {
+	if value, ok := _u.mutation.FinalizedAt(); ok {
 		_spec.SetField(creditnote.FieldFinalizedAt, field.TypeTime, value)
 	}
-	if cnu.mutation.FinalizedAtCleared() {
+	if _u.mutation.FinalizedAtCleared() {
 		_spec.ClearField(creditnote.FieldFinalizedAt, field.TypeTime)
 	}
-	if value, ok := cnu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditnote.FieldMetadata, field.TypeJSON, value)
 	}
-	if cnu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditnote.FieldMetadata, field.TypeJSON)
 	}
-	if cnu.mutation.LineItemsCleared() {
+	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -329,7 +329,7 @@ func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cnu.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !cnu.mutation.LineItemsCleared() {
+	if nodes := _u.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !_u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -345,7 +345,7 @@ func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cnu.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -361,7 +361,7 @@ func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cnu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditnote.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -369,8 +369,8 @@ func (cnu *CreditNoteUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	cnu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CreditNoteUpdateOne is the builder for updating a single CreditNote entity.
@@ -382,214 +382,214 @@ type CreditNoteUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cnuo *CreditNoteUpdateOne) SetStatus(s string) *CreditNoteUpdateOne {
-	cnuo.mutation.SetStatus(s)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetStatus(v string) *CreditNoteUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableStatus(s *string) *CreditNoteUpdateOne {
-	if s != nil {
-		cnuo.SetStatus(*s)
+func (_u *CreditNoteUpdateOne) SetNillableStatus(v *string) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cnuo *CreditNoteUpdateOne) SetUpdatedAt(t time.Time) *CreditNoteUpdateOne {
-	cnuo.mutation.SetUpdatedAt(t)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetUpdatedAt(v time.Time) *CreditNoteUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cnuo *CreditNoteUpdateOne) SetUpdatedBy(s string) *CreditNoteUpdateOne {
-	cnuo.mutation.SetUpdatedBy(s)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetUpdatedBy(v string) *CreditNoteUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableUpdatedBy(s *string) *CreditNoteUpdateOne {
-	if s != nil {
-		cnuo.SetUpdatedBy(*s)
+func (_u *CreditNoteUpdateOne) SetNillableUpdatedBy(v *string) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cnuo *CreditNoteUpdateOne) ClearUpdatedBy() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearUpdatedBy()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearUpdatedBy() *CreditNoteUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cnuo *CreditNoteUpdateOne) SetSubscriptionID(s string) *CreditNoteUpdateOne {
-	cnuo.mutation.SetSubscriptionID(s)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetSubscriptionID(v string) *CreditNoteUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableSubscriptionID(s *string) *CreditNoteUpdateOne {
-	if s != nil {
-		cnuo.SetSubscriptionID(*s)
+func (_u *CreditNoteUpdateOne) SetNillableSubscriptionID(v *string) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // ClearSubscriptionID clears the value of the "subscription_id" field.
-func (cnuo *CreditNoteUpdateOne) ClearSubscriptionID() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearSubscriptionID()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearSubscriptionID() *CreditNoteUpdateOne {
+	_u.mutation.ClearSubscriptionID()
+	return _u
 }
 
 // SetCreditNoteStatus sets the "credit_note_status" field.
-func (cnuo *CreditNoteUpdateOne) SetCreditNoteStatus(tns types.CreditNoteStatus) *CreditNoteUpdateOne {
-	cnuo.mutation.SetCreditNoteStatus(tns)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetCreditNoteStatus(v types.CreditNoteStatus) *CreditNoteUpdateOne {
+	_u.mutation.SetCreditNoteStatus(v)
+	return _u
 }
 
 // SetNillableCreditNoteStatus sets the "credit_note_status" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableCreditNoteStatus(tns *types.CreditNoteStatus) *CreditNoteUpdateOne {
-	if tns != nil {
-		cnuo.SetCreditNoteStatus(*tns)
+func (_u *CreditNoteUpdateOne) SetNillableCreditNoteStatus(v *types.CreditNoteStatus) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetCreditNoteStatus(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (cnuo *CreditNoteUpdateOne) SetRefundStatus(ts types.PaymentStatus) *CreditNoteUpdateOne {
-	cnuo.mutation.SetRefundStatus(ts)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetRefundStatus(v types.PaymentStatus) *CreditNoteUpdateOne {
+	_u.mutation.SetRefundStatus(v)
+	return _u
 }
 
 // SetNillableRefundStatus sets the "refund_status" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableRefundStatus(ts *types.PaymentStatus) *CreditNoteUpdateOne {
-	if ts != nil {
-		cnuo.SetRefundStatus(*ts)
+func (_u *CreditNoteUpdateOne) SetNillableRefundStatus(v *types.PaymentStatus) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetRefundStatus(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // ClearRefundStatus clears the value of the "refund_status" field.
-func (cnuo *CreditNoteUpdateOne) ClearRefundStatus() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearRefundStatus()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearRefundStatus() *CreditNoteUpdateOne {
+	_u.mutation.ClearRefundStatus()
+	return _u
 }
 
 // SetVoidedAt sets the "voided_at" field.
-func (cnuo *CreditNoteUpdateOne) SetVoidedAt(t time.Time) *CreditNoteUpdateOne {
-	cnuo.mutation.SetVoidedAt(t)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetVoidedAt(v time.Time) *CreditNoteUpdateOne {
+	_u.mutation.SetVoidedAt(v)
+	return _u
 }
 
 // SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableVoidedAt(t *time.Time) *CreditNoteUpdateOne {
-	if t != nil {
-		cnuo.SetVoidedAt(*t)
+func (_u *CreditNoteUpdateOne) SetNillableVoidedAt(v *time.Time) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetVoidedAt(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // ClearVoidedAt clears the value of the "voided_at" field.
-func (cnuo *CreditNoteUpdateOne) ClearVoidedAt() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearVoidedAt()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearVoidedAt() *CreditNoteUpdateOne {
+	_u.mutation.ClearVoidedAt()
+	return _u
 }
 
 // SetFinalizedAt sets the "finalized_at" field.
-func (cnuo *CreditNoteUpdateOne) SetFinalizedAt(t time.Time) *CreditNoteUpdateOne {
-	cnuo.mutation.SetFinalizedAt(t)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetFinalizedAt(v time.Time) *CreditNoteUpdateOne {
+	_u.mutation.SetFinalizedAt(v)
+	return _u
 }
 
 // SetNillableFinalizedAt sets the "finalized_at" field if the given value is not nil.
-func (cnuo *CreditNoteUpdateOne) SetNillableFinalizedAt(t *time.Time) *CreditNoteUpdateOne {
-	if t != nil {
-		cnuo.SetFinalizedAt(*t)
+func (_u *CreditNoteUpdateOne) SetNillableFinalizedAt(v *time.Time) *CreditNoteUpdateOne {
+	if v != nil {
+		_u.SetFinalizedAt(*v)
 	}
-	return cnuo
+	return _u
 }
 
 // ClearFinalizedAt clears the value of the "finalized_at" field.
-func (cnuo *CreditNoteUpdateOne) ClearFinalizedAt() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearFinalizedAt()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearFinalizedAt() *CreditNoteUpdateOne {
+	_u.mutation.ClearFinalizedAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cnuo *CreditNoteUpdateOne) SetMetadata(m map[string]string) *CreditNoteUpdateOne {
-	cnuo.mutation.SetMetadata(m)
-	return cnuo
+func (_u *CreditNoteUpdateOne) SetMetadata(v map[string]string) *CreditNoteUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cnuo *CreditNoteUpdateOne) ClearMetadata() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearMetadata()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearMetadata() *CreditNoteUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // AddLineItemIDs adds the "line_items" edge to the CreditNoteLineItem entity by IDs.
-func (cnuo *CreditNoteUpdateOne) AddLineItemIDs(ids ...string) *CreditNoteUpdateOne {
-	cnuo.mutation.AddLineItemIDs(ids...)
-	return cnuo
+func (_u *CreditNoteUpdateOne) AddLineItemIDs(ids ...string) *CreditNoteUpdateOne {
+	_u.mutation.AddLineItemIDs(ids...)
+	return _u
 }
 
 // AddLineItems adds the "line_items" edges to the CreditNoteLineItem entity.
-func (cnuo *CreditNoteUpdateOne) AddLineItems(c ...*CreditNoteLineItem) *CreditNoteUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CreditNoteUpdateOne) AddLineItems(v ...*CreditNoteLineItem) *CreditNoteUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cnuo.AddLineItemIDs(ids...)
+	return _u.AddLineItemIDs(ids...)
 }
 
 // Mutation returns the CreditNoteMutation object of the builder.
-func (cnuo *CreditNoteUpdateOne) Mutation() *CreditNoteMutation {
-	return cnuo.mutation
+func (_u *CreditNoteUpdateOne) Mutation() *CreditNoteMutation {
+	return _u.mutation
 }
 
 // ClearLineItems clears all "line_items" edges to the CreditNoteLineItem entity.
-func (cnuo *CreditNoteUpdateOne) ClearLineItems() *CreditNoteUpdateOne {
-	cnuo.mutation.ClearLineItems()
-	return cnuo
+func (_u *CreditNoteUpdateOne) ClearLineItems() *CreditNoteUpdateOne {
+	_u.mutation.ClearLineItems()
+	return _u
 }
 
 // RemoveLineItemIDs removes the "line_items" edge to CreditNoteLineItem entities by IDs.
-func (cnuo *CreditNoteUpdateOne) RemoveLineItemIDs(ids ...string) *CreditNoteUpdateOne {
-	cnuo.mutation.RemoveLineItemIDs(ids...)
-	return cnuo
+func (_u *CreditNoteUpdateOne) RemoveLineItemIDs(ids ...string) *CreditNoteUpdateOne {
+	_u.mutation.RemoveLineItemIDs(ids...)
+	return _u
 }
 
 // RemoveLineItems removes "line_items" edges to CreditNoteLineItem entities.
-func (cnuo *CreditNoteUpdateOne) RemoveLineItems(c ...*CreditNoteLineItem) *CreditNoteUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CreditNoteUpdateOne) RemoveLineItems(v ...*CreditNoteLineItem) *CreditNoteUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cnuo.RemoveLineItemIDs(ids...)
+	return _u.RemoveLineItemIDs(ids...)
 }
 
 // Where appends a list predicates to the CreditNoteUpdate builder.
-func (cnuo *CreditNoteUpdateOne) Where(ps ...predicate.CreditNote) *CreditNoteUpdateOne {
-	cnuo.mutation.Where(ps...)
-	return cnuo
+func (_u *CreditNoteUpdateOne) Where(ps ...predicate.CreditNote) *CreditNoteUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cnuo *CreditNoteUpdateOne) Select(field string, fields ...string) *CreditNoteUpdateOne {
-	cnuo.fields = append([]string{field}, fields...)
-	return cnuo
+func (_u *CreditNoteUpdateOne) Select(field string, fields ...string) *CreditNoteUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CreditNote entity.
-func (cnuo *CreditNoteUpdateOne) Save(ctx context.Context) (*CreditNote, error) {
-	cnuo.defaults()
-	return withHooks(ctx, cnuo.sqlSave, cnuo.mutation, cnuo.hooks)
+func (_u *CreditNoteUpdateOne) Save(ctx context.Context) (*CreditNote, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cnuo *CreditNoteUpdateOne) SaveX(ctx context.Context) *CreditNote {
-	node, err := cnuo.Save(ctx)
+func (_u *CreditNoteUpdateOne) SaveX(ctx context.Context) *CreditNote {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -597,34 +597,34 @@ func (cnuo *CreditNoteUpdateOne) SaveX(ctx context.Context) *CreditNote {
 }
 
 // Exec executes the query on the entity.
-func (cnuo *CreditNoteUpdateOne) Exec(ctx context.Context) error {
-	_, err := cnuo.Save(ctx)
+func (_u *CreditNoteUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnuo *CreditNoteUpdateOne) ExecX(ctx context.Context) {
-	if err := cnuo.Exec(ctx); err != nil {
+func (_u *CreditNoteUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cnuo *CreditNoteUpdateOne) defaults() {
-	if _, ok := cnuo.mutation.UpdatedAt(); !ok {
+func (_u *CreditNoteUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditnote.UpdateDefaultUpdatedAt()
-		cnuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote, err error) {
+func (_u *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote, err error) {
 	_spec := sqlgraph.NewUpdateSpec(creditnote.Table, creditnote.Columns, sqlgraph.NewFieldSpec(creditnote.FieldID, field.TypeString))
-	id, ok := cnuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CreditNote.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cnuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditnote.FieldID)
 		for _, f := range fields {
@@ -636,68 +636,68 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 			}
 		}
 	}
-	if ps := cnuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cnuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditnote.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cnuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditnote.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cnuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditnote.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cnuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditnote.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cnuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditnote.FieldUpdatedBy, field.TypeString)
 	}
-	if cnuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditnote.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cnuo.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(creditnote.FieldSubscriptionID, field.TypeString, value)
 	}
-	if cnuo.mutation.SubscriptionIDCleared() {
+	if _u.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(creditnote.FieldSubscriptionID, field.TypeString)
 	}
-	if value, ok := cnuo.mutation.CreditNoteStatus(); ok {
+	if value, ok := _u.mutation.CreditNoteStatus(); ok {
 		_spec.SetField(creditnote.FieldCreditNoteStatus, field.TypeString, value)
 	}
-	if value, ok := cnuo.mutation.RefundStatus(); ok {
+	if value, ok := _u.mutation.RefundStatus(); ok {
 		_spec.SetField(creditnote.FieldRefundStatus, field.TypeString, value)
 	}
-	if cnuo.mutation.RefundStatusCleared() {
+	if _u.mutation.RefundStatusCleared() {
 		_spec.ClearField(creditnote.FieldRefundStatus, field.TypeString)
 	}
-	if cnuo.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(creditnote.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := cnuo.mutation.VoidedAt(); ok {
+	if value, ok := _u.mutation.VoidedAt(); ok {
 		_spec.SetField(creditnote.FieldVoidedAt, field.TypeTime, value)
 	}
-	if cnuo.mutation.VoidedAtCleared() {
+	if _u.mutation.VoidedAtCleared() {
 		_spec.ClearField(creditnote.FieldVoidedAt, field.TypeTime)
 	}
-	if value, ok := cnuo.mutation.FinalizedAt(); ok {
+	if value, ok := _u.mutation.FinalizedAt(); ok {
 		_spec.SetField(creditnote.FieldFinalizedAt, field.TypeTime, value)
 	}
-	if cnuo.mutation.FinalizedAtCleared() {
+	if _u.mutation.FinalizedAtCleared() {
 		_spec.ClearField(creditnote.FieldFinalizedAt, field.TypeTime)
 	}
-	if value, ok := cnuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditnote.FieldMetadata, field.TypeJSON, value)
 	}
-	if cnuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditnote.FieldMetadata, field.TypeJSON)
 	}
-	if cnuo.mutation.LineItemsCleared() {
+	if _u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -710,7 +710,7 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cnuo.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !cnuo.mutation.LineItemsCleared() {
+	if nodes := _u.mutation.RemovedLineItemsIDs(); len(nodes) > 0 && !_u.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -726,7 +726,7 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cnuo.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -742,10 +742,10 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &CreditNote{config: cnuo.config}
+	_node = &CreditNote{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cnuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditnote.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -753,6 +753,6 @@ func (cnuo *CreditNoteUpdateOne) sqlSave(ctx context.Context) (_node *CreditNote
 		}
 		return nil, err
 	}
-	cnuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

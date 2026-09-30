@@ -33,44 +33,44 @@ type PriceQuery struct {
 }
 
 // Where adds a new predicate for the PriceQuery builder.
-func (pq *PriceQuery) Where(ps ...predicate.Price) *PriceQuery {
-	pq.predicates = append(pq.predicates, ps...)
-	return pq
+func (_q *PriceQuery) Where(ps ...predicate.Price) *PriceQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (pq *PriceQuery) Limit(limit int) *PriceQuery {
-	pq.ctx.Limit = &limit
-	return pq
+func (_q *PriceQuery) Limit(limit int) *PriceQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (pq *PriceQuery) Offset(offset int) *PriceQuery {
-	pq.ctx.Offset = &offset
-	return pq
+func (_q *PriceQuery) Offset(offset int) *PriceQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (pq *PriceQuery) Unique(unique bool) *PriceQuery {
-	pq.ctx.Unique = &unique
-	return pq
+func (_q *PriceQuery) Unique(unique bool) *PriceQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (pq *PriceQuery) Order(o ...price.OrderOption) *PriceQuery {
-	pq.order = append(pq.order, o...)
-	return pq
+func (_q *PriceQuery) Order(o ...price.OrderOption) *PriceQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryCostsheet chains the current query on the "costsheet" edge.
-func (pq *PriceQuery) QueryCostsheet() *CostsheetQuery {
-	query := (&CostsheetClient{config: pq.config}).Query()
+func (_q *PriceQuery) QueryCostsheet() *CostsheetQuery {
+	query := (&CostsheetClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := pq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := pq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -79,20 +79,20 @@ func (pq *PriceQuery) QueryCostsheet() *CostsheetQuery {
 			sqlgraph.To(costsheet.Table, costsheet.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, price.CostsheetTable, price.CostsheetColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryPriceUnitEdge chains the current query on the "price_unit_edge" edge.
-func (pq *PriceQuery) QueryPriceUnitEdge() *PriceUnitQuery {
-	query := (&PriceUnitClient{config: pq.config}).Query()
+func (_q *PriceQuery) QueryPriceUnitEdge() *PriceUnitQuery {
+	query := (&PriceUnitClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := pq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := pq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (pq *PriceQuery) QueryPriceUnitEdge() *PriceUnitQuery {
 			sqlgraph.To(priceunit.Table, priceunit.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitEdgeTable, price.PriceUnitEdgeColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -109,8 +109,8 @@ func (pq *PriceQuery) QueryPriceUnitEdge() *PriceUnitQuery {
 
 // First returns the first Price entity from the query.
 // Returns a *NotFoundError when no Price was found.
-func (pq *PriceQuery) First(ctx context.Context) (*Price, error) {
-	nodes, err := pq.Limit(1).All(setContextOp(ctx, pq.ctx, ent.OpQueryFirst))
+func (_q *PriceQuery) First(ctx context.Context) (*Price, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (pq *PriceQuery) First(ctx context.Context) (*Price, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (pq *PriceQuery) FirstX(ctx context.Context) *Price {
-	node, err := pq.First(ctx)
+func (_q *PriceQuery) FirstX(ctx context.Context) *Price {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -131,9 +131,9 @@ func (pq *PriceQuery) FirstX(ctx context.Context) *Price {
 
 // FirstID returns the first Price ID from the query.
 // Returns a *NotFoundError when no Price ID was found.
-func (pq *PriceQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *PriceQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = pq.Limit(1).IDs(setContextOp(ctx, pq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -144,8 +144,8 @@ func (pq *PriceQuery) FirstID(ctx context.Context) (id string, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (pq *PriceQuery) FirstIDX(ctx context.Context) string {
-	id, err := pq.FirstID(ctx)
+func (_q *PriceQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -155,8 +155,8 @@ func (pq *PriceQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single Price entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one Price entity is found.
 // Returns a *NotFoundError when no Price entities are found.
-func (pq *PriceQuery) Only(ctx context.Context) (*Price, error) {
-	nodes, err := pq.Limit(2).All(setContextOp(ctx, pq.ctx, ent.OpQueryOnly))
+func (_q *PriceQuery) Only(ctx context.Context) (*Price, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +171,8 @@ func (pq *PriceQuery) Only(ctx context.Context) (*Price, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (pq *PriceQuery) OnlyX(ctx context.Context) *Price {
-	node, err := pq.Only(ctx)
+func (_q *PriceQuery) OnlyX(ctx context.Context) *Price {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -182,9 +182,9 @@ func (pq *PriceQuery) OnlyX(ctx context.Context) *Price {
 // OnlyID is like Only, but returns the only Price ID in the query.
 // Returns a *NotSingularError when more than one Price ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (pq *PriceQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *PriceQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = pq.Limit(2).IDs(setContextOp(ctx, pq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -199,8 +199,8 @@ func (pq *PriceQuery) OnlyID(ctx context.Context) (id string, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (pq *PriceQuery) OnlyIDX(ctx context.Context) string {
-	id, err := pq.OnlyID(ctx)
+func (_q *PriceQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -208,18 +208,18 @@ func (pq *PriceQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of Prices.
-func (pq *PriceQuery) All(ctx context.Context) ([]*Price, error) {
-	ctx = setContextOp(ctx, pq.ctx, ent.OpQueryAll)
-	if err := pq.prepareQuery(ctx); err != nil {
+func (_q *PriceQuery) All(ctx context.Context) ([]*Price, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*Price, *PriceQuery]()
-	return withInterceptors[[]*Price](ctx, pq, qr, pq.inters)
+	return withInterceptors[[]*Price](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (pq *PriceQuery) AllX(ctx context.Context) []*Price {
-	nodes, err := pq.All(ctx)
+func (_q *PriceQuery) AllX(ctx context.Context) []*Price {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -227,20 +227,20 @@ func (pq *PriceQuery) AllX(ctx context.Context) []*Price {
 }
 
 // IDs executes the query and returns a list of Price IDs.
-func (pq *PriceQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if pq.ctx.Unique == nil && pq.path != nil {
-		pq.Unique(true)
+func (_q *PriceQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, pq.ctx, ent.OpQueryIDs)
-	if err = pq.Select(price.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(price.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (pq *PriceQuery) IDsX(ctx context.Context) []string {
-	ids, err := pq.IDs(ctx)
+func (_q *PriceQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -248,17 +248,17 @@ func (pq *PriceQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (pq *PriceQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, pq.ctx, ent.OpQueryCount)
-	if err := pq.prepareQuery(ctx); err != nil {
+func (_q *PriceQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, pq, querierCount[*PriceQuery](), pq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*PriceQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (pq *PriceQuery) CountX(ctx context.Context) int {
-	count, err := pq.Count(ctx)
+func (_q *PriceQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -266,9 +266,9 @@ func (pq *PriceQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (pq *PriceQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, pq.ctx, ent.OpQueryExist)
-	switch _, err := pq.FirstID(ctx); {
+func (_q *PriceQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -279,8 +279,8 @@ func (pq *PriceQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (pq *PriceQuery) ExistX(ctx context.Context) bool {
-	exist, err := pq.Exist(ctx)
+func (_q *PriceQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -289,44 +289,44 @@ func (pq *PriceQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the PriceQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (pq *PriceQuery) Clone() *PriceQuery {
-	if pq == nil {
+func (_q *PriceQuery) Clone() *PriceQuery {
+	if _q == nil {
 		return nil
 	}
 	return &PriceQuery{
-		config:            pq.config,
-		ctx:               pq.ctx.Clone(),
-		order:             append([]price.OrderOption{}, pq.order...),
-		inters:            append([]Interceptor{}, pq.inters...),
-		predicates:        append([]predicate.Price{}, pq.predicates...),
-		withCostsheet:     pq.withCostsheet.Clone(),
-		withPriceUnitEdge: pq.withPriceUnitEdge.Clone(),
+		config:            _q.config,
+		ctx:               _q.ctx.Clone(),
+		order:             append([]price.OrderOption{}, _q.order...),
+		inters:            append([]Interceptor{}, _q.inters...),
+		predicates:        append([]predicate.Price{}, _q.predicates...),
+		withCostsheet:     _q.withCostsheet.Clone(),
+		withPriceUnitEdge: _q.withPriceUnitEdge.Clone(),
 		// clone intermediate query.
-		sql:  pq.sql.Clone(),
-		path: pq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithCostsheet tells the query-builder to eager-load the nodes that are connected to
 // the "costsheet" edge. The optional arguments are used to configure the query builder of the edge.
-func (pq *PriceQuery) WithCostsheet(opts ...func(*CostsheetQuery)) *PriceQuery {
-	query := (&CostsheetClient{config: pq.config}).Query()
+func (_q *PriceQuery) WithCostsheet(opts ...func(*CostsheetQuery)) *PriceQuery {
+	query := (&CostsheetClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	pq.withCostsheet = query
-	return pq
+	_q.withCostsheet = query
+	return _q
 }
 
 // WithPriceUnitEdge tells the query-builder to eager-load the nodes that are connected to
 // the "price_unit_edge" edge. The optional arguments are used to configure the query builder of the edge.
-func (pq *PriceQuery) WithPriceUnitEdge(opts ...func(*PriceUnitQuery)) *PriceQuery {
-	query := (&PriceUnitClient{config: pq.config}).Query()
+func (_q *PriceQuery) WithPriceUnitEdge(opts ...func(*PriceUnitQuery)) *PriceQuery {
+	query := (&PriceUnitClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	pq.withPriceUnitEdge = query
-	return pq
+	_q.withPriceUnitEdge = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -343,10 +343,10 @@ func (pq *PriceQuery) WithPriceUnitEdge(opts ...func(*PriceUnitQuery)) *PriceQue
 //		GroupBy(price.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (pq *PriceQuery) GroupBy(field string, fields ...string) *PriceGroupBy {
-	pq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &PriceGroupBy{build: pq}
-	grbuild.flds = &pq.ctx.Fields
+func (_q *PriceQuery) GroupBy(field string, fields ...string) *PriceGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &PriceGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = price.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -364,59 +364,59 @@ func (pq *PriceQuery) GroupBy(field string, fields ...string) *PriceGroupBy {
 //	client.Price.Query().
 //		Select(price.FieldTenantID).
 //		Scan(ctx, &v)
-func (pq *PriceQuery) Select(fields ...string) *PriceSelect {
-	pq.ctx.Fields = append(pq.ctx.Fields, fields...)
-	sbuild := &PriceSelect{PriceQuery: pq}
+func (_q *PriceQuery) Select(fields ...string) *PriceSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &PriceSelect{PriceQuery: _q}
 	sbuild.label = price.Label
-	sbuild.flds, sbuild.scan = &pq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a PriceSelect configured with the given aggregations.
-func (pq *PriceQuery) Aggregate(fns ...AggregateFunc) *PriceSelect {
-	return pq.Select().Aggregate(fns...)
+func (_q *PriceQuery) Aggregate(fns ...AggregateFunc) *PriceSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (pq *PriceQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range pq.inters {
+func (_q *PriceQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, pq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range pq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !price.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if pq.path != nil {
-		prev, err := pq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		pq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price, error) {
+func (_q *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price, error) {
 	var (
 		nodes       = []*Price{}
-		_spec       = pq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [2]bool{
-			pq.withCostsheet != nil,
-			pq.withPriceUnitEdge != nil,
+			_q.withCostsheet != nil,
+			_q.withPriceUnitEdge != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Price).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Price{config: pq.config}
+		node := &Price{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -424,21 +424,21 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, pq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := pq.withCostsheet; query != nil {
-		if err := pq.loadCostsheet(ctx, query, nodes,
+	if query := _q.withCostsheet; query != nil {
+		if err := _q.loadCostsheet(ctx, query, nodes,
 			func(n *Price) { n.Edges.Costsheet = []*Costsheet{} },
 			func(n *Price, e *Costsheet) { n.Edges.Costsheet = append(n.Edges.Costsheet, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := pq.withPriceUnitEdge; query != nil {
-		if err := pq.loadPriceUnitEdge(ctx, query, nodes, nil,
+	if query := _q.withPriceUnitEdge; query != nil {
+		if err := _q.loadPriceUnitEdge(ctx, query, nodes, nil,
 			func(n *Price, e *PriceUnit) { n.Edges.PriceUnitEdge = e }); err != nil {
 			return nil, err
 		}
@@ -446,7 +446,7 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 	return nodes, nil
 }
 
-func (pq *PriceQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, nodes []*Price, init func(*Price), assign func(*Price, *Costsheet)) error {
+func (_q *PriceQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, nodes []*Price, init func(*Price), assign func(*Price, *Costsheet)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Price)
 	for i := range nodes {
@@ -477,7 +477,7 @@ func (pq *PriceQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, 
 	}
 	return nil
 }
-func (pq *PriceQuery) loadPriceUnitEdge(ctx context.Context, query *PriceUnitQuery, nodes []*Price, init func(*Price), assign func(*Price, *PriceUnit)) error {
+func (_q *PriceQuery) loadPriceUnitEdge(ctx context.Context, query *PriceUnitQuery, nodes []*Price, init func(*Price), assign func(*Price, *PriceUnit)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Price)
 	for i := range nodes {
@@ -510,24 +510,24 @@ func (pq *PriceQuery) loadPriceUnitEdge(ctx context.Context, query *PriceUnitQue
 	return nil
 }
 
-func (pq *PriceQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := pq.querySpec()
-	_spec.Node.Columns = pq.ctx.Fields
-	if len(pq.ctx.Fields) > 0 {
-		_spec.Unique = pq.ctx.Unique != nil && *pq.ctx.Unique
+func (_q *PriceQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, pq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (pq *PriceQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *PriceQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(price.Table, price.Columns, sqlgraph.NewFieldSpec(price.FieldID, field.TypeString))
-	_spec.From = pq.sql
-	if unique := pq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if pq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := pq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, price.FieldID)
 		for i := range fields {
@@ -535,24 +535,24 @@ func (pq *PriceQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if pq.withPriceUnitEdge != nil {
+		if _q.withPriceUnitEdge != nil {
 			_spec.Node.AddColumnOnce(price.FieldPriceUnitID)
 		}
 	}
-	if ps := pq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := pq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := pq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := pq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -562,33 +562,33 @@ func (pq *PriceQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (pq *PriceQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(pq.driver.Dialect())
+func (_q *PriceQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(price.Table)
-	columns := pq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = price.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if pq.sql != nil {
-		selector = pq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if pq.ctx.Unique != nil && *pq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range pq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range pq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := pq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := pq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -601,41 +601,41 @@ type PriceGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (pgb *PriceGroupBy) Aggregate(fns ...AggregateFunc) *PriceGroupBy {
-	pgb.fns = append(pgb.fns, fns...)
-	return pgb
+func (_g *PriceGroupBy) Aggregate(fns ...AggregateFunc) *PriceGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (pgb *PriceGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, pgb.build.ctx, ent.OpQueryGroupBy)
-	if err := pgb.build.prepareQuery(ctx); err != nil {
+func (_g *PriceGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*PriceQuery, *PriceGroupBy](ctx, pgb.build, pgb, pgb.build.inters, v)
+	return scanWithInterceptors[*PriceQuery, *PriceGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (pgb *PriceGroupBy) sqlScan(ctx context.Context, root *PriceQuery, v any) error {
+func (_g *PriceGroupBy) sqlScan(ctx context.Context, root *PriceQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(pgb.fns))
-	for _, fn := range pgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*pgb.flds)+len(pgb.fns))
-		for _, f := range *pgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*pgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := pgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -649,27 +649,27 @@ type PriceSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (ps *PriceSelect) Aggregate(fns ...AggregateFunc) *PriceSelect {
-	ps.fns = append(ps.fns, fns...)
-	return ps
+func (_s *PriceSelect) Aggregate(fns ...AggregateFunc) *PriceSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (ps *PriceSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, ps.ctx, ent.OpQuerySelect)
-	if err := ps.prepareQuery(ctx); err != nil {
+func (_s *PriceSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*PriceQuery, *PriceSelect](ctx, ps.PriceQuery, ps, ps.inters, v)
+	return scanWithInterceptors[*PriceQuery, *PriceSelect](ctx, _s.PriceQuery, _s, _s.inters, v)
 }
 
-func (ps *PriceSelect) sqlScan(ctx context.Context, root *PriceQuery, v any) error {
+func (_s *PriceSelect) sqlScan(ctx context.Context, root *PriceQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(ps.fns))
-	for _, fn := range ps.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*ps.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -677,7 +677,7 @@ func (ps *PriceSelect) sqlScan(ctx context.Context, root *PriceQuery, v any) err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := ps.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
