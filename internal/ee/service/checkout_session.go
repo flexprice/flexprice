@@ -733,7 +733,12 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	// payment is minted, so the payment and the link it drives are in the billing currency. This is
 	// the single choke point every checkout flow passes through. A no-op when no conversion applies;
 	// a missing rate fails here, before anything is charged. Finalize later skips it (fx_conversion set).
-	if err := NewInvoiceService(s.ServiceParams).(*invoiceService).convertAndRetaxInvoice(ctx, inv); err != nil {
+	// Wrapped in a transaction so the line-item, header (currency+fx_conversion) and tax writes commit
+	// atomically — the fx_conversion idempotency guard is only sound if it is set together with the
+	// converted amounts, exactly as the finalize path does it.
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return NewInvoiceService(s.ServiceParams).(*invoiceService).convertAndRetaxInvoice(txCtx, inv)
+	}); err != nil {
 		return nil, err
 	}
 
