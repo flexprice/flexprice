@@ -45,13 +45,14 @@ func (s *invoiceService) rejectPrepaidCrossCurrencyOneOff(ctx context.Context, r
 		Mark(ierr.ErrValidation)
 }
 
-// convertAndRetaxAtFinalize runs the shared conversion step (§5.2 steps 4–6) for any invoice whose
-// customer has a billing currency that differs from the charge currency. It converts the invoice
-// once at a frozen rate and recomputes tax on the converted amounts. It is a no-op for invoices with
-// no billing currency, a matching currency, an already-set fx_conversion, a custom currency (handled
-// in a later PR), or a non-zero amount_paid (pay-first checkout, handled in a later PR). A missing
-// rate leaves the invoice DRAFT via an invalid-operation error so the finalize is not auto-retried.
-func (s *invoiceService) convertAndRetaxAtFinalize(ctx context.Context, inv *invoice.Invoice) error {
+// convertAndRetaxInvoice runs the shared conversion step (§5.2/§5.6) for any invoice whose customer
+// has a billing currency that differs from the charge currency. It converts the invoice once at a
+// frozen rate and recomputes tax on the converted amounts. It runs both at finalize and at checkout-
+// session creation (before the payment record is minted). It is a no-op for invoices with no billing
+// currency, a matching currency, an already-set fx_conversion, a custom currency (handled in a later
+// PR), or a non-zero amount_paid (already-paid invoice). A missing rate returns an invalid-operation
+// error naming the pair, so finalize leaves the invoice DRAFT and checkout session creation fails.
+func (s *invoiceService) convertAndRetaxInvoice(ctx context.Context, inv *invoice.Invoice) error {
 	if inv.FxConversion != nil {
 		return nil
 	}
@@ -84,12 +85,12 @@ func (s *invoiceService) convertAndRetaxAtFinalize(ctx context.Context, inv *inv
 		SubscriptionID: lo.FromPtr(inv.SubscriptionID),
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "cannot finalize invoice: no fx rate for conversion",
+		s.Logger.Error(ctx, "cannot convert invoice: no fx rate for the pair",
 			"error", err, "invoice_id", inv.ID, "from", inv.Currency, "to", billing)
 		// A fresh error, not a wrap: the resolver's not-found would otherwise also match and make
 		// the HTTP status non-deterministic. Invalid-operation keeps Temporal from retrying.
 		return ierr.NewErrorf("no exchange rate configured for %s to %s", inv.Currency, billing).
-			WithHintf("No exchange rate configured for %s to %s; set a rate, then finalize.", inv.Currency, billing).
+			WithHintf("No exchange rate configured for %s to %s; set a rate for the pair, then retry.", inv.Currency, billing).
 			WithReportableDetails(map[string]any{"from": inv.Currency, "to": billing}).
 			Mark(ierr.ErrInvalidOperation)
 	}

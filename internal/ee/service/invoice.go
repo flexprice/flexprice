@@ -1227,7 +1227,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		// when the customer has no billing currency or it matches the charge
 		// currency. A missing rate stops finalize and leaves the invoice DRAFT.
 		// ====================================================================
-		if err := s.convertAndRetaxAtFinalize(txCtx, lockedInv); err != nil {
+		if err := s.convertAndRetaxInvoice(txCtx, lockedInv); err != nil {
 			return err
 		}
 

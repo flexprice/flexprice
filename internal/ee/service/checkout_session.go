@@ -729,6 +729,14 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 			Mark(ierr.ErrValidation)
 	}
 
+	// Pay-first (§5.6): convert to the customer's billing currency and recompute tax before the
+	// payment is minted, so the payment and the link it drives are in the billing currency. This is
+	// the single choke point every checkout flow passes through. A no-op when no conversion applies;
+	// a missing rate fails here, before anything is charged. Finalize later skips it (fx_conversion set).
+	if err := NewInvoiceService(s.ServiceParams).(*invoiceService).convertAndRetaxInvoice(ctx, inv); err != nil {
+		return nil, err
+	}
+
 	paySvc := NewPaymentService(s.ServiceParams)
 	return paySvc.CreatePaymentForCheckout(ctx, &dto.CreateCheckoutPaymentRequest{
 		Invoice: inv,

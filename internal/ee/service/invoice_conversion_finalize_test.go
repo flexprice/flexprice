@@ -123,7 +123,7 @@ func (s *InvoiceConversionFinalizeSuite) TestOneOffConverts() {
 	inv := s.seedDraftInvoice("inv_oneoff", "cust_1", "usd", types.InvoiceTypeOneOff, nil,
 		[]*invoice.InvoiceLineItem{line("il_1", "60"), line("il_2", "40")})
 
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+	s.NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
 
 	s.Equal("inr", inv.Currency)
 	s.True(decimal.RequireFromString("8300").Equal(inv.Subtotal), "subtotal got %s", inv.Subtotal)
@@ -153,7 +153,7 @@ func (s *InvoiceConversionFinalizeSuite) TestMissingRateStaysDraft() {
 	inv := s.seedDraftInvoice("inv_norate", "cust_5", "usd", types.InvoiceTypeOneOff, nil,
 		[]*invoice.InvoiceLineItem{line("il_r1", "100")})
 
-	err := s.svc.convertAndRetaxAtFinalize(s.ctx(), inv)
+	err := s.svc.convertAndRetaxInvoice(s.ctx(), inv)
 	s.Error(err)
 	s.True(ierr.IsInvalidOperation(err), "missing rate must be an invalid-operation error, got %v", err)
 	// The resolver's not-found must not leak through: a double-marked error makes the HTTP status
@@ -205,7 +205,7 @@ func (s *InvoiceConversionFinalizeSuite) TestOneOffRetaxRewritesTaxAppliedInBill
 		BaseModel:      types.GetDefaultBaseModel(s.ctx()),
 	}))
 
-	s.Require().NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+	s.Require().NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
 
 	s.Equal("inr", inv.Currency)
 	s.True(decimal.RequireFromString("1494").Equal(inv.TotalTax), "18%% of 8300, got %s", inv.TotalTax)
@@ -227,13 +227,13 @@ func (s *InvoiceConversionFinalizeSuite) TestConvertOnceRetrySkips() {
 	inv := s.seedDraftInvoice("inv_once", "cust_6", "usd", types.InvoiceTypeOneOff, nil,
 		[]*invoice.InvoiceLineItem{line("il_o1", "100")})
 
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+	s.NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
 	s.Require().NotNil(inv.FxConversion)
 	firstRate := inv.FxConversion.Rate
 
 	// A second pass must be a no-op even if a different rate now exists.
 	s.seedTenantRate("inr", "usd", "0.5") // unrelated pair; the invoice is already inr
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+	s.NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
 	s.Equal("inr", inv.Currency)
 	s.True(firstRate.Equal(inv.FxConversion.Rate), "fx_conversion must not change on a second pass")
 }
@@ -245,7 +245,7 @@ func (s *InvoiceConversionFinalizeSuite) TestAmountPaidNonZeroNoOp() {
 		[]*invoice.InvoiceLineItem{line("il_p1", "100")})
 	inv.AmountPaid = decimal.RequireFromString("100")
 
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+	s.NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
 	s.Equal("usd", inv.Currency, "a paid invoice is not converted here (pay-first is a later PR)")
 	s.Nil(inv.FxConversion)
 }
@@ -490,7 +490,7 @@ func (s *InvoiceConversionFinalizeSuite) TestExistingCustomersUnaffected() {
 				[]*invoice.InvoiceLineItem{line("il_u1", "60"), line("il_u2", "40")})
 
 			svc, spy := s.newServiceWithFXSpy()
-			s.NoError(svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+			s.NoError(svc.convertAndRetaxInvoice(s.ctx(), inv))
 
 			s.Equal(0, spy.reads, "case %d: finalize must not query fx_rates", i)
 			s.Equal("usd", inv.Currency)
