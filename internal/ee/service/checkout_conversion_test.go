@@ -58,6 +58,32 @@ func (s *InvoiceConversionFinalizeSuite) TestCheckoutPaymentNoBillingCurrencyUna
 	s.Nil(got.FxConversion)
 }
 
+// TestFinalizeAfterCheckoutDoesNotReconvert proves the pay-first E2E invariant: after conversion at
+// session creation, the invoice carries fx_conversion (and amount_paid once paid), so the finalize
+// convert step is a no-op — no double conversion, amounts unchanged.
+func (s *InvoiceConversionFinalizeSuite) TestFinalizeAfterCheckoutDoesNotReconvert() {
+	s.seedCustomer("cust_pf", lo.ToPtr("inr"))
+	s.seedTenantRate("usd", "inr", "83")
+	inv := s.seedDraftInvoice("inv_pf", "cust_pf", "usd", types.InvoiceTypeOneOff, nil,
+		[]*invoice.InvoiceLineItem{line("il_pf", "100")})
+
+	// Checkout: convert + mint at session creation.
+	_, err := s.checkoutSvcForConversion().createCheckoutPayment(s.ctx(), inv, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+	s.Require().NotNil(inv.FxConversion)
+	rateBefore := inv.FxConversion.Rate
+	dueBefore := inv.AmountDue
+
+	// Customer has paid the INR link; a pay-first draft carries amount_paid before finalize.
+	inv.AmountPaid = inv.AmountDue
+
+	// The finalize convert step must be a no-op (fx_conversion already set — first gate, before amount_paid).
+	s.Require().NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
+	s.Equal("inr", inv.Currency)
+	s.True(rateBefore.Equal(inv.FxConversion.Rate), "rate must not change on the finalize pass")
+	s.True(dueBefore.Equal(inv.AmountDue), "amount_due must not change: want %s got %s", dueBefore, inv.AmountDue)
+}
+
 // TestCheckoutPaymentMissingRateFails: no rate ⇒ session/payment cannot proceed, nothing minted.
 func (s *InvoiceConversionFinalizeSuite) TestCheckoutPaymentMissingRateFails() {
 	s.seedCustomer("cust_co_norate", lo.ToPtr("inr"))
