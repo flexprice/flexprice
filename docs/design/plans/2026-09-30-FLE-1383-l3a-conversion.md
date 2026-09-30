@@ -68,9 +68,12 @@ A test proving finalize issues **no `fx_rates` query** and produces an identical
 
 ## Verification
 
-- `go test ./...` for touched packages + `make lint-ci` green.
-- `make migrate-local` applies the new columns on the shared volume.
-- Dockerized end-to-end: set a customer `billing_currency`, run a subscription invoice → finalize → assert INR amounts, `fx_conversion` snapshot, INR tax; a no-billing-currency customer → identical to today.
+- Unit: `go test ./...` for touched packages + `make lint-ci` green.
+- **Local stack (integration) via the `flexprice-local-stack` skill** (`.agents/skills/flexprice-local-stack/SKILL.md`) — bring the stack up on the **existing named volumes**; **never** `docker compose down -v`:
+  - `make app-up` (infra + services on saved volumes) → `make migrate-local` (apply the new columns) → `make app-rebuild-backend` (rebuild the Go image).
+  - To exercise **this branch's** code specifically, build the image from the worktree under the same `flexprice` project: `docker compose -p flexprice -f docker-compose.yml build flexprice-build`, then `docker compose -p flexprice -f docker-compose.yml up -d flexprice-api flexprice-consumer flexprice-worker`.
+  - Auth: `-H "x-api-key: sk_local_flexprice_test_key" -H "x-environment-id: 00000000-0000-0000-0000-000000000000"`.
+  - Flow: set a customer `billing_currency`, run a subscription invoice → finalize → assert INR amounts, the `fx_conversion` snapshot, and INR tax; a no-billing-currency customer → identical to today (the §1.5 invariant).
 
 ## Deferred to later layer-3 PRs
 
