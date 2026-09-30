@@ -62,7 +62,7 @@ flowchart TD
     G --> H[CreateDraftInvoiceForSubscription<br/>get or create, SUBSCRIPTION_CYCLE]
     H --> I[ComputeInvoice<br/>line items, coupons; totals net of<br/>TotalPrepaidCreditsApplied]
     I --> J[Usage charges from period start to expiry]
-    J --> K[ApplyExpiringCreditToInvoice<br/>amount = min credit left, usage to expiry after each<br/>line's discounts, unpaid; rounded down to cents]
+    J --> K[ApplyExpiringCreditToInvoice<br/>amount = min credit left, usage to expiry after discounts,<br/>unpaid; rounded down to cents]
     K --> L[Debit this credit: CREDIT_ADJUSTMENT<br/>update invoice totals, lines untouched]
     L --> M{Credit left and more periods?}
     M -- Yes --> G
@@ -89,7 +89,7 @@ flowchart TD
 |---|---|---|---|
 | Settings | `credit_expiry_settlement_config` | `internal/types/settings.go`, `internal/ee/service/settings.go` | Per-environment setting, off by default |
 | `ExpireCreditsActivity` | expired-credit cutoff | `internal/temporal/activities/cron/wallet_activities.go` | Setting on: `expiry <= now − 2h` (buffer for late events; usage is still capped at the expiry time). Off: unchanged (6h) |
-| `ExpireCreditsActivity` | `ExpireCredits` → `settleExpiringCredit` | `internal/ee/service/wallet.go`, new `credit_expiry.go` | Setting on: active prepaid wallets only; for each eligible subscription, earlier unfinalized cycle drafts then the current period's draft (created only if it has usage before the expiry); cap at usage before the expiry after each line's discounts (the line's own net / gross, as finalization prices it), rounded down to cents; apply, then expire the rest, in one transaction |
+| `ExpireCreditsActivity` | `ExpireCredits` → `settleExpiringCredit` | `internal/ee/service/wallet.go`, new `credit_expiry.go` | Setting on: active prepaid wallets only; for each eligible subscription, earlier unfinalized cycle drafts then the current period's draft (created only if it has usage before the expiry); cap at usage before the expiry after discounts, rounded down to cents; apply, then expire the rest, in one transaction |
 | `ExpireCredits` | `UsageChargesForWindow` | `internal/ee/service/billing_meter_usage.go` | Usage charges for `[period_start, expiry)` |
 | `ExpireCredits` | `GetOrComputeCurrentPeriodDraft`, `ListOpenCycleDrafts` | `internal/ee/service/invoice.go` | Get or create + compute the current draft (same key as the billing run); list earlier open cycle drafts |
 | `ExpireCredits` | **new** `ApplyExpiringCreditToInvoice` | `internal/ee/service/credit_adjustment.go` | Debit the specific credit with `ParentCreditTxID`, reason `CREDIT_ADJUSTMENT`, reference = invoice, idempotency key = invoice + credit. Add to `TotalPrepaidCreditsApplied` and recalculate totals. Lines untouched |
@@ -234,7 +234,6 @@ Order: the cancel/threshold hook first, plan change second.
 | Not `CreateComputedDraftInvoice`, not a one-off invoice | Compute ignores caller line items for subscription invoices, and a hand-built request risks a second draft for the period. One-off = separate invoice |
 | New `ApplyExpiringCreditToInvoice`, not `ApplyCreditsToInvoice` at expiry | `ApplyCreditsToInvoice` pools the whole wallet and checks eligibility against the period end, so it would skip the expiring credit and use purchased ones |
 | Invoice-level `TotalPrepaidCreditsApplied` is the only record on the draft; at finalization it's the first source in the credit pool | It survives recompute. Draft lines stay as compute builds them. At finalization the existing allocation puts every credit, settled at expiry or not, onto the lines, so lines always add up to the invoice total, and `CalculateCreditAdjustments` needs no change |
-| Usage before expiry priced with each line's own discounts | Finalization places credits per line at that line's net amount. A blended ratio across lines over- or under-applies when lines carry different line-level coupons; invoice-level coupons are already spread per line by `DistributeInvoiceLevelDiscount` |
 | Cap at usage up to the expiry, not the draft total | The job runs up to 15 minutes after expiry; the draft includes usage after it |
 | Retroactive price changes out of scope | Rare; handled today by void and regenerate |
 | Reuse the existing expiry workflow | New logic lives in `ExpireCredits`; schedule, workflow and activity stay. Per-credit timers (FLE-898) aren't needed for the fix |
@@ -315,6 +314,12 @@ stack, checking wallet, ledger and invoices at each step:
    credit's expiry fails in a run and the later one succeeds, the later one takes that usage and
    the earlier one applies nothing on retry. Needs a mid-run error; fix if seen: skip later credits
    of the same wallet after a failure in that run.
+9. **Accepted for v1: one discount ratio across usage lines.** Usage before expiry is scaled by
+   the draft's usage net / gross, blended across all usage lines. Exact for invoice-level coupons
+   and single usage price plans. When usage prices carry different line-level coupons it over- or
+   under-applies (a line with no discount next to a 100%-off line gets half its value). Fix if
+   needed: return per-price charges from `UsageChargesForWindow` and scale each by its price's own
+   net / gross, as finalization prices lines.
 
 ## Other bugs found along the way
 

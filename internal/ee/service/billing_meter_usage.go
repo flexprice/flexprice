@@ -56,9 +56,9 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 	return time.Now().UTC()
 }
 
-// UsageChargesForWindow returns sub's usage charge lines for [periodStart, until), priced for the
+// UsageChargesForWindow returns sub's usage charges for [periodStart, until), priced for the
 // period [periodStart, periodEnd).
-func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) ([]dto.CreateInvoiceLineItemRequest, error) {
+func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
 	usage, err := NewSubscriptionService(s.ServiceParams).GetMeterUsageForSubscription(ctx, sub, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      periodStart,
@@ -66,15 +66,15 @@ func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscri
 		Source:         string(types.UsageSourceWallet),
 	})
 	if err != nil {
-		return nil, err
+		return decimal.Zero, err
 	}
-	lines, _, err := s.CalculateMeterUsageCharges(
+	_, total, err := s.CalculateMeterUsageCharges(
 		ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet, &until,
 	)
 	if err != nil {
-		return nil, err
+		return decimal.Zero, err
 	}
-	return lines, nil
+	return total, nil
 }
 
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
