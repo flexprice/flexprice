@@ -2575,7 +2575,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	}
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		return s.debitExpiredCredits(ctx, tx, tx.CreditsAvailable)
+		return s.debitExpiredCredits(ctx, tx)
 	})
 	if err != nil {
 		return nil, err
@@ -2598,13 +2598,13 @@ func (s *walletService) EligibleCreditsAmount(ctx context.Context, w *wallet.Wal
 	return s.GetCurrencyAmountFromCredits(total, w.ConversionRate), nil
 }
 
-// debitExpiredCredits writes the CREDIT_EXPIRED debit for credits left on tx.
-func (s *walletService) debitExpiredCredits(ctx context.Context, tx *wallet.Transaction, credits decimal.Decimal) error {
+// debitExpiredCredits writes the CREDIT_EXPIRED debit for the credits left on tx.
+func (s *walletService) debitExpiredCredits(ctx context.Context, tx *wallet.Transaction) error {
 	return s.DebitWallet(ctx, &wallet.WalletOperation{
 		WalletID:          tx.WalletID,
 		ParentCreditTxID:  tx.ID,
 		Type:              types.TransactionTypeDebit,
-		CreditAmount:      credits,
+		CreditAmount:      tx.CreditsAvailable,
 		Description:       fmt.Sprintf("Credit expiry for transaction %s", tx.ID),
 		TransactionReason: types.TransactionReasonCreditExpired,
 		ReferenceType:     types.WalletTxReferenceTypeRequest,

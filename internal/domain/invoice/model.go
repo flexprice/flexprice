@@ -312,6 +312,14 @@ func (i *Invoice) DenominationCurrency() string {
 // the invoice from the database, where the amount fields hold fiat. Pair with
 // CaptureCustomCurrencyDenomination and ProjectCustomCurrency, which snapshot the result
 // and convert it exactly once.
+// DenominationPrepaidCreditsApplied returns the prepaid credits applied, in the denomination currency.
+func (i *Invoice) DenominationPrepaidCreditsApplied() decimal.Decimal {
+	if i.CustomCurrency != nil {
+		return i.CustomCurrency.TotalPrepaidCreditsApplied
+	}
+	return i.TotalPrepaidCreditsApplied
+}
+
 func (i *Invoice) RestoreFromDenomination() {
 	if i.CustomCurrency == nil {
 		return

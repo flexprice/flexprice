@@ -614,12 +614,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		computed = true
 
-		// Credits applied at expiry must survive recompute. Read them in the subscription's
-		// currency, which is the denomination for custom-currency invoices.
-		creditsAppliedToDraft := inv.TotalPrepaidCreditsApplied
-		if cc := inv.CustomCurrency; cc != nil {
-			creditsAppliedToDraft = cc.TotalPrepaidCreditsApplied
-		}
+		// Credits applied at expiry must survive recompute, read in the denomination.
+		creditsAppliedToDraft := inv.DenominationPrepaidCreditsApplied()
 
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {

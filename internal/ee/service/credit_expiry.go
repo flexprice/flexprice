@@ -54,8 +54,8 @@ func creditExpirySettlementEnabled(ctx context.Context, params ServiceParams) (b
 	return cfg.Enabled, nil
 }
 
-// settlementPlan is a draft invoice and the most it may take from an expiring credit.
-type settlementPlan struct {
+// draftAllocation is a draft invoice and the most it may take from an expiring credit.
+type draftAllocation struct {
 	invoiceID string
 	currency  string
 	periodEnd time.Time
@@ -77,7 +77,7 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 	}
 
 	expiry := lo.FromPtr(tx.ExpiryDate)
-	plans := make([]settlementPlan, 0, len(subs))
+	allocations := make([]draftAllocation, 0, len(subs))
 	for _, sub := range subs {
 		targets, err := s.settlementTargets(ctx, sub, expiry)
 		if err != nil {
@@ -85,10 +85,11 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 		}
 		for _, target := range targets {
 			draft := target.draft
-			// Usage is priced in the subscription's currency, so compare in the invoice's denomination.
-			alreadyApplied, unpaid := draft.TotalPrepaidCreditsApplied, draft.AmountRemaining
-			if cc := draft.CustomCurrency; cc != nil {
-				alreadyApplied, unpaid = cc.TotalPrepaidCreditsApplied, cc.AmountDue.Sub(cc.FromFiat(draft.AmountPaid))
+			// A payment recorded on the draft is left to finalization to reconcile.
+			if draft.AmountPaid.IsPositive() {
+				s.Logger.Info(ctx, "skipping expiry settlement on a draft with a recorded payment",
+					"invoice_id", draft.ID, "amount_paid", draft.AmountPaid)
+				continue
 			}
 			// Finalization places credits only on usage after discounts; never apply more than it can place.
 			gross, net := usageLineTotals(draft)
@@ -96,15 +97,15 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 			if gross.IsPositive() && net.LessThan(gross) {
 				beforeExpiry = beforeExpiry.Mul(net).Div(gross)
 			}
-			maxAmount := decimal.Min(decimal.Min(beforeExpiry, net).Sub(alreadyApplied), unpaid)
+			maxAmount := decimal.Min(beforeExpiry, net).Sub(draft.DenominationPrepaidCreditsApplied())
 			if !maxAmount.IsPositive() {
 				continue
 			}
-			plans = append(plans, settlementPlan{invoiceID: draft.ID, currency: draft.DenominationCurrency(), periodEnd: lo.FromPtr(draft.PeriodEnd), maxAmount: maxAmount})
+			allocations = append(allocations, draftAllocation{invoiceID: draft.ID, currency: draft.DenominationCurrency(), periodEnd: lo.FromPtr(draft.PeriodEnd), maxAmount: maxAmount})
 		}
 	}
 	// Oldest period first: that invoice finalizes first.
-	sort.SliceStable(plans, func(i, j int) bool { return plans[i].periodEnd.Before(plans[j].periodEnd) })
+	sort.SliceStable(allocations, func(i, j int) bool { return allocations[i].periodEnd.Before(allocations[j].periodEnd) })
 
 	applied := decimal.Zero
 	expired := false
@@ -120,18 +121,18 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 		}
 
 		remaining := current.CreditsAvailable
-		for _, plan := range plans {
+		for _, alloc := range allocations {
 			if !remaining.IsPositive() {
 				break
 			}
 			// Whole cents, rounded down so it never exceeds what finalization can place.
-			amount := decimal.Min(plan.maxAmount, s.GetCurrencyAmountFromCredits(remaining, w.ConversionRate)).
-				RoundFloor(types.GetCurrencyPrecision(plan.currency))
+			amount := decimal.Min(alloc.maxAmount, s.GetCurrencyAmountFromCredits(remaining, w.ConversionRate)).
+				RoundFloor(types.GetCurrencyPrecision(alloc.currency))
 			if !amount.IsPositive() {
 				continue
 			}
 			credits := s.GetCreditsFromCurrencyAmount(amount, w.ConversionRate)
-			placed, err := creditAdjustmentService.ApplyExpiringCreditToInvoice(ctx, plan.invoiceID, w, current, credits)
+			placed, err := creditAdjustmentService.ApplyExpiringCreditToInvoice(ctx, alloc.invoiceID, w, current, credits)
 			if err != nil {
 				return err
 			}
@@ -141,11 +142,16 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 			}
 		}
 
-		if !remaining.IsPositive() {
+		// Re-read: the applies above debited this credit.
+		left, err := s.WalletRepo.GetTransactionByID(ctx, tx.ID)
+		if err != nil {
+			return err
+		}
+		if !left.CreditsAvailable.IsPositive() {
 			return nil
 		}
 		expired = true
-		return s.debitExpiredCredits(ctx, current, remaining)
+		return s.debitExpiredCredits(ctx, left)
 	})
 	if err != nil {
 		return nil, err
