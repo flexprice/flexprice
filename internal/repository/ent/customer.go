@@ -330,7 +330,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Customer.Update().
+	update := client.Customer.Update().
 		Where(
 			customer.ID(c.ID),
 			customer.TenantID(c.TenantID),
@@ -340,7 +340,6 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetName(c.Name).
 		SetEmail(c.Email).
 		SetNillableContact(c.Contact).
-		SetNillableBillingCurrency(c.BillingCurrency).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
 		SetAddressCity(c.AddressCity).
@@ -351,8 +350,17 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// SetNillable is a no-op on nil, so it cannot clear a column. Callers load the customer before
+	// mutating, so a nil billing currency here means "clear it" — issue an explicit clear.
+	if c.BillingCurrency != nil {
+		update.SetBillingCurrency(*c.BillingCurrency)
+	} else {
+		update.ClearBillingCurrency()
+	}
+
+	_, err := update.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
