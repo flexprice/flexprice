@@ -114,7 +114,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25.12"
+          go-version: "1.27.1"
 
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.

@@ -30,9 +30,9 @@ if ! which typst >/dev/null; then
     if [ "$OS" = "Darwin" ]; then
         echo "Installing typst binary for Darwin"
         if [ "$ARCH" = "arm64" ]; then
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-aarch64-apple-darwin.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-apple-darwin.tar.xz -o typst.tar.xz
         else
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-x86_64-apple-darwin.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-apple-darwin.tar.xz -o typst.tar.xz
         fi
         create_local_bin_folder
         mkdir -p typst-darwin && tar -xf typst.tar.xz -C typst-darwin --strip-components=1 && mv typst-darwin/typst ~/.local/bin/ && rm -rf typst.tar.xz typst-darwin
@@ -41,13 +41,13 @@ if ! which typst >/dev/null; then
     elif [ "$OS" = "Linux" ]; then
         echo "Installing typst binary for Linux"
         if [ "$ARCH" = "aarch64" ]; then
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-aarch64-unknown-linux-musl.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-unknown-linux-musl.tar.xz -o typst.tar.xz
         elif [ "$ARCH" = "x86_64" ]; then
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-x86_64-unknown-linux-musl.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz -o typst.tar.xz
         elif [ "$ARCH" = "armv7" ]; then
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-armv7-unknown-linux-musleabi.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-armv7-unknown-linux-musleabi.tar.xz -o typst.tar.xz
         elif [ "$ARCH" = "riscv64" ]; then
-            curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-riscv64gc-unknown-linux-gnu.tar.xz -o typst.tar.xz
+            curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-riscv64gc-unknown-linux-gnu.tar.xz -o typst.tar.xz
         fi
         create_local_bin_folder
         mkdir -p typst-linux && tar -xf typst.tar.xz -C typst-linux --strip-components=1 && mv typst-linux/typst ~/.local/bin/ && rm -rf typst.tar.xz typst-linux
@@ -55,7 +55,7 @@ if ! which typst >/dev/null; then
         add_local_bin_to_path
     elif [ "$OS" = "CYGWIN" ] || [ "$OS" = "MINGW" ]; then
         echo "Installing typst binary for Windows"
-        curl -L https://github.com/typst/typst/releases/download/v0.13.1/typst-x86_64-pc-windows-msvc.zip -o typst.zip
+        curl -L https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-pc-windows-msvc.zip -o typst.zip
         create_local_bin_folder
         mkdir -p typst-windows && unzip typst.zip -d typst-windows && mv typst-windows/typst.exe ~/.local/bin/ && rm -rf typst.zip typst-windows
         chmod +x ~/.local/bin/typst.exe

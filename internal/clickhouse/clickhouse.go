@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ClickHouse/clickhouse-go/v2/lib/column"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -38,7 +37,7 @@ func NewClickHouseStore(config *config.Configuration, tracingService *tracing.Se
 // have a feel for the cost at scale.
 func (s *ClickHouseStore) GetConn() driver.Conn {
 	if s.tracing != nil && s.tracing.IsStorageSpansEnabled() {
-		return &tracedConn{conn: s.conn, tracing: s.tracing}
+		return &tracedConn{Conn: s.conn, tracing: s.tracing}
 	}
 	return s.conn
 }
@@ -62,26 +61,19 @@ func (s *ClickHouseStore) WithSpan(ctx context.Context, operation string, params
 	return newCtx, &tracing.SpanFinisher{Span: span}
 }
 
-// tracedConn is a wrapper around the ClickHouse Conn interface that adds tracing
+// tracedConn is a wrapper around the ClickHouse Conn interface that adds tracing.
+//
+// driver.Conn is embedded rather than implemented: the driver adds methods to it
+// in minor releases, which breaks any type that spells out every method.
 type tracedConn struct {
-	conn    driver.Conn
+	driver.Conn
 	tracing *tracing.Service
-}
-
-// Contributors delegates to the underlying connection
-func (tc *tracedConn) Contributors() []string {
-	return tc.conn.Contributors()
-}
-
-// ServerVersion delegates to the underlying connection
-func (tc *tracedConn) ServerVersion() (*driver.ServerVersion, error) {
-	return tc.conn.ServerVersion()
 }
 
 // Select adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args ...any) error {
 	if tc.tracing == nil {
-		return tc.conn.Select(ctx, dest, query, args...)
+		return tc.Conn.Select(ctx, dest, query, args...)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.select", map[string]interface{}{
@@ -90,7 +82,7 @@ func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args .
 	})
 	defer span.Finish()
 
-	err := tc.conn.Select(ctx, dest, query, args...)
+	err := tc.Conn.Select(ctx, dest, query, args...)
 	span.SetStatusError(err)
 	return err
 }
@@ -98,7 +90,7 @@ func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args .
 // Query adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (driver.Rows, error) {
 	if tc.tracing == nil {
-		return tc.conn.Query(ctx, query, args...)
+		return tc.Conn.Query(ctx, query, args...)
 	}
 
 	// Note: the span covers the query call, not consumption of the returned
@@ -109,7 +101,7 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 	})
 	defer span.Finish()
 
-	rows, err := tc.conn.Query(ctx, query, args...)
+	rows, err := tc.Conn.Query(ctx, query, args...)
 	span.SetStatusError(err)
 	return rows, err
 }
@@ -117,7 +109,7 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 // QueryRow adds tracing and delegates to the underlying connection
 func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) driver.Row {
 	if tc.tracing == nil {
-		return tc.conn.QueryRow(ctx, query, args...)
+		return tc.Conn.QueryRow(ctx, query, args...)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query_row", map[string]interface{}{
@@ -126,13 +118,13 @@ func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) d
 	})
 	defer span.Finish()
 
-	return tc.conn.QueryRow(ctx, query, args...)
+	return tc.Conn.QueryRow(ctx, query, args...)
 }
 
 // PrepareBatch adds tracing and delegates to the underlying connection
 func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ...driver.PrepareBatchOption) (driver.Batch, error) {
 	if tc.tracing == nil {
-		return tc.conn.PrepareBatch(ctx, query, options...)
+		return tc.Conn.PrepareBatch(ctx, query, options...)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
@@ -140,14 +132,14 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 	})
 	defer span.Finish()
 
-	batch, err := tc.conn.PrepareBatch(ctx, query, options...)
+	batch, err := tc.Conn.PrepareBatch(ctx, query, options...)
 	if err != nil {
 		span.SetStatusError(err)
 		return nil, err
 	}
 
 	return &tracedBatch{
-		batch:   batch,
+		Batch:   batch,
 		tracing: tc.tracing,
 		ctx:     ctx,
 	}, nil
@@ -156,7 +148,7 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 // Exec adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error {
 	if tc.tracing == nil {
-		return tc.conn.Exec(ctx, query, args...)
+		return tc.Conn.Exec(ctx, query, args...)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
@@ -165,7 +157,7 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 	})
 	defer span.Finish()
 
-	err := tc.conn.Exec(ctx, query, args...)
+	err := tc.Conn.Exec(ctx, query, args...)
 	span.SetStatusError(err)
 	return err
 }
@@ -173,7 +165,7 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 // AsyncInsert adds tracing and delegates to the underlying connection
 func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
 	if tc.tracing == nil {
-		return tc.conn.AsyncInsert(ctx, query, wait, args...)
+		return tc.Conn.AsyncInsert(ctx, query, wait, args...)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
@@ -182,7 +174,7 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 	})
 	defer span.Finish()
 
-	err := tc.conn.AsyncInsert(ctx, query, wait, args...)
+	err := tc.Conn.AsyncInsert(ctx, query, wait, args...)
 	span.SetStatusError(err)
 	return err
 }
@@ -190,58 +182,30 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 // Ping adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Ping(ctx context.Context) error {
 	if tc.tracing == nil {
-		return tc.conn.Ping(ctx)
+		return tc.Conn.Ping(ctx)
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.ping", nil)
 	defer span.Finish()
 
-	err := tc.conn.Ping(ctx)
+	err := tc.Conn.Ping(ctx)
 	span.SetStatusError(err)
 	return err
 }
 
-// Stats delegates to the underlying connection
-func (tc *tracedConn) Stats() driver.Stats {
-	return tc.conn.Stats()
-}
-
-// Close delegates to the underlying connection
-func (tc *tracedConn) Close() error {
-	return tc.conn.Close()
-}
-
-// tracedBatch is a wrapper around the ClickHouse Batch interface that adds tracing
+// tracedBatch is a wrapper around the ClickHouse Batch interface that adds tracing.
+//
+// driver.Batch is embedded for the same reason as driver.Conn in tracedConn.
 type tracedBatch struct {
-	batch   driver.Batch
+	driver.Batch
 	tracing *tracing.Service
 	ctx     context.Context // context captured at PrepareBatch time for child spans
-}
-
-// Append delegates to the underlying batch
-func (tb *tracedBatch) Append(v ...any) error {
-	return tb.batch.Append(v...)
-}
-
-// AppendStruct delegates to the underlying batch
-func (tb *tracedBatch) AppendStruct(v any) error {
-	return tb.batch.AppendStruct(v)
-}
-
-// Column delegates to the underlying batch
-func (tb *tracedBatch) Column(idx int) driver.BatchColumn {
-	return tb.batch.Column(idx)
-}
-
-// Abort delegates to the underlying batch
-func (tb *tracedBatch) Abort() error {
-	return tb.batch.Abort()
 }
 
 // Flush delegates to the underlying batch
 func (tb *tracedBatch) Flush() error {
 	if tb.tracing == nil {
-		return tb.batch.Flush()
+		return tb.Batch.Flush()
 	}
 
 	// Use the context captured at PrepareBatch time so the flush span is a
@@ -249,7 +213,7 @@ func (tb *tracedBatch) Flush() error {
 	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_flush", nil)
 	defer span.Finish()
 
-	err := tb.batch.Flush()
+	err := tb.Batch.Flush()
 	span.SetStatusError(err)
 	return err
 }
@@ -257,34 +221,19 @@ func (tb *tracedBatch) Flush() error {
 // Send adds tracing and delegates to the underlying batch
 func (tb *tracedBatch) Send() error {
 	if tb.tracing == nil {
-		return tb.batch.Send()
+		return tb.Batch.Send()
 	}
 
 	// Use the context captured at PrepareBatch time so the send span is a
 	// child of the originating request trace rather than a detached root span.
 	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_send", map[string]interface{}{
-		"rows": tb.batch.Rows(),
+		"rows": tb.Batch.Rows(),
 	})
 	defer span.Finish()
 
-	err := tb.batch.Send()
+	err := tb.Batch.Send()
 	span.SetStatusError(err)
 	return err
-}
-
-// IsSent delegates to the underlying batch
-func (tb *tracedBatch) IsSent() bool {
-	return tb.batch.IsSent()
-}
-
-// Columns delegates to the underlying batch
-func (tb *tracedBatch) Columns() []column.Interface {
-	return tb.batch.Columns()
-}
-
-// Rows delegates to the underlying batch
-func (tb *tracedBatch) Rows() int {
-	return tb.batch.Rows()
 }
 
 // truncateQuery limits query length to keep OTel span attributes small.

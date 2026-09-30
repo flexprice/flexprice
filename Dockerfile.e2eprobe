@@ -7,7 +7,7 @@
 # Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
 # Go version must be >= the `go` directive in go.mod or `go mod download`
 # hard-fails. Bump this whenever that directive moves.
-FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o e2eprobe cmd/e2eprobe/main.go
 
 # Final stage
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk --no-cache add ca-certificates tzdata && \
     addgroup -S app && adduser -S -G app app
 
