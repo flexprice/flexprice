@@ -67,7 +67,9 @@ func waitForServer(t *testing.T, addr string) {
 
 // An in-flight request shorter than the drain window must finish, not be severed.
 func TestAPIServerDrainsInFlightRequest(t *testing.T) {
+	entered := make(chan struct{})
 	lc, addr := newTestServer(t, 10*time.Second, func(c *gin.Context) {
+		close(entered)
 		time.Sleep(300 * time.Millisecond)
 		c.String(http.StatusOK, "completed")
 	})
@@ -94,8 +96,12 @@ func TestAPIServerDrainsInFlightRequest(t *testing.T) {
 		done <- result{status: resp.StatusCode, body: string(body), err: err}
 	}()
 
-	// Let the handler enter before shutdown begins.
-	time.Sleep(50 * time.Millisecond)
+	// Shutdown must not begin until the request is provably inside the handler.
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("request never reached the handler")
+	}
 
 	if err := lc.Stop(context.Background()); err != nil {
 		t.Fatalf("expected clean drain, got %v", err)
@@ -115,7 +121,9 @@ func TestAPIServerClosesConnectionsPastDrainDeadline(t *testing.T) {
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
 
+	entered := make(chan struct{})
 	lc, addr := newTestServer(t, 100*time.Millisecond, func(c *gin.Context) {
+		close(entered)
 		<-release
 		c.String(http.StatusOK, "never delivered")
 	})
@@ -134,7 +142,12 @@ func TestAPIServerClosesConnectionsPastDrainDeadline(t *testing.T) {
 		reqErr <- err
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	// The handler must be blocking before the drain deadline starts.
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("request never reached the handler")
+	}
 
 	stopped := make(chan error, 1)
 	go func() { stopped <- lc.Stop(context.Background()) }()
