@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -163,10 +162,6 @@ type walletService struct {
 	// Test seams. Defaulted in NewWalletService; Tests in package service may set them via type assertion.
 	computeBalanceTimeout  time.Duration
 	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
-
-	// Seams for credit expiry settlement; tests override them to avoid ClickHouse.
-	settlementDraftInvoice func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error)
-	settlementUsageCharges func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error)
 }
 
 // NewWalletService creates a new instance of WalletService
@@ -179,12 +174,6 @@ func NewWalletService(params ServiceParams) WalletService {
 	// Test seams. Production code must not override these.
 	s.computeBalanceTimeout = walletBalanceComputeTimeout
 	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
-	s.settlementDraftInvoice = func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {
-		return NewInvoiceService(s.ServiceParams).GetOrComputeCurrentPeriodDraft(ctx, sub)
-	}
-	s.settlementUsageCharges = func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
-		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, periodStart, periodEnd, until)
-	}
 	return s
 }
 

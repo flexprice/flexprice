@@ -230,14 +230,14 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 		return targets, nil
 	}
 	// Check usage first so no draft is created for a period with nothing to pay.
-	usage, err := s.settlementUsageCharges(ctx, sub, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, expiry)
+	usage, err := NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, expiry)
 	if err != nil {
 		return nil, err
 	}
 	if !usage.IsPositive() {
 		return targets, nil
 	}
-	draft, skipped, err := s.settlementDraftInvoice(ctx, sub)
+	draft, skipped, err := invoiceService.GetOrComputeCurrentPeriodDraft(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func usageLineTotals(draft *invoice.Invoice) (gross, net decimal.Decimal) {
 func (s *walletService) earlierDraftUsageBeforeExpiry(ctx context.Context, sub *subscription.Subscription, draft *invoice.Invoice, expiry time.Time) (decimal.Decimal, error) {
 	periodStart, periodEnd := lo.FromPtr(draft.PeriodStart), lo.FromPtr(draft.PeriodEnd)
 	if periodEnd.After(expiry) {
-		return s.settlementUsageCharges(ctx, sub, periodStart, periodEnd, expiry)
+		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, periodStart, periodEnd, expiry)
 	}
 
 	// The whole period is before the expiry: the computed draft's usage lines are that usage.
