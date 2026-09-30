@@ -195,10 +195,13 @@ api:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  # Give in-flight HTTP requests time to drain. Must be ≥ server read/write
-  # timeouts. preStop sleep gives the ingress/Service endpoints controller
-  # time to remove this pod from the load-balancer pool before the process exits.
-  terminationGracePeriodSeconds: 30
+  # Total budget for pod termination. The preStop sleep runs inside this window,
+  # not in addition to it, so the budget must cover preStop + the server's
+  # server.shutdown_timeout drain + dependency cleanup, or kubelet SIGKILLs
+  # mid-shutdown. 45 = 5 preStop + 25 drain + 15 slack.
+  # preStop gives the endpoints controller time to pull this pod from the
+  # load-balancer pool before the process stops accepting.
+  terminationGracePeriodSeconds: 45
   preStop:
     enabled: true
     sleepSeconds: 5
