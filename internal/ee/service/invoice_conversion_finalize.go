@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -11,6 +12,38 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+// rejectPrepaidCrossCurrencyOneOff blocks creating a one-off invoice pre-paid (payment_status or
+// amount_paid set) for a customer billed in a different currency: the invoice is issued in the
+// billing currency only at finalize, so a payment recorded at create would settle the wrong amount.
+// Today those fields are silently dropped; this makes it a loud error instead (§8.4).
+func (s *invoiceService) rejectPrepaidCrossCurrencyOneOff(ctx context.Context, req dto.CreateInvoiceRequest) error {
+	hasPayment := (req.AmountPaid != nil && !req.AmountPaid.IsZero()) ||
+		(req.PaymentStatus != nil && *req.PaymentStatus != types.PaymentStatusPending)
+	if !hasPayment {
+		return nil
+	}
+
+	cust, err := s.CustomerRepo.Get(ctx, req.CustomerID)
+	if err != nil {
+		return err
+	}
+	if cust.BillingCurrency == nil || *cust.BillingCurrency == "" {
+		return nil
+	}
+	if types.IsMatchingCurrency(*cust.BillingCurrency, req.Currency) {
+		return nil
+	}
+
+	return ierr.NewError("cannot create a pre-paid invoice for a cross-currency customer").
+		WithHintf("This customer is billed in %s; create the invoice without payment, then pay it once it is finalized in %s.",
+			strings.ToUpper(*cust.BillingCurrency), strings.ToUpper(*cust.BillingCurrency)).
+		WithReportableDetails(map[string]any{
+			"request_currency": req.Currency,
+			"billing_currency": *cust.BillingCurrency,
+		}).
+		Mark(ierr.ErrValidation)
+}
 
 // convertAndRetaxAtFinalize runs the shared conversion step (§5.2 steps 4–6) for any invoice whose
 // customer has a billing currency that differs from the charge currency. It converts the invoice
