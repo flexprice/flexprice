@@ -555,6 +555,12 @@ func (c *SubscriptionCreationConfig) Validate() error {
 	return nil
 }
 
+// InlineFXRate is the optional fx_rate block on subscription create — just the rate; the pair and
+// scope are derived from the subscription's currency and the customer's billing currency.
+type InlineFXRate struct {
+	Rate string `json:"rate" validate:"required"`
+}
+
 type CreateSubscriptionRequest struct {
 	// ID is pre-generated for internal use (e.g. Paddle mapping before write). Never from external JSON.
 	// TODO: Remove once plan-change integration carryover is handled generically.
@@ -564,11 +570,16 @@ type CreateSubscriptionRequest struct {
 	CustomerID         string `json:"customer_id"`
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	PlanID    string     `json:"plan_id" validate:"required"`
-	Currency  string     `json:"currency" validate:"required,len=3"`
-	LookupKey string     `json:"lookup_key"`
-	StartDate *time.Time `json:"start_date,omitempty"`
-	EndDate   *time.Time `json:"end_date,omitempty"`
+	PlanID    string `json:"plan_id" validate:"required"`
+	Currency  string `json:"currency" validate:"required,len=3"`
+	LookupKey string `json:"lookup_key"`
+
+	// FxRate optionally creates a subscription-scope FX rate for this subscription's currency to the
+	// invoicing customer's billing currency, in the same transaction. Rejected when there is nothing
+	// to convert or no tenant rate exists for the pair (§8.3).
+	FxRate    *InlineFXRate `json:"fx_rate,omitempty"`
+	StartDate *time.Time    `json:"start_date,omitempty"`
+	EndDate   *time.Time    `json:"end_date,omitempty"`
 
 	// TrialStart/TrialEnd are for internal integrations (e.g. Stripe sync); not accepted from public JSON.
 	TrialStart *time.Time `json:"-"`
