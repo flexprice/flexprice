@@ -29,6 +29,12 @@ metadata:
     # record stays valid. Without it the load balancer takes an ephemeral IP.
     kubernetes.io/ingress.global-static-ip-name: {{ . | quote }}
     {{- end }}
+    # With tls.mode=managed this must start as "true": Google validates a managed
+    # certificate over plain HTTP against the load balancer, so closing port 80
+    # before the load balancer is fully programmed prevents issuance. Provision
+    # with allowHttp: true, wait for the certificate to report Active, then set
+    # false in a second upgrade. tls.mode=certManager has no such constraint --
+    # DNS-01 never touches port 80, so false from the start is correct.
     kubernetes.io/ingress.allow-http: {{ .Values.gceIngress.allowHttp | quote }}
     networking.gke.io/v1beta1.FrontendConfig: {{ include "flexprice.gceIngressName" . }}
     {{- if eq .Values.gceIngress.tls.mode "managed" }}

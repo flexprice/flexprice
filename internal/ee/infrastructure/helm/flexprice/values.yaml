@@ -773,9 +773,23 @@ gceIngress:
 
   # Suffix for the object name: <fullname>-api-<nameSuffix>.
   nameSuffix: gce
-  # Pin the object name exactly, overriding nameSuffix. Set this to ADOPT
-  # objects already created out of band: Helm matches on name, so a mismatch
-  # creates a duplicate load balancer instead of taking ownership.
+  # Pin the object name exactly, overriding nameSuffix.
+  #
+  # Matching the name is NECESSARY but NOT SUFFICIENT to take over objects that
+  # already exist. Helm refuses to manage a resource it did not create:
+  #   Error: ... invalid ownership metadata; label validation error:
+  #   missing key "app.kubernetes.io/managed-by": must be set to "Helm"
+  # Objects created with kubectl carry no such metadata, so the upgrade FAILS
+  # rather than adopting them. Either:
+  #   a) label and annotate them first --
+  #        kubectl -n <ns> label <kind>/<name> app.kubernetes.io/managed-by=Helm
+  #        kubectl -n <ns> annotate <kind>/<name> \
+  #          meta.helm.sh/release-name=<release> meta.helm.sh/release-namespace=<ns>
+  #   b) or delete them and let the chart recreate -- which for an Ingress means
+  #      a new load balancer and ~12 minutes before it serves, so only do this
+  #      while DNS points elsewhere.
+  # A name MISMATCH is worse than either: the chart creates a SECOND load
+  # balancer and leaves the original orphaned.
   nameOverride: ""
 
   # Hostnames served. Defaults to the hosts under ingress.hosts, so the parallel
@@ -789,6 +803,12 @@ gceIngress:
 
   # false serves 443 only, matching an nginx setup with the HTTP listener
   # disabled. With DNS-01 certificate issuance nothing needs port 80.
+  #
+  # With tls.mode=managed this must start TRUE. Google validates a managed
+  # certificate over plain HTTP against the load balancer, so closing port 80
+  # before the load balancer is fully programmed prevents issuance. Deploy with
+  # true, wait for the certificate to report Active, then set false in a second
+  # upgrade. tls.mode=certManager has no such constraint.
   allowHttp: false
 
   annotations: {}

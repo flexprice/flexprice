@@ -835,10 +835,14 @@ One name is shared by the Ingress, its Service, BackendConfig and FrontendConfig
 because they are a single unit and a mismatch between them is the common failure
 (a BackendConfig the Service does not reference is silently ignored).
 
-Defaults to "<fullname>-api-gce". gceIngress.nameOverride pins it exactly, which
-is what lets the chart ADOPT objects already created out of band during a
-migration: Helm matches on name, so a mismatch creates a duplicate load balancer
-instead of taking ownership.
+Defaults to "<fullname>-api-gce". gceIngress.nameOverride pins it exactly.
+
+Matching an existing object's name is necessary but NOT sufficient to take it
+over: Helm rejects resources lacking its ownership metadata
+("missing key app.kubernetes.io/managed-by"), so objects created with kubectl
+must be labelled and annotated first or deleted. See the nameOverride comment in
+values.yaml. A name mismatch is worse than either -- it creates a SECOND load
+balancer and orphans the original.
 */}}
 {{- define "flexprice.gceIngressName" -}}
 {{- if .Values.gceIngress.nameOverride -}}
