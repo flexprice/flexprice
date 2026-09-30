@@ -57,6 +57,24 @@ func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+func (h *CreditNoteHandler) PreviewCreditNote(c *gin.Context) {
+	var req dto.CreateCreditNoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.creditNoteService.PreviewCreditNote(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // @Summary Get credit note
 // @ID getCreditNote
 // @Description Use when you need to load a single credit note (e.g. for display or reconciliation).

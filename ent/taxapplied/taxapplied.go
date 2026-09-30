@@ -49,6 +49,14 @@ const (
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldTaxBehavior holds the string denoting the tax_behavior field in the database.
 	FieldTaxBehavior = "tax_behavior"
+	// FieldProvider holds the string denoting the provider field in the database.
+	FieldProvider = "provider"
+	// FieldTaxTransactionID holds the string denoting the tax_transaction_id field in the database.
+	FieldTaxTransactionID = "tax_transaction_id"
+	// FieldTaxTransactionType holds the string denoting the tax_transaction_type field in the database.
+	FieldTaxTransactionType = "tax_transaction_type"
+	// FieldExternalTaxDetails holds the string denoting the external_tax_details field in the database.
+	FieldExternalTaxDetails = "external_tax_details"
 	// Table holds the table name of the taxapplied in the database.
 	Table = "tax_applieds"
 )
@@ -74,6 +82,10 @@ var Columns = []string{
 	FieldMetadata,
 	FieldIdempotencyKey,
 	FieldTaxBehavior,
+	FieldProvider,
+	FieldTaxTransactionID,
+	FieldTaxTransactionType,
+	FieldExternalTaxDetails,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -99,8 +111,6 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// TaxRateIDValidator is a validator for the "tax_rate_id" field. It is called by the builders before save.
-	TaxRateIDValidator func(string) error
 	// EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
 	EntityTypeValidator func(string) error
 	// EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
@@ -202,4 +212,19 @@ func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 // ByTaxBehavior orders the results by the tax_behavior field.
 func ByTaxBehavior(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTaxBehavior, opts...).ToFunc()
+}
+
+// ByProvider orders the results by the provider field.
+func ByProvider(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProvider, opts...).ToFunc()
+}
+
+// ByTaxTransactionID orders the results by the tax_transaction_id field.
+func ByTaxTransactionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxTransactionID, opts...).ToFunc()
+}
+
+// ByTaxTransactionType orders the results by the tax_transaction_type field.
+func ByTaxTransactionType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxTransactionType, opts...).ToFunc()
 }

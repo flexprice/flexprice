@@ -34,8 +34,8 @@ type TaxApplied struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// Reference to the TaxRate entity that was applied
-	TaxRateID string `json:"tax_rate_id,omitempty"`
+	// Reference to the TaxRate entity that was applied. Null for external engine rows
+	TaxRateID *string `json:"tax_rate_id,omitempty"`
 	// Type of entity this tax was applied to (invoice, subscription, etc.)
 	EntityType string `json:"entity_type,omitempty"`
 	// ID of the entity this tax was applied to
@@ -55,8 +55,16 @@ type TaxApplied struct {
 	// Idempotency key for the tax application
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// inclusive or exclusive, frozen at apply time
-	TaxBehavior  types.TaxBehavior `json:"tax_behavior,omitempty"`
-	selectValues sql.SelectValues
+	TaxBehavior types.TaxBehavior `json:"tax_behavior,omitempty"`
+	// Engine that produced this row. Null or empty means the native engine
+	Provider types.TaxProvider `json:"provider,omitempty"`
+	// Provider transaction recording the filed tax, stamped once at commit
+	TaxTransactionID *string `json:"tax_transaction_id,omitempty"`
+	// What the provider transaction did. Null or empty means a filing
+	TaxTransactionType types.TaxTransactionType `json:"tax_transaction_type,omitempty"`
+	// What the external engine returned about this tax. Null for native rows
+	ExternalTaxDetails *types.ExternalTaxDetails `json:"external_tax_details,omitempty"`
+	selectValues       sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -64,11 +72,11 @@ func (*TaxApplied) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case taxapplied.FieldMetadata:
+		case taxapplied.FieldMetadata, taxapplied.FieldExternalTaxDetails:
 			values[i] = new([]byte)
 		case taxapplied.FieldTaxableAmount, taxapplied.FieldTaxAmount:
 			values[i] = new(decimal.Decimal)
-		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency, taxapplied.FieldIdempotencyKey, taxapplied.FieldTaxBehavior:
+		case taxapplied.FieldID, taxapplied.FieldTenantID, taxapplied.FieldStatus, taxapplied.FieldCreatedBy, taxapplied.FieldUpdatedBy, taxapplied.FieldEnvironmentID, taxapplied.FieldTaxRateID, taxapplied.FieldEntityType, taxapplied.FieldEntityID, taxapplied.FieldTaxAssociationID, taxapplied.FieldCurrency, taxapplied.FieldIdempotencyKey, taxapplied.FieldTaxBehavior, taxapplied.FieldProvider, taxapplied.FieldTaxTransactionID, taxapplied.FieldTaxTransactionType:
 			values[i] = new(sql.NullString)
 		case taxapplied.FieldCreatedAt, taxapplied.FieldUpdatedAt, taxapplied.FieldAppliedAt:
 			values[i] = new(sql.NullTime)
@@ -139,7 +147,8 @@ func (ta *TaxApplied) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_rate_id", values[i])
 			} else if value.Valid {
-				ta.TaxRateID = value.String
+				ta.TaxRateID = new(string)
+				*ta.TaxRateID = value.String
 			}
 		case taxapplied.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -205,6 +214,33 @@ func (ta *TaxApplied) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ta.TaxBehavior = types.TaxBehavior(value.String)
 			}
+		case taxapplied.FieldProvider:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field provider", values[i])
+			} else if value.Valid {
+				ta.Provider = types.TaxProvider(value.String)
+			}
+		case taxapplied.FieldTaxTransactionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_transaction_id", values[i])
+			} else if value.Valid {
+				ta.TaxTransactionID = new(string)
+				*ta.TaxTransactionID = value.String
+			}
+		case taxapplied.FieldTaxTransactionType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_transaction_type", values[i])
+			} else if value.Valid {
+				ta.TaxTransactionType = types.TaxTransactionType(value.String)
+			}
+		case taxapplied.FieldExternalTaxDetails:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field external_tax_details", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &ta.ExternalTaxDetails); err != nil {
+					return fmt.Errorf("unmarshal field external_tax_details: %w", err)
+				}
+			}
 		default:
 			ta.selectValues.Set(columns[i], values[i])
 		}
@@ -262,8 +298,10 @@ func (ta *TaxApplied) String() string {
 	builder.WriteString("environment_id=")
 	builder.WriteString(ta.EnvironmentID)
 	builder.WriteString(", ")
-	builder.WriteString("tax_rate_id=")
-	builder.WriteString(ta.TaxRateID)
+	if v := ta.TaxRateID; v != nil {
+		builder.WriteString("tax_rate_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
 	builder.WriteString(ta.EntityType)
@@ -298,6 +336,20 @@ func (ta *TaxApplied) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tax_behavior=")
 	builder.WriteString(fmt.Sprintf("%v", ta.TaxBehavior))
+	builder.WriteString(", ")
+	builder.WriteString("provider=")
+	builder.WriteString(fmt.Sprintf("%v", ta.Provider))
+	builder.WriteString(", ")
+	if v := ta.TaxTransactionID; v != nil {
+		builder.WriteString("tax_transaction_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("tax_transaction_type=")
+	builder.WriteString(fmt.Sprintf("%v", ta.TaxTransactionType))
+	builder.WriteString(", ")
+	builder.WriteString("external_tax_details=")
+	builder.WriteString(fmt.Sprintf("%v", ta.ExternalTaxDetails))
 	builder.WriteByte(')')
 	return builder.String()
 }

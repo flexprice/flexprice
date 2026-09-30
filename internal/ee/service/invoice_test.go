@@ -3205,7 +3205,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesReturnsTaxSummary() {
 	applied := []*taxapplied.TaxApplied{
 		{
 			ID:            "taxapp_inc",
-			TaxRateID:     "taxrate_inc",
+			TaxRateID:     lo.ToPtr("taxrate_inc"),
 			EntityType:    types.TaxRateEntityTypeInvoice,
 			EntityID:      taxed.ID,
 			TaxableAmount: decimal.NewFromInt(100),
@@ -3216,7 +3216,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesReturnsTaxSummary() {
 		},
 		{
 			ID:            "taxapp_exc",
-			TaxRateID:     "taxrate_exc",
+			TaxRateID:     lo.ToPtr("taxrate_exc"),
 			EntityType:    types.TaxRateEntityTypeInvoice,
 			EntityID:      taxed.ID,
 			TaxableAmount: decimal.NewFromInt(100),
@@ -3279,7 +3279,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesTaxSummaryIsPerInvoice() {
 		for r := 0; r <= i; r++ {
 			s.NoError(s.GetStores().TaxAppliedRepo.Create(ctx, &taxapplied.TaxApplied{
 				ID:            fmt.Sprintf("taxapp_per_%02d_%02d", i, r),
-				TaxRateID:     fmt.Sprintf("taxrate_%02d", r),
+				TaxRateID:     lo.ToPtr(fmt.Sprintf("taxrate_%02d", r)),
 				EntityType:    types.TaxRateEntityTypeInvoice,
 				EntityID:      id,
 				TaxableAmount: decimal.NewFromInt(100),

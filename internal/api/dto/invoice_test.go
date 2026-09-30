@@ -62,6 +62,14 @@ func taxRow(behavior types.TaxBehavior, amount string) *TaxAppliedResponse {
 	}}
 }
 
+// reversalRow is what a voided invoice leaves behind: it records tax being un-filed, carries no
+// amounts and no behavior, and is not a tax the invoice charges.
+func reversalRow() *TaxAppliedResponse {
+	return &TaxAppliedResponse{TaxApplied: taxapplied.TaxApplied{
+		TaxTransactionType: types.TaxTransactionTypeReversal,
+	}}
+}
+
 func TestBuildTaxSummary(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -137,13 +145,22 @@ func TestBuildTaxSummary(t *testing.T) {
 			why:        "same zeroed shape as the exempt case, different reason — the two must never be confused",
 		},
 		{
-			name:          "a reason code wins over whatever rows were passed",
-			taxes:         []*TaxAppliedResponse{taxRow(types.TaxBehaviorExclusive, "10.00")},
-			reasonCode:    lo.ToPtr(types.TaxExemptionReasonCustomerExempt),
-			wantInclusive: "0", wantExclusive: "0", wantTotal: "0",
-			wantReason: lo.ToPtr(types.TaxExemptionReasonCustomerExempt),
-			wantLabel:  "Customer is tax exempt",
-			why:        "the reason code is the authority on whether anything was charged, not the row count",
+			name:          "reverse charged in one jurisdiction and taxed in another",
+			taxes:         []*TaxAppliedResponse{taxRow(types.TaxBehaviorExclusive, "27.00")},
+			reasonCode:    lo.ToPtr(types.TaxExemptionReasonReverseCharge),
+			wantInclusive: "0", wantExclusive: "27", wantTotal: "27",
+			wantReason: lo.ToPtr(types.TaxExemptionReasonReverseCharge),
+			wantLabel:  types.TaxExemptionReasonReverseCharge.DisplayLabel(),
+			why:        "a reason does not mean nothing was charged, and zeroing the total would hide tax the customer owes",
+		},
+		{
+			name: "a reversal row is not a tax the invoice charges",
+			taxes: []*TaxAppliedResponse{
+				taxRow(types.TaxBehaviorExclusive, "27.00"),
+				reversalRow(),
+			},
+			wantInclusive: "0", wantExclusive: "27", wantTotal: "27",
+			why: "it records tax being un-filed after a void, so counting it would report the invoice as untaxed",
 		},
 	}
 

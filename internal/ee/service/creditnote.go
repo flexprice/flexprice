@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
@@ -24,6 +25,10 @@ import (
 
 type CreditNoteService interface {
 	CreateCreditNote(ctx context.Context, req *dto.CreateCreditNoteRequest) (*dto.CreditNoteResponse, error)
+
+	// PreviewCreditNote quotes what a credit note would come to, tax included, without writing
+	// anything. Safe to call on every change the tenant makes.
+	PreviewCreditNote(ctx context.Context, req *dto.CreateCreditNoteRequest) (*dto.CreditNotePreviewResponse, error)
 	GetCreditNote(ctx context.Context, id string) (*dto.CreditNoteResponse, error)
 	ListCreditNotes(ctx context.Context, filter *types.CreditNoteFilter) (*dto.ListCreditNotesResponse, error)
 
@@ -60,6 +65,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 
 	var creditNote *creditnote.CreditNote
 	isNewCreditNote := false
+	taxService := NewTaxService(s.ServiceParams)
 
 	// Start transaction
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
@@ -119,8 +125,11 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			req.CreditNoteNumber = types.GenerateShortIDWithPrefix(types.SHORT_ID_PREFIX_CREDIT_NOTE)
 		}
 
-		// Convert request to domain model
-		cn := req.ToCreditNote(tx, inv)
+		// The same steps the preview endpoint runs, held in memory.
+		cn, taxResult, err := s.buildCreditNoteWithTax(tx, req, inv)
+		if err != nil {
+			return err
+		}
 
 		// Set correct credit note type and status
 		cn.CreditNoteType = creditNoteType
@@ -130,6 +139,13 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 
 		// Create credit note with line items in a single transaction
 		if err := s.CreditNoteRepo.CreateWithLineItems(tx, cn); err != nil {
+			return err
+		}
+
+		// Persisting what the preview calculated is what makes a draft credit note carry the
+		// breakdown behind its total, and finalize files against these rows rather than asking
+		// the engine again.
+		if err := taxService.PersistTaxResult(tx, types.TaxRateEntityTypeCreditNote, cn.ID, cn.Currency, taxResult); err != nil {
 			return err
 		}
 
@@ -178,6 +194,118 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	return &dto.CreditNoteResponse{
 		CreditNote: updatedCreditNote,
 	}, nil
+}
+
+// PreviewCreditNote answers what the customer would get back, writing nothing. It runs the same
+// validation and the same calculation the real thing does, so what is shown is what would be
+// issued. Called only by the preview handler; CreateCreditNote runs the same steps itself and
+// then persists them.
+func (s *creditNoteService) PreviewCreditNote(ctx context.Context, req *dto.CreateCreditNoteRequest) (*dto.CreditNotePreviewResponse, error) {
+	// A reason is required to issue a credit note but has no bearing on what it is taxed at,
+	// and the dashboard quotes the figure while the tenant is still filling the form in. So
+	// only what the quote actually depends on is checked here.
+	if req.InvoiceID == "" {
+		return nil, ierr.NewError("invoice_id is required").
+			WithHint("Please provide the invoice to credit").
+			Mark(ierr.ErrValidation)
+	}
+	if len(req.LineItems) == 0 {
+		return nil, ierr.NewError("line_items is required").
+			WithHint("Please provide at least one line item").
+			Mark(ierr.ErrValidation)
+	}
+	for _, lineItem := range req.LineItems {
+		if err := lineItem.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.ValidateCreditNoteCreation(ctx, req); err != nil {
+		return nil, err
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	creditNoteType, err := s.getCreditNoteType(inv)
+	if err != nil {
+		return nil, err
+	}
+
+	cn, taxResult, err := s.buildCreditNoteWithTax(ctx, req, inv)
+	if err != nil {
+		return nil, err
+	}
+
+	preview := &dto.CreditNotePreviewResponse{
+		Subtotal:       cn.TotalAmount.Sub(taxResult.TotalTaxAmount),
+		TotalTax:       taxResult.TotalTaxAmount,
+		TotalAmount:    cn.TotalAmount,
+		Currency:       cn.Currency,
+		CreditNoteType: creditNoteType,
+		Taxes:          taxResult.TaxAppliedRecords,
+	}
+
+	return preview, nil
+}
+
+// buildCreditNoteWithTax builds the credit note a request would produce and asks the engine
+// what it is taxed at, holding both in memory. Nothing is written, which is what lets
+// PreviewCreditNote run it on every keystroke and lets CreateCreditNote run the identical step
+// and then persist what came back.
+//
+// The total comes back gross. The money going back includes the tax the customer paid on it,
+// total_amount is immutable, so the gross has to be settled before the row is written and the
+// reversal undoes exactly this figure.
+func (s *creditNoteService) buildCreditNoteWithTax(ctx context.Context, req *dto.CreateCreditNoteRequest, inv *invoice.Invoice) (*creditnote.CreditNote, *dto.TaxCalculationResult, error) {
+	cn := req.ToCreditNote(ctx, inv)
+
+	engine, err := NewTaxEngine(ctx, s.ServiceParams)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	taxResult, err := engine.Calculate(ctx, dto.TaxCalculationRequest{
+		EntityType: types.TaxRateEntityTypeCreditNote,
+		EntityID:   cn.ID,
+		CustomerID: cn.CustomerID,
+		Currency:   cn.Currency,
+		Amount:     cn.TotalAmount,
+		Reference:  creditNoteTaxReference(cn),
+	})
+	if err != nil {
+		// No fallback to an untaxed credit note. Returning less than the customer paid is a
+		// wrong document that looks right.
+		s.Logger.Error(ctx, "tax engine could not price the credit note",
+			"error", err,
+			"credit_note_id", cn.ID,
+			"invoice_id", cn.InvoiceID,
+			"provider", engine.GetProvider())
+		return nil, nil, err
+	}
+
+	cn.TotalAmount = taxResult.AmountTotal
+
+	// A credit note's tax is only ever filed as a reversal of the invoice's, so its rows carry
+	// that from the moment they are calculated.
+	for _, record := range taxResult.TaxAppliedRecords {
+		record.TaxApplied.TaxTransactionType = types.TaxTransactionTypeReversal
+	}
+
+	return cn, taxResult, nil
+}
+
+// creditNoteTaxReference is what the engine files a credit note's reversal under. The credit
+// note's idempotency key is used rather than its id: it is a hash of the request, so a retry
+// after a failed write sends the identical reference and the provider refuses the duplicate
+// instead of reversing twice. It also contains no cn_, which the provider reserves.
+func creditNoteTaxReference(cn *creditnote.CreditNote) string {
+	if key := lo.FromPtr(cn.IdempotencyKey); key != "" {
+		return key
+	}
+	return strings.TrimPrefix(cn.ID, types.UUID_PREFIX_CREDIT_NOTE+"_")
 }
 
 // generateCreditNoteIdempotencyKey hashes stable request content only;
@@ -439,6 +567,33 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 			Mark(ierr.ErrValidation)
 	}
 
+	// Tax already returned to the authority cannot be un-returned: the provider offers no way
+	// to reverse a reversal, and filing a second correction would credit the tax twice.
+	if cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
+		filter := types.NewNoLimitTaxAppliedFilter()
+		filter.EntityType = types.TaxRateEntityTypeCreditNote
+		filter.EntityID = cn.ID
+
+		rows, err := s.TaxAppliedRepo.List(ctx, filter)
+		if err != nil {
+			return err
+		}
+
+		// A reversal row carrying a provider transaction is what says the reversal landed.
+		reversed := lo.ContainsBy(rows, func(applied *taxapplied.TaxApplied) bool {
+			return applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) != ""
+		})
+		if reversed {
+			return ierr.NewError("cannot void a credit note whose tax was reversed").
+				WithHint("The tax on this credit note has already been returned with the tax provider, and that cannot be undone. Issue a new invoice instead.").
+				WithReportableDetails(map[string]any{
+					"credit_note_id": cn.ID,
+					"invoice_id":     cn.InvoiceID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	var originalStatus types.CreditNoteStatus
 
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
@@ -611,6 +766,27 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string, r
 
 		// Same tx as the refund rows above, so both commit/roll back together.
 		if err := s.RecalculateInvoiceAmountsForCreditNote(tx, lockedInv, cn); err != nil {
+			return err
+		}
+
+		// The money going back includes tax the tenant already filed, so that part of the
+		// invoice's transaction is undone here, against the rows written when the credit note
+		// was created. Inside this transaction and returning its error: a provider that refuses
+		// rolls the whole finalize back rather than leaving a credit note issued with its tax
+		// still filed.
+		taxService := NewTaxService(s.ServiceParams)
+		if err := taxService.ReverseTaxOnProvider(tx, dto.TaxReversalRequest{
+			EntityType: types.TaxRateEntityTypeCreditNote,
+			EntityID:   cn.ID,
+			// The credit note carries the invoice it credits, and that invoice's rows carry
+			// the transaction being undone.
+			InvoiceID: cn.InvoiceID,
+			Mode:      types.TaxReversalModePartial,
+			Reference: creditNoteTaxReference(cn),
+			// The gross figure going back, tax included. The engine splits it itself.
+			Amount:   cn.TotalAmount,
+			Currency: cn.Currency,
+		}); err != nil {
 			return err
 		}
 

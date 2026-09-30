@@ -170,6 +170,78 @@ func (tau *TaxAppliedUpdate) ClearTaxBehavior() *TaxAppliedUpdate {
 	return tau
 }
 
+// SetProvider sets the "provider" field.
+func (tau *TaxAppliedUpdate) SetProvider(tp types.TaxProvider) *TaxAppliedUpdate {
+	tau.mutation.SetProvider(tp)
+	return tau
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableProvider(tp *types.TaxProvider) *TaxAppliedUpdate {
+	if tp != nil {
+		tau.SetProvider(*tp)
+	}
+	return tau
+}
+
+// ClearProvider clears the value of the "provider" field.
+func (tau *TaxAppliedUpdate) ClearProvider() *TaxAppliedUpdate {
+	tau.mutation.ClearProvider()
+	return tau
+}
+
+// SetTaxTransactionID sets the "tax_transaction_id" field.
+func (tau *TaxAppliedUpdate) SetTaxTransactionID(s string) *TaxAppliedUpdate {
+	tau.mutation.SetTaxTransactionID(s)
+	return tau
+}
+
+// SetNillableTaxTransactionID sets the "tax_transaction_id" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableTaxTransactionID(s *string) *TaxAppliedUpdate {
+	if s != nil {
+		tau.SetTaxTransactionID(*s)
+	}
+	return tau
+}
+
+// ClearTaxTransactionID clears the value of the "tax_transaction_id" field.
+func (tau *TaxAppliedUpdate) ClearTaxTransactionID() *TaxAppliedUpdate {
+	tau.mutation.ClearTaxTransactionID()
+	return tau
+}
+
+// SetTaxTransactionType sets the "tax_transaction_type" field.
+func (tau *TaxAppliedUpdate) SetTaxTransactionType(ttt types.TaxTransactionType) *TaxAppliedUpdate {
+	tau.mutation.SetTaxTransactionType(ttt)
+	return tau
+}
+
+// SetNillableTaxTransactionType sets the "tax_transaction_type" field if the given value is not nil.
+func (tau *TaxAppliedUpdate) SetNillableTaxTransactionType(ttt *types.TaxTransactionType) *TaxAppliedUpdate {
+	if ttt != nil {
+		tau.SetTaxTransactionType(*ttt)
+	}
+	return tau
+}
+
+// ClearTaxTransactionType clears the value of the "tax_transaction_type" field.
+func (tau *TaxAppliedUpdate) ClearTaxTransactionType() *TaxAppliedUpdate {
+	tau.mutation.ClearTaxTransactionType()
+	return tau
+}
+
+// SetExternalTaxDetails sets the "external_tax_details" field.
+func (tau *TaxAppliedUpdate) SetExternalTaxDetails(ttd *types.ExternalTaxDetails) *TaxAppliedUpdate {
+	tau.mutation.SetExternalTaxDetails(ttd)
+	return tau
+}
+
+// ClearExternalTaxDetails clears the value of the "external_tax_details" field.
+func (tau *TaxAppliedUpdate) ClearExternalTaxDetails() *TaxAppliedUpdate {
+	tau.mutation.ClearExternalTaxDetails()
+	return tau
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tau *TaxAppliedUpdate) Mutation() *TaxAppliedMutation {
 	return tau.mutation
@@ -238,6 +310,9 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if tau.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
 	}
+	if tau.mutation.TaxRateIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxRateID, field.TypeString)
+	}
 	if value, ok := tau.mutation.TaxAssociationID(); ok {
 		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
 	}
@@ -267,6 +342,30 @@ func (tau *TaxAppliedUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tau.mutation.TaxBehaviorCleared() {
 		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
+	}
+	if value, ok := tau.mutation.Provider(); ok {
+		_spec.SetField(taxapplied.FieldProvider, field.TypeString, value)
+	}
+	if tau.mutation.ProviderCleared() {
+		_spec.ClearField(taxapplied.FieldProvider, field.TypeString)
+	}
+	if value, ok := tau.mutation.TaxTransactionID(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionID, field.TypeString, value)
+	}
+	if tau.mutation.TaxTransactionIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxTransactionID, field.TypeString)
+	}
+	if value, ok := tau.mutation.TaxTransactionType(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionType, field.TypeString, value)
+	}
+	if tau.mutation.TaxTransactionTypeCleared() {
+		_spec.ClearField(taxapplied.FieldTaxTransactionType, field.TypeString)
+	}
+	if value, ok := tau.mutation.ExternalTaxDetails(); ok {
+		_spec.SetField(taxapplied.FieldExternalTaxDetails, field.TypeJSON, value)
+	}
+	if tau.mutation.ExternalTaxDetailsCleared() {
+		_spec.ClearField(taxapplied.FieldExternalTaxDetails, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -428,6 +527,78 @@ func (tauo *TaxAppliedUpdateOne) ClearTaxBehavior() *TaxAppliedUpdateOne {
 	return tauo
 }
 
+// SetProvider sets the "provider" field.
+func (tauo *TaxAppliedUpdateOne) SetProvider(tp types.TaxProvider) *TaxAppliedUpdateOne {
+	tauo.mutation.SetProvider(tp)
+	return tauo
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableProvider(tp *types.TaxProvider) *TaxAppliedUpdateOne {
+	if tp != nil {
+		tauo.SetProvider(*tp)
+	}
+	return tauo
+}
+
+// ClearProvider clears the value of the "provider" field.
+func (tauo *TaxAppliedUpdateOne) ClearProvider() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearProvider()
+	return tauo
+}
+
+// SetTaxTransactionID sets the "tax_transaction_id" field.
+func (tauo *TaxAppliedUpdateOne) SetTaxTransactionID(s string) *TaxAppliedUpdateOne {
+	tauo.mutation.SetTaxTransactionID(s)
+	return tauo
+}
+
+// SetNillableTaxTransactionID sets the "tax_transaction_id" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableTaxTransactionID(s *string) *TaxAppliedUpdateOne {
+	if s != nil {
+		tauo.SetTaxTransactionID(*s)
+	}
+	return tauo
+}
+
+// ClearTaxTransactionID clears the value of the "tax_transaction_id" field.
+func (tauo *TaxAppliedUpdateOne) ClearTaxTransactionID() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearTaxTransactionID()
+	return tauo
+}
+
+// SetTaxTransactionType sets the "tax_transaction_type" field.
+func (tauo *TaxAppliedUpdateOne) SetTaxTransactionType(ttt types.TaxTransactionType) *TaxAppliedUpdateOne {
+	tauo.mutation.SetTaxTransactionType(ttt)
+	return tauo
+}
+
+// SetNillableTaxTransactionType sets the "tax_transaction_type" field if the given value is not nil.
+func (tauo *TaxAppliedUpdateOne) SetNillableTaxTransactionType(ttt *types.TaxTransactionType) *TaxAppliedUpdateOne {
+	if ttt != nil {
+		tauo.SetTaxTransactionType(*ttt)
+	}
+	return tauo
+}
+
+// ClearTaxTransactionType clears the value of the "tax_transaction_type" field.
+func (tauo *TaxAppliedUpdateOne) ClearTaxTransactionType() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearTaxTransactionType()
+	return tauo
+}
+
+// SetExternalTaxDetails sets the "external_tax_details" field.
+func (tauo *TaxAppliedUpdateOne) SetExternalTaxDetails(ttd *types.ExternalTaxDetails) *TaxAppliedUpdateOne {
+	tauo.mutation.SetExternalTaxDetails(ttd)
+	return tauo
+}
+
+// ClearExternalTaxDetails clears the value of the "external_tax_details" field.
+func (tauo *TaxAppliedUpdateOne) ClearExternalTaxDetails() *TaxAppliedUpdateOne {
+	tauo.mutation.ClearExternalTaxDetails()
+	return tauo
+}
+
 // Mutation returns the TaxAppliedMutation object of the builder.
 func (tauo *TaxAppliedUpdateOne) Mutation() *TaxAppliedMutation {
 	return tauo.mutation
@@ -526,6 +697,9 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	if tauo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxapplied.FieldEnvironmentID, field.TypeString)
 	}
+	if tauo.mutation.TaxRateIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxRateID, field.TypeString)
+	}
 	if value, ok := tauo.mutation.TaxAssociationID(); ok {
 		_spec.SetField(taxapplied.FieldTaxAssociationID, field.TypeString, value)
 	}
@@ -555,6 +729,30 @@ func (tauo *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied
 	}
 	if tauo.mutation.TaxBehaviorCleared() {
 		_spec.ClearField(taxapplied.FieldTaxBehavior, field.TypeString)
+	}
+	if value, ok := tauo.mutation.Provider(); ok {
+		_spec.SetField(taxapplied.FieldProvider, field.TypeString, value)
+	}
+	if tauo.mutation.ProviderCleared() {
+		_spec.ClearField(taxapplied.FieldProvider, field.TypeString)
+	}
+	if value, ok := tauo.mutation.TaxTransactionID(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionID, field.TypeString, value)
+	}
+	if tauo.mutation.TaxTransactionIDCleared() {
+		_spec.ClearField(taxapplied.FieldTaxTransactionID, field.TypeString)
+	}
+	if value, ok := tauo.mutation.TaxTransactionType(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionType, field.TypeString, value)
+	}
+	if tauo.mutation.TaxTransactionTypeCleared() {
+		_spec.ClearField(taxapplied.FieldTaxTransactionType, field.TypeString)
+	}
+	if value, ok := tauo.mutation.ExternalTaxDetails(); ok {
+		_spec.SetField(taxapplied.FieldExternalTaxDetails, field.TypeJSON, value)
+	}
+	if tauo.mutation.ExternalTaxDetailsCleared() {
+		_spec.ClearField(taxapplied.FieldExternalTaxDetails, field.TypeJSON)
 	}
 	_node = &TaxApplied{config: tauo.config}
 	_spec.Assign = _node.assignValues

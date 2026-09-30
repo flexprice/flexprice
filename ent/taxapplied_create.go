@@ -118,6 +118,14 @@ func (tac *TaxAppliedCreate) SetTaxRateID(s string) *TaxAppliedCreate {
 	return tac
 }
 
+// SetNillableTaxRateID sets the "tax_rate_id" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableTaxRateID(s *string) *TaxAppliedCreate {
+	if s != nil {
+		tac.SetTaxRateID(*s)
+	}
+	return tac
+}
+
 // SetEntityType sets the "entity_type" field.
 func (tac *TaxAppliedCreate) SetEntityType(s string) *TaxAppliedCreate {
 	tac.mutation.SetEntityType(s)
@@ -210,6 +218,54 @@ func (tac *TaxAppliedCreate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxA
 	return tac
 }
 
+// SetProvider sets the "provider" field.
+func (tac *TaxAppliedCreate) SetProvider(tp types.TaxProvider) *TaxAppliedCreate {
+	tac.mutation.SetProvider(tp)
+	return tac
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableProvider(tp *types.TaxProvider) *TaxAppliedCreate {
+	if tp != nil {
+		tac.SetProvider(*tp)
+	}
+	return tac
+}
+
+// SetTaxTransactionID sets the "tax_transaction_id" field.
+func (tac *TaxAppliedCreate) SetTaxTransactionID(s string) *TaxAppliedCreate {
+	tac.mutation.SetTaxTransactionID(s)
+	return tac
+}
+
+// SetNillableTaxTransactionID sets the "tax_transaction_id" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableTaxTransactionID(s *string) *TaxAppliedCreate {
+	if s != nil {
+		tac.SetTaxTransactionID(*s)
+	}
+	return tac
+}
+
+// SetTaxTransactionType sets the "tax_transaction_type" field.
+func (tac *TaxAppliedCreate) SetTaxTransactionType(ttt types.TaxTransactionType) *TaxAppliedCreate {
+	tac.mutation.SetTaxTransactionType(ttt)
+	return tac
+}
+
+// SetNillableTaxTransactionType sets the "tax_transaction_type" field if the given value is not nil.
+func (tac *TaxAppliedCreate) SetNillableTaxTransactionType(ttt *types.TaxTransactionType) *TaxAppliedCreate {
+	if ttt != nil {
+		tac.SetTaxTransactionType(*ttt)
+	}
+	return tac
+}
+
+// SetExternalTaxDetails sets the "external_tax_details" field.
+func (tac *TaxAppliedCreate) SetExternalTaxDetails(ttd *types.ExternalTaxDetails) *TaxAppliedCreate {
+	tac.mutation.SetExternalTaxDetails(ttd)
+	return tac
+}
+
 // SetID sets the "id" field.
 func (tac *TaxAppliedCreate) SetID(s string) *TaxAppliedCreate {
 	tac.mutation.SetID(s)
@@ -292,14 +348,6 @@ func (tac *TaxAppliedCreate) check() error {
 	if _, ok := tac.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "TaxApplied.updated_at"`)}
 	}
-	if _, ok := tac.mutation.TaxRateID(); !ok {
-		return &ValidationError{Name: "tax_rate_id", err: errors.New(`ent: missing required field "TaxApplied.tax_rate_id"`)}
-	}
-	if v, ok := tac.mutation.TaxRateID(); ok {
-		if err := taxapplied.TaxRateIDValidator(v); err != nil {
-			return &ValidationError{Name: "tax_rate_id", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_rate_id": %w`, err)}
-		}
-	}
 	if _, ok := tac.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "TaxApplied.entity_type"`)}
 	}
@@ -336,6 +384,11 @@ func (tac *TaxAppliedCreate) check() error {
 	if v, ok := tac.mutation.TaxBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_behavior": %w`, err)}
+		}
+	}
+	if v, ok := tac.mutation.Provider(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.provider": %w`, err)}
 		}
 	}
 	return nil
@@ -403,7 +456,7 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := tac.mutation.TaxRateID(); ok {
 		_spec.SetField(taxapplied.FieldTaxRateID, field.TypeString, value)
-		_node.TaxRateID = value
+		_node.TaxRateID = &value
 	}
 	if value, ok := tac.mutation.EntityType(); ok {
 		_spec.SetField(taxapplied.FieldEntityType, field.TypeString, value)
@@ -444,6 +497,22 @@ func (tac *TaxAppliedCreate) createSpec() (*TaxApplied, *sqlgraph.CreateSpec) {
 	if value, ok := tac.mutation.TaxBehavior(); ok {
 		_spec.SetField(taxapplied.FieldTaxBehavior, field.TypeString, value)
 		_node.TaxBehavior = value
+	}
+	if value, ok := tac.mutation.Provider(); ok {
+		_spec.SetField(taxapplied.FieldProvider, field.TypeString, value)
+		_node.Provider = value
+	}
+	if value, ok := tac.mutation.TaxTransactionID(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionID, field.TypeString, value)
+		_node.TaxTransactionID = &value
+	}
+	if value, ok := tac.mutation.TaxTransactionType(); ok {
+		_spec.SetField(taxapplied.FieldTaxTransactionType, field.TypeString, value)
+		_node.TaxTransactionType = value
+	}
+	if value, ok := tac.mutation.ExternalTaxDetails(); ok {
+		_spec.SetField(taxapplied.FieldExternalTaxDetails, field.TypeJSON, value)
+		_node.ExternalTaxDetails = value
 	}
 	return _node, _spec
 }

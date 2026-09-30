@@ -391,7 +391,7 @@ func newTaxes(taxes []*dto.TaxAppliedResponse) []*TaxApplied {
 		}
 		t := &TaxApplied{
 			ID:            tax.ID,
-			TaxRateID:     tax.TaxRateID,
+			TaxRateID:     tax.GetTaxRateID(),
 			TaxableAmount: tax.TaxableAmount,
 			TaxAmount:     tax.TaxAmount,
 			TaxBehavior:   tax.TaxBehavior,

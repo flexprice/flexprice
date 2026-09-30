@@ -82,7 +82,7 @@ func (RevenueFact) Indexes() []ent.Index {
 		// share one price on one day (e.g. a mid-period price version change).
 		index.Fields("tenant_id", "environment_id", "subscription_id", "price_id", "sub_line_item_id", "day", "revenue_source").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'PROVISIONAL'")).
+			Annotations(entsql.IndexWhere("(status = 'PROVISIONAL'::text)")).
 			StorageKey("revenue_facts_provisional_grain"),
 		index.Fields("tenant_id", "environment_id", "day", "revenue_source").
 			StorageKey("revenue_facts_read"),

@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -44,8 +43,28 @@ type TaxService interface {
 
 	// Invoice tax operations
 	PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceTaxRates, error)
-	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*TaxCalculationResult, error)
-	CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *TaxCalculationResult
+	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*dto.TaxCalculationResult, error)
+	CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *dto.TaxCalculationResult
+
+	// PersistTaxResult writes what an engine calculated onto Flexprice's own tax_applied
+	// rows. Nothing leaves Flexprice. A calculation is held in memory until this is called,
+	// so a preview runs the same maths and writes nothing.
+	PersistTaxResult(ctx context.Context, entityType types.TaxRateEntityType, entityID, currency string, result *dto.TaxCalculationResult) error
+
+	// TaxRatesFromAppliedTaxes rebuilds a rate selection from the tax an invoice already
+	// carries, for a recalculation with no request to resolve from.
+	TaxRatesFromAppliedTaxes(ctx context.Context, inv *invoice.Invoice) (*dto.InvoiceTaxRates, error)
+
+	// CommitTaxToProvider records a finalized invoice's tax in the engine's own books, which
+	// is what lets the tenant file it. The only thing written back is the transaction id.
+	// Every failure is logged and swallowed: the invoice is already finalized by the time this
+	// runs, so an unfiled tax is an operator's problem to chase and never the caller's to fail on.
+	CommitTaxToProvider(ctx context.Context, inv *invoice.Invoice)
+
+	// ReverseTaxOnProvider un-files tax already recorded, in full for a voided invoice or in
+	// part for a credit note, and records that it was undone against the entity the request
+	// names.
+	ReverseTaxOnProvider(ctx context.Context, req dto.TaxReversalRequest) error
 }
 
 type taxService struct {
@@ -442,12 +461,12 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 		items[i] = &dto.TaxAppliedResponse{TaxApplied: *ta}
 	}
 
-	// Fetch tax rates if requested
-	if filter.GetExpand().Has(types.ExpandTaxRate) {
-		taxRateIDs := lo.Map(taxAppliedRecords, func(ta *taxapplied.TaxApplied, _ int) string {
-			return ta.TaxRateID
-		})
-
+	// Fetch tax rates if requested. External records carry no Flexprice rate, so an invoice
+	// taxed by an engine has nothing to expand.
+	taxRateIDs := lo.FilterMap(taxAppliedRecords, func(ta *taxapplied.TaxApplied, _ int) (string, bool) {
+		return ta.GetTaxRateID(), ta.TaxRateID != nil
+	})
+	if filter.GetExpand().Has(types.ExpandTaxRate) && len(taxRateIDs) > 0 {
 		taxRateFilter := types.NewNoLimitTaxRateFilter()
 		taxRateFilter.TaxRateIDs = taxRateIDs
 
@@ -467,7 +486,7 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 
 		// Assign tax rates to the appropriate tax applied records
 		for i, ta := range taxAppliedRecords {
-			if taxRate, exists := taxRatesByID[ta.TaxRateID]; exists {
+			if taxRate, exists := taxRatesByID[ta.GetTaxRateID()]; exists {
 				items[i].TaxRate = taxRate
 			}
 		}
@@ -531,6 +550,24 @@ func (s *taxService) DeleteTaxApplied(ctx context.Context, id string) error {
 func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTaxAssociationRequest) (*dto.TaxAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	// An association is what makes a Flexprice rate apply, and an external engine resolves tax
+	// from its own configuration instead, so one created now would silently do nothing. Linking
+	// returns once Flexprice rates are synced to the provider.
+	cfg, err := taxConfig(ctx, s.ServiceParams)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.UsesExternalTaxEngine() {
+		return nil, ierr.NewErrorf("tax rates cannot be linked while the %s tax engine is in use", cfg.Provider).
+			WithHintf("Tax for this environment is calculated by %s. Configure tax rates and registrations in %s instead.", cfg.Provider, cfg.Provider).
+			WithReportableDetails(map[string]any{
+				"tax_provider": cfg.Provider,
+				"entity_type":  req.EntityType,
+				"entity_id":    req.EntityID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Resolve external_customer_id if provided
@@ -887,6 +924,33 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 	entityType := req.EntityType
 	entityID := req.EntityID
 
+	// Overrides are a caller asking for these rates; the rest is Flexprice cascading what an
+	// entity inherits. So an external engine refuses the first, because dropping a request
+	// silently is how a tenant comes to believe it configured tax, and skips the second,
+	// because failing a customer over inherited rows it never asked for helps nobody.
+	cfg, err := taxConfig(ctx, s.ServiceParams)
+	if err != nil {
+		return err
+	}
+	if cfg.UsesExternalTaxEngine() {
+		if len(req.TaxRateOverrides) > 0 {
+			return ierr.NewErrorf("tax rates cannot be linked while the %s tax engine is in use", cfg.Provider).
+				WithHintf("Tax for this environment is calculated by %s. Remove the tax rate overrides and configure tax rates in %s instead.", cfg.Provider, cfg.Provider).
+				WithReportableDetails(map[string]any{
+					"tax_provider": cfg.Provider,
+					"entity_type":  entityType,
+					"entity_id":    entityID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		s.Logger.Info(ctx, "external tax engine in use, no inherited tax associations linked",
+			"tax_provider", cfg.Provider,
+			"entity_type", entityType,
+			"entity_id", entityID)
+		return nil
+	}
+
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if len(req.TaxRateOverrides) > 0 {
 			// Validate all overrides first
@@ -1094,27 +1158,6 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 	return dto.NewInvoiceTaxRates(nil, cust), nil
 }
 
-// TaxCalculationResult represents the result of tax calculations
-type TaxCalculationResult struct {
-	// InclusiveTax is the tax already contained in the taxable amount, recovered by working
-	// backwards from it. Because it is already inside the subtotal it is never added to the
-	// invoice total; it exists to report how much of the listed price was tax. Computed the
-	// same way whether or not the customer is exempt.
-	InclusiveTax decimal.Decimal
-
-	// ExclusiveTax is added on top of the taxable amount — the only tax that moves the total.
-	// Computed the same way whether or not the customer is exempt.
-	ExclusiveTax decimal.Decimal
-
-	// TotalTaxAmount is what is actually charged: InclusiveTax + ExclusiveTax, or zero when
-	// the customer is exempt. This is what lands on invoice.total_tax.
-	TotalTaxAmount decimal.Decimal
-
-	Exempt bool
-
-	TaxAppliedRecords []*dto.TaxAppliedResponse
-}
-
 func taxableAmount(inv *invoice.Invoice) decimal.Decimal {
 	amount := inv.Subtotal.Sub(inv.TotalDiscount)
 	if amount.IsNegative() {
@@ -1124,10 +1167,23 @@ func taxableAmount(inv *invoice.Invoice) decimal.Decimal {
 	return amount
 }
 
+// invoiceTaxRequest is the calculation request for an invoice. Its taxable base is the subtotal
+// net of discounts, which is what the native engine and Stripe are both asked about.
+func invoiceTaxRequest(inv *invoice.Invoice) dto.TaxCalculationRequest {
+	return dto.TaxCalculationRequest{
+		EntityType: types.TaxRateEntityTypeInvoice,
+		EntityID:   inv.ID,
+		CustomerID: inv.CustomerID,
+		Currency:   inv.Currency,
+		Amount:     taxableAmount(inv),
+		Reference:  inv.ID,
+	}
+}
+
 // CalculateTaxesOnInvoice computes what the resolved rates would charge and writes nothing.
 // TaxAppliedRecords are built in memory, so it is safe for a preview of an invoice that will
 // never exist. ApplyTaxesOnInvoice calls this and then persists them.
-func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *TaxCalculationResult {
+func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *dto.TaxCalculationResult {
 	taxableAmt := taxableAmount(inv)
 	rateLines, rateByID := s.buildRateLines(ctx, inv, taxRates.GetRates())
 
@@ -1140,6 +1196,13 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 	// Tax is computed the same way for everyone; exemption only zeroes what is charged. One
 	// override at the end, rather than a branch inside the maths.
 	exempt := taxRates.IsExempt()
+
+	// Every engine reports why it charged zero, so the caller reads one field rather than
+	// inferring it from a flag.
+	var exemptionReason *types.TaxExemptionReasonCode
+	if exempt {
+		exemptionReason = lo.ToPtr(types.TaxExemptionReasonCustomerExempt)
+	}
 	totalTaxCharged := breakdown.inclusiveTax.Add(breakdown.exclusiveTax)
 	if exempt {
 		s.Logger.Info(ctx, "exemption applied at compute",
@@ -1158,7 +1221,7 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 
 		taxAppliedRecords = append(taxAppliedRecords, &dto.TaxAppliedResponse{
 			TaxApplied: taxapplied.TaxApplied{
-				TaxRateID:     rate.ID,
+				TaxRateID:     lo.ToPtr(rate.ID),
 				EntityType:    types.TaxRateEntityTypeInvoice,
 				EntityID:      inv.ID,
 				TaxableAmount: line.taxableAmount,
@@ -1171,45 +1234,31 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 		})
 	}
 
-	return &TaxCalculationResult{
+	return &dto.TaxCalculationResult{
 		InclusiveTax:      breakdown.inclusiveTax,
 		ExclusiveTax:      breakdown.exclusiveTax,
 		TotalTaxAmount:    totalTaxCharged,
 		Exempt:            exempt,
+		ExemptionReason:   exemptionReason,
 		TaxAppliedRecords: taxAppliedRecords,
 	}
 }
 
-// ApplyTaxesOnInvoice applies taxes to an invoice and creates/updates tax applied records
-// This method handles idempotency by checking for existing tax applied records
-// Returns calculated tax data instead of directly updating the invoice
-func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*TaxCalculationResult, error) {
-	if len(taxRates.GetRates()) == 0 {
-		s.Logger.Info(ctx, "no tax rates to apply to invoice", "invoice_id", inv.ID)
-		return &TaxCalculationResult{
-			TotalTaxAmount:    decimal.Zero,
-			TaxAppliedRecords: []*dto.TaxAppliedResponse{},
-		}, nil
-	}
-
+// ApplyTaxesOnInvoice computes the native engine's tax and writes it to tax_applied rows.
+// Returns calculated tax data instead of directly updating the invoice.
+func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*dto.TaxCalculationResult, error) {
+	// An empty selection still persists. The invoice may be carrying rows from a rate that has
+	// since been removed, and returning early would leave those in force while the invoice
+	// reported zero tax.
 	s.Logger.Info(ctx, "applying taxes to invoice",
 		"invoice_id", inv.ID,
 		"tax_rates_count", len(taxRates.GetRates()))
 
 	result := s.CalculateTaxesOnInvoice(ctx, inv, taxRates)
 
-	rateByID := lo.SliceToMap(taxRates.GetRates(), func(r *dto.TaxRateWithBehavior) (string, *dto.TaxRateWithBehavior) {
-		return r.ID, r
-	})
-	persisted := make([]*dto.TaxAppliedResponse, 0, len(result.TaxAppliedRecords))
-	for _, record := range result.TaxAppliedRecords {
-		applied, err := s.processTaxApplication(ctx, inv, rateByID[record.TaxRateID], record.TaxableAmount, record.TaxAmount)
-		if err != nil {
-			return nil, err
-		}
-		persisted = append(persisted, applied)
+	if err := s.PersistTaxResult(ctx, types.TaxRateEntityTypeInvoice, inv.ID, inv.Currency, result); err != nil {
+		return nil, err
 	}
-	result.TaxAppliedRecords = persisted
 
 	s.Logger.Info(ctx, "successfully calculated taxes for invoice",
 		"invoice_id", inv.ID,
@@ -1217,85 +1266,6 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		"tax_rates_processed", len(taxRates.GetRates()))
 
 	return result, nil
-}
-
-// processTaxApplication handles the creation or update of tax applied records
-func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Invoice, taxRate *dto.TaxRateWithBehavior, taxableAmount, taxAmount decimal.Decimal) (*dto.TaxAppliedResponse, error) {
-	idempGen := idempotency.NewGenerator()
-	idempotencyKey := idempGen.GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
-		"tax_rate_id": taxRate.ID,
-		"entity_id":   inv.ID,
-		"entity_type": string(types.TaxRateEntityTypeInvoice),
-	})
-
-	// Check if tax applied record already exists
-	existingTaxApplied, err := s.TaxAppliedRepo.GetByIdempotencyKey(ctx, idempotencyKey)
-	if err != nil && !ierr.IsNotFound(err) {
-		s.Logger.Error(ctx, "failed to check existing tax applied record",
-			"error", err,
-			"tax_rate_id", taxRate.ID,
-			"invoice_id", inv.ID,
-			"idempotency_key", idempotencyKey)
-		return nil, err
-	}
-
-	if existingTaxApplied != nil {
-		existingTaxApplied.TaxableAmount = taxableAmount
-		existingTaxApplied.TaxAmount = taxAmount
-		existingTaxApplied.TaxBehavior = taxRate.TaxBehavior
-		existingTaxApplied.AppliedAt = time.Now().UTC()
-
-		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
-			s.Logger.Error(ctx, "failed to update existing tax applied record",
-				"error", err,
-				"tax_applied_id", existingTaxApplied.ID,
-				"tax_rate_id", taxRate.ID)
-			return nil, err
-		}
-
-		s.Logger.Info(ctx, "updated existing tax applied record",
-			"tax_applied_id", existingTaxApplied.ID,
-			"tax_rate_id", taxRate.ID,
-			"tax_rate_code", taxRate.Code,
-			"tax_amount", taxAmount,
-			"taxable_amount", taxableAmount)
-
-		return &dto.TaxAppliedResponse{TaxApplied: *existingTaxApplied}, nil
-	}
-
-	taxAppliedRecord := &dto.CreateTaxAppliedRequest{
-		TaxRateID:     taxRate.ID,
-		EntityType:    types.TaxRateEntityTypeInvoice,
-		EntityID:      inv.ID,
-		TaxableAmount: taxableAmount,
-		TaxAmount:     taxAmount,
-		TaxBehavior:   taxRate.TaxBehavior,
-		Currency:      inv.Currency,
-	}
-
-	// Convert to domain model and set idempotency key
-	taxApplied := taxAppliedRecord.ToTaxApplied(ctx)
-	taxApplied.IdempotencyKey = &idempotencyKey
-	taxApplied.AppliedAt = time.Now().UTC()
-
-	// Create the tax applied record
-	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
-		s.Logger.Error(ctx, "failed to create tax applied record",
-			"error", err,
-			"tax_rate_id", taxRate.ID,
-			"invoice_id", inv.ID,
-			"idempotency_key", idempotencyKey)
-		return nil, err
-	}
-
-	s.Logger.Info(ctx, "created new tax applied record",
-		"tax_applied_id", taxApplied.ID,
-		"tax_rate_id", taxRate.ID,
-		"tax_rate_code", taxRate.Code,
-		"tax_amount", taxAmount,
-		"taxable_amount", taxableAmount)
-
-	return &dto.TaxAppliedResponse{TaxApplied: *taxApplied}, nil
 }
 
 // buildRateLines drops rates with no percentage_value and reshapes the rest for the calculation.
@@ -1496,4 +1466,425 @@ func calculateTaxBreakdown(taxableAmount decimal.Decimal, rates []taxRateLine, c
 		exclusiveTax: exclusiveTax,
 		lines:        lines,
 	}
+}
+
+// PersistTaxResult writes what an engine calculated onto the entity's tax_applied records.
+//
+// Every recalculation archives what is published and writes a new set, whichever engine
+// produced it. Nothing is updated in place, so a record's amounts stay true for its lifetime.
+// The one column written after creation is tax_transaction_id, stamped by CommitTaxToProvider.
+func (s *taxService) PersistTaxResult(ctx context.Context, entityType types.TaxRateEntityType, entityID, currency string, result *dto.TaxCalculationResult) error {
+	// Archiving and recreating has to land as one unit. Every caller already holds a
+	// transaction, and WithTx reuses it, so this only makes the guarantee local.
+	return s.DB.WithTx(ctx, func(ctx context.Context) error {
+		existing, err := s.publishedAppliedTaxes(ctx, entityType, entityID)
+		if err != nil {
+			return err
+		}
+
+		for _, applied := range existing {
+			if err := s.TaxAppliedRepo.Delete(ctx, applied.ID); err != nil {
+				s.Logger.Error(ctx, "failed to archive tax applied record",
+					"error", err,
+					"tax_applied_id", applied.ID,
+					"entity_type", entityType,
+					"entity_id", entityID)
+				return err
+			}
+		}
+
+		persisted := make([]*dto.TaxAppliedResponse, 0, len(result.TaxAppliedRecords))
+		for _, record := range result.TaxAppliedRecords {
+			applied := record.TaxApplied
+			applied.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED)
+			applied.EntityType = entityType
+			applied.EntityID = entityID
+			applied.Currency = currency
+			applied.Provider = result.Provider
+			applied.AppliedAt = time.Now().UTC()
+			applied.EnvironmentID = types.GetEnvironmentID(ctx)
+			applied.BaseModel = types.GetDefaultBaseModel(ctx)
+
+			if err := s.TaxAppliedRepo.Create(ctx, &applied); err != nil {
+				s.Logger.Error(ctx, "failed to create tax applied record",
+					"error", err,
+					"entity_type", entityType,
+					"entity_id", entityID,
+					"provider", result.Provider,
+					"tax_rate_id", lo.FromPtr(applied.TaxRateID))
+				return err
+			}
+
+			persisted = append(persisted, &dto.TaxAppliedResponse{TaxApplied: applied, TaxRate: record.TaxRate})
+		}
+
+		result.TaxAppliedRecords = persisted
+		return nil
+	})
+}
+
+// publishedAppliedTaxes returns the tax currently in force on an entity. Archived records are
+// excluded by the repository's default status filter, so what comes back is one generation.
+func (s *taxService) publishedAppliedTaxes(ctx context.Context, entityType types.TaxRateEntityType, entityID string) ([]*taxapplied.TaxApplied, error) {
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = entityType
+	filter.EntityID = entityID
+
+	return s.TaxAppliedRepo.List(ctx, filter)
+}
+
+// TaxRatesFromAppliedTaxes rebuilds an invoice's rate selection from the tax it already
+// carries. A one-off invoice's rates arrive on its create request and are stored nowhere
+// else, so this is the only way to recompute one.
+//
+// Rates are re-read so a percentage that moved since is picked up, and the customer is
+// re-read so a change in exemption applies.
+func (s *taxService) TaxRatesFromAppliedTaxes(ctx context.Context, inv *invoice.Invoice) (*dto.InvoiceTaxRates, error) {
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	appliedTaxes, err := s.publishedAppliedTaxes(ctx, types.TaxRateEntityTypeInvoice, inv.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	behaviorByRateID := make(map[string]types.TaxBehavior, len(appliedTaxes))
+	rateIDs := make([]string, 0, len(appliedTaxes))
+	for _, applied := range appliedTaxes {
+		// An external engine's record carries no Flexprice rate to rebuild from.
+		rateID := lo.FromPtr(applied.TaxRateID)
+		if rateID == "" {
+			continue
+		}
+		behaviorByRateID[rateID] = applied.TaxBehavior
+		rateIDs = append(rateIDs, rateID)
+	}
+
+	if len(rateIDs) == 0 {
+		return dto.NewInvoiceTaxRates(nil, cust), nil
+	}
+
+	filter := types.NewNoLimitTaxRateFilter()
+	filter.TaxRateIDs = rateIDs
+
+	taxRatesResponse, err := s.ListTaxRates(ctx, filter)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to read tax rates back from applied tax",
+			"error", err,
+			"invoice_id", inv.ID,
+			"tax_rate_ids", rateIDs)
+		return nil, err
+	}
+
+	// A rate that no longer exists drops out here, which is correct.
+	resolved := make([]*dto.TaxRateWithBehavior, len(taxRatesResponse.Items))
+	for i, rate := range taxRatesResponse.Items {
+		resolved[i] = &dto.TaxRateWithBehavior{TaxRateResponse: rate, TaxBehavior: behaviorByRateID[rate.ID]}
+	}
+
+	return dto.NewInvoiceTaxRates(resolved, cust), nil
+}
+
+// commitAttempts is how many times a provider is asked to record the tax before the invoice
+// is left finalized with nothing filed.
+const commitAttempts = 3
+
+// CommitTaxToProvider records a finalized invoice's tax in the engine's own books and stamps
+// the resulting transaction id onto the invoice's records. Runs after the finalize transaction
+// has committed, because an engine call cannot sit inside a database transaction. Nothing here
+// is allowed to fail the caller: the invoice is finalized either way.
+func (s *taxService) CommitTaxToProvider(ctx context.Context, inv *invoice.Invoice) {
+	engine, err := NewTaxEngine(ctx, s.ServiceParams)
+	if err != nil {
+		s.Logger.Error(ctx, "tax engine could not be resolved, nothing was filed",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx),
+			"invoice_id", inv.ID)
+		return
+	}
+
+	provider := engine.GetProvider()
+	if !provider.IsExternal() {
+		return
+	}
+
+	appliedTaxes, err := s.publishedAppliedTaxes(ctx, types.TaxRateEntityTypeInvoice, inv.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "applied taxes could not be read, nothing was filed",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx),
+			"invoice_id", inv.ID,
+			"provider", provider)
+		return
+	}
+
+	// A record carrying a transaction id was already filed by an earlier attempt. The whole
+	// set comes from one calculation, so a partial set here means an earlier stamp failed
+	// halfway.
+	unfiledTaxes := lo.Filter(appliedTaxes, func(applied *taxapplied.TaxApplied, _ int) bool {
+		return lo.FromPtr(applied.TaxTransactionID) == ""
+	})
+	if len(unfiledTaxes) == 0 {
+		return
+	}
+
+	var transactionID string
+	for attempt := 1; attempt <= commitAttempts; attempt++ {
+		transactionID, err = engine.Commit(ctx, inv, unfiledTaxes)
+		// Only a transport failure can succeed on another attempt. Anything the provider
+		// rejected outright is rejected identically every time.
+		if err == nil || !ierr.IsHTTPClient(err) {
+			break
+		}
+		if attempt < commitAttempts {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+	}
+
+	if err != nil {
+		s.Logger.Error(ctx, "tax commit failed, invoice is finalized with nothing filed",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx),
+			"invoice_id", inv.ID,
+			"invoice_number", lo.FromPtr(inv.InvoiceNumber),
+			"provider", provider,
+			"calculation_expires_at", unfiledTaxes[0].ExternalTaxDetails.GetCalculationExpiresAt(),
+			"tax_applied_ids", lo.Map(unfiledTaxes, func(applied *taxapplied.TaxApplied, _ int) string { return applied.ID }),
+			"total_tax", inv.TotalTax,
+			"currency", inv.Currency,
+			"attempts", commitAttempts)
+		return
+	}
+
+	if transactionID == "" {
+		return
+	}
+
+	// A stamp that does not land leaves the tax filed but the record unmarked, so a later
+	// commit would offer it again and Stripe would reject the duplicate reference.
+	for _, applied := range unfiledTaxes {
+		applied.TaxTransactionID = lo.ToPtr(transactionID)
+		if err := s.TaxAppliedRepo.Update(ctx, applied); err != nil {
+			s.Logger.Error(ctx, "tax filed but the transaction id could not be stamped",
+				"error", err,
+				"tenant_id", types.GetTenantID(ctx),
+				"environment_id", types.GetEnvironmentID(ctx),
+				"invoice_id", inv.ID,
+				"tax_applied_id", applied.ID,
+				"tax_transaction_id", transactionID)
+		}
+	}
+
+	s.Logger.Info(ctx, "tax commit succeeded",
+		"invoice_id", inv.ID,
+		"provider", provider,
+		"tax_transaction_id", transactionID,
+		"records_stamped", len(unfiledTaxes))
+}
+
+// ReverseTaxOnProvider un-files tax the engine already recorded and records that it was undone. A voided
+// invoice reverses its own filing in full; a credit note reverses part of the invoice it credits.
+// Both find the original transaction on the invoice, so both send the same request and only the
+// mode, the amount and the entity the reversal belongs to differ.
+//
+// The entity's own unfiled reversal rows are what get stamped. A credit note already carries
+// them, written when it was created. A voided invoice carries only its filing, so the rows
+// recording the undoing are created here, at zero: an amount says what tax an entity carries,
+// and a reversal carries none.
+//
+// The error is returned rather than swallowed. A void logs it and carries on, because the
+// invoice is already void; a credit note rolls back on it, because one issued with its tax
+// still filed is worse than one not issued.
+func (s *taxService) ReverseTaxOnProvider(ctx context.Context, req dto.TaxReversalRequest) error {
+	engine, err := NewTaxEngine(ctx, s.ServiceParams)
+	if err != nil {
+		return err
+	}
+
+	provider := engine.GetProvider()
+	if !provider.IsExternal() {
+		return nil
+	}
+
+	reversed, err := s.taxIsReversed(ctx, req.EntityType, req.EntityID)
+	if err != nil {
+		return err
+	}
+	// A second reversal of the same transaction would be filed as a second correction, and the
+	// provider does not link the original back to what reversed it, so the guard is ours.
+	if reversed {
+		s.Logger.Info(ctx, "tax is already reversed, leaving it alone",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"provider", provider)
+		return nil
+	}
+
+	// The invoice's own transaction is what is being undone, in whole or in part. A void is
+	// its own invoice, so it names none.
+	invoiceID := req.InvoiceID
+	if invoiceID == "" {
+		invoiceID = req.EntityID
+	}
+
+	invoiceTaxes, err := s.publishedAppliedTaxes(ctx, types.TaxRateEntityTypeInvoice, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	filed := lo.Filter(invoiceTaxes, func(applied *taxapplied.TaxApplied, _ int) bool {
+		return !applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) != ""
+	})
+	if len(filed) == 0 {
+		// Nothing was ever filed for this invoice, so there is nothing to undo. Whatever asked
+		// for the reversal still stands: it is not conditional on a filing that never happened.
+		s.Logger.Info(ctx, "invoice carries no filed tax, nothing to reverse",
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"invoice_id", invoiceID,
+			"provider", provider)
+		return nil
+	}
+
+	// Every row of one invoice came from one calculation and was filed under one transaction.
+	req.OriginalTransactionID = lo.FromPtr(filed[0].TaxTransactionID)
+
+	transactionID, err := engine.Reverse(ctx, req)
+	if err != nil {
+		s.Logger.Error(ctx, "tax reversal failed",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx),
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"invoice_id", invoiceID,
+			"provider", provider,
+			"mode", req.Mode,
+			"reference", req.Reference,
+			"original_transaction_id", req.OriginalTransactionID,
+			"amount", req.Amount,
+			"currency", req.Currency)
+		return err
+	}
+
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return s.recordReversal(txCtx, req, filed, transactionID)
+	})
+	if err != nil {
+		// The provider has reversed and we may have no record of it, so a retry would be
+		// refused on the duplicate reference. These fields are what it takes to reconcile.
+		s.Logger.Error(ctx, "tax reversed but the record could not be written",
+			"error", err,
+			"tenant_id", types.GetTenantID(ctx),
+			"environment_id", types.GetEnvironmentID(ctx),
+			"entity_type", req.EntityType,
+			"entity_id", req.EntityID,
+			"invoice_id", invoiceID,
+			"provider", provider,
+			"reference", req.Reference,
+			"original_transaction_id", req.OriginalTransactionID,
+			"tax_transaction_id", transactionID)
+		return err
+	}
+
+	s.Logger.Info(ctx, "tax reversal succeeded",
+		"entity_type", req.EntityType,
+		"entity_id", req.EntityID,
+		"invoice_id", invoiceID,
+		"provider", provider,
+		"mode", req.Mode,
+		"tax_transaction_id", transactionID)
+
+	return nil
+}
+
+// recordReversal stamps the transaction onto the entity's own reversal rows, or writes them
+// when it has none of its own to stamp. The rows that were filed are left exactly as
+// finalization sealed them.
+func (s *taxService) recordReversal(ctx context.Context, req dto.TaxReversalRequest, filed []*taxapplied.TaxApplied, transactionID string) error {
+	reversal := &types.TaxReversal{
+		Mode:                  req.Mode,
+		OriginalTransactionID: req.OriginalTransactionID,
+	}
+
+	own, err := s.publishedAppliedTaxes(ctx, req.EntityType, req.EntityID)
+	if err != nil {
+		return err
+	}
+
+	unstamped := lo.Filter(own, func(applied *taxapplied.TaxApplied, _ int) bool {
+		return applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) == ""
+	})
+
+	for _, applied := range unstamped {
+		applied.TaxTransactionID = lo.ToPtr(transactionID)
+		if details := applied.ExternalTaxDetails; details != nil {
+			details.Reference = req.Reference
+			details.Reversal = reversal
+		}
+
+		if err := s.TaxAppliedRepo.Update(ctx, applied); err != nil {
+			return err
+		}
+	}
+	if len(unstamped) > 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	for _, applied := range filed {
+		details := types.ExternalTaxDetails{}
+		if applied.ExternalTaxDetails != nil {
+			details = *applied.ExternalTaxDetails
+		}
+		details.Reference = req.Reference
+		details.Reversal = reversal
+
+		row := &taxapplied.TaxApplied{
+			ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
+			EntityType: req.EntityType,
+			EntityID:   req.EntityID,
+			// The schema requires a currency, and this row belongs to a document that has
+			// one, so it carries it rather than being left blank.
+			Currency:           applied.Currency,
+			Provider:           applied.Provider,
+			TaxTransactionID:   lo.ToPtr(transactionID),
+			TaxTransactionType: types.TaxTransactionTypeReversal,
+			ExternalTaxDetails: &details,
+			AppliedAt:          now,
+			EnvironmentID:      applied.EnvironmentID,
+			BaseModel: types.BaseModel{
+				TenantID:  applied.TenantID,
+				Status:    types.StatusPublished,
+				CreatedAt: now,
+				UpdatedAt: now,
+				CreatedBy: applied.CreatedBy,
+				UpdatedBy: applied.UpdatedBy,
+			},
+		}
+
+		if err := s.TaxAppliedRepo.Create(ctx, row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// taxIsReversed reports whether an entity's tax has already been un-filed. A reversal row
+// carrying a provider transaction is what says the reversal landed.
+func (s *taxService) taxIsReversed(ctx context.Context, entityType types.TaxRateEntityType, entityID string) (bool, error) {
+	rows, err := s.publishedAppliedTaxes(ctx, entityType, entityID)
+	if err != nil {
+		return false, err
+	}
+
+	return lo.ContainsBy(rows, func(applied *taxapplied.TaxApplied) bool {
+		return applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) != ""
+	}), nil
 }
