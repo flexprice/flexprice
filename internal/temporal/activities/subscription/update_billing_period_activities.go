@@ -257,16 +257,14 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 }
 
 const (
-	processInvoiceStartDelay = 6 * time.Hour
-	processInvoiceJitterMin  = 2 * time.Hour
-	processInvoiceJitterMax  = 6 * time.Hour
+	processInvoiceStartDelay = 1 * time.Hour
+	processInvoiceJitterSpan = 4 * time.Hour
 )
 
 // processInvoiceDelaySeconds is the StartDelay for ProcessInvoiceWorkflow:
-// a 6h wait plus a uniform jitter in [2h, 6h).
+// a 1h wait plus a uniform jitter in [0, 4h), so the workflow starts in [1h, 5h).
 func processInvoiceDelaySeconds() int {
-	span := int64(processInvoiceJitterMax - processInvoiceJitterMin)
-	jitter := processInvoiceJitterMin + time.Duration(rand.Int63n(span)) // #nosec G404 -- jitter, not security-sensitive
+	jitter := time.Duration(rand.Int63n(int64(processInvoiceJitterSpan))) // #nosec G404 -- jitter, not security-sensitive
 	return int((processInvoiceStartDelay + jitter) / time.Second)
 }
 
