@@ -97,7 +97,7 @@ flowchart TD
 | `performFinalizeInvoiceActions` | `ApplyCreditsToInvoice` | `internal/ee/service/credit_adjustment.go` | Pre-expiry amount first in the pool, not debited again. Wallets capped at credits eligible at the period end. `CalculateCreditAdjustments` unchanged |
 | Finalization schedule | `IsFinalizationDue` | `internal/ee/service/invoice.go` | Wait while a credit that expired inside the draft's period is unprocessed, at most expiry + 3h |
 | Wallet balance | `pendingCharges`, `GetUnpaidInvoicesToBePaid` | `internal/ee/service/wallet.go`, `invoice.go` | Skip the current period's cycle draft (usage is counted live) and net its applied credits off that usage. Past drafts: subtract applied credits not yet on lines |
-| `ExpireCreditsActivity` | `orderByExpiry` | `internal/temporal/activities/cron/wallet_activities.go` | Process expired credits earliest expiry first, so a later credit can't take usage an earlier one could pay |
+| `ExpireCreditsActivity` | expired-credit listing | `internal/temporal/activities/cron/wallet_activities.go` | Sorted by `expiry_date asc`, so a later credit can't take usage an earlier one could pay. An environment whose setting can't be read is skipped, not the whole run |
 | Line items repo | `ListByInvoiceID` | `internal/repository/ent/invoice_line_item.go` | Order by `created_at, id` so allocation at finalization is deterministic |
 
 ### Ongoing balance
@@ -275,7 +275,7 @@ $1 per unit, period ends 22 Sep 00:00 UTC. "Balance" is the ongoing balance.
 ## Verification
 
 Unit tests cover each rule above (`pre_expiry_credit_consumption_test.go`,
-`invoice_compute_prepaid_credits_test.go`, `wallet_activities_test.go`). Run end to end on a local
+`invoice_compute_prepaid_credits_test.go`). Run end to end on a local
 stack, checking wallet, ledger and invoices at each step:
 
 | Run | Result |

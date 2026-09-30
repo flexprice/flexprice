@@ -2,10 +2,8 @@ package cron
 
 import (
 	"context"
-	"sort"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -68,15 +66,17 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 			// The grace after expiry depends on the environment's pre-expiry consumption setting.
 			cutoff, err := a.walletService.CreditExpiryCutoff(envCtx)
 			if err != nil {
-				a.logger.Error(ctx, "failed to resolve credit expiry cutoff", "error", err,
+				a.logger.Error(ctx, "failed to resolve credit expiry cutoff, skipping environment", "error", err,
 					"tenant_id", tenant.ID, "environment_id", environment.ID)
-				return nil, err
+				continue
 			}
 			filter := types.NewNoLimitWalletTransactionFilter()
 			filter.Type = lo.ToPtr(types.TransactionTypeCredit)
 			filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
 			filter.ExpiryDateBefore = lo.ToPtr(cutoff)
 			filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
+			// Earliest expiry first, so a later credit can't take usage an earlier one could pay.
+			filter.Sort = []*types.SortCondition{{Field: "expiry_date", Direction: types.SortDirectionAsc}}
 
 			transactions, err := a.walletService.ListWalletTransactionsByFilter(envCtx, filter)
 			if err != nil {
@@ -85,7 +85,6 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 			}
 
 			a.logger.Debug(ctx, "found expired credits", "count", len(transactions.Items))
-			orderByExpiry(transactions.Items)
 
 			for i, tx := range transactions.Items {
 				if i%100 == 0 {
@@ -124,19 +123,4 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		"failed", result.Failed,
 	)
 	return result, nil
-}
-
-// orderByExpiry sorts expired credits earliest expiry first, so a later credit can't take usage an
-// earlier one could have paid for before it expired.
-func orderByExpiry(txs []*dto.WalletTransactionResponse) {
-	sort.SliceStable(txs, func(i, j int) bool {
-		a, b := lo.FromPtr(txs[i].ExpiryDate), lo.FromPtr(txs[j].ExpiryDate)
-		if !a.Equal(b) {
-			return a.Before(b)
-		}
-		if !txs[i].CreatedAt.Equal(txs[j].CreatedAt) {
-			return txs[i].CreatedAt.Before(txs[j].CreatedAt)
-		}
-		return txs[i].ID < txs[j].ID
-	})
 }
