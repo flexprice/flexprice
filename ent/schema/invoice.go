@@ -150,6 +150,11 @@ func (Invoice) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Optional(),
+		field.JSON("fx_conversion", &types.FxConversion{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
 		field.String("description").
 			Optional(),
 		field.Time("due_date").

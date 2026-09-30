@@ -78,6 +78,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			Metadata:                    item.Metadata,
 			CommitmentInfo:              item.CommitmentInfo,
 			CustomCurrency:              item.CustomCurrency,
+			OriginalCurrency:            item.OriginalCurrency,
+			OriginalAmount:              item.OriginalAmount,
 			PrepaidCreditsApplied:       item.PrepaidCreditsApplied,
 			LineItemDiscount:            item.LineItemDiscount,
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
@@ -101,6 +103,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountDue:                  inv.AmountDue,
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
+		FxConversion:               inv.FxConversion,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -281,6 +284,12 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	if updated.CustomCurrency == nil {
 		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
 			updated.CustomCurrency = existing.CustomCurrency
+		}
+	}
+	// fx_conversion is frozen at finalize and never cleared; preserve it like custom_currency.
+	if updated.FxConversion == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.FxConversion = existing.FxConversion
 		}
 	}
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)

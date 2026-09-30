@@ -214,6 +214,18 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.String("original_currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("original_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 

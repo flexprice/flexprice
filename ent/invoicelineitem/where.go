@@ -229,6 +229,16 @@ func ParentLineItemID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldParentLineItemID, v))
 }
 
+// OriginalCurrency applies equality check predicate on the "original_currency" field. It's identical to OriginalCurrencyEQ.
+func OriginalCurrency(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldOriginalCurrency, v))
+}
+
+// OriginalAmount applies equality check predicate on the "original_amount" field. It's identical to OriginalAmountEQ.
+func OriginalAmount(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldOriginalAmount, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -2330,6 +2340,131 @@ func CustomCurrencyIsNil() predicate.InvoiceLineItem {
 // CustomCurrencyNotNil applies the NotNil predicate on the "custom_currency" field.
 func CustomCurrencyNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCustomCurrency))
+}
+
+// OriginalCurrencyEQ applies the EQ predicate on the "original_currency" field.
+func OriginalCurrencyEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyNEQ applies the NEQ predicate on the "original_currency" field.
+func OriginalCurrencyNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyIn applies the In predicate on the "original_currency" field.
+func OriginalCurrencyIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldOriginalCurrency, vs...))
+}
+
+// OriginalCurrencyNotIn applies the NotIn predicate on the "original_currency" field.
+func OriginalCurrencyNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldOriginalCurrency, vs...))
+}
+
+// OriginalCurrencyGT applies the GT predicate on the "original_currency" field.
+func OriginalCurrencyGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyGTE applies the GTE predicate on the "original_currency" field.
+func OriginalCurrencyGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyLT applies the LT predicate on the "original_currency" field.
+func OriginalCurrencyLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyLTE applies the LTE predicate on the "original_currency" field.
+func OriginalCurrencyLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyContains applies the Contains predicate on the "original_currency" field.
+func OriginalCurrencyContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyHasPrefix applies the HasPrefix predicate on the "original_currency" field.
+func OriginalCurrencyHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyHasSuffix applies the HasSuffix predicate on the "original_currency" field.
+func OriginalCurrencyHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyIsNil applies the IsNil predicate on the "original_currency" field.
+func OriginalCurrencyIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldOriginalCurrency))
+}
+
+// OriginalCurrencyNotNil applies the NotNil predicate on the "original_currency" field.
+func OriginalCurrencyNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldOriginalCurrency))
+}
+
+// OriginalCurrencyEqualFold applies the EqualFold predicate on the "original_currency" field.
+func OriginalCurrencyEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldOriginalCurrency, v))
+}
+
+// OriginalCurrencyContainsFold applies the ContainsFold predicate on the "original_currency" field.
+func OriginalCurrencyContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldOriginalCurrency, v))
+}
+
+// OriginalAmountEQ applies the EQ predicate on the "original_amount" field.
+func OriginalAmountEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldOriginalAmount, v))
+}
+
+// OriginalAmountNEQ applies the NEQ predicate on the "original_amount" field.
+func OriginalAmountNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldOriginalAmount, v))
+}
+
+// OriginalAmountIn applies the In predicate on the "original_amount" field.
+func OriginalAmountIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldOriginalAmount, vs...))
+}
+
+// OriginalAmountNotIn applies the NotIn predicate on the "original_amount" field.
+func OriginalAmountNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldOriginalAmount, vs...))
+}
+
+// OriginalAmountGT applies the GT predicate on the "original_amount" field.
+func OriginalAmountGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldOriginalAmount, v))
+}
+
+// OriginalAmountGTE applies the GTE predicate on the "original_amount" field.
+func OriginalAmountGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldOriginalAmount, v))
+}
+
+// OriginalAmountLT applies the LT predicate on the "original_amount" field.
+func OriginalAmountLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldOriginalAmount, v))
+}
+
+// OriginalAmountLTE applies the LTE predicate on the "original_amount" field.
+func OriginalAmountLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldOriginalAmount, v))
+}
+
+// OriginalAmountIsNil applies the IsNil predicate on the "original_amount" field.
+func OriginalAmountIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldOriginalAmount))
+}
+
+// OriginalAmountNotNil applies the NotNil predicate on the "original_amount" field.
+func OriginalAmountNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldOriginalAmount))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

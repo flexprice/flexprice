@@ -98,6 +98,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
 		SetCustomCurrency(inv.CustomCurrency).
+		SetFxConversion(inv.FxConversion).
 		Save(ctx)
 
 	if err != nil {
@@ -207,6 +208,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
 			SetCustomCurrency(inv.CustomCurrency).
+			SetFxConversion(inv.FxConversion).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -276,6 +278,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetEnvironmentID(item.EnvironmentID).
 					SetCommitmentInfo(item.CommitmentInfo).
 					SetCustomCurrency(item.CustomCurrency).
+					SetNillableOriginalCurrency(item.OriginalCurrency).
+					SetNillableOriginalAmount(item.OriginalAmount).
 					SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 					SetLineItemDiscount(item.LineItemDiscount).
 					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -367,6 +371,8 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetMetadata(item.Metadata).
 				SetCommitmentInfo(item.CommitmentInfo).
 				SetCustomCurrency(item.CustomCurrency).
+				SetNillableOriginalCurrency(item.OriginalCurrency).
+				SetNillableOriginalAmount(item.OriginalAmount).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -600,6 +606,12 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	// otherwise wipe it and leave the stored amounts unexplainable.
 	if inv.CustomCurrency != nil {
 		query.SetCustomCurrency(inv.CustomCurrency)
+	}
+
+	// Frozen at finalize and never cleared afterwards; an update from a struct that did not
+	// load it must not wipe the conversion record.
+	if inv.FxConversion != nil {
+		query.SetFxConversion(inv.FxConversion)
 	}
 
 	if inv.TaxExemptionReasonCode != nil {

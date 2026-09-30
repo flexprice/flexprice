@@ -91,6 +91,10 @@ type InvoiceLineItem struct {
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
 	// CustomCurrency holds the value of the "custom_currency" field.
 	CustomCurrency *types.CustomCurrencyLineItem `json:"custom_currency,omitempty"`
+	// OriginalCurrency holds the value of the "original_currency" field.
+	OriginalCurrency *string `json:"original_currency,omitempty"`
+	// OriginalAmount holds the value of the "original_amount" field.
+	OriginalAmount *decimal.Decimal `json:"original_amount,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -133,13 +137,13 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedEntitlementQuantity:
+		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedEntitlementQuantity, invoicelineitem.FieldOriginalAmount:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo, invoicelineitem.FieldCustomCurrency:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
-		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldParentLineItemID:
+		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldParentLineItemID, invoicelineitem.FieldOriginalCurrency:
 			values[i] = new(sql.NullString)
 		case invoicelineitem.FieldCreatedAt, invoicelineitem.FieldUpdatedAt, invoicelineitem.FieldPeriodStart, invoicelineitem.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -152,7 +156,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the InvoiceLineItem fields.
-func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
+func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -162,183 +166,183 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				_m.ID = value.String
+				ili.ID = value.String
 			}
 		case invoicelineitem.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				_m.TenantID = value.String
+				ili.TenantID = value.String
 			}
 		case invoicelineitem.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				_m.Status = value.String
+				ili.Status = value.String
 			}
 		case invoicelineitem.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				_m.CreatedAt = value.Time
+				ili.CreatedAt = value.Time
 			}
 		case invoicelineitem.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				_m.UpdatedAt = value.Time
+				ili.UpdatedAt = value.Time
 			}
 		case invoicelineitem.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				_m.CreatedBy = value.String
+				ili.CreatedBy = value.String
 			}
 		case invoicelineitem.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				_m.UpdatedBy = value.String
+				ili.UpdatedBy = value.String
 			}
 		case invoicelineitem.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				_m.EnvironmentID = value.String
+				ili.EnvironmentID = value.String
 			}
 		case invoicelineitem.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_id", values[i])
 			} else if value.Valid {
-				_m.InvoiceID = value.String
+				ili.InvoiceID = value.String
 			}
 		case invoicelineitem.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				_m.CustomerID = value.String
+				ili.CustomerID = value.String
 			}
 		case invoicelineitem.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				_m.SubscriptionID = new(string)
-				*_m.SubscriptionID = value.String
+				ili.SubscriptionID = new(string)
+				*ili.SubscriptionID = value.String
 			}
 		case invoicelineitem.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				_m.EntityID = new(string)
-				*_m.EntityID = value.String
+				ili.EntityID = new(string)
+				*ili.EntityID = value.String
 			}
 		case invoicelineitem.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				_m.EntityType = new(types.InvoiceLineItemEntityType)
-				*_m.EntityType = types.InvoiceLineItemEntityType(value.String)
+				ili.EntityType = new(types.InvoiceLineItemEntityType)
+				*ili.EntityType = types.InvoiceLineItemEntityType(value.String)
 			}
 		case invoicelineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_display_name", values[i])
 			} else if value.Valid {
-				_m.PlanDisplayName = new(string)
-				*_m.PlanDisplayName = value.String
+				ili.PlanDisplayName = new(string)
+				*ili.PlanDisplayName = value.String
 			}
 		case invoicelineitem.FieldPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_id", values[i])
 			} else if value.Valid {
-				_m.PriceID = new(string)
-				*_m.PriceID = value.String
+				ili.PriceID = new(string)
+				*ili.PriceID = value.String
 			}
 		case invoicelineitem.FieldPriceType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_type", values[i])
 			} else if value.Valid {
-				_m.PriceType = new(types.PriceType)
-				*_m.PriceType = types.PriceType(value.String)
+				ili.PriceType = new(types.PriceType)
+				*ili.PriceType = types.PriceType(value.String)
 			}
 		case invoicelineitem.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
-				_m.MeterID = new(string)
-				*_m.MeterID = value.String
+				ili.MeterID = new(string)
+				*ili.MeterID = value.String
 			}
 		case invoicelineitem.FieldMeterDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_display_name", values[i])
 			} else if value.Valid {
-				_m.MeterDisplayName = new(string)
-				*_m.MeterDisplayName = value.String
+				ili.MeterDisplayName = new(string)
+				*ili.MeterDisplayName = value.String
 			}
 		case invoicelineitem.FieldPriceUnitID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
 			} else if value.Valid {
-				_m.PriceUnitID = new(string)
-				*_m.PriceUnitID = value.String
+				ili.PriceUnitID = new(string)
+				*ili.PriceUnitID = value.String
 			}
 		case invoicelineitem.FieldPriceUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
 			} else if value.Valid {
-				_m.PriceUnit = new(string)
-				*_m.PriceUnit = value.String
+				ili.PriceUnit = new(string)
+				*ili.PriceUnit = value.String
 			}
 		case invoicelineitem.FieldPriceUnitAmount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
 			} else if value.Valid {
-				_m.PriceUnitAmount = new(decimal.Decimal)
-				*_m.PriceUnitAmount = *value.S.(*decimal.Decimal)
+				ili.PriceUnitAmount = new(decimal.Decimal)
+				*ili.PriceUnitAmount = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_name", values[i])
 			} else if value.Valid {
-				_m.DisplayName = new(string)
-				*_m.DisplayName = value.String
+				ili.DisplayName = new(string)
+				*ili.DisplayName = value.String
 			}
 		case invoicelineitem.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				_m.Amount = *value
+				ili.Amount = *value
 			}
 		case invoicelineitem.FieldQuantity:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field quantity", values[i])
 			} else if value != nil {
-				_m.Quantity = *value
+				ili.Quantity = *value
 			}
 		case invoicelineitem.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				_m.Currency = value.String
+				ili.Currency = value.String
 			}
 		case invoicelineitem.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
 			} else if value.Valid {
-				_m.PeriodStart = new(time.Time)
-				*_m.PeriodStart = value.Time
+				ili.PeriodStart = new(time.Time)
+				*ili.PeriodStart = value.Time
 			}
 		case invoicelineitem.FieldPeriodEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_end", values[i])
 			} else if value.Valid {
-				_m.PeriodEnd = new(time.Time)
-				*_m.PeriodEnd = value.Time
+				ili.PeriodEnd = new(time.Time)
+				*ili.PeriodEnd = value.Time
 			}
 		case invoicelineitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &ili.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -346,7 +350,7 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_info", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.CommitmentInfo); err != nil {
+				if err := json.Unmarshal(*value, &ili.CommitmentInfo); err != nil {
 					return fmt.Errorf("unmarshal field commitment_info: %w", err)
 				}
 			}
@@ -354,54 +358,68 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field prepaid_credits_applied", values[i])
 			} else if value.Valid {
-				_m.PrepaidCreditsApplied = new(decimal.Decimal)
-				*_m.PrepaidCreditsApplied = *value.S.(*decimal.Decimal)
+				ili.PrepaidCreditsApplied = new(decimal.Decimal)
+				*ili.PrepaidCreditsApplied = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldLineItemDiscount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field line_item_discount", values[i])
 			} else if value.Valid {
-				_m.LineItemDiscount = new(decimal.Decimal)
-				*_m.LineItemDiscount = *value.S.(*decimal.Decimal)
+				ili.LineItemDiscount = new(decimal.Decimal)
+				*ili.LineItemDiscount = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldInvoiceLevelDiscount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_level_discount", values[i])
 			} else if value.Valid {
-				_m.InvoiceLevelDiscount = new(decimal.Decimal)
-				*_m.InvoiceLevelDiscount = *value.S.(*decimal.Decimal)
+				ili.InvoiceLevelDiscount = new(decimal.Decimal)
+				*ili.InvoiceLevelDiscount = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldSubscriptionLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_line_item_id", values[i])
 			} else if value.Valid {
-				_m.SubscriptionLineItemID = new(string)
-				*_m.SubscriptionLineItemID = value.String
+				ili.SubscriptionLineItemID = new(string)
+				*ili.SubscriptionLineItemID = value.String
 			}
 		case invoicelineitem.FieldAdjustedEntitlementQuantity:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field adjusted_entitlement_quantity", values[i])
 			} else if value.Valid {
-				_m.AdjustedEntitlementQuantity = new(decimal.Decimal)
-				*_m.AdjustedEntitlementQuantity = *value.S.(*decimal.Decimal)
+				ili.AdjustedEntitlementQuantity = new(decimal.Decimal)
+				*ili.AdjustedEntitlementQuantity = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldParentLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_line_item_id", values[i])
 			} else if value.Valid {
-				_m.ParentLineItemID = new(string)
-				*_m.ParentLineItemID = value.String
+				ili.ParentLineItemID = new(string)
+				*ili.ParentLineItemID = value.String
 			}
 		case invoicelineitem.FieldCustomCurrency:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field custom_currency", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.CustomCurrency); err != nil {
+				if err := json.Unmarshal(*value, &ili.CustomCurrency); err != nil {
 					return fmt.Errorf("unmarshal field custom_currency: %w", err)
 				}
 			}
+		case invoicelineitem.FieldOriginalCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field original_currency", values[i])
+			} else if value.Valid {
+				ili.OriginalCurrency = new(string)
+				*ili.OriginalCurrency = value.String
+			}
+		case invoicelineitem.FieldOriginalAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field original_amount", values[i])
+			} else if value.Valid {
+				ili.OriginalAmount = new(decimal.Decimal)
+				*ili.OriginalAmount = *value.S.(*decimal.Decimal)
+			}
 		default:
-			_m.selectValues.Set(columns[i], values[i])
+			ili.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -409,187 +427,197 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the InvoiceLineItem.
 // This includes values selected through modifiers, order, etc.
-func (_m *InvoiceLineItem) Value(name string) (ent.Value, error) {
-	return _m.selectValues.Get(name)
+func (ili *InvoiceLineItem) Value(name string) (ent.Value, error) {
+	return ili.selectValues.Get(name)
 }
 
 // QueryInvoice queries the "invoice" edge of the InvoiceLineItem entity.
-func (_m *InvoiceLineItem) QueryInvoice() *InvoiceQuery {
-	return NewInvoiceLineItemClient(_m.config).QueryInvoice(_m)
+func (ili *InvoiceLineItem) QueryInvoice() *InvoiceQuery {
+	return NewInvoiceLineItemClient(ili.config).QueryInvoice(ili)
 }
 
 // QueryCouponApplications queries the "coupon_applications" edge of the InvoiceLineItem entity.
-func (_m *InvoiceLineItem) QueryCouponApplications() *CouponApplicationQuery {
-	return NewInvoiceLineItemClient(_m.config).QueryCouponApplications(_m)
+func (ili *InvoiceLineItem) QueryCouponApplications() *CouponApplicationQuery {
+	return NewInvoiceLineItemClient(ili.config).QueryCouponApplications(ili)
 }
 
 // Update returns a builder for updating this InvoiceLineItem.
 // Note that you need to call InvoiceLineItem.Unwrap() before calling this method if this InvoiceLineItem
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *InvoiceLineItem) Update() *InvoiceLineItemUpdateOne {
-	return NewInvoiceLineItemClient(_m.config).UpdateOne(_m)
+func (ili *InvoiceLineItem) Update() *InvoiceLineItemUpdateOne {
+	return NewInvoiceLineItemClient(ili.config).UpdateOne(ili)
 }
 
 // Unwrap unwraps the InvoiceLineItem entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *InvoiceLineItem) Unwrap() *InvoiceLineItem {
-	_tx, ok := _m.config.driver.(*txDriver)
+func (ili *InvoiceLineItem) Unwrap() *InvoiceLineItem {
+	_tx, ok := ili.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: InvoiceLineItem is not a transactional entity")
 	}
-	_m.config.driver = _tx.drv
-	return _m
+	ili.config.driver = _tx.drv
+	return ili
 }
 
 // String implements the fmt.Stringer.
-func (_m *InvoiceLineItem) String() string {
+func (ili *InvoiceLineItem) String() string {
 	var builder strings.Builder
 	builder.WriteString("InvoiceLineItem(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", ili.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(_m.TenantID)
+	builder.WriteString(ili.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
+	builder.WriteString(ili.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(ili.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(ili.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(_m.CreatedBy)
+	builder.WriteString(ili.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(_m.UpdatedBy)
+	builder.WriteString(ili.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(_m.EnvironmentID)
+	builder.WriteString(ili.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("invoice_id=")
-	builder.WriteString(_m.InvoiceID)
+	builder.WriteString(ili.InvoiceID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(_m.CustomerID)
+	builder.WriteString(ili.CustomerID)
 	builder.WriteString(", ")
-	if v := _m.SubscriptionID; v != nil {
+	if v := ili.SubscriptionID; v != nil {
 		builder.WriteString("subscription_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.EntityID; v != nil {
+	if v := ili.EntityID; v != nil {
 		builder.WriteString("entity_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.EntityType; v != nil {
+	if v := ili.EntityType; v != nil {
 		builder.WriteString("entity_type=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.PlanDisplayName; v != nil {
+	if v := ili.PlanDisplayName; v != nil {
 		builder.WriteString("plan_display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.PriceID; v != nil {
+	if v := ili.PriceID; v != nil {
 		builder.WriteString("price_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.PriceType; v != nil {
+	if v := ili.PriceType; v != nil {
 		builder.WriteString("price_type=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.MeterID; v != nil {
+	if v := ili.MeterID; v != nil {
 		builder.WriteString("meter_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.MeterDisplayName; v != nil {
+	if v := ili.MeterDisplayName; v != nil {
 		builder.WriteString("meter_display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.PriceUnitID; v != nil {
+	if v := ili.PriceUnitID; v != nil {
 		builder.WriteString("price_unit_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.PriceUnit; v != nil {
+	if v := ili.PriceUnit; v != nil {
 		builder.WriteString("price_unit=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.PriceUnitAmount; v != nil {
+	if v := ili.PriceUnitAmount; v != nil {
 		builder.WriteString("price_unit_amount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.DisplayName; v != nil {
+	if v := ili.DisplayName; v != nil {
 		builder.WriteString("display_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
+	builder.WriteString(fmt.Sprintf("%v", ili.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("quantity=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Quantity))
+	builder.WriteString(fmt.Sprintf("%v", ili.Quantity))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(_m.Currency)
+	builder.WriteString(ili.Currency)
 	builder.WriteString(", ")
-	if v := _m.PeriodStart; v != nil {
+	if v := ili.PeriodStart; v != nil {
 		builder.WriteString("period_start=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := _m.PeriodEnd; v != nil {
+	if v := ili.PeriodEnd; v != nil {
 		builder.WriteString("period_end=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", ili.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("commitment_info=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CommitmentInfo))
+	builder.WriteString(fmt.Sprintf("%v", ili.CommitmentInfo))
 	builder.WriteString(", ")
-	if v := _m.PrepaidCreditsApplied; v != nil {
+	if v := ili.PrepaidCreditsApplied; v != nil {
 		builder.WriteString("prepaid_credits_applied=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.LineItemDiscount; v != nil {
+	if v := ili.LineItemDiscount; v != nil {
 		builder.WriteString("line_item_discount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.InvoiceLevelDiscount; v != nil {
+	if v := ili.InvoiceLevelDiscount; v != nil {
 		builder.WriteString("invoice_level_discount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.SubscriptionLineItemID; v != nil {
+	if v := ili.SubscriptionLineItemID; v != nil {
 		builder.WriteString("subscription_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := _m.AdjustedEntitlementQuantity; v != nil {
+	if v := ili.AdjustedEntitlementQuantity; v != nil {
 		builder.WriteString("adjusted_entitlement_quantity=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := _m.ParentLineItemID; v != nil {
+	if v := ili.ParentLineItemID; v != nil {
 		builder.WriteString("parent_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("custom_currency=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CustomCurrency))
+	builder.WriteString(fmt.Sprintf("%v", ili.CustomCurrency))
+	builder.WriteString(", ")
+	if v := ili.OriginalCurrency; v != nil {
+		builder.WriteString("original_currency=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ili.OriginalAmount; v != nil {
+		builder.WriteString("original_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

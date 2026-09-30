@@ -832,11 +832,11 @@ func init() {
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
 	// customerDescTimezone is the schema descriptor for timezone field.
-	customerDescTimezone := customerFields[11].Descriptor()
+	customerDescTimezone := customerFields[12].Descriptor()
 	// customer.DefaultTimezone holds the default value on creation for the timezone field.
 	customer.DefaultTimezone = customerDescTimezone.Default.(string)
 	// customerDescTaxTreatment is the schema descriptor for tax_treatment field.
-	customerDescTaxTreatment := customerFields[12].Descriptor()
+	customerDescTaxTreatment := customerFields[13].Descriptor()
 	// customer.DefaultTaxTreatment holds the default value on creation for the tax_treatment field.
 	customer.DefaultTaxTreatment = types.TaxTreatment(customerDescTaxTreatment.Default.(string))
 	// customer.TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
@@ -1303,15 +1303,15 @@ func init() {
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[31].Descriptor()
+	invoiceDescVersion := invoiceFields[32].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	// invoiceDescTotalPrepaidCreditsApplied is the schema descriptor for total_prepaid_credits_applied field.
-	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[34].Descriptor()
+	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[35].Descriptor()
 	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
 	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
 	// invoiceDescIsManuallyEdited is the schema descriptor for is_manually_edited field.
-	invoiceDescIsManuallyEdited := invoiceFields[38].Descriptor()
+	invoiceDescIsManuallyEdited := invoiceFields[39].Descriptor()
 	// invoice.DefaultIsManuallyEdited holds the default value on creation for the is_manually_edited field.
 	invoice.DefaultIsManuallyEdited = invoiceDescIsManuallyEdited.Default.(bool)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

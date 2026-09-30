@@ -120,6 +120,11 @@ func Contact(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldContact, v))
 }
 
+// BillingCurrency applies equality check predicate on the "billing_currency" field. It's identical to BillingCurrencyEQ.
+func BillingCurrency(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldBillingCurrency, v))
+}
+
 // AddressLine1 applies equality check predicate on the "address_line1" field. It's identical to AddressLine1EQ.
 func AddressLine1(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldAddressLine1, v))
@@ -884,6 +889,81 @@ func ContactEqualFold(v string) predicate.Customer {
 // ContactContainsFold applies the ContainsFold predicate on the "contact" field.
 func ContactContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldContact, v))
+}
+
+// BillingCurrencyEQ applies the EQ predicate on the "billing_currency" field.
+func BillingCurrencyEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyNEQ applies the NEQ predicate on the "billing_currency" field.
+func BillingCurrencyNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyIn applies the In predicate on the "billing_currency" field.
+func BillingCurrencyIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldBillingCurrency, vs...))
+}
+
+// BillingCurrencyNotIn applies the NotIn predicate on the "billing_currency" field.
+func BillingCurrencyNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldBillingCurrency, vs...))
+}
+
+// BillingCurrencyGT applies the GT predicate on the "billing_currency" field.
+func BillingCurrencyGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyGTE applies the GTE predicate on the "billing_currency" field.
+func BillingCurrencyGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyLT applies the LT predicate on the "billing_currency" field.
+func BillingCurrencyLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyLTE applies the LTE predicate on the "billing_currency" field.
+func BillingCurrencyLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyContains applies the Contains predicate on the "billing_currency" field.
+func BillingCurrencyContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyHasPrefix applies the HasPrefix predicate on the "billing_currency" field.
+func BillingCurrencyHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyHasSuffix applies the HasSuffix predicate on the "billing_currency" field.
+func BillingCurrencyHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyIsNil applies the IsNil predicate on the "billing_currency" field.
+func BillingCurrencyIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldBillingCurrency))
+}
+
+// BillingCurrencyNotNil applies the NotNil predicate on the "billing_currency" field.
+func BillingCurrencyNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldBillingCurrency))
+}
+
+// BillingCurrencyEqualFold applies the EqualFold predicate on the "billing_currency" field.
+func BillingCurrencyEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldBillingCurrency, v))
+}
+
+// BillingCurrencyContainsFold applies the ContainsFold predicate on the "billing_currency" field.
+func BillingCurrencyContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldBillingCurrency, v))
 }
 
 // AddressLine1EQ applies the EQ predicate on the "address_line1" field.

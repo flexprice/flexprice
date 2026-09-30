@@ -47,6 +47,9 @@ type Invoice struct {
 	// custom_currency is the custom-currency equivalent; Currency itself is always fiat
 	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
 
+	// fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -188,6 +191,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AmountDue:              e.AmountDue,
 		AmountPaid:             e.AmountPaid,
 		CustomCurrency:         e.CustomCurrency,
+		FxConversion:           e.FxConversion,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),

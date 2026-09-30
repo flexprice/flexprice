@@ -68,6 +68,8 @@ type Invoice struct {
 	Total decimal.Decimal `json:"total,omitempty"`
 	// CustomCurrency holds the value of the "custom_currency" field.
 	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
+	// FxConversion holds the value of the "fx_conversion" field.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -154,7 +156,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoice.FieldCustomCurrency, invoice.FieldMetadata:
+		case invoice.FieldCustomCurrency, invoice.FieldFxConversion, invoice.FieldMetadata:
 			values[i] = new([]byte)
 		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
@@ -335,6 +337,14 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.CustomCurrency); err != nil {
 					return fmt.Errorf("unmarshal field custom_currency: %w", err)
+				}
+			}
+		case invoice.FieldFxConversion:
+			if value, ok := values[j].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field fx_conversion", values[j])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &i.FxConversion); err != nil {
+					return fmt.Errorf("unmarshal field fx_conversion: %w", err)
 				}
 			}
 		case invoice.FieldDescription:
@@ -612,6 +622,9 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("custom_currency=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CustomCurrency))
+	builder.WriteString(", ")
+	builder.WriteString("fx_conversion=")
+	builder.WriteString(fmt.Sprintf("%v", i.FxConversion))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)
