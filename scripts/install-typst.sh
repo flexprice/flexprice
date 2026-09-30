@@ -24,7 +24,11 @@ create_local_bin_folder() {
     fi
 }
 
-if ! which typst >/dev/null; then
+TYPST_VERSION="0.15.1"
+
+# Reinstall when the pinned version is missing OR an older one is on PATH;
+# a stale binary silently compiles templates the CI version rejects.
+if ! typst --version 2>/dev/null | grep -q "typst $TYPST_VERSION"; then
     ARCH=$(uname -m)
     OS=$(uname)
     if [ "$OS" = "Darwin" ]; then

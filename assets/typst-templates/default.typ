@@ -524,8 +524,8 @@
   v(3em)
   align(bottom,   align(center, text(size: 8pt)[
     #biller.name ⋅ 
-    #{if "website" in biller {[#link("https://" + biller.website)[#biller.website] ⋅ ]}}
-    #{if "help-email" in biller {[#link(biller.help-email)[#biller.help-email]]}}
+    #{if biller.at("website", default: "") != "" {[#link("https://" + biller.website)[#biller.website] ⋅ ]}}
+    #{if biller.at("help-email", default: "") != "" {[#link(biller.help-email)[#biller.help-email]]}}
   ]))
 
   doc
