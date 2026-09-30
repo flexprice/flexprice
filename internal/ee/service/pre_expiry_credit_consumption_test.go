@@ -191,6 +191,74 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_OnlyActivePrepaidWallets() 
 	}
 }
 
+// Voiding a draft that carries credits applied at expiry refunds them like any void: a wallet
+// top-up with no expiry.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_VoidRefundsAppliedCredits() {
+	s.enablePreExpiryConsumption()
+	tx, periodStart, periodEnd := s.midPeriodGrant(30)
+	sub := s.activeSubscription("subs_pre_expiry", periodStart, periodEnd)
+	inv := s.subscriptionInvoice("inv_pre_expiry", decimal.NewFromInt(35), periodStart, periodEnd)
+	s.stubPreExpiry(map[string]string{sub.ID: inv.ID}, map[string]decimal.Decimal{sub.ID: decimal.NewFromInt(20)})
+
+	_, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+
+	_, err = s.invoiceService.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+
+	refunds := s.walletTransactions(types.TransactionReasonInvoiceVoidRefund)
+	s.Require().Len(refunds, 1)
+	s.True(decimal.NewFromInt(20).Equal(refunds[0].CreditAmount), "refunded %s", refunds[0].CreditAmount)
+	s.Nil(refunds[0].ExpiryDate)
+}
+
+// Two grants that expired before one job run. The earlier one must be processed first: it can only
+// pay usage before day 10, while the later one can pay anything before day 20. Usage: 8 before
+// day 10, 24 before day 20. Earliest expiry first applies 8 + 16 = 24; the reverse applies 20 + 0.
+func (s *CreditExpiryInvoiceRaceSuite) TestPreExpiry_ProcessingOrderOfTwoGrants() {
+	cases := []struct {
+		name         string
+		earlierFirst bool
+		want         int64
+	}{
+		{"earliest expiry first", true, 24},
+		{"latest expiry first", false, 20},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.enablePreExpiryConsumption()
+			now := time.Now().UTC()
+			periodStart, periodEnd := now.Add(-25*24*time.Hour), now.Add(5*24*time.Hour)
+			day10, day20 := periodStart.Add(9*24*time.Hour), periodStart.Add(19*24*time.Hour)
+			g1 := s.seedGrant("wtxn_g1", decimal.NewFromInt(10), periodStart, day10)
+			g2 := s.seedGrant("wtxn_g2", decimal.NewFromInt(20), periodStart.Add(11*24*time.Hour), day20)
+			sub := s.activeSubscription("subs_pre_expiry", periodStart, periodEnd)
+			inv := s.subscriptionInvoice("inv_pre_expiry", decimal.NewFromInt(29), periodStart, periodEnd)
+			ws := s.stubPreExpiry(map[string]string{sub.ID: inv.ID}, nil)
+			ws.preExpiryUsageCharges = func(_ context.Context, _ *subscription.Subscription, _, _, until time.Time) (decimal.Decimal, error) {
+				if until.After(day10) {
+					return decimal.NewFromInt(24), nil
+				}
+				return decimal.NewFromInt(8), nil
+			}
+
+			order := []*wallet.Transaction{g1, g2}
+			if !tc.earlierFirst {
+				order = []*wallet.Transaction{g2, g1}
+			}
+			for _, g := range order {
+				_, err := s.walletService.ExpireCredits(s.GetContext(), g.ID)
+				s.Require().NoError(err)
+			}
+
+			updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
+			s.Require().NoError(err)
+			s.True(decimal.NewFromInt(tc.want).Equal(updated.TotalPrepaidCreditsApplied), "applied %s", updated.TotalPrepaidCreditsApplied)
+		})
+	}
+}
+
 // discountedDraft is a draft with a usage line of usage less discount, plus a fixed fee line.
 func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, usage, discount, fee decimal.Decimal, periodStart, periodEnd time.Time) *invoice.Invoice {
 	ctx := s.GetContext()

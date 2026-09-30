@@ -81,6 +81,7 @@ func (s *CreditExpiryInvoiceRaceSuite) SetupTest() {
 		UserRepo:                     stores.UserRepo,
 		AuthRepo:                     stores.AuthRepo,
 		PaymentRepo:                  stores.PaymentRepo,
+		RefundRepo:                   stores.RefundRepo,
 		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
 		CreditNoteRepo:               stores.CreditNoteRepo,
 		CreditNoteLineItemRepo:       stores.CreditNoteLineItemRepo,

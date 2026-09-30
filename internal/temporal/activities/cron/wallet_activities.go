@@ -2,8 +2,10 @@ package cron
 
 import (
 	"context"
+	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -83,6 +85,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 			}
 
 			a.logger.Debug(ctx, "found expired credits", "count", len(transactions.Items))
+			orderByExpiry(transactions.Items)
 
 			for i, tx := range transactions.Items {
 				if i%100 == 0 {
@@ -121,4 +124,19 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		"failed", result.Failed,
 	)
 	return result, nil
+}
+
+// orderByExpiry sorts expired credits earliest expiry first, so a later credit can't take usage an
+// earlier one could have paid for before it expired.
+func orderByExpiry(txs []*dto.WalletTransactionResponse) {
+	sort.SliceStable(txs, func(i, j int) bool {
+		a, b := lo.FromPtr(txs[i].ExpiryDate), lo.FromPtr(txs[j].ExpiryDate)
+		if !a.Equal(b) {
+			return a.Before(b)
+		}
+		if !txs[i].CreatedAt.Equal(txs[j].CreatedAt) {
+			return txs[i].CreatedAt.Before(txs[j].CreatedAt)
+		}
+		return txs[i].ID < txs[j].ID
+	})
 }
