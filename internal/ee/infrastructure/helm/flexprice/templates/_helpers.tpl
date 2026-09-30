@@ -827,3 +827,65 @@ the bytes shipped — the workloads and the migration Job all resolve through he
 {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+flexprice.gceIngressName — object name for the parallel GCE Ingress stack.
+
+One name is shared by the Ingress, its Service, BackendConfig and FrontendConfig,
+because they are a single unit and a mismatch between them is the common failure
+(a BackendConfig the Service does not reference is silently ignored).
+
+Defaults to "<fullname>-api-gce". gceIngress.nameOverride pins it exactly, which
+is what lets the chart ADOPT objects already created out of band during a
+migration: Helm matches on name, so a mismatch creates a duplicate load balancer
+instead of taking ownership.
+*/}}
+{{- define "flexprice.gceIngressName" -}}
+{{- if .Values.gceIngress.nameOverride -}}
+{{ .Values.gceIngress.nameOverride }}
+{{- else -}}
+{{ printf "%s-api-%s" (include "flexprice.fullname" .) .Values.gceIngress.nameSuffix }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressHosts — hostnames the parallel GCE Ingress serves, as a
+YAML array. Defaults to the hosts already under ingress.hosts, so the parallel
+Ingress covers the same names it is migrating; gceIngress.hosts overrides.
+*/}}
+{{- define "flexprice.gceIngressHosts" -}}
+{{- if .Values.gceIngress.hosts -}}
+{{ toYaml .Values.gceIngress.hosts }}
+{{- else -}}
+{{ range .Values.ingress.hosts }}
+- {{ .host }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressSecretName — TLS secret for the parallel GCE Ingress.
+
+Separate from the chart Ingress's secret by default. Sharing it would couple this
+load balancer's TLS renewal to the nginx Ingress's lifecycle; see
+ingress-gce-parallel/certificate.yaml.
+*/}}
+{{- define "flexprice.gceIngressSecretName" -}}
+{{- if .Values.gceIngress.tls.secretName -}}
+{{ .Values.gceIngress.tls.secretName }}
+{{- else -}}
+{{ printf "%s-tls" (include "flexprice.gceIngressName" .) }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressCertName — Certificate / ManagedCertificate object name.
+Independent of the secret name so an out-of-band certificate can be adopted.
+*/}}
+{{- define "flexprice.gceIngressCertName" -}}
+{{- if .Values.gceIngress.tls.certificateName -}}
+{{ .Values.gceIngress.tls.certificateName }}
+{{- else -}}
+{{ include "flexprice.gceIngressName" . }}
+{{- end -}}
+{{- end -}}

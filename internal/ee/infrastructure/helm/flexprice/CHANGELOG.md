@@ -9,6 +9,53 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.5.0] - 2026-09-30
+
+### Added
+- **`gceIngress` — an optional SECOND api Ingress on a GCE global external
+  Application Load Balancer, rendered alongside `ingress.*` instead of replacing
+  it.** Default `enabled: false`, so every existing values file renders
+  byte-identically and `ingress.provider: gce` is unchanged.
+  - Purpose: migrate an API off ingress-nginx onto a GCE load balancer with zero
+    downtime. `ingress.provider: gce` cannot do this — the chart renders exactly
+    one api Ingress, so flipping that provider CONVERTS it, deleting the nginx
+    load balancer before the replacement serves. Measured on GCP staging: a fresh
+    GCE load balancer took ~12 minutes from apply to its first 200, and an
+    ADDRESS plus HEALTHY backends appeared ~6 minutes BEFORE it served. A
+    conversion is therefore a ~12 minute hole.
+  - With this block both Ingresses serve the same pods through their own load
+    balancers, DNS decides which takes traffic, and reverting the DNS record is
+    the rollback.
+  - Renders a parallel `Service` carrying the NEG and BackendConfig annotations,
+    so the chart's own api Service is never mutated, plus `BackendConfig`,
+    `FrontendConfig`, an optional cert-manager `Certificate` (or
+    `ManagedCertificate`), and the `Ingress`.
+  - `nameOverride` pins the object name so the chart can ADOPT objects already
+    created out of band during a migration. Helm matches on name; a mismatch
+    creates a duplicate load balancer instead of taking ownership.
+- **`gceIngress.frontendConfig.sslPolicy`.** The GCE frontend default accepts TLS
+  1.0/1.1 while ingress-nginx refuses them, so migrating without a policy WEAKENS
+  TLS. The existing `ingress-gcp/frontendconfig.yaml` has no such field, which is
+  why a region already on `provider: gce` currently accepts TLS 1.0.
+- **`gceIngress.backendConfig.logging`.** Load balancer request logging, needed to
+  see Cloud Armor preview-rule matches, which are otherwise invisible.
+
+### Notes
+- `gceIngress.backendConfig.timeoutSec` defaults to **60** to match
+  ingress-nginx's `proxy-read-timeout`. The load balancer's own default is 30,
+  which silently cuts requests the nginx path serves.
+- `gceIngress.tls.mode` defaults to `certManager`, not the Google-managed
+  certificate used by `ingress.provider: gce`. A `ManagedCertificate` validates
+  over HTTP against the load balancer, so it can only go Active AFTER DNS already
+  points there, and takes 15-60 minutes — guaranteeing a TLS error window. With a
+  DNS-01 issuer, cert-manager issues before cutover with no port 80.
+- The Ingress is claimed with the legacy `kubernetes.io/ingress.class` annotation,
+  not `spec.ingressClassName`. GKE enables the httpLoadBalancing addon without
+  necessarily creating a `gce` IngressClass object, and with
+  `ingressClassName: gce` and no such object no controller claims the Ingress —
+  no events, no ADDRESS. `kubectl` warns the annotation is deprecated; that
+  warning is expected.
+
 ## [1.4.1] - 2026-08-31
 
 ### Fixed

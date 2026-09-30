@@ -1,0 +1,34 @@
+{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+# BackendConfig for the parallel GCE Ingress's Service.
+#
+# timeoutSec defaults to 60 to match ingress-nginx's proxy-read-timeout. The
+# load balancer's own default is 30, which would cut requests the nginx path
+# currently serves -- a silent behaviour change on cutover.
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ include "flexprice.gceIngressName" . }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  {{- with .Values.gceIngress.backendConfig.healthCheck }}
+  healthCheck:
+    type: HTTP
+    requestPath: {{ .path | quote }}
+    port: {{ .port }}
+    checkIntervalSec: {{ .checkIntervalSec }}
+    timeoutSec: {{ .timeoutSec }}
+    healthyThreshold: {{ .healthyThreshold }}
+    unhealthyThreshold: {{ .unhealthyThreshold }}
+  {{- end }}
+  timeoutSec: {{ .Values.gceIngress.backendConfig.timeoutSec }}
+  {{- with .Values.gceIngress.backendConfig.cloudArmor.securityPolicyName }}
+  securityPolicy:
+    name: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.gceIngress.backendConfig.logging.enable }}
+  logging:
+    enable: true
+    sampleRate: {{ .Values.gceIngress.backendConfig.logging.sampleRate }}
+  {{- end }}
+{{- end }}

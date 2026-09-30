@@ -750,6 +750,103 @@ temporalIngress:
   host: "temporal.example.com"
   tls: []
 
+# ── Parallel GCE Ingress ──────────────────────────────────────────────────────
+# A SECOND api Ingress on a GCE global external Application Load Balancer,
+# rendered alongside `ingress.*` rather than replacing it.
+#
+# Why this exists separately from `ingress.provider: gce`: the chart renders
+# exactly one api Ingress, so flipping that provider CONVERTS it — deleting the
+# nginx Ingress and its load balancer before the replacement serves. Measured on
+# GCP staging, a fresh GCE load balancer took ~12 minutes from apply to its first
+# 200, so a conversion is a ~12 minute hole. With this block both Ingresses serve
+# the same pods through their own load balancers, DNS decides which takes
+# traffic, and reverting the DNS record is the rollback.
+#
+# Default OFF: every existing values file renders byte-identically, and
+# `ingress.provider: gce` keeps working unchanged for regions already on it.
+#
+# Requires two GCP resources created out of band (the chart cannot create them):
+#   - a reserved global address, named in globalStaticIpName
+#   - a compute SSL policy, named in frontendConfig.sslPolicy
+gceIngress:
+  enabled: false
+
+  # Suffix for the object name: <fullname>-api-<nameSuffix>.
+  nameSuffix: gce
+  # Pin the object name exactly, overriding nameSuffix. Set this to ADOPT
+  # objects already created out of band: Helm matches on name, so a mismatch
+  # creates a duplicate load balancer instead of taking ownership.
+  nameOverride: ""
+
+  # Hostnames served. Defaults to the hosts under ingress.hosts, so the parallel
+  # Ingress covers the same names it is migrating.
+  hosts: []
+
+  # Reserved global address name. Leave empty to let the load balancer take an
+  # ephemeral IP — not recommended, since recreating the Ingress then changes the
+  # IP and breaks whatever DNS points at it.
+  globalStaticIpName: ""
+
+  # false serves 443 only, matching an nginx setup with the HTTP listener
+  # disabled. With DNS-01 certificate issuance nothing needs port 80.
+  allowHttp: false
+
+  annotations: {}
+  service:
+    annotations: {}
+
+  tls:
+    # certManager — cert-manager issues the certificate. With a DNS-01 solver it
+    #   needs no port 80 and no DNS pointing at this load balancer, so TLS is
+    #   valid and testable BEFORE cutover. Default, and the only mode safe for a
+    #   zero-downtime migration.
+    # managed — Google-managed certificate, validated over HTTP against the load
+    #   balancer. It can only go Active AFTER DNS already points here and takes
+    #   15-60 minutes, guaranteeing a TLS error window.
+    mode: certManager
+
+    # certManager mode. When clusterIssuer is set the chart renders the
+    # Certificate; leave it empty to reference a secret managed elsewhere.
+    clusterIssuer: ""
+    issuerKind: ClusterIssuer
+    # Defaults to <objectName>-tls. Deliberately NOT the chart Ingress's secret:
+    # that one is managed on the nginx Ingress's behalf, so sharing it would stop
+    # renewal when that Ingress is removed.
+    secretName: ""
+    # Certificate object name; defaults to the shared object name. Independent of
+    # secretName so an out-of-band certificate can be adopted.
+    certificateName: ""
+
+  backendConfig:
+    healthCheck:
+      path: /health
+      port: 8080
+      checkIntervalSec: 15
+      timeoutSec: 5
+      healthyThreshold: 2
+      unhealthyThreshold: 3
+    # 60 matches ingress-nginx's proxy-read-timeout. The load balancer's own
+    # default is 30, which would cut requests the nginx path currently serves.
+    timeoutSec: 60
+    # Cloud Armor security policy to attach. Created out of band.
+    cloudArmor:
+      securityPolicyName: ""
+    # Load balancer request logging. Needed to see Cloud Armor preview-rule
+    # matches, which are otherwise invisible.
+    logging:
+      enable: false
+      sampleRate: 1.0
+
+  frontendConfig:
+    # Name of a pre-existing compute SSL policy. WITHOUT THIS the load balancer
+    # accepts TLS 1.0/1.1 while ingress-nginx refuses them, so migrating weakens
+    # TLS. Create a MODERN profile policy with min TLS 1.2 and name it here.
+    sslPolicy: ""
+    redirectToHttps:
+      # Meaningless when allowHttp is false, since there is no port 80 listener.
+      enabled: false
+      responseCodeName: MOVED_PERMANENTLY_DEFAULT
+
 # Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
