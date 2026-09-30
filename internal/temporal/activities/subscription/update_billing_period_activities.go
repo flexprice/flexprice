@@ -256,6 +256,20 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 	return nil
 }
 
+const (
+	processInvoiceStartDelay = 6 * time.Hour
+	processInvoiceJitterMin  = 2 * time.Hour
+	processInvoiceJitterMax  = 6 * time.Hour
+)
+
+// processInvoiceDelaySeconds is the StartDelay for ProcessInvoiceWorkflow:
+// a 6h wait plus a uniform jitter in [2h, 6h).
+func processInvoiceDelaySeconds() int {
+	span := int64(processInvoiceJitterMax - processInvoiceJitterMin)
+	jitter := processInvoiceJitterMin + time.Duration(rand.Int63n(span)) // #nosec G404 -- jitter, not security-sensitive
+	return int((processInvoiceStartDelay + jitter) / time.Second)
+}
+
 // TriggerInvoiceWorkflowActivity triggers invoice workflows for each invoice (fire-and-forget)
 // If triggering fails for any invoice, it logs the error and continues with the rest
 func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
@@ -289,7 +303,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
-			900+rand.Intn(300), // #nosec G404 -- jitter, not security-sensitive
+			processInvoiceDelaySeconds(),
 		)
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",
