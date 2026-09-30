@@ -17,8 +17,8 @@ import (
 // on the subscription's unfinalized cycle drafts, and only the rest expires.
 
 const (
-	// creditExpiryGracePeriod is how long after expiry the job waits when expiry settlement
-	// consumption is off, so the period's invoice can finalize and use the credit first.
+	// creditExpiryGracePeriod is how long after expiry the job waits when credit expiry settlement
+	// is off, so the period's invoice can finalize and use the credit first.
 	creditExpiryGracePeriod = 6 * time.Hour
 	// settlementGracePeriod lets late events timestamped before the expiry
 	// arrive before the credit is applied to drafts.
