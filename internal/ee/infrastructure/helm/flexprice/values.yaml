@@ -505,6 +505,12 @@ ingress:
       # to omit the securityPolicy block entirely.
       cloudArmor:
         securityPolicyName: ""
+      # Load balancer request logging. Needed to see Cloud Armor rule matches,
+      # which are otherwise invisible. Raise sampleRate before sizing rules off
+      # low-frequency matches.
+      logging:
+        enable: false
+        sampleRate: 0.1
     frontendConfig:
       # Redirect HTTP -> HTTPS at the GCE load balancer.
       redirectToHttps:
@@ -858,10 +864,11 @@ gceIngress:
     cloudArmor:
       securityPolicyName: ""
     # Load balancer request logging. Needed to see Cloud Armor preview-rule
-    # matches, which are otherwise invisible.
+    # matches, which are otherwise invisible. Raise sampleRate before sizing
+    # rules off low-frequency matches.
     logging:
       enable: false
-      sampleRate: 1.0
+      sampleRate: 0.1
 
   frontendConfig:
     # Name of a pre-existing compute SSL policy. WITHOUT THIS the load balancer

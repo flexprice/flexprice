@@ -9,6 +9,27 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.5.1] - 2026-09-30
+
+### Added
+- **`ingress.gce.backendConfig.logging`** — load balancer request logging on the
+  `ingress.provider: gce` path, which had no way to set it. `gceIngress` already
+  had this block; the two GCE paths now expose the same key.
+  - Rendered for BOTH boolean values on purpose. Omitting `spec.logging` does
+    not disable logging — GKE falls back to the load balancer default, which can
+    still record every request. Only an explicit `enable: false` turns it off.
+  - Consequence for existing `provider: gce` users: the new default of
+    `enable: false` makes the chart assert what was previously inherited. A
+    backend that was logging via the load balancer default will STOP unless its
+    values file sets `enable: true` explicitly. Set it in the same change.
+
+### Changed
+- `gceIngress.backendConfig.logging.sampleRate` default `1.0` → `0.1`, and the
+  new `ingress.gce` equivalent defaults to `0.1` to match. Request logs exist to
+  show Cloud Armor rule matches; 10% keeps the volume trivial at production
+  scale. Raise it before sizing rules off low-frequency matches, since a
+  previewed rule only appears in requests that were logged.
+
 ## [1.5.0] - 2026-09-30
 
 ### Added
