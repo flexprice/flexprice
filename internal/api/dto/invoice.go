@@ -1705,7 +1705,7 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
 
 	// CurrentPeriodCreditsApplied maps subscription ID to credits already applied to its
-	// current-period draft (an expiring credit's pre-expiry share), in the wallet's currency.
+	// current-period draft (credits settled at expiry), in the wallet's currency.
 	CurrentPeriodCreditsApplied map[string]decimal.Decimal `json:"-"`
 }
 

@@ -53,7 +53,7 @@ The draft invoice itself is the record of what the credit paid. No new table, no
 ```mermaid
 flowchart TD
     A[wallet-credit-expiry schedule, every 15 min] --> B[ExpireCreditsActivity<br/>expired credits, earliest expiry first]
-    B --> C{pre_expiry_credit_consumption_config<br/>on for the environment?}
+    B --> C{credit_expiry_settlement_config<br/>on for the environment?}
     C -- No --> Z[ExpireCredits as today:<br/>6h grace, skip rules, expire full remainder]
     C -- Yes --> D[ExpireCredits for each expired credit]
     D --> E[Active prepaid wallet? Find subscriptions: active,<br/>standalone or parent, same currency, no auto-invoice threshold]
@@ -70,7 +70,7 @@ flowchart TD
 
     P[Period end: billing run] --> Q[Reuses the same draft by idempotency key]
     Q --> R[ComputeInvoice: full month, totals net of<br/>TotalPrepaidCreditsApplied, lines untouched]
-    R --> S[Finalize: ApplyCreditsToInvoice<br/>pool = pre-expiry amount first, then wallets;<br/>existing allocation fills usage lines]
+    R --> S[Finalize: ApplyCreditsToInvoice<br/>pool = amount settled at expiry first, then wallets;<br/>existing allocation fills usage lines]
 ```
 
 ### Walk-through (case 2)
@@ -87,14 +87,14 @@ flowchart TD
 
 | Parent | Function | File | Change |
 |---|---|---|---|
-| Settings | `pre_expiry_credit_consumption_config` | `internal/types/settings.go`, `internal/ee/service/settings.go` | Per-environment setting, off by default |
+| Settings | `credit_expiry_settlement_config` | `internal/types/settings.go`, `internal/ee/service/settings.go` | Per-environment setting, off by default |
 | `ExpireCreditsActivity` | expired-credit cutoff | `internal/temporal/activities/cron/wallet_activities.go` | Setting on: `expiry <= now − 2h` (buffer for late events; usage is still capped at the expiry time). Off: unchanged (6h) |
-| `ExpireCreditsActivity` | `ExpireCredits` → `expireCreditAfterPreExpiryConsumption` | `internal/ee/service/wallet.go`, new `credit_expiry.go` | Setting on: active prepaid wallets only; for each eligible subscription, earlier unfinalized cycle drafts then the current period's draft (created only if it has usage before the expiry); cap at usage before the expiry after discounts, rounded down to cents; apply, then expire the rest, in one transaction |
+| `ExpireCreditsActivity` | `ExpireCredits` → `settleExpiringCredit` | `internal/ee/service/wallet.go`, new `credit_expiry.go` | Setting on: active prepaid wallets only; for each eligible subscription, earlier unfinalized cycle drafts then the current period's draft (created only if it has usage before the expiry); cap at usage before the expiry after discounts, rounded down to cents; apply, then expire the rest, in one transaction |
 | `ExpireCredits` | `UsageChargesForWindow` | `internal/ee/service/billing_meter_usage.go` | Usage charges for `[period_start, expiry)` |
 | `ExpireCredits` | `GetOrComputeCurrentPeriodDraft`, `ListOpenCycleDrafts` | `internal/ee/service/invoice.go` | Get or create + compute the current draft (same key as the billing run); list earlier open cycle drafts |
 | `ExpireCredits` | **new** `ApplyExpiringCreditToInvoice` | `internal/ee/service/credit_adjustment.go` | Debit the specific credit with `ParentCreditTxID`, reason `CREDIT_ADJUSTMENT`, reference = invoice, idempotency key = invoice + credit. Add to `TotalPrepaidCreditsApplied` and recalculate totals. Lines untouched |
 | Every compute | `ComputeInvoice` | `internal/ee/service/invoice.go` | Totals net of `TotalPrepaidCreditsApplied` (read from the denomination for custom currency). Never SKIPPED when credits are applied |
-| `performFinalizeInvoiceActions` | `ApplyCreditsToInvoice` | `internal/ee/service/credit_adjustment.go` | Pre-expiry amount first in the pool, not debited again. Wallets capped at credits eligible at the period end. `CalculateCreditAdjustments` unchanged |
+| `performFinalizeInvoiceActions` | `ApplyCreditsToInvoice` | `internal/ee/service/credit_adjustment.go` | Amount settled at expiry first in the pool, not debited again. Wallets capped at credits eligible at the period end. `CalculateCreditAdjustments` unchanged |
 | Finalization schedule | `IsFinalizationDue` | `internal/ee/service/invoice.go` | Wait while a credit that expired inside the draft's period is unprocessed, at most expiry + 3h |
 | Wallet balance | `pendingCharges`, `GetUnpaidInvoicesToBePaid` | `internal/ee/service/wallet.go`, `invoice.go` | Skip the current period's cycle draft (usage is counted live) and net its applied credits off that usage. Past drafts: subtract applied credits not yet on lines |
 | `ExpireCreditsActivity` | expired-credit listing | `internal/temporal/activities/cron/wallet_activities.go` | Sorted by `expiry_date asc`, so a later credit can't take usage an earlier one could pay. An environment whose setting can't be read is skipped, not the whole run |
@@ -107,7 +107,7 @@ Unpaid invoices skip drafts whose period hasn't ended.
 
 Two problems once credits are applied to drafts at expiry:
 
-- **Mid-period:** the wallet was already debited for pre-expiry usage, but ClickHouse usage still
+- **Mid-period:** the wallet was already debited for usage before expiry, but ClickHouse usage still
   includes it. Case 2 would show 80 instead of 100.
 - **Between period end and rollover** (~2 min, longer if the billing run is late): the
   subscription still points at the old period, so ClickHouse usage covers it, and the ended draft
@@ -140,7 +140,7 @@ finalization hold, voids as today. Threshold subscriptions are excluded.
 then plan change.
 
 Until v2, an immediate cancel or an `anchor_at_effect` plan change after a mid-period expiry bills
-the pre-expiry usage twice or orphans the draft. Before enabling v1 for a tenant:
+the usage before expiry twice or orphans the draft. Before enabling v1 for a tenant:
 
 1. Check how often the tenant uses immediate cancel and `anchor_at_effect` plan changes.
 2. Monitor for orphaned drafts: open cycle drafts with credits applied whose subscription has a
@@ -174,7 +174,7 @@ Not affected: end-of-period cancel, and pause/resume (no period change, no invoi
 To handle:
 
 1. **Credit expired just before the cut.** These flows finalize through `ProcessDraftInvoice`,
-   which skips the finalization hold. Run the pre-expiry step for the customer's credits that
+   which skips the finalization hold. Run expiry settlement for the customer's credits that
    expired inside the window before the cut.
 2. **Idempotency key.** Unique per tenant and environment (`ent/schema/invoice.go:285`). Change it
    inside the flow's transaction with the draft locked, so the expiry job and billing run can't
@@ -233,15 +233,15 @@ Order: the cancel/threshold hook first, plan change second.
 | Call `CreateDraftInvoiceForSubscription` + `ComputeInvoice` directly, not a workflow | We need the computed draft right away; the daily-draft workflow is a thin wrapper around the same function. The billing workflow would roll the period |
 | Not `CreateComputedDraftInvoice`, not a one-off invoice | Compute ignores caller line items for subscription invoices, and a hand-built request risks a second draft for the period. One-off = separate invoice |
 | New `ApplyExpiringCreditToInvoice`, not `ApplyCreditsToInvoice` at expiry | `ApplyCreditsToInvoice` pools the whole wallet and checks eligibility against the period end, so it would skip the expiring credit and use purchased ones |
-| Invoice-level `TotalPrepaidCreditsApplied` is the only record on the draft; at finalization it's the first source in the credit pool | It survives recompute. Draft lines stay as compute builds them. At finalization the existing allocation puts every credit, pre-expiry or not, onto the lines, so lines always add up to the invoice total, and `CalculateCreditAdjustments` needs no change |
+| Invoice-level `TotalPrepaidCreditsApplied` is the only record on the draft; at finalization it's the first source in the credit pool | It survives recompute. Draft lines stay as compute builds them. At finalization the existing allocation puts every credit, settled at expiry or not, onto the lines, so lines always add up to the invoice total, and `CalculateCreditAdjustments` needs no change |
 | Cap at usage up to the expiry, not the draft total | The job runs up to 15 minutes after expiry; the draft includes usage after it |
 | Retroactive price changes out of scope | Rare; handled today by void and regenerate |
 | Reuse the existing expiry workflow | New logic lives in `ExpireCredits`; schedule, workflow and activity stay. Per-credit timers (FLE-898) aren't needed for the fix |
 | Several subscriptions: earliest period end first | That's the invoice that would finalize first today, so behavior matches |
 | Run 2 hours after expiry (`expiry <= now − 2h`) | Late events timestamped before the expiry get counted. Usage is capped at `[period_start, expiry)`, so nothing after the expiry is counted. Cost accepted: for about 2h15m the current balance is high by the whole remaining credit and the ongoing balance by the unused part |
 | Finalization pool sized by eligible credits, not `wallet.balance` | During the wait the expired credit is still in the wallet. An invoice finalized then, with a period ending after the expiry, would plan to use it but the debit can't, and fails with "insufficient balance". Exists today with the 6h window too |
-| Environment setting (`pre_expiry_credit_consumption_config`), old behavior when off | Safe rollout per tenant environment; the old grace and skip rules stay for everyone else |
-| Voids refund pre-expiry credits as today, with no expiry | Same as voiding any invoice with credits applied: `AmountPaid + TotalPrepaidCreditsApplied` comes back as a top-up with no expiry. Drafts are voidable, so this covers drafts carrying credits applied at expiry. The expired share becoming permanent is the existing void behavior for every invoice, fixed separately if ever |
+| Environment setting (`credit_expiry_settlement_config`), old behavior when off | Safe rollout per tenant environment; the old grace and skip rules stay for everyone else |
+| Voids refund credits settled at expiry as today, with no expiry | Same as voiding any invoice with credits applied: `AmountPaid + TotalPrepaidCreditsApplied` comes back as a top-up with no expiry. Drafts are voidable, so this covers drafts carrying credits applied at expiry. The expired share becoming permanent is the existing void behavior for every invoice, fixed separately if ever |
 | Early period cuts reuse the open draft, no undo | The credit keeps paying for the usage it covered; one invoice per cut; matches the Metronome model where a draft is always open |
 | Expired credits processed earliest expiry first | Each credit is capped at usage before its own expiry; the earliest-expiring one can only pay older usage, so it goes first |
 | No new transaction reason | `CREDIT_ADJUSTMENT` + metadata for the applied part, `CREDIT_EXPIRED` for the rest. No corrections needed without retroactive changes |
@@ -268,13 +268,13 @@ $1 per unit, period ends 22 Sep 00:00 UTC. "Balance" is the ongoing balance.
 | 8 | Threshold billing on | Credits used only by windows ending before expiry | Excluded until the reuse hook lands; then the threshold invoice reuses the open draft |
 | 9 | Invoice finalizes inside the 6h grace window | Can fail "insufficient balance" (pool counts the expired credit, debit skips it) | Pool capped at eligible credits; finalization waits for a pending expiry |
 | 10 | Late events for usage before expiry | — | Not covered: amount is fixed at expiry. Accepted for v1 |
-| 11 | Invoice voided after pre-expiry credits applied | Refund comes back with no expiry | Same: refunded with no expiry, draft or finalized |
+| 11 | Invoice voided after credits settled at expiry applied | Refund comes back with no expiry | Same: refunded with no expiry, draft or finalized |
 | 12 | Several subscriptions (A used 20, period ends 1 Oct; B used 25, ends 15 Oct), 30 free left | Whichever finalizes first | A gets 20, B gets 10, nothing expires |
 | 13 | Two grants in one period (10 expiring day 10, 20 expiring day 20); usage 8 before day 10, 24 before day 20 | Both expire in full (except what finalization catches) | 8 + 16 applied, in either separate runs or one run |
 
 ## Verification
 
-Unit tests cover each rule above (`pre_expiry_credit_consumption_test.go`,
+Unit tests cover each rule above (`credit_expiry_settlement_test.go`,
 `invoice_compute_prepaid_credits_test.go`). Run end to end on a local
 stack, checking wallet, ledger and invoices at each step:
 
@@ -299,7 +299,7 @@ stack, checking wallet, ledger and invoices at each step:
 4. **Earlier attempt.** Confirm why PR #2309 was reverted.
 5. **Parked: read "already applied" from the ledger.** Finalization reads credits applied before
    it from `TotalPrepaidCreditsApplied`. `RecalculateInvoiceV2` overwrites that field with what it
-   could place on lines, so a price cut or an empty draft can drop the pre-expiry amount and
+   could place on lines, so a price cut or an empty draft can drop the amount settled at expiry and
    finalization debits the wallet again. Fix: sum the invoice's `CREDIT_ADJUSTMENT` debits
    instead.
 6. **Product call: immediate cancel with `skip` invoice policy** (the default). No final invoice

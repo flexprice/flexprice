@@ -38,7 +38,7 @@ const (
 	SettingKeyWalletTopupConfig           SettingKey = "wallet_topup_config"
 	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
 	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
-	SettingKeyPreExpiryCreditConsumption  SettingKey = "pre_expiry_credit_consumption_config"
+	SettingKeyCreditExpirySettlement      SettingKey = "credit_expiry_settlement_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -63,7 +63,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyWalletTopupConfig,
 		SettingKeyCustomCurrencyConfig,
 		SettingKeyRevenueAnalyticsConfig,
-		SettingKeyPreExpiryCreditConsumption,
+		SettingKeyCreditExpirySettlement,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -533,14 +533,14 @@ func (c RevenueAnalyticsConfig) Validate() error {
 	return nil
 }
 
-// PreExpiryCreditConsumptionConfig gates applying expiring wallet credits to the current
+// CreditExpirySettlementConfig gates applying expiring wallet credits to the current
 // period's draft invoice before the unused remainder is expired.
-type PreExpiryCreditConsumptionConfig struct {
+type CreditExpirySettlementConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
 // Validate implements SettingConfig.
-func (c PreExpiryCreditConsumptionConfig) Validate() error {
+func (c CreditExpirySettlementConfig) Validate() error {
 	return nil
 }
 
@@ -791,7 +791,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
-	defaultPreExpiryCreditConsumptionMap, err := utils.ToMap(PreExpiryCreditConsumptionConfig{Enabled: false})
+	defaultCreditExpirySettlementMap, err := utils.ToMap(CreditExpirySettlementConfig{Enabled: false})
 	if err != nil {
 		return nil, err
 	}
@@ -904,10 +904,10 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultRevenueAnalyticsConfigMap,
 			Description:  "Gates the revenue_facts rollup for this tenant/environment: when enabled, the scheduled dirty-scan decomposes its active subscriptions into provisional revenue facts",
 		},
-		SettingKeyPreExpiryCreditConsumption: {
-			Key:          SettingKeyPreExpiryCreditConsumption,
-			DefaultValue: defaultPreExpiryCreditConsumptionMap,
-			Description:  "When enabled, an expiring wallet credit first pays the pre-expiry usage on the current period's draft invoice; only the unused remainder expires",
+		SettingKeyCreditExpirySettlement: {
+			Key:          SettingKeyCreditExpirySettlement,
+			DefaultValue: defaultCreditExpirySettlementMap,
+			Description:  "When enabled, an expiring wallet credit first pays the usage before expiry on the current period's draft invoice; only the unused remainder expires",
 		},
 		SettingKeyWalletTopupConfig: {
 			Key:          SettingKeyWalletTopupConfig,
@@ -1063,8 +1063,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyPreExpiryCreditConsumption:
-		config, err := utils.ToStruct[PreExpiryCreditConsumptionConfig](value)
+	case SettingKeyCreditExpirySettlement:
+		config, err := utils.ToStruct[CreditExpirySettlementConfig](value)
 		if err != nil {
 			return err
 		}

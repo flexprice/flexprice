@@ -1338,12 +1338,12 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 }
 
 // hasPendingExpiringCredit reports whether a credit that expired inside this subscription draft's
-// period still waits for the expiry job, which applies its pre-expiry share to this draft first.
+// period is still waiting for the expiry job to settle it against this draft.
 func (s *invoiceService) hasPendingExpiringCredit(ctx context.Context, inv *invoice.Invoice) (bool, error) {
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.PeriodStart == nil || inv.PeriodEnd == nil {
 		return false, nil
 	}
-	enabled, err := preExpiryCreditConsumptionEnabled(ctx, s.ServiceParams)
+	enabled, err := creditExpirySettlementEnabled(ctx, s.ServiceParams)
 	if err != nil || !enabled {
 		return false, err
 	}

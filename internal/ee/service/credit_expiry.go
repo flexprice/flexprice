@@ -13,73 +13,73 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Pre-expiry credit consumption: an expiring credit first pays the usage from before its expiry
+// Credit expiry settlement: an expiring credit first pays the usage from before its expiry
 // on the subscription's unfinalized cycle drafts, and only the rest expires.
 
 const (
-	// creditExpiryGracePeriod is how long after expiry the job waits when pre-expiry
+	// creditExpiryGracePeriod is how long after expiry the job waits when expiry settlement
 	// consumption is off, so the period's invoice can finalize and use the credit first.
 	creditExpiryGracePeriod = 6 * time.Hour
-	// preExpiryCreditExpiryGracePeriod lets late events timestamped before the expiry
+	// settlementGracePeriod lets late events timestamped before the expiry
 	// arrive before the credit is applied to drafts.
-	preExpiryCreditExpiryGracePeriod = 2 * time.Hour
-	// preExpiryFinalizationHold is how long after an expiry finalization waits for the expiry job:
+	settlementGracePeriod = 2 * time.Hour
+	// settlementFinalizationHold is how long after an expiry finalization waits for the expiry job:
 	// the grace, the job's 15-minute schedule, and margin for a failed run.
-	preExpiryFinalizationHold = preExpiryCreditExpiryGracePeriod + time.Hour
+	settlementFinalizationHold = settlementGracePeriod + time.Hour
 )
 
 func (s *walletService) CreditExpiryCutoff(ctx context.Context) (time.Time, error) {
-	enabled, err := preExpiryCreditConsumptionEnabled(ctx, s.ServiceParams)
+	enabled, err := creditExpirySettlementEnabled(ctx, s.ServiceParams)
 	if err != nil {
 		return time.Time{}, err
 	}
 	grace := creditExpiryGracePeriod
 	if enabled {
-		grace = preExpiryCreditExpiryGracePeriod
+		grace = settlementGracePeriod
 	}
 	return time.Now().UTC().Add(-grace), nil
 }
 
-// preExpiryCreditConsumptionEnabled reports whether the tenant environment has pre-expiry credit
-// consumption turned on.
-func preExpiryCreditConsumptionEnabled(ctx context.Context, params ServiceParams) (bool, error) {
+// creditExpirySettlementEnabled reports whether the tenant environment has credit expiry
+// settlement turned on.
+func creditExpirySettlementEnabled(ctx context.Context, params ServiceParams) (bool, error) {
 	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
 		return false, nil
 	}
 	settingsSvc := NewSettingsService(params).(*settingsService)
-	cfg, err := GetSetting[types.PreExpiryCreditConsumptionConfig](settingsSvc, ctx, types.SettingKeyPreExpiryCreditConsumption)
+	cfg, err := GetSetting[types.CreditExpirySettlementConfig](settingsSvc, ctx, types.SettingKeyCreditExpirySettlement)
 	if err != nil {
 		return false, err
 	}
 	return cfg.Enabled, nil
 }
 
-// preExpiryPlan is a draft invoice and the most it may take from an expiring credit.
-type preExpiryPlan struct {
+// settlementPlan is a draft invoice and the most it may take from an expiring credit.
+type settlementPlan struct {
 	invoiceID string
 	currency  string
 	periodEnd time.Time
 	maxAmount decimal.Decimal
 }
 
-// preExpiryTarget is a draft invoice and its usage charges from before the expiry.
-type preExpiryTarget struct {
+// settlementTarget is a draft invoice and its usage charges from before the expiry.
+type settlementTarget struct {
 	draft *invoice.Invoice
 	usage decimal.Decimal
 }
 
-// expireCreditAfterPreExpiryConsumption applies an expiring credit to drafts for usage before
-// the expiry, then expires the rest. Drafts are computed first; apply and expire share one tx.
-func (s *walletService) expireCreditAfterPreExpiryConsumption(ctx context.Context, tx *wallet.Transaction) (*types.ExpireCreditsResult, error) {
-	subs, err := s.preExpiryEligibleSubscriptions(ctx, tx)
+// settleExpiringCredit settles an expiring credit against drafts for usage before the expiry,
+// then expires the rest. Drafts are computed first; apply and expire share one tx.
+func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Transaction) (*types.ExpireCreditsResult, error) {
+	subs, err := s.settlementSubscriptions(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
 	expiry := lo.FromPtr(tx.ExpiryDate)
-	plans := make([]preExpiryPlan, 0, len(subs))
+	plans := make([]settlementPlan, 0, len(subs))
 	for _, sub := range subs {
-		targets, err := s.preExpiryTargets(ctx, sub, expiry)
+		targets, err := s.settlementTargets(ctx, sub, expiry)
 		if err != nil {
 			return nil, err
 		}
@@ -92,15 +92,15 @@ func (s *walletService) expireCreditAfterPreExpiryConsumption(ctx context.Contex
 			}
 			// Finalization places credits only on usage after discounts; never apply more than it can place.
 			gross, net := usageLineTotals(draft)
-			preExpiry := target.usage
+			beforeExpiry := target.usage
 			if gross.IsPositive() && net.LessThan(gross) {
-				preExpiry = preExpiry.Mul(net).Div(gross)
+				beforeExpiry = beforeExpiry.Mul(net).Div(gross)
 			}
-			maxAmount := decimal.Min(decimal.Min(preExpiry, net).Sub(alreadyApplied), unpaid)
+			maxAmount := decimal.Min(decimal.Min(beforeExpiry, net).Sub(alreadyApplied), unpaid)
 			if !maxAmount.IsPositive() {
 				continue
 			}
-			plans = append(plans, preExpiryPlan{invoiceID: draft.ID, currency: draft.DenominationCurrency(), periodEnd: lo.FromPtr(draft.PeriodEnd), maxAmount: maxAmount})
+			plans = append(plans, settlementPlan{invoiceID: draft.ID, currency: draft.DenominationCurrency(), periodEnd: lo.FromPtr(draft.PeriodEnd), maxAmount: maxAmount})
 		}
 	}
 	// Oldest period first: that invoice finalizes first.
@@ -154,9 +154,9 @@ func (s *walletService) expireCreditAfterPreExpiryConsumption(ctx context.Contex
 	return &types.ExpireCreditsResult{Expired: expired, Applied: applied}, nil
 }
 
-// preExpiryEligibleSubscriptions returns the customer's subscriptions an expiring credit can pay
+// settlementSubscriptions returns the customer's subscriptions an expiring credit can pay
 // usage for, earliest period end first.
-func (s *walletService) preExpiryEligibleSubscriptions(ctx context.Context, tx *wallet.Transaction) ([]*subscription.Subscription, error) {
+func (s *walletService) settlementSubscriptions(ctx context.Context, tx *wallet.Transaction) ([]*subscription.Subscription, error) {
 	w, err := s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
 	if err != nil {
 		return nil, err
@@ -191,9 +191,9 @@ func (s *walletService) preExpiryEligibleSubscriptions(ctx context.Context, tx *
 	return eligible, nil
 }
 
-// preExpiryTargets returns the subscription's unfinalized cycle drafts with usage before the
+// settlementTargets returns the subscription's unfinalized cycle drafts with usage before the
 // expiry, oldest first. The current period's draft is created only if it has such usage.
-func (s *walletService) preExpiryTargets(ctx context.Context, sub *subscription.Subscription, expiry time.Time) ([]preExpiryTarget, error) {
+func (s *walletService) settlementTargets(ctx context.Context, sub *subscription.Subscription, expiry time.Time) ([]settlementTarget, error) {
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	startedBefore := sub.CurrentPeriodStart
 	if expiry.Before(startedBefore) {
@@ -204,7 +204,7 @@ func (s *walletService) preExpiryTargets(ctx context.Context, sub *subscription.
 		return nil, err
 	}
 
-	targets := make([]preExpiryTarget, 0, len(earlier)+1)
+	targets := make([]settlementTarget, 0, len(earlier)+1)
 	for _, inv := range earlier {
 		// Its usage is final only once computed after the period ended.
 		if inv.LastComputedAt == nil || inv.LastComputedAt.Before(*inv.PeriodEnd) {
@@ -222,7 +222,7 @@ func (s *walletService) preExpiryTargets(ctx context.Context, sub *subscription.
 			return nil, err
 		}
 		if usage.IsPositive() {
-			targets = append(targets, preExpiryTarget{draft: inv, usage: usage})
+			targets = append(targets, settlementTarget{draft: inv, usage: usage})
 		}
 	}
 
@@ -230,19 +230,19 @@ func (s *walletService) preExpiryTargets(ctx context.Context, sub *subscription.
 		return targets, nil
 	}
 	// Check usage first so no draft is created for a period with nothing to pay.
-	usage, err := s.preExpiryUsageCharges(ctx, sub, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, expiry)
+	usage, err := s.settlementUsageCharges(ctx, sub, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, expiry)
 	if err != nil {
 		return nil, err
 	}
 	if !usage.IsPositive() {
 		return targets, nil
 	}
-	draft, skipped, err := s.preExpiryDraftInvoice(ctx, sub)
+	draft, skipped, err := s.settlementDraftInvoice(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
 	if !skipped && draft != nil {
-		targets = append(targets, preExpiryTarget{draft: draft, usage: usage})
+		targets = append(targets, settlementTarget{draft: draft, usage: usage})
 	}
 	return targets, nil
 }
@@ -264,7 +264,7 @@ func usageLineTotals(draft *invoice.Invoice) (gross, net decimal.Decimal) {
 func (s *walletService) earlierDraftUsageBeforeExpiry(ctx context.Context, sub *subscription.Subscription, draft *invoice.Invoice, expiry time.Time) (decimal.Decimal, error) {
 	periodStart, periodEnd := lo.FromPtr(draft.PeriodStart), lo.FromPtr(draft.PeriodEnd)
 	if periodEnd.After(expiry) {
-		return s.preExpiryUsageCharges(ctx, sub, periodStart, periodEnd, expiry)
+		return s.settlementUsageCharges(ctx, sub, periodStart, periodEnd, expiry)
 	}
 
 	// The whole period is before the expiry: the computed draft's usage lines are that usage.
@@ -305,7 +305,7 @@ func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID
 			if !expiry.After(periodStart) || !expiry.Before(periodEnd) {
 				continue
 			}
-			if now.Before(expiry.Add(preExpiryFinalizationHold)) {
+			if now.Before(expiry.Add(settlementFinalizationHold)) {
 				return true, nil
 			}
 			s.Logger.Error(ctx, "expiring credit still unprocessed past the finalization hold",

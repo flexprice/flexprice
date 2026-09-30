@@ -63,7 +63,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		for _, environment := range environments.Environments {
 			envCtx := context.WithValue(tenantCtx, types.CtxEnvironmentID, environment.ID)
 
-			// The grace after expiry depends on the environment's pre-expiry consumption setting.
+			// The grace after expiry depends on the environment's credit expiry settlement setting.
 			cutoff, err := a.walletService.CreditExpiryCutoff(envCtx)
 			if err != nil {
 				a.logger.Error(ctx, "failed to resolve credit expiry cutoff, skipping environment", "error", err,

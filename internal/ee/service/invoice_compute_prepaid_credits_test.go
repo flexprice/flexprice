@@ -11,8 +11,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Credits applied to a subscription draft before finalization (an expiring credit's pre-expiry
-// share) must survive recompute: totals stay net of them, and the invoice is never marked SKIPPED.
+// Credits applied to a subscription draft before finalization (settled at a credit's expiry)
+// must survive recompute: totals stay net of them, and the invoice is never marked SKIPPED.
 
 // computedCycleDraft creates a subscription with one fixed arrear charge of amount (or none when
 // amount is zero) and returns its computed cycle draft for the current period.

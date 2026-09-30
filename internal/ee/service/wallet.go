@@ -82,7 +82,7 @@ type WalletService interface {
 	ExpireCredits(ctx context.Context, transactionID string) (*types.ExpireCreditsResult, error)
 
 	// CreditExpiryCutoff returns the latest expiry date the expiry job may process now. The
-	// grace after expiry depends on whether pre-expiry credit consumption is on for the tenant.
+	// grace after expiry depends on whether credit expiry settlement is on for the tenant.
 	CreditExpiryCutoff(ctx context.Context) (time.Time, error)
 
 	// HasPendingExpiringCredit reports whether a prepaid credit that expired inside
@@ -164,9 +164,9 @@ type walletService struct {
 	computeBalanceTimeout  time.Duration
 	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
 
-	// Seams for pre-expiry credit consumption; tests override them to avoid ClickHouse.
-	preExpiryDraftInvoice func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error)
-	preExpiryUsageCharges func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error)
+	// Seams for credit expiry settlement; tests override them to avoid ClickHouse.
+	settlementDraftInvoice func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error)
+	settlementUsageCharges func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error)
 }
 
 // NewWalletService creates a new instance of WalletService
@@ -179,10 +179,10 @@ func NewWalletService(params ServiceParams) WalletService {
 	// Test seams. Production code must not override these.
 	s.computeBalanceTimeout = walletBalanceComputeTimeout
 	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
-	s.preExpiryDraftInvoice = func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {
+	s.settlementDraftInvoice = func(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {
 		return NewInvoiceService(s.ServiceParams).GetOrComputeCurrentPeriodDraft(ctx, sub)
 	}
-	s.preExpiryUsageCharges = func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
+	s.settlementUsageCharges = func(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
 		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, periodStart, periodEnd, until)
 	}
 	return s
@@ -2569,12 +2569,12 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	preExpiryEnabled, err := preExpiryCreditConsumptionEnabled(ctx, s.ServiceParams)
+	settlementEnabled, err := creditExpirySettlementEnabled(ctx, s.ServiceParams)
 	if err != nil {
 		return nil, err
 	}
-	if preExpiryEnabled {
-		return s.expireCreditAfterPreExpiryConsumption(ctx, tx)
+	if settlementEnabled {
+		return s.settleExpiringCredit(ctx, tx)
 	}
 
 	skipReason, err := s.shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(ctx, tx)

@@ -264,7 +264,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if placed := amountsToDebitFromWallets[appliedBeforeFinalizationSourceID]; placed.LessThan(appliedBeforeFinalization) {
 		// Only possible if usage dropped below what was paid at expiry (e.g. a retroactive price cut).
 		s.Logger.Error(ctx, "credits applied before finalization exceed the invoice's usage lines",
-			"error", "unplaced pre-expiry credits",
+			"error", "unplaced credits settled at expiry",
 			"invoice_id", inv.ID,
 			"applied_before_finalization", appliedBeforeFinalization,
 			"placed_on_lines", placed,
@@ -451,7 +451,7 @@ func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
 			Metadata: types.Metadata{
 				"invoice_id":      inv.ID,
 				"source_tx_id":    creditTx.ID,
-				"adjustment_type": "pre_expiry",
+				"adjustment_type": "expiry_settlement",
 			},
 		}); err != nil {
 			return err
