@@ -158,6 +158,10 @@ const (
 	WebhookEventCustomerCreated WebhookEventName = "customer.created"
 	WebhookEventCustomerUpdated WebhookEventName = "customer.updated"
 	WebhookEventCustomerDeleted WebhookEventName = "customer.deleted"
+
+	WebhookEventFXRateCreated WebhookEventName = "fx_rate.created"
+	WebhookEventFXRateUpdated WebhookEventName = "fx_rate.updated"
+	WebhookEventFXRateDeleted WebhookEventName = "fx_rate.deleted"
 )
 
 // TODO: Below events should be cron triggered webhook event names

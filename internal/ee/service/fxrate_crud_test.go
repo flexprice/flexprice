@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,12 +29,42 @@ func TestFXRateCRUD(t *testing.T) {
 func (s *FXRateCRUDSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.svc = NewFXRateService(ServiceParams{
-		Logger:       s.GetLogger(),
-		DB:           s.GetDB(),
-		FXRateRepo:   s.GetStores().FXRateRepo,
-		SubRepo:      s.GetStores().SubscriptionRepo,
-		SettingsRepo: s.GetStores().SettingsRepo,
+		Logger:           s.GetLogger(),
+		DB:               s.GetDB(),
+		FXRateRepo:       s.GetStores().FXRateRepo,
+		SubRepo:          s.GetStores().SubscriptionRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		SettingsRepo:     s.GetStores().SettingsRepo,
+		WebhookPublisher: s.GetWebhookPublisher(),
 	})
+}
+
+func (s *FXRateCRUDSuite) TestCreate_CustomerScopeRequiresExistingCustomer() {
+	s.ClearStores()
+	s.createTenantRate("usd", "inr", "83")
+	// no customer row for "ghost"
+	_, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
+		Scope: types.FXRateScopeCustomer, ScopeID: "ghost", FromCurrency: "usd", ToCurrency: "inr", Rate: "84",
+	})
+	s.Error(err, "a customer-scope rate for a non-existent customer must be rejected")
+	s.True(ierr.IsValidation(err) || ierr.IsNotFound(err))
+}
+
+func (s *FXRateCRUDSuite) TestCreateFXRate_PublishesWebhook() {
+	s.ClearStores()
+	_, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
+		Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: "83",
+	})
+	s.NoError(err)
+
+	events := s.GetPublishedWebhooks()
+	found := false
+	for _, e := range events {
+		if e.EventName == types.WebhookEventFXRateCreated && e.EntityType == types.SystemEntityTypeFXRate {
+			found = true
+		}
+	}
+	s.True(found, "CreateFXRate must publish an fx_rate.created webhook")
 }
 
 func (s *FXRateCRUDSuite) TearDownTest() {
@@ -55,6 +86,17 @@ func (s *FXRateCRUDSuite) createOverride(scope types.FXRateScope, scopeID, from,
 	})
 	s.NoError(err)
 	return resp
+}
+
+func (s *FXRateCRUDSuite) seedCustomer(id string) {
+	ctx := s.GetContext()
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+		ID:            id,
+		ExternalID:    "ext_" + id,
+		Name:          id,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
 }
 
 func (s *FXRateCRUDSuite) seedSubscription(id, currency string) {
@@ -131,6 +173,7 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 		},
 		{
 			name:    "override requires a tenant rate",
+			setup:   func() { s.seedCustomer("cust_a") },
 			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeCustomer, ScopeID: "cust_a", FromCurrency: "usd", ToCurrency: "inr", Rate: "84.5"},
 			wantErr: true,
 		},
@@ -143,6 +186,7 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 		{
 			name: "overlapping override windows rejected",
 			setup: func() {
+				s.seedCustomer("cust_a")
 				s.createTenantRate("usd", "inr", "83")
 				s.createOverride(types.FXRateScopeCustomer, "cust_a", "usd", "inr", "84", nil) // open-ended
 			},
@@ -276,6 +320,7 @@ func (s *FXRateCRUDSuite) TestDeleteFXRate() {
 		{
 			name: "override is soft-archived",
 			setup: func() string {
+				s.seedCustomer("cust_a")
 				s.createTenantRate("usd", "inr", "83")
 				return s.createOverride(types.FXRateScopeCustomer, "cust_a", "usd", "inr", "84", nil).ID
 			},

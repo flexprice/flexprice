@@ -157,6 +157,17 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewCustomerPayloadBuilder(f.services)
 	}
 
+	// fx rate builders
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventFXRateCreated,
+		types.WebhookEventFXRateUpdated,
+		types.WebhookEventFXRateDeleted,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewFXRatePayloadBuilder(f.services)
+		}
+	}
+
 	// payment builders
 	f.builders[types.WebhookEventPaymentCreated] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)

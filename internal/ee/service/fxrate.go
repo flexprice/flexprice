@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -166,6 +168,7 @@ func (s *fxRateService) CreateFXRate(ctx context.Context, req dto.CreateFXRateRe
 	if err := s.FXRateRepo.Create(ctx, rate); err != nil {
 		return nil, err
 	}
+	s.publishSystemEvent(ctx, types.WebhookEventFXRateCreated, rate.ID)
 	return &dto.FXRateResponse{FXRate: rate}, nil
 }
 
@@ -264,6 +267,7 @@ func (s *fxRateService) UpdateFXRate(ctx context.Context, id string, req dto.Upd
 	if err := s.FXRateRepo.Update(ctx, updated); err != nil {
 		return nil, err
 	}
+	s.publishSystemEvent(ctx, types.WebhookEventFXRateUpdated, updated.ID)
 	return &dto.FXRateResponse{FXRate: updated}, nil
 }
 
@@ -281,7 +285,40 @@ func (s *fxRateService) DeleteFXRate(ctx context.Context, id string) error {
 			WithReportableDetails(map[string]any{"fx_rate_id": id}).
 			Mark(ierr.ErrValidation)
 	}
-	return s.FXRateRepo.Delete(ctx, existing)
+	if err := s.FXRateRepo.Delete(ctx, existing); err != nil {
+		return err
+	}
+	s.publishSystemEvent(ctx, types.WebhookEventFXRateDeleted, existing.ID)
+	return nil
+}
+
+// publishSystemEvent emits an fx_rate.* system event; failures are logged, not fatal.
+func (s *fxRateService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, fxRateID string) {
+	if s.WebhookPublisher == nil {
+		return
+	}
+	payload, err := json.Marshal(webhookDto.InternalFXRateEvent{
+		FXRateID: fxRateID,
+		TenantID: types.GetTenantID(ctx),
+	})
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal fx rate webhook payload", "error", err, "fx_rate_id", fxRateID)
+		return
+	}
+	event := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(payload),
+		EntityType:    types.SystemEntityTypeFXRate,
+		EntityID:      fxRateID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, event); err != nil {
+		s.Logger.Error(ctx, "failed to publish fx rate webhook", "error", err, "event_name", string(event.EventName), "fx_rate_id", fxRateID)
+	}
 }
 
 // validateForCreate enforces the §8.1 guardrails on a new rate.
@@ -307,6 +344,9 @@ func (s *fxRateService) validateForCreate(ctx context.Context, r *fxrate.FXRate)
 			return ierr.NewError("scope_id is required for a customer rate").
 				WithHint("Provide the customer_id as scope_id.").
 				Mark(ierr.ErrValidation)
+		}
+		if _, err := s.CustomerRepo.Get(ctx, r.ScopeID); err != nil {
+			return err
 		}
 	case types.FXRateScopeSubscription:
 		if r.ScopeID == "" {
