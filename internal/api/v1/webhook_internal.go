@@ -372,6 +372,16 @@ func WebhookEventPaymentSuccess() {}
 // @Router /webhook-events/payment.failed [post]
 func WebhookEventPaymentFailed() {}
 
+// WebhookEventPaymentAttemptFailed godoc
+// @Summary payment.attempt.failed
+// @Description Fired when a charge attempt fails and the payment stays open for retry. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.PaymentAttemptWebhookPayload "Webhook payload"
+// @Router /webhook-events/payment.attempt.failed [post]
+func WebhookEventPaymentAttemptFailed() {}
+
 // WebhookEventPaymentPending godoc
 // @Summary payment.pending
 // @Description Fired when a payment is pending processing. Doc-only for parsing.

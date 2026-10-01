@@ -36,8 +36,11 @@ type PaymentService interface {
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
 	PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error)
 	// RecordAttempt appends the gateway's outcome for one charge attempt, leaving the
-	// parent payment's status untouched.
-	RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error
+	// parent payment's status untouched. The attempt number is 0 when the payment
+	// does not track attempts.
+	RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) (int, error)
+	// PublishPaymentAttemptFailed emits payment.attempt.failed for one open decline.
+	PublishPaymentAttemptFailed(ctx context.Context, event dto.PaymentAttemptFailedEvent) error
 	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released

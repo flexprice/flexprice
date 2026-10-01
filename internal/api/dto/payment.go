@@ -97,6 +97,16 @@ type RecordAttemptRequest struct {
 	GatewayAttemptID string              `json:"gateway_attempt_id,omitempty"`
 }
 
+// PaymentAttemptFailedEvent is the input for a payment.attempt.failed webhook.
+// The payment stays open; this describes one declined charge.
+type PaymentAttemptFailedEvent struct {
+	PaymentID         string
+	AttemptNumber     int
+	GatewayAttemptID  string
+	ErrorMessage      string
+	CheckoutSessionID string
+}
+
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
 	ID                     string                       `json:"id"`
