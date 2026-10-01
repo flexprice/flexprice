@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -203,6 +204,62 @@ func (s *PlanServiceSuite) TestGetPlans_ExpandPricesFeatures() {
 	s.Equal("minute", reportingUnit.UnitSingular)
 	s.Equal("minutes", reportingUnit.UnitPlural)
 	s.True(conversionRate.Equal(*reportingUnit.ConversionRate))
+}
+
+// TestGetPlans_ExpandEntitlementsFeatures verifies that a nested "entitlements.features"
+// expand populates the feature on each entitlement. "features" is only reachable nested
+// under "entitlements" in PlanExpandConfig, so a root-level check never sees it.
+func (s *PlanServiceSuite) TestGetPlans_ExpandEntitlementsFeatures() {
+	_ = s.GetStores().PlanRepo.Create(s.GetContext(), &plan.Plan{
+		ID:        "plan-entitlement-expand",
+		Name:      "Plan With Entitlement",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	_ = s.GetStores().MeterRepo.CreateMeter(s.GetContext(), &meter.Meter{
+		ID:        "meter-entitlement-expand",
+		Name:      "Entitlement Meter",
+		EventName: "call",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	_ = s.GetStores().FeatureRepo.Create(s.GetContext(), &feature.Feature{
+		ID:            "feature-entitlement-expand",
+		Name:          "Generations",
+		Type:          types.FeatureTypeMetered,
+		MeterID:       "meter-entitlement-expand",
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	})
+
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), &entitlement.Entitlement{
+		ID:               "entitlement-expand",
+		EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:         "plan-entitlement-expand",
+		FeatureID:        "feature-entitlement-expand",
+		FeatureType:      types.FeatureTypeMetered,
+		IsEnabled:        true,
+		UsageLimit:       lo.ToPtr(int64(50)),
+		UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	})
+	s.NoError(err)
+
+	planFilter := types.NewPlanFilter()
+	planFilter.PlanIDs = []string{"plan-entitlement-expand"}
+	planFilter.Expand = lo.ToPtr("entitlements.features")
+
+	resp, err := s.service.GetPlans(s.GetContext(), planFilter)
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.Require().Len(resp.Items[0].Entitlements, 1)
+
+	s.Require().NotNil(resp.Items[0].Entitlements[0].Feature)
+	s.Equal("Generations", resp.Items[0].Entitlements[0].Feature.Name)
+	s.Equal(types.FeatureTypeMetered, resp.Items[0].Entitlements[0].Feature.Type)
 }
 
 func (s *PlanServiceSuite) TestUpdatePlan() {
