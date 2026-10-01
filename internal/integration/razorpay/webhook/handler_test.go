@@ -77,11 +77,20 @@ func (webhookTestMappingStore) Delete(_ context.Context, _ *entityintegrationmap
 
 // ── fake interfaces.PaymentService ───────────────────────────────────────────
 
+type recordedAttemptFailed struct {
+	paymentID         string
+	attemptNumber     int
+	gatewayAttemptID  string
+	errorMessage      string
+	checkoutSessionID string
+}
+
 type webhookTestPaymentService struct {
 	interfaces.PaymentService
-	payment     *dto.PaymentResponse
-	updateCalls []dto.UpdatePaymentRequest
-	attempts    []dto.RecordAttemptRequest
+	payment       *dto.PaymentResponse
+	updateCalls   []dto.UpdatePaymentRequest
+	attempts      []dto.RecordAttemptRequest
+	attemptEvents []recordedAttemptFailed
 }
 
 func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
@@ -96,8 +105,19 @@ func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, r
 	return s.payment, nil
 }
 
-func (s *webhookTestPaymentService) RecordAttempt(_ context.Context, _ string, req dto.RecordAttemptRequest) error {
+func (s *webhookTestPaymentService) RecordAttempt(_ context.Context, _ string, req dto.RecordAttemptRequest) (int, error) {
 	s.attempts = append(s.attempts, req)
+	return len(s.attempts), nil
+}
+
+func (s *webhookTestPaymentService) PublishPaymentAttemptFailed(_ context.Context, event dto.PaymentAttemptFailedEvent) error {
+	s.attemptEvents = append(s.attemptEvents, recordedAttemptFailed{
+		paymentID:         event.PaymentID,
+		attemptNumber:     event.AttemptNumber,
+		gatewayAttemptID:  event.GatewayAttemptID,
+		errorMessage:      event.ErrorMessage,
+		checkoutSessionID: event.CheckoutSessionID,
+	})
 	return nil
 }
 
@@ -142,10 +162,20 @@ func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *type
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
-	if s.session == nil || len(filter.CheckoutPaymentIDs) == 0 || filter.CheckoutPaymentIDs[0] != s.session.ID {
+	if s.session == nil || len(filter.CheckoutPaymentIDs) == 0 || filter.CheckoutPaymentIDs[0] != s.linkedPaymentID() {
 		return &dto.ListCheckoutSessionsResponse{}, nil
 	}
 	return &dto.ListCheckoutSessionsResponse{Items: []*dto.CheckoutSessionResponse{s.session}}, nil
+}
+
+func (s *webhookTestCheckoutSessionService) linkedPaymentID() string {
+	if s.session != nil && s.session.CheckoutPaymentID != nil {
+		return *s.session.CheckoutPaymentID
+	}
+	if s.session == nil {
+		return ""
+	}
+	return s.session.ID
 }
 
 func (s *webhookTestCheckoutSessionService) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
@@ -276,6 +306,20 @@ func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
 	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestCancelledSession_Refunds() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCancelled,
+	}
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.NoError(err)
+	s.Empty(s.checkoutSvc.completeCalls)
+	s.Require().Len(s.client.refundCalls, 1)
+	s.Equal("pay_rzp_001", s.client.refundCalls[0])
+	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCompleted,
@@ -338,7 +382,9 @@ func (s *WebhookCheckoutBranchingSuite) makeFailedEvent() *RazorpayWebhookEvent 
 
 func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
-		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+		ID:                "chs_01",
+		CheckoutPaymentID: lo.ToPtr("pay_flex_001"),
+		CheckoutStatus:    types.CheckoutStatusPending,
 	}
 }
 
@@ -354,6 +400,12 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_Records
 	s.Equal("pay_rzp_001", s.paymentSvc.failedAttempts()[0].GatewayAttemptID)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
+	s.Require().Len(s.paymentSvc.attemptEvents, 1)
+	s.Equal("pay_flex_001", s.paymentSvc.attemptEvents[0].paymentID)
+	s.Equal(1, s.paymentSvc.attemptEvents[0].attemptNumber)
+	s.Equal("pay_rzp_001", s.paymentSvc.attemptEvents[0].gatewayAttemptID)
+	s.Equal("card declined", s.paymentSvc.attemptEvents[0].errorMessage)
+	s.Equal("chs_01", s.paymentSvc.attemptEvents[0].checkoutSessionID)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_RecordEachAttempt() {
@@ -376,6 +428,8 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_StandaloneLink_LeavesP
 	s.Require().Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a standalone payment link stays open too — the customer can retry on the same link")
+	s.Require().Len(s.paymentSvc.attemptEvents, 1)
+	s.Empty(s.paymentSvc.attemptEvents[0].checkoutSessionID)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkPayment_SealsPayment() {
@@ -386,6 +440,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkPayment_SealsPa
 
 	s.NoError(err)
 	s.Empty(s.paymentSvc.failedAttempts())
+	s.Empty(s.paymentSvc.attemptEvents)
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus,
 		"a one-shot card charge has no retry vehicle, so a decline is final")
 }

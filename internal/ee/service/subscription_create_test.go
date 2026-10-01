@@ -358,7 +358,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckout(
 	s.Require().False(skipped, "the seeded plan must produce a real charge")
 	s.Require().True(draft.AmountDue.GreaterThan(decimal.Zero))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draft.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -402,7 +402,7 @@ func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_ActivatesAnd
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_subs_complete_001",
 	}))
@@ -445,7 +445,7 @@ func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_ReplayIsIdem
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_complete_replay")
 	invoicesBefore := len(s.invoicesForSubscription(draftSub.ID))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	providerResult := &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_subs_replay_001"}
 
 	// Applied directly, twice, so the second call is not short-circuited by the session's own
@@ -491,7 +491,7 @@ func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_LegacyResult
 	})
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.completeSubscriptionCheckout(ctx, session,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_subs_legacy_001"}))
 
@@ -509,8 +509,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupArchive
 
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_cleanup_draft")
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -545,8 +545,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupWithDup
 	})
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -588,8 +588,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupLegacyR
 	})
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	archived, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -617,7 +617,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_InvoiceFailure
 	s.Require().NoError(err)
 	s.Require().NotEqual(types.PaymentStatusSucceeded, before.PaymentStatus)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	err = checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, "inv_does_not_exist", paymentID,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_never_collected"})
 	s.Require().Error(err, "an unresolvable invoice must abort before the payment is touched")
@@ -643,7 +643,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_FinalizeSettle
 	session, _, draft := s.seedPayFirstSubscriptionCheckout("plan_finalize_order")
 	paymentID := *session.CheckoutPaymentID
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, draft.ID, paymentID,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_order_001"}))
 
@@ -672,7 +672,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_FinalizeIsRepl
 
 	session, _, draft := s.seedPayFirstSubscriptionCheckout("plan_finalize_replay")
 	paymentID := *session.CheckoutPaymentID
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	res := &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_replay_001"}
 
 	s.Require().NoError(checkoutSvc.finalizeCheckoutInvoiceAndPayment(ctx, session.ID, draft.ID, paymentID, res))
@@ -698,8 +698,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupSkipsAc
 	draftSub.SubscriptionStatus = types.SubscriptionStatusActive
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, draftSub))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	live, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
 	s.Require().NoError(err)
@@ -723,8 +723,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupArchive
 	grantID := grants[0].ID
 	s.Require().NotNil(s.firstApplicationFor(grantID))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	published := types.NewNoLimitQueryFilter()
 	published.Status = lo.ToPtr(types.StatusPublished)
@@ -758,7 +758,7 @@ func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_ProcessesPen
 	s.Require().NotEqual(types.ApplicationStatusApplied, before.ApplicationStatus,
 		"the grant must still be unapplied while the subscription is a draft")
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.completeSubscriptionCheckout(ctx, session,
 		&types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_subs_grants_001"}))
 
@@ -794,7 +794,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckoutWithGrants(
 	s.Require().NoError(err)
 	s.Require().False(skipped)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draft.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 

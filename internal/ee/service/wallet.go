@@ -710,9 +710,8 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 					return s.blockedByPendingTopupSession(ctx, walletID, existing[0])
 				}
 
-				// nil reason -> the session settles as expired, not failed: a supersede is not an error.
 				checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
-				if err := checkoutSvc.CleanupCheckoutSession(ctx, existing[0].ID, nil); err != nil {
+				if _, err := checkoutSvc.Cancel(ctx, existing[0].ID); err != nil {
 					return nil, err
 				}
 				superseded = true

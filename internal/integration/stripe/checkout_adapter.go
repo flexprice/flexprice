@@ -239,3 +239,62 @@ func (a *CheckoutAdapter) checkoutSessionPaymentState(ctx context.Context, strip
 		GatewayPaymentID: piID,
 	}, nil
 }
+
+func (a *CheckoutAdapter) CancelOpenCharge(ctx context.Context, gatewayTrackingID string) (interfaces.OpenChargeResult, error) {
+	if a == nil || a.Client == nil {
+		return interfaces.OpenChargeResult{}, ierr.NewError("stripe checkout adapter is not configured").
+			Mark(ierr.ErrNotImplemented)
+	}
+	if gatewayTrackingID == "" {
+		return interfaces.OpenChargeResult{}, nil
+	}
+
+	stripeClient, _, err := a.Client.GetStripeClient(ctx)
+	if err != nil {
+		return interfaces.OpenChargeResult{}, err
+	}
+
+	switch {
+	case strings.HasPrefix(gatewayTrackingID, checkoutSessionIDPrefix):
+		session, err := stripeClient.V1CheckoutSessions.Retrieve(ctx, gatewayTrackingID, nil)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		piID := ""
+		if session.PaymentIntent != nil {
+			piID = session.PaymentIntent.ID
+		}
+		if session.PaymentStatus == stripeapi.CheckoutSessionPaymentStatusPaid {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: piID}, nil
+		}
+		if session.Status == stripeapi.CheckoutSessionStatusExpired {
+			return interfaces.OpenChargeResult{}, nil
+		}
+		if _, err := stripeClient.V1CheckoutSessions.Expire(ctx, gatewayTrackingID, nil); err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		return interfaces.OpenChargeResult{}, nil
+
+	case strings.HasPrefix(gatewayTrackingID, paymentIntentIDPrefix):
+		pi, err := stripeClient.V1PaymentIntents.Retrieve(ctx, gatewayTrackingID, nil)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		if pi.Status == stripeapi.PaymentIntentStatusSucceeded {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: pi.ID}, nil
+		}
+		if pi.Status == stripeapi.PaymentIntentStatusCanceled {
+			return interfaces.OpenChargeResult{}, nil
+		}
+		if _, err := stripeClient.V1PaymentIntents.Cancel(ctx, gatewayTrackingID, nil); err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		return interfaces.OpenChargeResult{}, nil
+
+	default:
+		return interfaces.OpenChargeResult{}, ierr.NewError("unrecognised stripe checkout handle").
+			WithHint("The stored gateway tracking ID does not match any Stripe object this adapter can cancel").
+			WithReportableDetails(map[string]interface{}{"gateway_tracking_id": gatewayTrackingID}).
+			Mark(ierr.ErrValidation)
+	}
+}

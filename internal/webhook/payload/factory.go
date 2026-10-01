@@ -176,6 +176,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventPaymentFailed] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventPaymentAttemptFailed] = func() PayloadBuilder {
+		return NewPaymentAttemptPayloadBuilder(f.services)
+	}
 	f.builders[types.WebhookEventPaymentSuccess] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)
 	}
@@ -234,6 +237,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewCheckoutSessionPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventCheckoutSessionExpired] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionCancelled] = func() PayloadBuilder {
 		return NewCheckoutSessionPayloadBuilder(f.services)
 	}
 

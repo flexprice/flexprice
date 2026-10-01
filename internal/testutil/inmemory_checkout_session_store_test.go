@@ -122,3 +122,27 @@ func TestInMemoryCheckoutSessionStore_List_SubscriptionIDMatchesBothParamsBlobs(
 		require.Equal(t, []string{"cs_wallet"}, ids)
 	})
 }
+
+func TestInMemoryCheckoutSessionStore_MarkTerminal_Cancelled(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	store := NewInMemoryCheckoutSessionStore()
+	session := &domainCheckout.CheckoutSession{
+		ID:              "cs_cancel",
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      "cust_1",
+		Action:          types.CheckoutActionPayInvoice,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		ExpiresAt:       time.Now().UTC().Add(time.Hour),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, store.Create(ctx, session))
+
+	claimed, err := store.MarkTerminal(ctx, session.ID, types.CheckoutStatusCancelled, nil)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	got, err := store.Get(ctx, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, types.CheckoutStatusCancelled, got.CheckoutStatus)
+}

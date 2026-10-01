@@ -895,7 +895,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonCheckout(
 	s.Require().NoError(err)
 	draft := drafted.Draft
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draft.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -942,7 +942,7 @@ func (s *SubscriptionServiceSuite) TestCompleteAddAddonCheckout_ActivatesAndFina
 	oneOffBefore := len(s.oneOffInvoicesFor(sub.ID))
 	s.Empty(s.addonLineItemsFor(sub.ID, addonID), "line items must not exist before payment")
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_addon_complete_001",
 	}))
@@ -1041,8 +1041,8 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupArchivesPendingAs
 
 	lineItemsBefore := len(sub.LineItems)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pending.ID)
 	s.Require().NoError(err)
@@ -1078,8 +1078,8 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupLeavesActivatedAs
 	cfg := session.Configuration.ToCheckoutConfiguration()
 	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams))
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pending.ID)
 	s.Require().NoError(err)

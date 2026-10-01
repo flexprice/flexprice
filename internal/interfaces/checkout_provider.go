@@ -29,6 +29,8 @@ type CheckoutProvider interface {
 	// ready for off-session automatic charges, optionally within the specified amount ceiling.
 	HasAutoChargeableMethod(ctx context.Context, req HasAutoChargeableMethodRequest) (bool, error)
 
+	CancelOpenCharge(ctx context.Context, gatewayTrackingID string) (OpenChargeResult, error)
+
 	// FetchPaymentState asks the provider what happened to a checkout's payment, so a
 	// session can be reconciled when the webhook was late, dropped, or errored.
 	//
@@ -36,6 +38,11 @@ type CheckoutProvider interface {
 	// what kind of object each is, so interpreting them is the adapter's job.
 	// Providers without a read API return ierr.ErrNotImplemented.
 	FetchPaymentState(ctx context.Context, req PaymentStateRequest) (*PaymentState, error)
+}
+
+type OpenChargeResult struct {
+	Captured         bool
+	GatewayPaymentID string
 }
 
 // PaymentStateRequest carries the provider handles recorded on the payment at
@@ -105,17 +112,17 @@ type AuthorizationLinkRequest struct {
 	// that cannot express CIT/MIT ignore it.
 	CustomerPresent bool
 	InvoiceID       string
-	CustomerID          string
-	PaymentID           string
-	Amount              decimal.Decimal
-	Currency            string
-	MaxAmount           *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt           *time.Time
-	PreferredMethod     types.PaymentMethodType
-	SuccessURL          string
-	CancelURL           string
-	Metadata            map[string]string
-	LineItems           []CheckoutLineItem
+	CustomerID      string
+	PaymentID       string
+	Amount          decimal.Decimal
+	Currency        string
+	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt       *time.Time
+	PreferredMethod types.PaymentMethodType
+	SuccessURL      string
+	CancelURL       string
+	Metadata        map[string]string
+	LineItems       []CheckoutLineItem
 }
 
 // HasAutoChargeableMethodRequest is the input for checking if a customer has
@@ -190,4 +197,10 @@ func (m *ProviderPaymentMethod) RecurringMaxAmount() *decimal.Decimal {
 		return nil
 	}
 	return m.Recurring.MaxAmount
+}
+
+// GatewayPaymentService is one provider's payment service, used to refund a capture
+// that landed after the checkout had already closed.
+type GatewayPaymentService interface {
+	RefundLateCapturedPayment(ctx context.Context, flexpricePaymentID, gatewayPaymentID string, paymentService PaymentService) error
 }

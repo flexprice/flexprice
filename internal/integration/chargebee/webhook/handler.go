@@ -265,7 +265,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"chargebee_transaction_id", chargebeeTransactionID)
 		}
 
-	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed, types.CheckoutStatusCancelled:
 		// The hosted page outlives the session, so the customer paid after we gave up.
 		// The invoice and payment are archived by then and nothing can be delivered
 		// for the money — give it back.

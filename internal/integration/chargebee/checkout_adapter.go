@@ -412,3 +412,8 @@ func (a *CheckoutAdapter) FetchPaymentState(
 		WithHint("Chargebee checkout sessions are reconciled by webhook only").
 		Mark(ierr.ErrNotImplemented)
 }
+
+func (a *CheckoutAdapter) CancelOpenCharge(context.Context, string) (interfaces.OpenChargeResult, error) {
+	return interfaces.OpenChargeResult{}, ierr.NewError("chargebee does not support cancelling an open checkout charge").
+		Mark(ierr.ErrNotImplemented)
+}

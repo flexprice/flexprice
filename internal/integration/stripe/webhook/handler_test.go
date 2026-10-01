@@ -149,7 +149,7 @@ func TestHandler_HandleCheckoutSessionForPayment_TerminalStatusIgnored(t *testin
 }
 
 func TestHandler_HandleCheckoutSessionForPayment_TerminalSessionIsHandled(t *testing.T) {
-	for _, status := range []types.CheckoutStatus{types.CheckoutStatusExpired, types.CheckoutStatusFailed} {
+	for _, status := range []types.CheckoutStatus{types.CheckoutStatusExpired, types.CheckoutStatusFailed, types.CheckoutStatusCancelled} {
 		t.Run(string(status), func(t *testing.T) {
 			handler := &Handler{logger: logger.NewNoopLogger()}
 			fakeCheckout := &fakeCheckoutSessionServiceForStripe{

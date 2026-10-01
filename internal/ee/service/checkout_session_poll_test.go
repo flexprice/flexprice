@@ -41,6 +41,16 @@ type fakeCheckoutProvider struct {
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
+
+	openCharge interfaces.OpenChargeResult
+	cancelIDs  []string
+}
+
+func (f *fakeCheckoutProvider) CancelOpenCharge(_ context.Context, id string) (interfaces.OpenChargeResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancelIDs = append(f.cancelIDs, id)
+	return f.openCharge, nil
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(

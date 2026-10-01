@@ -312,3 +312,13 @@ func TestAddAddonParams_LegacyJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(out), "removes")
 }
+
+func TestCheckoutStatusCancelled(t *testing.T) {
+	status := CheckoutStatusCancelled
+
+	require.NoError(t, status.Validate())
+	assert.True(t, status.IsTerminal())
+	for _, active := range ActiveCheckoutStatuses() {
+		assert.NotEqual(t, status, active)
+	}
+}

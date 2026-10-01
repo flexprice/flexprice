@@ -48,3 +48,28 @@ func (b *PaymentPayloadBuilder) BuildPayload(ctx context.Context, eventType type
 
 	return json.Marshal(payload)
 }
+
+// PaymentAttemptPayloadBuilder builds payment.attempt.failed from the internal event.
+// It does not load the payment, so delivery does not re-enter gateway status sync.
+type PaymentAttemptPayloadBuilder struct{}
+
+func NewPaymentAttemptPayloadBuilder(_ *Services) PayloadBuilder {
+	return &PaymentAttemptPayloadBuilder{}
+}
+
+func (b *PaymentAttemptPayloadBuilder) BuildPayload(_ context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
+	var ev webhookDto.InternalPaymentAttemptEvent
+	if err := json.Unmarshal(data, &ev); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to unmarshal payment attempt event payload").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if ev.PaymentID == "" || ev.TenantID == "" {
+		return nil, ierr.NewError("invalid data for payment attempt event").
+			WithHint("Please provide a valid payment ID and tenant ID").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return json.Marshal(webhookDto.NewPaymentAttemptWebhookPayload(ev, eventType))
+}
