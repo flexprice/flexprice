@@ -26,339 +26,339 @@ type InvoiceLineItemUpdate struct {
 }
 
 // Where appends a list predicates to the InvoiceLineItemUpdate builder.
-func (iliu *InvoiceLineItemUpdate) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemUpdate {
-	iliu.mutation.Where(ps...)
-	return iliu
+func (_u *InvoiceLineItemUpdate) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (iliu *InvoiceLineItemUpdate) SetStatus(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetStatus(s)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetStatus(v string) *InvoiceLineItemUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableStatus(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetStatus(*s)
+func (_u *InvoiceLineItemUpdate) SetNillableStatus(v *string) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return iliu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (iliu *InvoiceLineItemUpdate) SetUpdatedAt(t time.Time) *InvoiceLineItemUpdate {
-	iliu.mutation.SetUpdatedAt(t)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetUpdatedAt(v time.Time) *InvoiceLineItemUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (iliu *InvoiceLineItemUpdate) SetUpdatedBy(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetUpdatedBy(s)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetUpdatedBy(v string) *InvoiceLineItemUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableUpdatedBy(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetUpdatedBy(*s)
+func (_u *InvoiceLineItemUpdate) SetNillableUpdatedBy(v *string) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (iliu *InvoiceLineItemUpdate) ClearUpdatedBy() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearUpdatedBy()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearUpdatedBy() *InvoiceLineItemUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (iliu *InvoiceLineItemUpdate) SetAmount(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetAmount(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetAmount(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableAmount(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetAmount(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableAmount(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return iliu
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (iliu *InvoiceLineItemUpdate) SetQuantity(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetQuantity(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetQuantity(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetQuantity(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableQuantity(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return iliu
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (iliu *InvoiceLineItemUpdate) SetCurrency(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetCurrency(s)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetCurrency(v string) *InvoiceLineItemUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableCurrency(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetCurrency(*s)
+func (_u *InvoiceLineItemUpdate) SetNillableCurrency(v *string) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return iliu
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (iliu *InvoiceLineItemUpdate) SetPeriodStart(t time.Time) *InvoiceLineItemUpdate {
-	iliu.mutation.SetPeriodStart(t)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetPeriodStart(v time.Time) *InvoiceLineItemUpdate {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillablePeriodStart(t *time.Time) *InvoiceLineItemUpdate {
-	if t != nil {
-		iliu.SetPeriodStart(*t)
+func (_u *InvoiceLineItemUpdate) SetNillablePeriodStart(v *time.Time) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearPeriodStart clears the value of the "period_start" field.
-func (iliu *InvoiceLineItemUpdate) ClearPeriodStart() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearPeriodStart()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearPeriodStart() *InvoiceLineItemUpdate {
+	_u.mutation.ClearPeriodStart()
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (iliu *InvoiceLineItemUpdate) SetPeriodEnd(t time.Time) *InvoiceLineItemUpdate {
-	iliu.mutation.SetPeriodEnd(t)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetPeriodEnd(v time.Time) *InvoiceLineItemUpdate {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillablePeriodEnd(t *time.Time) *InvoiceLineItemUpdate {
-	if t != nil {
-		iliu.SetPeriodEnd(*t)
+func (_u *InvoiceLineItemUpdate) SetNillablePeriodEnd(v *time.Time) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearPeriodEnd clears the value of the "period_end" field.
-func (iliu *InvoiceLineItemUpdate) ClearPeriodEnd() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearPeriodEnd()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearPeriodEnd() *InvoiceLineItemUpdate {
+	_u.mutation.ClearPeriodEnd()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (iliu *InvoiceLineItemUpdate) SetMetadata(m map[string]string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetMetadata(m)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetMetadata(v map[string]string) *InvoiceLineItemUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (iliu *InvoiceLineItemUpdate) ClearMetadata() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearMetadata()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearMetadata() *InvoiceLineItemUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCommitmentInfo sets the "commitment_info" field.
-func (iliu *InvoiceLineItemUpdate) SetCommitmentInfo(ti *types.CommitmentInfo) *InvoiceLineItemUpdate {
-	iliu.mutation.SetCommitmentInfo(ti)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetCommitmentInfo(v *types.CommitmentInfo) *InvoiceLineItemUpdate {
+	_u.mutation.SetCommitmentInfo(v)
+	return _u
 }
 
 // ClearCommitmentInfo clears the value of the "commitment_info" field.
-func (iliu *InvoiceLineItemUpdate) ClearCommitmentInfo() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearCommitmentInfo()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearCommitmentInfo() *InvoiceLineItemUpdate {
+	_u.mutation.ClearCommitmentInfo()
+	return _u
 }
 
 // SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
-func (iliu *InvoiceLineItemUpdate) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetPrepaidCreditsApplied(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetPrepaidCreditsApplied(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetPrepaidCreditsApplied(v)
+	return _u
 }
 
 // SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetPrepaidCreditsApplied(*d)
+func (_u *InvoiceLineItemUpdate) SetNillablePrepaidCreditsApplied(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetPrepaidCreditsApplied(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearPrepaidCreditsApplied clears the value of the "prepaid_credits_applied" field.
-func (iliu *InvoiceLineItemUpdate) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearPrepaidCreditsApplied()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdate {
+	_u.mutation.ClearPrepaidCreditsApplied()
+	return _u
 }
 
 // SetLineItemDiscount sets the "line_item_discount" field.
-func (iliu *InvoiceLineItemUpdate) SetLineItemDiscount(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetLineItemDiscount(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetLineItemDiscount(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetLineItemDiscount(v)
+	return _u
 }
 
 // SetNillableLineItemDiscount sets the "line_item_discount" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableLineItemDiscount(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetLineItemDiscount(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableLineItemDiscount(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetLineItemDiscount(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearLineItemDiscount clears the value of the "line_item_discount" field.
-func (iliu *InvoiceLineItemUpdate) ClearLineItemDiscount() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearLineItemDiscount()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearLineItemDiscount() *InvoiceLineItemUpdate {
+	_u.mutation.ClearLineItemDiscount()
+	return _u
 }
 
 // SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
-func (iliu *InvoiceLineItemUpdate) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetInvoiceLevelDiscount(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetInvoiceLevelDiscount(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetInvoiceLevelDiscount(v)
+	return _u
 }
 
 // SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetInvoiceLevelDiscount(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableInvoiceLevelDiscount(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetInvoiceLevelDiscount(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
-func (iliu *InvoiceLineItemUpdate) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearInvoiceLevelDiscount()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdate {
+	_u.mutation.ClearInvoiceLevelDiscount()
+	return _u
 }
 
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
-func (iliu *InvoiceLineItemUpdate) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetAdjustedEntitlementQuantity(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetAdjustedEntitlementQuantity(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetAdjustedEntitlementQuantity(v)
+	return _u
 }
 
 // SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetAdjustedEntitlementQuantity(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableAdjustedEntitlementQuantity(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetAdjustedEntitlementQuantity(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
-func (iliu *InvoiceLineItemUpdate) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearAdjustedEntitlementQuantity()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdate {
+	_u.mutation.ClearAdjustedEntitlementQuantity()
+	return _u
 }
 
 // SetCustomCurrency sets the "custom_currency" field.
-func (iliu *InvoiceLineItemUpdate) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemUpdate {
-	iliu.mutation.SetCustomCurrency(tcli)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetCustomCurrency(v *types.CustomCurrencyLineItem) *InvoiceLineItemUpdate {
+	_u.mutation.SetCustomCurrency(v)
+	return _u
 }
 
 // ClearCustomCurrency clears the value of the "custom_currency" field.
-func (iliu *InvoiceLineItemUpdate) ClearCustomCurrency() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearCustomCurrency()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearCustomCurrency() *InvoiceLineItemUpdate {
+	_u.mutation.ClearCustomCurrency()
+	return _u
 }
 
 // SetOriginalCurrency sets the "original_currency" field.
-func (iliu *InvoiceLineItemUpdate) SetOriginalCurrency(s string) *InvoiceLineItemUpdate {
-	iliu.mutation.SetOriginalCurrency(s)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetOriginalCurrency(v string) *InvoiceLineItemUpdate {
+	_u.mutation.SetOriginalCurrency(v)
+	return _u
 }
 
 // SetNillableOriginalCurrency sets the "original_currency" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableOriginalCurrency(s *string) *InvoiceLineItemUpdate {
-	if s != nil {
-		iliu.SetOriginalCurrency(*s)
+func (_u *InvoiceLineItemUpdate) SetNillableOriginalCurrency(v *string) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetOriginalCurrency(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearOriginalCurrency clears the value of the "original_currency" field.
-func (iliu *InvoiceLineItemUpdate) ClearOriginalCurrency() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearOriginalCurrency()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearOriginalCurrency() *InvoiceLineItemUpdate {
+	_u.mutation.ClearOriginalCurrency()
+	return _u
 }
 
 // SetOriginalAmount sets the "original_amount" field.
-func (iliu *InvoiceLineItemUpdate) SetOriginalAmount(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetOriginalAmount(d)
-	return iliu
+func (_u *InvoiceLineItemUpdate) SetOriginalAmount(v decimal.Decimal) *InvoiceLineItemUpdate {
+	_u.mutation.SetOriginalAmount(v)
+	return _u
 }
 
 // SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableOriginalAmount(d *decimal.Decimal) *InvoiceLineItemUpdate {
-	if d != nil {
-		iliu.SetOriginalAmount(*d)
+func (_u *InvoiceLineItemUpdate) SetNillableOriginalAmount(v *decimal.Decimal) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetOriginalAmount(*v)
 	}
-	return iliu
+	return _u
 }
 
 // ClearOriginalAmount clears the value of the "original_amount" field.
-func (iliu *InvoiceLineItemUpdate) ClearOriginalAmount() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearOriginalAmount()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearOriginalAmount() *InvoiceLineItemUpdate {
+	_u.mutation.ClearOriginalAmount()
+	return _u
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (iliu *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
-	iliu.mutation.AddCouponApplicationIDs(ids...)
-	return iliu
+func (_u *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (iliu *InvoiceLineItemUpdate) AddCouponApplications(c ...*CouponApplication) *InvoiceLineItemUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *InvoiceLineItemUpdate) AddCouponApplications(v ...*CouponApplication) *InvoiceLineItemUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return iliu.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the InvoiceLineItemMutation object of the builder.
-func (iliu *InvoiceLineItemUpdate) Mutation() *InvoiceLineItemMutation {
-	return iliu.mutation
+func (_u *InvoiceLineItemUpdate) Mutation() *InvoiceLineItemMutation {
+	return _u.mutation
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (iliu *InvoiceLineItemUpdate) ClearCouponApplications() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearCouponApplications()
-	return iliu
+func (_u *InvoiceLineItemUpdate) ClearCouponApplications() *InvoiceLineItemUpdate {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (iliu *InvoiceLineItemUpdate) RemoveCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
-	iliu.mutation.RemoveCouponApplicationIDs(ids...)
-	return iliu
+func (_u *InvoiceLineItemUpdate) RemoveCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (iliu *InvoiceLineItemUpdate) RemoveCouponApplications(c ...*CouponApplication) *InvoiceLineItemUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *InvoiceLineItemUpdate) RemoveCouponApplications(v ...*CouponApplication) *InvoiceLineItemUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return iliu.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (iliu *InvoiceLineItemUpdate) Save(ctx context.Context) (int, error) {
-	iliu.defaults()
-	return withHooks(ctx, iliu.sqlSave, iliu.mutation, iliu.hooks)
+func (_u *InvoiceLineItemUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iliu *InvoiceLineItemUpdate) SaveX(ctx context.Context) int {
-	affected, err := iliu.Save(ctx)
+func (_u *InvoiceLineItemUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -366,187 +366,187 @@ func (iliu *InvoiceLineItemUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (iliu *InvoiceLineItemUpdate) Exec(ctx context.Context) error {
-	_, err := iliu.Save(ctx)
+func (_u *InvoiceLineItemUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iliu *InvoiceLineItemUpdate) ExecX(ctx context.Context) {
-	if err := iliu.Exec(ctx); err != nil {
+func (_u *InvoiceLineItemUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (iliu *InvoiceLineItemUpdate) defaults() {
-	if _, ok := iliu.mutation.UpdatedAt(); !ok {
+func (_u *InvoiceLineItemUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := invoicelineitem.UpdateDefaultUpdatedAt()
-		iliu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (iliu *InvoiceLineItemUpdate) check() error {
-	if v, ok := iliu.mutation.Currency(); ok {
+func (_u *InvoiceLineItemUpdate) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := invoicelineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
 		}
 	}
-	if iliu.mutation.InvoiceCleared() && len(iliu.mutation.InvoiceIDs()) > 0 {
+	if _u.mutation.InvoiceCleared() && len(_u.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
 	return nil
 }
 
-func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := iliu.check(); err != nil {
-		return n, err
+func (_u *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(invoicelineitem.Table, invoicelineitem.Columns, sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString))
-	if ps := iliu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := iliu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(invoicelineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := iliu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if iliu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := iliu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if iliu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if iliu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if iliu.mutation.SubscriptionIDCleared() {
+	if _u.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if iliu.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldEntityID, field.TypeString)
 	}
-	if iliu.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(invoicelineitem.FieldEntityType, field.TypeString)
 	}
-	if iliu.mutation.PlanDisplayNameCleared() {
+	if _u.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
 	}
-	if iliu.mutation.PriceIDCleared() {
+	if _u.mutation.PriceIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceID, field.TypeString)
 	}
-	if iliu.mutation.PriceTypeCleared() {
+	if _u.mutation.PriceTypeCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceType, field.TypeString)
 	}
-	if iliu.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterID, field.TypeString)
 	}
-	if iliu.mutation.MeterDisplayNameCleared() {
+	if _u.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
 	}
-	if iliu.mutation.PriceUnitIDCleared() {
+	if _u.mutation.PriceUnitIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnitID, field.TypeString)
 	}
-	if iliu.mutation.PriceUnitCleared() {
+	if _u.mutation.PriceUnitCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnit, field.TypeString)
 	}
-	if iliu.mutation.PriceUnitAmountCleared() {
+	if _u.mutation.PriceUnitAmountCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther)
 	}
-	if iliu.mutation.DisplayNameCleared() {
+	if _u.mutation.DisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)
 	}
-	if value, ok := iliu.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := iliu.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := iliu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := iliu.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 	}
-	if iliu.mutation.PeriodStartCleared() {
+	if _u.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoicelineitem.FieldPeriodStart, field.TypeTime)
 	}
-	if value, ok := iliu.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if iliu.mutation.PeriodEndCleared() {
+	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(invoicelineitem.FieldPeriodEnd, field.TypeTime)
 	}
-	if value, ok := iliu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(invoicelineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if iliu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := iliu.mutation.CommitmentInfo(); ok {
+	if value, ok := _u.mutation.CommitmentInfo(); ok {
 		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
 	}
-	if iliu.mutation.CommitmentInfoCleared() {
+	if _u.mutation.CommitmentInfoCleared() {
 		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
 	}
-	if value, ok := iliu.mutation.PrepaidCreditsApplied(); ok {
+	if value, ok := _u.mutation.PrepaidCreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iliu.mutation.PrepaidCreditsAppliedCleared() {
+	if _u.mutation.PrepaidCreditsAppliedCleared() {
 		_spec.ClearField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther)
 	}
-	if value, ok := iliu.mutation.LineItemDiscount(); ok {
+	if value, ok := _u.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
 	}
-	if iliu.mutation.LineItemDiscountCleared() {
+	if _u.mutation.LineItemDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldLineItemDiscount, field.TypeOther)
 	}
-	if value, ok := iliu.mutation.InvoiceLevelDiscount(); ok {
+	if value, ok := _u.mutation.InvoiceLevelDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 	}
-	if iliu.mutation.InvoiceLevelDiscountCleared() {
+	if _u.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
-	if iliu.mutation.SubscriptionLineItemIDCleared() {
+	if _u.mutation.SubscriptionLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
 	}
-	if value, ok := iliu.mutation.AdjustedEntitlementQuantity(); ok {
+	if value, ok := _u.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 	}
-	if iliu.mutation.AdjustedEntitlementQuantityCleared() {
+	if _u.mutation.AdjustedEntitlementQuantityCleared() {
 		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
 	}
-	if iliu.mutation.ParentLineItemIDCleared() {
+	if _u.mutation.ParentLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
 	}
-	if value, ok := iliu.mutation.CustomCurrency(); ok {
+	if value, ok := _u.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
 	}
-	if iliu.mutation.CustomCurrencyCleared() {
+	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
 	}
-	if value, ok := iliu.mutation.OriginalCurrency(); ok {
+	if value, ok := _u.mutation.OriginalCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalCurrency, field.TypeString, value)
 	}
-	if iliu.mutation.OriginalCurrencyCleared() {
+	if _u.mutation.OriginalCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldOriginalCurrency, field.TypeString)
 	}
-	if value, ok := iliu.mutation.OriginalAmount(); ok {
+	if value, ok := _u.mutation.OriginalAmount(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalAmount, field.TypeOther, value)
 	}
-	if iliu.mutation.OriginalAmountCleared() {
+	if _u.mutation.OriginalAmountCleared() {
 		_spec.ClearField(invoicelineitem.FieldOriginalAmount, field.TypeOther)
 	}
-	if iliu.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -559,7 +559,7 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := iliu.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !iliu.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -575,7 +575,7 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := iliu.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -591,7 +591,7 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, iliu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{invoicelineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -599,8 +599,8 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		return 0, err
 	}
-	iliu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // InvoiceLineItemUpdateOne is the builder for updating a single InvoiceLineItem entity.
@@ -612,346 +612,346 @@ type InvoiceLineItemUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetStatus(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetStatus(s)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetStatus(v string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableStatus(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetStatus(*s)
+func (_u *InvoiceLineItemUpdateOne) SetNillableStatus(v *string) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetUpdatedAt(t time.Time) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetUpdatedAt(t)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetUpdatedAt(v time.Time) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetUpdatedBy(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetUpdatedBy(s)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetUpdatedBy(v string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableUpdatedBy(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetUpdatedBy(*s)
+func (_u *InvoiceLineItemUpdateOne) SetNillableUpdatedBy(v *string) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearUpdatedBy() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearUpdatedBy()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearUpdatedBy() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetAmount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetAmount(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetAmount(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableAmount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetAmount(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableAmount(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetQuantity(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetQuantity(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetQuantity(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetQuantity(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableQuantity(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetCurrency(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetCurrency(s)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetCurrency(v string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableCurrency(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetCurrency(*s)
+func (_u *InvoiceLineItemUpdateOne) SetNillableCurrency(v *string) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetPeriodStart(t time.Time) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetPeriodStart(t)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetPeriodStart(v time.Time) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetPeriodStart(v)
+	return _u
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillablePeriodStart(t *time.Time) *InvoiceLineItemUpdateOne {
-	if t != nil {
-		iliuo.SetPeriodStart(*t)
+func (_u *InvoiceLineItemUpdateOne) SetNillablePeriodStart(v *time.Time) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetPeriodStart(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearPeriodStart clears the value of the "period_start" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearPeriodStart() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearPeriodStart()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearPeriodStart() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearPeriodStart()
+	return _u
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetPeriodEnd(t time.Time) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetPeriodEnd(t)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetPeriodEnd(v time.Time) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillablePeriodEnd(t *time.Time) *InvoiceLineItemUpdateOne {
-	if t != nil {
-		iliuo.SetPeriodEnd(*t)
+func (_u *InvoiceLineItemUpdateOne) SetNillablePeriodEnd(v *time.Time) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearPeriodEnd clears the value of the "period_end" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearPeriodEnd() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearPeriodEnd()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearPeriodEnd() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearPeriodEnd()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetMetadata(m map[string]string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetMetadata(m)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetMetadata(v map[string]string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearMetadata() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearMetadata()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearMetadata() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCommitmentInfo sets the "commitment_info" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetCommitmentInfo(ti *types.CommitmentInfo) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetCommitmentInfo(ti)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetCommitmentInfo(v *types.CommitmentInfo) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetCommitmentInfo(v)
+	return _u
 }
 
 // ClearCommitmentInfo clears the value of the "commitment_info" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearCommitmentInfo() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearCommitmentInfo()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearCommitmentInfo() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearCommitmentInfo()
+	return _u
 }
 
 // SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetPrepaidCreditsApplied(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetPrepaidCreditsApplied(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetPrepaidCreditsApplied(v)
+	return _u
 }
 
 // SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetPrepaidCreditsApplied(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillablePrepaidCreditsApplied(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetPrepaidCreditsApplied(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearPrepaidCreditsApplied clears the value of the "prepaid_credits_applied" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearPrepaidCreditsApplied()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearPrepaidCreditsApplied()
+	return _u
 }
 
 // SetLineItemDiscount sets the "line_item_discount" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetLineItemDiscount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetLineItemDiscount(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetLineItemDiscount(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetLineItemDiscount(v)
+	return _u
 }
 
 // SetNillableLineItemDiscount sets the "line_item_discount" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableLineItemDiscount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetLineItemDiscount(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableLineItemDiscount(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetLineItemDiscount(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearLineItemDiscount clears the value of the "line_item_discount" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearLineItemDiscount() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearLineItemDiscount()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearLineItemDiscount() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearLineItemDiscount()
+	return _u
 }
 
 // SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetInvoiceLevelDiscount(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetInvoiceLevelDiscount(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetInvoiceLevelDiscount(v)
+	return _u
 }
 
 // SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetInvoiceLevelDiscount(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableInvoiceLevelDiscount(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetInvoiceLevelDiscount(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearInvoiceLevelDiscount()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearInvoiceLevelDiscount()
+	return _u
 }
 
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetAdjustedEntitlementQuantity(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetAdjustedEntitlementQuantity(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetAdjustedEntitlementQuantity(v)
+	return _u
 }
 
 // SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetAdjustedEntitlementQuantity(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableAdjustedEntitlementQuantity(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetAdjustedEntitlementQuantity(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearAdjustedEntitlementQuantity()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearAdjustedEntitlementQuantity()
+	return _u
 }
 
 // SetCustomCurrency sets the "custom_currency" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetCustomCurrency(tcli)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetCustomCurrency(v *types.CustomCurrencyLineItem) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetCustomCurrency(v)
+	return _u
 }
 
 // ClearCustomCurrency clears the value of the "custom_currency" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearCustomCurrency() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearCustomCurrency()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearCustomCurrency() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearCustomCurrency()
+	return _u
 }
 
 // SetOriginalCurrency sets the "original_currency" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetOriginalCurrency(s string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetOriginalCurrency(s)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetOriginalCurrency(v string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetOriginalCurrency(v)
+	return _u
 }
 
 // SetNillableOriginalCurrency sets the "original_currency" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableOriginalCurrency(s *string) *InvoiceLineItemUpdateOne {
-	if s != nil {
-		iliuo.SetOriginalCurrency(*s)
+func (_u *InvoiceLineItemUpdateOne) SetNillableOriginalCurrency(v *string) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetOriginalCurrency(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearOriginalCurrency clears the value of the "original_currency" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearOriginalCurrency() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearOriginalCurrency()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearOriginalCurrency() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearOriginalCurrency()
+	return _u
 }
 
 // SetOriginalAmount sets the "original_amount" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetOriginalAmount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetOriginalAmount(d)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) SetOriginalAmount(v decimal.Decimal) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetOriginalAmount(v)
+	return _u
 }
 
 // SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableOriginalAmount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
-	if d != nil {
-		iliuo.SetOriginalAmount(*d)
+func (_u *InvoiceLineItemUpdateOne) SetNillableOriginalAmount(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetOriginalAmount(*v)
 	}
-	return iliuo
+	return _u
 }
 
 // ClearOriginalAmount clears the value of the "original_amount" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearOriginalAmount() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearOriginalAmount()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearOriginalAmount() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearOriginalAmount()
+	return _u
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (iliuo *InvoiceLineItemUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.AddCouponApplicationIDs(ids...)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (iliuo *InvoiceLineItemUpdateOne) AddCouponApplications(c ...*CouponApplication) *InvoiceLineItemUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *InvoiceLineItemUpdateOne) AddCouponApplications(v ...*CouponApplication) *InvoiceLineItemUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return iliuo.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the InvoiceLineItemMutation object of the builder.
-func (iliuo *InvoiceLineItemUpdateOne) Mutation() *InvoiceLineItemMutation {
-	return iliuo.mutation
+func (_u *InvoiceLineItemUpdateOne) Mutation() *InvoiceLineItemMutation {
+	return _u.mutation
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (iliuo *InvoiceLineItemUpdateOne) ClearCouponApplications() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearCouponApplications()
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) ClearCouponApplications() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (iliuo *InvoiceLineItemUpdateOne) RemoveCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.RemoveCouponApplicationIDs(ids...)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) RemoveCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (iliuo *InvoiceLineItemUpdateOne) RemoveCouponApplications(c ...*CouponApplication) *InvoiceLineItemUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *InvoiceLineItemUpdateOne) RemoveCouponApplications(v ...*CouponApplication) *InvoiceLineItemUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return iliuo.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Where appends a list predicates to the InvoiceLineItemUpdate builder.
-func (iliuo *InvoiceLineItemUpdateOne) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.Where(ps...)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (iliuo *InvoiceLineItemUpdateOne) Select(field string, fields ...string) *InvoiceLineItemUpdateOne {
-	iliuo.fields = append([]string{field}, fields...)
-	return iliuo
+func (_u *InvoiceLineItemUpdateOne) Select(field string, fields ...string) *InvoiceLineItemUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated InvoiceLineItem entity.
-func (iliuo *InvoiceLineItemUpdateOne) Save(ctx context.Context) (*InvoiceLineItem, error) {
-	iliuo.defaults()
-	return withHooks(ctx, iliuo.sqlSave, iliuo.mutation, iliuo.hooks)
+func (_u *InvoiceLineItemUpdateOne) Save(ctx context.Context) (*InvoiceLineItem, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iliuo *InvoiceLineItemUpdateOne) SaveX(ctx context.Context) *InvoiceLineItem {
-	node, err := iliuo.Save(ctx)
+func (_u *InvoiceLineItemUpdateOne) SaveX(ctx context.Context) *InvoiceLineItem {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -959,50 +959,50 @@ func (iliuo *InvoiceLineItemUpdateOne) SaveX(ctx context.Context) *InvoiceLineIt
 }
 
 // Exec executes the query on the entity.
-func (iliuo *InvoiceLineItemUpdateOne) Exec(ctx context.Context) error {
-	_, err := iliuo.Save(ctx)
+func (_u *InvoiceLineItemUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iliuo *InvoiceLineItemUpdateOne) ExecX(ctx context.Context) {
-	if err := iliuo.Exec(ctx); err != nil {
+func (_u *InvoiceLineItemUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (iliuo *InvoiceLineItemUpdateOne) defaults() {
-	if _, ok := iliuo.mutation.UpdatedAt(); !ok {
+func (_u *InvoiceLineItemUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := invoicelineitem.UpdateDefaultUpdatedAt()
-		iliuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (iliuo *InvoiceLineItemUpdateOne) check() error {
-	if v, ok := iliuo.mutation.Currency(); ok {
+func (_u *InvoiceLineItemUpdateOne) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := invoicelineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
 		}
 	}
-	if iliuo.mutation.InvoiceCleared() && len(iliuo.mutation.InvoiceIDs()) > 0 {
+	if _u.mutation.InvoiceCleared() && len(_u.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
 	return nil
 }
 
-func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *InvoiceLineItem, err error) {
-	if err := iliuo.check(); err != nil {
+func (_u *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *InvoiceLineItem, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(invoicelineitem.Table, invoicelineitem.Columns, sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString))
-	id, ok := iliuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "InvoiceLineItem.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := iliuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, invoicelineitem.FieldID)
 		for _, f := range fields {
@@ -1014,149 +1014,149 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 			}
 		}
 	}
-	if ps := iliuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := iliuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(invoicelineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := iliuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if iliuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if iliuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(invoicelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if iliuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if iliuo.mutation.SubscriptionIDCleared() {
+	if _u.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionID, field.TypeString)
 	}
-	if iliuo.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldEntityID, field.TypeString)
 	}
-	if iliuo.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(invoicelineitem.FieldEntityType, field.TypeString)
 	}
-	if iliuo.mutation.PlanDisplayNameCleared() {
+	if _u.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldPlanDisplayName, field.TypeString)
 	}
-	if iliuo.mutation.PriceIDCleared() {
+	if _u.mutation.PriceIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceID, field.TypeString)
 	}
-	if iliuo.mutation.PriceTypeCleared() {
+	if _u.mutation.PriceTypeCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceType, field.TypeString)
 	}
-	if iliuo.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterID, field.TypeString)
 	}
-	if iliuo.mutation.MeterDisplayNameCleared() {
+	if _u.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldMeterDisplayName, field.TypeString)
 	}
-	if iliuo.mutation.PriceUnitIDCleared() {
+	if _u.mutation.PriceUnitIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnitID, field.TypeString)
 	}
-	if iliuo.mutation.PriceUnitCleared() {
+	if _u.mutation.PriceUnitCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnit, field.TypeString)
 	}
-	if iliuo.mutation.PriceUnitAmountCleared() {
+	if _u.mutation.PriceUnitAmountCleared() {
 		_spec.ClearField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther)
 	}
-	if iliuo.mutation.DisplayNameCleared() {
+	if _u.mutation.DisplayNameCleared() {
 		_spec.ClearField(invoicelineitem.FieldDisplayName, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := iliuo.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := iliuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := iliuo.mutation.PeriodStart(); ok {
+	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 	}
-	if iliuo.mutation.PeriodStartCleared() {
+	if _u.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoicelineitem.FieldPeriodStart, field.TypeTime)
 	}
-	if value, ok := iliuo.mutation.PeriodEnd(); ok {
+	if value, ok := _u.mutation.PeriodEnd(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if iliuo.mutation.PeriodEndCleared() {
+	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(invoicelineitem.FieldPeriodEnd, field.TypeTime)
 	}
-	if value, ok := iliuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(invoicelineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if iliuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := iliuo.mutation.CommitmentInfo(); ok {
+	if value, ok := _u.mutation.CommitmentInfo(); ok {
 		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
 	}
-	if iliuo.mutation.CommitmentInfoCleared() {
+	if _u.mutation.CommitmentInfoCleared() {
 		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
 	}
-	if value, ok := iliuo.mutation.PrepaidCreditsApplied(); ok {
+	if value, ok := _u.mutation.PrepaidCreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iliuo.mutation.PrepaidCreditsAppliedCleared() {
+	if _u.mutation.PrepaidCreditsAppliedCleared() {
 		_spec.ClearField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther)
 	}
-	if value, ok := iliuo.mutation.LineItemDiscount(); ok {
+	if value, ok := _u.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
 	}
-	if iliuo.mutation.LineItemDiscountCleared() {
+	if _u.mutation.LineItemDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldLineItemDiscount, field.TypeOther)
 	}
-	if value, ok := iliuo.mutation.InvoiceLevelDiscount(); ok {
+	if value, ok := _u.mutation.InvoiceLevelDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 	}
-	if iliuo.mutation.InvoiceLevelDiscountCleared() {
+	if _u.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
-	if iliuo.mutation.SubscriptionLineItemIDCleared() {
+	if _u.mutation.SubscriptionLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.AdjustedEntitlementQuantity(); ok {
+	if value, ok := _u.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 	}
-	if iliuo.mutation.AdjustedEntitlementQuantityCleared() {
+	if _u.mutation.AdjustedEntitlementQuantityCleared() {
 		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
 	}
-	if iliuo.mutation.ParentLineItemIDCleared() {
+	if _u.mutation.ParentLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldParentLineItemID, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.CustomCurrency(); ok {
+	if value, ok := _u.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
 	}
-	if iliuo.mutation.CustomCurrencyCleared() {
+	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
 	}
-	if value, ok := iliuo.mutation.OriginalCurrency(); ok {
+	if value, ok := _u.mutation.OriginalCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalCurrency, field.TypeString, value)
 	}
-	if iliuo.mutation.OriginalCurrencyCleared() {
+	if _u.mutation.OriginalCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldOriginalCurrency, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.OriginalAmount(); ok {
+	if value, ok := _u.mutation.OriginalAmount(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalAmount, field.TypeOther, value)
 	}
-	if iliuo.mutation.OriginalAmountCleared() {
+	if _u.mutation.OriginalAmountCleared() {
 		_spec.ClearField(invoicelineitem.FieldOriginalAmount, field.TypeOther)
 	}
-	if iliuo.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1169,7 +1169,7 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := iliuo.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !iliuo.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1185,7 +1185,7 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := iliuo.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1201,10 +1201,10 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &InvoiceLineItem{config: iliuo.config}
+	_node = &InvoiceLineItem{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, iliuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{invoicelineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1212,6 +1212,6 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 		}
 		return nil, err
 	}
-	iliuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

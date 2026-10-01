@@ -340,10 +340,10 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				}
 			}
 		case invoice.FieldFxConversion:
-			if value, ok := values[j].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field fx_conversion", values[j])
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field fx_conversion", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &i.FxConversion); err != nil {
+				if err := json.Unmarshal(*value, &_m.FxConversion); err != nil {
 					return fmt.Errorf("unmarshal field fx_conversion: %w", err)
 				}
 			}
@@ -624,7 +624,7 @@ func (_m *Invoice) String() string {
 	builder.WriteString(fmt.Sprintf("%v", _m.CustomCurrency))
 	builder.WriteString(", ")
 	builder.WriteString("fx_conversion=")
-	builder.WriteString(fmt.Sprintf("%v", i.FxConversion))
+	builder.WriteString(fmt.Sprintf("%v", _m.FxConversion))
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(_m.Description)

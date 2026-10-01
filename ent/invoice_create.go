@@ -25,657 +25,657 @@ type InvoiceCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (ic *InvoiceCreate) SetTenantID(s string) *InvoiceCreate {
-	ic.mutation.SetTenantID(s)
-	return ic
+func (_c *InvoiceCreate) SetTenantID(v string) *InvoiceCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (ic *InvoiceCreate) SetStatus(s string) *InvoiceCreate {
-	ic.mutation.SetStatus(s)
-	return ic
+func (_c *InvoiceCreate) SetStatus(v string) *InvoiceCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableStatus(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetStatus(*s)
+func (_c *InvoiceCreate) SetNillableStatus(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (ic *InvoiceCreate) SetCreatedAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetCreatedAt(t)
-	return ic
+func (_c *InvoiceCreate) SetCreatedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableCreatedAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetCreatedAt(*t)
+func (_c *InvoiceCreate) SetNillableCreatedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ic *InvoiceCreate) SetUpdatedAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetUpdatedAt(t)
-	return ic
+func (_c *InvoiceCreate) SetUpdatedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableUpdatedAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetUpdatedAt(*t)
+func (_c *InvoiceCreate) SetNillableUpdatedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (ic *InvoiceCreate) SetCreatedBy(s string) *InvoiceCreate {
-	ic.mutation.SetCreatedBy(s)
-	return ic
+func (_c *InvoiceCreate) SetCreatedBy(v string) *InvoiceCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableCreatedBy(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetCreatedBy(*s)
+func (_c *InvoiceCreate) SetNillableCreatedBy(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ic *InvoiceCreate) SetUpdatedBy(s string) *InvoiceCreate {
-	ic.mutation.SetUpdatedBy(s)
-	return ic
+func (_c *InvoiceCreate) SetUpdatedBy(v string) *InvoiceCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableUpdatedBy(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetUpdatedBy(*s)
+func (_c *InvoiceCreate) SetNillableUpdatedBy(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (ic *InvoiceCreate) SetEnvironmentID(s string) *InvoiceCreate {
-	ic.mutation.SetEnvironmentID(s)
-	return ic
+func (_c *InvoiceCreate) SetEnvironmentID(v string) *InvoiceCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableEnvironmentID(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetEnvironmentID(*s)
+func (_c *InvoiceCreate) SetNillableEnvironmentID(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (ic *InvoiceCreate) SetCustomerID(s string) *InvoiceCreate {
-	ic.mutation.SetCustomerID(s)
-	return ic
+func (_c *InvoiceCreate) SetCustomerID(v string) *InvoiceCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (ic *InvoiceCreate) SetSubscriptionID(s string) *InvoiceCreate {
-	ic.mutation.SetSubscriptionID(s)
-	return ic
+func (_c *InvoiceCreate) SetSubscriptionID(v string) *InvoiceCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableSubscriptionID(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetSubscriptionID(*s)
+func (_c *InvoiceCreate) SetNillableSubscriptionID(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetSubscriptionCustomerID sets the "subscription_customer_id" field.
-func (ic *InvoiceCreate) SetSubscriptionCustomerID(s string) *InvoiceCreate {
-	ic.mutation.SetSubscriptionCustomerID(s)
-	return ic
+func (_c *InvoiceCreate) SetSubscriptionCustomerID(v string) *InvoiceCreate {
+	_c.mutation.SetSubscriptionCustomerID(v)
+	return _c
 }
 
 // SetNillableSubscriptionCustomerID sets the "subscription_customer_id" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableSubscriptionCustomerID(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetSubscriptionCustomerID(*s)
+func (_c *InvoiceCreate) SetNillableSubscriptionCustomerID(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetSubscriptionCustomerID(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetInvoiceType sets the "invoice_type" field.
-func (ic *InvoiceCreate) SetInvoiceType(tt types.InvoiceType) *InvoiceCreate {
-	ic.mutation.SetInvoiceType(tt)
-	return ic
+func (_c *InvoiceCreate) SetInvoiceType(v types.InvoiceType) *InvoiceCreate {
+	_c.mutation.SetInvoiceType(v)
+	return _c
 }
 
 // SetInvoiceStatus sets the "invoice_status" field.
-func (ic *InvoiceCreate) SetInvoiceStatus(ts types.InvoiceStatus) *InvoiceCreate {
-	ic.mutation.SetInvoiceStatus(ts)
-	return ic
+func (_c *InvoiceCreate) SetInvoiceStatus(v types.InvoiceStatus) *InvoiceCreate {
+	_c.mutation.SetInvoiceStatus(v)
+	return _c
 }
 
 // SetNillableInvoiceStatus sets the "invoice_status" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableInvoiceStatus(ts *types.InvoiceStatus) *InvoiceCreate {
-	if ts != nil {
-		ic.SetInvoiceStatus(*ts)
+func (_c *InvoiceCreate) SetNillableInvoiceStatus(v *types.InvoiceStatus) *InvoiceCreate {
+	if v != nil {
+		_c.SetInvoiceStatus(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetPaymentStatus sets the "payment_status" field.
-func (ic *InvoiceCreate) SetPaymentStatus(ts types.PaymentStatus) *InvoiceCreate {
-	ic.mutation.SetPaymentStatus(ts)
-	return ic
+func (_c *InvoiceCreate) SetPaymentStatus(v types.PaymentStatus) *InvoiceCreate {
+	_c.mutation.SetPaymentStatus(v)
+	return _c
 }
 
 // SetNillablePaymentStatus sets the "payment_status" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillablePaymentStatus(ts *types.PaymentStatus) *InvoiceCreate {
-	if ts != nil {
-		ic.SetPaymentStatus(*ts)
+func (_c *InvoiceCreate) SetNillablePaymentStatus(v *types.PaymentStatus) *InvoiceCreate {
+	if v != nil {
+		_c.SetPaymentStatus(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (ic *InvoiceCreate) SetCurrency(s string) *InvoiceCreate {
-	ic.mutation.SetCurrency(s)
-	return ic
+func (_c *InvoiceCreate) SetCurrency(v string) *InvoiceCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetAmountDue sets the "amount_due" field.
-func (ic *InvoiceCreate) SetAmountDue(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetAmountDue(d)
-	return ic
+func (_c *InvoiceCreate) SetAmountDue(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetAmountDue(v)
+	return _c
 }
 
 // SetNillableAmountDue sets the "amount_due" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableAmountDue(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetAmountDue(*d)
+func (_c *InvoiceCreate) SetNillableAmountDue(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetAmountDue(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetAmountPaid sets the "amount_paid" field.
-func (ic *InvoiceCreate) SetAmountPaid(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetAmountPaid(d)
-	return ic
+func (_c *InvoiceCreate) SetAmountPaid(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetAmountPaid(v)
+	return _c
 }
 
 // SetNillableAmountPaid sets the "amount_paid" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableAmountPaid(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetAmountPaid(*d)
+func (_c *InvoiceCreate) SetNillableAmountPaid(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetAmountPaid(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetAmountRemaining sets the "amount_remaining" field.
-func (ic *InvoiceCreate) SetAmountRemaining(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetAmountRemaining(d)
-	return ic
+func (_c *InvoiceCreate) SetAmountRemaining(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetAmountRemaining(v)
+	return _c
 }
 
 // SetNillableAmountRemaining sets the "amount_remaining" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableAmountRemaining(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetAmountRemaining(*d)
+func (_c *InvoiceCreate) SetNillableAmountRemaining(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetAmountRemaining(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetSubtotal sets the "subtotal" field.
-func (ic *InvoiceCreate) SetSubtotal(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetSubtotal(d)
-	return ic
+func (_c *InvoiceCreate) SetSubtotal(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetSubtotal(v)
+	return _c
 }
 
 // SetNillableSubtotal sets the "subtotal" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableSubtotal(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetSubtotal(*d)
+func (_c *InvoiceCreate) SetNillableSubtotal(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetSubtotal(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetAdjustmentAmount sets the "adjustment_amount" field.
-func (ic *InvoiceCreate) SetAdjustmentAmount(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetAdjustmentAmount(d)
-	return ic
+func (_c *InvoiceCreate) SetAdjustmentAmount(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetAdjustmentAmount(v)
+	return _c
 }
 
 // SetNillableAdjustmentAmount sets the "adjustment_amount" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableAdjustmentAmount(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetAdjustmentAmount(*d)
+func (_c *InvoiceCreate) SetNillableAdjustmentAmount(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetAdjustmentAmount(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetRefundedAmount sets the "refunded_amount" field.
-func (ic *InvoiceCreate) SetRefundedAmount(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetRefundedAmount(d)
-	return ic
+func (_c *InvoiceCreate) SetRefundedAmount(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetRefundedAmount(v)
+	return _c
 }
 
 // SetNillableRefundedAmount sets the "refunded_amount" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableRefundedAmount(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetRefundedAmount(*d)
+func (_c *InvoiceCreate) SetNillableRefundedAmount(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetRefundedAmount(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetTotalTax sets the "total_tax" field.
-func (ic *InvoiceCreate) SetTotalTax(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotalTax(d)
-	return ic
+func (_c *InvoiceCreate) SetTotalTax(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetTotalTax(v)
+	return _c
 }
 
 // SetNillableTotalTax sets the "total_tax" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotalTax(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetTotalTax(*d)
+func (_c *InvoiceCreate) SetNillableTotalTax(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetTotalTax(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetTotalDiscount sets the "total_discount" field.
-func (ic *InvoiceCreate) SetTotalDiscount(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotalDiscount(d)
-	return ic
+func (_c *InvoiceCreate) SetTotalDiscount(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetTotalDiscount(v)
+	return _c
 }
 
 // SetNillableTotalDiscount sets the "total_discount" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotalDiscount(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetTotalDiscount(*d)
+func (_c *InvoiceCreate) SetNillableTotalDiscount(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetTotalDiscount(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetTotal sets the "total" field.
-func (ic *InvoiceCreate) SetTotal(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotal(d)
-	return ic
+func (_c *InvoiceCreate) SetTotal(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetTotal(v)
+	return _c
 }
 
 // SetNillableTotal sets the "total" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotal(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetTotal(*d)
+func (_c *InvoiceCreate) SetNillableTotal(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetTotal(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetCustomCurrency sets the "custom_currency" field.
-func (ic *InvoiceCreate) SetCustomCurrency(tc *types.CustomCurrency) *InvoiceCreate {
-	ic.mutation.SetCustomCurrency(tc)
-	return ic
+func (_c *InvoiceCreate) SetCustomCurrency(v *types.CustomCurrency) *InvoiceCreate {
+	_c.mutation.SetCustomCurrency(v)
+	return _c
 }
 
 // SetFxConversion sets the "fx_conversion" field.
-func (ic *InvoiceCreate) SetFxConversion(tc *types.FxConversion) *InvoiceCreate {
-	ic.mutation.SetFxConversion(tc)
-	return ic
+func (_c *InvoiceCreate) SetFxConversion(v *types.FxConversion) *InvoiceCreate {
+	_c.mutation.SetFxConversion(v)
+	return _c
 }
 
 // SetDescription sets the "description" field.
-func (ic *InvoiceCreate) SetDescription(s string) *InvoiceCreate {
-	ic.mutation.SetDescription(s)
-	return ic
+func (_c *InvoiceCreate) SetDescription(v string) *InvoiceCreate {
+	_c.mutation.SetDescription(v)
+	return _c
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableDescription(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetDescription(*s)
+func (_c *InvoiceCreate) SetNillableDescription(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetDescription(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetDueDate sets the "due_date" field.
-func (ic *InvoiceCreate) SetDueDate(t time.Time) *InvoiceCreate {
-	ic.mutation.SetDueDate(t)
-	return ic
+func (_c *InvoiceCreate) SetDueDate(v time.Time) *InvoiceCreate {
+	_c.mutation.SetDueDate(v)
+	return _c
 }
 
 // SetNillableDueDate sets the "due_date" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableDueDate(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetDueDate(*t)
+func (_c *InvoiceCreate) SetNillableDueDate(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetDueDate(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetPaidAt sets the "paid_at" field.
-func (ic *InvoiceCreate) SetPaidAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetPaidAt(t)
-	return ic
+func (_c *InvoiceCreate) SetPaidAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetPaidAt(v)
+	return _c
 }
 
 // SetNillablePaidAt sets the "paid_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillablePaidAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetPaidAt(*t)
+func (_c *InvoiceCreate) SetNillablePaidAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetPaidAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetVoidedAt sets the "voided_at" field.
-func (ic *InvoiceCreate) SetVoidedAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetVoidedAt(t)
-	return ic
+func (_c *InvoiceCreate) SetVoidedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetVoidedAt(v)
+	return _c
 }
 
 // SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableVoidedAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetVoidedAt(*t)
+func (_c *InvoiceCreate) SetNillableVoidedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetVoidedAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetFinalizedAt sets the "finalized_at" field.
-func (ic *InvoiceCreate) SetFinalizedAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetFinalizedAt(t)
-	return ic
+func (_c *InvoiceCreate) SetFinalizedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetFinalizedAt(v)
+	return _c
 }
 
 // SetNillableFinalizedAt sets the "finalized_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableFinalizedAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetFinalizedAt(*t)
+func (_c *InvoiceCreate) SetNillableFinalizedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetFinalizedAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetIssueDate sets the "issue_date" field.
-func (ic *InvoiceCreate) SetIssueDate(t time.Time) *InvoiceCreate {
-	ic.mutation.SetIssueDate(t)
-	return ic
+func (_c *InvoiceCreate) SetIssueDate(v time.Time) *InvoiceCreate {
+	_c.mutation.SetIssueDate(v)
+	return _c
 }
 
 // SetNillableIssueDate sets the "issue_date" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableIssueDate(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetIssueDate(*t)
+func (_c *InvoiceCreate) SetNillableIssueDate(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetIssueDate(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetLastComputedAt sets the "last_computed_at" field.
-func (ic *InvoiceCreate) SetLastComputedAt(t time.Time) *InvoiceCreate {
-	ic.mutation.SetLastComputedAt(t)
-	return ic
+func (_c *InvoiceCreate) SetLastComputedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetLastComputedAt(v)
+	return _c
 }
 
 // SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableLastComputedAt(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetLastComputedAt(*t)
+func (_c *InvoiceCreate) SetNillableLastComputedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetLastComputedAt(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (ic *InvoiceCreate) SetBillingPeriod(tp types.BillingPeriod) *InvoiceCreate {
-	ic.mutation.SetBillingPeriod(tp)
-	return ic
+func (_c *InvoiceCreate) SetBillingPeriod(v types.BillingPeriod) *InvoiceCreate {
+	_c.mutation.SetBillingPeriod(v)
+	return _c
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableBillingPeriod(tp *types.BillingPeriod) *InvoiceCreate {
-	if tp != nil {
-		ic.SetBillingPeriod(*tp)
+func (_c *InvoiceCreate) SetNillableBillingPeriod(v *types.BillingPeriod) *InvoiceCreate {
+	if v != nil {
+		_c.SetBillingPeriod(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (ic *InvoiceCreate) SetPeriodStart(t time.Time) *InvoiceCreate {
-	ic.mutation.SetPeriodStart(t)
-	return ic
+func (_c *InvoiceCreate) SetPeriodStart(v time.Time) *InvoiceCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillablePeriodStart(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetPeriodStart(*t)
+func (_c *InvoiceCreate) SetNillablePeriodStart(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetPeriodStart(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (ic *InvoiceCreate) SetPeriodEnd(t time.Time) *InvoiceCreate {
-	ic.mutation.SetPeriodEnd(t)
-	return ic
+func (_c *InvoiceCreate) SetPeriodEnd(v time.Time) *InvoiceCreate {
+	_c.mutation.SetPeriodEnd(v)
+	return _c
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillablePeriodEnd(t *time.Time) *InvoiceCreate {
-	if t != nil {
-		ic.SetPeriodEnd(*t)
+func (_c *InvoiceCreate) SetNillablePeriodEnd(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetPeriodEnd(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetInvoicePdfURL sets the "invoice_pdf_url" field.
-func (ic *InvoiceCreate) SetInvoicePdfURL(s string) *InvoiceCreate {
-	ic.mutation.SetInvoicePdfURL(s)
-	return ic
+func (_c *InvoiceCreate) SetInvoicePdfURL(v string) *InvoiceCreate {
+	_c.mutation.SetInvoicePdfURL(v)
+	return _c
 }
 
 // SetNillableInvoicePdfURL sets the "invoice_pdf_url" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableInvoicePdfURL(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetInvoicePdfURL(*s)
+func (_c *InvoiceCreate) SetNillableInvoicePdfURL(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetInvoicePdfURL(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetBillingReason sets the "billing_reason" field.
-func (ic *InvoiceCreate) SetBillingReason(s string) *InvoiceCreate {
-	ic.mutation.SetBillingReason(s)
-	return ic
+func (_c *InvoiceCreate) SetBillingReason(v string) *InvoiceCreate {
+	_c.mutation.SetBillingReason(v)
+	return _c
 }
 
 // SetNillableBillingReason sets the "billing_reason" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableBillingReason(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetBillingReason(*s)
+func (_c *InvoiceCreate) SetNillableBillingReason(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetBillingReason(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (ic *InvoiceCreate) SetMetadata(m map[string]string) *InvoiceCreate {
-	ic.mutation.SetMetadata(m)
-	return ic
+func (_c *InvoiceCreate) SetMetadata(v map[string]string) *InvoiceCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetVersion sets the "version" field.
-func (ic *InvoiceCreate) SetVersion(i int) *InvoiceCreate {
-	ic.mutation.SetVersion(i)
-	return ic
+func (_c *InvoiceCreate) SetVersion(v int) *InvoiceCreate {
+	_c.mutation.SetVersion(v)
+	return _c
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableVersion(i *int) *InvoiceCreate {
-	if i != nil {
-		ic.SetVersion(*i)
+func (_c *InvoiceCreate) SetNillableVersion(v *int) *InvoiceCreate {
+	if v != nil {
+		_c.SetVersion(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetInvoiceNumber sets the "invoice_number" field.
-func (ic *InvoiceCreate) SetInvoiceNumber(s string) *InvoiceCreate {
-	ic.mutation.SetInvoiceNumber(s)
-	return ic
+func (_c *InvoiceCreate) SetInvoiceNumber(v string) *InvoiceCreate {
+	_c.mutation.SetInvoiceNumber(v)
+	return _c
 }
 
 // SetNillableInvoiceNumber sets the "invoice_number" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableInvoiceNumber(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetInvoiceNumber(*s)
+func (_c *InvoiceCreate) SetNillableInvoiceNumber(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetInvoiceNumber(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetBillingSequence sets the "billing_sequence" field.
-func (ic *InvoiceCreate) SetBillingSequence(i int) *InvoiceCreate {
-	ic.mutation.SetBillingSequence(i)
-	return ic
+func (_c *InvoiceCreate) SetBillingSequence(v int) *InvoiceCreate {
+	_c.mutation.SetBillingSequence(v)
+	return _c
 }
 
 // SetNillableBillingSequence sets the "billing_sequence" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableBillingSequence(i *int) *InvoiceCreate {
-	if i != nil {
-		ic.SetBillingSequence(*i)
+func (_c *InvoiceCreate) SetNillableBillingSequence(v *int) *InvoiceCreate {
+	if v != nil {
+		_c.SetBillingSequence(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field.
-func (ic *InvoiceCreate) SetTotalPrepaidCreditsApplied(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotalPrepaidCreditsApplied(d)
-	return ic
+func (_c *InvoiceCreate) SetTotalPrepaidCreditsApplied(v decimal.Decimal) *InvoiceCreate {
+	_c.mutation.SetTotalPrepaidCreditsApplied(v)
+	return _c
 }
 
 // SetNillableTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotalPrepaidCreditsApplied(d *decimal.Decimal) *InvoiceCreate {
-	if d != nil {
-		ic.SetTotalPrepaidCreditsApplied(*d)
+func (_c *InvoiceCreate) SetNillableTotalPrepaidCreditsApplied(v *decimal.Decimal) *InvoiceCreate {
+	if v != nil {
+		_c.SetTotalPrepaidCreditsApplied(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (ic *InvoiceCreate) SetIdempotencyKey(s string) *InvoiceCreate {
-	ic.mutation.SetIdempotencyKey(s)
-	return ic
+func (_c *InvoiceCreate) SetIdempotencyKey(v string) *InvoiceCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableIdempotencyKey(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetIdempotencyKey(*s)
+func (_c *InvoiceCreate) SetNillableIdempotencyKey(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetIdempotencyKey(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetRecalculatedInvoiceID sets the "recalculated_invoice_id" field.
-func (ic *InvoiceCreate) SetRecalculatedInvoiceID(s string) *InvoiceCreate {
-	ic.mutation.SetRecalculatedInvoiceID(s)
-	return ic
+func (_c *InvoiceCreate) SetRecalculatedInvoiceID(v string) *InvoiceCreate {
+	_c.mutation.SetRecalculatedInvoiceID(v)
+	return _c
 }
 
 // SetNillableRecalculatedInvoiceID sets the "recalculated_invoice_id" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableRecalculatedInvoiceID(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetRecalculatedInvoiceID(*s)
+func (_c *InvoiceCreate) SetNillableRecalculatedInvoiceID(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetRecalculatedInvoiceID(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetSourceType sets the "source_type" field.
-func (ic *InvoiceCreate) SetSourceType(tst types.InvoiceSourceType) *InvoiceCreate {
-	ic.mutation.SetSourceType(tst)
-	return ic
+func (_c *InvoiceCreate) SetSourceType(v types.InvoiceSourceType) *InvoiceCreate {
+	_c.mutation.SetSourceType(v)
+	return _c
 }
 
 // SetNillableSourceType sets the "source_type" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableSourceType(tst *types.InvoiceSourceType) *InvoiceCreate {
-	if tst != nil {
-		ic.SetSourceType(*tst)
+func (_c *InvoiceCreate) SetNillableSourceType(v *types.InvoiceSourceType) *InvoiceCreate {
+	if v != nil {
+		_c.SetSourceType(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetIsManuallyEdited sets the "is_manually_edited" field.
-func (ic *InvoiceCreate) SetIsManuallyEdited(b bool) *InvoiceCreate {
-	ic.mutation.SetIsManuallyEdited(b)
-	return ic
+func (_c *InvoiceCreate) SetIsManuallyEdited(v bool) *InvoiceCreate {
+	_c.mutation.SetIsManuallyEdited(v)
+	return _c
 }
 
 // SetNillableIsManuallyEdited sets the "is_manually_edited" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableIsManuallyEdited(b *bool) *InvoiceCreate {
-	if b != nil {
-		ic.SetIsManuallyEdited(*b)
+func (_c *InvoiceCreate) SetNillableIsManuallyEdited(v *bool) *InvoiceCreate {
+	if v != nil {
+		_c.SetIsManuallyEdited(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetTaxExemptionReasonCode sets the "tax_exemption_reason_code" field.
-func (ic *InvoiceCreate) SetTaxExemptionReasonCode(terc types.TaxExemptionReasonCode) *InvoiceCreate {
-	ic.mutation.SetTaxExemptionReasonCode(terc)
-	return ic
+func (_c *InvoiceCreate) SetTaxExemptionReasonCode(v types.TaxExemptionReasonCode) *InvoiceCreate {
+	_c.mutation.SetTaxExemptionReasonCode(v)
+	return _c
 }
 
 // SetNillableTaxExemptionReasonCode sets the "tax_exemption_reason_code" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTaxExemptionReasonCode(terc *types.TaxExemptionReasonCode) *InvoiceCreate {
-	if terc != nil {
-		ic.SetTaxExemptionReasonCode(*terc)
+func (_c *InvoiceCreate) SetNillableTaxExemptionReasonCode(v *types.TaxExemptionReasonCode) *InvoiceCreate {
+	if v != nil {
+		_c.SetTaxExemptionReasonCode(*v)
 	}
-	return ic
+	return _c
 }
 
 // SetID sets the "id" field.
-func (ic *InvoiceCreate) SetID(s string) *InvoiceCreate {
-	ic.mutation.SetID(s)
-	return ic
+func (_c *InvoiceCreate) SetID(v string) *InvoiceCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
-func (ic *InvoiceCreate) AddLineItemIDs(ids ...string) *InvoiceCreate {
-	ic.mutation.AddLineItemIDs(ids...)
-	return ic
+func (_c *InvoiceCreate) AddLineItemIDs(ids ...string) *InvoiceCreate {
+	_c.mutation.AddLineItemIDs(ids...)
+	return _c
 }
 
 // AddLineItems adds the "line_items" edges to the InvoiceLineItem entity.
-func (ic *InvoiceCreate) AddLineItems(i ...*InvoiceLineItem) *InvoiceCreate {
-	ids := make([]string, len(i))
-	for j := range i {
-		ids[j] = i[j].ID
+func (_c *InvoiceCreate) AddLineItems(v ...*InvoiceLineItem) *InvoiceCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return ic.AddLineItemIDs(ids...)
+	return _c.AddLineItemIDs(ids...)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (ic *InvoiceCreate) AddCouponApplicationIDs(ids ...string) *InvoiceCreate {
-	ic.mutation.AddCouponApplicationIDs(ids...)
-	return ic
+func (_c *InvoiceCreate) AddCouponApplicationIDs(ids ...string) *InvoiceCreate {
+	_c.mutation.AddCouponApplicationIDs(ids...)
+	return _c
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (ic *InvoiceCreate) AddCouponApplications(c ...*CouponApplication) *InvoiceCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *InvoiceCreate) AddCouponApplications(v ...*CouponApplication) *InvoiceCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return ic.AddCouponApplicationIDs(ids...)
+	return _c.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the InvoiceMutation object of the builder.
-func (ic *InvoiceCreate) Mutation() *InvoiceMutation {
-	return ic.mutation
+func (_c *InvoiceCreate) Mutation() *InvoiceMutation {
+	return _c.mutation
 }
 
 // Save creates the Invoice in the database.
-func (ic *InvoiceCreate) Save(ctx context.Context) (*Invoice, error) {
-	ic.defaults()
-	return withHooks(ctx, ic.sqlSave, ic.mutation, ic.hooks)
+func (_c *InvoiceCreate) Save(ctx context.Context) (*Invoice, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (ic *InvoiceCreate) SaveX(ctx context.Context) *Invoice {
-	v, err := ic.Save(ctx)
+func (_c *InvoiceCreate) SaveX(ctx context.Context) *Invoice {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -683,187 +683,187 @@ func (ic *InvoiceCreate) SaveX(ctx context.Context) *Invoice {
 }
 
 // Exec executes the query.
-func (ic *InvoiceCreate) Exec(ctx context.Context) error {
-	_, err := ic.Save(ctx)
+func (_c *InvoiceCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ic *InvoiceCreate) ExecX(ctx context.Context) {
-	if err := ic.Exec(ctx); err != nil {
+func (_c *InvoiceCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ic *InvoiceCreate) defaults() {
-	if _, ok := ic.mutation.Status(); !ok {
+func (_c *InvoiceCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := invoice.DefaultStatus
-		ic.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := ic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := invoice.DefaultCreatedAt()
-		ic.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := ic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := invoice.DefaultUpdatedAt()
-		ic.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := ic.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := invoice.DefaultEnvironmentID
-		ic.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := ic.mutation.InvoiceStatus(); !ok {
+	if _, ok := _c.mutation.InvoiceStatus(); !ok {
 		v := invoice.DefaultInvoiceStatus
-		ic.mutation.SetInvoiceStatus(v)
+		_c.mutation.SetInvoiceStatus(v)
 	}
-	if _, ok := ic.mutation.PaymentStatus(); !ok {
+	if _, ok := _c.mutation.PaymentStatus(); !ok {
 		v := invoice.DefaultPaymentStatus
-		ic.mutation.SetPaymentStatus(v)
+		_c.mutation.SetPaymentStatus(v)
 	}
-	if _, ok := ic.mutation.AmountDue(); !ok {
+	if _, ok := _c.mutation.AmountDue(); !ok {
 		v := invoice.DefaultAmountDue
-		ic.mutation.SetAmountDue(v)
+		_c.mutation.SetAmountDue(v)
 	}
-	if _, ok := ic.mutation.AmountPaid(); !ok {
+	if _, ok := _c.mutation.AmountPaid(); !ok {
 		v := invoice.DefaultAmountPaid
-		ic.mutation.SetAmountPaid(v)
+		_c.mutation.SetAmountPaid(v)
 	}
-	if _, ok := ic.mutation.AmountRemaining(); !ok {
+	if _, ok := _c.mutation.AmountRemaining(); !ok {
 		v := invoice.DefaultAmountRemaining
-		ic.mutation.SetAmountRemaining(v)
+		_c.mutation.SetAmountRemaining(v)
 	}
-	if _, ok := ic.mutation.Subtotal(); !ok {
+	if _, ok := _c.mutation.Subtotal(); !ok {
 		v := invoice.DefaultSubtotal
-		ic.mutation.SetSubtotal(v)
+		_c.mutation.SetSubtotal(v)
 	}
-	if _, ok := ic.mutation.AdjustmentAmount(); !ok {
+	if _, ok := _c.mutation.AdjustmentAmount(); !ok {
 		v := invoice.DefaultAdjustmentAmount
-		ic.mutation.SetAdjustmentAmount(v)
+		_c.mutation.SetAdjustmentAmount(v)
 	}
-	if _, ok := ic.mutation.RefundedAmount(); !ok {
+	if _, ok := _c.mutation.RefundedAmount(); !ok {
 		v := invoice.DefaultRefundedAmount
-		ic.mutation.SetRefundedAmount(v)
+		_c.mutation.SetRefundedAmount(v)
 	}
-	if _, ok := ic.mutation.TotalTax(); !ok {
+	if _, ok := _c.mutation.TotalTax(); !ok {
 		v := invoice.DefaultTotalTax
-		ic.mutation.SetTotalTax(v)
+		_c.mutation.SetTotalTax(v)
 	}
-	if _, ok := ic.mutation.TotalDiscount(); !ok {
+	if _, ok := _c.mutation.TotalDiscount(); !ok {
 		v := invoice.DefaultTotalDiscount
-		ic.mutation.SetTotalDiscount(v)
+		_c.mutation.SetTotalDiscount(v)
 	}
-	if _, ok := ic.mutation.Total(); !ok {
+	if _, ok := _c.mutation.Total(); !ok {
 		v := invoice.DefaultTotal
-		ic.mutation.SetTotal(v)
+		_c.mutation.SetTotal(v)
 	}
-	if _, ok := ic.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		v := invoice.DefaultVersion
-		ic.mutation.SetVersion(v)
+		_c.mutation.SetVersion(v)
 	}
-	if _, ok := ic.mutation.TotalPrepaidCreditsApplied(); !ok {
+	if _, ok := _c.mutation.TotalPrepaidCreditsApplied(); !ok {
 		v := invoice.DefaultTotalPrepaidCreditsApplied
-		ic.mutation.SetTotalPrepaidCreditsApplied(v)
+		_c.mutation.SetTotalPrepaidCreditsApplied(v)
 	}
-	if _, ok := ic.mutation.IsManuallyEdited(); !ok {
+	if _, ok := _c.mutation.IsManuallyEdited(); !ok {
 		v := invoice.DefaultIsManuallyEdited
-		ic.mutation.SetIsManuallyEdited(v)
+		_c.mutation.SetIsManuallyEdited(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ic *InvoiceCreate) check() error {
-	if _, ok := ic.mutation.TenantID(); !ok {
+func (_c *InvoiceCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Invoice.tenant_id"`)}
 	}
-	if v, ok := ic.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := invoice.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Invoice.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Invoice.status"`)}
 	}
-	if _, ok := ic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Invoice.created_at"`)}
 	}
-	if _, ok := ic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Invoice.updated_at"`)}
 	}
-	if _, ok := ic.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Invoice.customer_id"`)}
 	}
-	if v, ok := ic.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := invoice.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "Invoice.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.InvoiceType(); !ok {
+	if _, ok := _c.mutation.InvoiceType(); !ok {
 		return &ValidationError{Name: "invoice_type", err: errors.New(`ent: missing required field "Invoice.invoice_type"`)}
 	}
-	if v, ok := ic.mutation.InvoiceType(); ok {
+	if v, ok := _c.mutation.InvoiceType(); ok {
 		if err := invoice.InvoiceTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "invoice_type", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_type": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.InvoiceStatus(); !ok {
+	if _, ok := _c.mutation.InvoiceStatus(); !ok {
 		return &ValidationError{Name: "invoice_status", err: errors.New(`ent: missing required field "Invoice.invoice_status"`)}
 	}
-	if v, ok := ic.mutation.InvoiceStatus(); ok {
+	if v, ok := _c.mutation.InvoiceStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.PaymentStatus(); !ok {
+	if _, ok := _c.mutation.PaymentStatus(); !ok {
 		return &ValidationError{Name: "payment_status", err: errors.New(`ent: missing required field "Invoice.payment_status"`)}
 	}
-	if v, ok := ic.mutation.PaymentStatus(); ok {
+	if v, ok := _c.mutation.PaymentStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Invoice.currency"`)}
 	}
-	if v, ok := ic.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := invoice.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Invoice.currency": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.AmountDue(); !ok {
+	if _, ok := _c.mutation.AmountDue(); !ok {
 		return &ValidationError{Name: "amount_due", err: errors.New(`ent: missing required field "Invoice.amount_due"`)}
 	}
-	if _, ok := ic.mutation.AmountPaid(); !ok {
+	if _, ok := _c.mutation.AmountPaid(); !ok {
 		return &ValidationError{Name: "amount_paid", err: errors.New(`ent: missing required field "Invoice.amount_paid"`)}
 	}
-	if _, ok := ic.mutation.AmountRemaining(); !ok {
+	if _, ok := _c.mutation.AmountRemaining(); !ok {
 		return &ValidationError{Name: "amount_remaining", err: errors.New(`ent: missing required field "Invoice.amount_remaining"`)}
 	}
-	if v, ok := ic.mutation.BillingPeriod(); ok {
+	if v, ok := _c.mutation.BillingPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Invoice.billing_period": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Invoice.version"`)}
 	}
-	if v, ok := ic.mutation.SourceType(); ok {
+	if v, ok := _c.mutation.SourceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "Invoice.source_type": %w`, err)}
 		}
 	}
-	if _, ok := ic.mutation.IsManuallyEdited(); !ok {
+	if _, ok := _c.mutation.IsManuallyEdited(); !ok {
 		return &ValidationError{Name: "is_manually_edited", err: errors.New(`ent: missing required field "Invoice.is_manually_edited"`)}
 	}
 	return nil
 }
 
-func (ic *InvoiceCreate) sqlSave(ctx context.Context) (*Invoice, error) {
-	if err := ic.check(); err != nil {
+func (_c *InvoiceCreate) sqlSave(ctx context.Context) (*Invoice, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := ic.createSpec()
-	if err := sqlgraph.CreateNode(ctx, ic.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -876,209 +876,209 @@ func (ic *InvoiceCreate) sqlSave(ctx context.Context) (*Invoice, error) {
 			return nil, fmt.Errorf("unexpected Invoice.ID type: %T", _spec.ID.Value)
 		}
 	}
-	ic.mutation.id = &_node.ID
-	ic.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
+func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Invoice{config: ic.config}
+		_node = &Invoice{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(invoice.Table, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
 	)
-	if id, ok := ic.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := ic.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(invoice.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := ic.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(invoice.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := ic.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(invoice.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := ic.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := ic.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(invoice.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := ic.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(invoice.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := ic.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(invoice.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := ic.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(invoice.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := ic.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(invoice.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
-	if value, ok := ic.mutation.SubscriptionCustomerID(); ok {
+	if value, ok := _c.mutation.SubscriptionCustomerID(); ok {
 		_spec.SetField(invoice.FieldSubscriptionCustomerID, field.TypeString, value)
 		_node.SubscriptionCustomerID = &value
 	}
-	if value, ok := ic.mutation.InvoiceType(); ok {
+	if value, ok := _c.mutation.InvoiceType(); ok {
 		_spec.SetField(invoice.FieldInvoiceType, field.TypeString, value)
 		_node.InvoiceType = value
 	}
-	if value, ok := ic.mutation.InvoiceStatus(); ok {
+	if value, ok := _c.mutation.InvoiceStatus(); ok {
 		_spec.SetField(invoice.FieldInvoiceStatus, field.TypeString, value)
 		_node.InvoiceStatus = value
 	}
-	if value, ok := ic.mutation.PaymentStatus(); ok {
+	if value, ok := _c.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
 		_node.PaymentStatus = value
 	}
-	if value, ok := ic.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := ic.mutation.AmountDue(); ok {
+	if value, ok := _c.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)
 		_node.AmountDue = value
 	}
-	if value, ok := ic.mutation.AmountPaid(); ok {
+	if value, ok := _c.mutation.AmountPaid(); ok {
 		_spec.SetField(invoice.FieldAmountPaid, field.TypeOther, value)
 		_node.AmountPaid = value
 	}
-	if value, ok := ic.mutation.AmountRemaining(); ok {
+	if value, ok := _c.mutation.AmountRemaining(); ok {
 		_spec.SetField(invoice.FieldAmountRemaining, field.TypeOther, value)
 		_node.AmountRemaining = value
 	}
-	if value, ok := ic.mutation.Subtotal(); ok {
+	if value, ok := _c.mutation.Subtotal(); ok {
 		_spec.SetField(invoice.FieldSubtotal, field.TypeOther, value)
 		_node.Subtotal = value
 	}
-	if value, ok := ic.mutation.AdjustmentAmount(); ok {
+	if value, ok := _c.mutation.AdjustmentAmount(); ok {
 		_spec.SetField(invoice.FieldAdjustmentAmount, field.TypeOther, value)
 		_node.AdjustmentAmount = value
 	}
-	if value, ok := ic.mutation.RefundedAmount(); ok {
+	if value, ok := _c.mutation.RefundedAmount(); ok {
 		_spec.SetField(invoice.FieldRefundedAmount, field.TypeOther, value)
 		_node.RefundedAmount = value
 	}
-	if value, ok := ic.mutation.TotalTax(); ok {
+	if value, ok := _c.mutation.TotalTax(); ok {
 		_spec.SetField(invoice.FieldTotalTax, field.TypeOther, value)
 		_node.TotalTax = &value
 	}
-	if value, ok := ic.mutation.TotalDiscount(); ok {
+	if value, ok := _c.mutation.TotalDiscount(); ok {
 		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
 		_node.TotalDiscount = &value
 	}
-	if value, ok := ic.mutation.Total(); ok {
+	if value, ok := _c.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 		_node.Total = value
 	}
-	if value, ok := ic.mutation.CustomCurrency(); ok {
+	if value, ok := _c.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoice.FieldCustomCurrency, field.TypeJSON, value)
 		_node.CustomCurrency = value
 	}
-	if value, ok := ic.mutation.FxConversion(); ok {
+	if value, ok := _c.mutation.FxConversion(); ok {
 		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
 		_node.FxConversion = value
 	}
-	if value, ok := ic.mutation.Description(); ok {
+	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
-	if value, ok := ic.mutation.DueDate(); ok {
+	if value, ok := _c.mutation.DueDate(); ok {
 		_spec.SetField(invoice.FieldDueDate, field.TypeTime, value)
 		_node.DueDate = &value
 	}
-	if value, ok := ic.mutation.PaidAt(); ok {
+	if value, ok := _c.mutation.PaidAt(); ok {
 		_spec.SetField(invoice.FieldPaidAt, field.TypeTime, value)
 		_node.PaidAt = &value
 	}
-	if value, ok := ic.mutation.VoidedAt(); ok {
+	if value, ok := _c.mutation.VoidedAt(); ok {
 		_spec.SetField(invoice.FieldVoidedAt, field.TypeTime, value)
 		_node.VoidedAt = &value
 	}
-	if value, ok := ic.mutation.FinalizedAt(); ok {
+	if value, ok := _c.mutation.FinalizedAt(); ok {
 		_spec.SetField(invoice.FieldFinalizedAt, field.TypeTime, value)
 		_node.FinalizedAt = &value
 	}
-	if value, ok := ic.mutation.IssueDate(); ok {
+	if value, ok := _c.mutation.IssueDate(); ok {
 		_spec.SetField(invoice.FieldIssueDate, field.TypeTime, value)
 		_node.IssueDate = &value
 	}
-	if value, ok := ic.mutation.LastComputedAt(); ok {
+	if value, ok := _c.mutation.LastComputedAt(); ok {
 		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)
 		_node.LastComputedAt = &value
 	}
-	if value, ok := ic.mutation.BillingPeriod(); ok {
+	if value, ok := _c.mutation.BillingPeriod(); ok {
 		_spec.SetField(invoice.FieldBillingPeriod, field.TypeString, value)
 		_node.BillingPeriod = &value
 	}
-	if value, ok := ic.mutation.PeriodStart(); ok {
+	if value, ok := _c.mutation.PeriodStart(); ok {
 		_spec.SetField(invoice.FieldPeriodStart, field.TypeTime, value)
 		_node.PeriodStart = &value
 	}
-	if value, ok := ic.mutation.PeriodEnd(); ok {
+	if value, ok := _c.mutation.PeriodEnd(); ok {
 		_spec.SetField(invoice.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = &value
 	}
-	if value, ok := ic.mutation.InvoicePdfURL(); ok {
+	if value, ok := _c.mutation.InvoicePdfURL(); ok {
 		_spec.SetField(invoice.FieldInvoicePdfURL, field.TypeString, value)
 		_node.InvoicePdfURL = &value
 	}
-	if value, ok := ic.mutation.BillingReason(); ok {
+	if value, ok := _c.mutation.BillingReason(); ok {
 		_spec.SetField(invoice.FieldBillingReason, field.TypeString, value)
 		_node.BillingReason = value
 	}
-	if value, ok := ic.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(invoice.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := ic.mutation.Version(); ok {
+	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(invoice.FieldVersion, field.TypeInt, value)
 		_node.Version = value
 	}
-	if value, ok := ic.mutation.InvoiceNumber(); ok {
+	if value, ok := _c.mutation.InvoiceNumber(); ok {
 		_spec.SetField(invoice.FieldInvoiceNumber, field.TypeString, value)
 		_node.InvoiceNumber = &value
 	}
-	if value, ok := ic.mutation.BillingSequence(); ok {
+	if value, ok := _c.mutation.BillingSequence(); ok {
 		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
 		_node.BillingSequence = &value
 	}
-	if value, ok := ic.mutation.TotalPrepaidCreditsApplied(); ok {
+	if value, ok := _c.mutation.TotalPrepaidCreditsApplied(); ok {
 		_spec.SetField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther, value)
 		_node.TotalPrepaidCreditsApplied = &value
 	}
-	if value, ok := ic.mutation.IdempotencyKey(); ok {
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = &value
 	}
-	if value, ok := ic.mutation.RecalculatedInvoiceID(); ok {
+	if value, ok := _c.mutation.RecalculatedInvoiceID(); ok {
 		_spec.SetField(invoice.FieldRecalculatedInvoiceID, field.TypeString, value)
 		_node.RecalculatedInvoiceID = &value
 	}
-	if value, ok := ic.mutation.SourceType(); ok {
+	if value, ok := _c.mutation.SourceType(); ok {
 		_spec.SetField(invoice.FieldSourceType, field.TypeString, value)
 		_node.SourceType = value
 	}
-	if value, ok := ic.mutation.IsManuallyEdited(); ok {
+	if value, ok := _c.mutation.IsManuallyEdited(); ok {
 		_spec.SetField(invoice.FieldIsManuallyEdited, field.TypeBool, value)
 		_node.IsManuallyEdited = value
 	}
-	if value, ok := ic.mutation.TaxExemptionReasonCode(); ok {
+	if value, ok := _c.mutation.TaxExemptionReasonCode(); ok {
 		_spec.SetField(invoice.FieldTaxExemptionReasonCode, field.TypeString, value)
 		_node.TaxExemptionReasonCode = &value
 	}
-	if nodes := ic.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1094,7 +1094,7 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := ic.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1121,16 +1121,16 @@ type InvoiceCreateBulk struct {
 }
 
 // Save creates the Invoice entities in the database.
-func (icb *InvoiceCreateBulk) Save(ctx context.Context) ([]*Invoice, error) {
-	if icb.err != nil {
-		return nil, icb.err
+func (_c *InvoiceCreateBulk) Save(ctx context.Context) ([]*Invoice, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(icb.builders))
-	nodes := make([]*Invoice, len(icb.builders))
-	mutators := make([]Mutator, len(icb.builders))
-	for i := range icb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Invoice, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := icb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*InvoiceMutation)
@@ -1144,11 +1144,11 @@ func (icb *InvoiceCreateBulk) Save(ctx context.Context) ([]*Invoice, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, icb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, icb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -1168,7 +1168,7 @@ func (icb *InvoiceCreateBulk) Save(ctx context.Context) ([]*Invoice, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, icb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -1176,8 +1176,8 @@ func (icb *InvoiceCreateBulk) Save(ctx context.Context) ([]*Invoice, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (icb *InvoiceCreateBulk) SaveX(ctx context.Context) []*Invoice {
-	v, err := icb.Save(ctx)
+func (_c *InvoiceCreateBulk) SaveX(ctx context.Context) []*Invoice {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1185,14 +1185,14 @@ func (icb *InvoiceCreateBulk) SaveX(ctx context.Context) []*Invoice {
 }
 
 // Exec executes the query.
-func (icb *InvoiceCreateBulk) Exec(ctx context.Context) error {
-	_, err := icb.Save(ctx)
+func (_c *InvoiceCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (icb *InvoiceCreateBulk) ExecX(ctx context.Context) {
-	if err := icb.Exec(ctx); err != nil {
+func (_c *InvoiceCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

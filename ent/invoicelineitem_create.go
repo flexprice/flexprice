@@ -25,507 +25,507 @@ type InvoiceLineItemCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (ilic *InvoiceLineItemCreate) SetTenantID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetTenantID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetTenantID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (ilic *InvoiceLineItemCreate) SetStatus(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetStatus(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetStatus(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableStatus(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetStatus(*s)
+func (_c *InvoiceLineItemCreate) SetNillableStatus(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (ilic *InvoiceLineItemCreate) SetCreatedAt(t time.Time) *InvoiceLineItemCreate {
-	ilic.mutation.SetCreatedAt(t)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCreatedAt(v time.Time) *InvoiceLineItemCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableCreatedAt(t *time.Time) *InvoiceLineItemCreate {
-	if t != nil {
-		ilic.SetCreatedAt(*t)
+func (_c *InvoiceLineItemCreate) SetNillableCreatedAt(v *time.Time) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ilic *InvoiceLineItemCreate) SetUpdatedAt(t time.Time) *InvoiceLineItemCreate {
-	ilic.mutation.SetUpdatedAt(t)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetUpdatedAt(v time.Time) *InvoiceLineItemCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableUpdatedAt(t *time.Time) *InvoiceLineItemCreate {
-	if t != nil {
-		ilic.SetUpdatedAt(*t)
+func (_c *InvoiceLineItemCreate) SetNillableUpdatedAt(v *time.Time) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (ilic *InvoiceLineItemCreate) SetCreatedBy(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetCreatedBy(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCreatedBy(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableCreatedBy(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetCreatedBy(*s)
+func (_c *InvoiceLineItemCreate) SetNillableCreatedBy(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ilic *InvoiceLineItemCreate) SetUpdatedBy(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetUpdatedBy(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetUpdatedBy(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableUpdatedBy(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetUpdatedBy(*s)
+func (_c *InvoiceLineItemCreate) SetNillableUpdatedBy(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (ilic *InvoiceLineItemCreate) SetEnvironmentID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetEnvironmentID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetEnvironmentID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableEnvironmentID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetEnvironmentID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableEnvironmentID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (ilic *InvoiceLineItemCreate) SetInvoiceID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetInvoiceID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetInvoiceID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetInvoiceID(v)
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (ilic *InvoiceLineItemCreate) SetCustomerID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetCustomerID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCustomerID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (ilic *InvoiceLineItemCreate) SetSubscriptionID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetSubscriptionID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetSubscriptionID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetSubscriptionID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableSubscriptionID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (ilic *InvoiceLineItemCreate) SetEntityID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetEntityID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetEntityID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableEntityID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetEntityID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableEntityID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetEntityID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (ilic *InvoiceLineItemCreate) SetEntityType(tliet types.InvoiceLineItemEntityType) *InvoiceLineItemCreate {
-	ilic.mutation.SetEntityType(tliet)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetEntityType(v types.InvoiceLineItemEntityType) *InvoiceLineItemCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableEntityType(tliet *types.InvoiceLineItemEntityType) *InvoiceLineItemCreate {
-	if tliet != nil {
-		ilic.SetEntityType(*tliet)
+func (_c *InvoiceLineItemCreate) SetNillableEntityType(v *types.InvoiceLineItemEntityType) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetEntityType(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
-func (ilic *InvoiceLineItemCreate) SetPlanDisplayName(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetPlanDisplayName(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPlanDisplayName(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetPlanDisplayName(v)
+	return _c
 }
 
 // SetNillablePlanDisplayName sets the "plan_display_name" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePlanDisplayName(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetPlanDisplayName(*s)
+func (_c *InvoiceLineItemCreate) SetNillablePlanDisplayName(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPlanDisplayName(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPriceID sets the "price_id" field.
-func (ilic *InvoiceLineItemCreate) SetPriceID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetPriceID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPriceID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetPriceID(v)
+	return _c
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePriceID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetPriceID(*s)
+func (_c *InvoiceLineItemCreate) SetNillablePriceID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPriceID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPriceType sets the "price_type" field.
-func (ilic *InvoiceLineItemCreate) SetPriceType(tt types.PriceType) *InvoiceLineItemCreate {
-	ilic.mutation.SetPriceType(tt)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPriceType(v types.PriceType) *InvoiceLineItemCreate {
+	_c.mutation.SetPriceType(v)
+	return _c
 }
 
 // SetNillablePriceType sets the "price_type" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePriceType(tt *types.PriceType) *InvoiceLineItemCreate {
-	if tt != nil {
-		ilic.SetPriceType(*tt)
+func (_c *InvoiceLineItemCreate) SetNillablePriceType(v *types.PriceType) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPriceType(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetMeterID sets the "meter_id" field.
-func (ilic *InvoiceLineItemCreate) SetMeterID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetMeterID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetMeterID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetMeterID(v)
+	return _c
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableMeterID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetMeterID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableMeterID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetMeterID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetMeterDisplayName sets the "meter_display_name" field.
-func (ilic *InvoiceLineItemCreate) SetMeterDisplayName(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetMeterDisplayName(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetMeterDisplayName(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetMeterDisplayName(v)
+	return _c
 }
 
 // SetNillableMeterDisplayName sets the "meter_display_name" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableMeterDisplayName(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetMeterDisplayName(*s)
+func (_c *InvoiceLineItemCreate) SetNillableMeterDisplayName(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetMeterDisplayName(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPriceUnitID sets the "price_unit_id" field.
-func (ilic *InvoiceLineItemCreate) SetPriceUnitID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetPriceUnitID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPriceUnitID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetPriceUnitID(v)
+	return _c
 }
 
 // SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePriceUnitID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetPriceUnitID(*s)
+func (_c *InvoiceLineItemCreate) SetNillablePriceUnitID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPriceUnitID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPriceUnit sets the "price_unit" field.
-func (ilic *InvoiceLineItemCreate) SetPriceUnit(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetPriceUnit(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPriceUnit(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetPriceUnit(v)
+	return _c
 }
 
 // SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePriceUnit(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetPriceUnit(*s)
+func (_c *InvoiceLineItemCreate) SetNillablePriceUnit(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPriceUnit(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (ilic *InvoiceLineItemCreate) SetPriceUnitAmount(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetPriceUnitAmount(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPriceUnitAmount(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetPriceUnitAmount(v)
+	return _c
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetPriceUnitAmount(*d)
+func (_c *InvoiceLineItemCreate) SetNillablePriceUnitAmount(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPriceUnitAmount(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetDisplayName sets the "display_name" field.
-func (ilic *InvoiceLineItemCreate) SetDisplayName(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetDisplayName(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetDisplayName(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetDisplayName(v)
+	return _c
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableDisplayName(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetDisplayName(*s)
+func (_c *InvoiceLineItemCreate) SetNillableDisplayName(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetDisplayName(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetAmount sets the "amount" field.
-func (ilic *InvoiceLineItemCreate) SetAmount(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetAmount(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetAmount(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetAmount(v)
+	return _c
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableAmount(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetAmount(*d)
+func (_c *InvoiceLineItemCreate) SetNillableAmount(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetAmount(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetQuantity sets the "quantity" field.
-func (ilic *InvoiceLineItemCreate) SetQuantity(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetQuantity(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetQuantity(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetQuantity(v)
+	return _c
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableQuantity(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetQuantity(*d)
+func (_c *InvoiceLineItemCreate) SetNillableQuantity(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetQuantity(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (ilic *InvoiceLineItemCreate) SetCurrency(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetCurrency(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCurrency(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (ilic *InvoiceLineItemCreate) SetPeriodStart(t time.Time) *InvoiceLineItemCreate {
-	ilic.mutation.SetPeriodStart(t)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPeriodStart(v time.Time) *InvoiceLineItemCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
 }
 
 // SetNillablePeriodStart sets the "period_start" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePeriodStart(t *time.Time) *InvoiceLineItemCreate {
-	if t != nil {
-		ilic.SetPeriodStart(*t)
+func (_c *InvoiceLineItemCreate) SetNillablePeriodStart(v *time.Time) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPeriodStart(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (ilic *InvoiceLineItemCreate) SetPeriodEnd(t time.Time) *InvoiceLineItemCreate {
-	ilic.mutation.SetPeriodEnd(t)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPeriodEnd(v time.Time) *InvoiceLineItemCreate {
+	_c.mutation.SetPeriodEnd(v)
+	return _c
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePeriodEnd(t *time.Time) *InvoiceLineItemCreate {
-	if t != nil {
-		ilic.SetPeriodEnd(*t)
+func (_c *InvoiceLineItemCreate) SetNillablePeriodEnd(v *time.Time) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPeriodEnd(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (ilic *InvoiceLineItemCreate) SetMetadata(m map[string]string) *InvoiceLineItemCreate {
-	ilic.mutation.SetMetadata(m)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetMetadata(v map[string]string) *InvoiceLineItemCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetCommitmentInfo sets the "commitment_info" field.
-func (ilic *InvoiceLineItemCreate) SetCommitmentInfo(ti *types.CommitmentInfo) *InvoiceLineItemCreate {
-	ilic.mutation.SetCommitmentInfo(ti)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCommitmentInfo(v *types.CommitmentInfo) *InvoiceLineItemCreate {
+	_c.mutation.SetCommitmentInfo(v)
+	return _c
 }
 
 // SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
-func (ilic *InvoiceLineItemCreate) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetPrepaidCreditsApplied(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetPrepaidCreditsApplied(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetPrepaidCreditsApplied(v)
+	return _c
 }
 
 // SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetPrepaidCreditsApplied(*d)
+func (_c *InvoiceLineItemCreate) SetNillablePrepaidCreditsApplied(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetPrepaidCreditsApplied(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetLineItemDiscount sets the "line_item_discount" field.
-func (ilic *InvoiceLineItemCreate) SetLineItemDiscount(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetLineItemDiscount(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetLineItemDiscount(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetLineItemDiscount(v)
+	return _c
 }
 
 // SetNillableLineItemDiscount sets the "line_item_discount" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableLineItemDiscount(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetLineItemDiscount(*d)
+func (_c *InvoiceLineItemCreate) SetNillableLineItemDiscount(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetLineItemDiscount(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
-func (ilic *InvoiceLineItemCreate) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetInvoiceLevelDiscount(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetInvoiceLevelDiscount(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetInvoiceLevelDiscount(v)
+	return _c
 }
 
 // SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetInvoiceLevelDiscount(*d)
+func (_c *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetInvoiceLevelDiscount(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
-func (ilic *InvoiceLineItemCreate) SetSubscriptionLineItemID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetSubscriptionLineItemID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetSubscriptionLineItemID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetSubscriptionLineItemID(v)
+	return _c
 }
 
 // SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionLineItemID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetSubscriptionLineItemID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableSubscriptionLineItemID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetSubscriptionLineItemID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
-func (ilic *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetAdjustedEntitlementQuantity(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetAdjustedEntitlementQuantity(v)
+	return _c
 }
 
 // SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetAdjustedEntitlementQuantity(*d)
+func (_c *InvoiceLineItemCreate) SetNillableAdjustedEntitlementQuantity(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetAdjustedEntitlementQuantity(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetParentLineItemID sets the "parent_line_item_id" field.
-func (ilic *InvoiceLineItemCreate) SetParentLineItemID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetParentLineItemID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetParentLineItemID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetParentLineItemID(v)
+	return _c
 }
 
 // SetNillableParentLineItemID sets the "parent_line_item_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableParentLineItemID(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetParentLineItemID(*s)
+func (_c *InvoiceLineItemCreate) SetNillableParentLineItemID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetParentLineItemID(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetCustomCurrency sets the "custom_currency" field.
-func (ilic *InvoiceLineItemCreate) SetCustomCurrency(tcli *types.CustomCurrencyLineItem) *InvoiceLineItemCreate {
-	ilic.mutation.SetCustomCurrency(tcli)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetCustomCurrency(v *types.CustomCurrencyLineItem) *InvoiceLineItemCreate {
+	_c.mutation.SetCustomCurrency(v)
+	return _c
 }
 
 // SetOriginalCurrency sets the "original_currency" field.
-func (ilic *InvoiceLineItemCreate) SetOriginalCurrency(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetOriginalCurrency(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetOriginalCurrency(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetOriginalCurrency(v)
+	return _c
 }
 
 // SetNillableOriginalCurrency sets the "original_currency" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableOriginalCurrency(s *string) *InvoiceLineItemCreate {
-	if s != nil {
-		ilic.SetOriginalCurrency(*s)
+func (_c *InvoiceLineItemCreate) SetNillableOriginalCurrency(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetOriginalCurrency(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetOriginalAmount sets the "original_amount" field.
-func (ilic *InvoiceLineItemCreate) SetOriginalAmount(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetOriginalAmount(d)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetOriginalAmount(v decimal.Decimal) *InvoiceLineItemCreate {
+	_c.mutation.SetOriginalAmount(v)
+	return _c
 }
 
 // SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableOriginalAmount(d *decimal.Decimal) *InvoiceLineItemCreate {
-	if d != nil {
-		ilic.SetOriginalAmount(*d)
+func (_c *InvoiceLineItemCreate) SetNillableOriginalAmount(v *decimal.Decimal) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetOriginalAmount(*v)
 	}
-	return ilic
+	return _c
 }
 
 // SetID sets the "id" field.
-func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetID(s)
-	return ilic
+func (_c *InvoiceLineItemCreate) SetID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetInvoice sets the "invoice" edge to the Invoice entity.
-func (ilic *InvoiceLineItemCreate) SetInvoice(i *Invoice) *InvoiceLineItemCreate {
-	return ilic.SetInvoiceID(i.ID)
+func (_c *InvoiceLineItemCreate) SetInvoice(v *Invoice) *InvoiceLineItemCreate {
+	return _c.SetInvoiceID(v.ID)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (ilic *InvoiceLineItemCreate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemCreate {
-	ilic.mutation.AddCouponApplicationIDs(ids...)
-	return ilic
+func (_c *InvoiceLineItemCreate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemCreate {
+	_c.mutation.AddCouponApplicationIDs(ids...)
+	return _c
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (ilic *InvoiceLineItemCreate) AddCouponApplications(c ...*CouponApplication) *InvoiceLineItemCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *InvoiceLineItemCreate) AddCouponApplications(v ...*CouponApplication) *InvoiceLineItemCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return ilic.AddCouponApplicationIDs(ids...)
+	return _c.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the InvoiceLineItemMutation object of the builder.
-func (ilic *InvoiceLineItemCreate) Mutation() *InvoiceLineItemMutation {
-	return ilic.mutation
+func (_c *InvoiceLineItemCreate) Mutation() *InvoiceLineItemMutation {
+	return _c.mutation
 }
 
 // Save creates the InvoiceLineItem in the database.
-func (ilic *InvoiceLineItemCreate) Save(ctx context.Context) (*InvoiceLineItem, error) {
-	ilic.defaults()
-	return withHooks(ctx, ilic.sqlSave, ilic.mutation, ilic.hooks)
+func (_c *InvoiceLineItemCreate) Save(ctx context.Context) (*InvoiceLineItem, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (ilic *InvoiceLineItemCreate) SaveX(ctx context.Context) *InvoiceLineItem {
-	v, err := ilic.Save(ctx)
+func (_c *InvoiceLineItemCreate) SaveX(ctx context.Context) *InvoiceLineItem {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -533,124 +533,124 @@ func (ilic *InvoiceLineItemCreate) SaveX(ctx context.Context) *InvoiceLineItem {
 }
 
 // Exec executes the query.
-func (ilic *InvoiceLineItemCreate) Exec(ctx context.Context) error {
-	_, err := ilic.Save(ctx)
+func (_c *InvoiceLineItemCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ilic *InvoiceLineItemCreate) ExecX(ctx context.Context) {
-	if err := ilic.Exec(ctx); err != nil {
+func (_c *InvoiceLineItemCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ilic *InvoiceLineItemCreate) defaults() {
-	if _, ok := ilic.mutation.Status(); !ok {
+func (_c *InvoiceLineItemCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := invoicelineitem.DefaultStatus
-		ilic.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := ilic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := invoicelineitem.DefaultCreatedAt()
-		ilic.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := ilic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := invoicelineitem.DefaultUpdatedAt()
-		ilic.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := ilic.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := invoicelineitem.DefaultEnvironmentID
-		ilic.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := ilic.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		v := invoicelineitem.DefaultAmount
-		ilic.mutation.SetAmount(v)
+		_c.mutation.SetAmount(v)
 	}
-	if _, ok := ilic.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		v := invoicelineitem.DefaultQuantity
-		ilic.mutation.SetQuantity(v)
+		_c.mutation.SetQuantity(v)
 	}
-	if _, ok := ilic.mutation.PrepaidCreditsApplied(); !ok {
+	if _, ok := _c.mutation.PrepaidCreditsApplied(); !ok {
 		v := invoicelineitem.DefaultPrepaidCreditsApplied
-		ilic.mutation.SetPrepaidCreditsApplied(v)
+		_c.mutation.SetPrepaidCreditsApplied(v)
 	}
-	if _, ok := ilic.mutation.LineItemDiscount(); !ok {
+	if _, ok := _c.mutation.LineItemDiscount(); !ok {
 		v := invoicelineitem.DefaultLineItemDiscount
-		ilic.mutation.SetLineItemDiscount(v)
+		_c.mutation.SetLineItemDiscount(v)
 	}
-	if _, ok := ilic.mutation.InvoiceLevelDiscount(); !ok {
+	if _, ok := _c.mutation.InvoiceLevelDiscount(); !ok {
 		v := invoicelineitem.DefaultInvoiceLevelDiscount
-		ilic.mutation.SetInvoiceLevelDiscount(v)
+		_c.mutation.SetInvoiceLevelDiscount(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ilic *InvoiceLineItemCreate) check() error {
-	if _, ok := ilic.mutation.TenantID(); !ok {
+func (_c *InvoiceLineItemCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "InvoiceLineItem.tenant_id"`)}
 	}
-	if v, ok := ilic.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := invoicelineitem.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := ilic.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "InvoiceLineItem.status"`)}
 	}
-	if _, ok := ilic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "InvoiceLineItem.created_at"`)}
 	}
-	if _, ok := ilic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "InvoiceLineItem.updated_at"`)}
 	}
-	if _, ok := ilic.mutation.InvoiceID(); !ok {
+	if _, ok := _c.mutation.InvoiceID(); !ok {
 		return &ValidationError{Name: "invoice_id", err: errors.New(`ent: missing required field "InvoiceLineItem.invoice_id"`)}
 	}
-	if v, ok := ilic.mutation.InvoiceID(); ok {
+	if v, ok := _c.mutation.InvoiceID(); ok {
 		if err := invoicelineitem.InvoiceIDValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.invoice_id": %w`, err)}
 		}
 	}
-	if _, ok := ilic.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "InvoiceLineItem.customer_id"`)}
 	}
-	if v, ok := ilic.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := invoicelineitem.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.customer_id": %w`, err)}
 		}
 	}
-	if v, ok := ilic.mutation.PriceType(); ok {
+	if v, ok := _c.mutation.PriceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "price_type", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.price_type": %w`, err)}
 		}
 	}
-	if _, ok := ilic.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "InvoiceLineItem.amount"`)}
 	}
-	if _, ok := ilic.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		return &ValidationError{Name: "quantity", err: errors.New(`ent: missing required field "InvoiceLineItem.quantity"`)}
 	}
-	if _, ok := ilic.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "InvoiceLineItem.currency"`)}
 	}
-	if v, ok := ilic.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := invoicelineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
 		}
 	}
-	if len(ilic.mutation.InvoiceIDs()) == 0 {
+	if len(_c.mutation.InvoiceIDs()) == 0 {
 		return &ValidationError{Name: "invoice", err: errors.New(`ent: missing required edge "InvoiceLineItem.invoice"`)}
 	}
 	return nil
 }
 
-func (ilic *InvoiceLineItemCreate) sqlSave(ctx context.Context) (*InvoiceLineItem, error) {
-	if err := ilic.check(); err != nil {
+func (_c *InvoiceLineItemCreate) sqlSave(ctx context.Context) (*InvoiceLineItem, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := ilic.createSpec()
-	if err := sqlgraph.CreateNode(ctx, ilic.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -663,165 +663,165 @@ func (ilic *InvoiceLineItemCreate) sqlSave(ctx context.Context) (*InvoiceLineIte
 			return nil, fmt.Errorf("unexpected InvoiceLineItem.ID type: %T", _spec.ID.Value)
 		}
 	}
-	ilic.mutation.id = &_node.ID
-	ilic.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.CreateSpec) {
+func (_c *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.CreateSpec) {
 	var (
-		_node = &InvoiceLineItem{config: ilic.config}
+		_node = &InvoiceLineItem{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(invoicelineitem.Table, sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString))
 	)
-	if id, ok := ilic.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := ilic.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(invoicelineitem.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := ilic.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(invoicelineitem.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := ilic.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(invoicelineitem.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := ilic.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := ilic.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(invoicelineitem.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := ilic.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(invoicelineitem.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := ilic.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(invoicelineitem.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := ilic.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(invoicelineitem.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := ilic.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(invoicelineitem.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
-	if value, ok := ilic.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(invoicelineitem.FieldEntityID, field.TypeString, value)
 		_node.EntityID = &value
 	}
-	if value, ok := ilic.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(invoicelineitem.FieldEntityType, field.TypeString, value)
 		_node.EntityType = &value
 	}
-	if value, ok := ilic.mutation.PlanDisplayName(); ok {
+	if value, ok := _c.mutation.PlanDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldPlanDisplayName, field.TypeString, value)
 		_node.PlanDisplayName = &value
 	}
-	if value, ok := ilic.mutation.PriceID(); ok {
+	if value, ok := _c.mutation.PriceID(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceID, field.TypeString, value)
 		_node.PriceID = &value
 	}
-	if value, ok := ilic.mutation.PriceType(); ok {
+	if value, ok := _c.mutation.PriceType(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceType, field.TypeString, value)
 		_node.PriceType = &value
 	}
-	if value, ok := ilic.mutation.MeterID(); ok {
+	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(invoicelineitem.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
 	}
-	if value, ok := ilic.mutation.MeterDisplayName(); ok {
+	if value, ok := _c.mutation.MeterDisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldMeterDisplayName, field.TypeString, value)
 		_node.MeterDisplayName = &value
 	}
-	if value, ok := ilic.mutation.PriceUnitID(); ok {
+	if value, ok := _c.mutation.PriceUnitID(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceUnitID, field.TypeString, value)
 		_node.PriceUnitID = &value
 	}
-	if value, ok := ilic.mutation.PriceUnit(); ok {
+	if value, ok := _c.mutation.PriceUnit(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceUnit, field.TypeString, value)
 		_node.PriceUnit = &value
 	}
-	if value, ok := ilic.mutation.PriceUnitAmount(); ok {
+	if value, ok := _c.mutation.PriceUnitAmount(); ok {
 		_spec.SetField(invoicelineitem.FieldPriceUnitAmount, field.TypeOther, value)
 		_node.PriceUnitAmount = &value
 	}
-	if value, ok := ilic.mutation.DisplayName(); ok {
+	if value, ok := _c.mutation.DisplayName(); ok {
 		_spec.SetField(invoicelineitem.FieldDisplayName, field.TypeString, value)
 		_node.DisplayName = &value
 	}
-	if value, ok := ilic.mutation.Amount(); ok {
+	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(invoicelineitem.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := ilic.mutation.Quantity(); ok {
+	if value, ok := _c.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
 		_node.Quantity = value
 	}
-	if value, ok := ilic.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := ilic.mutation.PeriodStart(); ok {
+	if value, ok := _c.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 		_node.PeriodStart = &value
 	}
-	if value, ok := ilic.mutation.PeriodEnd(); ok {
+	if value, ok := _c.mutation.PeriodEnd(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = &value
 	}
-	if value, ok := ilic.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(invoicelineitem.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := ilic.mutation.CommitmentInfo(); ok {
+	if value, ok := _c.mutation.CommitmentInfo(); ok {
 		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
 		_node.CommitmentInfo = value
 	}
-	if value, ok := ilic.mutation.PrepaidCreditsApplied(); ok {
+	if value, ok := _c.mutation.PrepaidCreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
 		_node.PrepaidCreditsApplied = &value
 	}
-	if value, ok := ilic.mutation.LineItemDiscount(); ok {
+	if value, ok := _c.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
 		_node.LineItemDiscount = &value
 	}
-	if value, ok := ilic.mutation.InvoiceLevelDiscount(); ok {
+	if value, ok := _c.mutation.InvoiceLevelDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 		_node.InvoiceLevelDiscount = &value
 	}
-	if value, ok := ilic.mutation.SubscriptionLineItemID(); ok {
+	if value, ok := _c.mutation.SubscriptionLineItemID(); ok {
 		_spec.SetField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString, value)
 		_node.SubscriptionLineItemID = &value
 	}
-	if value, ok := ilic.mutation.AdjustedEntitlementQuantity(); ok {
+	if value, ok := _c.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 		_node.AdjustedEntitlementQuantity = &value
 	}
-	if value, ok := ilic.mutation.ParentLineItemID(); ok {
+	if value, ok := _c.mutation.ParentLineItemID(); ok {
 		_spec.SetField(invoicelineitem.FieldParentLineItemID, field.TypeString, value)
 		_node.ParentLineItemID = &value
 	}
-	if value, ok := ilic.mutation.CustomCurrency(); ok {
+	if value, ok := _c.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
 		_node.CustomCurrency = value
 	}
-	if value, ok := ilic.mutation.OriginalCurrency(); ok {
+	if value, ok := _c.mutation.OriginalCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalCurrency, field.TypeString, value)
 		_node.OriginalCurrency = &value
 	}
-	if value, ok := ilic.mutation.OriginalAmount(); ok {
+	if value, ok := _c.mutation.OriginalAmount(); ok {
 		_spec.SetField(invoicelineitem.FieldOriginalAmount, field.TypeOther, value)
 		_node.OriginalAmount = &value
 	}
-	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -838,7 +838,7 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_node.InvoiceID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := ilic.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -865,16 +865,16 @@ type InvoiceLineItemCreateBulk struct {
 }
 
 // Save creates the InvoiceLineItem entities in the database.
-func (ilicb *InvoiceLineItemCreateBulk) Save(ctx context.Context) ([]*InvoiceLineItem, error) {
-	if ilicb.err != nil {
-		return nil, ilicb.err
+func (_c *InvoiceLineItemCreateBulk) Save(ctx context.Context) ([]*InvoiceLineItem, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(ilicb.builders))
-	nodes := make([]*InvoiceLineItem, len(ilicb.builders))
-	mutators := make([]Mutator, len(ilicb.builders))
-	for i := range ilicb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*InvoiceLineItem, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := ilicb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*InvoiceLineItemMutation)
@@ -888,11 +888,11 @@ func (ilicb *InvoiceLineItemCreateBulk) Save(ctx context.Context) ([]*InvoiceLin
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, ilicb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, ilicb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -912,7 +912,7 @@ func (ilicb *InvoiceLineItemCreateBulk) Save(ctx context.Context) ([]*InvoiceLin
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, ilicb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -920,8 +920,8 @@ func (ilicb *InvoiceLineItemCreateBulk) Save(ctx context.Context) ([]*InvoiceLin
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ilicb *InvoiceLineItemCreateBulk) SaveX(ctx context.Context) []*InvoiceLineItem {
-	v, err := ilicb.Save(ctx)
+func (_c *InvoiceLineItemCreateBulk) SaveX(ctx context.Context) []*InvoiceLineItem {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -929,14 +929,14 @@ func (ilicb *InvoiceLineItemCreateBulk) SaveX(ctx context.Context) []*InvoiceLin
 }
 
 // Exec executes the query.
-func (ilicb *InvoiceLineItemCreateBulk) Exec(ctx context.Context) error {
-	_, err := ilicb.Save(ctx)
+func (_c *InvoiceLineItemCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ilicb *InvoiceLineItemCreateBulk) ExecX(ctx context.Context) {
-	if err := ilicb.Exec(ctx); err != nil {
+func (_c *InvoiceLineItemCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

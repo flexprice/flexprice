@@ -175,8 +175,8 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_currency", values[i])
 			} else if value.Valid {
-				c.BillingCurrency = new(string)
-				*c.BillingCurrency = value.String
+				_m.BillingCurrency = new(string)
+				*_m.BillingCurrency = value.String
 			}
 		case customer.FieldAddressLine1:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -300,7 +300,7 @@ func (_m *Customer) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := c.BillingCurrency; v != nil {
+	if v := _m.BillingCurrency; v != nil {
 		builder.WriteString("billing_currency=")
 		builder.WriteString(*v)
 	}
