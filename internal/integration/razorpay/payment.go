@@ -1249,6 +1249,16 @@ func (s *PaymentService) GetInvoiceStatus(ctx context.Context, invoiceID string)
 	return out, nil
 }
 
+func (s *PaymentService) CancelInvoice(ctx context.Context, invoiceID string) error {
+	_, err := s.client.CancelInvoice(ctx, invoiceID)
+	return err
+}
+
+func (s *PaymentService) CancelPaymentLink(ctx context.Context, paymentLinkID string) error {
+	_, err := s.client.CancelPaymentLink(ctx, paymentLinkID)
+	return err
+}
+
 // OrderStatus is the outcome of fetching a Razorpay order (order_xxx), used on the
 // saved-token charge path when a retry never saw the payment id.
 type OrderStatus struct {

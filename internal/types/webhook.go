@@ -216,6 +216,7 @@ const (
 	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
+	WebhookEventCheckoutSessionCancelled WebhookEventName = "checkout.session.cancelled"
 )
 
 // event (usage ingestion) webhook event names

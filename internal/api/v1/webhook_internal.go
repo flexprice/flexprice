@@ -652,6 +652,16 @@ func WebhookEventCheckoutSessionFailed() {}
 // @Router /webhook-events/checkout.session.expired [post]
 func WebhookEventCheckoutSessionExpired() {}
 
+// WebhookEventCheckoutSessionCancelled godoc
+// @Summary checkout.session.cancelled
+// @Description Fired when a Checkout Session is cancelled before payment. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Router /webhook-events/checkout.session.cancelled [post]
+func WebhookEventCheckoutSessionCancelled() {}
+
 // WebhookEventEventRejected godoc
 // @Summary event.rejected
 // @Description Fired when an ingested usage event produces no meter usage — either no meter is registered for its event name, or meters exist for the name but the event matched none of their filters. Throttled to at most once per configured window per event name. Doc-only for parsing.

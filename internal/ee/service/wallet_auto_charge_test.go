@@ -160,6 +160,9 @@ func (p *stubAutoChargeCheckoutProvider) HasAutoChargeableMethod(_ context.Conte
 func (p *stubAutoChargeCheckoutProvider) FetchPaymentState(context.Context, interfaces.PaymentStateRequest) (*interfaces.PaymentState, error) {
 	return nil, nil
 }
+func (p *stubAutoChargeCheckoutProvider) CancelOpenCharge(context.Context, string) (interfaces.OpenChargeResult, error) {
+	return interfaces.OpenChargeResult{}, nil
+}
 
 func (s *WalletAutoChargeSuite) TestFetchGatewayWithAutoChargeSupport_Success() {
 	s.connect(types.SecretProviderChargebee)

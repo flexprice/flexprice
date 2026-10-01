@@ -57,7 +57,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckout(
 	s.Require().NoError(err)
 	draft := drafted.Draft
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draft.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -136,7 +136,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Completion_AppliesRemovesA
 	session, config, draft := s.seedPayFirstAddonBatchCheckout("addon_pfc_in", outgoing, at)
 	pendingID := config.getAttaches()[0].getAssociation().ID
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_addons_batch_001",
 	}))
@@ -223,8 +223,8 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Cleanup_ArchivesAddsAndKee
 	session, config, _ := s.seedPayFirstAddonBatchCheckout("addon_pfx_in", outgoing, at)
 	pendingID := config.getAttaches()[0].getAssociation().ID
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+	checkoutSvc := NewCheckoutSessionService(subService.ServiceParams).(*checkoutSessionService)
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, session, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pendingID)
 	if err == nil {
