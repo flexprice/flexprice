@@ -397,8 +397,8 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
           npm install --ignore-scripts
           [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
-          npm run build
-          npm publish --access public
+          NODE_ENV=production npm run build
+          NODE_ENV=production npm publish --access public
 
       - name: Set up Python
         if: matrix.lang == 'python'
