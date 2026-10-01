@@ -61,10 +61,7 @@ func (s *ClickHouseStore) WithSpan(ctx context.Context, operation string, params
 	return newCtx, &tracing.SpanFinisher{Span: span}
 }
 
-// tracedConn is a wrapper around the ClickHouse Conn interface that adds tracing.
-//
-// driver.Conn is embedded rather than implemented: the driver adds methods to it
-// in minor releases, which breaks any type that spells out every method.
+// tracedConn wraps a ClickHouse connection with tracing.
 type tracedConn struct {
 	driver.Conn
 	tracing *tracing.Service
@@ -193,9 +190,7 @@ func (tc *tracedConn) Ping(ctx context.Context) error {
 	return err
 }
 
-// tracedBatch is a wrapper around the ClickHouse Batch interface that adds tracing.
-//
-// driver.Batch is embedded for the same reason as driver.Conn in tracedConn.
+// tracedBatch wraps a ClickHouse batch with tracing.
 type tracedBatch struct {
 	driver.Batch
 	tracing *tracing.Service

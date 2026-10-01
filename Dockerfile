@@ -52,8 +52,6 @@ RUN go mod init flexprice.local/dbmate-build && \
       -o /out/dbmate github.com/amacneil/dbmate/v2
 
 # Typst stage
-# ghcr tags dropped the "v" prefix at 0.14.0, while GitHub release tags kept
-# it. Use the bare version here; "v0.15.1" does not exist on ghcr.
 FROM ghcr.io/typst/typst:0.15.1 AS typst
 
 # Final stage
