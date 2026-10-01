@@ -1,4 +1,4 @@
-{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+{{- if and .Values.gceIngress.enabled .Values.api.enabled .Values.gceIngress.ownService }}
 # Second api Service, existing ONLY to carry the GCE-native annotations.
 #
 # A GCE Ingress needs its backend Service to advertise a NEG and a

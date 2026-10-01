@@ -53,19 +53,21 @@ spec:
       secretName: {{ include "flexprice.gceIngressSecretName" . }}
   {{- end }}
   rules:
-    {{- range include "flexprice.gceIngressHosts" . | fromYamlArray }}
-    - host: {{ . | quote }}
+    {{- range include "flexprice.gceIngressRules" . | fromYamlArray }}
+    - host: {{ .host | quote }}
       http:
         paths:
+          {{- range .paths }}
           # ImplementationSpecific + /* is the GCE-native form. pathType Prefix
           # with path / also works, but /* matches what the GCE controller emits
           # and keeps the rendered url-map identical to a hand-written one.
-          - path: /*
-            pathType: ImplementationSpecific
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "flexprice.gceIngressName" $ }}
+                name: {{ .service }}
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: {{ .port }}
+          {{- end }}
     {{- end }}
 {{- end }}

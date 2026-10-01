@@ -859,12 +859,59 @@ Ingress covers the same names it is migrating; gceIngress.hosts overrides.
 */}}
 {{- define "flexprice.gceIngressHosts" -}}
 {{- if .Values.gceIngress.hosts -}}
-{{ toYaml .Values.gceIngress.hosts }}
+{{- range .Values.gceIngress.hosts }}
+{{- if kindIs "string" . }}
+- {{ . }}
+{{- else }}
+- {{ .host }}
+{{- end }}
+{{- end }}
 {{- else -}}
 {{ range .Values.ingress.hosts }}
 - {{ .host }}
 {{- end }}
 {{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressRules — host/path structures for the parallel GCE Ingress.
+
+A gceIngress.hosts entry may be a bare hostname or a map carrying paths. Bare
+hostnames yield one /* path to the parallel api Service, matching the shape
+before per-path backends existed.
+*/}}
+{{- define "flexprice.gceIngressRules" -}}
+{{- $svc := ternary (include "flexprice.gceIngressName" .) (printf "%s-api" (include "flexprice.fullname" .)) .Values.gceIngress.ownService }}
+{{- $port := .Values.service.port }}
+{{- $default := list (dict "path" "/*" "pathType" "ImplementationSpecific" "service" $svc "port" $port) }}
+{{- if .Values.gceIngress.hosts }}
+{{- range .Values.gceIngress.hosts }}
+{{- if kindIs "string" . }}
+- host: {{ . }}
+  paths:
+{{ toYaml $default | indent 4 }}
+{{- else }}
+- host: {{ .host }}
+  paths:
+{{- if .paths }}
+{{- range .paths }}
+    - path: {{ .path | default "/*" }}
+      pathType: {{ .pathType | default "ImplementationSpecific" }}
+      service: {{ .service | default $svc }}
+      port: {{ .port | default $port }}
+{{- end }}
+{{- else }}
+{{ toYaml $default | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- else }}
+{{- range .Values.ingress.hosts }}
+- host: {{ .host }}
+  paths:
+{{ toYaml $default | indent 4 }}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/*

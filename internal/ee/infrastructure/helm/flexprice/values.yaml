@@ -823,6 +823,10 @@ gceIngress:
   allowHttp: false
 
   annotations: {}
+
+  # false annotates the shared api Service instead of rendering its own.
+  # Only safe when no other Ingress serves that Service.
+  ownService: true
   service:
     annotations: {}
 

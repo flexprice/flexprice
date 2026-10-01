@@ -9,6 +9,25 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.6.0] - 2026-10-01
+
+### Added
+- **Per-path backends on the `gceIngress` path.** A `gceIngress.hosts` entry may
+  now be a map carrying `paths`, each with its own `path`, `pathType`, `service`
+  and `port`, matching what `ingress.hosts` already supports. A bare hostname
+  string still yields one `/*` path to the parallel api Service, so existing
+  values render unchanged.
+  - Needed to serve an API and a UI from one load balancer. Two Ingress objects
+    cannot share a static IP, so per-host rules on a single Ingress are the only
+    way to put both hostnames on one address.
+- **`gceIngress.ownService`** (default `true`). When false the chart annotates
+  the shared api Service with the NEG and BackendConfig links instead of
+  rendering a parallel `-gce` Service, which is what `ingress.provider: gce`
+  does. Only safe when no other Ingress serves that Service.
+
+Both additions are inert: with `ownService` at its default and hosts given as
+strings, every existing values file renders byte-identically.
+
 ## [1.5.2] - 2026-10-01
 
 ### Fixed
