@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
   {{- $parallel := include "flexprice.gceParallelEnabled" . }}
-  {{- $providerGce := and .Values.ingress.enabled (eq (include "flexprice.ingressType" .) "gce") (not $parallel) }}
+  {{- $providerGce := include "flexprice.legacyGceEnabled" . }}
   {{- $sharedGce := and $parallel (not .Values.gceIngress.ownService) }}
   {{- if or $providerGce $sharedGce }}
   annotations:

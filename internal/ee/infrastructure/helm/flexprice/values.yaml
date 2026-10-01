@@ -485,12 +485,15 @@ ingress:
   # FrontendConfig — GKE's Ingress-for-Anthos / GCE-native ingress objects)
   # and adds NEG + BackendConfig annotations to the api Service. Only takes
   # effect when ingress.enabled is also true.
-  # type supersedes provider. Unset means provider decides, so existing values
-  # files are unaffected. type: gce renders the gceIngress templates, not the
-  # older ingress-gcp set, and reads its options from gceIngress.
+  # type supersedes provider for selecting the nginx className. type: gce also
+  # renders the gceIngress templates, reading options from gceIngress.
   # aws is reserved and not implemented.
+  #
+  # type never stops the legacy ingress-gcp objects rendering: only provider
+  # controls those, so a release cannot delete them without an explicit
+  # provider change. Set provider: nginx to retire them.
   type: ""          # nginx | gce
-  # Deprecated, use type. Renders the legacy ingress-gcp templates.
+  # Deprecated, use type. Solely controls the legacy ingress-gcp templates.
   provider: nginx   # nginx | gce
   gce:
     managedCertificate:

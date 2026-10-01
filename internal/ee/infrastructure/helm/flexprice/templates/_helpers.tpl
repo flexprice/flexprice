@@ -957,6 +957,19 @@ it without a matching values change.
 {{- end -}}
 
 {{/*
+flexprice.legacyGceEnabled — whether templates/ingress-gcp renders.
+
+Only ingress.provider selects it. type: gce routes to the gceIngress templates
+instead, so setting type never starts rendering the legacy set, and never stops
+it either while provider still says gce.
+*/}}
+{{- define "flexprice.legacyGceEnabled" -}}
+{{- if and .Values.ingress.enabled (eq (.Values.ingress.provider | default "nginx") "gce") -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
 flexprice.gceParallelEnabled — whether the parallel GCE objects render.
 
 True for gceIngress.enabled, or for ingress.type=gce once a values file opts in

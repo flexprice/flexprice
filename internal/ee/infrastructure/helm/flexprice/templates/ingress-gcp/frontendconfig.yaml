@@ -1,4 +1,4 @@
-{{- if and .Values.ingress.enabled (eq (include "flexprice.ingressType" .) "gce") (not (include "flexprice.gceParallelEnabled" .)) }}
+{{- if include "flexprice.legacyGceEnabled" . }}
 # FrontendConfig — HTTP to HTTPS redirect at the GCE load balancer.
 #
 # The GCE ingress serves both :80 and :443. Without the redirect the plaintext

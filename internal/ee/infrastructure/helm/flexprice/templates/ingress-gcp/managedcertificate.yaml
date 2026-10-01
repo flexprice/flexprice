@@ -1,4 +1,4 @@
-{{- if and .Values.ingress.enabled (eq (include "flexprice.ingressType" .) "gce") (not (include "flexprice.gceParallelEnabled" .)) }}
+{{- if include "flexprice.legacyGceEnabled" . }}
 # Google-managed TLS certificate for the GCE ingress.
 #
 # Replaces cert-manager on this path: Google issues and auto-renews. Validation

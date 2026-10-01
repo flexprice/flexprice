@@ -1,4 +1,4 @@
-{{- if and .Values.ingress.enabled (eq (include "flexprice.ingressType" .) "gce") (not (include "flexprice.gceParallelEnabled" .)) }}
+{{- if include "flexprice.legacyGceEnabled" . }}
 # BackendConfig for the api Service behind the GCE ingress.
 #
 # GCE's load balancer health-checks the backend directly rather than relying on

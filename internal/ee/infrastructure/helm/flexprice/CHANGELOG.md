@@ -22,8 +22,10 @@ FlexPrice app release.
     one place instead of repeating the condition.
 
 ### Deprecated
-- **`ingress.provider`** — still honored, and still renders the legacy
-  `templates/ingress-gcp` objects. `type` takes precedence when both are set.
+- **`ingress.provider`** — still honored, and remains the ONLY key that controls
+  the legacy `templates/ingress-gcp` objects. Setting `type` never stops them
+  rendering, so no release can delete them without an explicit `provider`
+  change; set `provider: nginx` to retire them deliberately.
 
 Inert: with `type` unset, every values file consuming this chart renders
 identically to 1.6.0.
