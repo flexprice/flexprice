@@ -495,25 +495,25 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 // RecordAttempt appends a PaymentAttempt carrying the gateway's outcome for one charge
 // attempt, without touching the parent payment's status. A per-attempt outcome is the
 // gateway's verdict on one try, not our decision about the payment as a whole.
-func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error {
+func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) (int, error) {
 	if paymentID == "" {
-		return ierr.NewError("payment_id is required").
+		return 0, ierr.NewError("payment_id is required").
 			WithHint("Payment ID is required").
 			Mark(ierr.ErrValidation)
 	}
 
 	p, err := s.PaymentRepo.Get(ctx, paymentID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !p.TrackAttempts {
-		return nil
+		return 0, nil
 	}
 
 	latestAttempt, err := s.PaymentRepo.GetLatestAttempt(ctx, paymentID)
 	if err != nil && !ierr.IsNotFound(err) {
-		return err
+		return 0, err
 	}
 
 	attemptNumber := 1
@@ -538,11 +538,11 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 	}
 
 	if err := attempt.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := s.PaymentRepo.CreateAttempt(ctx, attempt); err != nil {
-		return err
+		return 0, err
 	}
 
 	s.Logger.Info(ctx, "recorded payment attempt",
@@ -552,6 +552,48 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		"gateway_attempt_id", req.GatewayAttemptID,
 	)
 
+	return attemptNumber, nil
+}
+
+func (s *paymentService) PublishPaymentAttemptFailed(ctx context.Context, event dto.PaymentAttemptFailedEvent) error {
+	if event.PaymentID == "" {
+		return ierr.NewError("payment_id is required").
+			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentAttemptEvent{
+		PaymentID:         event.PaymentID,
+		TenantID:          types.GetTenantID(ctx),
+		AttemptNumber:     event.AttemptNumber,
+		GatewayAttemptID:  event.GatewayAttemptID,
+		ErrorMessage:      event.ErrorMessage,
+		CheckoutSessionID: event.CheckoutSessionID,
+	})
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal payment attempt webhook", "error", err, "payment_id", event.PaymentID)
+		return err
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     types.WebhookEventPaymentAttemptFailed,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypePayment,
+		EntityID:      event.PaymentID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Error(ctx, "failed to publish payment attempt webhook",
+			"error", err,
+			"event_name", webhookEvent.EventName,
+			"payment_id", event.PaymentID,
+		)
+		return err
+	}
 	return nil
 }
 

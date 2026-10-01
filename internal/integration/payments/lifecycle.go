@@ -277,7 +277,7 @@ func (l *PaymentLifecycle) RecordSucceededAttempt(ctx context.Context, params Re
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	if err := l.paymentService.RecordAttempt(ctx, params.FlexpricePaymentID, apidto.RecordAttemptRequest{
+	if _, err := l.paymentService.RecordAttempt(ctx, params.FlexpricePaymentID, apidto.RecordAttemptRequest{
 		PaymentStatus:    types.PaymentStatusSucceeded,
 		GatewayAttemptID: params.GatewayPaymentID,
 	}); err != nil {
@@ -302,11 +302,12 @@ func (l *PaymentLifecycle) RecordFailedAttempt(ctx context.Context, params Recor
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	if err := l.paymentService.RecordAttempt(ctx, params.FlexpricePaymentID, apidto.RecordAttemptRequest{
+	attemptNumber, err := l.paymentService.RecordAttempt(ctx, params.FlexpricePaymentID, apidto.RecordAttemptRequest{
 		PaymentStatus:    types.PaymentStatusFailed,
 		ErrorMessage:     params.ErrorMessage,
 		GatewayAttemptID: params.GatewayPaymentID,
-	}); err != nil {
+	})
+	if err != nil {
 		l.logger.Error(ctx, "failed to record failed payment attempt",
 			"flexprice_payment_id", params.FlexpricePaymentID,
 			"gateway_payment_id", params.GatewayPaymentID,
@@ -314,6 +315,26 @@ func (l *PaymentLifecycle) RecordFailedAttempt(ctx context.Context, params Recor
 		)
 		return ierr.WithError(err).
 			WithHint("Failed to record failed payment attempt").
+			WithReportableDetails(map[string]any{
+				"flexprice_payment_id": params.FlexpricePaymentID,
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	if err := l.paymentService.PublishPaymentAttemptFailed(ctx, apidto.PaymentAttemptFailedEvent{
+		PaymentID:         params.FlexpricePaymentID,
+		AttemptNumber:     attemptNumber,
+		GatewayAttemptID:  params.GatewayPaymentID,
+		ErrorMessage:      params.ErrorMessage,
+		CheckoutSessionID: params.CheckoutSessionID,
+	}); err != nil {
+		l.logger.Error(ctx, "failed to publish payment attempt failed",
+			"flexprice_payment_id", params.FlexpricePaymentID,
+			"gateway_payment_id", params.GatewayPaymentID,
+			"error", err,
+		)
+		return ierr.WithError(err).
+			WithHint("Failed to publish payment attempt failed").
 			WithReportableDetails(map[string]any{
 				"flexprice_payment_id": params.FlexpricePaymentID,
 			}).

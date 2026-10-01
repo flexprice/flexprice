@@ -43,6 +43,7 @@ type RecordFailedAttemptParams struct {
 	FlexpricePaymentID string
 	GatewayPaymentID   string
 	ErrorMessage       string
+	CheckoutSessionID  string
 }
 
 // RecordPaymentFailureParams holds inputs for marking a payment FAILED.

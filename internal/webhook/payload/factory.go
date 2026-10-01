@@ -176,6 +176,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventPaymentFailed] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventPaymentAttemptFailed] = func() PayloadBuilder {
+		return NewPaymentAttemptPayloadBuilder(f.services)
+	}
 	f.builders[types.WebhookEventPaymentSuccess] = func() PayloadBuilder {
 		return NewPaymentPayloadBuilder(f.services)
 	}

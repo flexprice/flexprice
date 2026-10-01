@@ -509,7 +509,7 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	}
 
 	// After the settle, so a payment that never succeeded leaves no succeeded attempt.
-	if err := paySvc.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
+	if _, err := paySvc.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
 		s.Logger.Error(ctx, "failed to record succeeded attempt",
 			"payment_id", paymentID, "error", err)
 	}
