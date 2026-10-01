@@ -2017,7 +2017,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	s.Require().NotNil(draftInv)
 
 	params := s.buildServiceParams()
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -2368,7 +2368,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	s.Require().NoError(err)
 
 	params := s.buildServiceParams()
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -2445,7 +2445,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	s.Require().NoError(err)
 
 	params := s.buildServiceParams()
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 

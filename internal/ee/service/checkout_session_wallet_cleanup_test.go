@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -36,7 +37,7 @@ func (s *WalletServiceSuite) seedPayFirstTopupSession(idempotencyKey string, cre
 	draftInv, err := invSvc.GetInvoice(ctx, invID)
 	s.Require().NoError(err)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 
@@ -70,7 +71,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_FailsPendingWalletTopupT
 
 	txID, session := s.seedPayFirstTopupSession("cleanup-fails-topup", decimal.NewFromInt(300), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
 
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
@@ -95,7 +96,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_FailsPendingBonusGrant()
 
 	txID, session := s.seedPayFirstTopupSession("cleanup-fails-bonus", decimal.NewFromInt(400), &bonus)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
 
 	filter := types.NewWalletTransactionFilter()
@@ -120,7 +121,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_CompletedSessionUntouche
 
 	txID, session := s.seedPayFirstTopupSession("cleanup-after-complete", decimal.NewFromInt(200), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_cleanup_guard_001",
 	}))
@@ -141,12 +142,12 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_StalePendingCopyDoesNotC
 	txID, session := s.seedPayFirstTopupSession("cleanup-stale-pending", decimal.NewFromInt(200), nil)
 	stale := *session
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_stale_cleanup_001",
 	}))
 
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+	s.Require().NoError(checkoutSvc.terminateCheckoutSession(ctx, &stale, newTerminateCheckoutSessionParams(types.CheckoutStatusExpired, types.WebhookEventCheckoutSessionExpired, nil, true)))
 
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
@@ -165,7 +166,7 @@ func (s *WalletServiceSuite) TestDeleteCheckoutSession_CleansUpBeforeArchiving()
 
 	txID, session := s.seedPayFirstTopupSession("delete-cleans-up", decimal.NewFromInt(150), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.Delete(ctx, session.ID))
 
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
@@ -174,7 +175,7 @@ func (s *WalletServiceSuite) TestDeleteCheckoutSession_CleansUpBeforeArchiving()
 
 	deleted, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusExpired, deleted.CheckoutStatus)
+	s.Equal(types.CheckoutStatusCancelled, deleted.CheckoutStatus)
 }
 
 func (s *WalletServiceSuite) TestCancelCheckoutSession_ExpiresInFlightAndKeepsPublished() {
@@ -183,10 +184,10 @@ func (s *WalletServiceSuite) TestCancelCheckoutSession_ExpiresInFlightAndKeepsPu
 
 	txID, session := s.seedPayFirstTopupSession("cancel-in-flight", decimal.NewFromInt(150), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	resp, err := checkoutSvc.Cancel(ctx, session.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusExpired, resp.CheckoutStatus)
+	s.Equal(types.CheckoutStatusCancelled, resp.CheckoutStatus)
 	s.True(resp.Terminal)
 
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
@@ -195,7 +196,7 @@ func (s *WalletServiceSuite) TestCancelCheckoutSession_ExpiresInFlightAndKeepsPu
 
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
+	s.Equal(types.CheckoutStatusCancelled, stored.CheckoutStatus)
 	s.Equal(types.StatusPublished, stored.Status)
 }
 
@@ -205,7 +206,7 @@ func (s *WalletServiceSuite) TestCancelCheckoutSession_RejectsCompleted() {
 
 	txID, session := s.seedPayFirstTopupSession("cancel-after-complete", decimal.NewFromInt(200), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_cancel_guard_001",
 	}))
@@ -225,7 +226,7 @@ func (s *WalletServiceSuite) TestCancelCheckoutSession_AlreadyTerminalIsNoop() {
 
 	txID, session := s.seedPayFirstTopupSession("cancel-already-expired", decimal.NewFromInt(100), nil)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
 
 	resp, err := checkoutSvc.Cancel(ctx, session.ID)
@@ -251,7 +252,7 @@ func (s *WalletServiceSuite) TestFailedTopupTransaction_UnblocksAutoTopup() {
 	s.Require().NotNil(last)
 	s.Equal(types.TransactionStatusPending, last.TxStatus, "guard blocks while pending")
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
 
 	last, err = s.GetStores().WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, s.testData.wallet.ID)
@@ -305,7 +306,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_TopupDraftNotVoided() {
 	txID, session := s.seedPayFirstTopupSession("cleanup-no-void", decimal.NewFromInt(250), nil)
 	invoiceID := *session.CheckoutInvoiceID
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
 
 	inv, err := s.GetStores().InvoiceRepo.Get(ctx, invoiceID)
@@ -317,4 +318,87 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_TopupDraftNotVoided() {
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
 	s.Require().NoError(err)
 	s.Equal(types.TransactionStatusFailed, tx.TxStatus)
+}
+
+func (s *WalletServiceSuite) webhookNames() []types.WebhookEventName {
+	events := s.GetPublishedWebhooks()
+	names := make([]types.WebhookEventName, 0, len(events))
+	for _, event := range events {
+		names = append(names, event.EventName)
+	}
+	return names
+}
+
+func (s *WalletServiceSuite) TestCancelCheckoutSession_VoidsPendingPayment() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+	_, session := s.seedPayFirstTopupSession("cancel-voids-payment", decimal.NewFromInt(100), nil)
+
+	paySvc := NewPaymentService(s.buildServiceParams())
+	_, err := paySvc.UpdatePayment(ctx, *session.CheckoutPaymentID, dto.UpdatePaymentRequest{
+		GatewayTrackingID: lo.ToPtr("inv_open"),
+	})
+	s.Require().NoError(err)
+
+	provider := &fakeCheckoutProvider{}
+	s.GetIntegrationFactory().SetCheckoutProvider(provider)
+	defer s.GetIntegrationFactory().SetCheckoutProvider(nil)
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
+	resp, err := checkoutSvc.Cancel(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusCancelled, resp.CheckoutStatus)
+	s.Equal([]string{"inv_open"}, provider.cancelIDs)
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusVoided, payment.PaymentStatus)
+	s.Equal(types.StatusPublished, payment.Status)
+	s.Contains(s.webhookNames(), types.WebhookEventCheckoutSessionCancelled)
+	s.NotContains(s.webhookNames(), types.WebhookEventPaymentFailed)
+}
+
+func (s *WalletServiceSuite) TestCancelCheckoutSession_RefundsCapturedPayment() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+	_, session := s.seedPayFirstTopupSession("cancel-refunds-capture", decimal.NewFromInt(100), nil)
+
+	paySvc := NewPaymentService(s.buildServiceParams())
+	_, err := paySvc.UpdatePayment(ctx, *session.CheckoutPaymentID, dto.UpdatePaymentRequest{
+		GatewayTrackingID: lo.ToPtr("inv_paid"),
+	})
+	s.Require().NoError(err)
+
+	provider := &fakeCheckoutProvider{openCharge: interfaces.OpenChargeResult{
+		Captured:         true,
+		GatewayPaymentID: "pay_rzp_1",
+	}}
+	s.GetIntegrationFactory().SetCheckoutProvider(provider)
+	defer s.GetIntegrationFactory().SetCheckoutProvider(nil)
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
+	resp, err := checkoutSvc.Cancel(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusCancelled, resp.CheckoutStatus)
+
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusRefunded, payment.PaymentStatus)
+	s.Equal("pay_rzp_1", lo.FromPtr(payment.GatewayPaymentID))
+	s.NotContains(s.webhookNames(), types.WebhookEventPaymentFailed)
+}
+
+func (s *WalletServiceSuite) TestCleanupAllExpiredSessions_PublishesExpired() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+	_, session := s.seedPayFirstTopupSession("expiry-publishes-expired", decimal.NewFromInt(100), nil)
+	session.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+
+	checkoutSvc := NewCheckoutSessionService(s.buildServiceParams()).(*checkoutSessionService)
+	_, err := checkoutSvc.CleanupAllExpiredSessions(ctx, nil)
+	s.Require().NoError(err)
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
+	s.Contains(s.webhookNames(), types.WebhookEventCheckoutSessionExpired)
 }

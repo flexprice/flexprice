@@ -498,7 +498,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"razorpay_payment_id", razorpayPaymentID,
 			)
 		}
-	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed, types.CheckoutStatusCancelled:
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
 				"error", err,

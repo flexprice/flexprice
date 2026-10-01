@@ -306,6 +306,20 @@ func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
 	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestCancelledSession_Refunds() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCancelled,
+	}
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.NoError(err)
+	s.Empty(s.checkoutSvc.completeCalls)
+	s.Require().Len(s.client.refundCalls, 1)
+	s.Equal("pay_rzp_001", s.client.refundCalls[0])
+	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusCompleted,

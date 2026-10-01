@@ -31,6 +31,12 @@ func TestPaymentStatusValidateTransitionTo(t *testing.T) {
 		{"initiated to succeeded for external gateways", PaymentStatusInitiated, PaymentStatusSucceeded, false},
 		{"initiated to overpaid for external gateways", PaymentStatusInitiated, PaymentStatusOverpaid, false},
 
+		// An abandoned checkout voids an unpaid in-flight payment. A sealed failure stays sealed.
+		{"pending to voided", PaymentStatusPending, PaymentStatusVoided, false},
+		{"processing to voided", PaymentStatusProcessing, PaymentStatusVoided, false},
+		{"failed cannot be voided", PaymentStatusFailed, PaymentStatusVoided, true},
+		{"initiated cannot be voided", PaymentStatusInitiated, PaymentStatusVoided, true},
+
 		// Post-settlement money movement.
 		{"succeeded to refunded", PaymentStatusSucceeded, PaymentStatusRefunded, false},
 		{"succeeded to partially refunded", PaymentStatusSucceeded, PaymentStatusPartiallyRefunded, false},
