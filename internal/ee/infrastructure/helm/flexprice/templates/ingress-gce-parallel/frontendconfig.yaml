@@ -1,4 +1,4 @@
-{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
 # FrontendConfig for the parallel GCE Ingress.
 #
 # Rendered unconditionally whenever gceIngress.enabled, even when every

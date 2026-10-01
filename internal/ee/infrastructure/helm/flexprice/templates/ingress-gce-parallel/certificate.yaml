@@ -1,4 +1,4 @@
-{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
 {{- if eq .Values.gceIngress.tls.mode "certManager" }}
 {{- if .Values.gceIngress.tls.clusterIssuer }}
 # cert-manager Certificate for the parallel GCE Ingress.

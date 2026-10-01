@@ -9,6 +9,25 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.7.0] - 2026-10-01
+
+### Added
+- **`ingress.type`** — `nginx` or `gce`, superseding `ingress.provider`. Unset by
+  default, so `provider` still decides and no existing values file changes
+  behaviour. `type: gce` renders the `gceIngress` templates and reads its options
+  from `gceIngress`, not the older `ingress-gcp` set. `aws` is reserved and not
+  implemented.
+  - Gating moved behind two helpers, `flexprice.ingressType` and
+    `flexprice.gceParallelEnabled`, so every template resolves the flavor through
+    one place instead of repeating the condition.
+
+### Deprecated
+- **`ingress.provider`** — still honored, and still renders the legacy
+  `templates/ingress-gcp` objects. `type` takes precedence when both are set.
+
+Inert: with `type` unset, every values file consuming this chart renders
+identically to 1.6.0.
+
 ## [1.6.0] - 2026-10-01
 
 ### Added

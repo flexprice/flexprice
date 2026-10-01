@@ -1,4 +1,4 @@
-{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
 # BackendConfig for the parallel GCE Ingress's Service.
 #
 # timeoutSec defaults to 60 to match ingress-nginx's proxy-read-timeout. The

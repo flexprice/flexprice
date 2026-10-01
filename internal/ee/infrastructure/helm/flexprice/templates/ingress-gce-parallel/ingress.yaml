@@ -1,4 +1,4 @@
-{{- if and .Values.gceIngress.enabled .Values.api.enabled }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
 # Parallel GCE Ingress -- a SECOND Ingress alongside the chart's `ingress.*` one.
 #
 # Purpose: migrate an API off ingress-nginx onto a GCE global external

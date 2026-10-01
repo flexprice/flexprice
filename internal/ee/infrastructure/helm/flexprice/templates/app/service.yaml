@@ -5,8 +5,9 @@ metadata:
   name: {{ include "flexprice.fullname" . }}-api
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
-  {{- $providerGce := and .Values.ingress.enabled (eq .Values.ingress.provider "gce") }}
-  {{- $sharedGce := and .Values.gceIngress.enabled (not .Values.gceIngress.ownService) }}
+  {{- $parallel := include "flexprice.gceParallelEnabled" . }}
+  {{- $providerGce := and .Values.ingress.enabled (eq (include "flexprice.ingressType" .) "gce") (not $parallel) }}
+  {{- $sharedGce := and $parallel (not .Values.gceIngress.ownService) }}
   {{- if or $providerGce $sharedGce }}
   annotations:
     # GCE-native ingress needs a Network Endpoint Group (not kube-proxy
