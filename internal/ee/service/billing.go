@@ -43,9 +43,9 @@ type FindMatchingLineItemPeriodResult struct {
 
 // BillingService handles all billing calculations
 type BillingService interface {
-	// UsageChargesForWindow returns usage charges for usage in [periodStart, until) of the billing
-	// period [periodStart, periodEnd), priced as of until.
-	UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error)
+	// UsageNetForWindow returns sub's usage charges for [periodStart, until) after coupon
+	// discounts, priced as an invoice for that window would be.
+	UsageNetForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, until time.Time) (decimal.Decimal, error)
 
 	// CalculateFixedCharges calculates all fixed charges for a subscription.
 	CalculateFixedCharges(ctx context.Context, params *dto.CalculateFixedChargesParams) (*dto.CalculateFixedChargesResult, error)

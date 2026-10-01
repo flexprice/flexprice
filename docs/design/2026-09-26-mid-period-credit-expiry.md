@@ -29,11 +29,12 @@ the wallet.
 
 ```mermaid
 flowchart TD
-    A[Expiry job, every 15 min<br/>credits expired 2h+ ago, earliest expiry first] --> B{Setting on?}
-    B -- No --> Z[Expire the whole credit, as today]
-    B -- Yes --> C[For each subscription the credit can pay]
+    A[Expiry job, every 15 min] --> B{Setting on?}
+    B -- No --> Z[Credits expired 6h+ ago:<br/>expire the whole credit, as today]
+    B -- Yes --> Y[Credits expired 2h+ ago,<br/>earliest expiry first]
+    Y --> C[For each subscription the credit can pay]
     C --> D[Find its unfinalized drafts that have usage before the expiry:<br/>earlier periods, then the current period<br/>current draft created only if it has such usage]
-    D --> E[Amount per draft =<br/>usage before expiry, after discounts,<br/>minus credits already applied]
+    D --> E[Amount per draft =<br/>usage before expiry, priced like an invoice for that window,<br/>minus credits already applied]
     E --> F[Apply to the drafts, oldest first:<br/>debit the credit, reduce the draft's total]
     F --> G[Expire what's left of the credit]
 
@@ -59,7 +60,9 @@ Ongoing balance = wallet balance − usage not yet paid. It stays correct at eve
 
 - Only usage **before the expiry** counts. The job waits 2h so late events timestamped before the
   expiry are counted; by then the draft also holds usage after the expiry, which is left out.
-- Only **usage lines, after discounts**. Finalization never puts credits on fixed charges.
+- Only **usage, after discounts**. That usage is priced exactly as an invoice for the window from
+  period start to expiry would be (same pricing code, coupons and included quotas applied, nothing
+  saved). Finalization never puts credits on fixed charges.
 - Minus credits **already applied** to that draft by an earlier expiring credit.
 - **Rounded down to cents**, and never more than what's left on the credit.
 - Several subscriptions: the one whose period ends first is paid first.
@@ -133,16 +136,15 @@ End to end on a local stack (wallet, ledger and invoices checked at each step):
 
 ## Not handled yet
 
-**v2 (designed, not built): a period that ends early.** Immediate cancel, threshold billing,
-scheduled cancel and plan change with `anchor_at_effect` create a new invoice for the shortened
-period. Until v2, a draft with credits applied is left behind: the usage before the expiry is billed
-again and the draft is never finalized. v2 rule: reuse the open draft instead (move its period end,
-set the flow's billing reason, recompute, finalize).
+**v2 (designed, not built): a period that ends early.** Immediate cancel, scheduled cancel and plan
+change with `anchor_at_effect` create a new invoice for the shortened period. Until v2, a draft with
+credits applied is left behind: the usage before the expiry is billed again and the draft is never
+finalized. v2 rule: reuse the open draft instead (move its period end, set the flow's billing reason,
+recompute, finalize). Threshold billing has the same shape; v1 avoids it by skipping threshold
+subscriptions, so it only matters if a subscription is switched to threshold billing after a credit
+was applied to its draft. The same v2 rule then lets threshold subscriptions be included.
 
 **Accepted limits in v1**
-- Several usage prices with different line-level coupons: one discount ratio is used for all.
-- Quotas that reset on a different cycle than billing (e.g. daily) can count some usage after the
-  expiry.
 - Events arriving after the job ran aren't counted.
 - `RecalculateInvoiceV2` on a draft can drop the applied amount.
 

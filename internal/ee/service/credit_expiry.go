@@ -64,8 +64,8 @@ type draftAllocation struct {
 
 // settlementTarget is a draft invoice and its usage charges from before the expiry.
 type settlementTarget struct {
-	draft *invoice.Invoice
-	usage decimal.Decimal
+	draft        *invoice.Invoice
+	beforeExpiry decimal.Decimal
 }
 
 // settleExpiringCredit settles an expiring credit against drafts for usage before the expiry,
@@ -91,13 +91,10 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 					"invoice_id", draft.ID, "amount_paid", draft.AmountPaid)
 				continue
 			}
+			// Do the math in the invoice's denomination; draft is a local copy, not saved.
+			draft.RestoreFromDenomination()
 			// Finalization places credits only on usage after discounts; never apply more than it can place.
-			gross, net := usageLineTotals(draft)
-			beforeExpiry := target.usage
-			if gross.IsPositive() && net.LessThan(gross) {
-				beforeExpiry = beforeExpiry.Mul(net).Div(gross)
-			}
-			maxAmount := decimal.Min(beforeExpiry, net).Sub(draft.DenominationPrepaidCreditsApplied())
+			maxAmount := decimal.Min(target.beforeExpiry, usageNet(draft)).Sub(draft.TotalPrepaidCreditsApplied)
 			if !maxAmount.IsPositive() {
 				continue
 			}
@@ -223,12 +220,12 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 			}
 			inv = computed
 		}
-		usage, err := s.earlierDraftUsageBeforeExpiry(ctx, sub, inv, expiry)
+		beforeExpiry, err := s.earlierDraftUsageBeforeExpiry(ctx, sub, inv, expiry)
 		if err != nil {
 			return nil, err
 		}
-		if usage.IsPositive() {
-			targets = append(targets, settlementTarget{draft: inv, usage: usage})
+		if beforeExpiry.IsPositive() {
+			targets = append(targets, settlementTarget{draft: inv, beforeExpiry: beforeExpiry})
 		}
 	}
 
@@ -236,11 +233,11 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 		return targets, nil
 	}
 	// Check usage first so no draft is created for a period with nothing to pay.
-	usage, err := NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, expiry)
+	beforeExpiry, err := NewBillingService(s.ServiceParams).UsageNetForWindow(ctx, sub, sub.CurrentPeriodStart, expiry)
 	if err != nil {
 		return nil, err
 	}
-	if !usage.IsPositive() {
+	if !beforeExpiry.IsPositive() {
 		return targets, nil
 	}
 	draft, skipped, err := invoiceService.GetOrComputeCurrentPeriodDraft(ctx, sub)
@@ -248,39 +245,33 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 		return nil, err
 	}
 	if !skipped && draft != nil {
-		targets = append(targets, settlementTarget{draft: draft, usage: usage})
+		targets = append(targets, settlementTarget{draft: draft, beforeExpiry: beforeExpiry})
 	}
 	return targets, nil
 }
 
-// usageLineTotals returns the draft's usage charges before and after discounts, in its denomination.
-func usageLineTotals(draft *invoice.Invoice) (gross, net decimal.Decimal) {
+// usageNet returns the draft's usage charges after discounts, in its denomination: what
+// finalization can place credits on.
+func usageNet(draft *invoice.Invoice) decimal.Decimal {
+	net := decimal.Zero
 	for _, item := range draft.LineItems {
 		if lo.FromPtr(item.PriceType) != string(types.PRICE_TYPE_USAGE) {
 			continue
 		}
 		d := item.Denomination()
-		gross = gross.Add(d.Amount)
 		net = net.Add(decimal.Max(decimal.Zero, d.Amount.Sub(d.LineItemDiscount).Sub(d.InvoiceLevelDiscount)))
 	}
-	return gross, net
+	return net
 }
 
-// earlierDraftUsageBeforeExpiry returns an earlier period's usage charges from before the expiry.
+// earlierDraftUsageBeforeExpiry returns an earlier period's usage from before the expiry, after
+// discounts.
 func (s *walletService) earlierDraftUsageBeforeExpiry(ctx context.Context, sub *subscription.Subscription, draft *invoice.Invoice, expiry time.Time) (decimal.Decimal, error) {
-	periodStart, periodEnd := lo.FromPtr(draft.PeriodStart), lo.FromPtr(draft.PeriodEnd)
-	if periodEnd.After(expiry) {
-		return NewBillingService(s.ServiceParams).UsageChargesForWindow(ctx, sub, periodStart, periodEnd, expiry)
+	if !lo.FromPtr(draft.PeriodEnd).After(expiry) {
+		// The whole period is before the expiry: the computed draft's usage lines are that usage.
+		return usageNet(draft), nil
 	}
-
-	// The whole period is before the expiry: the computed draft's usage lines are that usage.
-	usage := decimal.Zero
-	for _, item := range draft.LineItems {
-		if lo.FromPtr(item.PriceType) == string(types.PRICE_TYPE_USAGE) {
-			usage = usage.Add(item.Denomination().Amount)
-		}
-	}
-	return usage, nil
+	return NewBillingService(s.ServiceParams).UsageNetForWindow(ctx, sub, lo.FromPtr(draft.PeriodStart), expiry)
 }
 
 func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID, currency string, periodStart, periodEnd time.Time) (bool, error) {

@@ -465,24 +465,16 @@ func (s *invoiceService) ListOpenCycleDrafts(ctx context.Context, subscriptionID
 	filter.SubscriptionID = subscriptionID
 	filter.InvoiceType = types.InvoiceTypeSubscription
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
+	// Strictly before startedBefore: the filter's period-start bound is inclusive.
 	drafts := lo.Filter(invoices, func(inv *invoice.Invoice, _ int) bool {
-		return inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) &&
-			inv.PeriodStart != nil && inv.PeriodEnd != nil && inv.PeriodStart.Before(startedBefore)
+		return inv.PeriodStart != nil && inv.PeriodEnd != nil && inv.PeriodStart.Before(startedBefore)
 	})
 	sort.SliceStable(drafts, func(i, j int) bool { return drafts[i].PeriodStart.Before(*drafts[j].PeriodStart) })
-
-	for _, inv := range drafts {
-		if len(inv.LineItems) > 0 {
-			continue
-		}
-		if inv.LineItems, err = s.InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID); err != nil {
-			return nil, err
-		}
-	}
 	return drafts, nil
 }
 
@@ -614,8 +606,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		computed = true
 
-		// Credits applied at expiry must survive recompute, read in the denomination.
-		creditsAppliedToDraft := inv.DenominationPrepaidCreditsApplied()
+		// The math below runs in the denomination; credits applied at expiry must survive recompute.
+		inv.RestoreFromDenomination()
+		creditsAppliedToDraft := inv.TotalPrepaidCreditsApplied
 
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {

@@ -56,25 +56,32 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 	return time.Now().UTC()
 }
 
-// UsageChargesForWindow returns sub's usage charges for [periodStart, until), priced for the
-// period [periodStart, periodEnd).
-func (s *billingService) UsageChargesForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd, until time.Time) (decimal.Decimal, error) {
-	usage, err := NewSubscriptionService(s.ServiceParams).GetMeterUsageForSubscription(ctx, sub, &dto.GetUsageBySubscriptionRequest{
-		SubscriptionID: sub.ID,
-		StartTime:      periodStart,
-		EndTime:        until,
-		Source:         string(types.UsageSourceWallet),
+// UsageNetForWindow returns sub's usage charges for [periodStart, until) after coupon discounts,
+// priced as an invoice for that window would be. Nothing is persisted.
+func (s *billingService) UsageNetForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, until time.Time) (decimal.Decimal, error) {
+	window := *sub // building the request replaces the subscription's line items
+	req, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   &window,
+		PeriodStart:    periodStart,
+		PeriodEnd:      until,
+		ReferencePoint: types.ReferencePointPreview,
+		AsOf:           until,
 	})
 	if err != nil {
 		return decimal.Zero, err
 	}
-	_, total, err := s.CalculateMeterUsageCharges(
-		ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet, &until,
-	)
-	if err != nil {
+	if err := s.applyCouponPreview(ctx, req); err != nil {
 		return decimal.Zero, err
 	}
-	return total, nil
+	net := decimal.Zero
+	for _, line := range req.LineItems {
+		if lo.FromPtr(line.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			continue
+		}
+		discounts := lo.FromPtr(line.LineItemDiscount).Add(lo.FromPtr(line.InvoiceLevelDiscount))
+		net = net.Add(decimal.Max(decimal.Zero, line.Amount.Sub(discounts)))
+	}
+	return net, nil
 }
 
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.

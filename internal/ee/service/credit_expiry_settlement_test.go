@@ -5,7 +5,11 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -374,9 +378,34 @@ func (s *CreditExpiryInvoiceRaceSuite) discountedDraft(id string, sub *subscript
 	return inv
 }
 
+// percentCoupon gives sub a subscription-level coupon of percent off.
+func (s *CreditExpiryInvoiceRaceSuite) percentCoupon(sub *subscription.Subscription, percent decimal.Decimal) {
+	ctx := s.GetContext()
+	c := &coupon.Coupon{
+		ID:            "coupon_" + sub.ID,
+		Name:          "Discount",
+		Type:          types.CouponTypePercentage,
+		PercentageOff: lo.ToPtr(percent),
+		Cadence:       types.CouponCadenceForever,
+		Currency:      "usd",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CouponRepo.Create(ctx, c))
+	s.NoError(s.GetStores().CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
+		ID:             "assoc_" + sub.ID,
+		CouponID:       c.ID,
+		SubscriptionID: sub.ID,
+		StartDate:      sub.StartDate,
+		Coupon:         c,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}))
+}
+
 // Finalization places credits only on usage after discounts, so expiry applies no more than that.
 // $100 usage with a 50% coupon and a $200 fee. All usage before expiry places $50; $60 of it before
-// expiry places $30.
+// expiry places $30: the window is priced with the coupon, like the invoice.
 func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_CappedAtUsageAfterDiscounts() {
 	cases := []struct {
 		name         string
@@ -392,6 +421,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_CappedAtUsageAfterDi
 			s.enableExpirySettlement()
 			boundary := time.Now().UTC().Add(-3 * time.Hour)
 			sub, prevStart := s.rolledSubscription("subs_settlement", boundary)
+			s.percentCoupon(sub, decimal.NewFromInt(50))
 			expiry := boundary.Add(-24 * time.Hour)
 			s.usage(sub, expiry.Add(-time.Hour), tc.beforeExpiry)
 			s.usage(sub, expiry.Add(time.Hour), 100-tc.beforeExpiry)
@@ -406,7 +436,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_CappedAtUsageAfterDi
 	}
 }
 
-// The applied amount is whole cents, rounded down: $50 of usage at a 2/3 discount ratio is
+// The applied amount is whole cents, rounded down: $50 of usage with a 33.33…% coupon is
 // $33.333…, applied as $33.33. A conversion rate that doesn't divide evenly still lands on cents.
 func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_AppliesWholeCents() {
 	for _, rate := range []int64{1, 7} {
@@ -417,6 +447,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_AppliesWholeCents() 
 			s.NoError(s.GetStores().WalletRepo.UpdateWallet(s.GetContext(), s.wallet.ID, s.wallet))
 			boundary := time.Now().UTC().Add(-3 * time.Hour)
 			sub, prevStart := s.rolledSubscription("subs_settlement", boundary)
+			s.percentCoupon(sub, decimal.NewFromInt(100).Div(decimal.NewFromInt(3)))
 			expiry := boundary.Add(-24 * time.Hour)
 			s.usage(sub, expiry.Add(-time.Hour), 50)
 			s.usage(sub, expiry.Add(time.Hour), 40)
@@ -439,6 +470,45 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_AppliesWholeCents() 
 			s.True(debited.LessThanOrEqual(want) && debited.GreaterThan(decimal.RequireFromString("33.32")), "debited %s", debited)
 		})
 	}
+}
+
+// A daily included quota is re-read inside pricing, so the usage window must end at the expiry
+// there too. 10 units included per day; 30 used on the expiry day before the expiry, 40 on the next
+// day. Before the expiry that's 20 billable, not the 50 billable for the period so far.
+func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_DailyQuotaCountsOnlyUsageBeforeExpiry() {
+	s.enableExpirySettlement()
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	periodStart, periodEnd := now.Add(-20*24*time.Hour), now.Add(10*24*time.Hour)
+	expiry := now.Add(-3 * 24 * time.Hour)
+	tx := s.seedGrant("wtxn_free_grant", decimal.NewFromInt(100), periodStart, expiry)
+	sub := s.usageSubscription("subs_settlement", periodStart, periodStart, periodEnd)
+	f := &feature.Feature{
+		ID:        "feat_" + sub.ID,
+		Name:      "API calls",
+		Type:      types.FeatureTypeMetered,
+		MeterID:   "meter_" + sub.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
+		ID:               "ent_" + sub.ID,
+		EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:         sub.PlanID,
+		FeatureID:        f.ID,
+		FeatureType:      types.FeatureTypeMetered,
+		IsEnabled:        true,
+		UsageLimit:       lo.ToPtr(int64(10)),
+		UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	})
+	s.NoError(err)
+	s.usage(sub, expiry.Add(-2*time.Hour), 30)
+	s.usage(sub, expiry.Add(24*time.Hour), 40)
+
+	result, err := s.walletService.ExpireCredits(ctx, tx.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(20).Equal(result.Applied), "applied %s", result.Applied)
 }
 
 // A credit that expired earlier in the period already paid part of the same usage. The first
