@@ -350,7 +350,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	mac.Write(payload)
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
-	if expectedSignature != signature {
+	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
 		c.logger.Info(ctx, "webhook signature mismatch",
 			"expected_signature_length", len(expectedSignature),
 			"received_signature_length", len(signature),
