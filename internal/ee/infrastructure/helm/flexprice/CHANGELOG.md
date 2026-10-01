@@ -9,6 +9,16 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.5.2] - 2026-10-01
+
+### Fixed
+- `ingress.gce.backendConfig.logging.enable` now defaults to unset instead of
+  `false`, and the `logging` block is omitted entirely unless it is set. A chart
+  release reaches production on its own schedule, so a default of `false` would
+  assert logging OFF on a backend that had been logging via the load balancer
+  default. Unset preserves existing behaviour; an explicit `false` still means
+  off.
+
 ## [1.5.1] - 2026-09-30
 
 ### Added

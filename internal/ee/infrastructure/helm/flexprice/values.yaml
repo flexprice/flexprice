@@ -505,11 +505,10 @@ ingress:
       # to omit the securityPolicy block entirely.
       cloudArmor:
         securityPolicyName: ""
-      # Load balancer request logging. Needed to see Cloud Armor rule matches,
-      # which are otherwise invisible. Raise sampleRate before sizing rules off
-      # low-frequency matches.
+      # Shows Cloud Armor matches. Raise before sizing rules.
+      # null keeps the LB default; false asserts off.
       logging:
-        enable: false
+        enable: null
         sampleRate: 0.1
     frontendConfig:
       # Redirect HTTP -> HTTPS at the GCE load balancer.

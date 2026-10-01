@@ -30,14 +30,13 @@ spec:
   securityPolicy:
     name: {{ . | quote }}
   {{- end }}
-  # Rendered for BOTH boolean values on purpose. Omitting spec.logging does not
-  # disable access logging -- GKE falls back to the load balancer's default,
-  # which can still record requests. Only an explicit `enable: false` turns it
-  # off. sampleRate is rendered only when enabled, since it is meaningless
-  # otherwise.
+  # Unset omits the block, keeping the LB default.
+  # Explicit false asserts logging off.
+  {{- if kindIs "bool" .Values.ingress.gce.backendConfig.logging.enable }}
   logging:
     enable: {{ .Values.ingress.gce.backendConfig.logging.enable }}
     {{- if .Values.ingress.gce.backendConfig.logging.enable }}
     sampleRate: {{ .Values.ingress.gce.backendConfig.logging.sampleRate }}
     {{- end }}
+  {{- end }}
 {{- end }}
