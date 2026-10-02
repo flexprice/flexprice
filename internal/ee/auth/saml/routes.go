@@ -310,6 +310,8 @@ func (h *Handler) ACS(c *gin.Context) {
 	}
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetActor(ctx, types.SystemActor("saml", "SAML provisioning"))
+	ctx = types.SetSource(ctx, types.SourceDashboard)
 	userID, err := provider.resolveUser(ctx, h.serviceParams, tenantID, result.Email, cfg)
 	if err != nil {
 		h.logger.Error(ctx, "saml login could not resolve a user",

@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,7 +44,9 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		}
 	}
 
-	authResponse, err := h.authService.SignUp(c.Request.Context(), &req)
+	ctx := types.SetActor(c.Request.Context(), types.SystemActor("signup", "Signup"))
+	ctx = types.SetSource(ctx, types.SourceDashboard)
+	authResponse, err := h.authService.SignUp(ctx, &req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to sign up", "error", err)
 		c.Error(err)
@@ -67,7 +70,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	authResponse, err := h.authService.Login(c.Request.Context(), &req)
+	ctx := types.SetActor(c.Request.Context(), types.SystemActor("login", "Login"))
+	ctx = types.SetSource(ctx, types.SourceDashboard)
+	authResponse, err := h.authService.Login(ctx, &req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to login", "error", err)
 		c.Error(err)
