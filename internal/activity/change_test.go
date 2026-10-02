@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -35,6 +36,61 @@ func TestDiffRedacts(t *testing.T) {
 	c := changes["secret_note"]
 	if !c.Redacted || c.From != nil || c.To != nil {
 		t.Fatalf("expected redacted marker, got %+v", c)
+	}
+}
+
+func TestDiffBulkNoOpAcrossRepresentations(t *testing.T) {
+	ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	name := "same-name"
+	old := map[string]any{
+		"status":         "active",
+		"count":          int64(1_000_000),
+		"amount":         decimal.NewFromInt(42),
+		"synced_at":      ts,
+		"metadata":       []byte(`{"b":1,"a":2}`),
+		"cadence":        types.BILLING_CADENCE_RECURRING,
+		"label":          &name,
+		"tags":           map[string]string(nil),
+		"tenant_id":      "tenant_1",
+		"environment_id": "env_1",
+		"updated_at":     time.Unix(1, 0),
+		"updated_by":     "user_1",
+	}
+	new := map[string]any{
+		"status":         "active",
+		"count":          int64(1_000_000),
+		"amount":         []byte("42"),
+		"synced_at":      ts,
+		"metadata":       map[string]any{"a": 2, "b": 1},
+		"cadence":        "RECURRING",
+		"label":          name,
+		"tags":           []byte("null"),
+		"tenant_id":      "tenant_1",
+		"environment_id": "env_1",
+		"updated_at":     time.Unix(2, 0),
+		"updated_by":     "user_2",
+	}
+	if changes, changed := Diff(subDef, old, new); changed {
+		t.Fatalf("expected no change across representation-only differences, got %+v", changes)
+	}
+}
+
+func TestDiffJSONBKeyOrderOnlyIsNoOp(t *testing.T) {
+	old := map[string]any{"metadata": []byte(`{"a":1,"b":2}`)}
+	new := map[string]any{"metadata": map[string]any{"b": 2, "a": 1}}
+	if _, changed := Diff(subDef, old, new); changed {
+		t.Fatal("expected no change for reordered JSONB keys")
+	}
+}
+
+func TestDiffCreateSkipsNilFields(t *testing.T) {
+	new := map[string]any{"status": "active", "description": nil}
+	changes, changed := Diff(subDef, nil, new)
+	if !changed || len(changes) != 1 {
+		t.Fatalf("want exactly status reported, got %+v", changes)
+	}
+	if _, ok := changes["description"]; ok {
+		t.Fatalf("nil field with no old value should be absent, got %+v", changes["description"])
 	}
 }
 

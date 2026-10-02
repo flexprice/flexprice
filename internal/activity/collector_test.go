@@ -47,6 +47,51 @@ func TestRecordActionNamesEntryEitherOrder(t *testing.T) {
 	if e.Action != "subscription.paused" || e.Metadata["reason"] != "x" {
 		t.Fatalf("name not applied: %+v", e)
 	}
+	if e.Op != OpUpdate {
+		t.Fatalf("want OpUpdate once the hook's Add observes the update, got %v", e.Op)
+	}
+}
+
+func TestNameNeverFlipsASetOp(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpCreate, Snapshot: map[string]any{"name": "a"}})
+	RecordAction(ctx, Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.created",
+		Changes: map[string]Change{"name": {From: nil, To: "a"}}})
+	e := c.Entries()[0]
+	if e.Op != OpCreate {
+		t.Fatalf("Name must never change an already-set op, got %v", e.Op)
+	}
+}
+
+func TestCloseIsIdempotentAndDropsLateWrites(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "active", To: "paused"}}})
+	c.Close()
+	c.Close() // must not panic
+
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "paused", To: "active"}}})
+	RecordAction(ctx, Entry{EntityType: "subscription", EntityID: "sub_1", Action: "subscription.resumed"})
+
+	entries := c.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Changes["status"].To != "paused" || e.Action != "" {
+		t.Fatalf("writes after Close must be dropped: %+v", e)
+	}
+}
+
+func TestRecordActionWithoutCollectorIsNoop(t *testing.T) {
+	ctx := context.Background()
+	RecordAction(ctx, Entry{EntityType: "subscription", EntityID: "sub_1", Action: "subscription.paused"})
+	if CollectorFrom(ctx) != nil {
+		t.Fatal("no collector should exist without WithCollector")
+	}
 }
 
 func TestSuppressRequiresReason(t *testing.T) {

@@ -1,8 +1,11 @@
 package activity
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
@@ -12,7 +15,8 @@ import (
 type Op int
 
 const (
-	OpCreate Op = iota
+	opUnknown Op = iota
+	OpCreate
 	OpUpdate
 	OpDelete
 )
@@ -36,7 +40,10 @@ type Record struct {
 	Degraded   string
 }
 
-var bookkeeping = map[string]bool{"updated_at": true, "updated_by": true, "created_at": true, "created_by": true}
+var bookkeeping = map[string]bool{
+	"updated_at": true, "updated_by": true, "created_at": true, "created_by": true,
+	"tenant_id": true, "environment_id": true,
+}
 
 // Normalize maps driver and ent values onto a canonical string so values that
 // differ only in representation compare equal.
@@ -45,12 +52,7 @@ func Normalize(v any) string {
 	case nil:
 		return ""
 	case []byte:
-		var j any
-		if json.Unmarshal(x, &j) == nil {
-			b, _ := json.Marshal(j)
-			return string(b)
-		}
-		return string(x)
+		return normalizeBytes(x)
 	case string:
 		return x
 	case time.Time:
@@ -67,54 +69,85 @@ func Normalize(v any) string {
 			return ""
 		}
 		return x.String()
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		return fmt.Sprintf("%v", toFloat(x))
 	case bool:
 		if x {
 			return "true"
 		}
 		return "false"
-	case fmt.Stringer:
-		return x.String()
 	}
+
+	// Dereference pointers and unwrap named string/numeric/bool kinds so a
+	// type like types.BillingCadence or *string compares like its plain form.
+	rv := reflect.ValueOf(v)
+	for rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return ""
+		}
+		rv = rv.Elem()
+	}
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return strconv.FormatInt(rv.Int(), 10)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return strconv.FormatUint(rv.Uint(), 10)
+	case reflect.Float32, reflect.Float64:
+		return strconv.FormatFloat(rv.Float(), 'f', -1, 64)
+	case reflect.Bool:
+		if rv.Bool() {
+			return "true"
+		}
+		return "false"
+	}
+	if s, ok := v.(fmt.Stringer); ok {
+		return s.String()
+	}
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Sprintf("%v", v)
 	}
 	var j any
 	_ = json.Unmarshal(b, &j)
-	b, _ = json.Marshal(j)
-	return string(b)
+	return canonicalJSON(j)
 }
 
-func toFloat(v any) float64 {
-	switch x := v.(type) {
-	case int:
-		return float64(x)
-	case int8:
-		return float64(x)
-	case int16:
-		return float64(x)
-	case int32:
-		return float64(x)
-	case int64:
-		return float64(x)
-	case uint:
-		return float64(x)
-	case uint8:
-		return float64(x)
-	case uint16:
-		return float64(x)
-	case uint32:
-		return float64(x)
-	case uint64:
-		return float64(x)
-	case float32:
-		return float64(x)
-	case float64:
-		return x
+// normalizeBytes handles the driver's raw column bytes: a NUMERIC column
+// parses as a decimal to keep arbitrary precision, otherwise it is JSON
+// (preserving number literals) or an opaque string.
+func normalizeBytes(x []byte) string {
+	s := string(x)
+	if d, err := decimal.NewFromString(s); err == nil {
+		return d.String()
 	}
-	return 0
+	dec := json.NewDecoder(bytes.NewReader(x))
+	dec.UseNumber()
+	var j any
+	if dec.Decode(&j) == nil {
+		return canonicalJSON(j)
+	}
+	return s
+}
+
+// canonicalJSON collapses JSON null and empty containers to the empty
+// string so a NULL/{}/[] flip on a column is not a change, then marshals
+// with map keys sorted so key order never affects equality.
+func canonicalJSON(j any) string {
+	switch t := j.(type) {
+	case nil:
+		return ""
+	case map[string]any:
+		if len(t) == 0 {
+			return ""
+		}
+	case []any:
+		if len(t) == 0 {
+			return ""
+		}
+	}
+	b, _ := json.Marshal(j)
+	return string(b)
 }
 
 // Diff returns the fields whose normalized value changed, minus bookkeeping
@@ -135,6 +168,9 @@ func Diff(def Definition, old, new map[string]any) (map[string]Change, bool) {
 		}
 		ov, had := old[field]
 		if had && Normalize(ov) == Normalize(nv) {
+			continue
+		}
+		if !had && Normalize(nv) == "" {
 			continue
 		}
 		if redact[field] {

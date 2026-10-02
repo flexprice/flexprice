@@ -72,6 +72,11 @@ func (c *Collector) Add(r Record) {
 	}
 	p := c.get(key{r.EntityType, r.EntityID})
 	switch {
+	case p.Op == opUnknown:
+		p.Op = r.Op
+		if r.Op == OpCreate {
+			p.Snapshot = r.Snapshot
+		}
 	case r.Op == OpCreate:
 		p.Op = OpCreate
 		p.Snapshot = r.Snapshot
@@ -122,7 +127,7 @@ func (c *Collector) Name(e Entry) {
 	for f, ch := range e.Changes {
 		p.Changes[f] = ch
 	}
-	if p.Op == 0 && len(e.Changes) > 0 {
+	if p.Op == opUnknown && len(e.Changes) > 0 {
 		p.Op = OpUpdate
 	}
 }
