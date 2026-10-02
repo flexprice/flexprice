@@ -240,7 +240,8 @@ func main() {
 			// other service a copy carrying it, closing the hook loop
 			// without importing the revenue package from the service layer.
 			fx.Annotate(revenue.New, fx.ParamTags(`name:"base"`)),
-			fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``)),
+			fx.Annotate(provideActivityArchiveStorage, fx.ResultTags(`name:"activity_archive"`)),
+			fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``, `name:"activity_archive"`)),
 			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -789,8 +790,24 @@ func provideWalletBalanceAlertPubSub(
 }
 
 // enrichServiceParams returns the ServiceParams the rest of the app consumes:
-// the base params plus the revenue-facts service the invoice hooks call.
-func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService) service.ServiceParams {
+// the base params plus the revenue-facts service the invoice hooks call and the
+// activity archive storage.
+func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService, activityArchiveStorage storage.Storage) service.ServiceParams {
 	base.RevenueFacts = revenueFacts
+	base.ActivityArchiveStorage = activityArchiveStorage
 	return base
+}
+
+// provideActivityArchiveStorage builds S3 storage for the activity_logs archive
+// bucket, reusing the export credentials and region. Nil unless archiving to s3.
+func provideActivityArchiveStorage(cfg *config.Configuration, log *logger.Logger) (storage.Storage, error) {
+	archiveCfg := cfg.Activity.Archive
+	if !archiveCfg.Enabled || archiveCfg.Destination != "s3" {
+		return nil, nil
+	}
+	if archiveCfg.Bucket == "" {
+		return nil, fmt.Errorf("activity.archive.bucket is required when activity.archive.destination is s3")
+	}
+	return storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeExport,
+		archiveCfg.Bucket, cfg.FlexpriceS3Exports.Region, "", log)
 }

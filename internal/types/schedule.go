@@ -32,6 +32,9 @@ const (
 	// ScheduleIDRevenueRollup drives RevenueRollupWorkflow; gated off by default
 	// via analytics.revenue_rollup.enabled (see EnsureSchedules).
 	ScheduleIDRevenueRollup ScheduleID = "revenue-rollup"
+	// ScheduleIDActivityArchive drives ActivityArchiveWorkflow: partition upkeep, plus
+	// archiving when activity.archive.enabled.
+	ScheduleIDActivityArchive ScheduleID = "activity-archive"
 )
 
 // String returns the raw schedule id.
@@ -58,6 +61,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDDailyDraftAndCompute,
 		ScheduleIDDraftInvoiceFinalization,
 		ScheduleIDRevenueRollup,
+		ScheduleIDActivityArchive,
 	}
 }
 

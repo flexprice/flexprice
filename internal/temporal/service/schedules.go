@@ -149,6 +149,16 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.RevenueRollupInput{Interval: 24 * time.Hour},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			// Always declared: partition upkeep must run; activity.archive.enabled
+			// gates only the export and drop steps inside the activities.
+			ID:        types.ScheduleIDActivityArchive,
+			Interval:  24 * time.Hour,
+			Offset:    4 * time.Hour, // daily at 04:00 UTC
+			Workflow:  cronWorkflows.ActivityArchiveWorkflow,
+			Input:     models.ActivityArchiveWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 
