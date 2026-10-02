@@ -81,12 +81,19 @@ func (c *Collector) Add(r Record) {
 		p.Op = OpCreate
 		p.Snapshot = r.Snapshot
 	case p.Op == OpCreate && r.Op == OpUpdate:
-		if p.Snapshot == nil {
-			p.Snapshot = map[string]any{}
+		// The created row carries only the final snapshot; the intermediate
+		// values were never visible outside this transaction. A nil snapshot
+		// means the entity opted out of snapshots, so nothing is folded in.
+		if p.Snapshot != nil {
+			for f, ch := range r.Changes {
+				if ch.Redacted {
+					p.Snapshot[f] = "[redacted]"
+					continue
+				}
+				p.Snapshot[f] = ch.To
+			}
 		}
-		for f, ch := range r.Changes {
-			p.Snapshot[f] = ch.To
-		}
+		r.Changes = nil
 	case r.Op == OpDelete:
 		p.Op = OpDelete
 	default:

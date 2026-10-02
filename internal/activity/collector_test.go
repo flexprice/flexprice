@@ -35,6 +35,32 @@ func TestCollectorCreateThenUpdateIsCreate(t *testing.T) {
 	if e.Op != OpCreate || e.Snapshot["name"] != "b" {
 		t.Fatalf("want create with final snapshot, got op=%v snap=%v", e.Op, e.Snapshot)
 	}
+	if len(e.Changes) != 0 {
+		t.Fatalf("a create folds later updates into its snapshot, want no changes, got %v", e.Changes)
+	}
+}
+
+func TestCollectorCreateWithoutSnapshotStaysWithoutSnapshot(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "invoice", EntityID: "inv_1", Op: OpCreate})
+	c.Add(Record{EntityType: "invoice", EntityID: "inv_1", Op: OpUpdate,
+		Changes: map[string]Change{"invoice_status": {From: "DRAFT", To: "SKIPPED"}, "tax_id": {Redacted: true}}})
+	e := c.Entries()[0]
+	if e.Op != OpCreate || e.Snapshot != nil || len(e.Changes) != 0 {
+		t.Fatalf("want bare create, got op=%v snap=%v changes=%v", e.Op, e.Snapshot, e.Changes)
+	}
+}
+
+func TestCollectorCreateFoldKeepsRedaction(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpCreate, Snapshot: map[string]any{"tax_id": "[redacted]"}})
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpUpdate,
+		Changes: map[string]Change{"tax_id": {Redacted: true}}})
+	if got := c.Entries()[0].Snapshot["tax_id"]; got != "[redacted]" {
+		t.Fatalf("redacted field must stay redacted in the folded snapshot, got %v", got)
+	}
 }
 
 func TestRecordActionNamesEntryEitherOrder(t *testing.T) {
