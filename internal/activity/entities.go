@@ -65,6 +65,7 @@ func Definitions() []Definition {
 		{
 			EntType: "Invoice", EntityType: types.SystemEntityTypeInvoice, Table: "invoices",
 			LabelFields:  []string{"invoice_number", "customer_id"},
+			ParentFields: []string{"subscription_id"},
 			IgnoreFields: []string{"version"},
 			SnapshotMode: SnapshotNone,
 			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
@@ -97,8 +98,9 @@ func Definitions() []Definition {
 		},
 		{
 			EntType: "WalletTransaction", EntityType: types.SystemEntityTypeWalletTransaction, Table: "wallet_transactions",
-			LabelFields: []string{"type", "amount", "credit_amount", "currency"},
-			CustomerID:  func(f map[string]any) string { return str(f, "customer_id") },
+			LabelFields:  []string{"type", "amount", "credit_amount", "currency"},
+			ParentFields: []string{"customer_id"},
+			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
 			Label: func(f map[string]any) string {
 				return strings.ToLower(str(f, "type")) + " " + Normalize(f["credit_amount"]) + " credits"
 			},
@@ -109,9 +111,10 @@ func Definitions() []Definition {
 			// the real columns are scope_entity_id (the feature/plan/addon the grant scopes
 			// to) and quota (the granted amount). See ent/schema/entitlement_grant.go.
 			EntType: "EntitlementGrant", EntityType: types.SystemEntityTypeEntitlementGrant, Table: "entitlement_grants",
-			LabelFields: []string{"scope_entity_id", "quota"},
-			CustomerID:  func(f map[string]any) string { return str(f, "customer_id") },
-			Label:       func(f map[string]any) string { return "grant " + Normalize(f["quota"]) },
+			LabelFields:  []string{"scope_entity_id", "quota"},
+			ParentFields: []string{"customer_id", "subscription_id"},
+			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
+			Label:        func(f map[string]any) string { return "grant " + Normalize(f["quota"]) },
 		},
 
 		// direct customer_id
@@ -121,30 +124,35 @@ func Definitions() []Definition {
 			// real sensitive columns are gateway_method_id (the gateway's own token/id) and
 			// method_details (jsonb; carries card last4/brand/expiry etc). See
 			// ent/schema/paymentmethod.go.
-			LabelFields: []string{"type"}, RedactFields: []string{"gateway_method_id", "method_details"},
-			CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
-			Label:      func(f map[string]any) string { return strings.ToLower(str(f, "type")) + " payment method" },
+			LabelFields: []string{"type"}, ParentFields: []string{"customer_id"},
+			RedactFields: []string{"gateway_method_id", "method_details"},
+			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
+			Label:        func(f map[string]any) string { return strings.ToLower(str(f, "type")) + " payment method" },
 		},
 		{
 			EntType: "CreditNote", EntityType: types.SystemEntityTypeCreditNote, Table: "credit_notes",
-			LabelFields: []string{"credit_note_number"}, SnapshotMode: SnapshotNone,
-			CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
-			Label:      func(f map[string]any) string { return str(f, "credit_note_number") },
-			Actions:    map[string]string{"credit_note.finalized": "{actor} finalized {entity}", "credit_note.voided": "{actor} voided {entity}"},
+			LabelFields: []string{"credit_note_number"}, ParentFields: []string{"customer_id", "subscription_id"},
+			SnapshotMode: SnapshotNone,
+			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
+			Label:        func(f map[string]any) string { return str(f, "credit_note_number") },
+			Actions:      map[string]string{"credit_note.finalized": "{actor} finalized {entity}", "credit_note.voided": "{actor} voided {entity}"},
 		},
 		{
 			EntType: "InvoiceLineItem", EntityType: types.SystemEntityTypeInvoiceLineItem, Table: "invoice_line_items",
-			LabelFields: []string{"display_name", "invoice_id"}, CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
-			Label: func(f map[string]any) string { return str(f, "display_name") },
+			LabelFields: []string{"display_name", "invoice_id"}, ParentFields: []string{"customer_id", "subscription_id"},
+			CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
+			Label:      func(f map[string]any) string { return str(f, "display_name") },
 		},
 		{
 			EntType: "SubscriptionLineItem", EntityType: types.SystemEntityTypeSubscriptionLineItem, Table: "subscription_line_items",
-			LabelFields: []string{"display_name", "subscription_id"}, CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
-			Label: func(f map[string]any) string { return str(f, "display_name") },
+			LabelFields: []string{"display_name", "subscription_id"}, ParentFields: []string{"customer_id"},
+			CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
+			Label:      func(f map[string]any) string { return str(f, "display_name") },
 		},
 		{
 			EntType: "CheckoutSession", EntityType: types.SystemEntityTypeCheckoutSession, Table: "checkout_sessions",
-			LabelFields: []string{"checkout_status"}, IgnoreFields: []string{"expires_at"}, RedactFields: []string{"provider_result"},
+			LabelFields: []string{"checkout_status"}, ParentFields: []string{"customer_id"},
+			IgnoreFields: []string{"expires_at"}, RedactFields: []string{"provider_result"},
 			CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
 			Label:      func(f map[string]any) string { return "checkout " + strings.ToLower(str(f, "checkout_status")) },
 		},

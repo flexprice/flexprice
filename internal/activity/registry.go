@@ -30,7 +30,7 @@ type Definition struct {
 	EntityType   types.SystemEntityType
 	Table        string
 	LabelFields  []string
-	ParentFields []string // columns CustomerLookup needs, e.g. subscription_id; fetched with old values
+	ParentFields []string // roll-up columns (customer_id, subscription_id, CustomerLookup keys) fetched with old values on update
 	IgnoreFields []string
 	RedactFields []string
 	SnapshotMode SnapshotMode

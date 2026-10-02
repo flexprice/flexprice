@@ -50,3 +50,18 @@ func TestDefinitionsRegisterCleanly(t *testing.T) {
 		}
 	}
 }
+
+// An update only carries the columns it changed, so an entity that reads its
+// customer from its own customer_id column must fetch it with the old values,
+// or its updates drop out of the customer roll-up.
+func TestOwnCustomerIDIsFetchedOnUpdate(t *testing.T) {
+	for _, d := range Definitions() {
+		if d.CustomerID == nil || d.CustomerID(map[string]any{"customer_id": "c"}) != "c" {
+			continue
+		}
+		fetched := append(append([]string{}, d.LabelFields...), d.ParentFields...)
+		if !containsStr(fetched, "customer_id") {
+			t.Errorf("%s: customer_id is not in LabelFields or ParentFields", d.EntType)
+		}
+	}
+}
