@@ -17,6 +17,11 @@ func TestSummaryTiers(t *testing.T) {
 	if got := Summary(def, in); got != "Alice updated subscription sub_1: status from a to b" {
 		t.Fatalf("tier 1 single: %q", got)
 	}
+	in.Changes = map[string]any{"end_date": map[string]any{"from": nil, "to": "2026-10-02"}}
+	if got := Summary(def, in); got != "Alice updated subscription sub_1: end date from none to 2026-10-02" {
+		t.Fatalf("tier 1 unset from: %q", got)
+	}
+	in.Changes = map[string]any{"status": map[string]any{"from": "a", "to": "b"}}
 	in.Changes["plan_id"] = map[string]any{"from": "x", "to": "y"}
 	if got := Summary(def, in); got != "Alice updated 2 fields on subscription sub_1" {
 		t.Fatalf("tier 1 multi: %q", got)

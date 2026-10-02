@@ -36,10 +36,18 @@ func Summary(def Definition, in SummaryInput) string {
 			if ch["redacted"] == true {
 				return fmt.Sprintf("%s %s %s: %s changed", in.ActorLabel, verb, entity, name)
 			}
-			return fmt.Sprintf("%s %s %s: %s from %v to %v", in.ActorLabel, verb, entity, name, ch["from"], ch["to"])
+			return fmt.Sprintf("%s %s %s: %s from %s to %s", in.ActorLabel, verb, entity, name, summaryValue(ch["from"]), summaryValue(ch["to"]))
 		}
 	}
 	return fmt.Sprintf("%s %s %d fields on %s", in.ActorLabel, verb, len(in.Changes), entity)
+}
+
+// summaryValue renders an unset side of a change as "none" rather than "<nil>".
+func summaryValue(v any) string {
+	if v == nil || v == "" {
+		return "none"
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 // Humanize turns billing_anchor into "Billing anchor".
