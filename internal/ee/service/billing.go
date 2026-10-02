@@ -2608,9 +2608,19 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 			aggregationMode = types.EntitlementAggregationModeParallel
 		}
 
-		if e.UsageLimit == nil {
+		// A grant-backed entitlement carries its ceiling in GrantQuota: deriveGrantConfig
+		// moves usage_limit there and clears it. Reading UsageLimit alone would report
+		// every grant as unlimited, including a capped one.
+		switch {
+		case e.HasGrantConfig():
+			if e.IsUnlimitedGrant() {
+				hasUnlimitedEntitlement = true
+			} else {
+				totalLimit += e.GrantQuota.IntPart()
+			}
+		case e.UsageLimit == nil:
 			hasUnlimitedEntitlement = true
-		} else {
+		default:
 			totalLimit += *e.UsageLimit
 		}
 
