@@ -28,11 +28,6 @@ func (c *countingFXRateRepo) List(ctx context.Context, f *types.FXRateFilter) ([
 	return c.Repository.List(ctx, f)
 }
 
-func (c *countingFXRateRepo) ListAll(ctx context.Context, f *types.FXRateFilter) ([]*fxrate.FXRate, error) {
-	c.reads++
-	return c.Repository.ListAll(ctx, f)
-}
-
 func (c *countingFXRateRepo) Count(ctx context.Context, f *types.FXRateFilter) (int, error) {
 	c.reads++
 	return c.Repository.Count(ctx, f)
