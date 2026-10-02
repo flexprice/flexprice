@@ -9,25 +9,14 @@
 -- values: verified on Postgres 17 that pg_relation_filenode is unchanged across
 -- the ALTER. quota and usage move together, in one statement so the table is
 -- locked once: raising only the ceiling would still overflow once measured usage
--- passed ten digits.
---
--- Guarded on the table existing and idempotent on the type, so a database that
--- already has the wider column is a no-op and a re-run changes nothing.
+-- passed ten digits. Re-running is a no-op, and IF EXISTS keeps a database that
+-- predates either table from failing here.
 SET lock_timeout = '3s';
 SET statement_timeout = '30s';
 
-DO $$
-BEGIN
-  IF to_regclass('public.entitlements') IS NOT NULL THEN
-    ALTER TABLE "entitlements" ALTER COLUMN "grant_quota" TYPE numeric(34,15);
-  END IF;
-
-  IF to_regclass('public.entitlement_grants') IS NOT NULL THEN
-    ALTER TABLE "entitlement_grants" ALTER COLUMN "quota" TYPE numeric(34,15),
-                                     ALTER COLUMN "usage" TYPE numeric(34,15);
-  END IF;
-END
-$$;
+ALTER TABLE IF EXISTS "entitlements" ALTER COLUMN "grant_quota" TYPE numeric(34,15);
+ALTER TABLE IF EXISTS "entitlement_grants" ALTER COLUMN "quota" TYPE numeric(34,15),
+                                           ALTER COLUMN "usage" TYPE numeric(34,15);
 
 -- migrate:down
 -- Narrowing again fails on any row that has since used the extra range, which is
@@ -35,15 +24,6 @@ $$;
 SET lock_timeout = '3s';
 SET statement_timeout = '30s';
 
-DO $$
-BEGIN
-  IF to_regclass('public.entitlements') IS NOT NULL THEN
-    ALTER TABLE "entitlements" ALTER COLUMN "grant_quota" TYPE numeric(25,15);
-  END IF;
-
-  IF to_regclass('public.entitlement_grants') IS NOT NULL THEN
-    ALTER TABLE "entitlement_grants" ALTER COLUMN "quota" TYPE numeric(25,15),
-                                     ALTER COLUMN "usage" TYPE numeric(25,15);
-  END IF;
-END
-$$;
+ALTER TABLE IF EXISTS "entitlements" ALTER COLUMN "grant_quota" TYPE numeric(25,15);
+ALTER TABLE IF EXISTS "entitlement_grants" ALTER COLUMN "quota" TYPE numeric(25,15),
+                                           ALTER COLUMN "usage" TYPE numeric(25,15);
