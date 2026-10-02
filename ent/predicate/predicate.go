@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// ActivityLog is the predicate function for activitylog builders.
+type ActivityLog func(*sql.Selector)
+
 // Addon is the predicate function for addon builders.
 type Addon func(*sql.Selector)
 

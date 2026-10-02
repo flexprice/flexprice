@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent/activitylog"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -70,6 +71,28 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	activitylogFields := schema.ActivityLog{}.Fields()
+	_ = activitylogFields
+	// activitylogDescCategory is the schema descriptor for category field.
+	activitylogDescCategory := activitylogFields[3].Descriptor()
+	// activitylog.DefaultCategory holds the default value on creation for the category field.
+	activitylog.DefaultCategory = activitylogDescCategory.Default.(string)
+	// activitylogDescEntityLabel is the schema descriptor for entity_label field.
+	activitylogDescEntityLabel := activitylogFields[6].Descriptor()
+	// activitylog.DefaultEntityLabel holds the default value on creation for the entity_label field.
+	activitylog.DefaultEntityLabel = activitylogDescEntityLabel.Default.(string)
+	// activitylogDescActorLabel is the schema descriptor for actor_label field.
+	activitylogDescActorLabel := activitylogFields[10].Descriptor()
+	// activitylog.DefaultActorLabel holds the default value on creation for the actor_label field.
+	activitylog.DefaultActorLabel = activitylogDescActorLabel.Default.(string)
+	// activitylogDescOutcome is the schema descriptor for outcome field.
+	activitylogDescOutcome := activitylogFields[16].Descriptor()
+	// activitylog.DefaultOutcome holds the default value on creation for the outcome field.
+	activitylog.DefaultOutcome = activitylogDescOutcome.Default.(string)
+	// activitylogDescOccurredAt is the schema descriptor for occurred_at field.
+	activitylogDescOccurredAt := activitylogFields[21].Descriptor()
+	// activitylog.DefaultOccurredAt holds the default value on creation for the occurred_at field.
+	activitylog.DefaultOccurredAt = activitylogDescOccurredAt.Default.(func() time.Time)
 	addonMixin := schema.Addon{}.Mixin()
 	addonMixinFields0 := addonMixin[0].Fields()
 	_ = addonMixinFields0

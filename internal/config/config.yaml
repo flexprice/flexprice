@@ -338,6 +338,17 @@ webhook:
     auth_token: "svix_auth_token"
     base_url: "https://api.us.svix.com"
 
+activity:
+  enabled: true
+  hot_window_days: 90
+  archive:
+    enabled: false
+    destination: "local"
+    local_dir: "/tmp/flexprice-activity-archive"
+    bucket: ""
+    key_prefix: "activity_logs"
+    rows_per_file: 50000
+
 webhook_retry_job:
   enabled: true
   max_attempts: 5
