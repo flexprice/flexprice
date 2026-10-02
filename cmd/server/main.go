@@ -502,7 +502,10 @@ func provideActivityRegistry() *activity.Registry {
 	return activity.NewRegistry(activity.Definitions()...)
 }
 
-func providePostgresClient(clients *postgres.EntClients, log *logger.Logger, tracingSvc *tracing.Service, reg *activity.Registry) postgres.IClient {
+func providePostgresClient(cfg *config.Configuration, clients *postgres.EntClients, log *logger.Logger, tracingSvc *tracing.Service, reg *activity.Registry) postgres.IClient {
+	if !cfg.Activity.Enabled {
+		return postgres.NewClient(clients, log, tracingSvc)
+	}
 	return postgres.NewClient(clients, log, tracingSvc, postgres.WithActivity(reg))
 }
 

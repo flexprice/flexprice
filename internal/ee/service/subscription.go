@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -2088,6 +2089,12 @@ func (s *subscriptionService) CancelSubscription(
 		if err != nil {
 			return err
 		}
+		activity.RecordAction(ctx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeSubscription),
+			EntityID:   subscription.ID,
+			Action:     "subscription.cancelled",
+			Metadata:   map[string]any{"reason": req.Reason},
+		})
 
 		if err := s.CascadeCancelToInheritedSubscriptions(ctx, subscription); err != nil {
 			return err
@@ -4217,6 +4224,12 @@ func (s *subscriptionService) executePause(
 		if err := s.SubRepo.Update(txCtx, sub); err != nil {
 			return err
 		}
+		activity.RecordAction(txCtx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeSubscription),
+			EntityID:   sub.ID,
+			Action:     "subscription.paused",
+			Metadata:   map[string]any{"reason": req.Reason},
+		})
 
 		if sub.SubscriptionType == types.SubscriptionTypeParent {
 			if err := s.cascadePauseToInherited(txCtx, sub); err != nil {
@@ -4374,6 +4387,11 @@ func (s *subscriptionService) executeResume(
 		if err := s.SubRepo.Update(txCtx, sub); err != nil {
 			return err
 		}
+		activity.RecordAction(txCtx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeSubscription),
+			EntityID:   sub.ID,
+			Action:     "subscription.resumed",
+		})
 
 		if sub.SubscriptionType == types.SubscriptionTypeParent {
 			if err := s.cascadeResumeToInherited(txCtx, sub); err != nil {

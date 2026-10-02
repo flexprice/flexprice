@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -355,7 +356,17 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if err := s.CustomerRepo.Delete(ctx, customer); err != nil {
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.CustomerRepo.Delete(txCtx, customer); err != nil {
+			return err
+		}
+		activity.RecordAction(txCtx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeCustomer),
+			EntityID:   customer.ID,
+			Action:     "customer.deleted",
+		})
+		return nil
+	}); err != nil {
 		return err
 	}
 
