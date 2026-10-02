@@ -117,6 +117,22 @@ type ArchiveConfig struct {
 	RowsPerFile int    `mapstructure:"rows_per_file" default:"50000"`
 }
 
+// setActivityDefaults mirrors the `activity:` block in config.yaml. Struct `default:`
+// tags aren't applied at runtime (see the otel.traces.capture_exceptions comment in
+// NewConfig), so a deployment whose mounted config.yaml predates this key would
+// otherwise unmarshal Enabled=false, HotWindowDays=0, RowsPerFile=0 and empty
+// Destination/KeyPrefix — values the archiver later divides by and compares against.
+func setActivityDefaults(v *viper.Viper) {
+	v.SetDefault("activity.enabled", true)
+	v.SetDefault("activity.hot_window_days", 90)
+	v.SetDefault("activity.archive.enabled", false)
+	v.SetDefault("activity.archive.destination", "local")
+	v.SetDefault("activity.archive.local_dir", "/tmp/flexprice-activity-archive")
+	v.SetDefault("activity.archive.bucket", "")
+	v.SetDefault("activity.archive.key_prefix", "activity_logs")
+	v.SetDefault("activity.archive.rows_per_file", 50000)
+}
+
 type ChatSupportConfig struct {
 	AppID          string `mapstructure:"app_id"`
 	IdentitySecret string `mapstructure:"identity_secret"`
@@ -1163,6 +1179,7 @@ func NewConfig() (*Configuration, error) {
 	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
+	setActivityDefaults(v)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
