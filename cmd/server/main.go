@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -107,9 +108,12 @@ func main() {
 			cache.NewRedisCache,
 			cache.NewRedisLocker,
 
+			// Activity log
+			provideActivityRegistry,
+
 			// Postgres
 			postgres.NewEntClients,
-			postgres.NewClient,
+			providePostgresClient,
 
 			// Clickhouse
 			clickhouse.NewClickHouseStore,
@@ -492,6 +496,14 @@ func initIntegrationFactory(factory *integration.Factory, paymentService interfa
 // customer BYOB buckets from the connection row.
 func provideStorageResolver(cfg *config.Configuration, log *logger.Logger, factory *integration.Factory) storage.Resolver {
 	return storage.NewResolver(context.Background(), cfg, factory, log)
+}
+
+func provideActivityRegistry() *activity.Registry {
+	return activity.NewRegistry(activity.Definitions()...)
+}
+
+func providePostgresClient(clients *postgres.EntClients, log *logger.Logger, tracingSvc *tracing.Service, reg *activity.Registry) postgres.IClient {
+	return postgres.NewClient(clients, log, tracingSvc, postgres.WithActivity(reg))
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {

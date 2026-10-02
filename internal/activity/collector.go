@@ -141,7 +141,7 @@ func (c *Collector) Entries() []Pending {
 	out := make([]Pending, 0, len(c.order))
 	for _, k := range c.order {
 		p := c.pending[k]
-		if len(p.Changes) == 0 && p.Op == OpUpdate && p.Action == "" {
+		if len(p.Changes) == 0 && p.Op == OpUpdate && p.Action == "" && p.Degraded == "" {
 			continue
 		}
 		out = append(out, *p)
@@ -173,4 +173,12 @@ func IsSuppressed(ctx context.Context) bool {
 func SuppressReason(ctx context.Context) string {
 	r, _ := ctx.Value(ctxSuppress).(string)
 	return r
+}
+
+const ctxQuerier ctxKey = "activity_querier"
+
+// WithQuerier exposes the connection the hook must use for old-value reads
+// and direct writes. The postgres client installs it per transaction.
+func WithQuerier(ctx context.Context, q any) context.Context {
+	return context.WithValue(ctx, ctxQuerier, q)
 }
