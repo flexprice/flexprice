@@ -59,6 +59,8 @@ func (s *invoiceService) convertAndRetaxAtFinalize(ctx context.Context, inv *inv
 		return nil
 	}
 	if !inv.AmountPaid.IsZero() {
+		s.Logger.Info(ctx, "skipping fx conversion: invoice already carries a payment",
+			"invoice_id", inv.ID, "amount_paid", inv.AmountPaid.String(), "currency", inv.Currency)
 		return nil
 	}
 
@@ -84,7 +86,9 @@ func (s *invoiceService) convertAndRetaxAtFinalize(ctx context.Context, inv *inv
 	if err != nil {
 		s.Logger.Error(ctx, "cannot finalize invoice: no fx rate for conversion",
 			"error", err, "invoice_id", inv.ID, "from", inv.Currency, "to", billing)
-		return ierr.WithError(err).
+		// A fresh error, not a wrap: the resolver's not-found would otherwise also match and make
+		// the HTTP status non-deterministic. Invalid-operation keeps Temporal from retrying.
+		return ierr.NewErrorf("no exchange rate configured for %s to %s", inv.Currency, billing).
 			WithHintf("No exchange rate configured for %s to %s; set a rate, then finalize.", inv.Currency, billing).
 			WithReportableDetails(map[string]any{"from": inv.Currency, "to": billing}).
 			Mark(ierr.ErrInvalidOperation)

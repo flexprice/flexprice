@@ -45,6 +45,14 @@ func ConvertInvoice(inv *invoice.Invoice, resolution *FXRateResolution, converte
 	netCharge := srcSubtotal.Sub(srcDiscount).Sub(srcPrepaid)
 	netBilling := types.RoundToCurrencyPrecision(netCharge.Mul(rate), billingCurrency)
 
+	// A rate too small for the billing currency's precision would issue a free invoice for a real charge.
+	if !netCharge.IsZero() && netBilling.IsZero() {
+		return ierr.NewError("fx rate too small for the billing currency precision").
+			WithHintf("%s %s at %s rounds to zero %s; fix the rate before finalizing.", netCharge.String(), chargeCurrency, rate.String(), billingCurrency).
+			WithReportableDetails(map[string]any{"net": netCharge.String(), "rate": rate.String(), "billing_currency": billingCurrency}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	convert := func(v decimal.Decimal) decimal.Decimal {
 		return types.RoundToCurrencyPrecision(v.Mul(rate), billingCurrency)
 	}

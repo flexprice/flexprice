@@ -133,14 +133,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
-	// §8.3: a subscription for a customer billed in another currency needs a way to convert.
-	// inlineFXTarget is the billing currency when a subscription-scope fx_rate should be created
-	// after the subscription is persisted; empty otherwise.
-	inlineFXTarget, err := s.validateSubscriptionBillingCurrency(ctx, sub, customer, ccCfg, req)
-	if err != nil {
-		return nil, err
-	}
-
 	// Always inherit timezone from the customer record.
 	// The timezone field in the API request is intentionally ignored.
 	sub.Timezone = customer.Timezone
@@ -342,6 +334,15 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
+	if err != nil {
+		return nil, err
+	}
+
+	// A subscription for a customer billed in another currency needs a way to convert. Runs after
+	// inheritance so the invoicing customer — whose billing currency applies — is known.
+	// inlineFXTarget is the billing currency when a subscription-scope fx_rate should be created
+	// after the subscription is persisted; empty otherwise.
+	inlineFXTarget, err := s.validateSubscriptionBillingCurrency(ctx, sub, customer, ccCfg, req)
 	if err != nil {
 		return nil, err
 	}

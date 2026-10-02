@@ -20,6 +20,26 @@ func convLine(id, currency, amount string) *invoice.InvoiceLineItem {
 	}
 }
 
+// A rate too small for the billing currency's precision would turn a real charge into a zero
+// invoice. That must fail rather than finalize a free invoice.
+func TestConvertInvoice_NonZeroNetToZeroRejected(t *testing.T) {
+	inv := &invoice.Invoice{
+		ID:        "inv_tiny",
+		Currency:  "usd",
+		Subtotal:  dec("1"),
+		Total:     dec("1"),
+		AmountDue: dec("1"),
+		LineItems: []*invoice.InvoiceLineItem{convLine("il_1", "usd", "1")},
+	}
+	res := &FXRateResolution{Rate: dec("0.001"), To: "jpy", RateID: "fxr_x", Scope: string(types.FXRateScopeTenant)}
+
+	err := ConvertInvoice(inv, res, time.Now().UTC())
+
+	require.Error(t, err)
+	require.Equal(t, "usd", inv.Currency, "a rejected conversion must leave the invoice untouched")
+	require.Nil(t, inv.FxConversion)
+}
+
 // TestConvertInvoice covers §5.3 conversion + rounding: net converted once, each line converted
 // and rounded, residual to the largest positive line, originals stamped, fx_conversion recorded.
 func TestConvertInvoice(t *testing.T) {

@@ -141,6 +141,34 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_WithoutCheckoutIsUncha
 	s.Empty(sessions)
 }
 
+// §8.3 is about the customer who gets the invoice. A delegated subscription is billed to the
+// invoicing customer, so that customer's billing currency — not the subscriber's — decides whether
+// a rate is needed. With no usd→inr tenant rate the create must be rejected.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_DelegatedInvoicingCustomerBillingCurrencyIsChecked() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_delegated_fx", decimal.NewFromInt(50), 0)
+
+	payer := &customer.Customer{
+		ID:              "cust_payer_inr",
+		ExternalID:      "ext_payer_inr",
+		Name:            "Payer billed in INR",
+		BillingCurrency: lo.ToPtr("inr"),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, payer))
+
+	req := s.checkoutCreateRequest("plan_delegated_fx")
+	req.Checkout = nil
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{InvoicingCustomerExternalID: lo.ToPtr(payer.ExternalID)}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+
+	s.Require().Error(err, "the subscriber has no billing currency, but the invoicing customer is billed in INR with no usd→inr rate")
+	s.True(ierr.IsValidation(err), "expected a validation error naming the pair, got %v", err)
+	s.Contains(err.Error(), "usd", "error must name the pair")
+}
+
 // ─────────────────────────────────────────────
 // Nothing to collect → activate immediately
 // ─────────────────────────────────────────────
