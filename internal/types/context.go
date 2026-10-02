@@ -38,6 +38,9 @@ const (
 )
 
 func GetUserID(ctx context.Context) string {
+	if id := userIDFromActor(GetActor(ctx)); id != "" {
+		return id
+	}
 	if userID, ok := ctx.Value(CtxUserID).(string); ok {
 		return userID
 	}
