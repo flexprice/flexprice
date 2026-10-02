@@ -103,13 +103,15 @@ func AnnotateMetadata(def Definition, meta map[string]any) map[string]any {
 }
 
 var refPrefixes = map[string]types.SystemEntityType{
-	types.UUID_PREFIX_CUSTOMER + "_":     types.SystemEntityTypeCustomer,
-	types.UUID_PREFIX_SUBSCRIPTION + "_": types.SystemEntityTypeSubscription,
-	types.UUID_PREFIX_PLAN + "_":         types.SystemEntityTypePlan,
-	types.UUID_PREFIX_PRICE + "_":        types.SystemEntityTypePrice,
-	types.UUID_PREFIX_INVOICE + "_":      types.SystemEntityTypeInvoice,
-	types.UUID_PREFIX_WALLET + "_":       types.SystemEntityTypeWallet,
-	types.UUID_PREFIX_PAYMENT + "_":      types.SystemEntityTypePayment,
+	types.UUID_PREFIX_CUSTOMER + "_":           types.SystemEntityTypeCustomer,
+	types.UUID_PREFIX_SUBSCRIPTION + "_":       types.SystemEntityTypeSubscription,
+	types.UUID_PREFIX_PLAN + "_":               types.SystemEntityTypePlan,
+	types.UUID_PREFIX_PRICE + "_":              types.SystemEntityTypePrice,
+	types.UUID_PREFIX_INVOICE + "_":            types.SystemEntityTypeInvoice,
+	types.UUID_PREFIX_WALLET + "_":             types.SystemEntityTypeWallet,
+	types.UUID_PREFIX_PAYMENT + "_":            types.SystemEntityTypePayment,
+	types.UUID_PREFIX_WALLET_TRANSACTION + "_": types.SystemEntityTypeWalletTransaction,
+	types.UUID_PREFIX_ENTITLEMENT_GRANT + "_":  types.SystemEntityTypeEntitlementGrant,
 }
 
 // refTypeFor detects a reference by id prefix, e.g. "plan_01HX…" -> plan.
