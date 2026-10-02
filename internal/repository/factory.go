@@ -3,6 +3,7 @@ package repository
 import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
+	"github.com/flexprice/flexprice/internal/domain/activitylog"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alert"
@@ -263,6 +264,10 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger)
+}
+
+func NewActivityLogRepository(p RepositoryParams) activitylog.Repository {
+	return entRepo.NewActivityLogRepository(p.EntClient, p.Logger)
 }
 
 func NewAlertSettingsRepository(p RepositoryParams) alert.Repository {

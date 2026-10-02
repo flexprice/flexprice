@@ -67,6 +67,7 @@ type Handlers struct {
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
 	Analytics                *v1.AnalyticsHandler
+	ActivityLog              *v1.ActivityLogHandler
 
 	// Enterprise handlers
 	SAML *saml.Handler
@@ -829,6 +830,13 @@ func NewRouter(
 		workflows.GET("/:workflow_id/:run_id/summary", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowSummary)
 		workflows.GET("/:workflow_id/:run_id/timeline", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowTimeline)
 		workflows.GET("/:workflow_id/:run_id", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowDetails)
+	}
+
+	// Activity log routes
+	activityGroup := v1Private.Group("/activity")
+	{
+		activityGroup.GET("", read(types.EntityActivity, types.ActionRead), handlers.ActivityLog.List)
+		activityGroup.GET("/:id", read(types.EntityActivity, types.ActionRead), handlers.ActivityLog.Get)
 	}
 
 	return router

@@ -189,6 +189,7 @@ func main() {
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
 			repository.NewAlertSettingsRepository,
+			repository.NewActivityLogRepository,
 			repository.NewIncomingWebhookEventRepository,
 			repository.NewSystemEventRepository,
 			repository.NewSystemEventDomainRepository,
@@ -294,6 +295,7 @@ func main() {
 			service.NewSubscriptionScheduleService,
 			service.NewAlertLogsService,
 			service.NewAlertService,
+			service.NewActivityLogService,
 			service.NewGroupService,
 			service.NewScheduledTaskService,
 			service.NewWalletPaymentService,
@@ -384,6 +386,7 @@ func provideHandlers(
 	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
 	alertService service.AlertService,
+	activityLogService service.ActivityLogService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
@@ -456,6 +459,7 @@ func provideHandlers(
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, logger),
+		ActivityLog:              v1.NewActivityLogHandler(activityLogService),
 	}
 }
 
