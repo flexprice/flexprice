@@ -69,3 +69,8 @@ func userIDFromActor(a Actor) string {
 	}
 	return ""
 }
+
+// WorkflowActor is the system actor for work done inside a Temporal workflow.
+func WorkflowActor(workflowName string) Actor {
+	return SystemActor(workflowName, "Workflow "+workflowName)
+}

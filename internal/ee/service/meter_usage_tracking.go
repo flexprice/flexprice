@@ -149,7 +149,7 @@ func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router,
 		cfg.MeterUsageTracking.Topic,
 		cfg.MeterUsageTracking.TopicDLQ,
 		s.pubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.MeterUsageTracking.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 
@@ -177,7 +177,7 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 		cfg.MeterUsageTrackingLazy.Topic,
 		cfg.MeterUsageTrackingLazy.TopicDLQ,
 		s.lazyPubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.MeterUsageTrackingLazy.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 
@@ -209,7 +209,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 		cfg.BulkMeterUsageTracking.Topic,
 		dlq,
 		s.bulkPubSub,
-		s.processBulkMessage,
+		pubsubRouter.WithConsumerActor(cfg.BulkMeterUsageTracking.ConsumerGroup, s.processBulkMessage),
 		throttle.Middleware,
 	)
 

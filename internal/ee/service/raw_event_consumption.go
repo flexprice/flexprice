@@ -102,7 +102,7 @@ func (s *rawEventConsumptionService) RegisterHandler(
 		cfg.RawEventConsumption.Topic,
 		cfg.Kafka.TopicDLQ,
 		s.pubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.RawEventConsumption.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 

@@ -129,7 +129,7 @@ func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Route
 		cfg.BulkEventConsumption.Topic,
 		dlq,
 		s.bulkPubSub,
-		s.processBulkMessage,
+		pubsubRouter.WithConsumerActor(cfg.BulkEventConsumption.ConsumerGroup, s.processBulkMessage),
 		throttle.Middleware,
 	)
 
@@ -225,7 +225,7 @@ func (s *eventConsumptionService) RegisterHandler(
 		cfg.EventProcessing.Topic,
 		cfg.EventProcessing.TopicDLQ,
 		s.pubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.EventProcessing.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 
@@ -254,7 +254,7 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 		cfg.EventProcessingLazy.Topic,
 		cfg.EventProcessingLazy.TopicDLQ,
 		s.lazyPubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.EventProcessingLazy.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 
@@ -289,7 +289,7 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 		cfg.EventProcessingReplay.Topic,
 		cfg.Kafka.TopicDLQ,
 		s.replayPubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.EventProcessingReplay.ConsumerGroup, s.processMessage),
 		replayThrottle.Middleware,
 	)
 
