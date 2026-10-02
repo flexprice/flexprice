@@ -1243,6 +1243,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		existingTaxApplied.TaxableAmount = taxableAmount
 		existingTaxApplied.TaxAmount = taxAmount
 		existingTaxApplied.TaxBehavior = taxRate.TaxBehavior
+		existingTaxApplied.Currency = inv.Currency // the invoice may have been converted since
 		existingTaxApplied.AppliedAt = time.Now().UTC()
 
 		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {

@@ -3,11 +3,15 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -184,8 +188,69 @@ func (s *InvoiceConversionFinalizeSuite) TestMissingRateStaysDraft() {
 	err := s.svc.convertAndRetaxAtFinalize(s.ctx(), inv)
 	s.Error(err)
 	s.True(ierr.IsInvalidOperation(err), "missing rate must be an invalid-operation error, got %v", err)
+	// The resolver's not-found must not leak through: a double-marked error makes the HTTP status
+	// non-deterministic (ResolveError picks whichever sentinel it meets first).
+	s.False(ierr.IsNotFound(err), "missing rate must not also match not-found, got %v", err)
 	s.Equal("usd", inv.Currency, "invoice must stay in the charge currency")
 	s.Nil(inv.FxConversion)
+}
+
+// A one-off invoice is taxed at compute in the charge currency. Re-tax after conversion must
+// rewrite the existing tax_applied row in the billing currency, not leave INR amounts labelled usd.
+func (s *InvoiceConversionFinalizeSuite) TestOneOffRetaxRewritesTaxAppliedInBillingCurrency() {
+	s.seedCustomer("cust_tax", lo.ToPtr("inr"))
+	s.seedTenantRate("usd", "inr", "83")
+	inv := s.seedDraftInvoice("inv_tax", "cust_tax", "usd", types.InvoiceTypeOneOff, nil,
+		[]*invoice.InvoiceLineItem{line("il_t1", "100")})
+
+	pct := decimal.RequireFromString("18")
+	tr := &taxrate.TaxRate{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
+		Name:            "GST",
+		Code:            "gst_" + types.GenerateUUIDWithPrefix("code"),
+		TaxRateStatus:   types.TaxRateStatusActive,
+		TaxRateType:     types.TaxRateTypePercentage,
+		PercentageValue: &pct,
+		EnvironmentID:   types.GetEnvironmentID(s.ctx()),
+		BaseModel:       types.GetDefaultBaseModel(s.ctx()),
+	}
+	s.Require().NoError(s.GetStores().TaxRateRepo.Create(s.ctx(), tr))
+
+	// The row compute wrote, keyed exactly as processTaxApplication will look it up.
+	key := idempotency.NewGenerator().GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
+		"tax_rate_id": tr.ID,
+		"entity_id":   inv.ID,
+		"entity_type": string(types.TaxRateEntityTypeInvoice),
+	})
+	s.Require().NoError(s.GetStores().TaxAppliedRepo.Create(s.ctx(), &taxapplied.TaxApplied{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
+		TaxRateID:      tr.ID,
+		EntityType:     types.TaxRateEntityTypeInvoice,
+		EntityID:       inv.ID,
+		TaxableAmount:  decimal.RequireFromString("100"),
+		TaxAmount:      decimal.RequireFromString("18"),
+		TaxBehavior:    types.TaxBehaviorExclusive,
+		Currency:       "usd",
+		AppliedAt:      time.Now().UTC(),
+		IdempotencyKey: lo.ToPtr(key),
+		EnvironmentID:  types.GetEnvironmentID(s.ctx()),
+		BaseModel:      types.GetDefaultBaseModel(s.ctx()),
+	}))
+
+	s.Require().NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+
+	s.Equal("inr", inv.Currency)
+	s.True(decimal.RequireFromString("1494").Equal(inv.TotalTax), "18%% of 8300, got %s", inv.TotalTax)
+
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxRateEntityTypeInvoice
+	filter.EntityID = inv.ID
+	rows, err := s.GetStores().TaxAppliedRepo.List(s.ctx(), filter)
+	s.Require().NoError(err)
+	s.Require().Len(rows, 1, "re-tax must update the existing row, not add a second one")
+	s.Equal("inr", rows[0].Currency, "tax_applied must be rewritten in the billing currency")
+	s.True(decimal.RequireFromString("1494").Equal(rows[0].TaxAmount), "tax_amount got %s", rows[0].TaxAmount)
+	s.True(decimal.RequireFromString("8300").Equal(rows[0].TaxableAmount), "taxable_amount got %s", rows[0].TaxableAmount)
 }
 
 func (s *InvoiceConversionFinalizeSuite) TestConvertOnceRetrySkips() {
