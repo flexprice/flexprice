@@ -56,12 +56,12 @@ func Normalize(v any) string {
 	case string:
 		return x
 	case time.Time:
-		return x.UTC().Format(time.RFC3339Nano)
+		return normalizeTime(x)
 	case *time.Time:
 		if x == nil {
 			return ""
 		}
-		return x.UTC().Format(time.RFC3339Nano)
+		return normalizeTime(*x)
 	case decimal.Decimal:
 		return x.String()
 	case *decimal.Decimal:
@@ -111,6 +111,12 @@ func Normalize(v any) string {
 	var j any
 	_ = json.Unmarshal(b, &j)
 	return canonicalJSON(j)
+}
+
+// normalizeTime truncates to the microsecond Postgres stores, so an in-memory
+// time re-saved unchanged does not diff against its stored value.
+func normalizeTime(t time.Time) string {
+	return t.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
 }
 
 // normalizeBytes handles the driver's raw column bytes: a NUMERIC column
@@ -196,12 +202,12 @@ func display(v any) any {
 	case string, bool, float64, int, int64:
 		return x
 	case time.Time:
-		return x.UTC().Format(time.RFC3339)
+		return x.UTC().Truncate(time.Microsecond).Format(time.RFC3339)
 	case *time.Time:
 		if x == nil {
 			return nil
 		}
-		return x.UTC().Format(time.RFC3339)
+		return x.UTC().Truncate(time.Microsecond).Format(time.RFC3339)
 	case decimal.Decimal:
 		return x.String()
 	case *decimal.Decimal:

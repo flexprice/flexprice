@@ -31,6 +31,20 @@ func TestDiffNoEffectiveChange(t *testing.T) {
 	}
 }
 
+func TestNormalizeTimeAtMicrosecondPrecision(t *testing.T) {
+	inMemory := time.Date(2026, 10, 3, 12, 0, 0, 123456789, time.UTC)
+	stored := inMemory.Truncate(time.Microsecond)
+	if Normalize(inMemory) != Normalize(stored) || Normalize(&inMemory) != Normalize(stored) {
+		t.Fatalf("nanoseconds must not count: %q vs %q", Normalize(inMemory), Normalize(stored))
+	}
+	if _, changed := Diff(subDef, map[string]any{"due_date": stored}, map[string]any{"due_date": inMemory}); changed {
+		t.Fatal("a re-saved time differing only below the microsecond must not diff")
+	}
+	if Normalize(stored) == Normalize(stored.Add(time.Microsecond)) {
+		t.Fatal("a microsecond difference must still count")
+	}
+}
+
 func TestDiffRedacts(t *testing.T) {
 	changes, _ := Diff(subDef, map[string]any{"secret_note": "a"}, map[string]any{"secret_note": "b"})
 	c := changes["secret_note"]
