@@ -340,3 +340,40 @@ func TestHookSelectsOldValues(t *testing.T) {
 		t.Fatalf("want only cus_1 changed Old->New, got %+v", e)
 	}
 }
+
+func TestHookHardDeleteCarriesLabelAndRollup(t *testing.T) {
+	def := Definition{
+		EntType: "SubscriptionLineItem", EntityType: "subscription_line_item", Table: "subscription_line_items",
+		LabelFields: []string{"display_name", "subscription_id"}, ParentFields: []string{"customer_id"},
+		CustomerID: func(f map[string]any) string { return str(f, "customer_id") },
+		Label:      func(f map[string]any) string { return str(f, "display_name") },
+	}
+	reg := NewRegistry(def)
+	client, _, queries := stubClient(t, stubConn{
+		cols: []string{"id", "display_name", "subscription_id", "customer_id"},
+		rows: [][]driver.Value{{"li_1", "Seats", "sub_1", "cus_1"}},
+	})
+	ctx := WithCollector(baseCtx())
+	m := clientFakeMutation{&fakeMutation{op: ent.OpDeleteOne, typ: "SubscriptionLineItem", ids: []string{"li_1"}}, client}
+	h := hook{reg: reg}
+	if _, err := h.mutate(ctx, noopNext(), m); err != nil {
+		t.Fatal(err)
+	}
+	if len(*queries) != 1 || !strings.Contains((*queries)[0], `SELECT id, "display_name", "subscription_id", "customer_id" FROM "subscription_line_items"`) {
+		t.Fatalf("want one SELECT of label and parent columns before the delete, got %v", *queries)
+	}
+	e := CollectorFrom(ctx).Entries()
+	if len(e) != 1 || e[0].Op != OpDelete || e[0].Label != "Seats" {
+		t.Fatalf("want one labelled delete, got %+v", e)
+	}
+	if e[0].Fields["customer_id"] != "cus_1" || e[0].Fields["subscription_id"] != "sub_1" {
+		t.Fatalf("want customer and subscription roll-up fields, got %+v", e[0].Fields)
+	}
+	ex := &recExec{}
+	if err := Flush(ctx, ex, reg, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !contains(ex.args, "subscription_line_item.deleted") || !contains(ex.args, "Seats") || !contains(ex.args, "cus_1") || !contains(ex.args, "sub_1") {
+		t.Fatalf("want the delete row to carry label, customer_id and subscription_id, got %v", ex.args)
+	}
+}

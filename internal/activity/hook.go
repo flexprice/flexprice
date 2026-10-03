@@ -180,11 +180,7 @@ func (h *hook) update(ctx context.Context, next ent.Mutator, m mutation, def Def
 			cols = append(cols, c)
 		}
 	}
-	oldFn := h.old
-	if oldFn == nil {
-		oldFn = h.selectOld
-	}
-	olds, oldErr := oldFn(ctx, def, ids, cols)
+	olds, oldErr := h.oldValues(ctx, def, ids, cols)
 	v, err := next.Mutate(ctx, m)
 	if err != nil {
 		return v, err
@@ -227,14 +223,48 @@ func containsStr(xs []string, s string) bool {
 	return false
 }
 
+func (h *hook) oldValues(ctx context.Context, def Definition, ids []string, cols []string) (map[string]map[string]any, error) {
+	if h.old != nil {
+		return h.old(ctx, def, ids, cols)
+	}
+	return h.selectOld(ctx, def, ids, cols)
+}
+
+// rollupColumns lists the label and parent columns, deduplicated.
+func rollupColumns(def Definition) []string {
+	cols := make([]string, 0, len(def.LabelFields)+len(def.ParentFields))
+	for _, c := range append(append([]string{}, def.LabelFields...), def.ParentFields...) {
+		if !containsStr(cols, c) {
+			cols = append(cols, c)
+		}
+	}
+	return cols
+}
+
+// delete reads the label and roll-up columns before a hard delete removes the
+// row, so the record resolves its label, customer and subscription exactly as
+// an update does.
 func (h *hook) delete(ctx context.Context, next ent.Mutator, m mutation, def Definition) (ent.Value, error) {
 	ids, _ := m.IDs(ctx)
+	var olds map[string]map[string]any
+	if cols := rollupColumns(def); len(ids) > 0 && len(cols) > 0 {
+		var oldErr error
+		olds, oldErr = h.oldValues(ctx, def, ids, cols)
+		if oldErr != nil && h.log != nil {
+			h.log.Error(ctx, "activity delete lookup failed", "error", oldErr, "entity_type", string(def.EntityType))
+		}
+	}
 	v, err := next.Mutate(ctx, m)
 	if err != nil {
 		return v, err
 	}
 	for _, id := range ids {
-		h.emit(ctx, Record{EntityType: def.EntityType, EntityID: id, Op: OpDelete, Changes: map[string]Change{}})
+		fields := map[string]any{"id": id}
+		for k, v := range olds[id] {
+			fields[k] = v
+		}
+		h.resolveCustomer(ctx, def, fields)
+		h.emit(ctx, Record{EntityType: def.EntityType, EntityID: id, Op: OpDelete, Changes: map[string]Change{}, Fields: fields, Label: label(def, fields)})
 	}
 	return v, nil
 }
