@@ -211,6 +211,10 @@ jobs:
       - name: Verify SDK builds
         run: bash scripts/verify-sdk-builds.sh
 
+      # Test the branded TypeScript SDK before it is pushed to the client repo or published to npm
+      - name: Check TypeScript SDK
+        run: make ts-sdk-check
+
       - name: Apply resolved version to artifacts
         run: ./scripts/force-sdk-version.sh "${{ needs.matrix-setup.outputs.version }}"
 

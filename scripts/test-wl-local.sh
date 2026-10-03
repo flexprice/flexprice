@@ -3,7 +3,7 @@
 # test-wl-local.sh — Local white-label SDK generation test harness
 #
 # Runs the full WL pipeline (validate → swagger → configs → generate →
-# brand → verify) and prints a spot-check of each SDK's identity fields.
+# brand → verify → test) and prints a spot-check of each SDK's identity fields.
 # .speakeasy/ is restored to its original state on exit (pass or fail).
 #
 # Usage:
@@ -159,6 +159,11 @@ ok "Custom branding applied"
 step "Verifying SDK builds + residual branding check"
 bash scripts/verify-sdk-builds.sh
 ok "All SDK builds verified"
+
+# ── Step 9: Test the TypeScript SDK ────────────────────────────────────────
+step "Running TypeScript SDK tests"
+make ts-sdk-check
+ok "TypeScript SDK tests passed"
 
 # ── Spot-check: print key identity fields ──────────────────────────────────
 echo ""

@@ -529,6 +529,7 @@ help-sdk:
 	@echo "  make update-sdk          - Regenerate swagger then run sdk-all"
 	@echo "  make clean-sdk           - Remove generated api/go, api/typescript, api/python, api/mcp"
 	@echo "  make merge-custom       - Copy api/custom/<lang>/ into api/<lang>/"
+	@echo "  make ts-sdk-check       - Build the merged TypeScript SDK in a temp dir and run its custom tests"
 	@echo "  make sync-gen-to-output - Copy .speakeasy/gen/*.yaml to api/<lang>/.speakeasy/gen.yaml (run before generate)"
 	@echo "  make show-custom-files  - List files in api/custom/"
 	@echo ""
@@ -716,7 +717,7 @@ merge-custom:
 	@for dir in go typescript python mcp; do \
 		if [ -d "api/custom/$$dir" ]; then \
 			echo "Merging custom files into api/$$dir/..."; \
-			rsync -av --exclude='.gitkeep' "api/custom/$$dir/" "api/$$dir/" 2>/dev/null || true; \
+			rsync -av --exclude='.gitkeep' --exclude='/tests/' "api/custom/$$dir/" "api/$$dir/" 2>/dev/null || true; \
 		fi; \
 	done
 	@if [ -f api/python/pyproject.toml ]; then \
@@ -725,7 +726,24 @@ merge-custom:
 	@if [ -f api/typescript/src/index.ts ] && [ -f api/typescript/src/index.extras.ts ]; then \
 		node scripts/patch-ts-sdk-index.mjs; \
 	fi
+	@if [ -f api/typescript/src/lib/config.ts ]; then \
+		node scripts/patch-ts-sdk-config.mjs; \
+	fi
 	@echo "✓ Custom merge complete"
+
+# Build a scratch copy of the merged TS SDK and run api/custom/typescript/tests against it.
+# The copy keeps node_modules and esm/ out of api/typescript, which is uploaded and published as is.
+.PHONY: ts-sdk-check
+ts-sdk-check:
+	@test -f api/typescript/package.json || { echo "api/typescript not found; run make sdk-all first"; exit 1; }
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; set -e; \
+	rsync -a --exclude='node_modules' --exclude='esm' api/typescript/ "$$tmp/"; \
+	rsync -a api/custom/typescript/tests/ "$$tmp/tests/"; \
+	cd "$$tmp"; \
+	npm install --ignore-scripts --no-audit --no-fund; \
+	npm run build; \
+	node --test tests/*.test.mjs
+	@echo "✓ TypeScript SDK build and tests passed"
 
 # Force MCP package name so npm publish uses @flexprice/mcp-server.
 .PHONY: fix-mcp-package-name
