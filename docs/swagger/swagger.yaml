@@ -493,6 +493,79 @@ definitions:
     required:
     - start_date
     type: object
+  ActivityActor:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      type:
+        type: string
+      user_id:
+        type: string
+    type: object
+  ActivityDisplay:
+    properties:
+      entity_label:
+        type: string
+      parts:
+        $ref: '#/definitions/ActivityDisplayParts'
+      summary:
+        type: string
+    type: object
+  ActivityDisplayParts:
+    properties:
+      actor:
+        type: string
+      count:
+        type: integer
+      entity:
+        type: string
+      entity_type:
+        type: string
+      field:
+        type: string
+      from: {}
+      to: {}
+      verb:
+        type: string
+    type: object
+  ActivityResponse:
+    properties:
+      action:
+        type: string
+      actor:
+        $ref: '#/definitions/ActivityActor'
+      changes:
+        additionalProperties: {}
+        type: object
+      customer_id:
+        type: string
+      display:
+        $ref: '#/definitions/ActivityDisplay'
+      entity_id:
+        type: string
+      entity_label:
+        type: string
+      entity_type:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      occurred_at:
+        type: string
+      request_id:
+        type: string
+      snapshot:
+        additionalProperties: {}
+        type: object
+      source:
+        type: string
+      subscription_id:
+        type: string
+    type: object
   AddAddonRequest:
     properties:
       addon_id:
@@ -1465,7 +1538,7 @@ definitions:
         type: string
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: Expanded data (populated when expand options are specified)
       meter_id:
         type: string
@@ -5234,6 +5307,17 @@ definitions:
       mapping:
         $ref: '#/definitions/EntityIntegrationMappingResponse'
     type: object
+  ListActivityResponse:
+    properties:
+      has_more:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/ActivityResponse'
+        type: array
+      next_cursor:
+        type: string
+    type: object
   ListAlertLogsResponse:
     properties:
       items:
@@ -5320,7 +5404,7 @@ definitions:
       event_name:
         type: string
       meter:
-        $ref: '#/definitions/meter.Meter'
+        $ref: '#/definitions/Meter'
       meter_id:
         type: string
     type: object
@@ -6897,7 +6981,7 @@ definitions:
         type: object
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: |-
           Meter is populated when the caller adds "meters" to a subscription-scoped
           expand string alongside "subscription_line_items". Only usage line items
@@ -8660,7 +8744,7 @@ definitions:
         description: Group when the feature belongs to a group (object includes id)
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: Full meter object (only if expand includes "meter")
       meter_id:
         description: Meter ID
@@ -9363,6 +9447,56 @@ definitions:
       updated_by:
         type: string
     type: object
+  Meter:
+    properties:
+      aggregation:
+        allOf:
+        - $ref: '#/definitions/meter.Aggregation'
+        description: |-
+          Aggregation defines the aggregation type and field for the meter
+          It is used to aggregate the events into a single value for calculating the usage
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the meter
+        type: string
+      event_name:
+        description: |-
+          EventName is the unique identifier for the event that this meter is tracking
+          It is a mandatory field in the events table and hence being used as the primary matching field
+          We can have multiple meters tracking the same event but with different filters and aggregation
+        type: string
+      filters:
+        description: |-
+          Filters define the criteria for the meter to be applied on the events before aggregation
+          It also defines the possible values on which later the charges will be applied
+        items:
+          $ref: '#/definitions/meter.Filter'
+        type: array
+      id:
+        description: ID is the unique identifier for the meter
+        type: string
+      name:
+        description: Name is the display name of the meter
+        type: string
+      reset_usage:
+        allOf:
+        - $ref: '#/definitions/types.ResetUsage'
+        description: |-
+          ResetUsage defines whether the usage should be reset periodically or not
+          For ex meters tracking total storage used do not get reset but meters tracking
+          total API requests do.
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   Plan:
     properties:
       created_at:
@@ -9609,56 +9743,6 @@ definitions:
         items:
           type: string
         type: array
-    type: object
-  meter.Meter:
-    properties:
-      aggregation:
-        allOf:
-        - $ref: '#/definitions/meter.Aggregation'
-        description: |-
-          Aggregation defines the aggregation type and field for the meter
-          It is used to aggregate the events into a single value for calculating the usage
-      created_at:
-        type: string
-      created_by:
-        type: string
-      environment_id:
-        description: EnvironmentID is the environment identifier for the meter
-        type: string
-      event_name:
-        description: |-
-          EventName is the unique identifier for the event that this meter is tracking
-          It is a mandatory field in the events table and hence being used as the primary matching field
-          We can have multiple meters tracking the same event but with different filters and aggregation
-        type: string
-      filters:
-        description: |-
-          Filters define the criteria for the meter to be applied on the events before aggregation
-          It also defines the possible values on which later the charges will be applied
-        items:
-          $ref: '#/definitions/meter.Filter'
-        type: array
-      id:
-        description: ID is the unique identifier for the meter
-        type: string
-      name:
-        description: Name is the display name of the meter
-        type: string
-      reset_usage:
-        allOf:
-        - $ref: '#/definitions/types.ResetUsage'
-        description: |-
-          ResetUsage defines whether the usage should be reset periodically or not
-          For ex meters tracking total storage used do not get reset but meters tracking
-          total API requests do.
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
     type: object
   models.TemporalWorkflowResult:
     properties:
@@ -9915,7 +9999,7 @@ definitions:
         type: object
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: |-
           Meter is populated when the caller adds "meters" to a subscription-scoped
           expand string alongside "subscription_line_items". Only usage line items
@@ -13160,6 +13244,8 @@ definitions:
     - invoice.update.voided
     - invoice.update
     - invoice.payment.overdue
+    - invoice.sync.success
+    - invoice.sync.failed
     - wallet.credit_balance.dropped
     - wallet.credit_balance.recovered
     - wallet.ongoing_balance.dropped
@@ -13222,6 +13308,8 @@ definitions:
     - WebhookEventInvoiceUpdateVoided
     - WebhookEventInvoiceUpdate
     - WebhookEventInvoicePaymentOverdue
+    - WebhookEventInvoiceSyncSuccess
+    - WebhookEventInvoiceSyncFailed
     - WebhookEventWalletCreditBalanceDropped
     - WebhookEventWalletCreditBalanceRecovered
     - WebhookEventWalletOngoingBalanceDropped
@@ -13699,6 +13787,17 @@ definitions:
       subscription_line_item_id:
         type: string
     type: object
+  webhookDto.InvoiceSyncWebhookPayload:
+    properties:
+      error:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      invoice:
+        $ref: '#/definitions/webhookDto.Invoice'
+      provider_details:
+        $ref: '#/definitions/webhookDto.ProviderDetails'
+    type: object
   webhookDto.InvoiceWebhookPayload:
     properties:
       event_type:
@@ -13822,6 +13921,15 @@ definitions:
         $ref: '#/definitions/price.JSONBTransformQuantity'
       type:
         $ref: '#/definitions/types.PriceType'
+    type: object
+  webhookDto.ProviderDetails:
+    properties:
+      hosted_invoice_url:
+        type: string
+      invoice_id:
+        type: string
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
     type: object
   webhookDto.Refund:
     properties:
@@ -14194,6 +14302,102 @@ info:
   title: Flexprice API
   version: "1.0"
 paths:
+  /activity:
+    get:
+      description: Use when auditing what changed in the account. Returns newest first
+        with keyset pagination; pass next_cursor to page.
+      operationId: listActivity
+      parameters:
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: actions
+        type: array
+      - in: query
+        name: actor_id
+        type: string
+      - in: query
+        name: actor_type
+        type: string
+      - in: query
+        name: cursor
+        type: string
+      - in: query
+        name: customer_id
+        type: string
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: entity_id
+        type: string
+      - in: query
+        name: entity_type
+        type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: exclude_actor_types
+        type: array
+      - in: query
+        maximum: 200
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        name: request_id
+        type: string
+      - in: query
+        name: start_time
+        type: string
+      - in: query
+        name: subscription_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListActivityResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List activity
+      tags:
+      - Activity
+      x-scope: read
+  /activity/{id}:
+    get:
+      operationId: getActivity
+      parameters:
+      - description: Activity ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ActivityResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get activity entry
+      tags:
+      - Activity
+      x-scope: read
   /addons:
     post:
       consumes:
@@ -22652,6 +22856,37 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.payment.overdue
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.sync.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired once per provider when an invoice sync fails after its last
+        retry.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
+      summary: invoice.sync.failed
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.sync.success:
+    post:
+      consumes:
+      - application/json
+      description: Fired once per provider when an invoice is synced to that provider.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
+      summary: invoice.sync.success
       tags:
       - Webhook Events
   /webhook-events/invoice.update:

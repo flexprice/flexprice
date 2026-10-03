@@ -23,6 +23,197 @@
     }
   ],
   "paths": {
+    "/activity": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "List activity",
+        "description": "Use when auditing what changed in the account. Returns newest first with keyset pagination; pass next_cursor to page.",
+        "operationId": "listActivity",
+        "parameters": [
+          {
+            "name": "actions",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "actor_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actor_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude_actor_types",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/activity/{id}": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "Get activity entry",
+        "operationId": "getActivity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Activity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/addons": {
       "post": {
         "tags": [
@@ -15196,6 +15387,48 @@
         }
       }
     },
+    "/webhook-events/invoice.sync.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.sync.failed",
+        "description": "Fired once per provider when an invoice sync fails after its last retry.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoiceSyncWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/invoice.sync.success": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.sync.success",
+        "description": "Fired once per provider when an invoice is synced to that provider.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoiceSyncWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/invoice.update": {
       "post": {
         "tags": [
@@ -16807,6 +17040,126 @@
           }
         }
       },
+      "ActivityActor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityDisplay": {
+        "type": "object",
+        "properties": {
+          "entity_label": {
+            "type": "string"
+          },
+          "parts": {
+            "$ref": "#/components/schemas/ActivityDisplayParts"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityDisplayParts": {
+        "type": "object",
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "from": {
+            "type": "object"
+          },
+          "to": {
+            "type": "object"
+          },
+          "verb": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityResponse": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActivityActor"
+          },
+          "changes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "display": {
+            "$ref": "#/components/schemas/ActivityDisplay"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_label": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "subscription_id": {
+            "type": "string"
+          }
+        }
+      },
       "AddAddonRequest": {
         "required": [
           "addon_id",
@@ -18133,7 +18486,7 @@
             "type": "string"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string"
@@ -22973,6 +23326,23 @@
           }
         }
       },
+      "ListActivityResponse": {
+        "type": "object",
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityResponse"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        }
+      },
       "ListAlertLogsResponse": {
         "type": "object",
         "properties": {
@@ -23106,7 +23476,7 @@
             "type": "string"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string"
@@ -25180,7 +25550,7 @@
             }
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_display_name": {
             "type": "string"
@@ -27455,7 +27825,7 @@
             "$ref": "#/components/schemas/group.Group"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string",
@@ -28420,6 +28790,60 @@
           }
         }
       },
+      "Meter": {
+        "type": "object",
+        "properties": {
+          "aggregation": {
+            "$ref": "#/components/schemas/meter.Aggregation"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the meter"
+          },
+          "event_name": {
+            "type": "string",
+            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
+          },
+          "filters": {
+            "type": "array",
+            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+            "items": {
+              "$ref": "#/components/schemas/meter.Filter"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the meter"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name is the display name of the meter"
+          },
+          "reset_usage": {
+            "$ref": "#/components/schemas/types.ResetUsage"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
       "Plan": {
         "type": "object",
         "properties": {
@@ -28733,60 +29157,6 @@
             "items": {
               "type": "string"
             }
-          }
-        }
-      },
-      "meter.Meter": {
-        "type": "object",
-        "properties": {
-          "aggregation": {
-            "$ref": "#/components/schemas/meter.Aggregation"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the meter"
-          },
-          "event_name": {
-            "type": "string",
-            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
-          },
-          "filters": {
-            "type": "array",
-            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-            "items": {
-              "$ref": "#/components/schemas/meter.Filter"
-            }
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the meter"
-          },
-          "name": {
-            "type": "string",
-            "description": "Name is the display name of the meter"
-          },
-          "reset_usage": {
-            "$ref": "#/components/schemas/types.ResetUsage"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_by": {
-            "type": "string"
           }
         }
       },
@@ -29109,7 +29479,7 @@
             }
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_display_name": {
             "type": "string"
@@ -33595,6 +33965,8 @@
           "invoice.update.voided",
           "invoice.update",
           "invoice.payment.overdue",
+          "invoice.sync.success",
+          "invoice.sync.failed",
           "wallet.credit_balance.dropped",
           "wallet.credit_balance.recovered",
           "wallet.ongoing_balance.dropped",
@@ -33657,6 +34029,8 @@
           "WebhookEventInvoiceUpdateVoided",
           "WebhookEventInvoiceUpdate",
           "WebhookEventInvoicePaymentOverdue",
+          "WebhookEventInvoiceSyncSuccess",
+          "WebhookEventInvoiceSyncFailed",
           "WebhookEventWalletCreditBalanceDropped",
           "WebhookEventWalletCreditBalanceRecovered",
           "WebhookEventWalletOngoingBalanceDropped",
@@ -34380,6 +34754,23 @@
           }
         }
       },
+      "webhookDto.InvoiceSyncWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/webhookDto.Invoice"
+          },
+          "provider_details": {
+            "$ref": "#/components/schemas/webhookDto.ProviderDetails"
+          }
+        }
+      },
       "webhookDto.InvoiceWebhookPayload": {
         "type": "object",
         "properties": {
@@ -34570,6 +34961,20 @@
           },
           "type": {
             "$ref": "#/components/schemas/types.PriceType"
+          }
+        }
+      },
+      "webhookDto.ProviderDetails": {
+        "type": "object",
+        "properties": {
+          "hosted_invoice_url": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
           }
         }
       },

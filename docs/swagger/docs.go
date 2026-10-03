@@ -22,6 +22,157 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/activity": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when auditing what changed in the account. Returns newest first with keyset pagination; pass next_cursor to page.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "List activity",
+                "operationId": "listActivity",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "actions",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "actor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "actor_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "entity_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "entity_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "exclude_actor_types",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 200,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "request_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "subscription_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/activity/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "Get activity entry",
+                "operationId": "getActivity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Activity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ActivityResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/addons": {
             "post": {
                 "security": [
@@ -12699,6 +12850,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/invoice.sync.failed": {
+            "post": {
+                "description": "Fired once per provider when an invoice sync fails after its last retry.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.sync.success": {
+            "post": {
+                "description": "Fired once per provider when an invoice is synced to that provider.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.success",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/invoice.update": {
             "post": {
                 "description": "Fired when an invoice is updated. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
@@ -14424,6 +14621,115 @@ const docTemplate = `{
                 }
             }
         },
+        "ActivityActor": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityDisplay": {
+            "type": "object",
+            "properties": {
+                "entity_label": {
+                    "type": "string"
+                },
+                "parts": {
+                    "$ref": "#/definitions/ActivityDisplayParts"
+                },
+                "summary": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityDisplayParts": {
+            "type": "object",
+            "properties": {
+                "actor": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "entity": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "from": {},
+                "to": {},
+                "verb": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor": {
+                    "$ref": "#/definitions/ActivityActor"
+                },
+                "changes": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "display": {
+                    "$ref": "#/definitions/ActivityDisplay"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_label": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "snapshot": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "source": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
         "AddAddonRequest": {
             "type": "object",
             "required": [
@@ -15842,7 +16148,7 @@ const docTemplate = `{
                     "description": "Expanded data (populated when expand options are specified)",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -20907,6 +21213,23 @@ const docTemplate = `{
                 }
             }
         },
+        "ListActivityResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ActivityResponse"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
         "ListAlertLogsResponse": {
             "type": "object",
             "properties": {
@@ -21040,7 +21363,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "meter": {
-                    "$ref": "#/definitions/meter.Meter"
+                    "$ref": "#/definitions/Meter"
                 },
                 "meter_id": {
                     "type": "string"
@@ -23282,7 +23605,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -25698,7 +26021,7 @@ const docTemplate = `{
                     "description": "Full meter object (only if expand includes \"meter\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -26676,6 +26999,68 @@ const docTemplate = `{
                 }
             }
         },
+        "Meter": {
+            "type": "object",
+            "properties": {
+                "aggregation": {
+                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meter.Aggregation"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the meter",
+                    "type": "string"
+                },
+                "event_name": {
+                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meter.Filter"
+                    }
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the meter",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the display name of the meter",
+                    "type": "string"
+                },
+                "reset_usage": {
+                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ResetUsage"
+                        }
+                    ]
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "Plan": {
             "type": "object",
             "properties": {
@@ -26989,68 +27374,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "meter.Meter": {
-            "type": "object",
-            "properties": {
-                "aggregation": {
-                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/meter.Aggregation"
-                        }
-                    ]
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the meter",
-                    "type": "string"
-                },
-                "event_name": {
-                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meter.Filter"
-                    }
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the meter",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Name is the display name of the meter",
-                    "type": "string"
-                },
-                "reset_usage": {
-                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ResetUsage"
-                        }
-                    ]
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
                 }
             }
         },
@@ -27396,7 +27719,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -31741,6 +32064,8 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.sync.success",
+                "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
                 "wallet.credit_balance.recovered",
                 "wallet.ongoing_balance.dropped",
@@ -31803,6 +32128,8 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoiceSyncSuccess",
+                "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
                 "WebhookEventWalletCreditBalanceRecovered",
                 "WebhookEventWalletOngoingBalanceDropped",
@@ -32503,6 +32830,23 @@ const docTemplate = `{
                 }
             }
         },
+        "webhookDto.InvoiceSyncWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "provider_details": {
+                    "$ref": "#/definitions/webhookDto.ProviderDetails"
+                }
+            }
+        },
         "webhookDto.InvoiceWebhookPayload": {
             "type": "object",
             "properties": {
@@ -32689,6 +33033,20 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/types.PriceType"
+                }
+            }
+        },
+        "webhookDto.ProviderDetails": {
+            "type": "object",
+            "properties": {
+                "hosted_invoice_url": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
                 }
             }
         },
