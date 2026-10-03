@@ -8,14 +8,6 @@ sources:
             - location: .speakeasy/overlays/flexprice-sdk.yaml
         registry:
             location: registry.speakeasyapi.dev/flexprice/prod/swagger-json
-    swagger-json-typescript:
-        inputs:
-            - location: docs/swagger/swagger-3-0.json
-        overlays:
-            - location: .speakeasy/overlays/flexprice-sdk.yaml
-            - location: .speakeasy/overlays/typescript-auth.yaml
-        registry:
-            location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-typescript
     swagger-json-mcp:
         inputs:
             - location: docs/swagger/swagger-3-0-mcp.json
@@ -52,7 +44,7 @@ targets:
             blocking: false
     flexprice-typescript:
         target: typescript
-        source: swagger-json-typescript
+        source: swagger-json
         output: ./api/typescript
         publish:
             npm:

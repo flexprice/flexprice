@@ -448,6 +448,16 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
+	// Fixed per-source ID: Temporal rejects a second start while one is running, so two
+	// replays can't read the same uncommitted offsets and double-publish.
+	if workflowType == types.TemporalReplayDLQWorkflow {
+		if input, ok := params.(map[string]interface{}); ok {
+			if source, _ := input["source_topic"].(string); source != "" {
+				return fmt.Sprintf("%s_%s_%s", types.UUID_PREFIX_WORKFLOW, workflowType.String(), source)
+			}
+		}
+	}
+
 	contextID := s.extractWorkflowContextID(workflowType, params)
 	if contextID != "" {
 		return types.GenerateWorkflowIDWithContext(workflowType.String(), contextID)
@@ -705,6 +715,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildDraftAndComputeSubscriptionInvoiceInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessRawEventsWorkflow:
 		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalReplayDLQWorkflow:
+		// DLQ replay is cross-tenant infra: no tenant/env scoping. The caller
+		// already built the full workflow-input map; pass it through.
+		return params, nil
 	case types.TemporalEnvironmentCloneWorkflow:
 		return s.buildEnvironmentCloneInput(ctx, tenantID, environmentID, userID, params)
 	default:
