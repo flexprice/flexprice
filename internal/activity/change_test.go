@@ -108,6 +108,22 @@ func TestDiffCreateSkipsNilFields(t *testing.T) {
 	}
 }
 
+func TestDiffNumericDisplaysBothSidesAsStrings(t *testing.T) {
+	old := map[string]any{"amount": []byte("150.00000000"), "quota": []byte("12345678901234567890.123")}
+	new := map[string]any{"amount": decimal.NewFromInt(175), "quota": decimal.RequireFromString("12345678901234567890.5")}
+	changes, _ := Diff(subDef, old, new)
+	if c := changes["amount"]; c.From != "150" || c.To != "175" {
+		t.Fatalf("want amount \"150\" -> \"175\" as strings, got %#v", c)
+	}
+	if c := changes["quota"]; c.From != "12345678901234567890.123" || c.To != "12345678901234567890.5" {
+		t.Fatalf("want quota without float precision loss, got %#v", c)
+	}
+	same := decimal.NewFromInt(150)
+	if display([]byte("150.00000000")) != display(same) || display([]byte("150.00000000")) != display(&same) {
+		t.Fatal("stored NUMERIC bytes and a decimal must display identically")
+	}
+}
+
 func TestNormalizeEquivalents(t *testing.T) {
 	cases := []struct{ a, b any }{
 		{[]byte(`{"b":1,"a":2}`), map[string]any{"a": 2, "b": 1}},

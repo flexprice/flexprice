@@ -188,12 +188,17 @@ func Diff(def Definition, old, new map[string]any) (map[string]Change, bool) {
 	return out, len(out) > 0
 }
 
-// display keeps JSON-friendly values and stringifies the rest.
+// display keeps JSON-friendly values and stringifies the rest. Decimals,
+// whether a NUMERIC column's raw bytes or a decimal.Decimal, render as the
+// same canonical string so both sides of a money change share a type.
 func display(v any) any {
 	switch x := v.(type) {
 	case nil:
 		return nil
 	case []byte:
+		if d, err := decimal.NewFromString(string(x)); err == nil {
+			return d.String()
+		}
 		var j any
 		if json.Unmarshal(x, &j) == nil {
 			return j
