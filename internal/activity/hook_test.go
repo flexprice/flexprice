@@ -19,11 +19,14 @@ import (
 
 type fakeMutation struct {
 	ent.Mutation
-	op     ent.Op
-	typ    string
-	fields map[string]any
-	ids    []string
+	op      ent.Op
+	typ     string
+	fields  map[string]any
+	cleared []string
+	ids     []string
 }
+
+func (f *fakeMutation) ClearedFields() []string { return f.cleared }
 
 func (f *fakeMutation) Op() ent.Op   { return f.op }
 func (f *fakeMutation) Type() string { return f.typ }
@@ -71,6 +74,26 @@ func TestHookRecordsUpdateDiff(t *testing.T) {
 	e := CollectorFrom(ctx).Entries()
 	if len(e) != 1 || e[0].Op != OpUpdate || e[0].Changes["status"].To != "paused" || len(e[0].Changes) != 1 {
 		t.Fatalf("unexpected %+v", e)
+	}
+}
+
+func TestHookRecordsClearedField(t *testing.T) {
+	reg := NewRegistry(Definition{EntType: "Subscription", EntityType: "subscription", Table: "subscriptions"})
+	ctx := WithCollector(context.Background())
+	m := &fakeMutation{op: ent.OpUpdateOne, typ: "Subscription", ids: []string{"sub_1"},
+		cleared: []string{"cancel_at", "pause_reason"}}
+	old := fakeOld{"sub_1": {"cancel_at": "2026-11-01T00:00:00Z", "pause_reason": nil}}
+	h := hook{reg: reg, old: old.oldValues}
+	if _, err := h.mutate(ctx, noopNext(), m); err != nil {
+		t.Fatal(err)
+	}
+	e := CollectorFrom(ctx).Entries()
+	if len(e) != 1 || len(e[0].Changes) != 1 {
+		t.Fatalf("want one update with one change, got %+v", e)
+	}
+	ch, ok := e[0].Changes["cancel_at"]
+	if !ok || ch.From != "2026-11-01T00:00:00Z" || ch.To != nil {
+		t.Fatalf("want cancel_at from the old value to nil, got %+v", e[0].Changes)
 	}
 }
 

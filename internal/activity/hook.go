@@ -159,6 +159,11 @@ func snapshot(def Definition, fields map[string]any) map[string]any {
 // ent update mutations are bulk-shaped, then records one diff per row.
 func (h *hook) update(ctx context.Context, next ent.Mutator, m mutation, def Definition) (ent.Value, error) {
 	newVals := fieldValues(m)
+	// ClearX() is reported through ClearedFields, not Fields; a cleared column
+	// is written as NULL, so it diffs as old -> nil.
+	for _, f := range m.ClearedFields() {
+		newVals[f] = nil
+	}
 	if len(newVals) == 0 {
 		return next.Mutate(ctx, m)
 	}
