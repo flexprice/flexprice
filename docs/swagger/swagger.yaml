@@ -2279,6 +2279,37 @@ definitions:
     - provider_entity_id
     - provider_type
     type: object
+  CreateFXRateRequest:
+    properties:
+      end_date:
+        type: string
+      from_currency:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      source:
+        allOf:
+        - $ref: '#/definitions/types.FXRateSource'
+        description: |-
+          Source defaults to "fixed". A fixed rate requires `rate`; a market rate ignores it
+          (the value comes from the market-rate integration at conversion time).
+      start_date:
+        type: string
+      to_currency:
+        type: string
+    required:
+    - from_currency
+    - scope
+    - to_currency
+    type: object
   CreateFeatureRequest:
     properties:
       alert_settings:
@@ -3955,6 +3986,45 @@ definitions:
     required:
     - type
     type: object
+  FXRateResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      end_date:
+        type: string
+      environment_id:
+        type: string
+      from_currency:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      source:
+        $ref: '#/definitions/types.FXRateSource'
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      to_currency:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   FeatureResponse:
     properties:
       alert_settings:
@@ -5344,6 +5414,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/EntityIntegrationMappingResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListFXRatesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/FXRateResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -8296,6 +8375,19 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
+  UpdateFXRateRequest:
+    properties:
+      end_date:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      start_date:
+        type: string
+    type: object
   UpdateFeatureRequest:
     properties:
       alert_settings:
@@ -11174,6 +11266,67 @@ definitions:
     - entity_type
     - field_key
     type: object
+  types.FXRateFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      from_currency:
+        type: string
+      fx_rate_ids:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      to_currency:
+        type: string
+    type: object
+  types.FXRateScope:
+    enum:
+    - tenant
+    - customer
+    - subscription
+    type: string
+    x-enum-varnames:
+    - FXRateScopeTenant
+    - FXRateScopeCustomer
+    - FXRateScopeSubscription
+  types.FXRateSource:
+    enum:
+    - fixed
+    - market
+    type: string
+    x-enum-varnames:
+    - FXRateSourceFixed
+    - FXRateSourceMarket
   types.FactStatus:
     enum:
     - PROVISIONAL
@@ -17338,6 +17491,179 @@ paths:
       summary: Query features
       tags:
       - Features
+  /forex:
+    post:
+      consumes:
+      - application/json
+      description: Configure a fixed exchange rate at tenant, customer or subscription
+        scope. Overrides need a tenant rate for the same pair.
+      operationId: createFXRate
+      parameters:
+      - description: FX rate to create
+        in: body
+        name: fx_rate
+        required: true
+        schema:
+          $ref: '#/definitions/CreateFXRateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create an FX rate
+      tags:
+      - FX Rates
+  /forex/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Archive a customer or subscription override. Tenant rates cannot
+        be deleted.
+      operationId: deleteFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an FX rate
+      tags:
+      - FX Rates
+    get:
+      consumes:
+      - application/json
+      description: Load a single FX rate by ID.
+      operationId: getFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an FX rate
+      tags:
+      - FX Rates
+    put:
+      consumes:
+      - application/json
+      description: Update a rate's value, validity window (overrides only) or metadata.
+        Scope, scope_id and the currency pair are immutable.
+      operationId: updateFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: FX rate fields to update
+        in: body
+        name: fx_rate
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateFXRateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update an FX rate
+      tags:
+      - FX Rates
+  /forex/query:
+    post:
+      consumes:
+      - application/json
+      description: Filter FX rates via a request body (POST used for a complex query,
+        but read-only).
+      operationId: queryFXRates
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.FXRateFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListFXRatesResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query FX rates
+      tags:
+      - FX Rates
+      x-scope: read
   /groups:
     post:
       consumes:

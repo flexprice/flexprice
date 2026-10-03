@@ -26,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -236,6 +237,10 @@ func NewUsageRecordRepository(p RepositoryParams) usagerecord.Repository {
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.RedisCache)
+}
+
+func NewFXRateRepository(p RepositoryParams) fxrate.Repository {
+	return entRepo.NewFXRateRepository(p.EntClient, p.Logger)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {

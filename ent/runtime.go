@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -1073,6 +1074,57 @@ func init() {
 	environmentDescType := environmentFields[2].Descriptor()
 	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
+	fxrateMixin := schema.FXRate{}.Mixin()
+	fxrateMixinFields0 := fxrateMixin[0].Fields()
+	_ = fxrateMixinFields0
+	fxrateMixinFields1 := fxrateMixin[1].Fields()
+	_ = fxrateMixinFields1
+	fxrateFields := schema.FXRate{}.Fields()
+	_ = fxrateFields
+	// fxrateDescTenantID is the schema descriptor for tenant_id field.
+	fxrateDescTenantID := fxrateMixinFields0[0].Descriptor()
+	// fxrate.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	fxrate.TenantIDValidator = fxrateDescTenantID.Validators[0].(func(string) error)
+	// fxrateDescStatus is the schema descriptor for status field.
+	fxrateDescStatus := fxrateMixinFields0[1].Descriptor()
+	// fxrate.DefaultStatus holds the default value on creation for the status field.
+	fxrate.DefaultStatus = fxrateDescStatus.Default.(string)
+	// fxrateDescCreatedAt is the schema descriptor for created_at field.
+	fxrateDescCreatedAt := fxrateMixinFields0[2].Descriptor()
+	// fxrate.DefaultCreatedAt holds the default value on creation for the created_at field.
+	fxrate.DefaultCreatedAt = fxrateDescCreatedAt.Default.(func() time.Time)
+	// fxrateDescUpdatedAt is the schema descriptor for updated_at field.
+	fxrateDescUpdatedAt := fxrateMixinFields0[3].Descriptor()
+	// fxrate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	fxrate.DefaultUpdatedAt = fxrateDescUpdatedAt.Default.(func() time.Time)
+	// fxrate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	fxrate.UpdateDefaultUpdatedAt = fxrateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// fxrateDescEnvironmentID is the schema descriptor for environment_id field.
+	fxrateDescEnvironmentID := fxrateMixinFields1[0].Descriptor()
+	// fxrate.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	fxrate.DefaultEnvironmentID = fxrateDescEnvironmentID.Default.(string)
+	// fxrateDescScope is the schema descriptor for scope field.
+	fxrateDescScope := fxrateFields[1].Descriptor()
+	// fxrate.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	fxrate.ScopeValidator = fxrateDescScope.Validators[0].(func(string) error)
+	// fxrateDescScopeID is the schema descriptor for scope_id field.
+	fxrateDescScopeID := fxrateFields[2].Descriptor()
+	// fxrate.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
+	fxrate.ScopeIDValidator = fxrateDescScopeID.Validators[0].(func(string) error)
+	// fxrateDescFromCurrency is the schema descriptor for from_currency field.
+	fxrateDescFromCurrency := fxrateFields[3].Descriptor()
+	// fxrate.FromCurrencyValidator is a validator for the "from_currency" field. It is called by the builders before save.
+	fxrate.FromCurrencyValidator = fxrateDescFromCurrency.Validators[0].(func(string) error)
+	// fxrateDescToCurrency is the schema descriptor for to_currency field.
+	fxrateDescToCurrency := fxrateFields[4].Descriptor()
+	// fxrate.ToCurrencyValidator is a validator for the "to_currency" field. It is called by the builders before save.
+	fxrate.ToCurrencyValidator = fxrateDescToCurrency.Validators[0].(func(string) error)
+	// fxrateDescSource is the schema descriptor for source field.
+	fxrateDescSource := fxrateFields[6].Descriptor()
+	// fxrate.DefaultSource holds the default value on creation for the source field.
+	fxrate.DefaultSource = types.FXRateSource(fxrateDescSource.Default.(string))
+	// fxrate.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	fxrate.SourceValidator = fxrateDescSource.Validators[0].(func(string) error)
 	featureMixin := schema.Feature{}.Mixin()
 	featureMixinFields0 := featureMixin[0].Fields()
 	_ = featureMixinFields0
