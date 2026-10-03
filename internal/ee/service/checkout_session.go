@@ -734,8 +734,8 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	// the single choke point every checkout flow passes through. A no-op when no conversion applies;
 	// a missing rate fails here, before anything is charged. Finalize later skips it (fx_conversion set).
 	// Wrapped in a transaction so the line-item, header (currency+fx_conversion) and tax writes commit
-	// atomically — the fx_conversion idempotency guard is only sound if it is set together with the
-	// converted amounts, exactly as the finalize path does it.
+	// together. No row lock is taken here, unlike finalize: the draft belongs to the session being
+	// created and nothing else references it yet.
 	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		return NewInvoiceService(s.ServiceParams).(*invoiceService).convertAndRetaxInvoice(txCtx, inv)
 	}); err != nil {

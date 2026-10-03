@@ -1172,10 +1172,12 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		// For subscription invoices, credits and taxes are deferred to this
 		// step so wallet debits only happen when the invoice is sealed. Tax
 		// runs after the conversion step below, so it is computed only once.
+		// A draft already converted at checkout is skipped: it is in the billing
+		// currency and the customer has paid the link amount, so nothing may move.
 		// ====================================================================
 
 		taxSubscriptionInvoice := false
-		if lockedInv.InvoiceType == types.InvoiceTypeSubscription {
+		if lockedInv.InvoiceType == types.InvoiceTypeSubscription && lockedInv.FxConversion == nil {
 			// Load line items — ApplyCreditsToInvoice needs them
 			lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, lockedInv.ID)
 			if err != nil {
@@ -3959,6 +3961,18 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 				"current_status": inv.InvoiceStatus,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// A converted checkout draft is frozen: recalculating would rate the subscription in the charge
+	// currency onto a billing-currency invoice, and finalize would then skip conversion.
+	if inv.FxConversion != nil {
+		return nil, ierr.NewError("invoice has already been converted to the billing currency").
+			WithHint("A converted draft cannot be recalculated; void it and issue a new one.").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": inv.ID,
+				"currency":   inv.Currency,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Validate this is a subscription invoice

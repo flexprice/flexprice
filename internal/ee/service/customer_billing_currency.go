@@ -18,13 +18,17 @@ import (
 // every wallet held in a different currency. billingCurrency is the already-normalized target (nil or
 // empty clears it).
 func (s *customerService) validateBillingCurrency(ctx context.Context, customerID string, billingCurrency *string) error {
-	open, err := s.hasOpenCheckoutSession(ctx, customerID)
+	openSessions, err := s.openCheckoutSessionIDs(ctx, customerID)
 	if err != nil {
 		return err
 	}
-	if open {
+	if len(openSessions) > 0 {
 		return ierr.NewError("open checkout session").
 			WithHint("Complete or cancel the open checkout first.").
+			WithReportableDetails(map[string]any{
+				"customer_id":          customerID,
+				"checkout_session_ids": openSessions,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -102,7 +106,8 @@ func conversionAvailable(ctx context.Context, fxRates fxrate.Repository, ccCfg t
 	return true
 }
 
-func (s *customerService) hasOpenCheckoutSession(ctx context.Context, customerID string) (bool, error) {
+// openCheckoutSessionIDs returns the customer's active checkout sessions so the error can name them.
+func (s *customerService) openCheckoutSessionIDs(ctx context.Context, customerID string) ([]string, error) {
 	filter := &types.CheckoutSessionFilter{
 		QueryFilter:      types.NewNoLimitQueryFilter(),
 		CustomerIDs:      []string{customerID},
@@ -110,9 +115,13 @@ func (s *customerService) hasOpenCheckoutSession(ctx context.Context, customerID
 	}
 	sessions, err := s.CheckoutSessionRepo.List(ctx, filter)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return len(sessions) > 0, nil
+	ids := make([]string, 0, len(sessions))
+	for _, sess := range sessions {
+		ids = append(ids, sess.ID)
+	}
+	return ids, nil
 }
 
 // activeConvertibleSubscriptions returns the customer's active, trialing or paused subscriptions,

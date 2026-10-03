@@ -7,10 +7,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -408,6 +410,74 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckout(
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
 
 	return session, subResp.Subscription, draft
+}
+
+// A cross-currency pay-first checkout through the real path: the draft is converted and the payment
+// minted in the billing currency at session creation; completion finalizes without reconverting and
+// without applying billing-currency wallet credits after the fact, so the customer pays exactly the
+// link amount.
+func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_CrossCurrency_LinkAmountIsFinal() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	cust := s.testData.customer
+	cust.BillingCurrency = lo.ToPtr("inr")
+	s.Require().NoError(s.GetStores().CustomerRepo.Update(ctx, cust))
+	s.Require().NoError(s.GetStores().FXRateRepo.Create(ctx, &fxrate.FXRate{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FX_RATE),
+		Scope:         types.FXRateScopeTenant,
+		ScopeID:       types.FXRateScopeIDTenant,
+		FromCurrency:  "usd",
+		ToCurrency:    "inr",
+		Rate:          decimal.RequireFromString("83"),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+	// An INR prepaid wallet: without the finalize guard it would be drawn down on the converted draft.
+	inrWallet := &wallet.Wallet{
+		ID:             "wallet_inr_xcur",
+		CustomerID:     cust.ID,
+		Currency:       "inr",
+		Balance:        decimal.NewFromInt(100000),
+		CreditBalance:  decimal.NewFromInt(100000),
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "INR wallet",
+		ConversionRate: decimal.NewFromInt(1),
+		WalletType:     types.WalletTypePrePaid,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, inrWallet))
+
+	s.seedFixedPricePlan("plan_xcur_payfirst", decimal.NewFromInt(50), 0)
+	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_xcur_payfirst")
+
+	// Session creation: converted draft, payment in INR.
+	s.Equal("inr", draft.Currency, "the checkout draft must be converted at session creation")
+	s.Require().NotNil(draft.FxConversion)
+	s.True(decimal.RequireFromString("4150").Equal(draft.AmountDue), "50 usd × 83, got %s", draft.AmountDue)
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, lo.FromPtr(session.CheckoutPaymentID))
+	s.Require().NoError(err)
+	s.Equal("inr", payment.Currency, "the payment must inherit the billing currency")
+	s.True(decimal.RequireFromString("4150").Equal(payment.Amount), "payment amount got %s", payment.Amount)
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_xcur_001",
+	}))
+
+	final, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, final.InvoiceStatus)
+	s.Equal("inr", final.Currency)
+	s.True(decimal.RequireFromString("83").Equal(final.FxConversion.Rate), "the frozen rate must not change")
+	s.True(decimal.RequireFromString("4150").Equal(final.AmountDue), "amount_due must equal the paid link amount, got %s", final.AmountDue)
+	s.True(final.TotalPrepaidCreditsApplied.IsZero(), "no credits may be applied after conversion, got %s", final.TotalPrepaidCreditsApplied)
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, inrWallet.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(100000).Equal(w.Balance), "the INR wallet must be untouched, got %s", w.Balance)
+	_ = draftSub
 }
 
 func (s *SubscriptionServiceSuite) webhookEventNames() []types.WebhookEventName {

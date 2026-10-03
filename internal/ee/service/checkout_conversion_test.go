@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -82,6 +83,27 @@ func (s *InvoiceConversionFinalizeSuite) TestFinalizeAfterCheckoutDoesNotReconve
 	s.Equal("inr", inv.Currency)
 	s.True(rateBefore.Equal(inv.FxConversion.Rate), "rate must not change on the finalize pass")
 	s.True(dueBefore.Equal(inv.AmountDue), "amount_due must not change: want %s got %s", dueBefore, inv.AmountDue)
+}
+
+// TestRecalculateV2RejectsConvertedDraft: a draft converted at checkout is frozen. Recalculating it
+// would rate the subscription in USD onto an INR invoice, and finalize would then skip conversion.
+func (s *InvoiceConversionFinalizeSuite) TestRecalculateV2RejectsConvertedDraft() {
+	s.seedCustomer("cust_frozen", lo.ToPtr("inr"))
+	s.seedTenantRate("usd", "inr", "83")
+	inv := s.seedDraftInvoice("inv_frozen", "cust_frozen", "usd", types.InvoiceTypeSubscription, lo.ToPtr("sub_frozen"),
+		[]*invoice.InvoiceLineItem{line("il_frozen", "100")})
+	_, err := s.checkoutSvcForConversion().createCheckoutPayment(s.ctx(), inv, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+	s.Require().NotNil(inv.FxConversion)
+
+	_, err = s.svc.RecalculateInvoiceV2(s.ctx(), "inv_frozen", false)
+
+	s.Require().Error(err, "a converted checkout draft must not be recalculated")
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+	got, gerr := s.GetStores().InvoiceRepo.Get(s.ctx(), "inv_frozen")
+	s.Require().NoError(gerr)
+	s.Equal("inr", got.Currency, "the converted draft must be left untouched")
+	s.True(decimal.RequireFromString("8300").Equal(got.AmountDue), "amount_due got %s", got.AmountDue)
 }
 
 // TestCheckoutPaymentMissingRateFails: no rate ⇒ session/payment cannot proceed, nothing minted.

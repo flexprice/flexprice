@@ -246,7 +246,7 @@ func (s *InvoiceConversionFinalizeSuite) TestAmountPaidNonZeroNoOp() {
 	inv.AmountPaid = decimal.RequireFromString("100")
 
 	s.NoError(s.svc.convertAndRetaxInvoice(s.ctx(), inv))
-	s.Equal("usd", inv.Currency, "a paid invoice is not converted here (pay-first is a later PR)")
+	s.Equal("usd", inv.Currency, "a draft that already carries a payment is not converted at finalize; pay-first converts at checkout instead")
 	s.Nil(inv.FxConversion)
 }
 
