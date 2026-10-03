@@ -24,18 +24,8 @@ func NewDLQHandler(dlqReplayService service.DLQReplayService, log *logger.Logger
 	}
 }
 
-// ReplayDLQ godoc
-// @Summary Replay a dead-letter topic
-// @Description Starts a Temporal workflow that drains a dead-letter (poison-queue) topic back to the origin topic each message was poisoned from. Run with dry_run=true first to preview routing.
-// @Tags Admin
-// @Accept json
-// @Produce json
-// @Param request body dto.ReplayDLQRequest true "DLQ replay request"
-// @Success 200 {object} models.TemporalWorkflowResult
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Security ApiKeyAuth
-// @Router /admin/dlq/replay [post]
+// ReplayDLQ starts a workflow that drains a dead-letter topic back to its origin topics.
+// Operator-only and deliberately left out of the public OpenAPI spec.
 func (h *DLQHandler) ReplayDLQ(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.ReplayDLQRequest

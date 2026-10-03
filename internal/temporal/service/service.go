@@ -448,6 +448,16 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
+	// Fixed per-source ID: Temporal rejects a second start while one is running, so two
+	// replays can't read the same uncommitted offsets and double-publish.
+	if workflowType == types.TemporalReplayDLQWorkflow {
+		if input, ok := params.(map[string]interface{}); ok {
+			if source, _ := input["source_topic"].(string); source != "" {
+				return fmt.Sprintf("%s_%s_%s", types.UUID_PREFIX_WORKFLOW, workflowType.String(), source)
+			}
+		}
+	}
+
 	contextID := s.extractWorkflowContextID(workflowType, params)
 	if contextID != "" {
 		return types.GenerateWorkflowIDWithContext(workflowType.String(), contextID)

@@ -644,7 +644,10 @@ func NewRouter(
 
 		// Admin routes (API Key only)
 		adminRoutes := v1Private.Group("/admin")
-		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, environmentRepo, logger))
+		adminRoutes.Use(
+			middleware.APIKeyAuthMiddleware(cfg, secretService, environmentRepo, logger),
+			middleware.OperatorAPIKeyOnly(cfg, logger),
+		)
 		{
 			// Drain a dead-letter topic back to origin via the ReplayDLQ workflow.
 			adminRoutes.POST("/dlq/replay", handlers.DLQ.ReplayDLQ)
