@@ -280,6 +280,10 @@ migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
 migrate-check-sync:
 	@./scripts/migrations/synccheck.sh $(MIGRATIONS_PG)
 
+.PHONY: migrate-check-lint
+migrate-check-lint:
+	@./scripts/migrations/lint.sh
+
 .PHONY: migrate-check-checksum
 migrate-check-checksum:
 	@./scripts/migrations/checksum-check.sh
