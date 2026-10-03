@@ -81,6 +81,7 @@ func RevenueRollupWorkflow(ctx workflow.Context, in cronModels.RevenueRollupInpu
 	var result cronModels.RevenueRollupWorkflowResult
 	rollupIn := cronModels.RollupDirtyActivityInput{
 		Since:                     since,
+		ForceFull:                 in.ForceFull,
 		ResumeEnvironmentID:       in.ResumeEnvironmentID,
 		ResumeAfterSubscriptionID: in.ResumeAfterSubscriptionID,
 	}
