@@ -1,6 +1,7 @@
 package meter
 
 import (
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -102,7 +103,7 @@ func FromEnt(e *ent.Meter) *Meter {
 		}
 	}
 
-	return &Meter{
+	m := &Meter{
 		ID:        e.ID,
 		EventName: e.EventName,
 		Name:      e.Name,
@@ -126,6 +127,10 @@ func FromEnt(e *ent.Meter) *Meter {
 			UpdatedBy: e.UpdatedBy,
 		},
 	}
+	// Meters persisted before write-side sanitization can carry stray whitespace
+	// in their lookup keys. Sanitizing on read heals them without a data migration.
+	m.Sanitize()
+	return m
 }
 
 // FromEntList converts a list of Ent Meters to domain Meters
@@ -164,6 +169,26 @@ func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 		Multiplier: m.Aggregation.Multiplier,
 		BucketSize: m.Aggregation.BucketSize,
 		GroupBy:    m.Aggregation.GroupBy,
+	}
+}
+
+// Sanitize trims stray whitespace from the lookup keys the meter matches events
+// on. These are looked up verbatim against event.properties, so a single leading
+// or trailing space makes every lookup miss and silently records zero usage
+// instead of failing loudly. Applied on both write and read.
+//
+// Only identifiers are sanitized (event name, aggregation field/expression/group_by,
+// filter keys) — filter values are matched against tenant data and are left as given.
+func (m *Meter) Sanitize() {
+	if m == nil {
+		return
+	}
+	m.EventName = strings.TrimSpace(m.EventName)
+	m.Aggregation.Field = strings.TrimSpace(m.Aggregation.Field)
+	m.Aggregation.Expression = strings.TrimSpace(m.Aggregation.Expression)
+	m.Aggregation.GroupBy = strings.TrimSpace(m.Aggregation.GroupBy)
+	for i := range m.Filters {
+		m.Filters[i].Key = strings.TrimSpace(m.Filters[i].Key)
 	}
 }
 
