@@ -69,6 +69,8 @@ func SyncPriceToSubscriptions() error {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	ctx = types.SetActor(ctx, types.SystemActor("script:sync-price-to-subscriptions", "Script sync-price-to-subscriptions"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// Get the price
 	p, err := script.priceRepo.Get(ctx, priceID)

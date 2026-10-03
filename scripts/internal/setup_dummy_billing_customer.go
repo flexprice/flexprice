@@ -265,6 +265,8 @@ func SetupDummyBillingCustomer() error {
 	ctx = types.SetTenantID(ctx, tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 	ctx = types.SetUserID(ctx, "system")
+	ctx = types.SetActor(ctx, types.SystemActor("script:setup-dummy-billing-customer", "Script setup-dummy-billing-customer"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	m, err := meterRepo.GetMeter(ctx, meterID)
 	if err != nil {

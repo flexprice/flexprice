@@ -53,6 +53,8 @@ func AssignPlanToCustomers() error {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	ctx = types.SetActor(ctx, types.SystemActor("script:assign-plan", "Script assign-plan"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// Verify the plan exists
 	p, err := script.planRepo.Get(ctx, planID)

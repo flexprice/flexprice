@@ -150,6 +150,8 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 	ctx = types.SetTenantID(ctx, params.TenantID)
 	ctx = types.SetEnvironmentID(ctx, params.EnvironmentID)
 	ctx = types.SetUserID(ctx, "system")
+	ctx = types.SetActor(ctx, types.SystemActor("script:setup-draft-invoices", "Script setup-draft-invoices"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// 5. Process subscriptions: one idempotent draft per subscription for the current period
 	var invoiceIDs []string
