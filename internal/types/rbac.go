@@ -94,6 +94,7 @@ const (
 	EntityAI              Entity = "ai"
 	EntityPortal          Entity = "portal"
 	EntityWebhook         Entity = "webhook"
+	EntityActivity        Entity = "activity"
 	EntityCron            Entity = "cron"
 	EntitySetting         Entity = "setting"
 	EntityOAuth           Entity = "oauth"

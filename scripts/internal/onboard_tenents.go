@@ -25,6 +25,8 @@ import (
 func SyncBillingCustomers() error {
 	// Initialize context
 	ctx := context.Background()
+	ctx = types.SetActor(ctx, types.SystemActor("script:sync-billing-customers", "Script sync-billing-customers"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// Load configuration
 	cfg, err := config.NewConfig()

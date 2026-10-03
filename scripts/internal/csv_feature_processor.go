@@ -495,6 +495,8 @@ func ProcessCSVFeatures() error {
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, userID)
+	ctx = types.SetActor(ctx, types.SystemActor("script:process-csv-features", "Script process-csv-features"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// Parse the CSV file
 	records, err := processor.parseCSV(filePath)

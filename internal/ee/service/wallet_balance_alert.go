@@ -172,7 +172,7 @@ func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router,
 		cfg.WalletBalanceAlert.Topic,
 		cfg.Kafka.TopicDLQ,
 		s.pubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.WalletBalanceAlert.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 

@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -62,7 +63,19 @@ type Client struct {
 	readerClient *ent.Client // Read replica connection (may be same as writer)
 	logger       *logger.Logger
 	tracing      *tracing.Service
-	hasReader    bool // Whether a separate reader endpoint is configured
+	hasReader    bool               // Whether a separate reader endpoint is configured
+	activity     *activity.Registry // Entities whose writes are activity-logged; nil disables logging
+}
+
+// Option configures optional Client behaviour.
+type Option func(*Client)
+
+// WithActivity installs the activity-log hook on the writer client and makes
+// every transaction collect and flush activity rows before it commits.
+func WithActivity(reg *activity.Registry) Option {
+	return func(c *Client) {
+		c.activity = reg
+	}
 }
 
 // Module provides an fx.Option to integrate Ent client with the application
@@ -175,14 +188,21 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 
 // NewClient creates a new ent client wrapper with transaction management.
 // tracingSvc may be nil; all tracing hooks no-op in that case.
-func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.Service) IClient {
-	return &Client{
+func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.Service, opts ...Option) IClient {
+	c := &Client{
 		writerClient: clients.Writer,
 		readerClient: clients.Reader,
 		logger:       logger,
 		tracing:      tracingSvc,
 		hasReader:    clients.HasReader,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	if c.activity != nil && c.writerClient != nil {
+		c.writerClient.Use(activity.Hook(c.activity, logger))
+	}
+	return c
 }
 
 // WithTx wraps the given function in a transaction
@@ -238,6 +258,7 @@ func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error)
 			)
 			_ = tx.Rollback()
 			types.DiscardPostCommitHooks(txCtx)
+			activity.CollectorFrom(txCtx).Close()
 			panic(v)
 		}
 	}()
@@ -253,12 +274,31 @@ func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error)
 	// below, once the commit has made those writes visible.
 	txCtx = types.WithPostCommitHooks(txCtx)
 
+	// Activity rows for this transaction's writes collect here and are
+	// flushed inside it, so they commit or roll back with those writes.
+	if c.activity != nil {
+		txCtx = activity.WithCollector(txCtx)
+		txCtx = activity.WithQuerier(txCtx, tx.Client())
+	}
+
 	if err := fn(txCtx); err != nil {
 		if rerr := tx.Rollback(); rerr != nil {
 			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
 		}
 		types.DiscardPostCommitHooks(txCtx)
+		activity.CollectorFrom(txCtx).Close()
 		c.logger.Error(ctx, "rolling back transaction due to error",
+			"error", err,
+		)
+		return err
+	}
+
+	if err := activity.Flush(txCtx, tx.Client(), c.activity, c.logger); err != nil {
+		if rerr := tx.Rollback(); rerr != nil {
+			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
+		}
+		types.DiscardPostCommitHooks(txCtx)
+		c.logger.Error(ctx, "rolling back transaction: activity flush failed",
 			"error", err,
 		)
 		return err

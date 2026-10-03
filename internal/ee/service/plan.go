@@ -438,7 +438,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 	terminationIteration := 0
 	for {
 		terminationIteration++
-		numTerminated, err := s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(ctx, planPriceSyncParams)
+		// The repository records plan.prices_synced, which only lands inside a transaction.
+		var numTerminated int
+		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			var terr error
+			numTerminated, terr = s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(txCtx, planPriceSyncParams)
+			return terr
+		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to terminate expired plan price line items", "plan_id", planID, "error", err)
 			return nil, err
@@ -746,9 +752,15 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		//    run aren't re-checked; any LI leaked for them by a mid-run
 		//    price-end is picked up by the next sync invocation.
 		terminationStart := time.Now()
-		terminated, terr := s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(ctx, planpricesync.TerminatePlanPricesLineItemsV2Params{
-			PlanID: planID,
-			SubIDs: subIDsInPage,
+		// The repository records plan.prices_synced, which only lands inside a transaction.
+		var terminated int
+		terr := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			var err error
+			terminated, err = s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(txCtx, planpricesync.TerminatePlanPricesLineItemsV2Params{
+				PlanID: planID,
+				SubIDs: subIDsInPage,
+			})
+			return err
 		})
 		if terr != nil {
 			s.Logger.Error(ctx, "failed to terminate plan line items (v2)", "plan_id", planID, "page", pageIteration, "error", terr)

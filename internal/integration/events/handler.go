@@ -176,6 +176,8 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
+	ctx = types.SetActor(ctx, types.SystemActor(string(event.EventName), "Webhook "+string(event.EventName)))
+	ctx = types.SetSource(ctx, types.SourceWebhook)
 
 	h.deps.Logger.Debug(ctx, "integration_events: consumed webhook-shaped system event",
 		"message_uuid", msg.UUID,

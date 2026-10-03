@@ -221,7 +221,7 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 		cfg.OnboardingEvents.Topic,
 		cfg.Kafka.TopicDLQ,
 		s.pubSub,
-		s.processMessage,
+		pubsubRouter.WithConsumerActor(cfg.OnboardingEvents.ConsumerGroup, s.processMessage),
 		throttle.Middleware,
 	)
 
@@ -266,6 +266,8 @@ func (s *onboardingService) processMessage(ctx context.Context, msg *message.Mes
 	bgCtx = context.WithValue(bgCtx, types.CtxTenantID, eventMsg.TenantID)
 	bgCtx = context.WithValue(bgCtx, types.CtxEnvironmentID, eventMsg.EnvironmentID)
 	bgCtx = context.WithValue(bgCtx, types.CtxUserID, eventMsg.UserID)
+	bgCtx = types.SetActor(bgCtx, types.GetActor(ctx))
+	bgCtx = types.SetSource(bgCtx, types.GetSource(ctx))
 
 	// Start a goroutine to generate events at a rate of 1 per second
 	go s.generateEvents(bgCtx, &eventMsg)

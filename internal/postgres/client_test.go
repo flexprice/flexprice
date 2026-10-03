@@ -6,11 +6,13 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -97,37 +99,69 @@ func TestReader_UnpinnedContextWithoutHolderStaysOnReplica(t *testing.T) {
 	}
 }
 
-// stubDriver is a database/sql driver that can only begin, commit and roll
-// back — enough for withTx, which is what these tests exercise. No statement
-// ever reaches it, so it needs no schema and no database.
-type stubDriver struct{ rollbacks *int }
+// stubDriver is a database/sql driver that can begin, commit, roll back and
+// run Exec — enough for withTx and the activity flush it performs. Exec only
+// records the statement, so it needs no schema and no database.
+type stubDriver struct {
+	rollbacks *int
+	events    *[]string
+}
 
-func (d stubDriver) Open(string) (driver.Conn, error) { return stubConn{rollbacks: d.rollbacks}, nil }
+func (d stubDriver) Open(string) (driver.Conn, error) {
+	return stubConn{rollbacks: d.rollbacks, events: d.events}, nil
+}
 
-type stubConn struct{ rollbacks *int }
+type stubConn struct {
+	rollbacks *int
+	events    *[]string
+}
 
 func (c stubConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("no statements in stub")
 }
-func (c stubConn) Close() error              { return nil }
-func (c stubConn) Begin() (driver.Tx, error) { return stubTx{rollbacks: c.rollbacks}, nil }
+func (c stubConn) Close() error { return nil }
+func (c stubConn) Begin() (driver.Tx, error) {
+	return stubTx{rollbacks: c.rollbacks, events: c.events}, nil
+}
+func (c stubConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
+	record(c.events, "exec: "+q)
+	return driver.RowsAffected(1), nil
+}
 
-type stubTx struct{ rollbacks *int }
+type stubTx struct {
+	rollbacks *int
+	events    *[]string
+}
 
-func (t stubTx) Commit() error { return nil }
+func (t stubTx) Commit() error {
+	record(t.events, "commit")
+	return nil
+}
 func (t stubTx) Rollback() error {
 	if t.rollbacks != nil {
 		*t.rollbacks++
 	}
+	record(t.events, "rollback")
 	return nil
+}
+
+func record(events *[]string, e string) {
+	if events != nil {
+		*events = append(*events, e)
+	}
 }
 
 // newTxTestClient builds a Client whose writer can open real transactions
 // against the stub driver above.
 func newTxTestClient(t *testing.T, rollbacks *int) *Client {
 	t.Helper()
+	return newStubClient(t, stubDriver{rollbacks: rollbacks})
+}
+
+func newStubClient(t *testing.T, d stubDriver, opts ...Option) *Client {
+	t.Helper()
 	name := fmt.Sprintf("stub-%s", t.Name())
-	sql.Register(name, stubDriver{rollbacks: rollbacks})
+	sql.Register(name, d)
 	db, err := sql.Open(name, "")
 	if err != nil {
 		t.Fatalf("opening stub db: %v", err)
@@ -135,10 +169,8 @@ func newTxTestClient(t *testing.T, rollbacks *int) *Client {
 	t.Cleanup(func() { _ = db.Close() })
 
 	drv := entsql.OpenDB(dialect.Postgres, db)
-	return &Client{
-		writerClient: ent.NewClient(ent.Driver(drv)),
-		logger:       logger.NewNoopLogger(),
-	}
+	writer := ent.NewClient(ent.Driver(drv))
+	return NewClient(&EntClients{Writer: writer, Reader: writer}, logger.NewNoopLogger(), nil, opts...).(*Client)
 }
 
 // TestWithTx_RunsPostCommitHooksAfterCommit: work registered inside the
@@ -190,5 +222,109 @@ func TestWithTx_DiscardsPostCommitHooksOnRollback(t *testing.T) {
 	}
 	if types.RegisterPostCommit(txCtx, func() {}) {
 		t.Fatal("registration must be closed once the transaction has ended")
+	}
+}
+
+func actorCtx() context.Context {
+	ctx := types.SetTenantID(context.Background(), "t1")
+	ctx = types.SetEnvironmentID(ctx, "e1")
+	return types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: "u1"})
+}
+
+// TestWithTx_FlushesActivityBeforeCommit: the activity rows are written inside
+// the transaction, so they commit or roll back with the business writes.
+func TestWithTx_FlushesActivityBeforeCommit(t *testing.T) {
+	var events []string
+	c := newStubClient(t, stubDriver{events: &events}, WithActivity(activity.NewRegistry()))
+
+	err := c.withTx(actorCtx(), func(ctx context.Context) error {
+		activity.RecordAction(ctx, activity.Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.noted"})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withTx: %v", err)
+	}
+	if len(events) != 2 || !strings.HasPrefix(events[0], "exec: INSERT INTO activity_logs") || events[1] != "commit" {
+		t.Fatalf("want the activity insert then the commit, got %v", events)
+	}
+}
+
+// TestWithTx_EmptyActorRollsBack: a flush refused for a missing actor fails
+// the transaction instead of committing writes nobody can be blamed for.
+func TestWithTx_EmptyActorRollsBack(t *testing.T) {
+	var events []string
+	c := newStubClient(t, stubDriver{events: &events}, WithActivity(activity.NewRegistry()))
+
+	err := c.withTx(context.Background(), func(ctx context.Context) error {
+		activity.RecordAction(ctx, activity.Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.noted"})
+		return nil
+	})
+	if !errors.Is(err, activity.ErrEmptyActor) {
+		t.Fatalf("want ErrEmptyActor, got %v", err)
+	}
+	if len(events) != 1 || events[0] != "rollback" {
+		t.Fatalf("want only a rollback, got %v", events)
+	}
+}
+
+// TestWithTx_ClosesCollectorOnError: a rolled-back transaction's entries are
+// dropped and nothing more can be recorded into them.
+func TestWithTx_ClosesCollectorOnError(t *testing.T) {
+	var events []string
+	c := newStubClient(t, stubDriver{events: &events}, WithActivity(activity.NewRegistry()))
+
+	var txCtx context.Context
+	_ = c.withTx(actorCtx(), func(ctx context.Context) error {
+		txCtx = ctx
+		activity.RecordAction(ctx, activity.Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.noted"})
+		return errors.New("boom")
+	})
+	col := activity.CollectorFrom(txCtx)
+	if col == nil {
+		t.Fatal("withTx must install a collector")
+	}
+	activity.RecordAction(txCtx, activity.Entry{EntityType: "customer", EntityID: "cus_2", Action: "customer.noted"})
+	for _, e := range col.Entries() {
+		if e.EntityID == "cus_2" {
+			t.Fatal("a closed collector must accept no more entries")
+		}
+	}
+	for _, e := range events {
+		if strings.HasPrefix(e, "exec:") {
+			t.Fatalf("a failed transaction must not flush, got %v", events)
+		}
+	}
+}
+
+// TestWithTx_ClosesCollectorOnPanic: the panic path drops entries like the error path.
+func TestWithTx_ClosesCollectorOnPanic(t *testing.T) {
+	c := newStubClient(t, stubDriver{}, WithActivity(activity.NewRegistry()))
+
+	var txCtx context.Context
+	func() {
+		defer func() { _ = recover() }()
+		_ = c.withTx(actorCtx(), func(ctx context.Context) error {
+			txCtx = ctx
+			panic("boom")
+		})
+	}()
+	activity.RecordAction(txCtx, activity.Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.noted"})
+	if n := len(activity.CollectorFrom(txCtx).Entries()); n != 0 {
+		t.Fatalf("a closed collector must accept no more entries, got %d", n)
+	}
+}
+
+// TestWithTx_NoActivityWithoutRegistry: clients built without WithActivity
+// (scripts, tests) install no collector, so they never flush or need an actor.
+func TestWithTx_NoActivityWithoutRegistry(t *testing.T) {
+	c := newTxTestClient(t, nil)
+	err := c.withTx(context.Background(), func(ctx context.Context) error {
+		if activity.CollectorFrom(ctx) != nil {
+			t.Fatal("no collector without a registry")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withTx: %v", err)
 	}
 }

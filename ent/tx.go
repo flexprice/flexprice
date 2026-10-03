@@ -14,6 +14,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// ActivityLog is the client for interacting with the ActivityLog builders.
+	ActivityLog *ActivityLogClient
 	// Addon is the client for interacting with the Addon builders.
 	Addon *AddonClient
 	// AddonAssociation is the client for interacting with the AddonAssociation builders.
@@ -259,6 +261,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.ActivityLog = NewActivityLogClient(tx.config)
 	tx.Addon = NewAddonClient(tx.config)
 	tx.AddonAssociation = NewAddonAssociationClient(tx.config)
 	tx.AlertLogs = NewAlertLogsClient(tx.config)
@@ -325,7 +328,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Addon.QueryXXX(), the query will be executed
+// applies a query, for example: ActivityLog.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

@@ -52,6 +52,8 @@ func MigrateCGA() error {
 	creditGrantRepo := entRepo.NewCreditGrantRepository(pgClient, log, redisCache)
 
 	baseCtx := context.Background()
+	baseCtx = types.SetActor(baseCtx, types.SystemActor("script:migrate-cga", "Script migrate-cga"))
+	baseCtx = types.SetSource(baseCtx, types.SourceWorkflow)
 
 	log.Infow("Starting migration", "dry_run", isDryRun)
 

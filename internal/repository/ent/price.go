@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -552,6 +553,16 @@ func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
 		return ierr.WithError(err).
 			WithHint("Failed to delete prices in bulk").
 			Mark(ierr.ErrDatabase)
+	}
+
+	// Raw SQL bypasses the ent activity hook, so name each archive explicitly.
+	for _, id := range ids {
+		activity.RecordAction(ctx, activity.Entry{
+			EntityType: string(types.SystemEntityTypePrice),
+			EntityID:   id,
+			Action:     "price.archived",
+			Changes:    map[string]activity.Change{"status": {From: string(types.StatusPublished), To: string(types.StatusArchived)}},
+		})
 	}
 
 	return nil

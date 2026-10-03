@@ -552,6 +552,8 @@ func ImportPricing() error {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	ctx = types.SetActor(ctx, types.SystemActor("script:import-pricing", "Script import-pricing"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	// Parse the CSV file
 	pricingRows, err := script.parsePricingCSV(filePath)

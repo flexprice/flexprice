@@ -1,0 +1,135 @@
+package activity
+
+import (
+	"context"
+	"testing"
+)
+
+func TestCollectorMergesSameEntity(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "active", To: "paused"}}})
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "paused", To: "active"}, "plan_id": {From: "a", To: "b"}}})
+	entries := c.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("want 1 merged entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Changes["status"].From != "active" || e.Changes["status"].To != "active" {
+		t.Fatalf("merge should keep first from and last to: %+v", e.Changes["status"])
+	}
+	if e.Changes["plan_id"].To != "b" {
+		t.Fatal("union of fields lost plan_id")
+	}
+}
+
+func TestCollectorCreateThenUpdateIsCreate(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpCreate, Snapshot: map[string]any{"name": "a"}})
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpUpdate,
+		Changes: map[string]Change{"name": {From: "a", To: "b"}}, Fields: map[string]any{"name": "b"}})
+	e := c.Entries()[0]
+	if e.Op != OpCreate || e.Snapshot["name"] != "b" {
+		t.Fatalf("want create with final snapshot, got op=%v snap=%v", e.Op, e.Snapshot)
+	}
+	if len(e.Changes) != 0 {
+		t.Fatalf("a create folds later updates into its snapshot, want no changes, got %v", e.Changes)
+	}
+}
+
+func TestCollectorCreateWithoutSnapshotStaysWithoutSnapshot(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "invoice", EntityID: "inv_1", Op: OpCreate})
+	c.Add(Record{EntityType: "invoice", EntityID: "inv_1", Op: OpUpdate,
+		Changes: map[string]Change{"invoice_status": {From: "DRAFT", To: "SKIPPED"}, "tax_id": {Redacted: true}}})
+	e := c.Entries()[0]
+	if e.Op != OpCreate || e.Snapshot != nil || len(e.Changes) != 0 {
+		t.Fatalf("want bare create, got op=%v snap=%v changes=%v", e.Op, e.Snapshot, e.Changes)
+	}
+}
+
+func TestCollectorCreateFoldKeepsRedaction(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpCreate, Snapshot: map[string]any{"tax_id": "[redacted]"}})
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpUpdate,
+		Changes: map[string]Change{"tax_id": {Redacted: true}}})
+	if got := c.Entries()[0].Snapshot["tax_id"]; got != "[redacted]" {
+		t.Fatalf("redacted field must stay redacted in the folded snapshot, got %v", got)
+	}
+}
+
+func TestRecordActionNamesEntryEitherOrder(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	RecordAction(ctx, Entry{EntityType: "subscription", EntityID: "sub_1", Action: "subscription.paused",
+		Metadata: map[string]any{"reason": "x"}})
+	CollectorFrom(ctx).Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "active", To: "paused"}}})
+	e := CollectorFrom(ctx).Entries()[0]
+	if e.Action != "subscription.paused" || e.Metadata["reason"] != "x" {
+		t.Fatalf("name not applied: %+v", e)
+	}
+	if e.Op != OpUpdate {
+		t.Fatalf("want OpUpdate once the hook's Add observes the update, got %v", e.Op)
+	}
+}
+
+func TestNameNeverFlipsASetOp(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "customer", EntityID: "cus_1", Op: OpCreate, Snapshot: map[string]any{"name": "a"}})
+	RecordAction(ctx, Entry{EntityType: "customer", EntityID: "cus_1", Action: "customer.created",
+		Changes: map[string]Change{"name": {From: nil, To: "a"}}})
+	e := c.Entries()[0]
+	if e.Op != OpCreate {
+		t.Fatalf("Name must never change an already-set op, got %v", e.Op)
+	}
+}
+
+func TestCloseIsIdempotentAndDropsLateWrites(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	c := CollectorFrom(ctx)
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "active", To: "paused"}}})
+	c.Close()
+	c.Close() // must not panic
+
+	c.Add(Record{EntityType: "subscription", EntityID: "sub_1", Op: OpUpdate,
+		Changes: map[string]Change{"status": {From: "paused", To: "active"}}})
+	RecordAction(ctx, Entry{EntityType: "subscription", EntityID: "sub_1", Action: "subscription.resumed"})
+
+	entries := c.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("want 1 entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Changes["status"].To != "paused" || e.Action != "" {
+		t.Fatalf("writes after Close must be dropped: %+v", e)
+	}
+}
+
+func TestRecordActionWithoutCollectorIsNoop(t *testing.T) {
+	ctx := context.Background()
+	RecordAction(ctx, Entry{EntityType: "subscription", EntityID: "sub_1", Action: "subscription.paused"})
+	if CollectorFrom(ctx) != nil {
+		t.Fatal("no collector should exist without WithCollector")
+	}
+}
+
+func TestSuppressRequiresReason(t *testing.T) {
+	ctx := WithCollector(context.Background())
+	sctx := Suppress(ctx, "balance tick")
+	if !IsSuppressed(sctx) || IsSuppressed(ctx) {
+		t.Fatal("suppression scoping wrong")
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("empty reason must panic")
+		}
+	}()
+	Suppress(ctx, "")
+}

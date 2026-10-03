@@ -63,6 +63,7 @@ type cronActivityBundle struct {
 	marketplaceReport            *marketplaceActivities.ReportActivities
 	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 	revenueRollup                *cronActivities.RevenueRollupActivities
+	activityArchive              *cronActivities.ActivityArchiveActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -314,6 +315,7 @@ func RegisterWorkflowsAndActivities(
 		marketplaceReport:            marketplaceReportActivities,
 		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
+		activityArchive:              cronActivities.NewActivityArchiveActivities(params.DB, params.Config, params.ActivityArchiveStorage, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -554,6 +556,7 @@ func buildWorkerConfig(
 			cronWorkflows.MarketplaceUsageReportWorkflow,
 			cronWorkflows.DailyDraftAndComputeWorkflow,
 			cronWorkflows.RevenueRollupWorkflow,
+			cronWorkflows.ActivityArchiveWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -574,6 +577,10 @@ func buildWorkerConfig(
 			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
 			cron.revenueRollup.RollupDirtyActivity,
 			cron.revenueRollup.ReconcileBookedInvoicesActivity,
+			cron.activityArchive.MaintainPartitionsActivity,
+			cron.activityArchive.ListArchivablePartitionsActivity,
+			cron.activityArchive.ExportPartitionActivity,
+			cron.activityArchive.DropPartitionActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:

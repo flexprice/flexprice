@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
@@ -912,6 +913,13 @@ func (s *subscriptionService) executePlanChangeAt(
 		if err != nil {
 			return err
 		}
+
+		activity.RecordAction(txCtx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeSubscription),
+			EntityID:   sub.ID,
+			Action:     "subscription.plan_changed",
+			Metadata:   map[string]any{"from_plan_id": r.fromPlan.ID, "to_plan_id": r.toPlan.ID},
+		})
 
 		resp = buildPlanChangeResponse(r, anchoredSub, req)
 		resp.ChangedResources.LineItems = planChangeChangedLineItems(r)
