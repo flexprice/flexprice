@@ -655,9 +655,13 @@ filter-mcp-spec:
 sync-gen-to-output:
 	@./scripts/sync-gen-to-output.sh
 
+# Local runs skip the registry upload. The release workflow overrides this to publish the spec and
+# code samples behind the hosted docs spec (spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples).
+SPEAKEASY_RUN_FLAGS ?= --skip-upload-spec --minimal
+
 speakeasy-generate: speakeasy-validate filter-mcp-spec sync-gen-to-output
 	@echo "Generating SDKs with Speakeasy..."
-	@CI=true TERM=dumb speakeasy run --target all -y --skip-upload-spec --skip-compile --minimal
+	@CI=true TERM=dumb speakeasy run --target all -y --skip-compile $(SPEAKEASY_RUN_FLAGS)
 
 # =============================================================================
 # Single command: Swagger + SDK/MCP generation + merge custom (no testing; use make test-sdk for integration tests)
