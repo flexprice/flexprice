@@ -79,17 +79,7 @@ func (s *activityLogService) decorate(r *activitylog.ActivityLog) *dto.ActivityR
 	out.Changes = activity.AnnotateChanges(def, r.Changes)
 	out.Metadata = activity.AnnotateMetadata(def, r.Metadata)
 	in := activity.SummaryInput{ActorLabel: actorLabel, EntityLabel: entityLabel, Action: r.Action, Changes: r.Changes}
-	parts := dto.ActivityDisplayParts{Actor: actorLabel, Verb: r.Action[strings.LastIndex(r.Action, ".")+1:], EntityType: r.EntityType, Entity: entityLabel, Count: len(r.Changes)}
-	if len(r.Changes) == 1 {
-		for field, raw := range r.Changes {
-			ch, _ := raw.(map[string]any)
-			label := activity.Humanize(field)
-			if fd, ok := def.FieldLabels[field]; ok {
-				label = fd.Label
-			}
-			parts.Field, parts.From, parts.To = &label, ch["from"], ch["to"]
-		}
-	}
+	parts := dto.ActivityDisplayParts{Actor: actorLabel, Verb: r.Action[strings.LastIndex(r.Action, ".")+1:], EntityType: r.EntityType, Entity: entityLabel}
 	out.Display = dto.ActivityDisplay{Summary: activity.Summary(def, in), EntityLabel: entityLabel, Parts: parts}
 	return out
 }

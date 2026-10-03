@@ -14658,20 +14658,12 @@ const docTemplate = `{
                 "actor": {
                     "type": "string"
                 },
-                "count": {
-                    "type": "integer"
-                },
                 "entity": {
                     "type": "string"
                 },
                 "entity_type": {
                     "type": "string"
                 },
-                "field": {
-                    "type": "string"
-                },
-                "from": {},
-                "to": {},
                 "verb": {
                     "type": "string"
                 }

@@ -14,14 +14,10 @@ type ActivityActor struct {
 }
 
 type ActivityDisplayParts struct {
-	Actor      string  `json:"actor"`
-	Verb       string  `json:"verb"`
-	EntityType string  `json:"entity_type"`
-	Entity     string  `json:"entity"`
-	Field      *string `json:"field"`
-	From       any     `json:"from"`
-	To         any     `json:"to"`
-	Count      int     `json:"count"`
+	Actor      string `json:"actor"`
+	Verb       string `json:"verb"`
+	EntityType string `json:"entity_type"`
+	Entity     string `json:"entity"`
 }
 
 type ActivityDisplay struct {
