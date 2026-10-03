@@ -45,7 +45,10 @@ type ContactAddress struct {
 }
 
 type ContactCreateRequest struct {
-	ContactName     string          `json:"contact_name"`
+	ContactName string `json:"contact_name"`
+	// CurrencyID pins the contact's currency. Omitted, Zoho locks it to the org base currency.
+	// Immutable once the contact has transactions, so it is only sent on create.
+	CurrencyID      string          `json:"currency_id,omitempty"`
 	CompanyName     string          `json:"company_name,omitempty"`
 	ContactType     string          `json:"contact_type,omitempty"`
 	CustomerSubType string          `json:"customer_sub_type,omitempty"`
@@ -141,8 +144,11 @@ func NewCustomField(ref, value string) CustomField {
 }
 
 type InvoiceCreateRequest struct {
-	CustomerID          string            `json:"customer_id"`
-	CurrencyCode        string            `json:"currency_code,omitempty"`
+	CustomerID string `json:"customer_id"`
+	// CurrencyID sets the invoice's currency. Zoho identifies currency by id on write.
+	CurrencyID string `json:"currency_id,omitempty"`
+	// ExchangeRate translates the invoice into the org base currency for the ledger.
+	// It does not rescale line item rates.
 	ExchangeRate        float64           `json:"exchange_rate,omitempty"`
 	Date                string            `json:"date,omitempty"`
 	DueDate             string            `json:"due_date,omitempty"`
