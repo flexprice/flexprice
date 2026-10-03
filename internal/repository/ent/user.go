@@ -460,6 +460,9 @@ func (r *userRepository) ListByFilter(ctx context.Context, filter *types.UserFil
 // Users are scoped to a tenant (not to an environment), so the cache key is
 // keyed by tenant + user ID only, mirroring the GetByID query filter.
 func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
+	if r.redisCache == nil {
+		return
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "set", map[string]interface{}{
 		"user_id": user.ID,
 	})
@@ -470,6 +473,9 @@ func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
 }
 
 func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.User {
+	if r.redisCache == nil {
+		return nil
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "get", map[string]interface{}{
 		"user_id": id,
 	})
@@ -488,6 +494,9 @@ func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.Us
 }
 
 func (r *userRepository) DeleteCache(ctx context.Context, id string) {
+	if r.redisCache == nil {
+		return
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "delete", map[string]interface{}{
 		"user_id": id,
 	})

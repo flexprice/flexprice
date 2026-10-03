@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -52,9 +53,14 @@ func newOnboardingScript() (*onboardingScript, error) {
 	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 
 	// Initialize repositories
+	// Wire caches so repository cache hooks (e.g. user DeleteCache) have a
+	// backing store instead of a nil pointer. GetRedisCache may still return nil
+	// when Redis is unreachable; the repo cache methods nil-guard that.
 	repoParams := repository.RepositoryParams{
-		EntClient: client,
-		Logger:    log,
+		EntClient:     client,
+		Logger:        log,
+		InMemoryCache: cache.GetInMemoryCache(),
+		RedisCache:    cache.GetRedisCache(),
 	}
 
 	// Create auth provider
@@ -100,6 +106,9 @@ func (s *onboardingScript) createTenant(ctx context.Context, name string) (*tena
 func (s *onboardingScript) createUser(ctx context.Context, email, tenantID string) (*user.User, error) {
 	password := os.Getenv("USER_PASSWORD")
 	u := user.NewUser(email, tenantID)
+	// The first user of a tenant owns it; grant super_admin so tenant/admin
+	// operations pass RBAC, matching the primary onboarding flow.
+	u.Roles = []string{types.RoleSuperAdmin.String()}
 
 	// Check if user already exists in MongoDB
 	existingUser, err := s.userRepo.GetByEmail(ctx, u.Email)
