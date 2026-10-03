@@ -35,6 +35,14 @@ type EventConsumptionService interface {
 	// bulk-inserts every event in the batch into the events table in one call.
 	RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 
+	// RegisterHandlerBatchToBulk consumes the events topic and re-publishes to
+	// topic_bulk in batches, committing offsets only after publish. Mutually
+	// exclusive with RegisterHandler via the batch_to_bulk flag.
+	RegisterHandlerBatchToBulk(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// CloseBatcher flushes and releases the batch-to-bulk batcher on shutdown.
+	CloseBatcher()
+
 	// Process a raw event payload (used for AWS Lambda and direct processing)
 	ProcessRawEvent(ctx context.Context, payload []byte) error
 }
@@ -47,6 +55,7 @@ type eventConsumptionService struct {
 	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
+	bulkBatcher    *eventBatcher
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -216,6 +225,12 @@ func (s *eventConsumptionService) RegisterHandler(
 		return
 	}
 
+	// Mutually exclusive with the batch-to-bulk handler on the same group.
+	if cfg.EventProcessing.BatchToBulk {
+		s.Logger.Info(context.Background(), "event consumption handler skipped, batch_to_bulk enabled")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
 
@@ -348,41 +363,7 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 	)
 
 	// Prepare events to insert
-	eventsToInsert := []*events.Event{&event}
-
-	s.Logger.Debug(ctx, "creating billing event",
-		"tenant_id", s.Config.Billing.TenantID,
-		"environment_id", s.Config.Billing.EnvironmentID,
-		"external_customer_id", event.ExternalCustomerID,
-	)
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Generate new ID
-			"", // Customer ID will be looked up by external ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		s.Logger.Debug(ctx, "appending billing event",
-			"tenant_id", s.Config.Billing.TenantID,
-			"environment_id", s.Config.Billing.EnvironmentID,
-			"external_customer_id", event.ExternalCustomerID,
-		)
-
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
+	eventsToInsert := s.expandWithBillingEvent(&event)
 
 	// Insert events into ClickHouse
 	s.Logger.Debug(ctx, "inserting events into ClickHouse",
@@ -412,6 +393,114 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 	return nil
 }
 
+// expandWithBillingEvent returns the event alone, or with an appended
+// tenant_event billing event when billing is configured.
+func (s *eventConsumptionService) expandWithBillingEvent(event *events.Event) []*events.Event {
+	if s.Config.Billing.TenantID == "" {
+		return []*events.Event{event}
+	}
+
+	// Deterministic id AND timestamp from source event: the ClickHouse dedup key
+	// is (tenant, env, timestamp, id), so both must be stable or redelivery overbills.
+	billingID := "tenant_event_" + event.ID
+
+	billingEvent := events.NewEvent(
+		"tenant_event", // Standardized event name for billing
+		s.Config.Billing.TenantID,
+		event.TenantID, // Use original tenant ID as external customer ID
+		map[string]interface{}{
+			"original_event_id":   event.ID,
+			"original_event_name": event.EventName,
+			"original_timestamp":  event.Timestamp,
+			"tenant_id":           event.TenantID,
+			"source":              event.Source,
+		},
+		event.Timestamp,
+		billingID,
+		"", // Customer ID will be looked up by external ID
+		"system",
+		s.Config.Billing.EnvironmentID,
+	)
+	return []*events.Event{event, billingEvent}
+}
+
+// RegisterHandlerBatchToBulk consumes the events topic and re-publishes to
+// topic_bulk in batches, feeding the existing bulk consumer.
+func (s *eventConsumptionService) RegisterHandlerBatchToBulk(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessing.Enabled {
+		s.Logger.Info(context.Background(), "batch-to-bulk handler disabled by configuration")
+		return
+	}
+
+	if !cfg.EventProcessing.BatchToBulk {
+		s.Logger.Info(context.Background(), "batch-to-bulk handler skipped, flag disabled")
+		return
+	}
+
+	// Empty topic_bulk would ack source events while PublishBatch fails: stall, not loss.
+	if cfg.Kafka.TopicBulk == "" {
+		s.Logger.Fatal(context.Background(), "batch_to_bulk enabled but kafka.topic_bulk is empty",
+			"error", "kafka.topic_bulk must be set when event_processing.batch_to_bulk is true")
+		return
+	}
+
+	s.bulkBatcher = newEventBatcher(
+		cfg.EventProcessing.BatchFlushSize,
+		cfg.EventProcessing.BatchFlushMillis,
+		s.EventPublisher.PublishBatch,
+		s.Logger,
+	)
+
+	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
+
+	router.AddNoPublishHandler(
+		"event_consumption_batch_to_bulk_handler",
+		cfg.EventProcessing.Topic,
+		cfg.EventProcessing.TopicDLQ,
+		s.pubSub,
+		s.processMessageBatchToBulk,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered batch-to-bulk handler",
+		"topic", cfg.EventProcessing.Topic,
+		"flush_size", cfg.EventProcessing.BatchFlushSize,
+		"flush_millis", cfg.EventProcessing.BatchFlushMillis,
+	)
+}
+
+// processMessageBatchToBulk unmarshals one event and hands it to the batcher.
+// Enqueue blocks until published; its result drives Ack (nil) vs retry (err).
+func (s *eventConsumptionService) processMessageBatchToBulk(ctx context.Context, msg *message.Message) error {
+	var event events.Event
+	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal event",
+			"error", err,
+			"payload", string(msg.Payload),
+		)
+		s.tracingService.CaptureException(ctx, err)
+		if !s.shouldRetryError(err) {
+			return fmt.Errorf("non-retriable unmarshal error: %w", err)
+		}
+		return err
+	}
+
+	// Publish/transport errors returned raw so Watermill Retry retries them.
+	// A sustained (>2min) broker outage will DLQ; acceptable at-least-once,
+	// since DLQ replay is idempotent (deterministic billing id + dedup).
+	return s.bulkBatcher.Enqueue(ctx, s.expandWithBillingEvent(&event))
+}
+
+// CloseBatcher releases the batcher on shutdown. Nil-safe.
+func (s *eventConsumptionService) CloseBatcher() {
+	if s.bulkBatcher != nil {
+		s.bulkBatcher.Close()
+	}
+}
+
 // ProcessRawEvent processes a raw event payload (used for AWS Lambda and direct processing)
 func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload []byte) error {
 	// Start a transaction for this event processing
@@ -438,30 +527,8 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		"timestamp", event.Timestamp,
 	)
 
-	// Prepare events to insert
-	eventsToInsert := []*events.Event{&event}
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
+	// Same deterministic billing id as the consumer paths: redelivery dedups.
+	eventsToInsert := s.expandWithBillingEvent(&event)
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
