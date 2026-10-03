@@ -63,7 +63,10 @@ type Config struct {
 
 type SlackConfig struct {
 	WebhookURL string
-	Channel    string
+	// BotToken, when set, wins over WebhookURL and posts via chat.postMessage.
+	// Requires Channel.
+	BotToken string
+	Channel  string
 }
 
 type OTELConfig struct {
@@ -149,6 +152,7 @@ func LoadConfig() (*Config, error) {
 		LogLevel:            getLogLevel(&warnings, "E2EPROBE_LOG_LEVEL", "info"),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
+			BotToken:   os.Getenv("E2EPROBE_SLACK_BOT_TOKEN"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),
 		},
 		OTEL: OTELConfig{
@@ -168,6 +172,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if c.APIKey == "" && !c.NeedsBootstrap() {
 		return nil, errors.New("no credentials: set E2EPROBE_API_KEY, or set E2EPROBE_EMAIL and E2EPROBE_PASSWORD to bootstrap one (requires the flexprice-native auth provider)")
+	}
+	if c.Slack.BotToken != "" && c.Slack.Channel == "" {
+		return nil, errors.New("E2EPROBE_SLACK_CHANNEL is required when E2EPROBE_SLACK_BOT_TOKEN is set")
 	}
 	return c, nil
 }

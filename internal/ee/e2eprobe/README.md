@@ -118,8 +118,9 @@ Adding a new probe: write `internal/ee/e2eprobe/checks/<name>.go` implementing `
 | `E2EPROBE_EVENT_INGEST_RATE` | Events/sec for the ingest driver | `5` |
 | `E2EPROBE_EVENT_INGEST_SEED` | RNG seed for event deck | derived from start time |
 | `E2EPROBE_LISTENER_PORT` | HTTP listener port for webhook checks | `8765` |
-| `E2EPROBE_SLACK_WEBHOOK_URL` | Slack webhook (empty disables) | empty |
-| `E2EPROBE_SLACK_CHANNEL` | Override channel | empty |
+| `E2EPROBE_SLACK_WEBHOOK_URL` | Slack incoming webhook (empty disables) | empty |
+| `E2EPROBE_SLACK_BOT_TOKEN` | Slack bot token (`xoxb-…`); posts via `chat.postMessage` and wins over the webhook. Requires `E2EPROBE_SLACK_CHANNEL` | empty |
+| `E2EPROBE_SLACK_CHANNEL` | Channel for webhook (override) or bot-token (required) delivery | empty |
 | `E2EPROBE_OTEL_ENABLED` | Emit OTEL spans | `true` |
 | `E2EPROBE_HEARTBEAT_INTERVAL` | How often a structured heartbeat summary is logged (`0` disables) | `1h` |
 | `E2EPROBE_JANITOR_MAX_AGE` | Minimum age of an ephemeral entity before the janitor deletes it (applies to both in-memory sweep and Flexprice orphan scan) | `1h` |

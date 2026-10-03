@@ -148,7 +148,9 @@ func main() {
 	}()
 
 	reporters := []e2eprobe.Reporter{e2eprobe.NewLogReporter(lg)}
-	if cfg.Slack.WebhookURL != "" {
+	if cfg.Slack.BotToken != "" {
+		reporters = append(reporters, e2eprobe.NewSlackBotReporter(cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	} else if cfg.Slack.WebhookURL != "" {
 		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil, lg))
 	}
 	if tp != nil {
