@@ -42,6 +42,20 @@ func TestArchivable(t *testing.T) {
 	}
 }
 
+func TestDefaultPartitionNeverArchivable(t *testing.T) {
+	if _, _, ok := PartitionRange(DefaultPartition); ok {
+		t.Fatal("the default partition must not parse as a monthly range")
+	}
+	for _, hotDays := range []int{0, 90, -100000} {
+		got := Archivable([]string{DefaultPartition, "activity_logs_2026_05"}, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), hotDays)
+		for _, p := range got {
+			if p == DefaultPartition {
+				t.Fatalf("hotDays=%d: the default partition must never be archivable, got %v", hotDays, got)
+			}
+		}
+	}
+}
+
 func TestNeededAhead(t *testing.T) {
 	got := NeededAhead(time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), 3)
 	if len(got) != 4 || got[0] != "activity_logs_2026_10" || got[3] != "activity_logs_2027_01" {

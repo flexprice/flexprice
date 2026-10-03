@@ -1,4 +1,8 @@
 -- migrate:up
+-- Deploy: apply this migration before rolling the binary, or set
+-- FLEXPRICE_ACTIVITY_ENABLED=false for the first roll. Activity rows are
+-- written inside the business transaction, so a missing table fails every
+-- write to a registered entity.
 CREATE TABLE IF NOT EXISTS activity_logs (
     id             VARCHAR(50)  NOT NULL,
     tenant_id      VARCHAR(50)  NOT NULL,
@@ -42,6 +46,12 @@ CREATE TABLE IF NOT EXISTS activity_logs_2026_11 PARTITION OF activity_logs
     FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
 CREATE TABLE IF NOT EXISTS activity_logs_2026_12 PARTITION OF activity_logs
     FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
+
+-- Safety net: a row whose month has no partition yet (the worker that runs
+-- MaintainPartitionsActivity was down) lands here instead of failing the
+-- business write. The archiver never exports or drops it. Rows here must be
+-- moved out before the matching monthly partition can be created.
+CREATE TABLE IF NOT EXISTS activity_logs_default PARTITION OF activity_logs DEFAULT;
 
 -- migrate:down
 DROP TABLE IF EXISTS activity_logs;

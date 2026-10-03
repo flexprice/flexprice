@@ -9,6 +9,10 @@ import (
 
 const prefix = "activity_logs_"
 
+// DefaultPartition is the migration's DEFAULT partition, a safety net for rows
+// whose month has no partition yet. It is never archived, exported or dropped.
+const DefaultPartition = "activity_logs_default"
+
 // PartitionName returns the monthly partition holding t, e.g. activity_logs_2026_10.
 func PartitionName(t time.Time) string {
 	return fmt.Sprintf("%s%04d_%02d", prefix, t.Year(), int(t.Month()))
@@ -18,6 +22,9 @@ func PartitionName(t time.Time) string {
 // Only the canonical form PartitionName produces is accepted, so a parsed name
 // is safe to interpolate into DDL as an identifier.
 func PartitionRange(name string) (time.Time, time.Time, bool) {
+	if name == DefaultPartition {
+		return time.Time{}, time.Time{}, false
+	}
 	var y, m int
 	if _, err := fmt.Sscanf(name, prefix+"%d_%d", &y, &m); err != nil || m < 1 || m > 12 {
 		return time.Time{}, time.Time{}, false
@@ -29,11 +36,15 @@ func PartitionRange(name string) (time.Time, time.Time, bool) {
 	return start, start.AddDate(0, 1, 0), true
 }
 
-// Archivable returns partitions whose range ended before now - hotDays, oldest first.
+// Archivable returns partitions whose range ended before now - hotDays, oldest
+// first. The DEFAULT partition is never archivable.
 func Archivable(partitions []string, now time.Time, hotDays int) []string {
 	cutoff := now.AddDate(0, 0, -hotDays)
 	var out []string
 	for _, p := range partitions {
+		if p == DefaultPartition {
+			continue
+		}
 		if _, end, ok := PartitionRange(p); ok && end.Before(cutoff) {
 			out = append(out, p)
 		}
