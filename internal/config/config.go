@@ -1201,10 +1201,11 @@ func NewConfig() (*Configuration, error) {
 }
 
 // jsonStringToCollectionHook decodes a JSON array/object string (e.g. FLEXPRICE_USAGE_ALERTS_OVERRIDES)
-// into a slice or map target; the remaining hooks then convert nested values such as "30s" durations.
+// into a map or a slice of structured elements; the remaining hooks then convert nested values such as
+// "30s" durations. Scalar slices are left to the comma-split hook so values like "[::1]:9092" still work.
 func jsonStringToCollectionHook(from, to reflect.Type, data any) (any, error) {
 	raw, ok := data.(string)
-	if !ok || (to.Kind() != reflect.Slice && to.Kind() != reflect.Map) {
+	if !ok || !isStructuredCollection(to) {
 		return data, nil
 	}
 
@@ -1218,6 +1219,23 @@ func jsonStringToCollectionHook(from, to reflect.Type, data any) (any, error) {
 		return nil, fmt.Errorf("invalid JSON for %s: %w", to, err)
 	}
 	return decoded, nil
+}
+
+func isStructuredCollection(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Map:
+		return true
+	case reflect.Slice:
+		elem := t.Elem()
+		for elem.Kind() == reflect.Ptr {
+			elem = elem.Elem()
+		}
+		switch elem.Kind() {
+		case reflect.Struct, reflect.Map, reflect.Slice, reflect.Interface:
+			return true
+		}
+	}
+	return false
 }
 
 // bindEnvs walks a (possibly nested) struct type and registers a Viper env binding for

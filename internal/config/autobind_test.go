@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -89,25 +90,22 @@ func TestUsageAlertsOverridesFromJSONEnv(t *testing.T) {
 	tests := []struct {
 		name    string
 		env     string
-		set     bool
 		want    []UsageAlertsOverride
 		wantErr bool
 	}{
 		{
 			name: "valid json",
 			env:  `[{"tenant_id":"t1","environment_id":"e1","schedule_delay":"30s","stale_after":"15m"}]`,
-			set:  true,
 			want: []UsageAlertsOverride{{TenantID: "t1", EnvironmentID: "e1", ScheduleDelay: 30 * time.Second, StaleAfter: 15 * time.Minute}},
 		},
-		{name: "invalid json", env: `[{"tenant_id":`, set: true, wantErr: true},
-		{name: "bad duration", env: `[{"tenant_id":"t1","environment_id":"e1","schedule_delay":"soon","stale_after":"15m"}]`, set: true, wantErr: true},
+		{name: "invalid json", env: `[{"tenant_id":`, wantErr: true},
+		{name: "bad duration", env: `[{"tenant_id":"t1","environment_id":"e1","schedule_delay":"soon","stale_after":"15m"}]`, wantErr: true},
 		{name: "unset", want: []UsageAlertsOverride{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.set {
-				t.Setenv("FLEXPRICE_USAGE_ALERTS_OVERRIDES", tt.env)
-			}
+			// Empty is treated as unset by Viper, so this also clears any value from the runner's env.
+			t.Setenv("FLEXPRICE_USAGE_ALERTS_OVERRIDES", tt.env)
 			cfg, err := NewConfig()
 			if tt.wantErr {
 				if err == nil {
@@ -127,6 +125,21 @@ func TestUsageAlertsOverridesFromJSONEnv(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestStringSliceEnvKeepsBracketedValues guards that the JSON hook does not claim scalar slices:
+// a bracketed IPv6 broker list must still be comma-split, not parsed as JSON.
+func TestStringSliceEnvKeepsBracketedValues(t *testing.T) {
+	t.Setenv("FLEXPRICE_KAFKA_BROKERS", "[::1]:9092,[::2]:9092")
+
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	want := []string{"[::1]:9092", "[::2]:9092"}
+	if !slices.Equal(cfg.Kafka.Brokers, want) {
+		t.Errorf("kafka.brokers = %#v, want %#v", cfg.Kafka.Brokers, want)
 	}
 }
 
