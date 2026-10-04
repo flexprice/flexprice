@@ -18,6 +18,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
@@ -1157,7 +1158,11 @@ func NewConfig() (*Configuration, error) {
 	}
 
 	var cfg Configuration
-	if err := v.Unmarshal(&cfg); err != nil {
+	if err := v.Unmarshal(&cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		jsonStringToCollectionHook,
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+	))); err != nil {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
@@ -1193,6 +1198,26 @@ func NewConfig() (*Configuration, error) {
 	}
 
 	return &cfg, nil
+}
+
+// jsonStringToCollectionHook decodes a JSON array/object string (e.g. FLEXPRICE_USAGE_ALERTS_OVERRIDES)
+// into a slice or map target; the remaining hooks then convert nested values such as "30s" durations.
+func jsonStringToCollectionHook(from, to reflect.Type, data any) (any, error) {
+	raw, ok := data.(string)
+	if !ok || (to.Kind() != reflect.Slice && to.Kind() != reflect.Map) {
+		return data, nil
+	}
+
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "[") && !strings.HasPrefix(raw, "{") {
+		return data, nil
+	}
+
+	var decoded any
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return nil, fmt.Errorf("invalid JSON for %s: %w", to, err)
+	}
+	return decoded, nil
 }
 
 // bindEnvs walks a (possibly nested) struct type and registers a Viper env binding for
@@ -1244,7 +1269,7 @@ func bindEnvs(v *viper.Viper, t reflect.Type, parts ...string) {
 		case reflect.Map:
 			// JSON-string env vars can't decode into a map; parsed by hand after Unmarshal.
 		default:
-			// scalars and slices (Viper splits comma-separated env into []string)
+			// scalars and slices (comma-separated env -> []string; JSON array env -> []struct)
 			_ = v.BindEnv(strings.Join(path, "."))
 		}
 	}

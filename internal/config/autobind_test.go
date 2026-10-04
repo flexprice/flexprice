@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -81,6 +82,51 @@ func TestAutoBindLeavesManualJSONIntact(t *testing.T) {
 	}
 	if d.TenantID != "t1" {
 		t.Errorf("tenant_id = %q, want %q", d.TenantID, "t1")
+	}
+}
+
+func TestUsageAlertsOverridesFromJSONEnv(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     string
+		set     bool
+		want    []UsageAlertsOverride
+		wantErr bool
+	}{
+		{
+			name: "valid json",
+			env:  `[{"tenant_id":"t1","environment_id":"e1","schedule_delay":"30s","stale_after":"15m"}]`,
+			set:  true,
+			want: []UsageAlertsOverride{{TenantID: "t1", EnvironmentID: "e1", ScheduleDelay: 30 * time.Second, StaleAfter: 15 * time.Minute}},
+		},
+		{name: "invalid json", env: `[{"tenant_id":`, set: true, wantErr: true},
+		{name: "bad duration", env: `[{"tenant_id":"t1","environment_id":"e1","schedule_delay":"soon","stale_after":"15m"}]`, set: true, wantErr: true},
+		{name: "unset", want: []UsageAlertsOverride{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv("FLEXPRICE_USAGE_ALERTS_OVERRIDES", tt.env)
+			}
+			cfg, err := NewConfig()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NewConfig() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewConfig() error: %v", err)
+			}
+			if len(cfg.UsageAlerts.Overrides) != len(tt.want) {
+				t.Fatalf("overrides = %#v, want %#v", cfg.UsageAlerts.Overrides, tt.want)
+			}
+			for i := range tt.want {
+				if cfg.UsageAlerts.Overrides[i] != tt.want[i] {
+					t.Errorf("overrides[%d] = %#v, want %#v", i, cfg.UsageAlerts.Overrides[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
 
