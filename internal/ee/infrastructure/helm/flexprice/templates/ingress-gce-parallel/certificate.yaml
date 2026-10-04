@@ -1,20 +1,7 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
 {{- if eq .Values.gceIngress.tls.mode "certManager" }}
 {{- if .Values.gceIngress.tls.clusterIssuer }}
-# cert-manager Certificate for the parallel GCE Ingress.
-#
-# Deliberately NOT the chart Ingress's TLS secret. That secret is created by
-# cert-manager on behalf of the nginx Ingress (via its cert-manager.io/
-# cluster-issuer annotation), so sharing it would tie this load balancer's TLS to
-# that Ingress's lifecycle: removing the nginx Ingress later silently stops
-# renewal, and TLS breaks up to 90 days after the change that caused it.
-#
-# With a DNS-01 solver this issues with no port 80 and no DNS pointing at the new
-# load balancer, so TLS is valid and testable BEFORE cutover. That is why
-# tls.mode defaults to certManager rather than the Google-managed certificate
-# used by ingress.provider=gce, which validates over HTTP against the load
-# balancer and therefore can only go Active AFTER DNS has already moved --
-# guaranteeing a TLS error window of 15-60 minutes.
+# Own Certificate; DNS-01 issues before the LB serves.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

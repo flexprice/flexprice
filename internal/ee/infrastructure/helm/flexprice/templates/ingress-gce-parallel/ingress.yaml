@@ -1,15 +1,5 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
-# Parallel GCE Ingress -- a SECOND Ingress alongside the chart's `ingress.*` one.
-#
-# Purpose: migrate an API off ingress-nginx onto a GCE global external
-# Application Load Balancer with zero downtime. Both Ingresses serve the same
-# pods through their own load balancers; DNS decides which takes traffic, and
-# reverting the DNS record is the rollback.
-#
-# `ingress.provider: gce` cannot do this -- it converts the single chart Ingress,
-# deleting the nginx load balancer before the replacement serves. Measured on
-# GCP staging: a fresh GCE load balancer needed ~12 minutes from apply to first
-# 200, and an ADDRESS plus HEALTHY backends appeared ~6 minutes BEFORE it served.
+# GCE global external Application Load Balancer.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

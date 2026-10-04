@@ -479,55 +479,8 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
-  # provider selects the ingress controller flavor. "nginx" (default) changes
-  # nothing from prior chart versions. "gce" additionally renders the
-  # templates/ingress-gcp/* CRDs (ManagedCertificate, BackendConfig,
-  # FrontendConfig — GKE's Ingress-for-Anthos / GCE-native ingress objects)
-  # and adds NEG + BackendConfig annotations to the api Service. Only takes
-  # effect when ingress.enabled is also true.
-  # type supersedes provider for selecting the nginx className. type: gce also
-  # renders the gceIngress templates, reading options from gceIngress.
-  # aws is reserved and not implemented.
-  #
-  # type never stops the legacy ingress-gcp objects rendering: only provider
-  # controls those, so a release cannot delete them without an explicit
-  # provider change. Set provider: nginx to retire them.
+  # Selects the ingress flavor. gce reads gceIngress.
   type: ""          # nginx | gce
-  # Deprecated, use type. Solely controls the legacy ingress-gcp templates.
-  provider: nginx   # nginx | gce
-  gce:
-    managedCertificate:
-      # Domains covered by the GCP-managed TLS certificate. Defaults to the
-      # hosts already listed under ingress.hosts above; override only if the
-      # certificate needs to cover additional domains.
-      domains: []
-    backendConfig:
-      healthCheck:
-        path: /health
-        port: 8080
-        checkIntervalSec: 15
-        timeoutSec: 5
-        healthyThreshold: 2
-        unhealthyThreshold: 3
-      timeoutSec: 30
-      # Optional Cloud Armor security policy. Leave securityPolicyName empty
-      # to omit the securityPolicy block entirely.
-      cloudArmor:
-        securityPolicyName: ""
-      # Shows Cloud Armor matches. Raise before sizing rules.
-      # null keeps the LB default; false asserts off.
-      logging:
-        enable: null
-        sampleRate: 0.1
-    frontendConfig:
-      # Redirect HTTP -> HTTPS at the GCE load balancer.
-      redirectToHttps:
-        enabled: true
-        responseCodeName: MOVED_PERMANENTLY_DEFAULT
-      # Optional compute SSL policy governing the TLS handshake. Leave empty to
-      # inherit the GCE default, which still accepts TLS 1.0 and 1.1.
-      sslPolicy: ""
-
 
 # Frontend deployment configuration
 frontend:
