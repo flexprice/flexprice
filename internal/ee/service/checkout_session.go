@@ -456,10 +456,6 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 	}
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.cleanupCheckoutResources(txCtx, session, reason); err != nil {
-			return err
-		}
-
 		claimed, err := s.CheckoutSessionRepo.MarkTerminal(txCtx, session.ID, status, failureReason)
 		if err != nil {
 			return err
@@ -469,13 +465,21 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 				WithHintf("session %s was claimed by another process", session.ID).
 				Mark(ierr.ErrAlreadyExists)
 		}
-		return nil
+
+		return s.cleanupCheckoutResources(txCtx, session, reason)
 	})
 	if err != nil {
 		if ierr.IsAlreadyExists(err) {
 			return nil
 		}
 		return err
+	}
+
+	if paymentID := checkoutPaymentID(session); paymentID != "" {
+		if err := s.settleCheckoutPayment(ctx, session, paymentID); err != nil {
+			s.Logger.Error(ctx, "failed to settle checkout payment after termination",
+				"session_id", session.ID, "payment_id", paymentID, "error", err)
+		}
 	}
 
 	session.CheckoutStatus = status
@@ -509,15 +513,11 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 	if cfg.CreateSubscriptionParams != nil {
 		subID = cfg.CreateSubscriptionParams.SubscriptionID
 	}
-	paymentID := lo.FromPtr(session.CheckoutPaymentID)
 	invoiceID := lo.FromPtr(session.CheckoutInvoiceID)
 	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
 		res := session.Result.CreateSubscriptionResult
 		if subID == "" {
 			subID = res.SubscriptionID
-		}
-		if paymentID == "" {
-			paymentID = res.PaymentID
 		}
 		if invoiceID == "" {
 			invoiceID = res.InvoiceID
@@ -557,12 +557,6 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		}
 	}
 
-	if paymentID != "" {
-		if err := s.settleCheckoutPayment(ctx, session, paymentID); err != nil {
-			return err
-		}
-	}
-
 	if invoiceID != "" {
 		if err := s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, invoiceID); err != nil {
 			return err
@@ -572,6 +566,18 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		}
 	}
 	return nil
+}
+
+func checkoutPaymentID(session *domainCheckout.CheckoutSession) string {
+	if id := lo.FromPtr(session.CheckoutPaymentID); id != "" {
+		return id
+	}
+
+	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
+		return session.Result.CreateSubscriptionResult.PaymentID
+	}
+	
+	return ""
 }
 
 // this settles the payment bound to a checkout, checks with the 3rd party and take apt actions
@@ -668,6 +674,7 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 			return result, err
 		}
 
+		succeeded := 0
 		for _, sess := range sessions {
 			result.Total++
 			sessCtx := context.WithValue(ctx, types.CtxTenantID, sess.TenantID)
@@ -679,9 +686,10 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 				continue
 			}
 			result.Succeeded++
+			succeeded++
 		}
 
-		if len(sessions) < cleanupExpiredBatchSize {
+		if len(sessions) < cleanupExpiredBatchSize || succeeded == 0 {
 			break
 		}
 	}
