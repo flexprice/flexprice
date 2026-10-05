@@ -8948,6 +8948,16 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Addon statuses to include (active, cancelled, pending). Defaults to active.",
+                        "name": "addon_statuses",
+                        "in": "query"
                     }
                 ],
                 "responses": {

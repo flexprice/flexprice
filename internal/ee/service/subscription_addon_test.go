@@ -1916,3 +1916,54 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_TooManyAddons_IsReject
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
 }
+
+// A cancellation dated at period end keeps the addon live until its end_date, so a caller
+// mirroring entitlements must be able to see it; the default read still lists active only.
+func (s *SubscriptionServiceSuite) TestGetActiveAddonAssociations_OptInCancelled() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	sub := s.testData.subscription
+
+	featureID := "feat_cancelled_opt_in"
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, &feature.Feature{
+		ID:        featureID,
+		Name:      "Cancelled Opt-in Feature",
+		Type:      types.FeatureTypeMetered,
+		MeterID:   s.testData.meters.apiCalls.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	addonID := "addon_cancelled_opt_in"
+	s.seedMeteredAddon(addonID, featureID, types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
+
+	start := s.testData.now
+	end := s.testData.now.Add(24 * time.Hour)
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, &addonassociation.AddonAssociation{
+		ID:          "assoc_cancelled_opt_in",
+		EntityID:    sub.ID,
+		EntityType:  types.AddonAssociationEntityTypeSubscription,
+		AddonID:     addonID,
+		StartDate:   &start,
+		EndDate:     &end,
+		AddonStatus: types.AddonStatusCancelled,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+
+	hasAddon := func(resp *dto.ListAddonAssociationsResponse) bool {
+		for _, item := range resp.Items {
+			if item.AddonAssociation.AddonID == addonID {
+				return true
+			}
+		}
+		return false
+	}
+
+	defaultResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID)
+	s.NoError(err)
+	s.False(hasAddon(defaultResp), "default read must keep listing active associations only")
+
+	optInResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID,
+		types.AddonStatusActive, types.AddonStatusCancelled)
+	s.NoError(err)
+	s.True(hasAddon(optInResp), "cancelled association must surface when the caller asks for it")
+}
