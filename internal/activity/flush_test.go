@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"entgo.io/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -73,6 +74,7 @@ const (
 	argAction      = 7
 	argActorType   = 8
 	argActorLabel  = 10
+	argActorUser   = 11
 	argSubID       = 14
 	argChanges     = 18
 	argSnapshot    = 19
@@ -157,4 +159,53 @@ func contains(args []any, want string) bool {
 		}
 	}
 	return false
+}
+
+// A system write derived inside a user's request keeps its own actor, even though
+// the batch is flushed with the request's context.
+func TestFlushUsesEachEntrysOwnActor(t *testing.T) {
+	reg := NewRegistry(
+		Definition{EntType: "Subscription", EntityType: "subscription", Table: "subscriptions"},
+		Definition{EntType: "Invoice", EntityType: "invoice", Table: "invoices"},
+	)
+	ctx := WithCollector(baseCtx())
+	next := ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) { return nil, nil })
+	h := hook{reg: reg}
+	create := func(ctx context.Context, typ, id string) {
+		m := &fakeMutation{op: ent.OpCreate, typ: typ, ids: []string{id}, fields: map[string]any{"id": id}}
+		if _, err := h.mutate(ctx, next, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	create(ctx, "Subscription", "sub_1")
+	create(types.WithDerivedSystemActor(ctx, "subscription_billing", "Subscription billing"), "Invoice", "inv_1")
+	// RecordAction under the derived actor is attributed to it too.
+	RecordAction(types.WithDerivedSystemActor(ctx, "subscription_billing", "Subscription billing"), Entry{EntityType: "invoice", EntityID: "inv_2", Action: "invoice.finalized"})
+
+	ex := &recExec{}
+	if err := Flush(ctx, ex, reg, nil); err != nil {
+		t.Fatal(err)
+	}
+	const cols = 22
+	if len(ex.args) != 3*cols {
+		t.Fatalf("want 3 rows, got %d args", len(ex.args))
+	}
+	row := func(i int) []any { return ex.args[i*cols : (i+1)*cols] }
+	if row(0)[argActorType] != "user" || actorUserArg(row(0)) != "" {
+		t.Fatalf("subscription row must keep the user: %v", row(0))
+	}
+	for i := 1; i <= 2; i++ {
+		r := row(i)
+		if r[argActorType] != "system" || r[argActorLabel] != "Subscription billing" || actorUserArg(r) != "u1" {
+			t.Fatalf("row %d must be system on behalf of u1: %v", i, r)
+		}
+	}
+}
+
+// actorUserArg reads the nullable actor_user_id argument of a flushed row; "" is NULL.
+func actorUserArg(row []any) string {
+	if p, _ := row[argActorUser].(*string); p != nil {
+		return *p
+	}
+	return ""
 }

@@ -754,6 +754,9 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		return p, nil
 	}
 
+	// Status changes come from the gateway; the reader whose request triggered the refresh did not make them.
+	ctx = types.WithDerivedSystemActor(ctx, "payment_sync", "Payment sync")
+
 	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
 	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)

@@ -38,6 +38,9 @@ type Record struct {
 	Snapshot   map[string]any
 	Fields     map[string]any
 	Degraded   string
+	// Actor is who the context named when the mutation ran. It is captured here
+	// because a batch is flushed once, with the request's context.
+	Actor types.Actor
 }
 
 var bookkeeping = map[string]bool{

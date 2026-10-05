@@ -59,15 +59,31 @@ func SystemActor(id, label string) Actor {
 }
 
 // userIDFromActor is the id written to created_by/updated_by: the owning user
-// for an API key, the actor id for a user, empty for system actors.
+// for an API key, the actor id for a user, the owning user (if any) for a
+// system actor derived from a request, empty otherwise.
 func userIDFromActor(a Actor) string {
 	switch a.Type {
 	case ActorTypeUser:
 		return a.ID
-	case ActorTypeAPIKey:
+	case ActorTypeAPIKey, ActorTypeSystem:
 		return a.UserID
 	}
 	return ""
+}
+
+// WithDerivedSystemActor attributes writes the system derives inside a request
+// (an invoice generated while a user subscribes) to the system rather than to the
+// requester, keeping the requester as the owning user so created_by and the
+// activity row still say who triggered it. A context that already carries a system
+// actor, or no actor, is returned unchanged.
+func WithDerivedSystemActor(ctx context.Context, id, label string) context.Context {
+	cur := GetActor(ctx)
+	if cur.Type == "" || cur.Type == ActorTypeSystem {
+		return ctx
+	}
+	a := SystemActor(id, label)
+	a.UserID = userIDFromActor(cur)
+	return SetActor(ctx, a)
 }
 
 // WorkflowActor is the system actor for work done inside a Temporal workflow.

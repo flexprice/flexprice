@@ -43,23 +43,32 @@ func flush(ctx context.Context, exec Execer, reg *Registry, log *logger.Logger, 
 	if len(entries) == 0 {
 		return nil
 	}
-	actor := types.GetActor(ctx)
-	if actor.Type == "" {
-		if log != nil {
-			log.Error(ctx, "activity flush refused: empty actor", "error", ErrEmptyActor, "request_id", types.GetRequestID(ctx))
+	ctxActor := types.GetActor(ctx)
+	// An entry keeps the actor captured when it was written, so a system write derived
+	// inside a user's request is not flushed as that user.
+	actors := make([]types.Actor, len(entries))
+	for i, p := range entries {
+		actors[i] = p.Actor
+		if actors[i].Type == "" {
+			actors[i] = ctxActor
 		}
-		return ErrEmptyActor
+		if actors[i].Type == "" {
+			if log != nil {
+				log.Error(ctx, "activity flush refused: empty actor", "error", ErrEmptyActor, "request_id", types.GetRequestID(ctx))
+			}
+			return ErrEmptyActor
+		}
 	}
 	source := types.GetSource(ctx)
 	if source == "" {
 		source = types.SourceAPI
 	}
-	actorLabel := truncateRunes(actor.Label, maxLabelRunes)
 	now := time.Now().UTC()
 	var sb strings.Builder
 	sb.WriteString("INSERT INTO activity_logs (" + insertColumns + ") VALUES ")
 	args := make([]any, 0, len(entries)*columnsPerRow)
 	for i, p := range entries {
+		actor := actors[i]
 		def, _ := reg.ByEntityType(p.EntityType)
 		var customerID, subscriptionID any // nil or string
 		if def.CustomerID != nil && p.Fields != nil {
@@ -103,7 +112,7 @@ func flush(ctx context.Context, exec Execer, reg *Registry, log *logger.Logger, 
 			types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ACTIVITY_LOG),
 			types.GetTenantID(ctx), types.GetEnvironmentID(ctx), "business",
 			string(p.EntityType), p.EntityID, truncateRunes(p.Label, maxLabelRunes), action,
-			string(actor.Type), actor.ID, actorLabel, nilIfEmpty(actor.UserID),
+			string(actor.Type), actor.ID, truncateRunes(actor.Label, maxLabelRunes), nilIfEmpty(actor.UserID),
 			string(source), customerID, subscriptionID, nilIfEmpty(types.GetRequestID(ctx)),
 			"success", nil,
 			jsonOrNil(p.Changes, p.Op == OpUpdate || len(p.Changes) > 0),

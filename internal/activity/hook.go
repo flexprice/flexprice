@@ -310,6 +310,7 @@ func (h *hook) selectOld(ctx context.Context, def Definition, ids []string, cols
 // mutation's own client when the mutation runs outside WithTx. A direct-write
 // failure is logged and never fails the mutation.
 func (h *hook) emit(ctx context.Context, rec Record) {
+	rec.Actor = types.GetActor(ctx)
 	if c := CollectorFrom(ctx); c != nil {
 		c.Add(rec)
 		return

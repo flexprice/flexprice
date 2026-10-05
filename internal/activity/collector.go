@@ -31,6 +31,7 @@ type Pending struct {
 	Fields     map[string]any
 	Metadata   map[string]any
 	Degraded   string
+	Actor      types.Actor // empty means the flush context's actor
 }
 
 type Collector struct {
@@ -115,6 +116,10 @@ func (c *Collector) Add(r Record) {
 	if r.Degraded != "" {
 		p.Degraded = r.Degraded
 	}
+	// The creating write names the row's actor; otherwise the first observation does.
+	if r.Actor.Type != "" && (p.Actor.Type == "" || r.Op == OpCreate) {
+		p.Actor = r.Actor
+	}
 }
 
 func (c *Collector) Name(e Entry) {
@@ -128,6 +133,9 @@ func (c *Collector) Name(e Entry) {
 	}
 	p := c.get(key{types.SystemEntityType(e.EntityType), e.EntityID})
 	p.Action = e.Action
+	if p.Actor.Type == "" {
+		p.Actor = e.Actor
+	}
 	if e.Metadata != nil {
 		p.Metadata = e.Metadata
 	}

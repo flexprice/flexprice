@@ -1192,12 +1192,14 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			TaxRates:         taxRateIDs,
 		}
 
+		// The invoice is billing the platform derives from the top-up, not a user action.
+		invCtx := types.WithDerivedSystemActor(ctx, "credit_purchase_billing", "Credit purchase billing")
 		var inv *dto.InvoiceResponse
 		var skipped bool
 		if isPayFirst {
 			// Pay-first: leave DRAFT until checkout complete finalizes + reconciles.
 			invReq.SourceType = types.InvoiceSourceTypeCheckout
-			inv, skipped, err = invoiceService.CreateComputedDraftInvoice(ctx, invReq)
+			inv, skipped, err = invoiceService.CreateComputedDraftInvoice(invCtx, invReq)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create draft invoice for purchased credits").
@@ -1212,7 +1214,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					Mark(ierr.ErrValidation)
 			}
 		} else {
-			inv, err = invoiceService.CreateOneOffInvoice(ctx, invReq)
+			inv, err = invoiceService.CreateOneOffInvoice(invCtx, invReq)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create invoice for purchased credits").

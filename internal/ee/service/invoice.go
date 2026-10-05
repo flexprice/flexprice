@@ -2324,6 +2324,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 }
 
 func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+	// Billing generated from a subscription is the platform's work, whoever triggered the request.
+	ctx = types.WithDerivedSystemActor(ctx, "subscription_billing", "Subscription billing")
+
 	s.Logger.Info(ctx, "creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,
