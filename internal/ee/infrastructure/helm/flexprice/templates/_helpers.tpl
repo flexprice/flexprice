@@ -835,7 +835,7 @@ One name is shared by the Ingress, its Service, BackendConfig and FrontendConfig
 because they are a single unit and a mismatch between them is the common failure
 (a BackendConfig the Service does not reference is silently ignored).
 
-Defaults to "<fullname>-api-gce". gceIngress.nameOverride pins it exactly.
+Defaults to "<fullname>-api-gce". nameOverride pins it exactly.
 
 Matching an existing object's name is necessary but NOT sufficient to take it
 over: Helm rejects resources lacking its ownership metadata
@@ -856,7 +856,7 @@ balancer and orphans the original.
 {{/*
 flexprice.gceIngressHosts — hostnames the parallel GCE Ingress serves, as a
 YAML array. Defaults to the hosts already under ingress.hosts, so the parallel
-Ingress covers the same names it is migrating; gceIngress.hosts overrides.
+Defaults to ingress.hosts; ingress.gce.hosts overrides.
 */}}
 {{- define "flexprice.gceIngressHosts" -}}
 {{- $gce := fromYaml (include "flexprice.gce" .) -}}
@@ -878,7 +878,7 @@ Ingress covers the same names it is migrating; gceIngress.hosts overrides.
 {{/*
 flexprice.gceIngressRules — host/path structures for the parallel GCE Ingress.
 
-A gceIngress.hosts entry may be a bare hostname or a map carrying paths. Bare
+An ingress.gce.hosts entry may be a bare hostname or a map with paths. Bare
 hostnames yield one /* path to the parallel api Service, matching the shape
 before per-path backends existed.
 */}}
@@ -947,19 +947,10 @@ Independent of the secret name so an out-of-band certificate can be adopted.
 {{- end -}}
 
 {{/*
-flexprice.gce — resolved GCE options.
-
-Reads ingress.gce, falling back to the deprecated top-level gceIngress so a
-values file migrates on its own schedule.
+flexprice.gce — the GCE options under ingress.gce.
 */}}
 {{- define "flexprice.gce" -}}
-{{- $legacy := .Values.gceIngress | default dict -}}
-{{- $current := (.Values.ingress | default dict).gce | default dict -}}
-{{- if $current -}}
-{{- toYaml (mergeOverwrite (deepCopy $legacy) $current) -}}
-{{- else -}}
-{{- toYaml $legacy -}}
-{{- end -}}
+{{- toYaml ((.Values.ingress | default dict).gce | default dict) -}}
 {{- end -}}
 
 {{/*

@@ -481,8 +481,58 @@ ingress:
   tls: []
   # Selects the ingress flavor.
   type: ""          # nginx | gce
-  # GCE options. Falls back to the deprecated top-level gceIngress.
-  gce: {}
+  # GCE options, read when type is gce.
+  gce:
+    enabled: false
+    # Object name is <fullname>-api-<nameSuffix>.
+    nameSuffix: gce
+    # Pins the object name exactly. Must match an
+    # adopted object, which also needs Helm ownership
+    # metadata or the upgrade fails. A mismatch creates
+    # a second load balancer.
+    nameOverride: ""
+    # Defaults to ingress.hosts.
+    hosts: []
+    # Empty takes an ephemeral IP; recreation changes it.
+    globalStaticIpName: ""
+    # With tls.mode managed this must start true.
+    allowHttp: false
+    annotations: {}
+    # false annotates the shared api Service instead.
+    ownService: true
+    service:
+      annotations: {}
+    tls:
+      # certManager issues before the LB serves.
+      # managed validates over HTTP after DNS moves.
+      mode: certManager
+      # Set to render the Certificate.
+      clusterIssuer: ""
+      issuerKind: ClusterIssuer
+      # Defaults to <objectName>-tls.
+      secretName: ""
+      # Defaults to the shared object name.
+      certificateName: ""
+    backendConfig:
+      healthCheck:
+        path: /health
+        port: 8080
+        checkIntervalSec: 15
+        timeoutSec: 5
+        healthyThreshold: 2
+        unhealthyThreshold: 3
+      timeoutSec: 30
+      cloudArmor:
+        securityPolicyName: ""
+      # null keeps the LB default; false asserts off.
+      logging:
+        enable: null
+        sampleRate: 0.1
+    frontendConfig:
+      redirectToHttps:
+        enabled: false
+        responseCodeName: MOVED_PERMANENTLY_DEFAULT
+      sslPolicy: ""
 
 # Frontend deployment configuration
 frontend:
@@ -724,130 +774,6 @@ temporalIngress:
   annotations: {}
   host: "temporal.example.com"
   tls: []
-
-# ── Parallel GCE Ingress ──────────────────────────────────────────────────────
-# A SECOND api Ingress on a GCE global external Application Load Balancer,
-# rendered alongside `ingress.*` rather than replacing it.
-#
-# Why this exists separately from `ingress.provider: gce`: the chart renders
-# exactly one api Ingress, so flipping that provider CONVERTS it — deleting the
-# nginx Ingress and its load balancer before the replacement serves. Measured on
-# GCP staging, a fresh GCE load balancer took ~12 minutes from apply to its first
-# 200, so a conversion is a ~12 minute hole. With this block both Ingresses serve
-# the same pods through their own load balancers, DNS decides which takes
-# traffic, and reverting the DNS record is the rollback.
-#
-# Default OFF: every existing values file renders byte-identically, and
-# `ingress.provider: gce` keeps working unchanged for regions already on it.
-#
-# Requires two GCP resources created out of band (the chart cannot create them):
-#   - a reserved global address, named in globalStaticIpName
-#   - a compute SSL policy, named in frontendConfig.sslPolicy
-gceIngress:
-  enabled: false
-
-  # Suffix for the object name: <fullname>-api-<nameSuffix>.
-  nameSuffix: gce
-  # Pin the object name exactly, overriding nameSuffix.
-  #
-  # Matching the name is NECESSARY but NOT SUFFICIENT to take over objects that
-  # already exist. Helm refuses to manage a resource it did not create:
-  #   Error: ... invalid ownership metadata; label validation error:
-  #   missing key "app.kubernetes.io/managed-by": must be set to "Helm"
-  # Objects created with kubectl carry no such metadata, so the upgrade FAILS
-  # rather than adopting them. Either:
-  #   a) label and annotate them first --
-  #        kubectl -n <ns> label <kind>/<name> app.kubernetes.io/managed-by=Helm
-  #        kubectl -n <ns> annotate <kind>/<name> \
-  #          meta.helm.sh/release-name=<release> meta.helm.sh/release-namespace=<ns>
-  #   b) or delete them and let the chart recreate -- which for an Ingress means
-  #      a new load balancer and ~12 minutes before it serves, so only do this
-  #      while DNS points elsewhere.
-  # A name MISMATCH is worse than either: the chart creates a SECOND load
-  # balancer and leaves the original orphaned.
-  nameOverride: ""
-
-  # Hostnames served. Defaults to the hosts under ingress.hosts, so the parallel
-  # Ingress covers the same names it is migrating.
-  hosts: []
-
-  # Reserved global address name. Leave empty to let the load balancer take an
-  # ephemeral IP — not recommended, since recreating the Ingress then changes the
-  # IP and breaks whatever DNS points at it.
-  globalStaticIpName: ""
-
-  # false serves 443 only, matching an nginx setup with the HTTP listener
-  # disabled. With DNS-01 certificate issuance nothing needs port 80.
-  #
-  # With tls.mode=managed this must start TRUE. Google validates a managed
-  # certificate over plain HTTP against the load balancer, so closing port 80
-  # before the load balancer is fully programmed prevents issuance. Deploy with
-  # true, wait for the certificate to report Active, then set false in a second
-  # upgrade. tls.mode=certManager has no such constraint.
-  allowHttp: false
-
-  annotations: {}
-
-  # false annotates the shared api Service instead of rendering its own.
-  # Only safe when no other Ingress serves that Service.
-  ownService: true
-  service:
-    annotations: {}
-
-  tls:
-    # certManager — cert-manager issues the certificate. With a DNS-01 solver it
-    #   needs no port 80 and no DNS pointing at this load balancer, so TLS is
-    #   valid and testable BEFORE cutover. Default, and the only mode safe for a
-    #   zero-downtime migration.
-    # managed — Google-managed certificate, validated over HTTP against the load
-    #   balancer. It can only go Active AFTER DNS already points here and takes
-    #   15-60 minutes, guaranteeing a TLS error window.
-    mode: certManager
-
-    # certManager mode. When clusterIssuer is set the chart renders the
-    # Certificate; leave it empty to reference a secret managed elsewhere.
-    clusterIssuer: ""
-    issuerKind: ClusterIssuer
-    # Defaults to <objectName>-tls. Deliberately NOT the chart Ingress's secret:
-    # that one is managed on the nginx Ingress's behalf, so sharing it would stop
-    # renewal when that Ingress is removed.
-    secretName: ""
-    # Certificate object name; defaults to the shared object name. Independent of
-    # secretName so an out-of-band certificate can be adopted.
-    certificateName: ""
-
-  backendConfig:
-    healthCheck:
-      path: /health
-      port: 8080
-      checkIntervalSec: 15
-      timeoutSec: 5
-      healthyThreshold: 2
-      unhealthyThreshold: 3
-    # 60 matches ingress-nginx's proxy-read-timeout. The load balancer's own
-    # default is 30, which would cut requests the nginx path currently serves.
-    timeoutSec: 60
-    # Cloud Armor security policy to attach. Created out of band.
-    cloudArmor:
-      securityPolicyName: ""
-    # Load balancer request logging. Needed to see Cloud Armor preview-rule
-    # matches, which are otherwise invisible. Raise sampleRate before sizing
-    # rules off low-frequency matches.
-    logging:
-      enable: false
-      sampleRate: 0.1
-
-  frontendConfig:
-    # Name of a pre-existing compute SSL policy. WITHOUT THIS the load balancer
-    # accepts TLS 1.0/1.1 while ingress-nginx refuses them, so migrating weakens
-    # TLS. Create a MODERN profile policy with min TLS 1.2 and name it here.
-    sslPolicy: ""
-    redirectToHttps:
-      # Meaningless when allowHttp is false, since there is no port 80 listener.
-      enabled: false
-      responseCodeName: MOVED_PERMANENTLY_DEFAULT
-
-# Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
   secret: "" # Required — set via secret (existingSecret or auth.secret)
