@@ -112,6 +112,9 @@ func (r *redactor) value(value any, path string) any {
 		for key, child := range v {
 			if isSensitiveKey(key) {
 				v[key] = redactedValue
+				if normalizeKey(key) == "metadata" {
+					v[key] = keepOwnKeys(child)
+				}
 				continue
 			}
 			v[key] = r.value(child, path+"."+key)
@@ -127,17 +130,46 @@ func (r *redactor) value(value any, path string) any {
 }
 
 // form treats customer[billing_address][line1] as sensitive if any segment is.
+// It renders the body as a JSON object so it reads like the JSON bodies.
 func (r *redactor) form(values url.Values, side string) string {
+	fields := make(map[string]any, len(values))
 	for key, list := range values {
 		if isSensitiveFormKey(key) {
-			values[key] = []string{redactedValue}
+			fields[key] = redactedValue
 			continue
 		}
 		for i, item := range list {
 			list[i] = r.text(item, side+"."+key)
 		}
+		fields[key] = list
+		if len(list) == 1 {
+			fields[key] = list[0]
+		}
 	}
-	return values.Encode()
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return "[omitted: invalid form body]"
+	}
+	return string(out)
+}
+
+// keepOwnKeys redacts a metadata object except our own flexprice_* identifiers.
+func keepOwnKeys(value any) any {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return redactedValue
+	}
+	for key := range object {
+		if !isOwnKey(key) {
+			object[key] = redactedValue
+		}
+	}
+	return object
+}
+
+// isOwnKey reports our own identifiers, such as metadata[flexprice_invoice_id].
+func isOwnKey(key string) bool {
+	return strings.HasPrefix(normalizeKey(key), "flexprice")
 }
 
 // text masks emails, card numbers and API keys, recording the field for the pii_detected
@@ -171,6 +203,9 @@ func (r *redactor) text(value, path string) string {
 
 func isSensitiveFormKey(key string) bool {
 	segments := strings.FieldsFunc(key, func(c rune) bool { return c == '[' || c == ']' })
+	if len(segments) > 0 && isOwnKey(segments[len(segments)-1]) {
+		return false
+	}
 	for _, segment := range segments {
 		// OAuth authorization code; JSON keeps "code" for provider error codes.
 		if isSensitiveKey(segment) || normalizeKey(segment) == "code" {

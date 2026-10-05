@@ -87,7 +87,6 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	requestID := providerRequestID(resp.Header)
 	reqBody := requestBody(req, redact)
-	respBody := peekResponseBody(resp, redact)
 	defer t.logDetected(ctx, req, redact)
 
 	if resp.StatusCode < http.StatusBadRequest {
@@ -100,11 +99,12 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 			"duration_ms", durationMS,
 			"provider_request_id", requestID,
 			"request_body", reqBody,
-			"response_body", respBody,
 		)
 		return resp, nil
 	}
 
+	// Response bodies are logged only on failure; successful ones are mostly noise.
+	respBody := peekResponseBody(resp, redact)
 	if resp.StatusCode >= http.StatusInternalServerError {
 		t.logger.Error(ctx, "provider_call.failed",
 			"error", fmt.Sprintf("%s returned HTTP %d", t.provider, resp.StatusCode),

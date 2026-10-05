@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/stretchr/testify/assert"
@@ -37,16 +38,15 @@ func TestProviderTransport_LogsOneLinePerCall(t *testing.T) {
 		wantReqBody  string
 	}{
 		{
-			name:         "success logs status, request id and redacted bodies",
-			status:       http.StatusOK,
-			respBody:     `{"id":"cus_1","email":"a@b.com","status":"active"}`,
-			respHeaders:  map[string]string{"Request-Id": "req_123", "Content-Type": "application/json"},
-			reqBody:      `{"email":"a@b.com","currency":"usd"}`,
-			reqType:      "application/json",
-			wantLevel:    zapcore.InfoLevel,
-			wantMessage:  "provider_call.completed",
-			wantRespBody: `{"email":"[redacted]","id":"cus_1","status":"active"}`,
-			wantReqBody:  `{"currency":"usd","email":"[redacted]"}`,
+			name:        "success logs the request body but not the response body",
+			status:      http.StatusOK,
+			respBody:    `{"id":"cus_1","email":"a@b.com","status":"active"}`,
+			respHeaders: map[string]string{"Request-Id": "req_123", "Content-Type": "application/json"},
+			reqBody:     `{"email":"a@b.com","currency":"usd"}`,
+			reqType:     "application/json",
+			wantLevel:   zapcore.InfoLevel,
+			wantMessage: "provider_call.completed",
+			wantReqBody: `{"currency":"usd","email":"[redacted]"}`,
 		},
 		{
 			name:         "4xx logs redacted bodies at info",
@@ -58,7 +58,7 @@ func TestProviderTransport_LogsOneLinePerCall(t *testing.T) {
 			wantLevel:    zapcore.InfoLevel,
 			wantMessage:  "provider_call.rejected",
 			wantRespBody: `{"error":{"code":"card_declined","decline_code":"insufficient_funds"}}`,
-			wantReqBody:  "amount=100&card%5Bcvc%5D=%5Bredacted%5D&card%5Bnumber%5D=%5Bredacted%5D",
+			wantReqBody:  `{"amount":"100","card[cvc]":"[redacted]","card[number]":"[redacted]"}`,
 		},
 		{
 			name:         "5xx logs at error",
@@ -109,7 +109,11 @@ func TestProviderTransport_LogsOneLinePerCall(t *testing.T) {
 			assert.Equal(t, "/v1/charges", fields["http_path"], "query string must not be logged")
 			assert.EqualValues(t, tt.status, fields["status_code"])
 			assert.Equal(t, tt.respHeaders["Request-Id"], fields["provider_request_id"])
-			assert.Equal(t, tt.wantRespBody, fields["response_body"])
+			if tt.wantRespBody == "" {
+				assert.NotContains(t, fields, "response_body")
+			} else {
+				assert.Equal(t, tt.wantRespBody, fields["response_body"])
+			}
 			assert.Equal(t, tt.wantReqBody, fields["request_body"])
 		})
 	}
@@ -198,12 +202,13 @@ func TestProviderTransport_LogsBodyOfUnknownLength(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
-	assert.Equal(t, "currency=usd&email=%5Bredacted%5D", logs.All()[0].ContextMap()["request_body"])
+	assert.Equal(t, `{"currency":"usd","email":"[redacted]"}`, logs.All()[0].ContextMap()["request_body"])
 }
 
 func TestProviderTransport_ReportsDetectedPII(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, `{"id":"inv_1","footer":"Questions? Write to jane@acme.com"}`)
 	}))
 	defer srv.Close()
@@ -214,8 +219,8 @@ func TestProviderTransport_ReportsDetectedPII(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 
 	require.Equal(t, 2, logs.Len())
-	completed, detected := logs.All()[0], logs.All()[1]
-	assert.Equal(t, `{"footer":"Questions? Write to [email]","id":"inv_1"}`, completed.ContextMap()["response_body"])
+	call, detected := logs.All()[0], logs.All()[1]
+	assert.Equal(t, `{"footer":"Questions? Write to [email]","id":"inv_1"}`, call.ContextMap()["response_body"])
 	assert.Equal(t, "provider_call.pii_detected", detected.Message)
 	assert.Equal(t, []any{"response.footer"}, detected.ContextMap()["pii_paths"])
 	assert.NotContains(t, fmt.Sprint(detected.ContextMap()), "jane@acme.com", "the alert line must not carry values")
@@ -240,3 +245,38 @@ func TestProviderTransport_OmitsOversizedBodies(t *testing.T) {
 	assert.Equal(t, large, string(got))
 	assert.Equal(t, "[omitted: body over 64 KB]", logs.All()[0].ContextMap()["response_body"])
 }
+
+type ctxKey struct{}
+
+// TestContextTransport goes through an http.Client with a Timeout, which wraps the request
+// context before the transport runs.
+func TestContextTransport(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+
+	var seen any
+	spy := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		seen = req.Context().Value(ctxKey{})
+		return http.DefaultTransport.RoundTrip(req)
+	})
+	bound := context.WithValue(context.Background(), ctxKey{}, "caller")
+	client := &http.Client{Timeout: 100 * time.Millisecond, Transport: ContextTransport(bound, spy)}
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.Do(req)
+
+	require.Error(t, err, "the client timeout still applies")
+	assert.Less(t, time.Since(start), time.Second)
+	assert.Equal(t, "caller", seen, "the request runs under the bound context")
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
