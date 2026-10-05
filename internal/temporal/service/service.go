@@ -268,7 +268,7 @@ func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, wo
 			Mark(errors.ErrValidation)
 	}
 
-	options := s.buildWorkerOptions()
+	options := s.buildWorkerOptions(taskQueue)
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
@@ -293,7 +293,7 @@ func (s *temporalService) RegisterActivity(taskQueue types.TemporalTaskQueue, ac
 			Mark(errors.ErrValidation)
 	}
 
-	options := s.buildWorkerOptions()
+	options := s.buildWorkerOptions(taskQueue)
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
@@ -327,8 +327,9 @@ func (s *temporalService) StopWorker(taskQueue types.TemporalTaskQueue) error {
 	return s.workerManager.StopWorker(taskQueue)
 }
 
-// buildWorkerOptions creates worker options from config with interceptors
-func (s *temporalService) buildWorkerOptions() *models.WorkerOptions {
+// buildWorkerOptions creates worker options for a task queue, applying global
+// config then that queue's overrides, with interceptors.
+func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) *models.WorkerOptions {
 	options := models.DefaultWorkerOptions()
 
 	// Apply config overrides (0 values mean use defaults)
@@ -343,6 +344,21 @@ func (s *temporalService) buildWorkerOptions() *models.WorkerOptions {
 	}
 	if s.workerConfig.TaskQueueActivitiesPerSecond > 0 {
 		options.TaskQueueActivitiesPerSecond = s.workerConfig.TaskQueueActivitiesPerSecond
+	}
+
+	if q, ok := s.workerConfig.Queues[taskQueue.String()]; ok {
+		if q.MaxConcurrentActivityExecutionSize > 0 {
+			options.MaxConcurrentActivityExecutionSize = q.MaxConcurrentActivityExecutionSize
+		}
+		if q.MaxConcurrentWorkflowTaskExecutionSize > 0 {
+			options.MaxConcurrentWorkflowTaskExecutionSize = q.MaxConcurrentWorkflowTaskExecutionSize
+		}
+		if q.WorkerActivitiesPerSecond > 0 {
+			options.WorkerActivitiesPerSecond = q.WorkerActivitiesPerSecond
+		}
+		if q.TaskQueueActivitiesPerSecond > 0 {
+			options.TaskQueueActivitiesPerSecond = q.TaskQueueActivitiesPerSecond
+		}
 	}
 
 	// Add interceptors
