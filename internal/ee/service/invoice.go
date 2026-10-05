@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -1263,6 +1264,12 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
 		}
+		activity.RecordAction(txCtx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeInvoice),
+			EntityID:   lockedInv.ID,
+			Action:     "invoice.finalized",
+			Metadata:   map[string]any{"invoice_number": lo.FromPtr(lockedInv.InvoiceNumber)},
+		})
 
 		// Update the caller's reference so downstream code sees the finalized state
 		*inv = *lockedInv
@@ -1570,7 +1577,16 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			inv.PaymentStatus = types.PaymentStatusRefunded
 		}
 
-		return s.InvoiceRepo.Update(tx, inv)
+		if err := s.InvoiceRepo.Update(tx, inv); err != nil {
+			return err
+		}
+		activity.RecordAction(tx, activity.Entry{
+			EntityType: string(types.SystemEntityTypeInvoice),
+			EntityID:   inv.ID,
+			Action:     "invoice.voided",
+			Metadata:   map[string]any{"invoice_number": lo.FromPtr(inv.InvoiceNumber)},
+		})
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -2117,6 +2133,14 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 			return err
 		}
+		if status == types.PaymentStatusSucceeded {
+			activity.RecordAction(txCtx, activity.Entry{
+				EntityType: string(types.SystemEntityTypeInvoice),
+				EntityID:   inv.ID,
+				Action:     "invoice.paid",
+				Metadata:   map[string]any{"invoice_number": lo.FromPtr(inv.InvoiceNumber)},
+			})
+		}
 		return nil
 	})
 	if err != nil {
@@ -2300,6 +2324,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 }
 
 func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+	// Billing generated from a subscription is the platform's work, whoever triggered the request.
+	ctx = types.WithDerivedSystemActor(ctx, "subscription_billing", "Subscription billing")
+
 	s.Logger.Info(ctx, "creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,

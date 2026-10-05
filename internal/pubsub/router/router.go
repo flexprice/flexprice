@@ -138,6 +138,17 @@ func consumerContextMiddleware(tracingSvc *tracing.Service) message.HandlerMiddl
 	}
 }
 
+// WithConsumerActor stamps the consumer group as a system actor, with the consumer
+// source, on the context of every message the handler processes.
+func WithConsumerActor(consumerGroup string, handlerFunc func(ctx context.Context, msg *message.Message) error) func(ctx context.Context, msg *message.Message) error {
+	actor := types.SystemActor(consumerGroup, "Consumer "+consumerGroup)
+	return func(ctx context.Context, msg *message.Message) error {
+		ctx = types.SetActor(ctx, actor)
+		ctx = types.SetSource(ctx, types.SourceConsumer)
+		return handlerFunc(ctx, msg)
+	}
+}
+
 // AddNoPublishHandler adds a handler that doesn't publish messages.
 // topicDLQ overrides the global DLQ topic for this handler; pass "" to use
 // the global kafka.topic_dlq fallback.

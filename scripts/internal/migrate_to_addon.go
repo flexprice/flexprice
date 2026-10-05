@@ -55,6 +55,8 @@ func CopyPlanChargesToAddons() error {
 
 	ctx := context.WithValue(context.Background(), types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	ctx = types.SetActor(ctx, types.SystemActor("script:migrate-to-addon", "Script migrate-to-addon"))
+	ctx = types.SetSource(ctx, types.SourceWorkflow)
 
 	log.Infow("Starting plan-to-addon charges copy", "tenant_id", tenantID, "environment_id", environmentID, "dry_run", isDryRun)
 

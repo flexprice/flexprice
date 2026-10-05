@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
@@ -1191,12 +1192,14 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			TaxRates:         taxRateIDs,
 		}
 
+		// The invoice is billing the platform derives from the top-up, not a user action.
+		invCtx := types.WithDerivedSystemActor(ctx, "credit_purchase_billing", "Credit purchase billing")
 		var inv *dto.InvoiceResponse
 		var skipped bool
 		if isPayFirst {
 			// Pay-first: leave DRAFT until checkout complete finalizes + reconciles.
 			invReq.SourceType = types.InvoiceSourceTypeCheckout
-			inv, skipped, err = invoiceService.CreateComputedDraftInvoice(ctx, invReq)
+			inv, skipped, err = invoiceService.CreateComputedDraftInvoice(invCtx, invReq)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create draft invoice for purchased credits").
@@ -1211,7 +1214,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					Mark(ierr.ErrValidation)
 			}
 		} else {
-			inv, err = invoiceService.CreateOneOffInvoice(ctx, invReq)
+			inv, err = invoiceService.CreateOneOffInvoice(invCtx, invReq)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create invoice for purchased credits").
@@ -3673,7 +3676,13 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 	// expecting that tenant already got the updated balance
 	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, w.ID, nil)
 
-	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
+	// This evaluation pass runs on every usage tick; suppressing it keeps the
+	// hook from issuing an old-value SELECT for every balance recompute and
+	// alert-state check. Auto top-up below keeps the plain ctx so the wallet
+	// transaction it creates still reaches the customer's activity feed.
+	evalCtx := activity.Suppress(ctx, "wallet balance evaluation")
+
+	balance, err := s.GetWalletBalanceV2(evalCtx, w.ID)
 	if err != nil {
 		s.Logger.Error(ctx, "wallet alerts: failed to get wallet balance", "error", err, "wallet_id", w.ID)
 		return nil
@@ -3682,7 +3691,7 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 
 	if hasWalletAlert {
 		eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
-		if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, lo.FromPtr(balance.RealTimeBalance), alertSettings, alertLogs, eventID); err != nil {
+		if err := s.processWalletBalanceAlert(evalCtx, w, ongoingBalance, lo.FromPtr(balance.RealTimeBalance), alertSettings, alertLogs, eventID); err != nil {
 			s.Logger.Error(ctx, "failed to process wallet balance alert", "error", err, "wallet_id", w.ID)
 		}
 	}
@@ -4060,12 +4069,17 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		}
 
 		// 3. Fetch balance — deferred until we know at least one action requires it
+		// This evaluation pass runs on every usage tick; suppressing it keeps the
+		// hook from issuing an old-value SELECT for every balance recompute and
+		// alert-state check. Auto top-up below keeps the plain ctx so the wallet
+		// transaction it creates still reaches the customer's activity feed.
+		evalCtx := activity.Suppress(ctx, "wallet balance evaluation")
 		var balance *dto.WalletBalanceResponse
 		if req.GetFromCache {
 			maxLive := int64(60) // 1 minute in seconds
-			balance, err = s.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
+			balance, err = s.GetWalletBalanceFromCache(evalCtx, w.ID, &maxLive)
 		} else {
-			balance, err = s.GetWalletBalanceV2(ctx, w.ID)
+			balance, err = s.GetWalletBalanceV2(evalCtx, w.ID)
 		}
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get wallet balance, skipping wallet",
@@ -4094,7 +4108,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				"event_id", req.ID,
 			)
 
-			if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, lo.FromPtr(balance.RealTimeBalance), alertSettings, alertLogsService, req.ID); err != nil {
+			if err := s.processWalletBalanceAlert(evalCtx, w, ongoingBalance, lo.FromPtr(balance.RealTimeBalance), alertSettings, alertLogsService, req.ID); err != nil {
 				s.Logger.Error(ctx, "failed to process wallet balance alert",
 					"error", err,
 					"wallet_id", w.ID,
@@ -4105,7 +4119,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 
 		// Process feature-level alerts if enabled
 		if featureAlertsEnabled {
-			if err := s.processFeatureWalletBalanceAlert(ctx, w, ongoingBalance, featuresWithAlerts, alertLogsService); err != nil {
+			if err := s.processFeatureWalletBalanceAlert(evalCtx, w, ongoingBalance, featuresWithAlerts, alertLogsService); err != nil {
 				s.Logger.Error(ctx, "failed to process feature wallet balance alerts",
 					"error", err,
 					"wallet_id", w.ID,

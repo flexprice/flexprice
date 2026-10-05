@@ -747,6 +747,9 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 		return nil, err
 	}
 
+	// Session, payment and gateway handles are created by the platform on the requester's behalf.
+	ctx = types.WithDerivedSystemActor(ctx, "checkout", "Checkout")
+
 	providerCfg := &types.CheckoutPaymentProviderConfig{}
 	if req.Checkout.PaymentProviderConfig != nil {
 		providerCfg = req.Checkout.PaymentProviderConfig

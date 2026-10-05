@@ -78,6 +78,7 @@ type Configuration struct {
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
 	Analytics              AnalyticsConfig              `mapstructure:"analytics" validate:"omitempty"`
+	Activity               ActivityConfig               `mapstructure:"activity" validate:"omitempty"`
 }
 
 // AnalyticsConfig gates the fire-and-forget analytics meter_usage feed.
@@ -97,6 +98,39 @@ type RevenueRollupConfig struct {
 	// anything the scan's triggers miss is repaired within a week rather than
 	// persisting. This is the net under the scan, not a switch for it.
 	FullRebuildWeekday int `mapstructure:"full_rebuild_weekday" default:"0"`
+}
+
+// ActivityConfig gates the activity_logs write path and its hot-window retention.
+type ActivityConfig struct {
+	Enabled       bool          `mapstructure:"enabled" default:"true"`
+	HotWindowDays int           `mapstructure:"hot_window_days" default:"90"`
+	Archive       ArchiveConfig `mapstructure:"archive"`
+}
+
+// ArchiveConfig controls where activity_logs rows older than the hot window are archived.
+type ArchiveConfig struct {
+	Enabled     bool   `mapstructure:"enabled" default:"false"`
+	Destination string `mapstructure:"destination" default:"local"` // local | s3
+	LocalDir    string `mapstructure:"local_dir" default:"/tmp/flexprice-activity-archive"`
+	Bucket      string `mapstructure:"bucket"`
+	KeyPrefix   string `mapstructure:"key_prefix" default:"activity_logs"`
+	RowsPerFile int    `mapstructure:"rows_per_file" default:"50000"`
+}
+
+// setActivityDefaults mirrors the `activity:` block in config.yaml. Struct `default:`
+// tags aren't applied at runtime (see the otel.traces.capture_exceptions comment in
+// NewConfig), so a deployment whose mounted config.yaml predates this key would
+// otherwise unmarshal Enabled=false, HotWindowDays=0, RowsPerFile=0 and empty
+// Destination/KeyPrefix — values the archiver later divides by and compares against.
+func setActivityDefaults(v *viper.Viper) {
+	v.SetDefault("activity.enabled", true)
+	v.SetDefault("activity.hot_window_days", 90)
+	v.SetDefault("activity.archive.enabled", false)
+	v.SetDefault("activity.archive.destination", "local")
+	v.SetDefault("activity.archive.local_dir", "/tmp/flexprice-activity-archive")
+	v.SetDefault("activity.archive.bucket", "")
+	v.SetDefault("activity.archive.key_prefix", "activity_logs")
+	v.SetDefault("activity.archive.rows_per_file", 50000)
 }
 
 type ChatSupportConfig struct {
@@ -1145,6 +1179,7 @@ func NewConfig() (*Configuration, error) {
 	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
+	setActivityDefaults(v)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

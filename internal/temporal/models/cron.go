@@ -141,3 +141,26 @@ type CheckoutSessionExpiryWorkflowResult struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 }
+
+// ===================== Activity log archive =====================
+
+// ActivityArchiveWorkflowInput is the input for ActivityArchiveWorkflow.
+// No fields required — partitions are discovered from pg_inherits.
+type ActivityArchiveWorkflowInput struct{}
+
+// ActivityArchiveWorkflowResult lists the partitions exported and dropped this run.
+type ActivityArchiveWorkflowResult struct {
+	Archived []string `json:"archived"`
+}
+
+// ActivityArchiveExportInput names one monthly activity_logs partition to export.
+type ActivityArchiveExportInput struct {
+	Partition string `json:"partition"`
+}
+
+// ActivityArchiveExportResult is an exported partition's manifest: rows per tenant and objects written.
+type ActivityArchiveExportResult struct {
+	Partition string         `json:"partition"`
+	Counts    map[string]int `json:"counts"`
+	Objects   []string       `json:"objects"`
+}

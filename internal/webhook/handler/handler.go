@@ -111,6 +111,8 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
+	ctx = types.SetActor(ctx, types.SystemActor(string(event.EventName), "Webhook "+string(event.EventName)))
+	ctx = types.SetSource(ctx, types.SourceWebhook)
 
 	eventID := event.ID
 	h.logger.Debug(ctx, "delivering webhook synchronously",
@@ -217,6 +219,8 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
+	ctx = types.SetActor(ctx, types.SystemActor(string(event.EventName), "Webhook "+string(event.EventName)))
+	ctx = types.SetSource(ctx, types.SourceWebhook)
 
 	h.logger.Debug(ctx, "consumed webhook from topic and delivering",
 		"topic", h.config.Topic,

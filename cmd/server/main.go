@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -107,9 +108,12 @@ func main() {
 			cache.NewRedisCache,
 			cache.NewRedisLocker,
 
+			// Activity log
+			provideActivityRegistry,
+
 			// Postgres
 			postgres.NewEntClients,
-			postgres.NewClient,
+			providePostgresClient,
 
 			// Clickhouse
 			clickhouse.NewClickHouseStore,
@@ -186,6 +190,7 @@ func main() {
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
 			repository.NewAlertSettingsRepository,
+			repository.NewActivityLogRepository,
 			repository.NewIncomingWebhookEventRepository,
 			repository.NewSystemEventRepository,
 			repository.NewSystemEventDomainRepository,
@@ -236,7 +241,8 @@ func main() {
 			// other service a copy carrying it, closing the hook loop
 			// without importing the revenue package from the service layer.
 			fx.Annotate(revenue.New, fx.ParamTags(`name:"base"`)),
-			fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``)),
+			fx.Annotate(provideActivityArchiveStorage, fx.ResultTags(`name:"activity_archive"`)),
+			fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``, `name:"activity_archive"`)),
 			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -292,6 +298,7 @@ func main() {
 			service.NewSubscriptionScheduleService,
 			service.NewAlertLogsService,
 			service.NewAlertService,
+			service.NewActivityLogService,
 			service.NewGroupService,
 			service.NewScheduledTaskService,
 			service.NewWalletPaymentService,
@@ -383,6 +390,7 @@ func provideHandlers(
 	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
 	alertService service.AlertService,
+	activityLogService service.ActivityLogService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
@@ -456,6 +464,7 @@ func provideHandlers(
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, logger),
+		ActivityLog:              v1.NewActivityLogHandler(activityLogService),
 	}
 }
 
@@ -496,6 +505,17 @@ func initIntegrationFactory(factory *integration.Factory, paymentService interfa
 // customer BYOB buckets from the connection row.
 func provideStorageResolver(cfg *config.Configuration, log *logger.Logger, factory *integration.Factory) storage.Resolver {
 	return storage.NewResolver(context.Background(), cfg, factory, log)
+}
+
+func provideActivityRegistry() *activity.Registry {
+	return activity.NewRegistry(activity.Definitions()...)
+}
+
+func providePostgresClient(cfg *config.Configuration, clients *postgres.EntClients, log *logger.Logger, tracingSvc *tracing.Service, reg *activity.Registry) postgres.IClient {
+	if !cfg.Activity.Enabled {
+		return postgres.NewClient(clients, log, tracingSvc)
+	}
+	return postgres.NewClient(clients, log, tracingSvc, postgres.WithActivity(reg))
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {
@@ -774,8 +794,24 @@ func provideWalletBalanceAlertPubSub(
 }
 
 // enrichServiceParams returns the ServiceParams the rest of the app consumes:
-// the base params plus the revenue-facts service the invoice hooks call.
-func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService) service.ServiceParams {
+// the base params plus the revenue-facts service the invoice hooks call and the
+// activity archive storage.
+func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService, activityArchiveStorage storage.Storage) service.ServiceParams {
 	base.RevenueFacts = revenueFacts
+	base.ActivityArchiveStorage = activityArchiveStorage
 	return base
+}
+
+// provideActivityArchiveStorage builds S3 storage for the activity_logs archive
+// bucket, reusing the export credentials and region. Nil unless archiving to s3.
+func provideActivityArchiveStorage(cfg *config.Configuration, log *logger.Logger) (storage.Storage, error) {
+	archiveCfg := cfg.Activity.Archive
+	if !archiveCfg.Enabled || archiveCfg.Destination != "s3" {
+		return nil, nil
+	}
+	if archiveCfg.Bucket == "" {
+		return nil, fmt.Errorf("activity.archive.bucket is required when activity.archive.destination is s3")
+	}
+	return storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeExport,
+		archiveCfg.Bucket, cfg.FlexpriceS3Exports.Region, "", log)
 }

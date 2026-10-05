@@ -427,6 +427,8 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		syncCtx = context.WithValue(syncCtx, types.CtxTenantID, types.GetTenantID(ctx))
 		syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
 		syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+		syncCtx = types.SetActor(syncCtx, types.GetActor(ctx))
+		syncCtx = types.SetSource(syncCtx, types.GetSource(ctx))
 		if roles := ctx.Value(types.CtxRoles); roles != nil {
 			syncCtx = context.WithValue(syncCtx, types.CtxRoles, roles)
 		}

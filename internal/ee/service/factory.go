@@ -151,6 +151,10 @@ type ServiceParams struct {
 	// this — no direct AWS/GCP SDK imports outside internal/storage.
 	StorageResolver storage.Resolver
 
+	// ActivityArchiveStorage receives archived activity_logs Parquet files.
+	// Nil unless activity.archive is enabled with destination s3.
+	ActivityArchiveStorage storage.Storage
+
 	// Security
 	EncryptionService security.EncryptionService
 

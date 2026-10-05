@@ -9,6 +9,18 @@ import (
 	"github.com/flexprice/flexprice/ent"
 )
 
+// The ActivityLogFunc type is an adapter to allow the use of ordinary
+// function as ActivityLog mutator.
+type ActivityLogFunc func(context.Context, *ent.ActivityLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityLogMutation", m)
+}
+
 // The AddonFunc type is an adapter to allow the use of ordinary
 // function as Addon mutator.
 type AddonFunc func(context.Context, *ent.AddonMutation) (ent.Value, error)

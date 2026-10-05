@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -166,6 +167,13 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	// Line items are not a registered entity; record the sync on the plan.
+	activity.RecordAction(ctx, activity.Entry{
+		EntityType: string(types.SystemEntityTypePlan),
+		EntityID:   planID,
+		Action:     "plan.prices_synced",
+		Metadata:   map[string]any{"line_items_affected": rowsAffected},
+	})
 	SetSpanSuccess(span)
 	return int(rowsAffected), nil
 }

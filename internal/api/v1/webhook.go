@@ -189,6 +189,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderStripe)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get Stripe integration
@@ -319,6 +320,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderHubSpot)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get HubSpot integration
@@ -476,6 +478,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderRazorpay)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get Razorpay integration
@@ -568,6 +571,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderChargebee)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get Chargebee integration
@@ -737,6 +741,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderQuickBooks)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get QuickBooks integration
@@ -818,6 +823,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderNomod)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Get Nomod integration
@@ -972,6 +978,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderMoyasar)
 	c.Request = c.Request.WithContext(ctx)
 
 	// Parse webhook payload first to get the secret_token
@@ -1118,6 +1125,7 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderZohoBooks)
 	c.Request = c.Request.WithContext(ctx)
 
 	zohoIntegration, err := h.integrationFactory.GetZohoBooksIntegration(ctx)
@@ -1217,6 +1225,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	// Set context with tenant and environment IDs
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderPaddle)
 	c.Request = c.Request.WithContext(ctx)
 
 	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
@@ -1303,6 +1312,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = withGatewayWebhookActor(ctx, types.SecretProviderWhop)
 	c.Request = c.Request.WithContext(ctx)
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
@@ -1402,4 +1412,11 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 			"error", err,
 			"type", event.Type)
 	}
+}
+
+// withGatewayWebhookActor attributes work done for an inbound provider webhook to
+// a system actor named after the provider.
+func withGatewayWebhookActor(ctx context.Context, provider types.SecretProvider) context.Context {
+	ctx = types.SetActor(ctx, types.SystemActor(string(provider), "Webhook "+string(provider)))
+	return types.SetSource(ctx, types.SourceWebhook)
 }
