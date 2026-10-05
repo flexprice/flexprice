@@ -6,7 +6,8 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
   {{- $parallel := include "flexprice.gceParallelEnabled" . }}
-  {{- $sharedGce := and $parallel (not .Values.gceIngress.ownService) }}
+  {{- $gce := fromYaml (include "flexprice.gce" .) }}
+  {{- $sharedGce := and $parallel (not $gce.ownService) }}
   {{- if $sharedGce }}
   annotations:
     # GCE needs a NEG to route to pod IPs.

@@ -1,6 +1,7 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
-{{- if eq .Values.gceIngress.tls.mode "certManager" }}
-{{- if .Values.gceIngress.tls.clusterIssuer }}
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+{{- if eq $gce.tls.mode "certManager" }}
+{{- if $gce.tls.clusterIssuer }}
 # Own Certificate; DNS-01 issues before the LB serves.
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -15,11 +16,11 @@ spec:
     - {{ . | quote }}
     {{- end }}
   issuerRef:
-    name: {{ $.Values.gceIngress.tls.clusterIssuer | quote }}
-    kind: {{ $.Values.gceIngress.tls.issuerKind }}
+    name: {{ $gce.tls.clusterIssuer | quote }}
+    kind: {{ $gce.tls.issuerKind }}
 {{- end }}
 {{- end }}
-{{- if eq .Values.gceIngress.tls.mode "managed" }}
+{{- if eq $gce.tls.mode "managed" }}
 # Google-managed certificate. Validation is over HTTP against the load balancer,
 # so the DNS record must ALREADY point at this Ingress's static IP before the
 # certificate can go Active, and provisioning takes 15-60 minutes. That inverts

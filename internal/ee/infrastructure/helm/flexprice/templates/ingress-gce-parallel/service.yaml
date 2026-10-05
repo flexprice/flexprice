@@ -1,4 +1,5 @@
-{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled .Values.gceIngress.ownService }}
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled $gce.ownService }}
 # Own Service carrying the GCE-native annotations.
 apiVersion: v1
 kind: Service
@@ -9,7 +10,7 @@ metadata:
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
     cloud.google.com/backend-config: '{"default": "{{ include "flexprice.gceIngressName" . }}"}'
-    {{- with .Values.gceIngress.service.annotations }}
+    {{- with $gce.service.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:

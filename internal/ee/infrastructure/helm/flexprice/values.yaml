@@ -479,8 +479,10 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
-  # Selects the ingress flavor. gce reads gceIngress.
+  # Selects the ingress flavor.
   type: ""          # nginx | gce
+  # GCE options. Falls back to the deprecated top-level gceIngress.
+  gce: {}
 
 # Frontend deployment configuration
 frontend:
