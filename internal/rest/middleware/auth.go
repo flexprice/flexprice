@@ -17,6 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// OperatorAPIKeyOnly admits only operator-provisioned (config) API keys. Tenant keys,
+// including super_admin ones, are rejected because these routes act across all tenants.
+func OperatorAPIKeyOnly(cfg *config.Configuration, logger *logger.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, _, ok := auth.ValidateAPIKey(cfg, c.GetHeader(cfg.Auth.APIKey.Header)); !ok {
+			logger.Info(c.Request.Context(), "rejected non-operator caller on operator-only route", "path", c.FullPath())
+			c.JSON(http.StatusForbidden, gin.H{"error": "operator API key required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // validateAPIKey validates the API key against the config first, then the database.
 func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
 	if apiKey == "" {
