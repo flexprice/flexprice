@@ -87,6 +87,8 @@ type cancelChargeClient struct {
 	RazorpayClient
 	invoices          map[string]map[string]interface{}
 	links             map[string]map[string]interface{}
+	orders            map[string]map[string]interface{}
+	orderPayments     map[string][]map[string]interface{}
 	cancelledInvoices []string
 	cancelledLinks    []string
 }
@@ -107,6 +109,14 @@ func (c *cancelChargeClient) FetchPaymentLink(_ context.Context, id string) (map
 func (c *cancelChargeClient) CancelPaymentLink(_ context.Context, id string) (map[string]interface{}, error) {
 	c.cancelledLinks = append(c.cancelledLinks, id)
 	return map[string]interface{}{"id": id, "status": "cancelled"}, nil
+}
+
+func (c *cancelChargeClient) FetchOrder(_ context.Context, id string) (map[string]interface{}, error) {
+	return c.orders[id], nil
+}
+
+func (c *cancelChargeClient) FetchOrderPayments(_ context.Context, id string) ([]map[string]interface{}, error) {
+	return c.orderPayments[id], nil
 }
 
 func TestCancelOpenCharge(t *testing.T) {
@@ -160,9 +170,38 @@ func TestCancelOpenCharge(t *testing.T) {
 		}
 	})
 
+	t.Run("paid order reports the capture", func(t *testing.T) {
+		client := &cancelChargeClient{
+			orders: map[string]map[string]interface{}{"order_paid": {"status": "paid"}},
+			orderPayments: map[string][]map[string]interface{}{
+				"order_paid": {{"id": "pay_rzp_2", "status": "captured"}},
+			},
+		}
+		adapter := &CheckoutAdapter{Svc: NewPaymentService(client, nil, nil, nil, logger.NewNoopLogger())}
+
+		got, err := adapter.CancelOpenCharge(ctx, "order_paid")
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.Captured || got.GatewayPaymentID != "pay_rzp_2" {
+			t.Fatalf("got %+v", got)
+		}
+	})
+
+	t.Run("unpaid order cannot be cancelled", func(t *testing.T) {
+		client := &cancelChargeClient{orders: map[string]map[string]interface{}{
+			"order_open": {"status": "created"},
+		}}
+		adapter := &CheckoutAdapter{Svc: NewPaymentService(client, nil, nil, nil, logger.NewNoopLogger())}
+		if _, err := adapter.CancelOpenCharge(ctx, "order_open"); err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
 	t.Run("unknown prefix fails closed", func(t *testing.T) {
 		adapter := &CheckoutAdapter{Svc: NewPaymentService(&cancelChargeClient{}, nil, nil, nil, logger.NewNoopLogger())}
-		if _, err := adapter.CancelOpenCharge(ctx, "order_unknown"); err == nil {
+		if _, err := adapter.CancelOpenCharge(ctx, "sub_unknown"); err == nil {
 			t.Fatal("expected an error")
 		}
 	})
