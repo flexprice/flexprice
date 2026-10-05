@@ -1,16 +1,6 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
-# FrontendConfig for the parallel GCE Ingress.
-#
-# Rendered unconditionally whenever gceIngress.enabled, even when every
-# sub-field is off. The Ingress references this object by annotation, and a
-# dangling reference stops GKE provisioning the load balancer AT ALL rather than
-# merely skipping the feature -- the Ingress never gets an ADDRESS and there are
-# no events to explain why.
-#
-# sslPolicy is the reason this template exists separately from the
-# ingress-gcp/frontendconfig.yaml used by ingress.provider=gce: that one cannot
-# set a TLS floor, so a GCE load balancer accepts TLS 1.0/1.1 by default while
-# ingress-nginx refuses them. Migrating without it WEAKENS TLS.
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+# Always rendered; dangling annotation blocks provisioning.
 apiVersion: networking.gke.io/v1beta1
 kind: FrontendConfig
 metadata:
@@ -18,14 +8,14 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
 spec:
-  {{- with .Values.gceIngress.frontendConfig.sslPolicy }}
+  {{- with $gce.frontendConfig.sslPolicy }}
   # Name of a pre-existing compute SSL policy. Created out of band (Terraform),
   # because the chart cannot create GCP resources.
   sslPolicy: {{ . | quote }}
   {{- end }}
   redirectToHttps:
-    enabled: {{ .Values.gceIngress.frontendConfig.redirectToHttps.enabled }}
-    {{- if .Values.gceIngress.frontendConfig.redirectToHttps.enabled }}
-    responseCodeName: {{ .Values.gceIngress.frontendConfig.redirectToHttps.responseCodeName }}
+    enabled: {{ $gce.frontendConfig.redirectToHttps.enabled }}
+    {{- if $gce.frontendConfig.redirectToHttps.enabled }}
+    responseCodeName: {{ $gce.frontendConfig.redirectToHttps.responseCodeName }}
     {{- end }}
 {{- end }}
