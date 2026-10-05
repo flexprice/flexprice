@@ -82,9 +82,8 @@ func Definitions() []Definition {
 		},
 		{
 			EntType: "Wallet", EntityType: types.SystemEntityTypeWallet, Table: "wallets",
-			LabelFields:  []string{"name", "currency", "wallet_type", "customer_id"},
-			IgnoreFields: []string{"balance", "credit_balance"},
-			CustomerID:   func(f map[string]any) string { return str(f, "customer_id") },
+			LabelFields: []string{"name", "currency", "wallet_type", "customer_id"},
+			CustomerID:  func(f map[string]any) string { return str(f, "customer_id") },
 			Label: func(f map[string]any) string {
 				if n := str(f, "name"); n != "" {
 					return n

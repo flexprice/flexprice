@@ -377,3 +377,27 @@ func TestHookHardDeleteCarriesLabelAndRollup(t *testing.T) {
 		t.Fatalf("want the delete row to carry label, customer_id and subscription_id, got %v", ex.args)
 	}
 }
+
+// A wallet's stored balance changes only when a transaction is applied, so it is recorded;
+// the frequent background evaluations are suppressed at their call sites.
+func TestWalletBalanceChangesAreRecorded(t *testing.T) {
+	reg := NewRegistry(Definitions()...)
+	ctx := WithCollector(context.Background())
+	m := &fakeMutation{op: ent.OpUpdate, typ: "Wallet", ids: []string{"w_1"},
+		fields: map[string]any{"balance": "300", "credit_balance": "300"}}
+	old := fakeOld{"w_1": {"balance": "200", "credit_balance": "200"}}
+	h := hook{reg: reg, old: old.oldValues}
+	if _, err := h.mutate(ctx, noopNext(), m); err != nil {
+		t.Fatal(err)
+	}
+	e := CollectorFrom(ctx).Entries()
+	if len(e) != 1 || e[0].Op != OpUpdate {
+		t.Fatalf("want one update entry, got %+v", e)
+	}
+	for _, f := range []string{"balance", "credit_balance"} {
+		ch, ok := e[0].Changes[f]
+		if !ok || ch.From != "200" || ch.To != "300" {
+			t.Fatalf("%s change not recorded as 200 -> 300: %+v", f, e[0].Changes)
+		}
+	}
+}
