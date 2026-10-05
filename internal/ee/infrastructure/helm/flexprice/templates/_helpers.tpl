@@ -845,10 +845,11 @@ values.yaml. A name mismatch is worse than either -- it creates a SECOND load
 balancer and orphans the original.
 */}}
 {{- define "flexprice.gceIngressName" -}}
-{{- if .Values.gceIngress.nameOverride -}}
-{{ .Values.gceIngress.nameOverride }}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.nameOverride -}}
+{{ $gce.nameOverride }}
 {{- else -}}
-{{ printf "%s-api-%s" (include "flexprice.fullname" .) .Values.gceIngress.nameSuffix }}
+{{ printf "%s-api-%s" (include "flexprice.fullname" .) $gce.nameSuffix }}
 {{- end -}}
 {{- end -}}
 
@@ -858,8 +859,9 @@ YAML array. Defaults to the hosts already under ingress.hosts, so the parallel
 Ingress covers the same names it is migrating; gceIngress.hosts overrides.
 */}}
 {{- define "flexprice.gceIngressHosts" -}}
-{{- if .Values.gceIngress.hosts -}}
-{{- range .Values.gceIngress.hosts }}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.hosts -}}
+{{- range $gce.hosts }}
 {{- if kindIs "string" . }}
 - {{ . }}
 {{- else }}
@@ -881,11 +883,12 @@ hostnames yield one /* path to the parallel api Service, matching the shape
 before per-path backends existed.
 */}}
 {{- define "flexprice.gceIngressRules" -}}
-{{- $svc := ternary (include "flexprice.gceIngressName" .) (printf "%s-api" (include "flexprice.fullname" .)) .Values.gceIngress.ownService }}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- $svc := ternary (include "flexprice.gceIngressName" .) (printf "%s-api" (include "flexprice.fullname" .)) $gce.ownService }}
 {{- $port := .Values.service.port }}
 {{- $default := list (dict "path" "/*" "pathType" "ImplementationSpecific" "service" $svc "port" $port) }}
-{{- if .Values.gceIngress.hosts }}
-{{- range .Values.gceIngress.hosts }}
+{{- if $gce.hosts }}
+{{- range $gce.hosts }}
 {{- if kindIs "string" . }}
 - host: {{ . }}
   paths:
@@ -922,8 +925,9 @@ load balancer's TLS renewal to the nginx Ingress's lifecycle; see
 ingress-gce-parallel/certificate.yaml.
 */}}
 {{- define "flexprice.gceIngressSecretName" -}}
-{{- if .Values.gceIngress.tls.secretName -}}
-{{ .Values.gceIngress.tls.secretName }}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.tls.secretName -}}
+{{ $gce.tls.secretName }}
 {{- else -}}
 {{ printf "%s-tls" (include "flexprice.gceIngressName" .) }}
 {{- end -}}
@@ -934,50 +938,43 @@ flexprice.gceIngressCertName — Certificate / ManagedCertificate object name.
 Independent of the secret name so an out-of-band certificate can be adopted.
 */}}
 {{- define "flexprice.gceIngressCertName" -}}
-{{- if .Values.gceIngress.tls.certificateName -}}
-{{ .Values.gceIngress.tls.certificateName }}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.tls.certificateName -}}
+{{ $gce.tls.certificateName }}
 {{- else -}}
 {{ include "flexprice.gceIngressName" . }}
 {{- end -}}
 {{- end -}}
 
 {{/*
-flexprice.ingressType — the effective ingress flavor: "nginx" or "gce".
+flexprice.gce — resolved GCE options.
 
-type is the current key; provider is the deprecated fallback. type is unset by
-default, so an existing values file keeps its behaviour when a release reaches
-it without a matching values change.
+Reads ingress.gce, falling back to the deprecated top-level gceIngress so a
+values file migrates on its own schedule.
+*/}}
+{{- define "flexprice.gce" -}}
+{{- $legacy := .Values.gceIngress | default dict -}}
+{{- $current := (.Values.ingress | default dict).gce | default dict -}}
+{{- if $current -}}
+{{- toYaml (mergeOverwrite (deepCopy $legacy) $current) -}}
+{{- else -}}
+{{- toYaml $legacy -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.ingressType — the effective ingress flavor: "nginx" or "gce".
 */}}
 {{- define "flexprice.ingressType" -}}
-{{- if .Values.ingress.type -}}
-{{ .Values.ingress.type }}
-{{- else -}}
-{{ .Values.ingress.provider | default "nginx" }}
-{{- end -}}
+{{ .Values.ingress.type | default "nginx" }}
 {{- end -}}
 
 {{/*
-flexprice.legacyGceEnabled — whether templates/ingress-gcp renders.
-
-Only ingress.provider selects it. type: gce routes to the gceIngress templates
-instead, so setting type never starts rendering the legacy set, and never stops
-it either while provider still says gce.
-*/}}
-{{- define "flexprice.legacyGceEnabled" -}}
-{{- if and .Values.ingress.enabled (eq (.Values.ingress.provider | default "nginx") "gce") -}}
-true
-{{- end -}}
-{{- end -}}
-
-{{/*
-flexprice.gceParallelEnabled — whether the parallel GCE objects render.
-
-True for gceIngress.enabled, or for ingress.type=gce once a values file opts in
-by setting type rather than provider. ingress.provider=gce keeps rendering the
-older templates/ingress-gcp set instead.
+flexprice.gceParallelEnabled — whether the GCE objects render.
 */}}
 {{- define "flexprice.gceParallelEnabled" -}}
-{{- if .Values.gceIngress.enabled -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.enabled -}}
 true
 {{- else if eq (.Values.ingress.type | default "") "gce" -}}
 true

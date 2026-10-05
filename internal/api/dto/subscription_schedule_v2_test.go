@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -136,5 +137,107 @@ func TestSubscriptionScheduleResponse_V1RowUnchanged(t *testing.T) {
 	}
 	if result["old_subscription_id"] != "subs_old" || result["new_subscription_id"] != "subs_new" {
 		t.Fatalf("unexpected v1 result: %+v", result)
+	}
+}
+
+func TestSubscriptionScheduleResponse_TypedPlanChange(t *testing.T) {
+	effective := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		row        func(t *testing.T) *subscription.SubscriptionSchedule
+		wantConfig *ConfigurationDetails
+		wantExec   *ExecutionDetails
+	}{
+		{
+			name: "v2 pending",
+			row: func(t *testing.T) *subscription.SubscriptionSchedule {
+				row := planChangeScheduleRow()
+				if err := row.SetPlanChangeV2Config(&subscription.PlanChangeV2Configuration{
+					TargetPlanID:           "plan_target",
+					BillingPeriodBehaviour: types.BillingPeriodBehaviourUnchanged,
+					EntityPolicies: &subscription.EntityChangePoliciesConfig{
+						Addons: &subscription.EntityChangePolicyConfig{DefaultBehaviour: types.EntityChangeBehaviourDrop},
+					},
+					ChangeMetadata: map[string]string{"source": "api"},
+				}); err != nil {
+					t.Fatalf("SetPlanChangeV2Config: %v", err)
+				}
+				return row
+			},
+			wantConfig: &ConfigurationDetails{PlanChange: &PlanChangeScheduleDetails{
+				TargetPlanID:           "plan_target",
+				BillingPeriodBehaviour: types.BillingPeriodBehaviourUnchanged,
+				EntityPolicies: &SubscriptionChangeEntityPolicies{
+					Addons: &EntityChangePolicy{DefaultBehaviour: types.EntityChangeBehaviourDrop},
+				},
+			}},
+		},
+		{
+			name: "v2 executed",
+			row: func(t *testing.T) *subscription.SubscriptionSchedule {
+				row := planChangeScheduleRow()
+				if err := row.SetPlanChangeV2Config(&subscription.PlanChangeV2Configuration{TargetPlanID: "plan_b"}); err != nil {
+					t.Fatalf("SetPlanChangeV2Config: %v", err)
+				}
+				if err := row.SetPlanChangeV2Result(&subscription.PlanChangeV2Result{
+					SubscriptionID: "subs_1", FromPlanID: "plan_a", ToPlanID: "plan_b",
+					ChangeType: "downgrade", EffectiveDate: effective,
+				}); err != nil {
+					t.Fatalf("SetPlanChangeV2Result: %v", err)
+				}
+				return row
+			},
+			wantConfig: &ConfigurationDetails{PlanChange: &PlanChangeScheduleDetails{TargetPlanID: "plan_b"}},
+			wantExec: &ExecutionDetails{PlanChange: &PlanChangeScheduleResult{
+				SubscriptionID: "subs_1", FromPlanID: "plan_a", ToPlanID: "plan_b",
+				ChangeType: "downgrade", EffectiveDate: effective,
+			}},
+		},
+		{
+			name: "v1 executed",
+			row: func(t *testing.T) *subscription.SubscriptionSchedule {
+				row := planChangeScheduleRow()
+				if err := row.SetPlanChangeConfig(&subscription.PlanChangeConfiguration{
+					TargetPlanID:   "plan_target",
+					ChangeMetadata: map[string]string{"source": "v1"},
+				}); err != nil {
+					t.Fatalf("SetPlanChangeConfig: %v", err)
+				}
+				if err := row.SetPlanChangeResult(&subscription.PlanChangeResult{
+					OldSubscriptionID: "subs_old", NewSubscriptionID: "subs_new",
+					ChangeType: "upgrade", EffectiveDate: effective,
+				}); err != nil {
+					t.Fatalf("SetPlanChangeResult: %v", err)
+				}
+				return row
+			},
+			wantConfig: &ConfigurationDetails{PlanChange: &PlanChangeScheduleDetails{
+				TargetPlanID: "plan_target",
+			}},
+			wantExec: &ExecutionDetails{PlanChange: &PlanChangeScheduleResult{
+				SubscriptionID: "subs_new", PreviousSubscriptionID: "subs_old",
+				ChangeType: "upgrade", EffectiveDate: effective,
+			}},
+		},
+		{
+			name: "cancellation has no plan change",
+			row: func(t *testing.T) *subscription.SubscriptionSchedule {
+				row := planChangeScheduleRow()
+				row.ScheduleType = types.SubscriptionScheduleChangeTypeCancellation
+				return row
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := SubscriptionScheduleResponseFromDomain(tt.row(t))
+			if !reflect.DeepEqual(resp.ConfigurationDetails, tt.wantConfig) {
+				t.Fatalf("ConfigurationDetails = %+v, want %+v", resp.ConfigurationDetails, tt.wantConfig)
+			}
+			if !reflect.DeepEqual(resp.ExecutionDetails, tt.wantExec) {
+				t.Fatalf("ExecutionDetails = %+v, want %+v", resp.ExecutionDetails, tt.wantExec)
+			}
+		})
 	}
 }

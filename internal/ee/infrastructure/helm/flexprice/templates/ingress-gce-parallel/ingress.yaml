@@ -1,15 +1,6 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
-# Parallel GCE Ingress -- a SECOND Ingress alongside the chart's `ingress.*` one.
-#
-# Purpose: migrate an API off ingress-nginx onto a GCE global external
-# Application Load Balancer with zero downtime. Both Ingresses serve the same
-# pods through their own load balancers; DNS decides which takes traffic, and
-# reverting the DNS record is the rollback.
-#
-# `ingress.provider: gce` cannot do this -- it converts the single chart Ingress,
-# deleting the nginx load balancer before the replacement serves. Measured on
-# GCP staging: a fresh GCE load balancer needed ~12 minutes from apply to first
-# 200, and an ADDRESS plus HEALTHY backends appeared ~6 minutes BEFORE it served.
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+# GCE global external Application Load Balancer.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -24,7 +15,7 @@ metadata:
     # a stuck provision when provisioning was never attempted. kubectl warns the
     # annotation is deprecated; that warning is expected here.
     kubernetes.io/ingress.class: "gce"
-    {{- with .Values.gceIngress.globalStaticIpName }}
+    {{- with $gce.globalStaticIpName }}
     # Reserved global address, so the IP survives Ingress recreation and the DNS
     # record stays valid. Without it the load balancer takes an ephemeral IP.
     kubernetes.io/ingress.global-static-ip-name: {{ . | quote }}
@@ -35,16 +26,16 @@ metadata:
     # with allowHttp: true, wait for the certificate to report Active, then set
     # false in a second upgrade. tls.mode=certManager has no such constraint --
     # DNS-01 never touches port 80, so false from the start is correct.
-    kubernetes.io/ingress.allow-http: {{ .Values.gceIngress.allowHttp | quote }}
+    kubernetes.io/ingress.allow-http: {{ $gce.allowHttp | quote }}
     networking.gke.io/v1beta1.FrontendConfig: {{ include "flexprice.gceIngressName" . }}
-    {{- if eq .Values.gceIngress.tls.mode "managed" }}
+    {{- if eq $gce.tls.mode "managed" }}
     networking.gke.io/managed-certificates: {{ include "flexprice.gceIngressCertName" . }}
     {{- end }}
-    {{- with .Values.gceIngress.annotations }}
+    {{- with $gce.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
-  {{- if eq .Values.gceIngress.tls.mode "certManager" }}
+  {{- if eq $gce.tls.mode "certManager" }}
   tls:
     - hosts:
         {{- range include "flexprice.gceIngressHosts" . | fromYamlArray }}

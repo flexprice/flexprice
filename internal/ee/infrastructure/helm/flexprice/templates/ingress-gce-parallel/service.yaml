@@ -1,16 +1,6 @@
-{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled .Values.gceIngress.ownService }}
-# Second api Service, existing ONLY to carry the GCE-native annotations.
-#
-# A GCE Ingress needs its backend Service to advertise a NEG and a
-# BackendConfig. Putting those on the chart's own `{{ include "flexprice.fullname" . }}-api`
-# Service would mutate the object the nginx path is serving from, so this adds a
-# parallel Service over the SAME pod selector instead. Pods are untouched; a
-# Service is a cheap stateless object.
-#
-# This is what makes the migration zero-downtime: both Ingresses serve the same
-# pods through their own load balancers, and DNS alone decides which one takes
-# traffic. Contrast `ingress.provider: gce`, which CONVERTS the single chart
-# Ingress and deletes the nginx load balancer with no parallel path.
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled $gce.ownService }}
+# Own Service carrying the GCE-native annotations.
 apiVersion: v1
 kind: Service
 metadata:
@@ -20,7 +10,7 @@ metadata:
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
     cloud.google.com/backend-config: '{"default": "{{ include "flexprice.gceIngressName" . }}"}'
-    {{- with .Values.gceIngress.service.annotations }}
+    {{- with $gce.service.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:

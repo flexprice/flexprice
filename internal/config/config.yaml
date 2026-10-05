@@ -526,7 +526,6 @@ usage_alerts:
   wallet_alerts_enabled: true
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
-  overrides: [] # [{tenant_id, environment_id, schedule_delay, stale_after}]
 
 wallet_balance_alert:
   enabled: true

@@ -1,4 +1,5 @@
 {{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
 # BackendConfig for the parallel GCE Ingress's Service.
 #
 # timeoutSec defaults to 60 to match ingress-nginx's proxy-read-timeout. The
@@ -11,7 +12,7 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
 spec:
-  {{- with .Values.gceIngress.backendConfig.healthCheck }}
+  {{- with $gce.backendConfig.healthCheck }}
   healthCheck:
     type: HTTP
     requestPath: {{ .path | quote }}
@@ -21,8 +22,8 @@ spec:
     healthyThreshold: {{ .healthyThreshold }}
     unhealthyThreshold: {{ .unhealthyThreshold }}
   {{- end }}
-  timeoutSec: {{ .Values.gceIngress.backendConfig.timeoutSec }}
-  {{- with .Values.gceIngress.backendConfig.cloudArmor.securityPolicyName }}
+  timeoutSec: {{ $gce.backendConfig.timeoutSec }}
+  {{- with $gce.backendConfig.cloudArmor.securityPolicyName }}
   securityPolicy:
     name: {{ . | quote }}
   {{- end }}
@@ -32,8 +33,8 @@ spec:
   # off. sampleRate is rendered only when enabled, since it is meaningless
   # otherwise.
   logging:
-    enable: {{ .Values.gceIngress.backendConfig.logging.enable }}
-    {{- if .Values.gceIngress.backendConfig.logging.enable }}
-    sampleRate: {{ .Values.gceIngress.backendConfig.logging.sampleRate }}
+    enable: {{ $gce.backendConfig.logging.enable }}
+    {{- if $gce.backendConfig.logging.enable }}
+    sampleRate: {{ $gce.backendConfig.logging.sampleRate }}
     {{- end }}
 {{- end }}

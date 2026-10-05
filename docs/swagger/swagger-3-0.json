@@ -5439,6 +5439,310 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/forex": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Create an FX rate",
+        "description": "Configure a fixed exchange rate at tenant, customer or subscription scope. Overrides need a tenant rate for the same pair.",
+        "operationId": "createFXRate",
+        "requestBody": {
+          "description": "FX rate to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFXRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "fx_rate"
+      }
+    },
+    "/forex/query": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Query FX rates",
+        "description": "Filter FX rates via a request body (POST used for a complex query, but read-only).",
+        "operationId": "queryFXRates",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.FXRateFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFXRatesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/forex/{id}": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Get an FX rate",
+        "description": "Load a single FX rate by ID.",
+        "operationId": "getFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Update an FX rate",
+        "description": "Update a rate's value, validity window (overrides only) or metadata. Scope, scope_id and the currency pair are immutable.",
+        "operationId": "updateFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "FX rate fields to update",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFXRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "fx_rate"
+      },
+      "delete": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Delete an FX rate",
+        "description": "Archive a customer or subscription override. Tenant rates cannot be deleted.",
+        "operationId": "deleteFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/groups": {
       "post": {
         "tags": [
@@ -9993,6 +10297,56 @@
             "description": "Filter by subscription ID",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "subscription_ids",
+            "in": "query",
+            "description": "Filter by subscription IDs",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "schedule_type",
+            "in": "query",
+            "description": "Filter by schedule type",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "plan_change",
+                  "cancellation"
+                ]
+              }
+            }
+          },
+          {
+            "name": "schedule_status",
+            "in": "query",
+            "description": "Filter by schedule status",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "executing",
+                  "executed",
+                  "cancelled",
+                  "failed"
+                ]
+              }
             }
           },
           {
@@ -18109,6 +18463,14 @@
           }
         }
       },
+      "ConfigurationDetails": {
+        "type": "object",
+        "properties": {
+          "plan_change": {
+            "$ref": "#/components/schemas/PlanChangeScheduleDetails"
+          }
+        }
+      },
       "CostAnalyticItem": {
         "type": "object",
         "properties": {
@@ -19126,6 +19488,48 @@
           },
           "provider_type": {
             "maxLength": 50,
+            "type": "string"
+          }
+        }
+      },
+      "CreateFXRateRequest": {
+        "required": [
+          "from_currency",
+          "scope",
+          "to_currency"
+        ],
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FXRateSource"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to_currency": {
             "type": "string"
           }
         }
@@ -21246,6 +21650,77 @@
           }
         }
       },
+      "ExecutionDetails": {
+        "type": "object",
+        "properties": {
+          "plan_change": {
+            "$ref": "#/components/schemas/PlanChangeScheduleResult"
+          }
+        }
+      },
+      "FXRateResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FXRateSource"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "to_currency": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
       "FeatureResponse": {
         "type": "object",
         "properties": {
@@ -23029,6 +23504,20 @@
           }
         }
       },
+      "ListFXRatesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FXRateResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListPaymentsResponse": {
         "type": "object",
         "properties": {
@@ -23485,6 +23974,45 @@
           "voided_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PlanChangeScheduleDetails": {
+        "type": "object",
+        "properties": {
+          "billing_period_behaviour": {
+            "$ref": "#/components/schemas/types.BillingPeriodBehaviour"
+          },
+          "entity_policies": {
+            "$ref": "#/components/schemas/SubscriptionChangeEntityPolicies"
+          },
+          "target_plan_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PlanChangeScheduleResult": {
+        "type": "object",
+        "properties": {
+          "change_type": {
+            "type": "string"
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from_plan_id": {
+            "type": "string"
+          },
+          "previous_subscription_id": {
+            "type": "string",
+            "description": "previous_subscription_id is set when the change replaced the subscription with a new one"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "to_plan_id": {
+            "type": "string"
           }
         }
       },
@@ -25966,7 +26494,10 @@
           "configuration": {
             "type": "object",
             "additionalProperties": true,
-            "description": "configuration contains type-specific configuration (e.g., target_plan_id for plan changes)"
+            "description": "configuration is the raw type-specific configuration. Deprecated: use configuration_details."
+          },
+          "configuration_details": {
+            "$ref": "#/components/schemas/ConfigurationDetails"
           },
           "created_at": {
             "type": "string",
@@ -25986,10 +26517,13 @@
             "description": "executed_at is when the schedule was executed",
             "format": "date-time"
           },
+          "execution_details": {
+            "$ref": "#/components/schemas/ExecutionDetails"
+          },
           "execution_result": {
             "type": "object",
             "additionalProperties": true,
-            "description": "execution_result contains type-specific execution result"
+            "description": "execution_result is the raw type-specific execution result. Deprecated: use execution_details."
           },
           "id": {
             "type": "string",
@@ -26866,6 +27400,28 @@
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
+          }
+        }
+      },
+      "UpdateFXRateRequest": {
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -30806,6 +31362,98 @@
           }
         },
         "x-speakeasy-name-override": "ExportMetadataField"
+      },
+      "types.FXRateFilter": {
+        "type": "object",
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "fx_rate_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "to_currency": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "FXRateFilter"
+      },
+      "types.FXRateScope": {
+        "type": "string",
+        "enum": [
+          "tenant",
+          "customer",
+          "subscription"
+        ],
+        "x-enum-varnames": [
+          "FXRateScopeTenant",
+          "FXRateScopeCustomer",
+          "FXRateScopeSubscription"
+        ],
+        "x-speakeasy-name-override": "FXRateScope"
+      },
+      "types.FXRateSource": {
+        "type": "string",
+        "enum": [
+          "fixed",
+          "market"
+        ],
+        "x-enum-varnames": [
+          "FXRateSourceFixed",
+          "FXRateSourceMarket"
+        ],
+        "x-speakeasy-name-override": "FXRateSource"
       },
       "types.FactStatus": {
         "type": "string",
