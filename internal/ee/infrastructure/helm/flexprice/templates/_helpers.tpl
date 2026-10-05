@@ -950,6 +950,9 @@ Independent of the secret name so an out-of-band certificate can be adopted.
 flexprice.gce — the GCE options under ingress.gce.
 */}}
 {{- define "flexprice.gce" -}}
+{{- if .Values.gceIngress -}}
+{{- fail "gceIngress was removed. Move these values under ingress.gce." -}}
+{{- end -}}
 {{- toYaml ((.Values.ingress | default dict).gce | default dict) -}}
 {{- end -}}
 

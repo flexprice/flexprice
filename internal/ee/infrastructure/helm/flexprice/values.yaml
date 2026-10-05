@@ -521,7 +521,7 @@ ingress:
         timeoutSec: 5
         healthyThreshold: 2
         unhealthyThreshold: 3
-      timeoutSec: 30
+      timeoutSec: 60
       cloudArmor:
         securityPolicyName: ""
       # null keeps the LB default; false asserts off.
