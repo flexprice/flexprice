@@ -296,6 +296,10 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 
 	client := r.client.Writer(ctx)
 	builder := client.SubscriptionLineItem.UpdateOneID(item.ID).
+		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
@@ -412,6 +416,7 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 		Where(
 			subscriptionlineitem.ID(id),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Exec(ctx)
 
