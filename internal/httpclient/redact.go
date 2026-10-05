@@ -113,7 +113,7 @@ func (r *redactor) value(value any, path string) any {
 			if isSensitiveKey(key) {
 				v[key] = redactedValue
 				if normalizeKey(key) == "metadata" {
-					v[key] = keepOwnKeys(child)
+					v[key] = r.keepOwnKeys(child, path+"."+key)
 				}
 				continue
 			}
@@ -153,23 +153,28 @@ func (r *redactor) form(values url.Values, side string) string {
 	return string(out)
 }
 
-// keepOwnKeys redacts a metadata object except our own flexprice_* identifiers.
-func keepOwnKeys(value any) any {
+// ownMetadataKeys are the metadata ids our code sets on provider objects. Exact match only:
+// callers can add their own metadata keys, so a prefix would be spoofable.
+var ownMetadataKeys = map[string]bool{
+	"flexprice_payment_id": true, "flexprice_invoice_id": true, "flexprice_customer_id": true,
+	"flexprice_subscription_id": true, "flexprice_price_id": true, "flexprice_line_item_id": true,
+	"flexprice_invoice_number": true, "flexprice_environment_id": true,
+}
+
+// keepOwnKeys redacts a metadata object except our own ids, whose values are still scanned.
+func (r *redactor) keepOwnKeys(value any, path string) any {
 	object, ok := value.(map[string]any)
 	if !ok {
 		return redactedValue
 	}
-	for key := range object {
-		if !isOwnKey(key) {
+	for key, child := range object {
+		if !ownMetadataKeys[key] {
 			object[key] = redactedValue
+			continue
 		}
+		object[key] = r.value(child, path+"."+key)
 	}
 	return object
-}
-
-// isOwnKey reports our own identifiers, such as metadata[flexprice_invoice_id].
-func isOwnKey(key string) bool {
-	return strings.HasPrefix(normalizeKey(key), "flexprice")
 }
 
 // text masks emails, card numbers and API keys, recording the field for the pii_detected
@@ -203,10 +208,13 @@ func (r *redactor) text(value, path string) string {
 
 func isSensitiveFormKey(key string) bool {
 	segments := strings.FieldsFunc(key, func(c rune) bool { return c == '[' || c == ']' })
-	if len(segments) > 0 && isOwnKey(segments[len(segments)-1]) {
-		return false
-	}
-	for _, segment := range segments {
+	n := len(segments)
+	own := n >= 2 && normalizeKey(segments[n-2]) == "metadata" && ownMetadataKeys[segments[n-1]]
+	for i, segment := range segments {
+		// metadata[<own id>] itself is ours; every segment above it is still checked.
+		if own && i >= n-2 {
+			break
+		}
 		// OAuth authorization code; JSON keeps "code" for provider error codes.
 		if isSensitiveKey(segment) || normalizeKey(segment) == "code" {
 			return true

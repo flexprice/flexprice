@@ -68,6 +68,12 @@ func TestRedactor_Body(t *testing.T) {
 			want:        `{"description":"[redacted]","hosted_invoice_url":"[redacted]","invoice_pdf":"[redacted]"}`,
 		},
 		{
+			name:        "metadata keeps only our exact flexprice_ ids, and still scans them",
+			body:        `{"metadata":{"flexprice_customer_id":"jane@acme.com","flexprice_customer_phone":"+15551234567"}}`,
+			contentType: jsonType,
+			want:        `{"metadata":{"flexprice_customer_id":"[email]","flexprice_customer_phone":"[redacted]"}}`,
+		},
+		{
 			name:        "metadata keeps only our flexprice_ ids",
 			body:        `{"metadata":{"flexprice_invoice_id":"inv_1","owner":"Jane"},"meta_data":"{\"x\":1}"}`,
 			contentType: jsonType,
@@ -114,6 +120,12 @@ func TestRedactor_Body(t *testing.T) {
 			body:        "customer[billing_address][line1]=1+Main+St&customer[id]=cus_1&card[expiry_month]=12&card[brand]=visa",
 			contentType: formType,
 			want:        `{"card[brand]":"visa","card[expiry_month]":"[redacted]","customer[billing_address][line1]":"[redacted]","customer[id]":"cus_1"}`,
+		},
+		{
+			name:        "form metadata exemption needs a metadata parent and an exact id",
+			body:        "client_secret[flexprice_invoice_id]=hunter2&metadata[flexprice_phone]=%2B15551234567&subscription_data[metadata][flexprice_customer_id]=cust_1",
+			contentType: formType,
+			want:        `{"client_secret[flexprice_invoice_id]":"[redacted]","metadata[flexprice_phone]":"[redacted]","subscription_data[metadata][flexprice_customer_id]":"cust_1"}`,
 		},
 		{
 			name:        "form metadata keeps only our flexprice_ ids",
