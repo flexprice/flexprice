@@ -8,6 +8,9 @@ type QuickBooksCustomerSyncWorkflowInput struct {
 	CustomerID    string `json:"customer_id"`
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
+	// Currency the QuickBooks customer should be created in. Empty when the trigger is a
+	// customer event, which carries no currency — creation is then deferred to invoice sync.
+	Currency string `json:"currency,omitempty"`
 }
 
 func (input *QuickBooksCustomerSyncWorkflowInput) Validate() error {
