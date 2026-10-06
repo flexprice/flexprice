@@ -172,7 +172,8 @@ jobs:
   #       "api_service":      "flexprice-api-v4",
   #       "consumer_service": "flexprice-consumer-v1",
   #       "worker_service":   "temporal-worker",
-  #       "preprod_service":  "preprod-flexprice-api-service"
+  #       "preprod_service":  "preprod-flexprice-api-service",
+  #       "extra_api_services": ["flexprice-api-tirdad"]
   #     },
   #     {
   #       "region":           "us-west-2",
@@ -187,6 +188,10 @@ jobs:
   #   Targets that define it are deployed to preprod first; production rollout
   #   then waits for manual approval (GitHub Environment: prod-approval).
   #
+  #   extra_api_services (optional): more API services in the SAME cluster/region
+  #   (e.g. white-label deployments) that run the same image as api_service.
+  #   They roll out alongside api_service in deploy-api, after the approval gate.
+  #
   #   Trigger mapping (staging ECS deprovisioned — production only):
   #     push to main      → production targets
   #     workflow_dispatch → production targets
@@ -199,6 +204,7 @@ jobs:
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
+      api_targets: ${{ steps.config.outputs.api_targets }}
       preprod_targets: ${{ steps.config.outputs.preprod_targets }}
       environment: ${{ steps.config.outputs.environment }}
       dry_run: ${{ steps.config.outputs.dry_run }}
@@ -228,11 +234,23 @@ jobs:
           # manual approval gate before the full production rollout.
           if [ -z "$TARGETS_JSON" ]; then
             PREPROD_TARGETS_JSON="[]"
+            API_TARGETS_JSON="[]"
           else
             PREPROD_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
           import json, sys
           targets = json.load(sys.stdin)
           print(json.dumps([t for t in targets if t.get('preprod_service')]))
+          ")
+            # One deploy-api matrix entry per API service: the target's
+            # api_service plus any extra_api_services in the same cluster.
+            API_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
+          import json, sys
+          targets = json.load(sys.stdin)
+          print(json.dumps([
+              {'region': t['region'], 'cluster': t['cluster'], 'api_service': svc}
+              for t in targets
+              for svc in [t['api_service'], *t.get('extra_api_services', [])]
+          ]))
           ")
           fi
 
@@ -240,6 +258,10 @@ jobs:
           echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
           echo "$TARGETS_JSON" >> $GITHUB_OUTPUT
           echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+
+          echo "api_targets<<API_TARGETS_EOF" >> $GITHUB_OUTPUT
+          echo "$API_TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "API_TARGETS_EOF" >> $GITHUB_OUTPUT
 
           echo "preprod_targets<<PREPROD_EOF" >> $GITHUB_OUTPUT
           echo "$PREPROD_TARGETS_JSON" >> $GITHUB_OUTPUT
@@ -484,6 +506,8 @@ jobs:
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
   #
   # Each target matrix entry: region, cluster, api_service, consumer_service, worker_service.
+  # deploy-api matrixes over api_targets instead: one entry per API service,
+  # so extra_api_services (e.g. flexprice-api-tirdad) deploy in parallel.
   # Task definition family is derived at runtime from the ECS service.
   # DRY RUN: composite action prints plan only, no register/update-service.
   # ──────────────────────────────────────────────────────────────────────────
@@ -503,7 +527,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+        target: ${{ fromJson(needs.resolve-config.outputs.api_targets) }}
       fail-fast: false
       max-parallel: 3
 
