@@ -681,4 +681,36 @@ Checked in the order listed (R15).
 ## 13. Future Phase — Tenant Termination
 
 When a tenant's contract ends, the tenant chooses to have its data returned or deleted, except what the law requires us to keep. Delete runs this PRD's flow for every customer in the tenant, and also erases the tenant's own users (names, emails, authentication identifiers), who are data subjects too. Financial records follow the same retention classes, and backups follow the normal rotation. Out of scope for this PRD; it reuses the request record, the workflow and the verification API defined here.
+
+---
+
+## 14. Contract Language
+
+Proposed clause 7.2 for the data processing agreement, added after the existing termination clause (7.1). It commits to exactly what this PRD delivers. Wording needs legal sign-off before use.
+
+> **7.2 Deletion on Instruction During the Term.**
+>
+> (a) Where enabled for Customer under the Agreement, Flexprice shall provide an authenticated programmatic endpoint through which Customer may instruct the deletion of the Customer Personal Data relating to an individual end customer, including end customers whose accounts are inactive or closed. Flexprice shall also act on equivalent written instructions received from Customer. Requests received by Flexprice directly from Data Subjects are handled under Section 3.4.
+>
+> (b) Upon receipt of a valid instruction, Flexprice shall without undue delay render the relevant Customer Personal Data inaccessible through the Services, and shall refuse further usage data submitted for that end customer.
+>
+> (c) Following a cooldown period agreed in the Order Form, not exceeding fourteen (14) days, during which Customer may withdraw the instruction, Flexprice shall permanently delete the relevant Customer Personal Data, or irreversibly anonymise it so that it can no longer be attributed to the Data Subject, and in any event within thirty (30) days of receipt of the instruction.
+>
+> (d) Section 7.2(c) does not apply to: (i) invoices, payment records, credit and refund records, and other records Flexprice is required to retain under applicable tax, accounting or other law, which are retained for the period that law requires in a form dissociated from the Data Subject's identifying information; (ii) invoice documents, which may be retained for the dispute period agreed in the Order Form and are deleted at its end; and (iii) residual copies in routine backups, which are deleted in accordance with Section 7.1.
+>
+> (e) Flexprice may decline an instruction while the end customer has an active subscription, an unsettled invoice or a pending payment, and shall identify the blocking items to Customer.
+>
+> (f) Flexprice shall provide a programmatic verification endpoint that returns, for each instruction, its status, the dates of receipt and completion, and each category of Customer Personal Data retained under Section 7.2(d) with its retention end date and legal basis, so that Customer can verify and audit completion.
+>
+> (g) Flexprice retains a minimal record of each instruction, consisting of a pseudonymised reference to the Data Subject, dates and outcome, to demonstrate compliance with this Section.
+
+| Clause | PRD source |
+|---|---|
+| 7.2(a) | R1, R4, UC2, R13 |
+| 7.2(b) | R7, R9 |
+| 7.2(c) | R5, R8, V3 |
+| 7.2(d) | BR1, BR2, BR9, BR1a |
+| 7.2(e) | BR3 |
+| 7.2(f) | R2, R11 |
+| 7.2(g) | R10, BR4 |
 | One request per customer | Bulk erasure is not required, and one-per-customer keeps the gate and the audit record simple. |
