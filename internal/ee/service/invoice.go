@@ -1170,9 +1170,11 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		// One-off and credit invoices already have credits and taxes applied
 		// during ComputeInvoice, so we skip them here.
 		// For subscription invoices, credits and taxes are deferred to this
-		// step so wallet debits only happen when the invoice is sealed.
+		// step so wallet debits only happen when the invoice is sealed. Tax
+		// runs after the conversion step below, so it is computed only once.
 		// ====================================================================
 
+		taxSubscriptionInvoice := false
 		if lockedInv.InvoiceType == types.InvoiceTypeSubscription {
 			// Load line items — ApplyCreditsToInvoice needs them
 			lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, lockedInv.ID)
@@ -1215,14 +1217,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 				if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 					return err
 				}
-
-				// Recalculate taxes with credits factored in
-				if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
-					return err
-				}
-				// Tax was produced in fiat, so it is divided back into the denomination.
-				lockedInv.MirrorTaxIntoDenomination()
-
+				taxSubscriptionInvoice = true
 			}
 		}
 
@@ -1234,6 +1229,15 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		// ====================================================================
 		if err := s.convertAndRetaxAtFinalize(txCtx, lockedInv); err != nil {
 			return err
+		}
+
+		// A converted invoice was already taxed in the billing currency above; tax the rest here.
+		if taxSubscriptionInvoice && lockedInv.FxConversion == nil {
+			if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
+				return err
+			}
+			// Tax was produced in fiat, so it is divided back into the denomination.
+			lockedInv.MirrorTaxIntoDenomination()
 		}
 
 		// ====================================================================

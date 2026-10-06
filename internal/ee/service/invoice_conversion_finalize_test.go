@@ -5,11 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -280,4 +282,88 @@ func (s *InvoiceConversionFinalizeSuite) TestAmountPaidNonZeroNoOp() {
 	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
 	s.Equal("usd", inv.Currency, "a paid invoice is not converted here (pay-first is a later PR)")
 	s.Nil(inv.FxConversion)
+}
+
+// taxAppliedSpy records the currency of every tax_applied write so a test can tell one tax pass from two.
+type taxAppliedSpy struct {
+	taxapplied.Repository
+	created []string
+	updated []string
+}
+
+func (r *taxAppliedSpy) Create(ctx context.Context, ta *taxapplied.TaxApplied) error {
+	r.created = append(r.created, ta.Currency)
+	return r.Repository.Create(ctx, ta)
+}
+
+func (r *taxAppliedSpy) Update(ctx context.Context, ta *taxapplied.TaxApplied) error {
+	r.updated = append(r.updated, ta.Currency)
+	return r.Repository.Update(ctx, ta)
+}
+
+func (s *InvoiceConversionFinalizeSuite) TestFinalizeTaxesSubscriptionInvoiceOnce() {
+	cases := []struct {
+		name          string
+		billing       *string
+		wantCurrency  string
+		wantTax       string
+		wantTotal     string
+		wantConverted bool
+	}{
+		{name: "converted: taxed once, in the billing currency", billing: lo.ToPtr("inr"), wantCurrency: "inr", wantTax: "1494", wantTotal: "9794", wantConverted: true},
+		{name: "not converted: taxed once, in the charge currency", billing: nil, wantCurrency: "usd", wantTax: "18", wantTotal: "118"},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			spy := &taxAppliedSpy{Repository: s.GetStores().TaxAppliedRepo}
+			params := s.svc.ServiceParams
+			params.TaxAppliedRepo = spy
+			svc := NewInvoiceService(params).(*invoiceService)
+
+			s.seedCustomer("cust_once", tc.billing)
+			s.seedTenantRate("usd", "inr", "83")
+			s.seedDraftInvoice("inv_once_tax", "cust_once", "usd", types.InvoiceTypeSubscription, lo.ToPtr("sub_once"),
+				[]*invoice.InvoiceLineItem{line("il_once", "100")})
+
+			pct := decimal.RequireFromString("18")
+			tr := &taxrate.TaxRate{
+				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
+				Name:            "GST",
+				Code:            "gst_" + types.GenerateUUIDWithPrefix("code"),
+				TaxRateStatus:   types.TaxRateStatusActive,
+				TaxRateType:     types.TaxRateTypePercentage,
+				PercentageValue: &pct,
+				EnvironmentID:   types.GetEnvironmentID(s.ctx()),
+				BaseModel:       types.GetDefaultBaseModel(s.ctx()),
+			}
+			s.Require().NoError(s.GetStores().TaxRateRepo.Create(s.ctx(), tr))
+			s.Require().NoError(s.GetStores().TaxAssociationRepo.Create(s.ctx(), &taxassociation.TaxAssociation{
+				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
+				TaxRateID:     tr.ID,
+				EntityType:    types.TaxRateEntityTypeSubscription,
+				EntityID:      "sub_once",
+				StartDate:     time.Now().UTC().Add(-24 * time.Hour),
+				Priority:      100,
+				AutoApply:     true,
+				Currency:      "usd",
+				EnvironmentID: types.GetEnvironmentID(s.ctx()),
+				BaseModel:     types.GetDefaultBaseModel(s.ctx()),
+			}))
+
+			s.Require().NoError(svc.FinalizeInvoice(s.ctx(), "inv_once_tax", dto.FinalizeInvoiceRequest{}))
+
+			got, err := s.GetStores().InvoiceRepo.Get(s.ctx(), "inv_once_tax")
+			s.Require().NoError(err)
+			s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+			s.Equal(tc.wantCurrency, got.Currency)
+			s.Equal(tc.wantConverted, got.FxConversion != nil)
+			s.True(decimal.RequireFromString(tc.wantTax).Equal(got.TotalTax), "total_tax got %s", got.TotalTax)
+			s.True(decimal.RequireFromString(tc.wantTotal).Equal(got.Total), "total got %s", got.Total)
+
+			s.Equal([]string{tc.wantCurrency}, spy.created, "exactly one tax_applied row, written in the final currency")
+			s.Empty(spy.updated, "no second tax pass rewriting the row")
+		})
+	}
 }
