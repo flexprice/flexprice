@@ -266,6 +266,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 					wallettransaction.ExpiryDateIsNil(),
 					wallettransaction.ExpiryDateGTE(timeReference),
 				),
+				wallettransaction.CreatedAtLT(timeReference),
 				wallettransaction.StatusEQ(string(types.StatusPublished)),
 				wallettransaction.TransactionStatusEQ(types.TransactionStatusCompleted),
 			).
