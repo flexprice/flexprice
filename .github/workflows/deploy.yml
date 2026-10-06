@@ -173,7 +173,7 @@ jobs:
   #       "consumer_service": "flexprice-consumer-v1",
   #       "worker_service":   "temporal-worker",
   #       "preprod_service":  "preprod-flexprice-api-service",
-  #       "extra_api_services": ["flexprice-api-tirdad"]
+  #       "extra_api_services": ["<white-label-api-service>"]
   #     },
   #     {
   #       "region":           "us-west-2",
@@ -507,7 +507,7 @@ jobs:
   #
   # Each target matrix entry: region, cluster, api_service, consumer_service, worker_service.
   # deploy-api matrixes over api_targets instead: one entry per API service,
-  # so extra_api_services (e.g. flexprice-api-tirdad) deploy in parallel.
+  # so extra_api_services deploy in parallel.
   # Task definition family is derived at runtime from the ECS service.
   # DRY RUN: composite action prints plan only, no register/update-service.
   # ──────────────────────────────────────────────────────────────────────────
