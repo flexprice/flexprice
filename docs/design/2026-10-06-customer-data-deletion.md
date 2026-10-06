@@ -29,7 +29,7 @@ This is a different feature from bulk event deletion (#2963), but both are built
 
 `DELETE /v1/customers/{id}` only archives the customer. Their personal data stays in the transactional store, their usage events and meter usage stay in the analytics store, invoice PDFs stay in object storage, and nothing records that a deletion was asked for.
 
-Ingesting an event never looks up the customer. `external_customer_id` is treated as an opaque string, so events for an archived customer are still accepted, processed and stored.
+Nothing stops new events from arriving for a customer after they are archived.
 
 ### Problem
 
@@ -295,7 +295,7 @@ IngestEvent -> validate
                             no:  publish (hot path unchanged)
 ```
 
-Ingestion reads no database today, so the suppression check is a cache lookup. The list is held only as hashes, so it never recreates the identifiers it exists to protect. It has no expiry, and the `deletion_requests` table is the source for rebuilding it if the cache is lost. Cancelling a request removes its entry.
+The suppression check must not slow ingestion down. The list is held only as hashes, so it never recreates the identifiers it exists to protect. It has no expiry, and the `deletion_requests` table is the source for rebuilding it if the cache is lost. Cancelling a request removes its entry.
 
 ---
 
@@ -382,7 +382,7 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 | #2963 deletion record | Deleted for this customer | Cooldown end |
 | Invoice PDFs | Deleted from file storage | End of the dispute window |
 | Invoices, payments, wallet transactions, refunds | Kept unchanged | Reported until the legal retention period ends |
-| Backups | Expire on the rolling cycle | ≤ 90 days |
+| Backups | Expire on the normal rotation | Per backup policy |
 
 ---
 
@@ -525,7 +525,7 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 
 ### Open Questions
 
-**Q1 — Tenant salt.** Should `subject_ref`'s salt be a new tenant setting, or derived from an existing tenant secret?
+**Q1 — Tenant salt.** Where is `subject_ref`'s per-tenant salt stored and managed?
 
 **Q2 — Redaction run time.** The one-month commitment depends on how long a single customer's analytics purge takes at production scale. Measure it before fixing the maximum cooldown.
 
