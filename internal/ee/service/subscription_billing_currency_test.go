@@ -134,9 +134,8 @@ func (s *SubscriptionBillingCurrencySuite) TestValidateSubscriptionBillingCurren
 				Currency:   tc.subCurr,
 			}
 			subscriber := &domainCustomer.Customer{ID: custID, BillingCurrency: tc.billing}
-			req := dto.CreateSubscriptionRequest{Currency: tc.subCurr, FxRate: tc.fxRate}
 
-			target, err := s.svc.validateSubscriptionBillingCurrency(s.ctx(), sub, subscriber, tc.cfg, req)
+			target, err := s.svc.validateSubscriptionBillingCurrency(s.ctx(), sub, subscriber, tc.cfg, tc.fxRate)
 			if tc.wantErr {
 				s.Error(err, "case %d", i)
 				s.True(ierr.IsValidation(err), "case %d: want validation error, got %v", i, err)

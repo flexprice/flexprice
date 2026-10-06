@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -55,7 +56,7 @@ func (s *customerService) validateBillingCurrency(ctx context.Context, customerI
 		if types.IsMatchingCurrency(sub.Currency, target) {
 			continue
 		}
-		if !s.conversionAvailable(ctx, ccCfg, sub.Currency, target) {
+		if !conversionAvailable(ctx, s.FXRateRepo, ccCfg, sub.Currency, target) {
 			missingSubs = append(missingSubs, fmt.Sprintf("%s->%s", sub.Currency, target))
 		}
 	}
@@ -75,7 +76,7 @@ func (s *customerService) validateBillingCurrency(ctx context.Context, customerI
 		if types.IsMatchingCurrency(w.Currency, target) {
 			continue
 		}
-		if !s.conversionAvailable(ctx, ccCfg, w.Currency, target) {
+		if !conversionAvailable(ctx, s.FXRateRepo, ccCfg, w.Currency, target) {
 			missingWallets = append(missingWallets, fmt.Sprintf("%s->%s", w.Currency, target))
 		}
 	}
@@ -91,11 +92,11 @@ func (s *customerService) validateBillingCurrency(ctx context.Context, customerI
 
 // conversionAvailable reports whether from can be converted to the billing currency: a custom
 // currency needs a configured factor; a fiat currency needs a published tenant rate.
-func (s *customerService) conversionAvailable(ctx context.Context, ccCfg types.CustomCurrencyConfig, from, to string) bool {
+func conversionAvailable(ctx context.Context, fxRates fxrate.Repository, ccCfg types.CustomCurrencyConfig, from, to string) bool {
 	if ccCfg.IsCustom(from) {
 		return !ccCfg.RateFor(from, to).IsZero()
 	}
-	if _, err := s.FXRateRepo.GetTenantRate(ctx, from, to); err != nil {
+	if _, err := fxRates.GetTenantRate(ctx, from, to); err != nil {
 		return false
 	}
 	return true

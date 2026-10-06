@@ -338,11 +338,8 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
-	// A subscription for a customer billed in another currency needs a way to convert. Runs after
-	// inheritance so the invoicing customer — whose billing currency applies — is known.
-	// inlineFXTarget is the billing currency when a subscription-scope fx_rate should be created
-	// after the subscription is persisted; empty otherwise.
-	inlineFXTarget, err := s.validateSubscriptionBillingCurrency(ctx, sub, customer, ccCfg, req)
+	// Runs after inheritance so the invoicing customer, whose billing currency applies, is known.
+	inlineFXTarget, err := s.validateSubscriptionBillingCurrency(ctx, sub, customer, ccCfg, req.FxRate)
 	if err != nil {
 		return nil, err
 	}
@@ -361,9 +358,8 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
-	// Inline fx_rate: create the subscription-scope rate in the same transaction, now that the
-	// subscription id exists. Guarded in validateSubscriptionBillingCurrency.
-	if inlineFXTarget != "" && req.FxRate != nil {
+	// Inline fx_rate: create the subscription-scope rate now that the subscription id exists.
+	if inlineFXTarget != "" {
 		fxSvc := NewFXRateService(s.ServiceParams)
 		if _, err := fxSvc.CreateFXRate(ctx, dto.CreateFXRateRequest{
 			Scope:        types.FXRateScopeSubscription,
@@ -7852,6 +7848,49 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil
+}
+
+// validateSubscriptionBillingCurrency checks the subscription can be converted to its invoicing
+// customer's billing currency. It returns that currency when an inline fx_rate should be created for it.
+func (s *subscriptionService) validateSubscriptionBillingCurrency(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	subscriber *customer.Customer,
+	ccCfg types.CustomCurrencyConfig,
+	fxRate *dto.InlineFXRate,
+) (string, error) {
+	invoicingCust := subscriber
+	if id := sub.GetInvoicingCustomerID(); id != subscriber.ID {
+		c, err := s.CustomerRepo.Get(ctx, id)
+		if err != nil {
+			return "", err
+		}
+		invoicingCust = c
+	}
+
+	billing := lo.FromPtr(invoicingCust.BillingCurrency)
+	needsConversion := billing != "" && !types.IsMatchingCurrency(billing, sub.Currency)
+
+	if fxRate != nil && (!needsConversion || ccCfg.IsCustom(sub.Currency)) {
+		return "", ierr.NewError("fx_rate is not applicable").
+			WithHint("An fx_rate can only be set on a fiat subscription billed in another currency.").
+			Mark(ierr.ErrValidation)
+	}
+	if !needsConversion {
+		return "", nil
+	}
+
+	if !conversionAvailable(ctx, s.FXRateRepo, ccCfg, sub.Currency, billing) {
+		return "", ierr.NewErrorf("no conversion configured from %s to %s", sub.Currency, billing).
+			WithHintf("Configure a rate or custom factor for %s to %s before creating this subscription.", sub.Currency, billing).
+			WithReportableDetails(map[string]any{"from": sub.Currency, "to": billing}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if fxRate == nil {
+		return "", nil
+	}
+	return billing, nil
 }
 
 // validateAutoInvoiceThresholdForCreate enforces auto_invoice_threshold before create: the effective
