@@ -77,7 +77,7 @@ The tenant sends one API call per customer and gets back a request id. The custo
 - **No deletion of financial records within their retention period.** Invoices, payments, wallet transactions and refunds are kept, dissociated from the person.
 - No purge of financial records once their retention period expires. That is a separate scheduled job.
 - No surgical edits to backups. Backups age out on their normal rotation.
-- No erasure of Flexprice's own users or tenants. Those are a different class of data subject.
+- No deletion of a whole tenant at contract end, including the tenant's own users. That is a future phase (§13).
 - No self-serve UI. API only.
 - No bulk or CSV requests. One request per customer.
 - No blocking of a person who signs up again as a genuinely new customer, once the tenant confirms it (BR6).
@@ -93,6 +93,8 @@ A tenant's end user closes their account and asks to be erased. The customer has
 ### UC2 — Written instruction
 
 A tenant emails a deletion instruction. A Flexprice operator enters it through the operator route (R4), with `request_channel = written`, the operator's identity, and a reference to the written instruction. Everything after that is identical, and the tenant's super admin can verify it through the tenant API.
+
+"Written" always means an instruction from the tenant, who is the controller. A request that reaches Flexprice directly from a data subject is forwarded to the tenant and is never acted on by Flexprice.
 
 ### UC3 — Cancelled during cooldown
 
@@ -156,10 +158,12 @@ After an erasure, the same person signs up again under the same `external_id`. T
 
 | Class | Data | Outcome |
 |---|---|---|
-| Redact at cooldown end | Customer name, email, contact, address, `metadata`, `external_id` | `redacted`. Fields overwritten, row kept |
+| Redact at cooldown end | Customer name, email, contact, address, `metadata`, `external_id`; `metadata` on the customer's subscriptions, wallets, invoices and payments | `redacted`. Fields overwritten, rows kept |
 | Delete at cooldown end | Usage events and meter usage; #2963 deletion records | `deleted` |
 | Keep for the dispute window | Invoice documents (PDFs render name and address) | `retained`, then `deleted` when the tenant's dispute window ends |
-| Keep for the legal period | Invoices, payments, wallet transactions, refunds | `retained`. Invoices hold no personal fields, so redacting the customer row dissociates them |
+| Keep for the legal period | Invoices, payments, wallet transactions, refunds | `retained`. Their financial fields are unchanged. Their free-form `metadata` is redacted with the first class. Plan and price names on line items are tenant configuration, not personal data |
+
+**BR1a.** Transient copies. Personal data passing through the event pipeline and the workflow engine ages out on their own retention, which must stay inside the one-month commitment. The deletion workflow's inputs carry only the request id, never personal data. Support conversations are outside this API and follow the support process.
 
 **BR2.** The dispute window runs from the customer's newest transaction. If it has already passed when the cooldown ends, invoice documents are deleted together with everything else. Failed payments, voided invoices and non-production environments have no dispute window.
 
@@ -428,10 +432,12 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 | Customer name, email, contact, address | Overwritten with `[redacted]` | Cooldown end | `customer_record: redacted` |
 | Customer `external_id` | Overwritten with `redacted_<subject_ref>` | Cooldown end | `customer_record: redacted` |
 | Customer `metadata` | Purged | Cooldown end | `customer_record: redacted` |
+| `metadata` on the customer's subscriptions, wallets, invoices and payments | Purged | Cooldown end | `customer_record: redacted` |
 | Usage events and meter usage | Deleted | Cooldown end | `usage_data: deleted` |
 | #2963 deletion record | Deleted for this customer | Cooldown end | `usage_data: deleted` |
 | Invoice PDFs | Deleted from file storage | End of the dispute window | `invoice_documents: retained`, then `deleted` |
 | Invoices, payments, wallet transactions, refunds | Kept unchanged | Until each record's legal period ends (BR9) | `financial_records: retained` |
+| Event pipeline and workflow history | Age out on their own retention | Inside the one-month commitment (BR1a) | Not reported per request |
 | Backups | Expire on the normal rotation | Per backup policy | Not reported per request |
 
 ---
@@ -615,6 +621,10 @@ Checked in the order listed (R15).
 
 **AC22.** Creating a customer with a suppressed `external_id` returns `409`. With `confirm_new_subject = true`, it succeeds, suppression is lifted, and the old request records who lifted it and when.
 
+**AC23.** After redaction, `metadata` on the customer's subscriptions, wallets, invoices and payments is empty, and their amounts, dates and statuses are unchanged.
+
+**AC24.** The deletion workflow's inputs and history contain the request id and no personal data.
+
 ---
 
 ## 12. Open Questions & Decisions
@@ -632,6 +642,8 @@ Checked in the order listed (R15).
 **Q5 — Metered customer without a subscription.** Such a customer passes the gate but may still be sending billable usage. Once suppressed, that usage is refused. The contract needs to say who bears that.
 
 **Q6 — Operator route.** Which internal access control guards the operator route, and how is the written instruction stored behind `instruction_ref`?
+
+**Q7 — Pipeline retention.** Confirm that event pipeline and workflow history retention stay inside the one-month commitment (BR1a), or shorten them.
 
 ### Decisions
 
@@ -659,4 +671,14 @@ Checked in the order listed (R15).
 | `external_id` reuse needs explicit confirmation | Prevents both permanent blocking of a new customer and silent re-attachment to an erased one. |
 | `422` at ingestion, not a silent drop | The client can tell suppression apart from a malformed payload. |
 | Shared deletion machinery with #2963 | One way to delete from the analytics store, one workflow pattern, one deleted-key list. |
+| Free-form `metadata` on linked records redacted | Tenants can put personal data in any free-form field. Financial fields stay intact. |
+| Workflow inputs carry only the request id | Personal data never lands in workflow history. |
+| Direct data-subject requests forwarded, not acted on | The tenant is the controller and decides. |
+| Tenant termination deferred | A separate flow over every customer and user in the tenant, built on the same machinery. |
+
+---
+
+## 13. Future Phase — Tenant Termination
+
+When a tenant's contract ends, the tenant chooses to have its data returned or deleted, except what the law requires us to keep. Delete runs this PRD's flow for every customer in the tenant, and also erases the tenant's own users (names, emails, authentication identifiers), who are data subjects too. Financial records follow the same retention classes, and backups follow the normal rotation. Out of scope for this PRD; it reuses the request record, the workflow and the verification API defined here.
 | One request per customer | Bulk erasure is not required, and one-per-customer keeps the gate and the audit record simple. |
