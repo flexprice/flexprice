@@ -172,8 +172,7 @@ jobs:
   #       "api_service":      "flexprice-api-v4",
   #       "consumer_service": "flexprice-consumer-v1",
   #       "worker_service":   "temporal-worker",
-  #       "preprod_service":  "preprod-flexprice-api-service",
-  #       "extra_api_services": ["<white-label-api-service>"]
+  #       "preprod_service":  "preprod-flexprice-api-service"
   #     },
   #     {
   #       "region":           "us-west-2",
@@ -187,10 +186,6 @@ jobs:
   #   preprod_service (optional): canary ECS service in the SAME cluster/region.
   #   Targets that define it are deployed to preprod first; production rollout
   #   then waits for manual approval (GitHub Environment: prod-approval).
-  #
-  #   extra_api_services (optional): more API services in the SAME cluster/region
-  #   (e.g. white-label deployments) that run the same image as api_service.
-  #   They roll out alongside api_service in deploy-api, after the approval gate.
   #
   #   Trigger mapping (staging ECS deprovisioned — production only):
   #     push to main      → production targets
@@ -241,8 +236,6 @@ jobs:
           targets = json.load(sys.stdin)
           print(json.dumps([t for t in targets if t.get('preprod_service')]))
           ")
-            # One deploy-api matrix entry per API service: the target's
-            # api_service plus any extra_api_services in the same cluster.
             API_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
           import json, sys
           targets = json.load(sys.stdin)
@@ -506,8 +499,6 @@ jobs:
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
   #
   # Each target matrix entry: region, cluster, api_service, consumer_service, worker_service.
-  # deploy-api matrixes over api_targets instead: one entry per API service,
-  # so extra_api_services deploy in parallel.
   # Task definition family is derived at runtime from the ECS service.
   # DRY RUN: composite action prints plan only, no register/update-service.
   # ──────────────────────────────────────────────────────────────────────────
