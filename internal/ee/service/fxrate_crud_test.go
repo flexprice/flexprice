@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -44,7 +43,7 @@ func (s *FXRateCRUDSuite) TestCreate_CustomerScopeRequiresExistingCustomer() {
 	s.createTenantRate("usd", "inr", "83")
 	// no customer row for "ghost"
 	_, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
-		Scope: types.FXRateScopeCustomer, ScopeID: "ghost", FromCurrency: "usd", ToCurrency: "inr", Rate: "84",
+		Scope: types.FXRateScopeCustomer, ScopeID: "ghost", FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("84"),
 	})
 	s.Error(err, "a customer-scope rate for a non-existent customer must be rejected")
 	s.True(ierr.IsValidation(err) || ierr.IsNotFound(err))
@@ -58,14 +57,14 @@ func (s *FXRateCRUDSuite) TearDownTest() {
 
 func (s *FXRateCRUDSuite) createTenantRate(from, to, rate string) {
 	_, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
-		Scope: types.FXRateScopeTenant, FromCurrency: from, ToCurrency: to, Rate: rate,
+		Scope: types.FXRateScopeTenant, FromCurrency: from, ToCurrency: to, Rate: ratePtr(rate),
 	})
 	s.NoError(err)
 }
 
 func (s *FXRateCRUDSuite) createOverride(scope types.FXRateScope, scopeID, from, to, rate string, startDate *time.Time) *dto.FXRateResponse {
 	resp, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
-		Scope: scope, ScopeID: scopeID, FromCurrency: from, ToCurrency: to, Rate: rate, StartDate: startDate,
+		Scope: scope, ScopeID: scopeID, FromCurrency: from, ToCurrency: to, Rate: ratePtr(rate), StartDate: startDate,
 	})
 	s.NoError(err)
 	return resp
@@ -131,7 +130,7 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 	}{
 		{
 			name: "tenant rate success stores lowercase",
-			req:  dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "USD", ToCurrency: "INR", Rate: "83.00"},
+			req:  dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "USD", ToCurrency: "INR", Rate: ratePtr("83.00")},
 			check: func(resp *dto.FXRateResponse) {
 				s.Equal("usd", resp.FromCurrency)
 				s.Equal("inr", resp.ToCurrency)
@@ -141,29 +140,29 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 		},
 		{
 			name:    "rejects same currency",
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "usd", Rate: "1"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "usd", Rate: ratePtr("1")},
 			wantErr: true,
 		},
 		{
 			name:    "rejects non-positive rate",
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: "0"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("0")},
 			wantErr: true,
 		},
 		{
 			name:    "rejects unsupported currency",
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "xyz", Rate: "1"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "xyz", Rate: ratePtr("1")},
 			wantErr: true,
 		},
 		{
 			name:    "override requires a tenant rate",
 			setup:   func() { s.seedCustomer("cust_a") },
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeCustomer, ScopeID: "cust_a", FromCurrency: "usd", ToCurrency: "inr", Rate: "84.5"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeCustomer, ScopeID: "cust_a", FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("84.5")},
 			wantErr: true,
 		},
 		{
 			name:    "duplicate tenant rate rejected",
 			setup:   func() { s.createTenantRate("usd", "inr", "83") },
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: "84"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("84")},
 			wantErr: true,
 		},
 		{
@@ -173,13 +172,13 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				s.createOverride(types.FXRateScopeCustomer, "cust_a", "usd", "inr", "84", nil) // open-ended
 			},
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeCustomer, ScopeID: "cust_a", FromCurrency: "usd", ToCurrency: "inr", Rate: "85", StartDate: &nov},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeCustomer, ScopeID: "cust_a", FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("85"), StartDate: &nov},
 			wantErr: true,
 		},
 		{
 			name:    "rejects custom currency",
 			setup:   func() { s.seedCustomCurrency() },
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "mac", ToCurrency: "inr", Rate: "10"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "mac", ToCurrency: "inr", Rate: ratePtr("10")},
 			wantErr: true,
 		},
 		{
@@ -188,7 +187,7 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				s.seedSubscription("subs_eur", "eur")
 			},
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeSubscription, ScopeID: "subs_eur", FromCurrency: "usd", ToCurrency: "inr", Rate: "83"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeSubscription, ScopeID: "subs_eur", FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("83")},
 			wantErr: true,
 		},
 		{
@@ -197,14 +196,14 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				s.seedSubscription("subs_usd", "usd")
 			},
-			req: dto.CreateFXRateRequest{Scope: types.FXRateScopeSubscription, ScopeID: "subs_usd", FromCurrency: "usd", ToCurrency: "inr", Rate: "82"},
+			req: dto.CreateFXRateRequest{Scope: types.FXRateScopeSubscription, ScopeID: "subs_usd", FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("82")},
 			check: func(resp *dto.FXRateResponse) {
 				s.Equal(types.FXRateScopeSubscription, resp.Scope)
 			},
 		},
 		{
 			name: "source defaults to fixed",
-			req:  dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: "83"},
+			req:  dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("83")},
 			check: func(resp *dto.FXRateResponse) {
 				s.Equal(types.FXRateSourceFixed, resp.Source)
 			},
@@ -223,7 +222,7 @@ func (s *FXRateCRUDSuite) TestCreateFXRate() {
 		},
 		{
 			name:    "rejects invalid source",
-			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, Source: types.FXRateSource("live"), FromCurrency: "usd", ToCurrency: "inr", Rate: "83"},
+			req:     dto.CreateFXRateRequest{Scope: types.FXRateScopeTenant, Source: types.FXRateSource("live"), FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("83")},
 			wantErr: true,
 		},
 	}
@@ -273,7 +272,7 @@ func (s *FXRateCRUDSuite) TestUpdateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				return s.onlyRateID()
 			},
-			req: dto.UpdateFXRateRequest{Rate: lo.ToPtr("90")},
+			req: dto.UpdateFXRateRequest{Rate: ratePtr("90")},
 			check: func(id string) {
 				got, err := s.svc.GetFXRate(s.GetContext(), id)
 				s.NoError(err)
@@ -286,7 +285,7 @@ func (s *FXRateCRUDSuite) TestUpdateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				return s.onlyRateID()
 			},
-			req:     dto.UpdateFXRateRequest{Rate: lo.ToPtr("-5")},
+			req:     dto.UpdateFXRateRequest{Rate: ratePtr("-5")},
 			wantErr: true,
 		},
 		{
@@ -296,13 +295,13 @@ func (s *FXRateCRUDSuite) TestUpdateFXRate() {
 				s.createTenantRate("usd", "inr", "83")
 				resp, err := s.svc.CreateFXRate(s.GetContext(), dto.CreateFXRateRequest{
 					Scope: types.FXRateScopeCustomer, ScopeID: "cust_a",
-					FromCurrency: "usd", ToCurrency: "inr", Rate: "84",
+					FromCurrency: "usd", ToCurrency: "inr", Rate: ratePtr("84"),
 				})
 				s.Require().NoError(err)
 				s.Require().NoError(s.svc.DeleteFXRate(s.GetContext(), resp.ID))
 				return resp.ID
 			},
-			req:     dto.UpdateFXRateRequest{Rate: lo.ToPtr("85")},
+			req:     dto.UpdateFXRateRequest{Rate: ratePtr("85")},
 			wantErr: true,
 		},
 	}
@@ -381,4 +380,9 @@ func (s *FXRateCRUDSuite) onlyRateID() string {
 	s.NoError(err)
 	s.Len(list.Items, 1)
 	return list.Items[0].ID
+}
+
+func ratePtr(v string) *decimal.Decimal {
+	d := decimal.RequireFromString(v)
+	return &d
 }

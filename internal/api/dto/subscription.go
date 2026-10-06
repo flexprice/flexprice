@@ -558,7 +558,7 @@ func (c *SubscriptionCreationConfig) Validate() error {
 // InlineFXRate is the optional fx_rate block on subscription create — just the rate; the pair and
 // scope are derived from the subscription's currency and the customer's billing currency.
 type InlineFXRate struct {
-	Rate string `json:"rate" validate:"required"`
+	Rate decimal.Decimal `json:"rate" swaggertype:"string"`
 }
 
 type CreateSubscriptionRequest struct {
@@ -995,6 +995,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
 		return ierr.NewError("opening invoice adjustment amount must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.FxRate != nil && !r.FxRate.Rate.IsPositive() {
+		return ierr.NewError("fx_rate.rate must be greater than zero").
+			WithHint("Provide a positive exchange rate, or omit fx_rate.").
 			Mark(ierr.ErrValidation)
 	}
 

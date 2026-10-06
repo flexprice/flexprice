@@ -366,7 +366,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			ScopeID:      sub.ID,
 			FromCurrency: sub.Currency,
 			ToCurrency:   inlineFXTarget,
-			Rate:         req.FxRate.Rate,
+			Rate:         &req.FxRate.Rate,
 		}); err != nil {
 			return nil, err
 		}

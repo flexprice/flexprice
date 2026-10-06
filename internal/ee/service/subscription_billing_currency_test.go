@@ -82,7 +82,7 @@ func customCfg(code, fiat, factor string) types.CustomCurrencyConfig {
 }
 
 func (s *SubscriptionBillingCurrencySuite) TestValidateSubscriptionBillingCurrency() {
-	fxRate := &dto.InlineFXRate{Rate: "83"}
+	fxRate := &dto.InlineFXRate{Rate: decimal.RequireFromString("83")}
 
 	cases := []struct {
 		name       string

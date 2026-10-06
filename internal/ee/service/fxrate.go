@@ -260,14 +260,10 @@ func (s *fxRateService) UpdateFXRate(ctx context.Context, id string, req dto.Upd
 	builder := fxrate.NewFXRateBuilder(existing)
 
 	if req.Rate != nil {
-		rate, perr := decimal.NewFromString(*req.Rate)
-		if perr != nil {
-			return nil, ierr.NewError("invalid rate").WithHint("Rate must be a valid decimal number").Mark(ierr.ErrValidation)
-		}
-		if !rate.IsPositive() {
+		if !req.Rate.IsPositive() {
 			return nil, ierr.NewError("rate must be greater than zero").WithHint("FX rate must be a positive number").Mark(ierr.ErrValidation)
 		}
-		builder.WithRate(rate)
+		builder.WithRate(*req.Rate)
 	}
 
 	newStart := existing.StartDate
