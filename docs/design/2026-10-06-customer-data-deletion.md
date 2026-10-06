@@ -9,11 +9,11 @@ Related: [#2963 — Bulk Event Deletion](https://github.com/flexprice/flexprice/
 
 ## 1. Overview
 
-A tenant-facing API that permanently erases a customer's personal data on the tenant's instruction, including customers who have already churned. The same flow runs when the instruction arrives in writing. A second API lets the tenant check, at any time, whether the deletion has finished and what was deliberately kept and why.
+A tenant-facing API that permanently erases a customer's personal data on the tenant's instruction, including customers who have already churned. Written instructions run through the same flow. A second API lets the tenant check, at any time, whether the deletion has finished and what was deliberately kept and why.
 
 A request goes through three stages:
 
-1. **Suppression**, as soon as the request is accepted. The customer can no longer be read through any API, the UI or an export.
+1. **Suppression**, as soon as the request is accepted. The customer can no longer be read through any API, the UI or an export, and new events for them are refused.
 2. **Cooldown**, a per-tenant window during which the tenant can cancel the request. The data stays suppressed throughout.
 3. **Redaction**, when the cooldown ends. This cannot be undone. Personal data is overwritten in the transactional store and the customer's usage data is purged from the analytics store.
 
@@ -44,15 +44,16 @@ None of this exists today.
 
 ### Legal frame
 
-- **Deadline.** The controller must act on an erasure request without undue delay and within one month (GDPR Art. 12(3)). Because we act for the controller, the cooldown plus the redaction run must fit inside that month.
+- **Deadline.** The controller must tell the data subject what action was taken within one month (GDPR Art. 12(3)). That can be extended by two further months for complex or numerous requests. Our own commitment is one month from request to redaction, with no extension, so the cooldown plus the redaction run must fit inside it.
 - **No minimum retention under GDPR.** Data is kept no longer than necessary (Art. 5(1)(e)). Every retention period here comes from another law or from the tenant's contract:
   - Tax and accounting law requires keeping financial records (Art. 17(3)(b)).
   - Records needed to defend a dispute or chargeback can be kept for the dispute window (Art. 17(3)(e)).
 - **Anonymised data is out of scope** (Recital 26). Financial records are kept, but dissociated from the person.
+- **Pseudonymised data is still personal data** (Recital 26). The permanent audit record is pseudonymised, not anonymised, and is kept to demonstrate compliance (Art. 5(2)).
 
 ### Expected Outcome
 
-The tenant sends one API call per customer and gets back a request id. The customer disappears from every read path straight away. The tenant can cancel while the cooldown runs. Within one month of the request, all personal data is erased or anonymised. At any later point the tenant can fetch the request and see, for each category of data, whether it was deleted or kept, until when, and on what basis.
+The tenant sends one API call per customer and gets back a request id. The customer disappears from every read path straight away. The tenant can cancel while the cooldown runs. Within one month of the request, personal data is erased or anonymised, except the categories retained under BR1, each of which is reported with its end date and basis. At any later point the tenant can fetch the request and see, for each category of data, whether it was deleted, redacted or kept, until when, and on what basis.
 
 ---
 
@@ -60,27 +61,26 @@ The tenant sends one API call per customer and gets back a request id. The custo
 
 ### Goals
 
-- Programmatic deletion request per customer, idempotent across repeated calls.
-- Written instructions handled through the same flow and recorded with how they arrived (`api` or `written`).
-- Customer suppressed from every read path as soon as the request is accepted.
+- Programmatic deletion request per customer, idempotent across repeated and concurrent calls.
+- Written instructions recorded through the same flow, with who entered them and what instruction they came from.
+- Customer suppressed from every read path and from ingestion as soon as the request is accepted.
 - Off by default. Flexprice enables it per tenant, only for tenants whose contract covers it.
 - Callable only by the tenant's super admins.
 - A per-tenant cooldown, with cancellation allowed while it runs.
-- Personal data and usage data redacted within one month of the request.
+- Personal data and usage data redacted within one month of the request, apart from the categories retained under BR1.
 - Per-tenant retention periods for each category of data that is kept, set to match the tenant's contract.
-- New events for a suppressed customer refused at ingestion.
-- A verification API that reports every category of data as deleted or retained, with its retained-until date and basis.
+- A verification API that reports every category of data as deleted, redacted or retained, with its retained-until date and basis.
 - A permanent, pseudonymised record that the deletion happened.
 
 ### Non-Goals
 
 - **No deletion of financial records within their retention period.** Invoices, payments, wallet transactions and refunds are kept, dissociated from the person.
 - No purge of financial records once their retention period expires. That is a separate scheduled job.
-- No surgical edits to backups. Backups age out on their normal rolling cycle.
+- No surgical edits to backups. Backups age out on their normal rotation.
 - No erasure of Flexprice's own users or tenants. Those are a different class of data subject.
 - No self-serve UI. API only.
 - No bulk or CSV requests. One request per customer.
-- No blocking of a person who signs up again as a genuinely new customer.
+- No blocking of a person who signs up again as a genuinely new customer, once the tenant confirms it (BR6).
 
 ---
 
@@ -88,15 +88,15 @@ The tenant sends one API call per customer and gets back a request id. The custo
 
 ### UC1 — Churned customer, deletion via API
 
-A tenant's end user closes their account and asks to be erased. The customer has no active subscription and every invoice is settled. The tenant calls the endpoint and receives `202` with state `suppressed` and a `cooldown_ends_at`. When the cooldown ends, redaction runs and the request moves to `completed`. The tenant polls the verification endpoint and stores the outcome for their own audit trail.
+A tenant's end user closes their account and asks to be erased. The customer has no active subscription and every invoice is settled. A tenant super admin calls the endpoint and receives `202` with state `suppressed` and a `cooldown_ends_at`. When the cooldown ends, redaction runs and the request moves to `completed`. The tenant polls the verification endpoint and stores the outcome for their own audit trail.
 
 ### UC2 — Written instruction
 
-A tenant emails a deletion instruction. Support creates the request on the tenant's behalf through the same endpoint with `request_channel = written`. Everything else is identical, and the tenant can verify it through the API.
+A tenant emails a deletion instruction. A Flexprice operator enters it through the operator route (R4), with `request_channel = written`, the operator's identity, and a reference to the written instruction. Everything after that is identical, and the tenant's super admin can verify it through the tenant API.
 
 ### UC3 — Cancelled during cooldown
 
-The tenant sent the request by mistake. Before the cooldown ends, they cancel it. The customer is restored and readable again, the suppression is lifted, and the request ends `cancelled`.
+The tenant sent the request by mistake. Before the cooldown ends, they cancel it. The customer returns to the status they had before the request, the suppression is lifted, and the request ends `cancelled`.
 
 ### UC4 — Repeat request
 
@@ -104,7 +104,15 @@ The tenant sends the same request again, possibly months later. The response is 
 
 ### UC5 — Customer still billing
 
-The customer has an active subscription or an open invoice. The request is refused with `409` and a list of what's blocking it. The tenant cancels or settles those, then asks again.
+The customer has an active subscription or an unsettled invoice. The request is refused with `409` and a list of what's blocking it. The tenant cancels or settles those, then asks again.
+
+### UC6 — Failed request
+
+A new subscription appears during the cooldown, so the recheck fails and the request ends `failed`. The tenant either resolves the blocker and retries the request, or cancels it to restore the customer.
+
+### UC7 — Same person signs up again
+
+After an erasure, the same person signs up again under the same `external_id`. The tenant creates the customer with `confirm_new_subject = true`. The suppression is lifted for that `external_id`, the lift is recorded on the old request, and new events attach to the new customer.
 
 ---
 
@@ -112,59 +120,70 @@ The customer has an active subscription or an open invoice. The request is refus
 
 ### Functional Requirements
 
-**R1.** `POST /v1/privacy/deletion-requests` accepts a `customer_id` and a `request_channel`, runs the validation gate, suppresses the customer, records the request, and starts the deletion workflow. It returns `202`.
+**R1.** `POST /v1/privacy/deletion-requests` accepts a `customer_id`, runs the validation gate, records the request, archives the customer, applies suppression, and starts the deletion workflow. It returns `202` once suppression is in effect (R7).
 
 **R2.** `GET /v1/privacy/deletion-requests/{id}` returns the request's state, its timestamps, and one entry per data category with its outcome, retained-until date and basis. This is the verification API.
 
 **R3.** `GET /v1/privacy/deletion-requests` lists requests filtered by `customer_id`, `subject_ref` or `state`, so tenants can audit without storing our request ids.
 
-**R4.** `POST /v1/privacy/deletion-requests/{id}/cancel` cancels a request whose cooldown has not ended. It un-archives the customer and lifts the suppression. After the cooldown ends, cancelling is refused.
+**R4.** Written instructions are entered by a Flexprice operator through a separate operator route, never through the tenant API. The request records `request_channel = written`, `created_by` (the operator) and `instruction_ref` (a reference to the written instruction). The tenant API's access rules (R12) are unchanged.
 
-**R5.** Suppression takes effect synchronously. Once `202` is returned, the customer is absent from every customer read, list, export and UI path.
+**R5.** `POST /v1/privacy/deletion-requests/{id}/cancel` cancels a request in `suppressed` or `failed`. It restores the customer's pre-request status and lifts the suppression. Cancelling any other state is refused.
 
-**R6.** Personal data and usage data are redacted within one month of the request. The cooldown plus the redaction run must fit inside that month.
+**R6.** `POST /v1/privacy/deletion-requests/{id}/retry` restarts a `failed` request from the recheck. It is refused in any other state.
 
-**R7.** The feature, the cooldown and the retention periods live in a new `customer_data_deletion` setting (§8). Flexprice sets it per tenant directly in the database, with values taken from the tenant's contract. It is not exposed through the settings API, so a tenant can neither enable the feature nor change its values. Unset values fall back to the defaults.
+**R7.** `suppressed_at` is set only once both the customer archive and the suppression list entry are in effect. `202` is returned only after that. If the suppression write fails, the request stays recorded without `suppressed_at`, the call returns `503` with the request id, and the workflow retries the write as its first step. A repeated `POST` returns the same request.
 
-**R11.** Every `/v1/privacy` endpoint returns `404` for a tenant where the feature is not enabled. Ingestion runs the suppression check only for tenants where it is enabled, so every other tenant's hot path is unchanged.
+**R8.** Personal data and usage data are redacted within one month of the request, apart from the categories retained under BR1. The cooldown plus the redaction run must fit inside that month.
 
-**R12.** Every `/v1/privacy` endpoint requires a user caller holding `super_admin` in the tenant. API keys and service accounts are refused with `403`, whatever roles they carry.
+**R9.** Event ingestion refuses events for a suppressed customer with `422`. A bulk call accepts the other events and returns a `rejected` list with each refused event's index, event id and reason (`customer_suppressed`). Clients retry nothing from that list.
 
-**R8.** Event ingestion refuses events for a suppressed customer with `422`. In a bulk call, only the affected events are refused and the rest still ingest.
+**R10.** Every request leaves a permanent, pseudonymised record: `subject_ref`, `customer_id`, timestamps, channel, state and per-category outcomes. It keeps no external identifier and no personal field. `customer_id` is a Flexprice-generated id. It stays because it links the retained financial records, and after redaction it no longer resolves to any personal data.
 
-**R9.** Every request leaves a permanent, pseudonymised record: `subject_ref`, timestamps, channel, state and per-category outcomes. No raw identifier is kept.
+**R11.** Redaction ends with a verification step. A category is reported `deleted` only when no rows remain for the customer in its store. The customer record is reported `redacted` only when every personal field has been overwritten. The row itself stays, because retained financial records reference it.
 
-**R10.** Redaction finishes with a verification step that counts what remains for the customer in every store in scope. A category is reported `deleted` only when its count is zero.
+**R12.** Every tenant `/v1/privacy` endpoint requires a user caller holding `super_admin` in the tenant. API keys and service accounts are refused with `403`, whatever roles they carry.
+
+**R13.** The feature, the cooldown and the retention periods live in a new `customer_data_deletion` setting (§8). Flexprice sets it per tenant directly in the database, with values taken from the tenant's contract. It is not exposed through the settings API, so a tenant can neither enable the feature nor change its values. Unset values fall back to the defaults.
+
+**R14.** When the feature is not enabled, `POST /v1/privacy/deletion-requests` returns `404`. Reads, cancel and retry keep working on requests created while it was enabled, so turning the feature off never strands an open request or hides an audit record. Ingestion runs the suppression check only for tenants with the feature enabled or with any suppression entry in force, so every other tenant's hot path is unchanged.
+
+**R15.** Checks run in a fixed order: caller (`403`), feature (`404`), input (`400`), customer (`404`), existing request (`200`), validation gate (`409`).
 
 ### Business Rules
 
-**BR1.** Data falls into three retention classes:
+**BR1.** Data falls into four classes:
 
 | Class | Data | Outcome |
 |---|---|---|
-| Delete at cooldown end | Customer name, email, contact, address, `metadata`, `external_id`; usage events and meter usage; #2963 deletion records | Redacted or deleted when the cooldown ends |
-| Keep for the dispute window | Invoice documents (PDFs render name and address) | Deleted when the tenant's dispute window ends |
-| Keep for the legal period | Invoices, payments, wallet transactions, refunds | Kept unchanged. Invoices hold no personal fields, so redacting the customer row dissociates them |
+| Redact at cooldown end | Customer name, email, contact, address, `metadata`, `external_id` | `redacted`. Fields overwritten, row kept |
+| Delete at cooldown end | Usage events and meter usage; #2963 deletion records | `deleted` |
+| Keep for the dispute window | Invoice documents (PDFs render name and address) | `retained`, then `deleted` when the tenant's dispute window ends |
+| Keep for the legal period | Invoices, payments, wallet transactions, refunds | `retained`. Invoices hold no personal fields, so redacting the customer row dissociates them |
 
 **BR2.** The dispute window runs from the customer's newest transaction. If it has already passed when the cooldown ends, invoice documents are deleted together with everything else. Failed payments, voided invoices and non-production environments have no dispute window.
 
-**BR3.** The request is refused while the customer is still billing: an active, paused, trialing or incomplete subscription; an invoice that is draft, or finalized and not yet settled; or a payment still in flight.
+**BR3.** The request is refused while the customer is still billing: an active, paused, trialing or incomplete subscription; a draft invoice; a finalized invoice that is not yet settled; or a payment still in flight. A finalized invoice that is settled does not block.
 
-**BR4.** `subject_ref = SHA-256(external_id || tenant_salt)`. It is the idempotency key and the audit handle. The raw `external_id` is never kept after redaction.
+**BR4.** `subject_ref = SHA-256(external_id || tenant_salt)`. It is the idempotency key and the audit handle. It is pseudonymous, not anonymous: anyone holding the salt can test a candidate `external_id` against it. The salt is per tenant, is readable only by the deletion service, and is never returned by any API.
 
-**BR5.** `external_id` is captured when the request is made, because it is the key the analytics purge runs on, and redaction destroys it in the customer row.
+**BR5.** `external_id` is captured when the request is made, because it is the key the analytics purge runs on, and redaction destroys it in the customer row. The snapshot is cleared once the request reaches `completed`.
 
-**BR6.** The `external_id` of a suppressed customer cannot be reused for a new customer unless the tenant explicitly confirms the new customer is a different person. Otherwise post-deletion events would silently attach to the new customer.
+**BR6.** Creating a customer whose `external_id` hashes to a suppressed `subject_ref` returns `409` unless the call sets `confirm_new_subject = true`. With confirmation, the suppression entry is removed and the old request records `suppression_lifted_at` and `suppression_lifted_by`. Without this, events for the new customer would be refused forever, or, if the check were skipped, would silently attach post-deletion usage to an erased person.
 
-**BR7.** Deletion is refused with neither the #2963 finalized-invoice guard nor its marketplace guard. Erasure is a legal instruction. Financial records are covered by BR1, not by refusing the request.
+**BR7.** #2963's guards do not apply here. Its finalized-invoice guard refuses any finalized invoice in the period, and its marketplace guard refuses marketplace customers. Here, only an unsettled finalized invoice blocks (BR3), and a marketplace customer is not refused. Erasure is a legal instruction, and financial records are protected by BR1 rather than by refusing the request.
 
 **BR8.** The setting in force is captured on the request when it is created. Later changes to the setting don't move an existing request's dates.
+
+**BR9.** Financial retention is counted from each record's own date: the invoice date, payment date, transaction date or refund date. The `financial_records` category reports the latest of those end dates as its `retained_until`.
+
+**BR10.** Every state change is a conditional update on the current state. Cancel succeeds only from `suppressed` or `failed`. The move to `redacting` succeeds only from `suppressed`. Whichever commits first wins, and the other gets `409` or stops.
 
 ### Validations / Constraints
 
 **V1.** `customer_id` must resolve in this environment. Archived customers are valid targets.
 
-**V2.** `request_channel` is either `api` or `written`.
+**V2.** On the operator route, `request_channel` is `written` and `instruction_ref` is required. On the tenant route, `request_channel` is always `api`.
 
 **V3.** `cooldown_days` is between 0 and 14. `dispute_window_days` is between 0 and 180. `financial_retention_years` is between 1 and 15. These ranges are checked when Flexprice writes the setting.
 
@@ -178,83 +197,99 @@ The customer has an active subscription or an open invoice. The request is refus
 
 ```
 suppressed ──(cooldown ends)──→ redacting ──→ completed
-     │                              └──────→ failed     (gate tripped on recheck, or step failed)
-     └──(cancel during cooldown)──→ cancelled
+     │                              │
+     │                              └──→ failed ──(retry)──→ redacting
+     │                                     │
+     └──(cancel)──→ cancelled ←──(cancel)──┘
 ```
 
-`completed` means every category in the delete-at-cooldown-end class is gone. Categories that are still retained stay listed with their `retained_until`, and their outcome flips to `deleted` when the workflow removes them.
+`completed` means every category in the redact and delete classes is done. Categories still retained stay listed with their `retained_until`, and their outcome flips to `deleted` when the workflow removes them.
 
 ### Pseudocode
 
 ```
-POST /v1/privacy/deletion-requests { customer_id, request_channel }
+POST /v1/privacy/deletion-requests { customer_id }
 
-customer    = CustomerRepo.Get(customer_id)          // archived allowed
+require caller is a user with super_admin           // else 403
+policy = SettingsService.Get(customer_data_deletion)
+if not policy.enabled:
+    return 404
+validate input                                       // else 400
+
+customer    = CustomerRepo.Get(customer_id)          // archived allowed; else 404
 subject_ref = sha256(customer.external_id || tenant_salt)
 
-if existing = DeletionRequestRepo.GetActiveBySubjectRef(subject_ref):
+if existing = DeletionRequestRepo.GetOpenBySubjectRef(subject_ref):
     return 200 existing
 
 blocking = validation_gate(customer)
 if blocking not empty:
     return 409 { blocking }
 
-policy = SettingsService.Get(customer_data_deletion)  // defaults when unset
-if not policy.enabled:
-    return 404
-
 in one transaction:
     request = DeletionRequestRepo.Create(
-        id                   = GenerateUUIDWithPrefix("delreq"),
+        id                     = GenerateUUIDWithPrefix("delreq"),
         subject_ref, customer_id,
-        external_id_snapshot = customer.external_id,
-        request_channel,
-        state                = suppressed,
-        policy_snapshot      = policy,
-        cooldown_ends_at     = now + policy.cooldown_days,
-        categories           = plan_categories(customer, policy))
+        external_id_snapshot   = customer.external_id,
+        prior_customer_status  = customer.status,
+        request_channel        = api,
+        created_by             = caller,
+        state                  = suppressed,
+        policy_snapshot        = policy,
+        cooldown_ends_at       = now + policy.cooldown_days,
+        categories             = plan_categories(customer, policy))
     CustomerRepo.Archive(customer_id)
-    SuppressionList.Add(tenant, env, subject_ref)
+on unique-index conflict:
+    return 200 DeletionRequestRepo.GetOpenBySubjectRef(subject_ref)
 
 start CustomerDeletionWorkflow(request.id)
+
+if SuppressionList.Add(tenant, env, subject_ref) fails:
+    return 503 { request_id }                        // workflow retries the write
+DeletionRequestRepo.SetSuppressedAt(request.id, now)
 return 202 request
 ```
 
 ```
 CustomerDeletionWorkflow(request_id):
+    EnsureSuppressed                  // idempotent; sets suppressed_at if missing
+
     wait until cooldown_ends_at, or a cancel signal
-        cancel: un-archive customer, lift suppression, state = cancelled, stop
+        cancel: if transition(suppressed -> cancelled):
+                    restore prior_customer_status, lift suppression, stop
 
-    state = redacting
-    RevalidateScope              // gate again; blocked -> failed
-    RedactCustomerRecord         // PII -> "[redacted]", external_id -> "redacted_<subject_ref>", metadata purged
-    PurgeAnalyticsData           // events + meter usage + #2963 records, keyed on external_id_snapshot
-    VerifyRedaction              // counts == 0, customer row re-read
-    state = completed
+    if not transition(suppressed -> redacting): stop
+    RevalidateScope                   // gate again; blocked -> failed
+    RedactCustomerRecord              // PII -> "[redacted]", external_id -> "redacted_<subject_ref>", metadata purged
+    PurgeAnalyticsData                // events + meter usage + #2963 records, keyed on external_id_snapshot
+    VerifyRedaction                   // deleted: no rows left; redacted: every personal field overwritten
+    transition(redacting -> completed), clear external_id_snapshot
 
-    wait until dispute window ends     // zero wait if already past
-    DeleteInvoiceDocuments             // located through invoice rows, not the customer row
+    wait until dispute window ends    // zero wait if already past
+    DeleteInvoiceDocuments            // located through invoice rows, not the customer row
     mark category invoice_documents = deleted
 ```
 
-Every activity is idempotent, because the workflow engine retries them. The analytics purge uses the snapshot taken at request time, not the live row.
+Every activity is idempotent, because the workflow engine retries them. The analytics purge uses the snapshot taken at request time, not the live row. Retry starts a new run from `RevalidateScope`.
 
 ### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor T as Tenant
+    actor T as Tenant super admin
     participant API as PrivacyHandler
     participant SVC as DeletionRequestService
     participant PG as Transactional store
+    participant SL as Suppression list
     participant WF as Deletion workflow
     participant AN as Analytics store
     participant FS as File storage
 
     T->>API: POST /v1/privacy/deletion-requests
+    API->>API: caller is super_admin user, feature enabled
     API->>SVC: Create(request)
-    SVC->>PG: active request for subject_ref?
+    SVC->>PG: open request for subject_ref?
     alt already exists
         SVC-->>T: 200 existing record
     end
@@ -262,20 +297,27 @@ sequenceDiagram
     alt blocking objects
         SVC-->>T: 409 blocking list
     end
-    SVC->>PG: read customer_data_deletion setting
-    SVC->>PG: create request + archive customer + suppress (one tx)
+    SVC->>PG: create request + archive customer (one tx)
     SVC->>WF: start
+    SVC->>SL: add subject_ref
+    alt suppression write failed
+        SVC-->>T: 503 request_id (workflow retries)
+    end
+    SVC->>PG: set suppressed_at
     SVC-->>T: 202 suppressed, cooldown_ends_at
 
     alt cancelled during cooldown
         T->>API: POST /{id}/cancel
+        API->>PG: suppressed -> cancelled (conditional)
         API->>WF: cancel signal
-        WF->>PG: un-archive, lift suppression, cancelled
+        WF->>PG: restore prior status
+        WF->>SL: remove subject_ref
     else cooldown ends
+        WF->>PG: suppressed -> redacting (conditional)
         WF->>PG: revalidate gate
         WF->>PG: redact customer record
         WF->>AN: purge usage data by snapshot key
-        WF->>AN: verify counts == 0
+        WF->>AN: verify no rows remain
         WF->>PG: request -> completed
         WF->>WF: wait for dispute window
         WF->>FS: delete invoice documents
@@ -291,11 +333,13 @@ sequenceDiagram
 ```
 IngestEvent -> validate
             -> subject_ref = sha256(external_customer_id || tenant_salt)
-            -> suppressed?  yes: 422, not published
+            -> suppressed?  yes: 422 (bulk: added to rejected list), not published
                             no:  publish (hot path unchanged)
 ```
 
-The suppression check must not slow ingestion down. The list is held only as hashes, so it never recreates the identifiers it exists to protect. It has no expiry, and the `deletion_requests` table is the source for rebuilding it if the cache is lost. Cancelling a request removes its entry.
+The suppression check must not slow ingestion down. The list is held only as hashes, so it never holds the raw identifiers it exists to protect. Entries have no expiry. They are removed only by cancellation or by a confirmed new subject (BR6).
+
+If the list is lost, it is rebuilt from `deletion_requests` before ingestion resumes checking. The rebuild loads every request in `suppressed`, `redacting`, `completed` or `failed` whose suppression has not been lifted. Cancelled requests and lifted suppressions are never reloaded.
 
 ---
 
@@ -308,14 +352,14 @@ The two features answer different questions. #2963 lets a tenant **correct** eve
 | A request row in the transactional store with a state and a `GET` status endpoint | Tracking a bulk deletion through to completion | The verification API (R2) |
 | An async workflow that issues deletes in the analytics store and waits for them to finish | Deleting events and meter usage | `PurgeAnalyticsData` |
 | Delete predicates that filter by customer and period, and a cap on concurrent deletes | Keeping tenant-triggered deletes cheap and isolated | The same, scoped to one customer |
-| A deleted-key list that ingestion and reprocessing check | Stopping deleted events from coming back | Ingest suppression (R8) |
+| A deleted-key list that ingestion and reprocessing check | Stopping deleted events from coming back | Ingest suppression (R9) |
 
 Where they differ:
 
 | | #2963 | This PRD |
 |---|---|---|
 | Scope | Chosen events in a period | Everything about one customer |
-| Finalized invoice in scope | Refuse | Keep the invoice, redact the person (BR1) |
+| Finalized invoice in scope | Refuse | Refuse only if unsettled (BR3). Otherwise keep the invoice and redact the person |
 | Marketplace customer | Refuse | Not a reason to refuse (BR7) |
 | Archive of deleted data | Permanent copy of the event payloads | Must be purged for an erased customer |
 
@@ -327,21 +371,27 @@ The last row is a hard requirement on #2963. Its `event_deletion_data` table kee
 
 ### `deletion_requests` — new Postgres table
 
-The request lives in Postgres, not the analytics store. It is mutable state that moves through several transitions, it needs a unique index for idempotency, and it has to be written in the same transaction as the customer archive. Base mixin plus environment mixin, the same pattern as `ScheduledTask`. The id is generated by Flexprice with `types.GenerateUUIDWithPrefix("delreq")` and returned in the `202`.
+The request lives in Postgres, not the analytics store. It is mutable state that moves through several transitions, it needs a unique index for idempotency, and it is written in the same transaction as the customer archive. Base mixin plus environment mixin, the same pattern as `ScheduledTask`. The id is generated by Flexprice with `types.GenerateUUIDWithPrefix("delreq")` and returned in the `202`.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | varchar(50) | `delreq_*`, generated by us |
-| `subject_ref` | varchar(64) | SHA-256 hex |
-| `customer_id` | varchar(50) | |
-| `external_id_snapshot` | varchar(255) | Purge key. Cleared once the request reaches `completed`. |
+| `subject_ref` | varchar(64) | SHA-256 hex, pseudonymous (BR4) |
+| `customer_id` | varchar(50) | Flexprice id, links retained financial records (R10) |
+| `external_id_snapshot` | varchar(255), optional | Purge key. Cleared once the request reaches `completed` |
+| `prior_customer_status` | varchar(20) | Restored on cancel |
 | `request_channel` | varchar(20) | `api` \| `written` |
+| `created_by` | varchar(50) | Tenant user, or Flexprice operator for `written` |
+| `instruction_ref` | varchar(255), optional | Reference to the written instruction |
 | `state` | varchar(20) | see §6 |
 | `policy_snapshot` | JSON | The setting in force when the request was created (BR8) |
 | `requested_at` | time | |
+| `suppressed_at` | time, optional | Set once archive and suppression are both in effect (R7) |
 | `cooldown_ends_at` | time | |
 | `cancelled_at` | time, optional | |
 | `completed_at` | time, optional | |
+| `suppression_lifted_at` | time, optional | Set by cancel or a confirmed new subject (BR6) |
+| `suppression_lifted_by` | varchar(50), optional | |
 | `categories` | JSON | One entry per data category, see below |
 | `workflow_id` | varchar(100), optional | |
 | `failure_reason` | text, optional | |
@@ -352,7 +402,7 @@ Each entry in `categories`:
 { "category": "invoice_documents", "outcome": "retained", "retained_until": "2027-01-04T00:00:00Z", "basis": "dispute_window" }
 ```
 
-`outcome` is one of `pending`, `deleted` or `retained`. `basis` is one of `dispute_window` or `legal_retention`.
+`outcome` is one of `pending`, `redacted`, `deleted` or `retained`. `basis` is one of `dispute_window` or `legal_retention`.
 
 Indexes:
 
@@ -366,23 +416,23 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 
 | Key | Default | Range | Drives |
 |---|---|---|---|
-| `enabled` | `false` | — | Whether `/v1/privacy` and the ingest suppression check are active for the tenant |
+| `enabled` | `false` | — | Whether new requests are accepted (R14) |
 | `cooldown_days` | 7 | 0–14 | `cooldown_ends_at` |
 | `dispute_window_days` | 90 | 0–180 | When invoice documents are deleted |
-| `financial_retention_years` | 10 | 1–15 | `retained_until` reported for financial records |
+| `financial_retention_years` | 10 | 1–15 | `retained_until` for financial records, counted per BR9 |
 
 ### Data disposition
 
-| Data | Action | When |
-|---|---|---|
-| Customer name, email, contact, address | Overwritten with `[redacted]` | Cooldown end |
-| Customer `external_id` | Overwritten with `redacted_<subject_ref>` | Cooldown end |
-| Customer `metadata` | Purged | Cooldown end |
-| Usage events and meter usage | Deleted | Cooldown end |
-| #2963 deletion record | Deleted for this customer | Cooldown end |
-| Invoice PDFs | Deleted from file storage | End of the dispute window |
-| Invoices, payments, wallet transactions, refunds | Kept unchanged | Reported until the legal retention period ends |
-| Backups | Expire on the normal rotation | Per backup policy |
+| Data | Action | When | Reported as |
+|---|---|---|---|
+| Customer name, email, contact, address | Overwritten with `[redacted]` | Cooldown end | `customer_record: redacted` |
+| Customer `external_id` | Overwritten with `redacted_<subject_ref>` | Cooldown end | `customer_record: redacted` |
+| Customer `metadata` | Purged | Cooldown end | `customer_record: redacted` |
+| Usage events and meter usage | Deleted | Cooldown end | `usage_data: deleted` |
+| #2963 deletion record | Deleted for this customer | Cooldown end | `usage_data: deleted` |
+| Invoice PDFs | Deleted from file storage | End of the dispute window | `invoice_documents: retained`, then `deleted` |
+| Invoices, payments, wallet transactions, refunds | Kept unchanged | Until each record's legal period ends (BR9) | `financial_records: retained` |
+| Backups | Expire on the normal rotation | Per backup policy | Not reported per request |
 
 ---
 
@@ -393,7 +443,7 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 `@x-scope "delete"`
 
 ```json
-{ "customer_id": "cust_123", "request_channel": "api" }
+{ "customer_id": "cust_123" }
 ```
 
 `202 Accepted`
@@ -403,13 +453,15 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
   "id": "delreq_01H...",
   "customer_id": "cust_123",
   "state": "suppressed",
+  "request_channel": "api",
   "requested_at": "2026-10-06T10:00:00Z",
+  "suppressed_at": "2026-10-06T10:00:00Z",
   "cooldown_ends_at": "2026-10-13T10:00:00Z",
   "categories": [
     { "category": "customer_record",   "outcome": "pending" },
     { "category": "usage_data",        "outcome": "pending" },
     { "category": "invoice_documents", "outcome": "pending" },
-    { "category": "financial_records", "outcome": "retained", "retained_until": "2036-10-06T00:00:00Z", "basis": "legal_retention" }
+    { "category": "financial_records", "outcome": "retained", "retained_until": "2036-09-30T00:00:00Z", "basis": "legal_retention" }
   ]
 }
 ```
@@ -426,11 +478,21 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 }
 ```
 
-`200 OK` on a repeat request, with the existing record.
+`200 OK` on a repeat or concurrent duplicate request, with the existing record.
+
+`503 Service Unavailable` with `request_id` if the suppression write failed (R7). The workflow retries it, and a repeated `POST` returns the request.
+
+### Operator route for written instructions
+
+Not part of the tenant API and not in the public spec. Same body plus `instruction_ref`. Records `request_channel = written` and the operator as `created_by`. Otherwise identical to the tenant `POST`.
 
 ### `POST /v1/privacy/deletion-requests/{id}/cancel`
 
-`@x-scope "write"`. Returns the record with state `cancelled`. Returns `409` once the cooldown has ended.
+`@x-scope "write"`. Allowed from `suppressed` or `failed`. Returns the record with state `cancelled`. Returns `409` from any other state.
+
+### `POST /v1/privacy/deletion-requests/{id}/retry`
+
+`@x-scope "write"`. Allowed from `failed`. Returns the record with state `redacting`. Returns `409` from any other state.
 
 ### `GET /v1/privacy/deletion-requests/{id}`
 
@@ -439,7 +501,7 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 ```json
 "verification": {
   "customer_record": "redacted",
-  "usage_data_remaining": 0,
+  "usage_data_rows_remaining": 0,
   "verified_at": "2026-10-13T10:12:00Z"
 }
 ```
@@ -448,15 +510,34 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 
 `@x-scope "read"`. Filters: `customer_id`, `subject_ref`, `state`. Paginated.
 
+### Customer create
+
+`POST /v1/customers` gains an optional `confirm_new_subject` boolean (BR6). Without it, an `external_id` that matches a suppressed subject returns `409`.
+
+### Bulk ingestion
+
+The bulk ingest response gains a `rejected` array. Accepted events are published as normal.
+
+```json
+{
+  "rejected": [
+    { "index": 3, "event_id": "evt_123", "reason": "customer_suppressed" }
+  ]
+}
+```
+
 ### Errors
+
+Checked in the order listed (R15).
 
 | HTTP | `ierr` mark | Condition |
 |---|---|---|
-| 400 | `ErrValidation` | Missing `customer_id`, unknown channel, setting value out of range |
-| 404 | `ErrNotFound` | Customer or request not in this environment |
-| 409 | `ErrInvalidOperation` | Validation gate tripped, or cancel after cooldown |
 | 403 | `ErrPermissionDenied` | Caller is not a user with `super_admin`, or is an API key or service account |
-| 404 | `ErrNotFound` | Feature not enabled for the tenant |
+| 404 | `ErrNotFound` | `POST` while the feature is not enabled |
+| 400 | `ErrValidation` | Missing `customer_id` |
+| 404 | `ErrNotFound` | Customer or request not in this environment |
+| 409 | `ErrInvalidOperation` | Validation gate tripped; cancel or retry from a state that doesn't allow it; `external_id` reuse without `confirm_new_subject` |
+| 503 | `ErrInternal` | Suppression write failed, request recorded |
 | 422 | `ErrInvalidOperation` | Ingestion: event for a suppressed customer |
 
 ---
@@ -465,59 +546,74 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 
 | Scenario | Expected Behavior |
 |---|---|
-| Customer already archived (churned) | Valid target. Proceeds as normal. |
+| Customer already archived (churned) | Valid target. Proceeds as normal. Cancel leaves them archived. |
 | Repeat request for the same subject | `200` with the original record and its original `requested_at`. |
+| Two identical requests at the same moment | One creates the request. The other hits the unique index and returns `200` with the same record. |
 | Request after a cancelled one | Allowed. Creates a new request. |
 | `cooldown_days = 0` | Redaction starts immediately. Nothing to cancel. |
-| Cancel after cooldown ends | `409`. Redaction is already running or done. |
+| Cancel and cooldown end race | Conditional updates decide it (BR10). Only one path wins. |
+| Cancel after redaction starts | `409`. |
 | Setting changed while a request is open | No effect on that request. It uses its `policy_snapshot`. |
-| New subscription created during the cooldown | Recheck fails and the request moves to `failed` with a reason. Nothing is redacted. |
+| Feature turned off while requests are open | Open requests run to completion. Reads, cancel and retry still work. Only new requests get `404`. |
+| New subscription created during the cooldown | Recheck fails and the request moves to `failed`. Nothing is redacted. The tenant retries or cancels. |
+| Suppression write fails on create | `503` with the request id. The workflow retries the write before anything else. |
 | Events arrive after suppression | Refused with `422`. Nothing new lands. |
+| Bulk call with one suppressed customer | Other events ingest. The refused ones are listed in `rejected`. |
 | Events already in flight when suppression lands | Purged in redaction. The verification step catches anything that lands late. |
 | Raw-event reprocessing after the purge | Skipped by the deleted-key list shared with #2963. |
-| Same `external_id` used for a new customer | Refused unless the tenant confirms the new customer is a different person (BR6). |
+| Same `external_id` used for a new customer | `409` unless `confirm_new_subject = true`. With it, suppression is lifted and recorded (BR6). |
 | Dispute window already passed at cooldown end | Invoice documents are deleted together with everything else. |
-| Customer never had any transactions | Nothing to retain. Every category ends `deleted`. |
-| Suppression cache lost | Rebuilt from `deletion_requests` before ingestion resumes checking. |
-| Redaction step fails | Retried. After retries are exhausted, `failed` with the reason. The request stays suppressed. |
+| Customer never had any transactions | Nothing to retain. Every category ends `redacted` or `deleted`. |
+| Suppression list lost | Rebuilt from `deletion_requests` before ingestion resumes checking. Cancelled and lifted entries are not reloaded. |
+| Redaction step fails | Retried. After retries are exhausted, `failed` with the reason. The customer stays suppressed until the tenant retries or cancels. |
 
 ---
 
 ## 11. Acceptance Criteria
 
-**AC1.** A request for a clean, churned customer returns `202` with a `delreq_` id and `cooldown_ends_at`. The customer is archived and absent from every read path, and the request row exists in Postgres.
+**AC1.** A request for a clean, churned customer returns `202` with a `delreq_` id, `suppressed_at` and `cooldown_ends_at`. The customer is archived and absent from every read path, and the request row exists in Postgres.
 
 **AC2.** A customer with an active subscription returns `409` naming that subscription.
 
-**AC3.** A repeat request returns `200` with the same `id` and the original `requested_at`.
+**AC3.** A customer whose only finalized invoice is unsettled returns `409` naming it. A customer whose finalized invoices are all settled is accepted.
 
-**AC4.** Cancelling during the cooldown restores the customer, lifts suppression and ends the request `cancelled`. Cancelling after the cooldown returns `409`.
+**AC4.** A marketplace customer with no blockers is accepted.
 
-**AC5.** With `cooldown_days = 7`, nothing is redacted before day 7. Redaction completes within one month of the request.
+**AC5.** A repeat request returns `200` with the same `id` and the original `requested_at`. Two concurrent requests produce one record, and both callers receive it.
 
-**AC6.** An event for a suppressed customer returns `422` and is not published. In a bulk call that includes one suppressed customer, every other event is still ingested.
+**AC6.** Cancelling during the cooldown restores the customer's pre-request status, lifts suppression and ends the request `cancelled`. For a customer archived before the request, they stay archived. Cancelling after redaction starts returns `409`.
 
-**AC7.** Suppression survives a cache flush.
+**AC7.** A cancel racing the cooldown end produces exactly one outcome: either `cancelled` with nothing redacted, or `redacting` with the cancel refused.
 
-**AC8.** After redaction, the customer's personal fields read `[redacted]`, `external_id` has the `redacted_` prefix, and `metadata` is empty.
+**AC8.** With `cooldown_days = 7`, nothing is redacted before day 7. Redaction completes within one month of the request.
 
-**AC9.** After redaction, the customer's usage data and #2963 deletion records count zero in the analytics store.
+**AC9.** An event for a suppressed customer returns `422` and is not published. In a bulk call that includes one suppressed customer, every other event is still ingested and the refused ones appear in `rejected` with their index and event id.
 
-**AC10.** Invoice documents are deleted when the dispute window ends, and not before.
+**AC10.** If the suppression write fails, the call returns `503` with the request id, and the workflow applies suppression before any other step.
 
-**AC11.** After redaction, the customer's invoice rows, amounts and invoice numbers are unchanged, and `GET` reports financial records as `retained` with `basis = legal_retention`.
+**AC11.** Suppression survives a loss of the list. A request cancelled before the loss is not re-suppressed by the rebuild.
 
-**AC12.** A change to a tenant's `customer_data_deletion` setting changes the dates on new requests only.
+**AC12.** After redaction, the customer's personal fields read `[redacted]`, `external_id` has the `redacted_` prefix, `metadata` is empty, and `GET` reports `customer_record: redacted`.
 
-**AC13.** If a new subscription appears during the cooldown, the request ends `failed` and nothing is redacted.
+**AC13.** After redaction, no rows remain for the customer's usage data or #2963 deletion records in the analytics store, and `GET` reports `usage_data: deleted`.
 
-**AC14.** A request created with `request_channel = written` behaves identically to one created via the API, and its channel is recorded.
+**AC14.** Invoice documents are deleted when the dispute window ends, and not before.
 
-**AC15.** For a tenant where the feature is not enabled, every `/v1/privacy` endpoint returns `404` and ingestion does no suppression lookup.
+**AC15.** After redaction, the customer's invoice rows, amounts and invoice numbers are unchanged, and `GET` reports financial records as `retained` with `basis = legal_retention` and `retained_until` equal to the latest per-record end date.
 
-**AC16.** A user without `super_admin` gets `403`. An API key or service account gets `403` even when it carries `super_admin`.
+**AC16.** A change to a tenant's `customer_data_deletion` setting changes the dates on new requests only.
 
-**AC17.** `customer_data_deletion` cannot be read or written through the settings API.
+**AC17.** If a new subscription appears during the cooldown, the request ends `failed` and nothing is redacted. After the subscription is cancelled, retry completes the request. Cancel from `failed` restores the customer.
+
+**AC18.** A written instruction entered through the operator route records `request_channel = written`, the operator as `created_by` and the `instruction_ref`, and behaves identically after that.
+
+**AC19.** With the feature not enabled, `POST` returns `404` and ingestion does no suppression lookup for that tenant. Requests created while it was enabled stay readable.
+
+**AC20.** A user without `super_admin` gets `403`. An API key or service account gets `403` even when it carries `super_admin`. A `403` is returned before any feature or input check.
+
+**AC21.** `customer_data_deletion` cannot be read or written through the settings API.
+
+**AC22.** Creating a customer with a suppressed `external_id` returns `409`. With `confirm_new_subject = true`, it succeeds, suppression is lifted, and the old request records who lifted it and when.
 
 ---
 
@@ -525,31 +621,42 @@ A new `SettingKey`, read per tenant and environment. Flexprice writes it directl
 
 ### Open Questions
 
-**Q1 — Tenant salt.** Where is `subject_ref`'s per-tenant salt stored and managed?
+**Q1 — Tenant salt.** Where is `subject_ref`'s per-tenant salt stored, and how is access to it restricted (BR4)?
 
 **Q2 — Redaction run time.** The one-month commitment depends on how long a single customer's analytics purge takes at production scale. Measure it before fixing the maximum cooldown.
 
-**Q3 — Invoice documents under tax law.** Some jurisdictions require keeping the issued invoice document as issued, name and address included. If so, invoice documents move to the legal-retention class for those tenants. This needs legal sign-off per entity.
+**Q3 — Invoice documents under tax law.** Some jurisdictions require keeping the issued invoice document as issued, name and address included. If so, invoice documents move to the legal-retention class for those tenants, and the one-month commitment excludes them there. This needs legal sign-off per entity.
 
 **Q4 — Archived reads.** Does any tenant depend on reading archived customers? Suppression makes them unreadable.
 
 **Q5 — Metered customer without a subscription.** Such a customer passes the gate but may still be sending billable usage. Once suppressed, that usage is refused. The contract needs to say who bears that.
+
+**Q6 — Operator route.** Which internal access control guards the operator route, and how is the written instruction stored behind `instruction_ref`?
+
 ### Decisions
 
 | Decision | Reason |
 |---|---|
 | Suppress, then cooldown, then redact | Nobody can read the data from the first moment, and a mistaken request can still be undone. |
-| Cooldown capped at 14 days | Cooldown plus the redaction run must fit the one-month deadline (Art. 12(3)). |
-| Retention by data class, not one hold for everything | Only invoice documents are needed for disputes. Holding personal and usage data for the dispute window would break the one-month deadline. |
+| One-month commitment, no extension | Stricter than the Art. 12(3) maximum, and gives the tenant room to answer the data subject on time. |
+| Cooldown capped at 14 days | Cooldown plus the redaction run must fit the one-month commitment. |
+| Retention by data class, not one hold for everything | Only invoice documents are needed for disputes. Holding personal and usage data for the dispute window would break the one-month commitment. |
 | Retention periods set per tenant | Each tenant's contract sets its own periods. |
 | Enabled per tenant by Flexprice, off by default | Offered only where the contract covers it. Tenants can't switch it on themselves or change the contracted periods. |
+| Turning the feature off blocks new requests only | Open requests and audit records must stay reachable. |
 | Tenant `super_admin` users only, no API keys | Erasure is irreversible. It needs an accountable human, not an integration credential. |
+| Written instructions through a separate operator route | Keeps the tenant API's access rule intact and records which operator acted on which instruction. |
 | Settings snapshotted on the request | An open request's dates can't change under it. |
 | Financial records kept, personal data dissociated | Tax and accounting retention outranks erasure (Art. 17(3)(b)). Anonymised data is out of scope (Recital 26). |
+| Customer row redacted, not deleted | Retained financial records reference it. |
 | Refuse while billing is active | Redacting mid-cycle corrupts an open invoice and cannot be undone. |
 | Request stored in Postgres with our own id | Mutable state, a unique index for idempotency, and written in the same transaction as the archive. |
-| Hashed `subject_ref`, permanent record | Proves the deletion happened (Art. 5(2)) without keeping a re-identifiable value. |
+| Conditional state transitions | Cancel and redaction can't both win. |
+| `failed` is recoverable | A temporary blocker or failure must not suppress a customer forever. |
+| `202` only once suppression is in effect | The response must mean new events are already refused. |
+| Hashed `subject_ref`, permanent pseudonymised record | Proves the deletion happened (Art. 5(2)). Treated as personal data, with the salt access-restricted. |
 | `external_id` captured at request time | The purge needs it after the customer row is redacted. |
+| `external_id` reuse needs explicit confirmation | Prevents both permanent blocking of a new customer and silent re-attachment to an erased one. |
 | `422` at ingestion, not a silent drop | The client can tell suppression apart from a malformed payload. |
 | Shared deletion machinery with #2963 | One way to delete from the analytics store, one workflow pattern, one deleted-key list. |
 | One request per customer | Bulk erasure is not required, and one-per-customer keeps the gate and the audit record simple. |
