@@ -142,7 +142,7 @@ func (s *invoiceService) recomputeTaxOnConvertedInvoice(ctx context.Context, inv
 		return err
 	}
 
-	// No tax was applied; clear the stale charge-currency tax and recompute totals in billing.
+	// No tax rows: zero the tax and recompute totals in the billing currency.
 	if len(applied.Items) == 0 {
 		applyTaxResultToInvoice(inv, &TaxCalculationResult{
 			TotalTaxAmount:    decimal.Zero,
