@@ -38,7 +38,6 @@ Flexprice needs an activity log: a per-tenant, immutable record of what changed,
 | Outcome | committed only | success, failure, pending | n/a | yes |
 | Pagination | cursor | cursor, max 100 | n/a | cursor |
 | Retention | 30 days premium, unlimited enterprise | not stated | not stated | not stated |
-| Storage | explicit per-call capture, serialize before and after, Kafka after commit, ClickHouse | not public | not public | not public |
 
 Takeaways applied: the envelope matches the industry shape; `customer_id` is first-class as in Lago; creates carry a snapshot as in Lago; security events are a separate category as Lago does; failures are reserved as Metronome and Stripe record them; our hook-based capture is deliberately stronger than Lago's explicit calls, which is why Lago documents known gaps.
 
