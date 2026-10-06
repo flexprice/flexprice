@@ -147,40 +147,6 @@ func (s *InvoiceConversionFinalizeSuite) TestOneOffConverts() {
 	}
 }
 
-func (s *InvoiceConversionFinalizeSuite) TestSubscriptionConverts() {
-	s.seedCustomer("cust_2", lo.ToPtr("inr"))
-	s.seedTenantRate("usd", "inr", "83")
-	inv := s.seedDraftInvoice("inv_sub", "cust_2", "usd", types.InvoiceTypeSubscription, lo.ToPtr("sub_x"),
-		[]*invoice.InvoiceLineItem{line("il_s1", "100")})
-
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
-
-	s.Equal("inr", inv.Currency)
-	s.True(decimal.RequireFromString("8300").Equal(inv.AmountDue))
-	s.Require().NotNil(inv.FxConversion)
-}
-
-func (s *InvoiceConversionFinalizeSuite) TestNoBillingCurrencyNoOp() {
-	s.seedCustomer("cust_3", nil)
-	s.seedTenantRate("usd", "inr", "83")
-	inv := s.seedDraftInvoice("inv_nobc", "cust_3", "usd", types.InvoiceTypeOneOff, nil,
-		[]*invoice.InvoiceLineItem{line("il_n1", "100")})
-
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
-	s.Equal("usd", inv.Currency)
-	s.Nil(inv.FxConversion)
-}
-
-func (s *InvoiceConversionFinalizeSuite) TestMatchingCurrencyNoOp() {
-	s.seedCustomer("cust_4", lo.ToPtr("usd"))
-	inv := s.seedDraftInvoice("inv_match", "cust_4", "usd", types.InvoiceTypeOneOff, nil,
-		[]*invoice.InvoiceLineItem{line("il_m1", "100")})
-
-	s.NoError(s.svc.convertAndRetaxAtFinalize(s.ctx(), inv))
-	s.Equal("usd", inv.Currency)
-	s.Nil(inv.FxConversion)
-}
-
 func (s *InvoiceConversionFinalizeSuite) TestMissingRateStaysDraft() {
 	s.seedCustomer("cust_5", lo.ToPtr("inr"))
 	// no tenant rate
@@ -364,6 +330,177 @@ func (s *InvoiceConversionFinalizeSuite) TestFinalizeTaxesSubscriptionInvoiceOnc
 
 			s.Equal([]string{tc.wantCurrency}, spy.created, "exactly one tax_applied row, written in the final currency")
 			s.Empty(spy.updated, "no second tax pass rewriting the row")
+		})
+	}
+}
+
+// TestRejectPrepaidCrossCurrencyOneOff covers the §8.4 create-time guard.
+func (s *InvoiceConversionFinalizeSuite) TestRejectPrepaidCrossCurrencyOneOff() {
+	s.seedCustomer("cust_pp_inr", lo.ToPtr("inr"))
+	s.seedCustomer("cust_pp_usd", lo.ToPtr("usd"))
+	s.seedCustomer("cust_pp_none", nil)
+
+	paid := lo.ToPtr(types.PaymentStatusSucceeded)
+	amt := lo.ToPtr(decimal.RequireFromString("100"))
+
+	cases := []struct {
+		name      string
+		req       dto.CreateInvoiceRequest
+		expectErr bool
+	}{
+		{
+			name:      "prepaid + cross-currency rejected",
+			req:       dto.CreateInvoiceRequest{CustomerID: "cust_pp_inr", Currency: "usd", PaymentStatus: paid},
+			expectErr: true,
+		},
+		{
+			name:      "amount_paid + cross-currency rejected",
+			req:       dto.CreateInvoiceRequest{CustomerID: "cust_pp_inr", Currency: "usd", AmountPaid: amt},
+			expectErr: true,
+		},
+		{
+			name: "prepaid + same-currency allowed",
+			req:  dto.CreateInvoiceRequest{CustomerID: "cust_pp_usd", Currency: "usd", PaymentStatus: paid},
+		},
+		{
+			name: "prepaid + no billing currency allowed",
+			req:  dto.CreateInvoiceRequest{CustomerID: "cust_pp_none", Currency: "usd", PaymentStatus: paid},
+		},
+		{
+			name: "no payment + cross-currency allowed",
+			req:  dto.CreateInvoiceRequest{CustomerID: "cust_pp_inr", Currency: "usd"},
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			err := s.svc.rejectPrepaidCrossCurrencyOneOff(s.ctx(), tc.req)
+			if tc.expectErr {
+				s.Error(err)
+				s.True(ierr.IsValidation(err))
+			} else {
+				s.NoError(err)
+			}
+		})
+	}
+}
+
+// TestPaymentBeforeConversionRejected covers the §8.4 payment-eligibility guard.
+func (s *InvoiceConversionFinalizeSuite) TestPaymentBeforeConversionRejected() {
+	paySvc := NewPaymentService(ServiceParams{
+		Logger:              s.GetLogger(),
+		Config:              s.GetConfig(),
+		DB:                  s.GetDB(),
+		CustomerRepo:        s.GetStores().CustomerRepo,
+		InvoiceRepo:         s.GetStores().InvoiceRepo,
+		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
+		SubRepo:             s.GetStores().SubscriptionRepo,
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+		PaymentRepo:         s.GetStores().PaymentRepo,
+		SettingsRepo:        s.GetStores().SettingsRepo,
+		WalletRepo:          s.GetStores().WalletRepo,
+		EventPublisher:      s.GetPublisher(),
+		WebhookPublisher:    s.GetWebhookPublisher(),
+	}).(*paymentService)
+
+	s.seedCustomer("cust_pay_inr", lo.ToPtr("inr"))
+
+	// An unconverted DRAFT for a cross-currency customer cannot be paid.
+	draft := s.seedDraftInvoice("inv_pay_draft", "cust_pay_inr", "usd", types.InvoiceTypeOneOff, nil,
+		[]*invoice.InvoiceLineItem{line("il_pay1", "100")})
+	err := paySvc.validateInvoicePaymentEligibility(s.ctx(), draft, &dto.CreatePaymentRequest{
+		DestinationID: draft.ID,
+		Currency:      "usd",
+		Amount:        decimal.RequireFromString("100"),
+	})
+	s.Error(err, "paying an unconverted cross-currency draft must be rejected")
+	s.True(ierr.IsValidation(err))
+
+	// Once converted (fx_conversion set, currency now inr), a matching payment is allowed by the guard.
+	converted := s.seedDraftInvoice("inv_pay_converted", "cust_pay_inr", "inr", types.InvoiceTypeOneOff, nil,
+		[]*invoice.InvoiceLineItem{line("il_pay2", "8300")})
+	converted.FxConversion = &types.FxConversion{ChargeCurrency: "usd", BillingCurrency: "inr", Rate: decimal.RequireFromString("83")}
+	err = paySvc.validateInvoicePaymentEligibility(s.ctx(), converted, &dto.CreatePaymentRequest{
+		DestinationID: converted.ID,
+		Currency:      "inr",
+		Amount:        decimal.RequireFromString("8300"),
+	})
+	s.NoError(err, "a converted invoice can be paid in the billing currency")
+}
+
+// countingFXRateRepo wraps an fxrate.Repository and counts every read so a test can prove that
+// finalizing an unaffected invoice never touches fx_rates (§1.5).
+type countingFXRateRepo struct {
+	fxrate.Repository
+	reads int
+}
+
+func (c *countingFXRateRepo) Get(ctx context.Context, id string) (*fxrate.FXRate, error) {
+	c.reads++
+	return c.Repository.Get(ctx, id)
+}
+
+func (c *countingFXRateRepo) List(ctx context.Context, f *types.FXRateFilter) ([]*fxrate.FXRate, error) {
+	c.reads++
+	return c.Repository.List(ctx, f)
+}
+
+func (c *countingFXRateRepo) Count(ctx context.Context, f *types.FXRateFilter) (int, error) {
+	c.reads++
+	return c.Repository.Count(ctx, f)
+}
+
+func (c *countingFXRateRepo) GetTenantRate(ctx context.Context, from, to string) (*fxrate.FXRate, error) {
+	c.reads++
+	return c.Repository.GetTenantRate(ctx, from, to)
+}
+
+func (c *countingFXRateRepo) FindOverlapping(ctx context.Context, scope types.FXRateScope, scopeID, from, to string, vf, vt *time.Time, excludeID string) ([]*fxrate.FXRate, error) {
+	c.reads++
+	return c.Repository.FindOverlapping(ctx, scope, scopeID, from, to, vf, vt, excludeID)
+}
+
+func (s *InvoiceConversionFinalizeSuite) newServiceWithFXSpy() (*invoiceService, *countingFXRateRepo) {
+	spy := &countingFXRateRepo{Repository: s.GetStores().FXRateRepo}
+	params := s.svc.ServiceParams
+	params.FXRateRepo = spy
+	return NewInvoiceService(params).(*invoiceService), spy
+}
+
+// TestExistingCustomersUnaffected proves §1.5: finalizing an invoice for a customer with no billing
+// currency, or one equal to the charge currency, issues no fx_rates query and leaves the invoice
+// byte-for-byte unchanged — even when a tenant rate exists.
+func (s *InvoiceConversionFinalizeSuite) TestExistingCustomersUnaffected() {
+	cases := []struct {
+		name    string
+		billing *string
+	}{
+		{name: "no billing currency", billing: nil},
+		{name: "billing currency equals charge currency", billing: lo.ToPtr("usd")},
+	}
+
+	for i, tc := range cases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			s.seedCustomer("cust_un", tc.billing)
+			// A tenant rate exists, so the test proves it is deliberately NOT consulted.
+			s.seedTenantRate("usd", "inr", "83")
+
+			inv := s.seedDraftInvoice("inv_un", "cust_un", "usd", types.InvoiceTypeOneOff, nil,
+				[]*invoice.InvoiceLineItem{line("il_u1", "60"), line("il_u2", "40")})
+
+			svc, spy := s.newServiceWithFXSpy()
+			s.NoError(svc.convertAndRetaxAtFinalize(s.ctx(), inv))
+
+			s.Equal(0, spy.reads, "case %d: finalize must not query fx_rates", i)
+			s.Equal("usd", inv.Currency)
+			s.Nil(inv.FxConversion)
+			s.True(decimal.RequireFromString("100").Equal(inv.Subtotal))
+			for _, li := range inv.LineItems {
+				s.Equal("usd", li.Currency)
+				s.Nil(li.OriginalCurrency, "case %d: no line original should be stamped", i)
+				s.Nil(li.OriginalAmount)
+			}
 		})
 	}
 }
