@@ -73,7 +73,7 @@ func (a *RevenueRollupActivities) RollupDirtyActivity(ctx context.Context, in cr
 
 	// A scheduled full rebuild repairs anything the incremental triggers miss,
 	// so a gap lasts at most a week instead of persisting.
-	forceFull := a.cfg.Analytics.RevenueRollup.FullRebuildWeekday == int(since.UTC().Weekday())
+	forceFull := in.ForceFull || a.cfg.Analytics.RevenueRollup.FullRebuildWeekday == int(since.UTC().Weekday())
 	if forceFull {
 		log.Info("Revenue rollup running a full rebuild", "weekday", since.UTC().Weekday().String())
 	}
@@ -91,9 +91,16 @@ func (a *RevenueRollupActivities) RollupDirtyActivity(ctx context.Context, in cr
 		return nil, err
 	}
 
-	a.logger.Info(ctx, "revenue rollup dirty scan completed", "rolled", result.Rolled, "skipped", result.Skipped, "since", since)
-	log.Info("Completed revenue rollup dirty scan", "rolled", result.Rolled, "skipped", result.Skipped)
-	return &cronModels.RevenueRollupWorkflowResult{Rolled: result.Rolled, Skipped: result.Skipped}, nil
+	a.logger.Info(ctx, "revenue rollup dirty scan completed",
+		"rolled", result.Rolled, "skipped", result.Skipped, "scoped_out", result.ScopedOut,
+		"force_full", forceFull, "since", since)
+	log.Info("Completed revenue rollup dirty scan",
+		"rolled", result.Rolled, "skipped", result.Skipped, "scoped_out", result.ScopedOut)
+	return &cronModels.RevenueRollupWorkflowResult{
+		Rolled:    result.Rolled,
+		Skipped:   result.Skipped,
+		ScopedOut: result.ScopedOut,
+	}, nil
 }
 
 // ReconcileBookedInvoicesActivity compares recently finalized/voided invoices against their
