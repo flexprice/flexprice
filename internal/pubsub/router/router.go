@@ -180,10 +180,11 @@ func (r *Router) AddNoPublishHandler(
 			// Detach from msg.Context() cancellation so a consumer-group rebalance
 			// or subscriber shutdown doesn't kill an in-flight handler mid-write.
 			// WithoutCancel keeps values (tracing span, writer pin, handler name)
-			// but strips cancellation, so the 600s below is a real floor, not just
+			// but strips cancellation, so the timeout below is a real floor, not just
 			// a ceiling under whichever cancels first. Safe because unacked messages
 			// are redelivered on the next session and handlers are idempotent.
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(msg.Context()), 600*time.Second)
+			// 4m keeps one retry for a handler stuck the full timeout, since the retry budget is 5m.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(msg.Context()), 4*time.Minute)
 			defer cancel()
 			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
@@ -221,7 +222,7 @@ func (r *Router) AddNoPublishHandler(
 		InitialInterval:     1 * time.Second,
 		MaxInterval:         10 * time.Second,
 		Multiplier:          2.0,
-		MaxElapsedTime:      2 * time.Minute,
+		MaxElapsedTime:      5 * time.Minute,
 		RandomizationFactor: 0.5,
 		Logger:              watermill.NewStdLogger(r.debugLogs, false),
 		OnRetryHook: func(retryNum int, delay time.Duration) {

@@ -34,6 +34,9 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 	}
 }
 
+// insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
+const insertTimeout = 30 * time.Second
+
 // BulkInsertMeterUsage inserts meter usage records in batches of 100
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
 	span := StartRepositorySpan(ctx, "meter_usage", "bulk_insert", map[string]interface{}{
@@ -49,7 +52,10 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 	batches := lo.Chunk(records, 100)
 
 	for _, batch := range batches {
-		stmt, err := r.store.GetConn().PrepareBatch(ctx, `
+		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)
+		defer cancel()
+
+		stmt, err := r.store.GetConn().PrepareBatch(batchCtx, `
 			INSERT INTO meter_usage (
 				id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
 				timestamp, qty_total, unique_hash, source, properties, ingested_at

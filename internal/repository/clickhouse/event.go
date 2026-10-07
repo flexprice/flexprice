@@ -140,8 +140,11 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 	eventsBatches := lo.Chunk(events, 100)
 
 	for _, eventsBatch := range eventsBatches {
+		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)
+		defer cancel()
+
 		// Prepare batch statement
-		batch, err := r.store.GetConn().PrepareBatch(ctx, `
+		batch, err := r.store.GetConn().PrepareBatch(batchCtx, `
 		INSERT INTO events (
 			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
 		)
