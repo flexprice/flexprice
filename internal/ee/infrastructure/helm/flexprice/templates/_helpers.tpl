@@ -922,7 +922,7 @@ flexprice.gceIngressSecretName — TLS secret for the parallel GCE Ingress.
 
 Separate from the chart Ingress's secret by default. Sharing it would couple this
 load balancer's TLS renewal to the nginx Ingress's lifecycle; see
-ingress-gce-parallel/certificate.yaml.
+ingress-gce/certificate.yaml.
 */}}
 {{- define "flexprice.gceIngressSecretName" -}}
 {{- $gce := fromYaml (include "flexprice.gce" .) -}}
