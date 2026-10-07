@@ -1430,7 +1430,6 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 		BillingModel:         targetBillingModel,
 		InvoiceCadence:       originalPrice.InvoiceCadence,
 		TrialPeriodDays:      originalPrice.TrialPeriodDays,
-		TierMode:             originalPrice.TierMode,
 		BucketSize:           lo.Ternary(override.BucketSize != "", override.BucketSize, originalPrice.BucketSize),
 		MeterID:              originalPrice.MeterID,
 		Description:          originalPrice.Description,
@@ -1439,6 +1438,9 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 		DisplayName:          originalPrice.DisplayName,      // Preserve original price display name
 		PriceUnitType:        originalPrice.PriceUnitType,    // Always copy from original (cannot be changed)
 		SkipEntityValidation: true,
+	}
+	if override.BucketSize == dto.BucketSizeNone {
+		createPriceReq.BucketSize = ""
 	}
 
 	// Handle PriceUnitConfig construction for CUSTOM price unit type

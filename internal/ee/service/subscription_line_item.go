@@ -765,6 +765,8 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				TierMode:          req.TierMode,
 				Tiers:             req.Tiers,
 				TransformQuantity: req.TransformQuantity,
+				PriceUnitAmount:   req.PriceUnitAmount,
+				PriceUnitTiers:    req.PriceUnitTiers,
 				BucketSize:        req.BucketSize,
 			}
 			priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}

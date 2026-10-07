@@ -137,6 +137,12 @@ type UpdateSubscriptionLineItemRequest struct {
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 
+	// PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE billing models)
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
+
+	// PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED billing model)
+	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+
 	// BucketSize overrides the windowing used to turn this meter's usage into
 	// billable units for this line item. See CreatePriceRequest.BucketSize.
 	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
@@ -607,7 +613,7 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 	// If EffectiveFrom is provided, at least one critical field must be present
 	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
 		return ierr.NewError("effective_from requires at least one critical field").
-			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, bucket_size, or commitment fields").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, price_unit_tiers, bucket_size, or commitment fields").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -820,6 +826,8 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.TierMode != "" ||
 		len(r.Tiers) > 0 ||
 		r.TransformQuantity != nil ||
+		r.PriceUnitAmount != nil ||
+		len(r.PriceUnitTiers) > 0 ||
 		r.BucketSize != "" ||
 		r.HasCommitment() ||
 		r.CommitmentOverageFactor != nil ||
@@ -851,6 +859,11 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		Quantity:         existingLineItem.Quantity,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+
+		PriceUnitID:         existingLineItem.PriceUnitID,
+		PriceUnit:           existingLineItem.PriceUnit,
+		SubscriptionPhaseID: existingLineItem.SubscriptionPhaseID,
+		AddonAssociationID:  existingLineItem.AddonAssociationID,
 	}
 
 	// Set metadata - use provided metadata or keep existing
@@ -860,16 +873,16 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.Metadata = existingLineItem.Metadata
 	}
 
-	// Set commitment fields - use provided values or keep existing
+	// Set commitment fields - use provided values or keep existing; a type switch drops the other type's value
 	if r.CommitmentAmount != nil {
 		newLineItem.CommitmentAmount = r.CommitmentAmount
-	} else {
+	} else if r.CommitmentType != types.COMMITMENT_TYPE_QUANTITY {
 		newLineItem.CommitmentAmount = existingLineItem.CommitmentAmount
 	}
 
 	if r.CommitmentQuantity != nil {
 		newLineItem.CommitmentQuantity = r.CommitmentQuantity
-	} else {
+	} else if r.CommitmentType != types.COMMITMENT_TYPE_AMOUNT {
 		newLineItem.CommitmentQuantity = existingLineItem.CommitmentQuantity
 	}
 

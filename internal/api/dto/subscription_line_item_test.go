@@ -454,3 +454,29 @@ func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *test
 		t.Fatalf("expected overage factor to default to 1, got: %v", b.OverageFactor)
 	}
 }
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_KeepsLinks(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{
+		ID:                  "subs_line_old",
+		AddonAssociationID:  lo.ToPtr("addon_assoc_1"),
+		SubscriptionPhaseID: lo.ToPtr("phase_1"),
+		PriceUnitID:         lo.ToPtr("pu_1"),
+		PriceUnit:           lo.ToPtr("crd"),
+	}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(10))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Equal(t, existing.AddonAssociationID, successor.AddonAssociationID)
+	assert.Equal(t, existing.SubscriptionPhaseID, successor.SubscriptionPhaseID)
+	assert.Equal(t, existing.PriceUnitID, successor.PriceUnitID)
+	assert.Equal(t, existing.PriceUnit, successor.PriceUnit)
+}
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_CommitmentTypeSwitch(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{CommitmentType: types.COMMITMENT_TYPE_AMOUNT, CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100))}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(12))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Nil(t, successor.CommitmentAmount)
+	assert.True(t, successor.CommitmentQuantity.Equal(decimal.NewFromInt(12)))
+}

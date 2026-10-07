@@ -1947,7 +1947,8 @@ func (r *OverrideLineItemRequest) Validate(
 		}
 	}
 
-	return nil
+	return validateBillingModelChange(originalPrice.Price, r.BillingModel, r.TierMode,
+		r.Amount != nil || r.PriceUnitAmount != nil, len(r.Tiers) > 0 || len(r.PriceUnitTiers) > 0)
 }
 
 // ToSubscriptionLineItem converts a request to a domain subscription line item

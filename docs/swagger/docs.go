@@ -25932,6 +25932,17 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "price_unit_amount": {
+                    "description": "PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE billing models)",
+                    "type": "string"
+                },
+                "price_unit_tiers": {
+                    "description": "PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED billing model)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreatePriceTier"
+                    }
+                },
                 "tier_mode": {
                     "description": "TierMode determines how to calculate the price for a given quantity",
                     "allOf": [

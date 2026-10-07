@@ -8614,6 +8614,16 @@ definitions:
           type: string
         description: Metadata for the new line item
         type: object
+      price_unit_amount:
+        description: PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE
+          billing models)
+        type: string
+      price_unit_tiers:
+        description: PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED
+          billing model)
+        items:
+          $ref: '#/definitions/CreatePriceTier'
+        type: array
       tier_mode:
         allOf:
         - $ref: '#/definitions/types.BillingTier'

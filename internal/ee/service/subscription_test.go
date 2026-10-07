@@ -7629,6 +7629,8 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideValidation() {
 					Price: &price.Price{
 						ID:            "price-custom-tiers-valid",
 						PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+						BillingModel:  types.BILLING_MODEL_TIERED,
+						TierMode:      types.BILLING_TIER_SLAB,
 					},
 				},
 			},

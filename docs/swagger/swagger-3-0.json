@@ -27765,6 +27765,17 @@
             },
             "description": "Metadata for the new line item"
           },
+          "price_unit_amount": {
+            "type": "string",
+            "description": "PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE billing models)"
+          },
+          "price_unit_tiers": {
+            "type": "array",
+            "description": "PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED billing model)",
+            "items": {
+              "$ref": "#/components/schemas/CreatePriceTier"
+            }
+          },
           "tier_mode": {
             "$ref": "#/components/schemas/types.BillingTier"
           },
