@@ -693,6 +693,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_CustomCurrencyApplie
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
+	tx.CreatedAt = boundary.Add(-24 * time.Hour) // added during the period it pays
 	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, tx))
 
 	sub, prevStart := s.rolledSubscription("subs_cred", boundary)
@@ -1007,6 +1008,25 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_BillingCycleCreditPa
 	s.Require().Len(drafts, 1, "no current-period draft")
 	s.Equal(prev.ID, drafts[0].ID)
 	s.True(decimal.NewFromInt(20).Equal(drafts[0].TotalPrepaidCreditsApplied))
+}
+
+// A credit added after a period ended never pays that period's draft, as at finalization: it only
+// expires.
+func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_SkipsDraftsForPeriodsEndedBeforeTheCredit() {
+	s.enableExpirySettlement()
+	boundary := time.Now().UTC().Add(-3 * time.Hour)
+	sub, prevStart := s.rolledSubscription("subs_rolled", boundary)
+	stale := s.cycleDraft("inv_stale", sub.ID, 20, prevStart.Add(-30*24*time.Hour), prevStart)
+	tx := s.seedGrant("wtxn_late_grant", decimal.NewFromInt(30), prevStart.Add(time.Hour), boundary)
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.True(result.Applied.IsZero(), "applied %s", result.Applied)
+	s.True(result.Expired)
+
+	updated, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), stale.ID)
+	s.Require().NoError(err)
+	s.True(updated.TotalPrepaidCreditsApplied.IsZero(), "the stale draft gets nothing")
 }
 
 // The credit expires an hour before the previous period ended: only usage before the expiry counts.
