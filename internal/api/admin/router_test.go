@@ -352,3 +352,108 @@ func TestAddUserErrors(t *testing.T) {
 		})
 	}
 }
+
+type fakeSettingsService struct {
+	called bool
+	req    admindto.UpdateTenantConfigRequest
+	resp   *admindto.TenantConfigResponse
+	err    error
+}
+
+func (f *fakeSettingsService) UpdateTenantConfig(_ context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error) {
+	f.called = true
+	f.req = req
+	return f.resp, f.err
+}
+
+func newSettingsTestServer(settings *fakeSettingsService) *Server {
+	return NewRouter(Handlers{
+		Health:      v1.NewHealthHandler(),
+		Environment: v1.NewEnvironmentHandler(&fakeEnvironmentService{}),
+		Tenant:      v1.NewTenantHandler(&fakeTenantService{}),
+		User:        v1.NewUserHandler(&fakeUserService{}),
+		Settings:    v1.NewSettingsHandler(settings),
+	}, nil, "test-secret")
+}
+
+func putSetting(server *Server, key, body, secret string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPut, "/v1/settings/"+key, bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	if secret != "" {
+		req.Header.Set(secretHeader, secret)
+	}
+	rec := httptest.NewRecorder()
+	server.engine.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestUpdateTenantConfig(t *testing.T) {
+	fake := &fakeSettingsService{
+		resp: &admindto.TenantConfigResponse{TenantID: "tenant_1", Production: 2, Development: 5, MaxUsers: 20},
+	}
+	server := newSettingsTestServer(fake)
+
+	rec := putSetting(server, "tenant_config", `{"tenant_id":"tenant_1","value":{"max_users":20}}`, "test-secret")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "tenant_1", fake.req.TenantID)
+	require.NotNil(t, fake.req.Value.MaxUsers)
+	assert.Equal(t, 20, *fake.req.Value.MaxUsers)
+	assert.Nil(t, fake.req.Value.Production, "a limit left out must reach the service as not sent")
+	assert.Nil(t, fake.req.Value.Development, "a limit left out must reach the service as not sent")
+	assert.JSONEq(t, `{"tenant_id":"tenant_1","production":2,"development":5,"max_users":20}`, rec.Body.String())
+}
+
+func TestUpdateTenantConfigErrors(t *testing.T) {
+	body := `{"tenant_id":"tenant_1","value":{"development":5}}`
+	tests := []struct {
+		name       string
+		body       string
+		secret     string
+		serviceErr error
+		wantStatus int
+		wantCalled bool
+	}{
+		{
+			name:       "missing secret",
+			body:       body,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "malformed body",
+			body:       `{"tenant_id":`,
+			secret:     "test-secret",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "unknown tenant",
+			body:       body,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("tenant not found").Mark(ierr.ErrNotFound),
+			wantStatus: http.StatusNotFound,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeSettingsService{err: tt.serviceErr}
+			server := newSettingsTestServer(fake)
+
+			rec := putSetting(server, "tenant_config", tt.body, tt.secret)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantCalled, fake.called)
+		})
+	}
+}
+
+func TestOnlyTenantConfigIsExposed(t *testing.T) {
+	fake := &fakeSettingsService{}
+	server := newSettingsTestServer(fake)
+
+	rec := putSetting(server, "invoice_config", `{"tenant_id":"tenant_1","value":{}}`, "test-secret")
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.False(t, fake.called)
+}

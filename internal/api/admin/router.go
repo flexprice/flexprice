@@ -17,6 +17,7 @@ type Handlers struct {
 	Environment *v1.EnvironmentHandler
 	Tenant      *v1.TenantHandler
 	User        *v1.UserHandler
+	Settings    *v1.SettingsHandler
 }
 
 // Server is the Gin engine for deployment mode "admin".
@@ -54,6 +55,11 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 		user := group.Group("/users")
 		{
 			user.POST("", handlers.User.AddUser)
+		}
+
+		settings := group.Group("/settings")
+		{
+			settings.PUT("/tenant_config", handlers.Settings.UpdateTenantConfig)
 		}
 	}
 
