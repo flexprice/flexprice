@@ -39,7 +39,7 @@ func TestHealth(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		req := httptest.NewRequest(method, "/health", nil)
 		rec := httptest.NewRecorder()
-		server.engine.ServeHTTP(rec, req)
+		server.ServeHTTP(rec, req)
 
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
@@ -62,7 +62,7 @@ func TestCreateEnvironment(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(secretHeader, "test-secret")
 	rec := httptest.NewRecorder()
-	server.engine.ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusCreated, rec.Code)
 	require.Equal(t, "Production", fake.req.Name)
@@ -85,7 +85,7 @@ func TestCreateEnvironmentValidation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(secretHeader, "test-secret")
 	rec := httptest.NewRecorder()
-	server.engine.ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
@@ -101,7 +101,7 @@ func TestCreateEnvironmentUnauthorized(t *testing.T) {
 			req.Header.Set(secretHeader, header)
 		}
 		rec := httptest.NewRecorder()
-		server.engine.ServeHTTP(rec, req)
+		server.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusUnauthorized, rec.Code)
 	}
 }
@@ -115,7 +115,7 @@ func TestEmptySecretFailsClosed(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(secretHeader, "anything")
 	rec := httptest.NewRecorder()
-	server.engine.ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
@@ -123,6 +123,6 @@ func TestPublicRouteNotMounted(t *testing.T) {
 	server := newTestServer(&fakeEnvironmentService{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/customers", nil)
 	rec := httptest.NewRecorder()
-	server.engine.ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }

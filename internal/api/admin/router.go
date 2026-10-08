@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"net/http"
 
 	v1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -52,4 +53,12 @@ func (s *Server) Run(addr ...string) error {
 		return fmt.Errorf("admin router is not configured")
 	}
 	return s.engine.Run(addr...)
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if s == nil || s.engine == nil {
+		http.Error(w, "admin router is not configured", http.StatusInternalServerError)
+		return
+	}
+	s.engine.ServeHTTP(w, req)
 }

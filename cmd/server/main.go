@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -686,13 +686,9 @@ func startTemporalWorker(
 	})
 }
 
-type apiRunner interface {
-	Run(addr ...string) error
-}
-
 func startAPIServer(
 	lc fx.Lifecycle,
-	r apiRunner,
+	r http.Handler,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {
