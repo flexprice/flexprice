@@ -40,9 +40,9 @@ state right after the change.
 | Entry | One logged change to one entity |
 | Actor | Who made the change: a user, an API key, or the system |
 | Snapshot | The entity's state right after the change, in the same field names as the public API |
-| Registered entity | An entity type that is logged. Each one has a registration (section 6) |
+| Registered entity | An entity type that is logged. Each one has a registration (section 3) |
 | Collector | The in-memory list of entries for one database transaction |
-| `SaveReturning` / `ExecReturning` | Generated ent methods that run a bulk update or delete and return the changed rows (section 3.4) |
+| `SaveReturning` / `ExecReturning` | Generated ent methods that run a bulk update or delete and return the changed rows (section 4.3) |
 
 ---
 
@@ -114,29 +114,33 @@ flowchart LR
 
 ---
 
-## 3. Capture
+## 3. Entity registration
 
-### 3.1 Ent hook
+Each logged entity has one registration, next to its repository:
 
-Ent lets a function wrap every create, update and delete made through a client. The activity hook
-is one such function, installed once on the writer client (`client.Use(activity.Hook(registry))`)
-when `activity.enabled` is on. Every repository write passes through it, so no service code calls
-it.
+| Field | Purpose |
+| --- | --- |
+| Entity type | `types.SystemEntityType`, and the ent type the hook matches |
+| Snapshot | The entity's `FromEnt` conversion to its domain model |
+| Drop | Fields left out of the snapshot (for example `version`, `synced_price_sequence`) |
+| Redact | Fields stored as `"[redacted]"` (for example payment method details) |
+| Customer | The customer id field, or the parent lookup the consumer uses |
+| Label | The human name shown in lists (for example invoice number, customer name) |
 
-For each write it:
+Entities without a registration are never logged.
 
-1. Checks the registry. Unregistered entities, and contexts under `Suppress`, pass straight through.
-2. Lets the write run.
-3. Takes the rows the write returned: the created entity, or the rows from `SaveReturning` /
-   `ExecReturning`.
-4. For each row, builds an entry from the actor and request context in `ctx`, the action, and the
-   snapshot (the domain model's JSON, dropped and redacted per registration).
-5. Adds the entries to the transaction's collector.
+### 3.1 Entities in phase 1
 
-It makes no database calls and never returns an error to the write. If building an entry fails,
-the entry is skipped and `activity_capture_failed_total` is incremented.
+Customer-facing billing entities: customer, subscription, subscription phase, subscription schedule,
+subscription pause, invoice, credit note, wallet, wallet transaction, credit grant, credit grant
+application, entitlement grant, payment, payment method, refund, checkout session, coupon
+association, coupon application, addon association, tax association.
 
-### 3.2 Actor and request context
+---
+
+## 4. Capture
+
+### 4.1 Actor and request context
 
 Every entry point puts an actor and a request context into the Go context. The hook reads both at the
 moment of each write.
@@ -159,26 +163,33 @@ Request middleware adds the request id, IP address and user agent. System work h
 
 A write with no actor is logged as `system / unknown` and counted. It never fails the write.
 
-### 3.3 How each write is captured
+### 4.2 Snapshot
 
-The hook records the rows that each write hands back:
+The snapshot is the entity's domain model serialized to JSON, using the existing `FromEnt`
+conversion. Field names, types and formats are therefore the same as the public API. Nested objects
+that the API adds by extra queries (a subscription's plan, customer, phases) are not included. The
+snapshot keeps their ids, and the frontend links them.
 
-| Write | Rows come from | Extra round trips |
-| --- | --- | --- |
-| `Create` | The `INSERT` | None |
-| `CreateBulk` | The batch `INSERT`; the hook runs once per row | None |
-| `Update()…SaveReturning` (one row or many) | `UPDATE … RETURNING *` | None |
-| `Delete()…ExecReturning` (one row or many) | `DELETE … RETURNING *` | None |
-| Raw SQL | The statement's own `RETURNING *`, passed to `activity.Record` | None |
+Each registration drops internal fields and redacts sensitive ones (section 3).
 
-**Rule for registered entities:** updates end in `SaveReturning`, deletes end in `ExecReturning`.
-A plain `Save` or `Exec` on a registered entity returns only a count, so the hook cannot capture it.
-That fails in tests and local runs, and increments `activity_uncaptured_total` in production.
+```json
+{
+  "id": "subs_01JB8Q…",
+  "customer_id": "cus_3",
+  "plan_id": "plan_pro",
+  "subscription_status": "cancelled",
+  "currency": "usd",
+  "billing_period": "MONTHLY",
+  "current_period_end": "2026-11-01T00:00:00Z",
+  "cancelled_at": "2026-10-08T11:02:44Z",
+  "pause_status": "none",
+  "gateway_payment_method_id": "[redacted]"
+}
+```
 
-**Action** is `created`, `updated`, `archived` (status moves to archived or deleted) or `deleted`
-(row removed).
+A delete's snapshot is the row as it was when deleted.
 
-### 3.4 `SaveReturning` and `ExecReturning`
+### 4.3 `SaveReturning` and `ExecReturning`
 
 Ent's own bulk `Save` and `Exec` return only a row count. Two methods are added to every entity
 through an ent code-generation template, `ent/template/returning.tmpl`:
@@ -226,33 +237,7 @@ are exactly the ones this statement changed, in their state after the change.
 `SaveReturning` against a recording driver and checks that the SQL differs only by `RETURNING`. The
 tests run on every ent upgrade, since the template depends on ent's generated internals.
 
-### 3.5 Snapshot
-
-The snapshot is the entity's domain model serialized to JSON, using the existing `FromEnt`
-conversion. Field names, types and formats are therefore the same as the public API. Nested objects
-that the API adds by extra queries (a subscription's plan, customer, phases) are not included. The
-snapshot keeps their ids, and the frontend links them.
-
-Each registration drops internal fields and redacts sensitive ones (section 6).
-
-```json
-{
-  "id": "subs_01JB8Q…",
-  "customer_id": "cus_3",
-  "plan_id": "plan_pro",
-  "subscription_status": "cancelled",
-  "currency": "usd",
-  "billing_period": "MONTHLY",
-  "current_period_end": "2026-11-01T00:00:00Z",
-  "cancelled_at": "2026-10-08T11:02:44Z",
-  "pause_status": "none",
-  "gateway_payment_method_id": "[redacted]"
-}
-```
-
-A delete's snapshot is the row as it was when deleted.
-
-### 3.6 Collector
+### 4.4 Collector
 
 - `WithTx` installs one collector per transaction. Nested `WithTx` calls reuse it.
 - Several writes to one entity in a transaction become one entry with the last snapshot. A create
@@ -261,7 +246,50 @@ A delete's snapshot is the row as it was when deleted.
 - On rollback the collector is dropped with the other post-commit work.
 - A write outside any transaction goes to the publisher right after it succeeds.
 
-### 3.7 Suppress
+### 4.5 Ent hook
+
+Ent lets a function wrap every create, update and delete made through a client. The activity hook
+is one such function, installed once on the writer client (`client.Use(activity.Hook(registry))`)
+when `activity.enabled` is on. Every repository write passes through it, so no service code calls
+it.
+
+For each write it:
+
+1. Checks the registry. Unregistered entities, and contexts under `Suppress` (section 4.7), pass
+   straight through.
+2. Lets the write run.
+3. Takes the rows the write returned: the created entity, or the rows from `SaveReturning` /
+   `ExecReturning`.
+4. For each row, builds an entry from the actor and request context in `ctx`, the action, and the
+   snapshot (the domain model's JSON, dropped and redacted per registration).
+5. Adds the entries to the transaction's collector (section 4.4).
+
+It makes no database calls and never returns an error to the write. If building an entry fails,
+the entry is skipped and `activity_capture_failed_total` is incremented.
+
+### 4.6 How each write is captured
+
+The hook records the rows that each write hands back:
+
+| Write | Rows come from | Extra round trips |
+| --- | --- | --- |
+| `Create` | The `INSERT` | None |
+| `CreateBulk` | The batch `INSERT`; the hook runs once per row | None |
+| `Update()…SaveReturning` (one row or many) | `UPDATE … RETURNING *` | None |
+| `Delete()…ExecReturning` (one row or many) | `DELETE … RETURNING *` | None |
+| Raw SQL | The statement's own `RETURNING *`, passed to `activity.Record` | None |
+
+Raw SQL bypasses ent, so the repository passes the rows from its own `RETURNING *` to
+`activity.Record(ctx, entityType, rows)`, which builds entries the same way the hook does.
+
+**Rule for registered entities:** updates end in `SaveReturning`, deletes end in `ExecReturning`.
+A plain `Save` or `Exec` on a registered entity returns only a count, so the hook cannot capture it.
+That fails in tests and local runs, and increments `activity_uncaptured_total` in production.
+
+**Action** is `created`, `updated`, `archived` (status moves to archived or deleted) or `deleted`
+(row removed).
+
+### 4.7 Suppress
 
 `activity.Suppress(ctx, reason)` returns a context in which the hook records nothing. It is for
 system paths that keep data up to date as a side effect of other work, not changes anyone made.
@@ -278,11 +306,20 @@ skipped: an auto top-up started from the same flow uses the normal context and i
 - A reason is required and is logged at info level, so suppression always leaves a trace.
 - It is only for system maintenance paths. Using it on a path a tenant acts on would hide their changes.
 
+### 4.8 Repository changes for phase 1
+
+| Change | Sites |
+| --- | --- |
+| Template added to `generate-ent`, code regenerated | Once |
+| Updates on registered entities: `Save` to `SaveReturning` (single-row and bulk, including addon `CancelBulk` / `ActivateBulk` / `DeleteBulk` and credit grant `DeleteBulk`) | About 37 |
+| Deletes on registered entities: `Exec` / `DeleteOneID` to `ExecReturning` | 2 |
+| `Create`, `CreateBulk`, existing `UpdateOne` | None |
+
 ---
 
-## 4. Delivery
+## 5. Delivery
 
-### 4.1 Publisher
+### 5.1 Publisher
 
 - In-process, with a bounded buffer and background workers using the existing Kafka producer.
 - One Kafka message per committed transaction, split into several messages above 100 entries.
@@ -290,7 +327,7 @@ skipped: an auto top-up started from the same flow uses the normal context and i
   message and increments `activity_dropped_total`.
 - On shutdown it drains the buffer, with a timeout, before the process exits.
 
-### 4.2 Kafka message
+### 5.2 Kafka message
 
 ```json
 {
@@ -321,7 +358,7 @@ Entry ids are ULIDs created in the process. Their embedded time bounds lookups b
 format. It changes only on a breaking change to that format, and is stored with every row so old
 entries stay readable. The message carries no customer id; the consumer resolves it.
 
-### 4.3 Consumer
+### 5.3 Consumer
 
 Runs in the consumer deployment, registered with the router's `AddNoPublishHandler` and its DLQ.
 
@@ -336,9 +373,9 @@ Runs in the consumer deployment, registered with the router's `AddNoPublishHandl
 
 ---
 
-## 5. Storage
+## 6. Storage
 
-### 5.1 Table
+### 6.1 Table
 
 ```sql
 CREATE TABLE activity_logs
@@ -412,7 +449,7 @@ TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
 
 The access paths are checked with `EXPLAIN` on realistic volume before rollout.
 
-### 5.2 Retention and archive
+### 6.2 Retention and archive
 
 ```mermaid
 flowchart LR
@@ -428,39 +465,6 @@ flowchart LR
 - A month is dropped only after a verified export.
 - Erasure for a customer: lightweight `DELETE` in ClickHouse, and a rewrite of that tenant's
   Parquet files. A runbook, not an endpoint.
-
----
-
-## 6. Entity registration
-
-Each logged entity has one registration, next to its repository:
-
-| Field | Purpose |
-| --- | --- |
-| Entity type | `types.SystemEntityType`, and the ent type the hook matches |
-| Snapshot | The entity's `FromEnt` conversion to its domain model |
-| Drop | Fields left out of the snapshot (for example `version`, `synced_price_sequence`) |
-| Redact | Fields stored as `"[redacted]"` (for example payment method details) |
-| Customer | The customer id field, or the parent lookup the consumer uses |
-| Label | The human name shown in lists (for example invoice number, customer name) |
-
-Entities without a registration are never logged.
-
-### 6.1 Entities in phase 1
-
-Customer-facing billing entities: customer, subscription, subscription phase, subscription schedule,
-subscription pause, invoice, credit note, wallet, wallet transaction, credit grant, credit grant
-application, entitlement grant, payment, payment method, refund, checkout session, coupon
-association, coupon application, addon association, tax association.
-
-### 6.2 Repository changes for phase 1
-
-| Change | Sites |
-| --- | --- |
-| Template added to `generate-ent`, code regenerated | Once |
-| Updates on registered entities: `Save` to `SaveReturning` (single-row and bulk, including addon `CancelBulk` / `ActivateBulk` / `DeleteBulk` and credit grant `DeleteBulk`) | About 37 |
-| Deletes on registered entities: `Exec` / `DeleteOneID` to `ExecReturning` | 2 |
-| `Create`, `CreateBulk`, existing `UpdateOne` | None |
 
 ---
 
