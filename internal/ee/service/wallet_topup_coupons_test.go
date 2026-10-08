@@ -19,7 +19,6 @@ func (s *WalletServiceSuite) seedCoupon(code string, mutate func(c *coupon.Coupo
 		Type:          types.CouponTypePercentage,
 		PercentageOff: lo.ToPtr(decimal.NewFromInt(10)),
 		Cadence:       types.CouponCadenceOnce,
-		Currency:      "usd",
 		CouponCode:    lo.ToPtr(code),
 		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
 		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
@@ -43,6 +42,8 @@ func fixedOff(amount int64, currency string) func(c *coupon.Coupon) {
 func percentOff(pct int64) func(c *coupon.Coupon) {
 	return func(c *coupon.Coupon) { c.PercentageOff = lo.ToPtr(decimal.NewFromInt(pct)) }
 }
+
+// The API stores percentage coupons without a currency (CreateCouponRequest.ToCoupon).
 
 func (s *WalletServiceSuite) topUpWithCoupons(key string, credits int64, codes ...string) (*dto.TopUpWalletResponse, error) {
 	coupons := lo.Map(codes, func(code string, _ int) dto.TopUpCoupon { return dto.TopUpCoupon{CouponCode: code} })
@@ -148,15 +149,6 @@ func (s *WalletServiceSuite) TestTopUpCoupons_FullDiscountGrantsCreditsImmediate
 	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(1500).Equal(w.CreditBalance), "got %s", w.CreditBalance)
-}
-
-func (s *WalletServiceSuite) TestTopUpCoupons_PercentageCouponWorksInAnyCurrency() {
-	s.seedAutoComplete(false)
-	s.seedCoupon("EURPCT", func(c *coupon.Coupon) { c.Currency = "eur" })
-
-	resp, err := s.topUpWithCoupons("coupon_pct_eur", 500, "EURPCT")
-	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(450).Equal(s.topUpInvoice(resp).Total))
 }
 
 func (s *WalletServiceSuite) TestTopUpCoupons_InvalidCouponRejectsTheWholeTopUp() {

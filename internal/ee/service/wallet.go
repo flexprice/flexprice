@@ -1315,8 +1315,8 @@ func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		// A fixed amount is in the coupon's currency; a percentage applies in any.
-		if c.Type == types.CouponTypeFixed && !types.IsMatchingCurrency(c.Currency, w.Currency) {
+		// Only fixed-amount coupons carry a currency; a percentage coupon is stored without one.
+		if c.Currency != "" && !types.IsMatchingCurrency(c.Currency, w.Currency) {
 			return nil, ierr.NewError("coupon currency does not match the wallet currency").
 				WithHintf("Coupon '%s' is in %s; the wallet is in %s", input.CouponCode, c.Currency, w.Currency).
 				WithReportableDetails(map[string]interface{}{
