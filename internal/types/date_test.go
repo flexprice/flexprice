@@ -13,6 +13,20 @@ var (
 	jst, _ = time.LoadLocation("Asia/Tokyo")
 )
 
+func TestNextBillingDate_Onetime(t *testing.T) {
+	start := time.Date(2026, time.June, 2, 15, 38, 3, 0, time.UTC)
+
+	got, err := NextBillingDate(&NextBillingDateParams{
+		CurrentPeriodStart: start,
+		BillingAnchor:      start,
+		Unit:               1,
+		Period:             BILLING_PERIOD_ONETIME,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, start.AddDate(0, 0, 1), got)
+}
+
 // Anniversary billing - start date and billing anchor are the same
 // or start date is after the billing anchor but the same day
 func TestNextbillingDate_Monthly_Anniversary(t *testing.T) {
