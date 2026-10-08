@@ -33,8 +33,10 @@ dashboard and the public API.
 - **Business writes are never affected.** Capture adds no database round trip to a write and can
   never fail it. If the log pipeline is down, business writes carry on.
 - **Lag is acceptable.** Entries appear a few seconds after the change.
-- **Best-effort, but never silent.** An entry can be lost (a crash right after commit, a long Kafka
-  outage). Every drop is counted and alerted. An entry that exists is always correct on its own.
+- **Best-effort.** An entry can be lost. Drops inside the publisher (a full buffer, Kafka unavailable
+  past retries, a shutdown timeout) are counted and alerted. Entries still in memory when a process
+  crashes after commit are lost without being counted; there is no durable recovery path for them.
+  An entry that exists is always correct on its own.
 - **Product interfaces only.** The log covers changes made through Flexprice: API, dashboard,
   workflows, consumers and scripts. Direct SQL on the database is controlled by infrastructure access
   rules, not by this log.
@@ -558,7 +560,7 @@ The dashboard shows that entries can take a few seconds to appear.
 | Property | Guarantee |
 | --- | --- |
 | Business writes | Never failed or blocked by logging. Same number of round trips as today; updates and deletes also return the changed rows |
-| Completeness | Best-effort. Drops are counted and alerted |
+| Completeness | Best-effort. Publisher drops are counted and alerted. Entries in memory when a process crashes after commit are lost without being counted |
 | Correctness | Every stored entry is self-contained and holds exactly the row its write produced |
 | Order | By commit time. Two changes to one entity within milliseconds on different pods can show in either order |
 | Duplicates | Collapsed by entry id |
