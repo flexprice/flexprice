@@ -104,7 +104,7 @@ Reuses the subscription-create coupon components as-is. [Mockup](https://claude.
 - **Purchased** shows a **Discounts** section (`SubscriptionDiscountTable`): an Add button opens the **Link Coupon** dialog (`CouponModal`), and the chosen coupon shows as one row (coupon name, discount, type, currency, remove). One coupon.
 - Coupons are filtered with `filterValidCoupons` (redeem window, max redemptions, fixed-coupon currency). The label drops the cadence suffix ("10% off", not "10% off forever"), since cadence does not apply to top-ups.
 - No invoice preview, as on subscription create.
-- **Skip invoice** (direct purchase) and **Checkout link** (Razorpay) are disabled while a coupon is selected, with one hint, because coupons only discount a generated invoice.
+- **Skip invoice** (direct purchase) and **Checkout link** (Razorpay) are disabled while a coupon is selected, because coupons only discount a generated invoice. Hovering a greyed-out button says why that button is off.
 - Switching to **Free** clears and hides the coupon.
 
 ## Out of scope (v1)
