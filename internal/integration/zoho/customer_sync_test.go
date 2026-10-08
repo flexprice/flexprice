@@ -131,8 +131,10 @@ func TestCreateContactCarriesGSTFields(t *testing.T) {
 	assert.Equal(t, "400072", req.ShippingAddress.Zip)
 
 	require.NotNil(t, req.BillingAddress)
-	assert.Contains(t, req.BillingAddress.Address, "Boomerang Building",
-		"AddressLine2 must not be dropped")
+	assert.Equal(t, "Boomerang Building, Chandivali Farm Road", req.BillingAddress.Street2)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.ShippingAddress.Attention)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.LegalName)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.TraderName)
 
 	require.Len(t, req.ContactPersons, 1)
 	assert.Equal(t, "9311916570", req.ContactPersons[0].Phone, "contact phone must not be dropped")
@@ -251,4 +253,28 @@ func TestGSTTreatmentIsNotSent(t *testing.T) {
 	assert.NotContains(t, string(raw), "gst_treatment",
 		"gst_treatment is optional in Zoho and cannot express SEZ/deemed-export; we omit it")
 	assert.Contains(t, string(raw), "gst_no")
+}
+
+func TestToContactAddress(t *testing.T) {
+	tests := []struct {
+		name    string
+		country string
+		want    *ContactAddress
+	}{
+		{
+			name: "indian address gets the country name and code", country: "IN",
+			want: &ContactAddress{Attention: "Acme", Address: "l1", Street2: "l2", City: "c", State: "s", Zip: "z", Country: "India", CountryCode: "IN"},
+		},
+		{
+			name: "non-indian address", country: "US",
+			want: &ContactAddress{Attention: "Acme", Address: "l1", Street2: "l2", City: "c", State: "s", Zip: "z", Country: "United States", CountryCode: "US"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, toContactAddress("Acme", "l1", "l2", "c", "s", "z", tt.country))
+		})
+	}
+
+	assert.Nil(t, toContactAddress("Acme", "", "", "", "", "", ""), "attention alone is not an address")
 }

@@ -37,16 +37,21 @@ type ContactPerson struct {
 }
 
 type ContactAddress struct {
-	Address string `json:"address,omitempty"`
-	City    string `json:"city,omitempty"`
-	State   string `json:"state,omitempty"`
-	Zip     string `json:"zip,omitempty"`
-	Country string `json:"country,omitempty"`
+	Attention   string `json:"attention,omitempty"`
+	Address     string `json:"address,omitempty"`
+	Street2     string `json:"street2,omitempty"`
+	City        string `json:"city,omitempty"`
+	State       string `json:"state,omitempty"`
+	Zip         string `json:"zip,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
 }
 
 type ContactCreateRequest struct {
 	ContactName     string          `json:"contact_name"`
 	CompanyName     string          `json:"company_name,omitempty"`
+	LegalName       string          `json:"legal_name,omitempty"`
+	TraderName      string          `json:"trader_name,omitempty"`
 	ContactType     string          `json:"contact_type,omitempty"`
 	CustomerSubType string          `json:"customer_sub_type,omitempty"`
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`

@@ -9,6 +9,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 )
 
 type ZohoCustomerService interface {
@@ -106,19 +108,21 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	req := &ContactCreateRequest{
 		ContactName:     c.Name,
 		CompanyName:     c.Name,
+		LegalName:       c.Name,
+		TraderName:      c.Name,
 		ContactType:     "customer",
 		CustomerSubType: "business",
 	}
 
 	req.BillingAddress = toContactAddress(
-		c.AddressLine1, c.AddressLine2, c.AddressCity,
+		c.Name, c.AddressLine1, c.AddressLine2, c.AddressCity,
 		c.AddressState, c.AddressPostalCode, c.AddressCountry,
 	)
 
 	tax := types.TaxMetadataFromMap(c.Metadata)
 	if shipping := tax.ShippingAddress(); shipping != nil {
 		req.ShippingAddress = toContactAddress(
-			shipping.Line1(), shipping.Line2(), shipping.City(),
+			c.Name, shipping.Line1(), shipping.Line2(), shipping.City(),
 			shipping.State(), shipping.PostalCode(), shipping.Country(),
 		)
 	}
@@ -138,28 +142,27 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	return req
 }
 
-// toContactAddress folds line2 into Zoho's single street field, which is what the
-// invoice PDF path does too — Zoho's ContactAddress has no verified second line key.
-func toContactAddress(line1, line2, city, state, postalCode, country string) *ContactAddress {
-	street := line1
-	if line2 != "" {
-		if street != "" {
-			street += "\n"
-		}
-		street += line2
-	}
-
-	if street == "" && city == "" && state == "" && postalCode == "" && country == "" {
+func toContactAddress(attention, line1, line2, city, state, postalCode, country string) *ContactAddress {
+	if line1 == "" && line2 == "" && city == "" && state == "" && postalCode == "" && country == "" {
 		return nil
 	}
 
-	return &ContactAddress{
-		Address: street,
-		City:    city,
-		State:   state,
-		Zip:     postalCode,
-		Country: country,
+	addr := &ContactAddress{
+		Attention:   attention,
+		Address:     line1,
+		Street2:     line2,
+		City:        city,
+		State:       state,
+		Zip:         postalCode,
+		Country:     country,
+		CountryCode: country,
 	}
+	if region, err := language.ParseRegion(country); err == nil {
+		if name := display.English.Regions().Name(region); name != "" {
+			addr.Country = name
+		}
+	}
+	return addr
 }
 
 func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *customerDomain.Customer, contact *ContactResponse) error {
