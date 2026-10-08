@@ -12,6 +12,7 @@ import (
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,11 +27,40 @@ func (f *fakeEnvironmentService) CreateEnvironment(_ context.Context, req admind
 	return f.resp, f.err
 }
 
+type fakeTenantService struct {
+	called bool
+	req    admindto.CreateTenantRequest
+	resp   *admindto.CreateTenantResponse
+	err    error
+}
+
+func (f *fakeTenantService) CreateTenant(_ context.Context, req admindto.CreateTenantRequest) (*admindto.CreateTenantResponse, error) {
+	f.called = true
+	f.req = req
+	return f.resp, f.err
+}
+
 func newTestServer(environments *fakeEnvironmentService) *Server {
+	return newTestServerWith(environments, &fakeTenantService{})
+}
+
+func newTestServerWith(environments *fakeEnvironmentService, tenants *fakeTenantService) *Server {
 	return NewRouter(Handlers{
 		Health:      v1.NewHealthHandler(),
 		Environment: v1.NewEnvironmentHandler(environments),
+		Tenant:      v1.NewTenantHandler(tenants),
 	}, nil, "test-secret")
+}
+
+func postTenant(server *Server, body, secret string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/tenants", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	if secret != "" {
+		req.Header.Set(secretHeader, secret)
+	}
+	rec := httptest.NewRecorder()
+	server.engine.ServeHTTP(rec, req)
+	return rec
 }
 
 func TestHealth(t *testing.T) {
@@ -125,4 +155,86 @@ func TestPublicRouteNotMounted(t *testing.T) {
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestCreateTenant(t *testing.T) {
+	fake := &fakeTenantService{
+		resp: &admindto.CreateTenantResponse{
+			TenantID:   "tenant_1",
+			TenantName: "Acme",
+			UserID:     "user_1",
+			Email:      "owner@acme.com",
+			Environments: []*admindto.EnvironmentResponse{
+				{ID: "env_1", Name: "Sandbox", Type: types.EnvironmentDevelopment, TenantID: "tenant_1"},
+			},
+		},
+	}
+	server := newTestServerWith(&fakeEnvironmentService{}, fake)
+
+	rec := postTenant(server, `{"tenant_name":"Acme","email":"owner@acme.com","password":"chosen-by-operator","create_production":true}`, "test-secret")
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, admindto.CreateTenantRequest{
+		TenantName:       "Acme",
+		Email:            "owner@acme.com",
+		Password:         "chosen-by-operator",
+		CreateProduction: true,
+	}, fake.req)
+
+	var resp admindto.CreateTenantResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "tenant_1", resp.TenantID)
+	assert.Equal(t, "user_1", resp.UserID)
+	require.Len(t, resp.Environments, 1)
+	assert.Equal(t, "env_1", resp.Environments[0].ID)
+	assert.NotContains(t, rec.Body.String(), "chosen-by-operator")
+}
+
+func TestCreateTenantErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		secret     string
+		serviceErr error
+		wantStatus int
+		wantCalled bool
+	}{
+		{
+			name:       "missing secret",
+			body:       `{"tenant_name":"Acme","email":"owner@acme.com","password":"chosen-by-operator"}`,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "wrong secret",
+			body:       `{"tenant_name":"Acme","email":"owner@acme.com","password":"chosen-by-operator"}`,
+			secret:     "wrong-secret",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "malformed body",
+			body:       `{"tenant_name":`,
+			secret:     "test-secret",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "email already in use",
+			body:       `{"tenant_name":"Acme","email":"owner@acme.com","password":"chosen-by-operator"}`,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("email already in use").Mark(ierr.ErrAlreadyExists),
+			wantStatus: http.StatusConflict,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeTenantService{err: tt.serviceErr}
+			server := newTestServerWith(&fakeEnvironmentService{}, fake)
+
+			rec := postTenant(server, tt.body, tt.secret)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantCalled, fake.called)
+		})
+	}
 }

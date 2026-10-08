@@ -249,6 +249,7 @@ func main() {
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
 			adminsvc.NewEnvironmentService,
+			adminsvc.NewTenantService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -468,10 +469,12 @@ func provideHandlers(
 
 func provideAdminHandlers(
 	environments adminsvc.EnvironmentService,
+	tenants adminsvc.TenantService,
 ) adminapi.Handlers {
 	return adminapi.Handlers{
 		Health:      adminv1.NewHealthHandler(),
 		Environment: adminv1.NewEnvironmentHandler(environments),
+		Tenant:      adminv1.NewTenantHandler(tenants),
 	}
 }
 
