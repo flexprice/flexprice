@@ -385,6 +385,10 @@ entries stay readable. The message carries no customer id; the consumer resolves
 ### 5.3 Consumer
 
 Runs in the consumer deployment, registered with the router's `AddNoPublishHandler` and its DLQ.
+Like the existing bulk consumers, one Kafka message is one batch: it holds a transaction's entries
+(section 5.1) and becomes one ClickHouse insert. Inserts use ClickHouse async inserts and wait for
+the acknowledgement, so many small transactions are buffered into larger parts by the server, and
+the offset is committed only after the insert is acknowledged.
 
 1. Splits the message into rows and copies the request context and commit time onto each.
 2. Resolves `customer_id` using the registration, which says whether the entity has a customer.
@@ -582,11 +586,23 @@ The dashboard shows that entries can take a few seconds to appear.
 | `activity_capture_failed_total` (by entity) | Any non-zero value |
 | `activity_snapshot_truncated_total` (by entity) | Any non-zero value |
 
-- The feature sits behind `activity.enabled`. When off, no hook or collector is installed.
 - Scripts that change data install the hook with a `script:<name>` actor.
 - The Kafka topic is created with the other topics in `init-kafka`.
 - CI runs the parity tests for the returning methods and fails on any uncaptured write to a
   registered entity.
+
+### 8.1 Kill switch
+
+`activity.enabled` turns the whole feature off. When it is off:
+
+- no hook or collector is installed, and nothing is published;
+- the activity consumer does not start;
+- the activity API returns 404 and the dashboard hides the activity views;
+- repository writes are unaffected. `SaveReturning` and `ExecReturning` still return rows, which the
+  calling code uses.
+
+The setting is read at startup, so changing it takes a restart or a rolling deploy. It applies to all
+tenants.
 
 ---
 
