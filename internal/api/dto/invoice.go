@@ -176,6 +176,10 @@ type CreateInvoiceRequest struct {
 
 	// SourceType is server-set only; a caller must not be able to claim provenance.
 	SourceType types.InvoiceSourceType `json:"-"`
+
+	// PreparedInvoiceCoupons are coupons the caller already validated (e.g. a wallet top-up).
+	// CreateOneOffInvoice applies them instead of re-validating and silently dropping failures.
+	PreparedInvoiceCoupons []InvoiceCoupon `json:"-"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,

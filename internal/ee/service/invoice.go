@@ -147,7 +147,7 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 			CouponID: couponID,
 		})
 	}
-	req.InvoiceCoupons = validCoupons
+	req.InvoiceCoupons = append(validCoupons, req.PreparedInvoiceCoupons...)
 
 	// Prepare tax rates
 	taxService := NewTaxService(s.ServiceParams)

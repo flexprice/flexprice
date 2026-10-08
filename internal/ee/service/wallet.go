@@ -964,6 +964,11 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction &&
 		!isPayFirst && !req.TriggeringActor.IsEndCustomer()
 
+	invoiceCoupons, err := s.resolveTopUpCoupons(ctx, walletID, req.Coupons, autoCompleteEnabled)
+	if err != nil {
+		return "", "", err
+	}
+
 	s.Logger.Debug(ctx, "processing purchased credit transaction",
 		"wallet_id", walletID,
 		"auto_complete_enabled", autoCompleteEnabled,
@@ -1172,15 +1177,16 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		})
 
 		invReq := dto.CreateInvoiceRequest{
-			CustomerID:     w.CustomerID,
-			AmountDue:      amount,
-			AmountPaid:     amountPaid,
-			Subtotal:       amount,
-			Total:          amount,
-			Currency:       w.Currency,
-			InvoiceType:    types.InvoiceTypeOneOff,
-			DueDate:        lo.ToPtr(time.Now().UTC()),
-			IdempotencyKey: idempotencyKey,
+			PreparedInvoiceCoupons: invoiceCoupons,
+			CustomerID:             w.CustomerID,
+			AmountDue:              amount,
+			AmountPaid:             amountPaid,
+			Subtotal:               amount,
+			Total:                  amount,
+			Currency:               w.Currency,
+			InvoiceType:            types.InvoiceTypeOneOff,
+			DueDate:                lo.ToPtr(time.Now().UTC()),
+			IdempotencyKey:         idempotencyKey,
 			LineItems: []dto.CreateInvoiceLineItemRequest{
 				{
 					Amount:      amount,
@@ -1271,6 +1277,45 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	}
 
 	return walletTransactionID, invoiceID, err
+}
+
+// resolveTopUpCoupons looks up each coupon code and validates it for the wallet. Any invalid
+// coupon rejects the whole top-up, so nothing is created.
+func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCouponInput, autoCompleteEnabled bool) ([]dto.InvoiceCoupon, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+	// Auto-complete grants credits before payment; a discount there is not supported.
+	if autoCompleteEnabled {
+		return nil, ierr.NewError("coupons are not supported when purchased credits auto-complete").
+			WithHint("Turn off auto_complete_purchased_credit_transaction, or top up without coupons").
+			Mark(ierr.ErrValidation)
+	}
+
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	validationService := NewCouponValidationService(s.ServiceParams)
+	invoiceCoupons := make([]dto.InvoiceCoupon, 0, len(inputs))
+	for _, input := range inputs {
+		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
+		if err != nil {
+			return nil, err
+		}
+		if err := validationService.ValidateCouponForWallet(ctx, *c, w.Currency); err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Coupon '%s' cannot be applied: %s", input.CouponCode, err.Error()).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_code": input.CouponCode,
+					"wallet_id":   walletID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		invoiceCoupons = append(invoiceCoupons, dto.InvoiceCoupon{CouponID: c.ID})
+	}
+	return invoiceCoupons, nil
 }
 
 // CompletePurchasedCreditTransactionWithRetry completes a pending wallet transaction when payment succeeds
