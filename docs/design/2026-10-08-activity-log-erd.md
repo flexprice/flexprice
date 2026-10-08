@@ -489,6 +489,8 @@ Every DDL or delete on this table in a replicated cluster runs `ON CLUSTER '{clu
 
 ### 6.2 Retention and archive
 
+Not in the first release; archiving will be handled later. This section describes how it will work.
+
 ```mermaid
 flowchart LR
     LIVE["Months 0–12<br/>queryable in ClickHouse"] --> EXP["Archiver exports the month<br/>to Parquet on S3, one file set per tenant"]
@@ -497,13 +499,13 @@ flowchart LR
     DROP --> COLD["Parquet on S3<br/>retrieval on request"]
 ```
 
-- A Temporal cron finds months older than one year and exports each, deduplicated by id, with
+- A Temporal cron will find months older than one year and export each, deduplicated by id, with
   ClickHouse's `s3()` table function to `activity_logs/tenant_id=<t>/year=<yyyy>/month=<mm>/`. It
-  verifies counts, then drops the partition (`ALTER TABLE … ON CLUSTER '{cluster}' DROP PARTITION …`
+  will verify counts, then drop the partition (`ALTER TABLE … ON CLUSTER '{cluster}' DROP PARTITION …`
   on replicated clusters).
-- A month is dropped only after a verified export.
-- Erasure for a customer: lightweight `DELETE` in ClickHouse (`ON CLUSTER` on replicated clusters),
-  and a rewrite of that tenant's Parquet files. A runbook, not an endpoint.
+- A month will be dropped only after a verified export.
+- Erasure for a customer will be a lightweight `DELETE` in ClickHouse (`ON CLUSTER` on replicated
+  clusters) and a rewrite of that tenant's Parquet files. A runbook, not an endpoint.
 
 ---
 
