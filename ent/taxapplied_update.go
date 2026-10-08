@@ -118,6 +118,20 @@ func (_u *TaxAppliedUpdate) SetNillableTaxAmount(v *decimal.Decimal) *TaxApplied
 	return _u
 }
 
+// SetCurrency sets the "currency" field.
+func (_u *TaxAppliedUpdate) SetCurrency(v string) *TaxAppliedUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *TaxAppliedUpdate) SetNillableCurrency(v *string) *TaxAppliedUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *TaxAppliedUpdate) SetMetadata(v map[string]string) *TaxAppliedUpdate {
 	_u.mutation.SetMetadata(v)
@@ -211,7 +225,25 @@ func (_u *TaxAppliedUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *TaxAppliedUpdate) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := taxapplied.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.currency": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_behavior": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *TaxAppliedUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(taxapplied.Table, taxapplied.Columns, sqlgraph.NewFieldSpec(taxapplied.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -249,6 +281,9 @@ func (_u *TaxAppliedUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
+	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(taxapplied.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)
@@ -376,6 +411,20 @@ func (_u *TaxAppliedUpdateOne) SetNillableTaxAmount(v *decimal.Decimal) *TaxAppl
 	return _u
 }
 
+// SetCurrency sets the "currency" field.
+func (_u *TaxAppliedUpdateOne) SetCurrency(v string) *TaxAppliedUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *TaxAppliedUpdateOne) SetNillableCurrency(v *string) *TaxAppliedUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *TaxAppliedUpdateOne) SetMetadata(v map[string]string) *TaxAppliedUpdateOne {
 	_u.mutation.SetMetadata(v)
@@ -482,7 +531,25 @@ func (_u *TaxAppliedUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *TaxAppliedUpdateOne) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := taxapplied.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.currency": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.TaxBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxApplied.tax_behavior": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(taxapplied.Table, taxapplied.Columns, sqlgraph.NewFieldSpec(taxapplied.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -537,6 +604,9 @@ func (_u *TaxAppliedUpdateOne) sqlSave(ctx context.Context) (_node *TaxApplied, 
 	}
 	if value, ok := _u.mutation.TaxAmount(); ok {
 		_spec.SetField(taxapplied.FieldTaxAmount, field.TypeOther, value)
+	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(taxapplied.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxapplied.FieldMetadata, field.TypeJSON, value)

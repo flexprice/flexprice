@@ -78,6 +78,7 @@ type AddAddonToSubscriptionRequest struct {
 	AddonID           string                  `json:"addon_id" validate:"required"`
 	Cadence           types.AddonCadence      `json:"cadence"`
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	ProrationSettings ProrationSettings       `json:"-"`
 	StartDate         *time.Time              `json:"start_date,omitempty"`
 	// ChangeAt names when the attach applies without computing a date. Mutually exclusive
 	// with StartDate; omit both to attach now.

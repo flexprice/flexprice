@@ -227,21 +227,11 @@ func (s *InMemoryFXRateStore) FindOverlapping(ctx context.Context, scope types.F
 		if r.ID == excludeID {
 			continue
 		}
-		if fxWindowsOverlap(r.StartDate, r.EndDate, startDate, endDate) {
+		if types.FXRateWindowsOverlap(r.StartDate, r.EndDate, startDate, endDate) {
 			overlapping = append(overlapping, r)
 		}
 	}
 	return overlapping, nil
-}
-
-func fxWindowsOverlap(aFrom, aTo, bFrom, bTo *time.Time) bool {
-	if aFrom != nil && bTo != nil && !aFrom.Before(*bTo) {
-		return false
-	}
-	if bFrom != nil && aTo != nil && !bFrom.Before(*aTo) {
-		return false
-	}
-	return true
 }
 
 func (s *InMemoryFXRateStore) Clear() {

@@ -43,6 +43,15 @@ func taxRateFilterFn(ctx context.Context, tr *taxrate.TaxRate, filter interface{
 		return false
 	}
 
+	// Mirror the ent repo: no status filter means published only.
+	status := types.StatusPublished
+	if f.QueryFilter != nil && f.QueryFilter.Status != nil {
+		status = *f.QueryFilter.Status
+	}
+	if tr.Status != status {
+		return false
+	}
+
 	// Filter by tax rate IDs
 	if len(f.TaxRateIDs) > 0 {
 		if !lo.Contains(f.TaxRateIDs, tr.ID) {

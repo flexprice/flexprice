@@ -320,6 +320,12 @@ func (_c *InvoiceCreate) SetCustomCurrency(v *types.CustomCurrency) *InvoiceCrea
 	return _c
 }
 
+// SetFxConversion sets the "fx_conversion" field.
+func (_c *InvoiceCreate) SetFxConversion(v *types.FxConversion) *InvoiceCreate {
+	_c.mutation.SetFxConversion(v)
+	return _c
+}
+
 // SetDescription sets the "description" field.
 func (_c *InvoiceCreate) SetDescription(v string) *InvoiceCreate {
 	_c.mutation.SetDescription(v)
@@ -979,6 +985,10 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoice.FieldCustomCurrency, field.TypeJSON, value)
 		_node.CustomCurrency = value
+	}
+	if value, ok := _c.mutation.FxConversion(); ok {
+		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
+		_node.FxConversion = value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

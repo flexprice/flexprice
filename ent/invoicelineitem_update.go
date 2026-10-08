@@ -99,6 +99,20 @@ func (_u *InvoiceLineItemUpdate) SetNillableQuantity(v *decimal.Decimal) *Invoic
 	return _u
 }
 
+// SetCurrency sets the "currency" field.
+func (_u *InvoiceLineItemUpdate) SetCurrency(v string) *InvoiceLineItemUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *InvoiceLineItemUpdate) SetNillableCurrency(v *string) *InvoiceLineItemUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (_u *InvoiceLineItemUpdate) SetPeriodStart(v time.Time) *InvoiceLineItemUpdate {
 	_u.mutation.SetPeriodStart(v)
@@ -255,6 +269,18 @@ func (_u *InvoiceLineItemUpdate) ClearCustomCurrency() *InvoiceLineItemUpdate {
 	return _u
 }
 
+// SetFxConversion sets the "fx_conversion" field.
+func (_u *InvoiceLineItemUpdate) SetFxConversion(v *types.FxConversion) *InvoiceLineItemUpdate {
+	_u.mutation.SetFxConversion(v)
+	return _u
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (_u *InvoiceLineItemUpdate) ClearFxConversion() *InvoiceLineItemUpdate {
+	_u.mutation.ClearFxConversion()
+	return _u
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (_u *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
 	_u.mutation.AddCouponApplicationIDs(ids...)
@@ -334,6 +360,11 @@ func (_u *InvoiceLineItemUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *InvoiceLineItemUpdate) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := invoicelineitem.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
+		}
+	}
 	if _u.mutation.InvoiceCleared() && len(_u.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
@@ -412,6 +443,9 @@ func (_u *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
 	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 	}
@@ -471,6 +505,12 @@ func (_u *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.FxConversion(); ok {
+		_spec.SetField(invoicelineitem.FieldFxConversion, field.TypeJSON, value)
+	}
+	if _u.mutation.FxConversionCleared() {
+		_spec.ClearField(invoicelineitem.FieldFxConversion, field.TypeJSON)
 	}
 	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -601,6 +641,20 @@ func (_u *InvoiceLineItemUpdateOne) SetQuantity(v decimal.Decimal) *InvoiceLineI
 func (_u *InvoiceLineItemUpdateOne) SetNillableQuantity(v *decimal.Decimal) *InvoiceLineItemUpdateOne {
 	if v != nil {
 		_u.SetQuantity(*v)
+	}
+	return _u
+}
+
+// SetCurrency sets the "currency" field.
+func (_u *InvoiceLineItemUpdateOne) SetCurrency(v string) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *InvoiceLineItemUpdateOne) SetNillableCurrency(v *string) *InvoiceLineItemUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
 	return _u
 }
@@ -761,6 +815,18 @@ func (_u *InvoiceLineItemUpdateOne) ClearCustomCurrency() *InvoiceLineItemUpdate
 	return _u
 }
 
+// SetFxConversion sets the "fx_conversion" field.
+func (_u *InvoiceLineItemUpdateOne) SetFxConversion(v *types.FxConversion) *InvoiceLineItemUpdateOne {
+	_u.mutation.SetFxConversion(v)
+	return _u
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (_u *InvoiceLineItemUpdateOne) ClearFxConversion() *InvoiceLineItemUpdateOne {
+	_u.mutation.ClearFxConversion()
+	return _u
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (_u *InvoiceLineItemUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
 	_u.mutation.AddCouponApplicationIDs(ids...)
@@ -853,6 +919,11 @@ func (_u *InvoiceLineItemUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *InvoiceLineItemUpdateOne) check() error {
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := invoicelineitem.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
+		}
+	}
 	if _u.mutation.InvoiceCleared() && len(_u.mutation.InvoiceIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "InvoiceLineItem.invoice"`)
 	}
@@ -948,6 +1019,9 @@ func (_u *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(invoicelineitem.FieldQuantity, field.TypeOther, value)
 	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(invoicelineitem.FieldCurrency, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PeriodStart(); ok {
 		_spec.SetField(invoicelineitem.FieldPeriodStart, field.TypeTime, value)
 	}
@@ -1007,6 +1081,12 @@ func (_u *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	}
 	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoicelineitem.FieldCustomCurrency, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.FxConversion(); ok {
+		_spec.SetField(invoicelineitem.FieldFxConversion, field.TypeJSON, value)
+	}
+	if _u.mutation.FxConversionCleared() {
+		_spec.ClearField(invoicelineitem.FieldFxConversion, field.TypeJSON)
 	}
 	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

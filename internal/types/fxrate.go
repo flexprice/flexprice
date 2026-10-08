@@ -2,6 +2,7 @@ package types
 
 import (
 	"slices"
+	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
@@ -195,4 +196,16 @@ func (f *FXRateFilter) IsUnlimited() bool {
 		return NewNoLimitQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
+}
+
+// FXRateWindowsOverlap reports whether two half-open [from, to) windows intersect.
+// A nil from is −∞ and a nil to is +∞.
+func FXRateWindowsOverlap(aFrom, aTo, bFrom, bTo *time.Time) bool {
+	if aFrom != nil && bTo != nil && !aFrom.Before(*bTo) {
+		return false
+	}
+	if bFrom != nil && aTo != nil && !bFrom.Before(*aTo) {
+		return false
+	}
+	return true
 }

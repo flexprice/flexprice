@@ -30,6 +30,7 @@ type fakeClient struct {
 	couponAssociations fakeCouponAssociations
 	taxRates           fakeTaxRates
 	taxAssociations    fakeTaxAssociations
+	payments           fakePayments
 	async              *fakeAsyncEvents
 }
 
@@ -56,6 +57,7 @@ func (c *fakeClient) Coupons() e2eprobe.CouponOps                       { return
 func (c *fakeClient) CouponAssociations() e2eprobe.CouponAssociationOps { return &c.couponAssociations }
 func (c *fakeClient) TaxRates() e2eprobe.TaxRateOps                     { return &c.taxRates }
 func (c *fakeClient) TaxAssociations() e2eprobe.TaxAssociationOps       { return &c.taxAssociations }
+func (c *fakeClient) Payments() e2eprobe.PaymentOps                     { return &c.payments }
 
 // --- Customers ---
 
@@ -75,7 +77,8 @@ func (f *fakeCustomers) Create(_ context.Context, req types.CreateCustomerReques
 	id := "cust_" + req.ExternalID
 	f.byExt[req.ExternalID] = id
 	f.created = append(f.created, req)
-	return &dtos.CreateCustomerResponse{}, nil
+	ext := req.ExternalID
+	return &dtos.CreateCustomerResponse{CustomerResponse: &types.CustomerResponse{ID: &id, ExternalID: &ext}}, nil
 }
 func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.GetCustomerByExternalIDResponse, error) {
 	f.mu.Lock()
@@ -423,6 +426,10 @@ type fakeWallets struct {
 	topUpCalls []string
 	// incrementBalanceOnTopUp, when true, adds the TopUp amount to balance.
 	incrementBalanceOnTopUp bool
+	// creditBalance, when set, is returned as the balance response's credit_balance.
+	creditBalance string
+	// checkout, when set, answers a TopUp that carries checkout params.
+	checkout func(req types.TopUpWalletRequest) (*types.CheckoutSessionResponse, error)
 }
 
 func (f *fakeWallets) Create(_ context.Context, req types.CreateWalletRequest) (*dtos.CreateWalletResponse, error) {
@@ -462,6 +469,12 @@ func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBa
 	if f.balErr != nil {
 		return nil, f.balErr
 	}
+	if f.creditBalance != "" {
+		credit := f.creditBalance
+		return &dtos.GetWalletBalanceResponse{
+			WalletBalanceResponse: &types.WalletBalanceResponse{CreditBalance: &credit},
+		}, nil
+	}
 	if f.balance == "" {
 		return &dtos.GetWalletBalanceResponse{}, nil
 	}
@@ -470,6 +483,13 @@ func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBa
 	}, nil
 }
 func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+	if req.Checkout != nil && f.checkout != nil {
+		session, err := f.checkout(req)
+		if err != nil {
+			return nil, err
+		}
+		return &dtos.TopUpWalletResponse{TopUpWalletResponse: &types.TopUpWalletResponse{CheckoutSession: session}}, nil
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.topUpErr != nil {
@@ -988,4 +1008,275 @@ func (f *fakeTaxAssociations) Delete(_ context.Context, id string) (*dtos.Delete
 func dateP(y int, m time.Month, d int) *time.Time {
 	t := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	return &t
+}
+
+// --- Payments ---
+
+// fakePayments models checkout sessions and saved methods. Sessions start
+// pending with a URL; reads return them completed unless sessionOnGet says
+// otherwise. Hooks steer the paths a test needs.
+type fakePayments struct {
+	mu sync.Mutex
+
+	nextID   int
+	sessions map[string]*types.CheckoutSessionResponse
+	// start, when set, replaces the default pending session for a checkout
+	// start. action is "topup", "invoice" or "subscription".
+	start func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error)
+	// sessionOnGet, when set, is what GetCheckoutSession returns.
+	sessionOnGet    func(s *types.CheckoutSessionResponse) *types.CheckoutSessionResponse
+	getSessionCalls int
+	cancelled       []string
+	cancelStatus    types.CheckoutStatus
+
+	paymentStatus types.PaymentStatus
+
+	savedMethods      []e2eprobe.SavedPaymentMethod
+	listErr           error
+	gatewayCustomerID string
+	setupURL          string
+	portalAddURL      string
+	portalAddErr      error
+	portalDeleteErr   error
+	defaults          []string
+	deleted           []string
+
+	// onModify and onCreditNote let a test apply what the server would on
+	// completion (new line item, refunded invoice, wallet credit).
+	onModify          func(subID string, req types.ExecuteSubscriptionModifyRequest)
+	onCreditNote      func(req types.CreateCreditNoteRequest)
+	addons            map[string]string // lookup key -> addon id
+	addonAssociations []types.AddonAssociationResponse
+	creditNotes       []types.CreateCreditNoteRequest
+	refunds           []types.RefundResponse
+	// ungated makes "modify" or "addon" apply without a checkout session.
+	ungated map[string]bool
+}
+
+// startSession records and returns a new session for a checkout start.
+func (f *fakePayments) startSession(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
+	f.mu.Lock()
+	start := f.start
+	f.mu.Unlock()
+	var s *types.CheckoutSessionResponse
+	if start != nil {
+		var err error
+		if s, err = start(action, cfg); err != nil {
+			return nil, err
+		}
+	} else {
+		s = fakePendingSession()
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	if s.ID == nil {
+		s.ID = strPtr(fmt.Sprintf("cs_%d", f.nextID))
+	}
+	if s.CheckoutPaymentID == nil {
+		s.CheckoutPaymentID = strPtr(fmt.Sprintf("pay_%d", f.nextID))
+	}
+	if s.CheckoutInvoiceID == nil {
+		s.CheckoutInvoiceID = strPtr(fmt.Sprintf("inv_%d", f.nextID))
+	}
+	if f.sessions == nil {
+		f.sessions = map[string]*types.CheckoutSessionResponse{}
+	}
+	f.sessions[*s.ID] = s
+	return s, nil
+}
+
+func fakePendingSession() *types.CheckoutSessionResponse {
+	expiresAt := time.Now().Add(30 * time.Minute)
+	return &types.CheckoutSessionResponse{
+		ExpiresAt:      &expiresAt,
+		CheckoutStatus: types.CheckoutStatusPending.ToPointer(),
+		Terminal:       boolPtr(false),
+		PaymentAction:  &types.PaymentAction{URL: strPtr("https://pay.example.com/link")},
+	}
+}
+
+func (f *fakePayments) CreateCheckoutSession(_ context.Context, req types.CreateCheckoutSessionRequest) (*dtos.CreateCheckoutSessionResponse, error) {
+	s, err := f.startSession("subscription", &types.CheckoutParams{PaymentProvider: req.PaymentProvider, PaymentProviderConfig: req.PaymentProviderConfig})
+	if err != nil {
+		return nil, err
+	}
+	return &dtos.CreateCheckoutSessionResponse{CheckoutSessionResponse: s}, nil
+}
+func (f *fakePayments) GetCheckoutSession(_ context.Context, id string) (*dtos.GetCheckoutSessionResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getSessionCalls++
+	s, ok := f.sessions[id]
+	if !ok {
+		return nil, errNotFound
+	}
+	if f.sessionOnGet != nil {
+		return &dtos.GetCheckoutSessionResponse{CheckoutSessionResponse: f.sessionOnGet(s)}, nil
+	}
+	done := *s
+	done.CheckoutStatus = types.CheckoutStatusCompleted.ToPointer()
+	done.Terminal = boolPtr(true)
+	return &dtos.GetCheckoutSessionResponse{CheckoutSessionResponse: &done}, nil
+}
+func (f *fakePayments) CancelCheckoutSession(_ context.Context, id string) (*dtos.CancelCheckoutSessionResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancelled = append(f.cancelled, id)
+	s, ok := f.sessions[id]
+	if !ok {
+		return nil, errNotFound
+	}
+	status := f.cancelStatus
+	if status == "" {
+		status = types.CheckoutStatusExpired
+	}
+	out := *s
+	out.CheckoutStatus = status.ToPointer()
+	out.Terminal = boolPtr(true)
+	return &dtos.CancelCheckoutSessionResponse{CheckoutSessionResponse: &out}, nil
+}
+func (f *fakePayments) CreateCheckoutInvoice(_ context.Context, req types.CreateInvoiceRequest) (*dtos.CreateInvoiceResponse, error) {
+	s, err := f.startSession("invoice", req.Checkout)
+	if err != nil {
+		return nil, err
+	}
+	return &dtos.CreateInvoiceResponse{InvoiceResponse: &types.InvoiceResponse{CheckoutSession: s}}, nil
+}
+func (f *fakePayments) ListPayments(_ context.Context, req dtos.ListPaymentsRequest) (*dtos.ListPaymentsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	status := f.paymentStatus
+	if status == "" {
+		status = types.PaymentStatusSucceeded
+	}
+	items := make([]types.PaymentResponse, 0, len(req.PaymentIds))
+	for _, id := range req.PaymentIds {
+		id := id
+		items = append(items, types.PaymentResponse{ID: &id, PaymentStatus: &status})
+	}
+	return &dtos.ListPaymentsResponse{ListPaymentsResponse: &types.ListPaymentsResponse{Items: items}}, nil
+}
+func (f *fakePayments) ListSavedMethods(_ context.Context, _, _ string) ([]e2eprobe.SavedPaymentMethod, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return append([]e2eprobe.SavedPaymentMethod(nil), f.savedMethods...), nil
+}
+func (f *fakePayments) CreateSetupLink(_ context.Context, _, _, _ string) (string, error) {
+	return f.setupURL, nil
+}
+func (f *fakePayments) GetGatewayCustomerID(_ context.Context, _, _ string) (string, error) {
+	return f.gatewayCustomerID, nil
+}
+func (f *fakePayments) CreatePortalSession(_ context.Context, _ string) (string, error) {
+	return "portal_token", nil
+}
+func (f *fakePayments) PortalListSavedMethods(ctx context.Context, _, provider string) ([]e2eprobe.SavedPaymentMethod, error) {
+	return f.ListSavedMethods(ctx, "", provider)
+}
+func (f *fakePayments) PortalAddMethod(_ context.Context, _, _, _ string) (string, error) {
+	return f.portalAddURL, f.portalAddErr
+}
+func (f *fakePayments) PortalSetDefaultMethod(_ context.Context, _, _, methodID string) ([]e2eprobe.SavedPaymentMethod, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.defaults = append(f.defaults, methodID)
+	for i := range f.savedMethods {
+		f.savedMethods[i].IsDefault = f.savedMethods[i].ID == methodID
+	}
+	return append([]e2eprobe.SavedPaymentMethod(nil), f.savedMethods...), nil
+}
+func (f *fakePayments) PortalDeleteMethod(_ context.Context, _, _, methodID string) ([]e2eprobe.SavedPaymentMethod, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.portalDeleteErr != nil {
+		return nil, f.portalDeleteErr
+	}
+	f.deleted = append(f.deleted, methodID)
+	kept := f.savedMethods[:0]
+	for _, m := range f.savedMethods {
+		if m.ID != methodID {
+			kept = append(kept, m)
+		}
+	}
+	f.savedMethods = kept
+	return append([]e2eprobe.SavedPaymentMethod(nil), f.savedMethods...), nil
+}
+
+func (f *fakePayments) ExecuteSubscriptionModify(_ context.Context, subID string, req types.ExecuteSubscriptionModifyRequest) (*dtos.ExecuteSubscriptionModifyResponse, error) {
+	if f.ungated["modify"] {
+		return &dtos.ExecuteSubscriptionModifyResponse{SubscriptionModifyResponse: &types.SubscriptionModifyResponse{}}, nil
+	}
+	sess, err := f.startSession("modify", req.Checkout)
+	if err != nil {
+		return nil, err
+	}
+	if f.onModify != nil {
+		f.onModify(subID, req)
+	}
+	return &dtos.ExecuteSubscriptionModifyResponse{SubscriptionModifyResponse: &types.SubscriptionModifyResponse{CheckoutSession: sess}}, nil
+}
+func (f *fakePayments) AddSubscriptionAddon(_ context.Context, req types.AddAddonRequest) (*dtos.AddSubscriptionAddonResponse, error) {
+	if f.ungated["addon"] {
+		return &dtos.AddSubscriptionAddonResponse{AddAddonToSubscriptionResponse: &types.AddAddonToSubscriptionResponse{
+			AddonStatus: types.AddonStatusActive.ToPointer(),
+		}}, nil
+	}
+	sess, err := f.startSession("addon", req.Checkout)
+	if err != nil {
+		return nil, err
+	}
+	addonID := req.AddonID
+	return &dtos.AddSubscriptionAddonResponse{AddAddonToSubscriptionResponse: &types.AddAddonToSubscriptionResponse{
+		ID:              strPtr("assoc_1"),
+		AddonID:         &addonID,
+		AddonStatus:     types.AddonStatusPending.ToPointer(),
+		CheckoutSession: sess,
+	}}, nil
+}
+func (f *fakePayments) GetSubscriptionAddonAssociations(_ context.Context, _ string) (*dtos.GetSubscriptionAddonAssociationsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &dtos.GetSubscriptionAddonAssociationsResponse{ListAddonAssociationsResponse: &types.ListAddonAssociationsResponse{
+		Items: append([]types.AddonAssociationResponse(nil), f.addonAssociations...),
+	}}, nil
+}
+func (f *fakePayments) GetAddonByLookupKey(_ context.Context, lookupKey string) (*dtos.GetAddonByLookupKeyResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id, ok := f.addons[lookupKey]
+	if !ok {
+		return nil, errNotFound
+	}
+	return &dtos.GetAddonByLookupKeyResponse{AddonResponse: &types.AddonResponse{ID: &id}}, nil
+}
+func (f *fakePayments) CreateAddon(_ context.Context, req types.CreateAddonRequest) (*dtos.CreateAddonResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.addons == nil {
+		f.addons = map[string]string{}
+	}
+	id := fmt.Sprintf("addon_%d", len(f.addons)+1)
+	f.addons[req.LookupKey] = id
+	return &dtos.CreateAddonResponse{CreateAddonResponse: &types.CreateAddonResponse{ID: &id}}, nil
+}
+func (f *fakePayments) CreateCreditNote(_ context.Context, req types.CreateCreditNoteRequest) (*dtos.CreateCreditNoteResponse, error) {
+	f.mu.Lock()
+	f.creditNotes = append(f.creditNotes, req)
+	hook := f.onCreditNote
+	f.mu.Unlock()
+	if hook != nil {
+		hook(req)
+	}
+	return &dtos.CreateCreditNoteResponse{CreditNoteResponse: &types.CreditNoteResponse{ID: strPtr("cn_1")}}, nil
+}
+func (f *fakePayments) ListRefunds(_ context.Context, _ dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &dtos.ListRefundsResponse{ListRefundsResponse: &types.ListRefundsResponse{
+		Items: append([]types.RefundResponse(nil), f.refunds...),
+	}}, nil
 }

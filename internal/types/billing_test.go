@@ -214,11 +214,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 4, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "start on anchor day advances one month",
+			name:               "start earlier on anchor day ends at that day's anchor time",
 			currentPeriodStart: time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC),
 			unit:               1,
-			want:               time.Date(2024, 5, 14, 12, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 4, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "start after anchor day in month advances to next month anchor",
@@ -228,11 +228,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 5, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "anchor equals start day-of-month advances one month",
+			name:               "anchor later on the start day is the first billing date",
 			currentPeriodStart: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
 			unit:               1,
-			want:               time.Date(2024, 2, 15, 12, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "anchor day 31 in 30-day month clamps",
@@ -242,11 +242,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 4, 30, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "unit 2 before anchor snaps then next call uses two-month step",
+			name:               "unit 2 off-schedule start lands on the anchor's two-month schedule",
 			currentPeriodStart: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 14, 0, 0, 0, 0, time.UTC),
 			unit:               2,
-			want:               time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 5, 14, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:                "subscription end before first anchor cliffs",
@@ -287,7 +287,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !first.Equal(time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC)) {
+		if !first.Equal(time.Date(2024, 5, 14, 0, 0, 0, 0, time.UTC)) {
 			t.Fatalf("first = %v", first)
 		}
 		second, err := NextBillingDate(&NextBillingDateParams{
@@ -299,7 +299,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := time.Date(2024, 6, 14, 0, 0, 0, 0, time.UTC)
+		want := time.Date(2024, 7, 14, 0, 0, 0, 0, time.UTC)
 		if !second.Equal(want) {
 			t.Errorf("second = %v, want %v", second, want)
 		}

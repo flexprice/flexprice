@@ -244,6 +244,94 @@ func (f *fakeTaxAssociationOps) Delete(_ context.Context, _ string) (*dtos.Delet
 	return &dtos.DeleteTaxAssociationResponse{}, nil
 }
 
+// fakePaymentOps counts calls that must never reach the gateway in dry-run.
+type fakePaymentOps struct {
+	mutateCalled int
+	readCalled   int
+}
+
+func (f *fakePaymentOps) CreateCheckoutSession(_ context.Context, _ types.CreateCheckoutSessionRequest) (*dtos.CreateCheckoutSessionResponse, error) {
+	f.mutateCalled++
+	return &dtos.CreateCheckoutSessionResponse{}, nil
+}
+func (f *fakePaymentOps) GetCheckoutSession(_ context.Context, _ string) (*dtos.GetCheckoutSessionResponse, error) {
+	f.readCalled++
+	return &dtos.GetCheckoutSessionResponse{}, nil
+}
+func (f *fakePaymentOps) CancelCheckoutSession(_ context.Context, _ string) (*dtos.CancelCheckoutSessionResponse, error) {
+	f.mutateCalled++
+	return &dtos.CancelCheckoutSessionResponse{}, nil
+}
+func (f *fakePaymentOps) CreateCheckoutInvoice(_ context.Context, _ types.CreateInvoiceRequest) (*dtos.CreateInvoiceResponse, error) {
+	f.mutateCalled++
+	return &dtos.CreateInvoiceResponse{}, nil
+}
+func (f *fakePaymentOps) ListPayments(_ context.Context, _ dtos.ListPaymentsRequest) (*dtos.ListPaymentsResponse, error) {
+	f.readCalled++
+	return &dtos.ListPaymentsResponse{}, nil
+}
+func (f *fakePaymentOps) ListSavedMethods(_ context.Context, _, _ string) ([]SavedPaymentMethod, error) {
+	f.readCalled++
+	return nil, nil
+}
+func (f *fakePaymentOps) CreateSetupLink(_ context.Context, _, _, _ string) (string, error) {
+	f.mutateCalled++
+	return "", nil
+}
+func (f *fakePaymentOps) GetGatewayCustomerID(_ context.Context, _, _ string) (string, error) {
+	f.readCalled++
+	return "", nil
+}
+func (f *fakePaymentOps) CreatePortalSession(_ context.Context, _ string) (string, error) {
+	f.readCalled++
+	return "tok", nil
+}
+func (f *fakePaymentOps) PortalListSavedMethods(_ context.Context, _, _ string) ([]SavedPaymentMethod, error) {
+	f.readCalled++
+	return nil, nil
+}
+func (f *fakePaymentOps) PortalAddMethod(_ context.Context, _, _, _ string) (string, error) {
+	f.mutateCalled++
+	return "", nil
+}
+func (f *fakePaymentOps) PortalSetDefaultMethod(_ context.Context, _, _, _ string) ([]SavedPaymentMethod, error) {
+	f.mutateCalled++
+	return nil, nil
+}
+func (f *fakePaymentOps) PortalDeleteMethod(_ context.Context, _, _, _ string) ([]SavedPaymentMethod, error) {
+	f.mutateCalled++
+	return nil, nil
+}
+
+func (f *fakePaymentOps) ExecuteSubscriptionModify(_ context.Context, _ string, _ types.ExecuteSubscriptionModifyRequest) (*dtos.ExecuteSubscriptionModifyResponse, error) {
+	f.mutateCalled++
+	return &dtos.ExecuteSubscriptionModifyResponse{}, nil
+}
+func (f *fakePaymentOps) AddSubscriptionAddon(_ context.Context, _ types.AddAddonRequest) (*dtos.AddSubscriptionAddonResponse, error) {
+	f.mutateCalled++
+	return &dtos.AddSubscriptionAddonResponse{}, nil
+}
+func (f *fakePaymentOps) GetSubscriptionAddonAssociations(_ context.Context, _ string) (*dtos.GetSubscriptionAddonAssociationsResponse, error) {
+	f.readCalled++
+	return &dtos.GetSubscriptionAddonAssociationsResponse{}, nil
+}
+func (f *fakePaymentOps) GetAddonByLookupKey(_ context.Context, _ string) (*dtos.GetAddonByLookupKeyResponse, error) {
+	f.readCalled++
+	return &dtos.GetAddonByLookupKeyResponse{}, nil
+}
+func (f *fakePaymentOps) CreateAddon(_ context.Context, _ types.CreateAddonRequest) (*dtos.CreateAddonResponse, error) {
+	f.mutateCalled++
+	return &dtos.CreateAddonResponse{}, nil
+}
+func (f *fakePaymentOps) CreateCreditNote(_ context.Context, _ types.CreateCreditNoteRequest) (*dtos.CreateCreditNoteResponse, error) {
+	f.mutateCalled++
+	return &dtos.CreateCreditNoteResponse{}, nil
+}
+func (f *fakePaymentOps) ListRefunds(_ context.Context, _ dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error) {
+	f.readCalled++
+	return &dtos.ListRefundsResponse{}, nil
+}
+
 // ── fake Client assembling the ops above ─────────────────────────────
 
 type fakeInnerClient struct {
@@ -260,6 +348,7 @@ type fakeInnerClient struct {
 	couponAssociations *fakeCouponAssociationOps
 	taxRates           *fakeTaxRateOps
 	taxAssociations    *fakeTaxAssociationOps
+	payments           *fakePaymentOps
 	async              *fakeAsyncOps
 }
 
@@ -278,6 +367,7 @@ func newFakeInnerClient() *fakeInnerClient {
 		couponAssociations: &fakeCouponAssociationOps{},
 		taxRates:           &fakeTaxRateOps{},
 		taxAssociations:    &fakeTaxAssociationOps{},
+		payments:           &fakePaymentOps{},
 		async:              &fakeAsyncOps{},
 	}
 }
@@ -296,8 +386,62 @@ func (c *fakeInnerClient) CouponAssociations() CouponAssociationOps { return c.c
 func (c *fakeInnerClient) TaxRates() TaxRateOps                     { return c.taxRates }
 func (c *fakeInnerClient) TaxAssociations() TaxAssociationOps       { return c.taxAssociations }
 func (c *fakeInnerClient) NewAsyncEventClient() AsyncEventClient    { return c.async }
+func (c *fakeInnerClient) Payments() PaymentOps                     { return c.payments }
 
 // ── Tests ─────────────────────────────────────────────────────────────
+
+func TestDryRunClient_PaymentMutationsAreNoOps(t *testing.T) {
+	inner := newFakeInnerClient()
+	dry := NewDryRunClient(inner, nil).Payments()
+	ctx := context.Background()
+
+	if _, err := dry.CreateCheckoutSession(ctx, types.CreateCheckoutSessionRequest{}); err != nil {
+		t.Fatalf("CreateCheckoutSession: %v", err)
+	}
+	if _, err := dry.CancelCheckoutSession(ctx, "cs_1"); err != nil {
+		t.Fatalf("CancelCheckoutSession: %v", err)
+	}
+	if _, err := dry.CreateCheckoutInvoice(ctx, types.CreateInvoiceRequest{}); err != nil {
+		t.Fatalf("CreateCheckoutInvoice: %v", err)
+	}
+	if _, err := dry.CreateSetupLink(ctx, "c", "stripe", "https://x"); err != nil {
+		t.Fatalf("CreateSetupLink: %v", err)
+	}
+	if _, err := dry.PortalAddMethod(ctx, "tok", "stripe", "https://x"); err != nil {
+		t.Fatalf("PortalAddMethod: %v", err)
+	}
+	if _, err := dry.PortalSetDefaultMethod(ctx, "tok", "stripe", "pm_1"); err != nil {
+		t.Fatalf("PortalSetDefaultMethod: %v", err)
+	}
+	if _, err := dry.PortalDeleteMethod(ctx, "tok", "stripe", "pm_1"); err != nil {
+		t.Fatalf("PortalDeleteMethod: %v", err)
+	}
+	if _, err := dry.ExecuteSubscriptionModify(ctx, "sub_1", types.ExecuteSubscriptionModifyRequest{}); err != nil {
+		t.Fatalf("ExecuteSubscriptionModify: %v", err)
+	}
+	if _, err := dry.AddSubscriptionAddon(ctx, types.AddAddonRequest{}); err != nil {
+		t.Fatalf("AddSubscriptionAddon: %v", err)
+	}
+	if _, err := dry.CreateAddon(ctx, types.CreateAddonRequest{}); err != nil {
+		t.Fatalf("CreateAddon: %v", err)
+	}
+	if _, err := dry.CreateCreditNote(ctx, types.CreateCreditNoteRequest{}); err != nil {
+		t.Fatalf("CreateCreditNote: %v", err)
+	}
+	if inner.payments.mutateCalled != 0 {
+		t.Errorf("inner payment mutations called %d times; want 0", inner.payments.mutateCalled)
+	}
+
+	if _, err := dry.GetCheckoutSession(ctx, "cs_1"); err != nil {
+		t.Fatalf("GetCheckoutSession: %v", err)
+	}
+	if _, err := dry.ListSavedMethods(ctx, "c", "stripe"); err != nil {
+		t.Fatalf("ListSavedMethods: %v", err)
+	}
+	if inner.payments.readCalled != 2 {
+		t.Errorf("inner payment reads called %d times; want 2", inner.payments.readCalled)
+	}
+}
 
 func TestDryRunClient_MutatingMethodsAreNoOps(t *testing.T) {
 	inner := newFakeInnerClient()

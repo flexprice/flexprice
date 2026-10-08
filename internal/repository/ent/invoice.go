@@ -53,7 +53,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	invoice, err := client.Invoice.Create().
+	builder := client.Invoice.Create().
 		SetID(inv.ID).
 		SetTenantID(inv.TenantID).
 		SetCustomerID(inv.CustomerID).
@@ -97,8 +97,14 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
-		SetCustomCurrency(inv.CustomCurrency).
-		Save(ctx)
+		SetCustomCurrency(inv.CustomCurrency)
+
+	// Keep fx_conversion SQL NULL ("never converted"); never write a jsonb null.
+	if inv.FxConversion != nil {
+		builder = builder.SetFxConversion(inv.FxConversion)
+	}
+
+	invoice, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -162,7 +168,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// 1. Create invoice
-		invoice, err := r.client.Writer(ctx).Invoice.Create().
+		invBuilder := r.client.Writer(ctx).Invoice.Create().
 			SetID(inv.ID).
 			SetTenantID(inv.TenantID).
 			SetCustomerID(inv.CustomerID).
@@ -206,8 +212,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
-			SetCustomCurrency(inv.CustomCurrency).
-			Save(ctx)
+			SetCustomCurrency(inv.CustomCurrency)
+
+		// fx_conversion stays SQL NULL until conversion.
+		if inv.FxConversion != nil {
+			invBuilder = invBuilder.SetFxConversion(inv.FxConversion)
+		}
+
+		invoice, err := invBuilder.Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
 				var pqErr *pq.Error
@@ -284,6 +296,9 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetUpdatedBy(item.UpdatedBy).
 					SetCreatedAt(item.CreatedAt).
 					SetUpdatedAt(item.UpdatedAt)
+				if item.FxConversion != nil {
+					builders[i].SetFxConversion(item.FxConversion)
+				}
 			}
 
 			// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
@@ -375,6 +390,9 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetUpdatedBy(item.UpdatedBy).
 				SetCreatedAt(item.CreatedAt).
 				SetUpdatedAt(item.UpdatedAt)
+			if item.FxConversion != nil {
+				builders[i].SetFxConversion(item.FxConversion)
+			}
 		}
 
 		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
@@ -567,6 +585,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	query.
 		SetInvoiceStatus(inv.InvoiceStatus).
 		SetPaymentStatus(inv.PaymentStatus).
+		SetCurrency(inv.Currency).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
@@ -600,6 +619,12 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	// otherwise wipe it and leave the stored amounts unexplainable.
 	if inv.CustomCurrency != nil {
 		query.SetCustomCurrency(inv.CustomCurrency)
+	}
+
+	// Frozen at finalize and never cleared afterwards; an update from a struct that did not
+	// load it must not wipe the conversion record.
+	if inv.FxConversion != nil {
+		query.SetFxConversion(inv.FxConversion)
 	}
 
 	if inv.TaxExemptionReasonCode != nil {

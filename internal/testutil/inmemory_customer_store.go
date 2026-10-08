@@ -34,6 +34,7 @@ func copyCustomer(c *customer.Customer) *customer.Customer {
 		ExternalID:        c.ExternalID,
 		Name:              c.Name,
 		Email:             c.Email,
+		BillingCurrency:   clonePtr(c.BillingCurrency),
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,

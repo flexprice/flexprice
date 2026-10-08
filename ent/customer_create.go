@@ -157,6 +157,20 @@ func (_c *CustomerCreate) SetNillableContact(v *string) *CustomerCreate {
 	return _c
 }
 
+// SetBillingCurrency sets the "billing_currency" field.
+func (_c *CustomerCreate) SetBillingCurrency(v string) *CustomerCreate {
+	_c.mutation.SetBillingCurrency(v)
+	return _c
+}
+
+// SetNillableBillingCurrency sets the "billing_currency" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableBillingCurrency(v *string) *CustomerCreate {
+	if v != nil {
+		_c.SetBillingCurrency(*v)
+	}
+	return _c
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (_c *CustomerCreate) SetAddressLine1(v string) *CustomerCreate {
 	_c.mutation.SetAddressLine1(v)
@@ -461,6 +475,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Contact(); ok {
 		_spec.SetField(customer.FieldContact, field.TypeString, value)
 		_node.Contact = &value
+	}
+	if value, ok := _c.mutation.BillingCurrency(); ok {
+		_spec.SetField(customer.FieldBillingCurrency, field.TypeString, value)
+		_node.BillingCurrency = &value
 	}
 	if value, ok := _c.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)

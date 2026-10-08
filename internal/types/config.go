@@ -11,6 +11,9 @@ const (
 	ModeConsumer RunMode = "consumer"
 	// ModeTemporalWorker is the mode for running the temporal worker
 	ModeTemporalWorker RunMode = "temporal_worker"
+	// ModeAdmin serves the admin portal API only. The public API, Kafka consumers,
+	// and Temporal workers are not started.
+	ModeAdmin RunMode = "admin"
 )
 
 type LogLevel string

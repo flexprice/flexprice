@@ -458,6 +458,12 @@ func (_c *InvoiceLineItemCreate) SetCustomCurrency(v *types.CustomCurrencyLineIt
 	return _c
 }
 
+// SetFxConversion sets the "fx_conversion" field.
+func (_c *InvoiceLineItemCreate) SetFxConversion(v *types.FxConversion) *InvoiceLineItemCreate {
+	_c.mutation.SetFxConversion(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *InvoiceLineItemCreate) SetID(v string) *InvoiceLineItemCreate {
 	_c.mutation.SetID(v)
@@ -784,6 +790,10 @@ func (_c *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Creat
 	if value, ok := _c.mutation.CustomCurrency(); ok {
 		_spec.SetField(invoicelineitem.FieldCustomCurrency, field.TypeJSON, value)
 		_node.CustomCurrency = value
+	}
+	if value, ok := _c.mutation.FxConversion(); ok {
+		_spec.SetField(invoicelineitem.FieldFxConversion, field.TypeJSON, value)
+		_node.FxConversion = value
 	}
 	if nodes := _c.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

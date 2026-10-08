@@ -396,12 +396,11 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 	s.Require().NotNil(firstApp.PeriodEnd)
 	s.WithinDuration(sub.CurrentPeriodEnd, lo.FromPtr(firstApp.PeriodEnd), time.Second)
 
-	// The fixture's period is [now-24h, now+6d) and the addon attaches at `now`,
-	// leaving 6 of 7 days.
-	coefficient, err := proration.Coefficient(
-		sub.CurrentPeriodStart, sub.CurrentPeriodEnd, now, types.StrategySecondBased)
+	// The addon attaches at `now`, 6 days before the period ends; the divisor is the full billing period.
+	coefficient, _, err := proration.CalculateProrationCoefficient(sub, sub.BillingPeriod, sub.BillingPeriodCount,
+		types.Period{Start: now, End: sub.CurrentPeriodEnd}, types.StrategySecondBased)
 	s.NoError(err)
-	expectedCredits := decimal.NewFromInt(100).Mul(coefficient).Round(creditGrantCreditsScale)
+	expectedCredits := decimal.NewFromInt(100).Mul(coefficient).Round(types.GetCurrencyPrecision(sub.Currency))
 	s.True(expectedCredits.LessThan(decimal.NewFromInt(100)),
 		"sanity: a mid-period attach must yield less than the full grant")
 
@@ -455,8 +454,8 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProrationBehaviorN
 
 	grant := s.materializedAddonGrant(addonID)
 	s.Require().NotNil(grant)
-	s.WithinDuration(now, lo.FromPtr(grant.CreditGrantAnchor), time.Second,
-		"opting out of proration must leave the attach-date anchoring untouched")
+	s.WithinDuration(s.testData.subscription.CurrentPeriodEnd, lo.FromPtr(grant.CreditGrantAnchor), time.Second,
+		"opting out of proration still anchors later grants on the billing boundary")
 
 	app := s.firstApplicationFor(grant.ID)
 	s.Require().NotNil(app)
@@ -602,10 +601,8 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_AnnualCycleFirstPe
 		"first period must end at the subscription boundary, not a year later")
 }
 
-// FindPeriodForDate only walks forward, so an attach dated into an already-closed
-// period cannot be resolved. Proration must degrade to full credits rather than
-// rejecting the attach outright.
-func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachStillSucceeds() {
+// An attach dated before the current period start is accepted and keeps its start date, as before.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachIsAccepted() {
 	ctx := s.GetContext()
 	sub := s.testData.subscription
 	now := s.testData.now
@@ -630,15 +627,12 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachSti
 			ProrationBehavior: types.ProrationBehaviorCreateProrations,
 		},
 	})
-	s.NoError(err, "an unresolvable period must not fail the addon attach")
-
-	grant := s.materializedAddonGrant(addonID)
-	s.Require().NotNil(grant)
-
-	app := s.firstApplicationFor(grant.ID)
-	s.Require().NotNil(app)
-	s.Equal("100", app.Credits.String())
-	s.Empty(app.Metadata["proration_applied"])
+	s.Require().NoError(err)
+	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
+	s.Require().NoError(err)
+	addonItem, found := lo.Find(items, func(li *subscription.SubscriptionLineItem) bool { return li.EntityID == addonID })
+	s.Require().True(found)
+	s.True(addonItem.StartDate.Equal(backdated), "the line item keeps the requested start date")
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
@@ -1132,6 +1126,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
+		FXRateRepo:                 s.GetStores().FXRateRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),
@@ -1364,8 +1359,8 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		CustomerID:         s.testData.customer.ID,
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
-		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
-		BillingAnchor:      s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(-24*time.Hour).AddDate(0, 1, 0),
+		BillingAnchor:      s.testData.now.Add(-24 * time.Hour),
 		Currency:           "usd",
 		BillingCycle:       types.BillingCycleAnniversary,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
@@ -9850,7 +9845,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	}
 	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat))
 
-	anchor := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	anchor := s.testData.now.AddDate(0, 0, 10)
 	req := dto.CreateSubscriptionRequest{
 		CustomerID:         s.testData.customer.ID,
 		PlanID:             seatPlan.ID,
@@ -10926,4 +10921,242 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_ZeroOpeningInvoice_App
 	s.Require().NoError(err)
 	s.Require().Len(wallets, 1)
 	s.True(decimal.NewFromInt(100).Equal(wallets[0].Balance), "expected first grant applied at creation, got %s", wallets[0].Balance)
+}
+
+// D6: a billing anchor must fall in [start, start + 1 period], compared on local dates.
+func TestValidateBillingAnchor(t *testing.T) {
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	utc := func(y int, m time.Month, d, h, mi int) time.Time { return time.Date(y, m, d, h, mi, 0, 0, time.UTC) }
+	istStart := time.Date(2027, 1, 10, 0, 0, 0, 0, ist).UTC() // Jan 9 18:30 UTC
+	tests := []struct {
+		name          string
+		period        types.BillingPeriod
+		tz            string
+		start, anchor time.Time
+		ok            bool
+	}{
+		{"on start", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 1, 10, 0, 0), true},
+		{"later on the start day", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 1, 10, 12, 0), true},
+		{"inside the first period", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 1, 20, 0, 0), true},
+		{"exactly start + 1 period", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 2, 10, 0, 0), true},
+		{"later in the day than start + 1 period", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 2, 10, 0, 1), false},
+		{"day after start + 1 period", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 2, 11, 0, 0), false},
+		{"day before start", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 10, 0, 0), utc(2027, 1, 9, 23, 59), false},
+		{"monthly from Jan 31 allows Feb 28", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 31, 0, 0), utc(2027, 2, 28, 0, 0), true},
+		{"monthly from Jan 31 rejects Mar 1", types.BILLING_PERIOD_MONTHLY, "UTC", utc(2027, 1, 31, 0, 0), utc(2027, 3, 1, 0, 0), false},
+		{"quarterly from Nov 30 allows Feb 28", types.BILLING_PERIOD_QUARTER, "UTC", utc(2026, 11, 30, 0, 0), utc(2027, 2, 28, 0, 0), true},
+		{"quarterly from Nov 30 rejects Mar 1", types.BILLING_PERIOD_QUARTER, "UTC", utc(2026, 11, 30, 0, 0), utc(2027, 3, 1, 0, 0), false},
+		{"annual from Feb 29 allows Feb 28", types.BILLING_PERIOD_ANNUAL, "UTC", utc(2028, 2, 29, 0, 0), utc(2029, 2, 28, 0, 0), true},
+		{"annual from Feb 29 rejects Mar 1", types.BILLING_PERIOD_ANNUAL, "UTC", utc(2028, 2, 29, 0, 0), utc(2029, 3, 1, 0, 0), false},
+		// Local dates: Jan 9 23:30 IST is the day before the start, though it is Jan 9 in UTC like the start.
+		{"Kolkata day before start", types.BILLING_PERIOD_MONTHLY, "Asia/Kolkata", istStart, utc(2027, 1, 9, 18, 0), false},
+		{"Kolkata start day", types.BILLING_PERIOD_MONTHLY, "Asia/Kolkata", istStart, utc(2027, 1, 9, 20, 0), true},
+		{"Kolkata exactly start + 1 period", types.BILLING_PERIOD_MONTHLY, "Asia/Kolkata", istStart, utc(2027, 2, 9, 18, 30), true},
+		{"Kolkata later in the day than start + 1 period", types.BILLING_PERIOD_MONTHLY, "Asia/Kolkata", istStart, utc(2027, 2, 10, 0, 0), false},
+		{"Kolkata day after start + 1 period", types.BILLING_PERIOD_MONTHLY, "Asia/Kolkata", istStart, utc(2027, 2, 10, 18, 30), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBillingAnchor(&subscription.Subscription{
+				StartDate: tt.start, BillingAnchor: tt.anchor, BillingPeriod: tt.period, BillingPeriodCount: 1, Timezone: tt.tz,
+			})
+			if tt.ok != (err == nil) {
+				t.Errorf("start %s anchor %s (%s): ok=%v, err=%v", tt.start, tt.anchor, tt.tz, tt.ok, err)
+			}
+		})
+	}
+}
+
+// A7: draft activation keeps a custom anchor that is still in range, else moves it with the start,
+// else resets it to the start.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CustomAnchor() {
+	utc := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	tests := []struct {
+		name                 string
+		tz                   string
+		draftStart, anchor   time.Time
+		activateAt           time.Time
+		wantAnchor, firstEnd time.Time
+	}{
+		{"earlier start keeps an anchor still in range", "", utc(2027, 1, 10), utc(2027, 1, 20), utc(2026, 12, 20), utc(2027, 1, 20), utc(2027, 1, 20)},
+		{"earlier start moves an out-of-range anchor by -40 days", "", utc(2027, 1, 10), utc(2027, 1, 20), utc(2026, 12, 1), utc(2026, 12, 11), utc(2026, 12, 11)},
+		{"anchor still out of range after the move is reset", "", utc(2027, 1, 10), utc(2027, 2, 10), utc(2027, 2, 15), utc(2027, 2, 15), utc(2027, 3, 15)},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			customerID := s.testData.customer.ID
+			if tt.tz != "" {
+				customerID = fmt.Sprintf("cust_draft_anchor_%d", i)
+				s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, &customer.Customer{
+					ID: customerID, ExternalID: "ext_" + customerID, Name: customerID, Timezone: tt.tz, BaseModel: types.GetDefaultBaseModel(ctx),
+				}))
+			}
+			anchor := tt.anchor
+			resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+				CustomerID: customerID, PlanID: s.testData.plan.ID, StartDate: lo.ToPtr(tt.draftStart),
+				Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+				BillingCycle: types.BillingCycleAnniversary, BillingAnchor: &anchor,
+				CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice), PaymentBehavior: lo.ToPtr(types.PaymentBehaviorDefaultActive),
+				SubscriptionStatus: types.SubscriptionStatusDraft,
+			})
+			s.Require().NoError(err)
+
+			_, err = s.service.ActivateDraftSubscription(ctx, resp.ID, dto.ActivateDraftSubscriptionRequest{StartDate: lo.ToPtr(tt.activateAt)})
+			s.Require().NoError(err)
+			sub, err := s.GetStores().SubscriptionRepo.Get(ctx, resp.ID)
+			s.Require().NoError(err)
+			s.True(sub.BillingAnchor.Equal(tt.wantAnchor), "anchor %s, want %s", sub.BillingAnchor, tt.wantAnchor)
+			s.True(sub.CurrentPeriodEnd.Equal(tt.firstEnd), "first period end %s, want %s", sub.CurrentPeriodEnd, tt.firstEnd)
+		})
+	}
+}
+
+// J1, J4, J5, D8: change dates earlier than allowed are rejected, never moved; the boundaries are allowed.
+func (s *SubscriptionServiceSuite) TestChangeDateLimits() {
+	ctx := s.GetContext()
+	s.seedFixedPriceAddon("addon_date_limits", decimal.NewFromInt(31), types.InvoiceCadenceAdvance)
+	createReq := func(start time.Time, behavior types.ProrationBehavior, addonStart *time.Time) dto.CreateSubscriptionRequest {
+		req := dto.CreateSubscriptionRequest{
+			CustomerID: s.testData.customer.ID, PlanID: s.testData.plan.ID, StartDate: lo.ToPtr(start), Currency: "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingCycle: types.BillingCycleCalendar,
+			ProrationBehavior: behavior,
+		}
+		if addonStart != nil {
+			req.Addons = []dto.AddAddonToSubscriptionRequest{{AddonID: "addon_date_limits", StartDate: addonStart}}
+		}
+		return req
+	}
+
+	s.Run("J1 backdated start rejected with create_prorations", func() {
+		_, err := s.service.CreateSubscription(ctx, createReq(s.testData.now.AddDate(0, 0, -40), types.ProrationBehaviorCreateProrations, nil))
+		s.ErrorContains(err, "past start date")
+	})
+	s.Run("J1 backdated start allowed with none", func() {
+		_, err := s.service.CreateSubscription(ctx, createReq(s.testData.now.AddDate(0, 0, -40), types.ProrationBehaviorNone, nil))
+		s.NoError(err)
+	})
+
+	start := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
+	s.Run("J4 addon at the sub start allowed", func() {
+		_, err := s.service.CreateSubscription(ctx, createReq(start, types.ProrationBehaviorCreateProrations, lo.ToPtr(start)))
+		s.NoError(err)
+	})
+	s.Run("J4 addon one second before the sub start allowed", func() {
+		_, err := s.service.CreateSubscription(ctx, createReq(start, types.ProrationBehaviorCreateProrations, lo.ToPtr(start.Add(-time.Second))))
+		s.NoError(err)
+	})
+
+	sub := s.testData.subscription
+	attach := func(at time.Time) error {
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: sub.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID: "addon_date_limits", Cadence: types.AddonCadenceRecurring, StartDate: &at,
+				ProrationBehavior: types.ProrationBehaviorCreateProrations,
+			},
+		})
+		return err
+	}
+	s.Run("J5 addon one second before the current period allowed", func() {
+		s.NoError(attach(sub.CurrentPeriodStart.Add(-time.Second)))
+	})
+	s.Run("J5 addon at the current period start allowed", func() {
+		s.NoError(attach(sub.CurrentPeriodStart))
+	})
+
+	modify := NewSubscriptionModificationService(s.service.(*subscriptionService).ServiceParams)
+	lineItemChange := func(at time.Time) error {
+		_, err := modify.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+			Type: dto.SubscriptionModifyTypeLineItemChange,
+			LineItemChangeParams: &dto.SubModifyLineItemChangeRequest{LineItems: []dto.LineItemChange{
+				{ID: sub.LineItems[0].ID, Quantity: lo.ToPtr(decimal.NewFromInt(2)), EffectiveDate: &at},
+			}},
+		})
+		return err
+	}
+	s.Run("D8 line item change before the current period rejected", func() {
+		s.ErrorContains(lineItemChange(sub.CurrentPeriodStart.Add(-time.Second)), "before the current period start")
+	})
+	s.Run("D8 line item change at the current period end rejected", func() {
+		s.ErrorContains(lineItemChange(sub.CurrentPeriodEnd), "before the current period end")
+	})
+}
+
+// J2: a backdated sub catches up with one period-end invoice per elapsed period.
+// e.g. calendar from Jan 15, processed Apr 10 → invoices at Feb 1, Mar 1, Apr 1; current [Apr 1, May 1).
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedOneInvoicePerPeriod() {
+	ctx := s.GetContext()
+	utc := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
+	sub := &subscription.Subscription{
+		ID: "sub_backdated_j2", PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID,
+		StartDate: utc(1, 15), BillingAnchor: utc(2, 1), CurrentPeriodStart: utc(1, 15), CurrentPeriodEnd: utc(2, 1),
+		BillingCycle: types.BillingCycleCalendar, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		Currency: "usd", SubscriptionStatus: types.SubscriptionStatusActive, ProrationBehavior: types.ProrationBehaviorNone,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM), SubscriptionID: sub.ID,
+		CustomerID: sub.CustomerID, EntityID: s.testData.plan.ID, EntityType: types.SubscriptionLineItemEntityTypePlan,
+		PriceID: s.testData.prices.fixedMonthly.ID, PriceType: types.PRICE_TYPE_FIXED, DisplayName: "fixed",
+		Quantity: decimal.NewFromInt(1), Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		InvoiceCadence: types.InvoiceCadenceAdvance, StartDate: sub.StartDate, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{li}))
+
+	s.Require().NoError(s.service.(*subscriptionService).processSubscriptionPeriod(ctx, sub, utc(4, 10)))
+
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.True(updated.CurrentPeriodStart.Equal(utc(4, 1)) && updated.CurrentPeriodEnd.Equal(utc(5, 1)),
+		"current period [%s, %s), want [Apr 1, May 1)", updated.CurrentPeriodStart, updated.CurrentPeriodEnd)
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	s.Len(invoices, 3, "one invoice per elapsed period")
+}
+
+// B9: with none, an addon dated mid-period at creation is free until the next period, then full.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPeriod() {
+	ctx := s.GetContext()
+	s.seedFixedPriceAddon("addon_none_mid", decimal.NewFromInt(31), types.InvoiceCadenceAdvance)
+	start := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
+	addonStart := time.Date(2027, 1, 20, 0, 0, 0, 0, time.UTC)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID: s.testData.customer.ID, PlanID: s.testData.plan.ID, StartDate: lo.ToPtr(start), Currency: "usd",
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingCycle: types.BillingCycleCalendar,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			Addons: []dto.AddAddonToSubscriptionRequest{{AddonID: "addon_none_mid", StartDate: &addonStart}},
+		},
+	})
+	s.Require().NoError(err)
+	sub, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	sub.LineItems = items
+	addonItem, found := lo.Find(items, func(li *subscription.SubscriptionLineItem) bool {
+		return li.EntityType == types.SubscriptionLineItemEntityTypeAddon
+	})
+	s.Require().True(found)
+
+	billing := NewBillingService(s.service.(*subscriptionService).ServiceParams)
+	addonCharge := func(periodStart, periodEnd time.Time) decimal.Decimal {
+		res, err := billing.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: sub, PeriodStart: periodStart, PeriodEnd: periodEnd})
+		s.Require().NoError(err)
+		total := decimal.Zero
+		for _, l := range res.LineItems {
+			if lo.FromPtr(l.SubscriptionLineItemID) == addonItem.ID {
+				total = total.Add(l.Amount)
+			}
+		}
+		return total
+	}
+	s.True(addonCharge(start, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)).IsZero(), "addon is free in [Jan 15, Feb 1)")
+	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
+		"addon is billed in full from Feb 1")
 }

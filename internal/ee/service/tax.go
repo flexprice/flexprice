@@ -44,6 +44,7 @@ type TaxService interface {
 
 	// Invoice tax operations
 	PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceTaxRates, error)
+	PrepareTaxRatesFromApplied(ctx context.Context, inv *invoice.Invoice) (*dto.InvoiceTaxRates, error)
 	ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) (*TaxCalculationResult, error)
 	CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates *dto.InvoiceTaxRates) *TaxCalculationResult
 }
@@ -964,6 +965,48 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 	})
 }
 
+// PrepareTaxRatesFromApplied rebuilds the rates an invoice was already taxed with, from its
+// tax_applied rows. No rows returns no rates.
+func (s *taxService) PrepareTaxRatesFromApplied(ctx context.Context, inv *invoice.Invoice) (*dto.InvoiceTaxRates, error) {
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxRateEntityTypeInvoice
+	filter.EntityID = inv.ID
+	applied, err := s.ListTaxApplied(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(applied.Items) == 0 {
+		return dto.NewInvoiceTaxRates(nil, nil), nil
+	}
+
+	behaviorByRateID := make(map[string]types.TaxBehavior, len(applied.Items))
+	rateIDs := make([]string, 0, len(applied.Items))
+	for _, a := range applied.Items {
+		if _, seen := behaviorByRateID[a.TaxRateID]; seen {
+			continue
+		}
+		behaviorByRateID[a.TaxRateID] = a.TaxBehavior
+		rateIDs = append(rateIDs, a.TaxRateID)
+	}
+
+	// Fetch each recorded rate by id, archived or not: the invoice was taxed with it. A rate that
+	// no longer exists fails rather than under-taxing.
+	resolved := make([]*dto.TaxRateWithBehavior, 0, len(rateIDs))
+	for _, id := range rateIDs {
+		r, err := s.GetTaxRate(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, &dto.TaxRateWithBehavior{TaxRateResponse: r, TaxBehavior: behaviorByRateID[id]})
+	}
+
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+	return dto.NewInvoiceTaxRates(resolved, cust), nil
+}
+
 // PrepareTaxRatesForInvoice resolves everything invoice tax computation needs about this
 // customer: which rates apply, what behavior each carries, and whether the customer is
 // exempt. Rate overrides win over raw tax_rate IDs, which win over the subscription's own
@@ -1243,6 +1286,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		existingTaxApplied.TaxableAmount = taxableAmount
 		existingTaxApplied.TaxAmount = taxAmount
 		existingTaxApplied.TaxBehavior = taxRate.TaxBehavior
+		existingTaxApplied.Currency = inv.Currency // the invoice may have been converted since
 		existingTaxApplied.AppliedAt = time.Now().UTC()
 
 		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {

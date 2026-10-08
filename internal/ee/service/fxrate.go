@@ -37,11 +37,11 @@ type ResolveFXRateRequest struct {
 	SubscriptionID string
 }
 
-// FXRateResolution is the rate a resolution produced. Scope is "identity" when from == to.
+// FXRateResolution is the rate a resolution produced.
 type FXRateResolution struct {
 	Rate   decimal.Decimal
 	RateID string
-	Scope  string
+	Scope  types.FXRateScope
 	Source types.FXRateSource
 	From   string
 	To     string
@@ -61,11 +61,6 @@ func (s *fxRateService) ResolveRate(ctx context.Context, req ResolveFXRateReques
 
 // resolveRateAt is ResolveRate with an injected clock, so validity windows are testable.
 func (s *fxRateService) resolveRateAt(ctx context.Context, req ResolveFXRateRequest, now time.Time) (*FXRateResolution, error) {
-	// Same currency needs no rate and no query.
-	if types.IsMatchingCurrency(req.From, req.To) {
-		return &FXRateResolution{Rate: decimal.NewFromInt(1), Scope: "identity", Source: types.FXRateSourceFixed, From: req.From, To: req.To}, nil
-	}
-
 	scopesChecked := make([]string, 0, 3)
 
 	if req.SubscriptionID != "" {
@@ -149,7 +144,7 @@ func toResolution(r *fxrate.FXRate) *FXRateResolution {
 	return &FXRateResolution{
 		Rate:   r.Rate,
 		RateID: r.ID,
-		Scope:  string(r.Scope),
+		Scope:  r.Scope,
 		Source: r.Source,
 		From:   r.FromCurrency,
 		To:     r.ToCurrency,
@@ -260,14 +255,10 @@ func (s *fxRateService) UpdateFXRate(ctx context.Context, id string, req dto.Upd
 	builder := fxrate.NewFXRateBuilder(existing)
 
 	if req.Rate != nil {
-		rate, perr := decimal.NewFromString(*req.Rate)
-		if perr != nil {
-			return nil, ierr.NewError("invalid rate").WithHint("Rate must be a valid decimal number").Mark(ierr.ErrValidation)
-		}
-		if !rate.IsPositive() {
+		if !req.Rate.IsPositive() {
 			return nil, ierr.NewError("rate must be greater than zero").WithHint("FX rate must be a positive number").Mark(ierr.ErrValidation)
 		}
-		builder.WithRate(rate)
+		builder.WithRate(*req.Rate)
 	}
 
 	newStart := existing.StartDate
@@ -305,9 +296,7 @@ func (s *fxRateService) UpdateFXRate(ctx context.Context, id string, req dto.Upd
 				return oerr
 			}
 			if len(overlaps) > 0 {
-				return ierr.NewErrorf("overlapping FX rate window for %s → %s", existing.FromCurrency, existing.ToCurrency).
-					WithHint("Another override for this scope and currency pair covers an overlapping period.").
-					Mark(ierr.ErrValidation)
+				return overlappingWindowError(existing.FromCurrency, existing.ToCurrency, overlaps)
 			}
 		}
 		return s.FXRateRepo.Update(txCtx, updated)
@@ -391,9 +380,10 @@ func (s *fxRateService) validateForCreate(ctx context.Context, r *fxrate.FXRate)
 
 	if r.Scope == types.FXRateScopeTenant {
 		// one tenant rate per pair
-		if _, err := s.FXRateRepo.GetTenantRate(ctx, r.FromCurrency, r.ToCurrency); err == nil {
+		if existing, err := s.FXRateRepo.GetTenantRate(ctx, r.FromCurrency, r.ToCurrency); err == nil {
 			return ierr.NewErrorf("a tenant FX rate for %s → %s already exists", r.FromCurrency, r.ToCurrency).
-				WithHint("Update the existing tenant rate instead of creating another.").
+				WithHintf("A %s rate already exists. Edit it instead of adding another.", fxPairLabel(r.FromCurrency, r.ToCurrency)).
+				WithReportableDetails(map[string]any{"fx_rate_id": existing.ID}).
 				Mark(ierr.ErrAlreadyExists)
 		} else if !ierr.IsNotFound(err) {
 			return err
@@ -405,7 +395,8 @@ func (s *fxRateService) validateForCreate(ctx context.Context, r *fxrate.FXRate)
 	if _, err := s.FXRateRepo.GetTenantRate(ctx, r.FromCurrency, r.ToCurrency); err != nil {
 		if ierr.IsNotFound(err) {
 			return ierr.NewErrorf("no tenant FX rate configured for %s → %s", r.FromCurrency, r.ToCurrency).
-				WithHint("Configure a tenant rate for this pair before adding an override.").
+				WithHintf("Add a global %s rate before adding an override.", fxPairLabel(r.FromCurrency, r.ToCurrency)).
+				WithReportableDetails(map[string]any{"missing_pairs": []string{fxPairKey(r.FromCurrency, r.ToCurrency)}}).
 				Mark(ierr.ErrValidation)
 		}
 		return err
@@ -417,9 +408,7 @@ func (s *fxRateService) validateForCreate(ctx context.Context, r *fxrate.FXRate)
 		return err
 	}
 	if len(overlaps) > 0 {
-		return ierr.NewErrorf("overlapping FX rate window for %s → %s", r.FromCurrency, r.ToCurrency).
-			WithHint("Another override for this scope and currency pair covers an overlapping period.").
-			Mark(ierr.ErrValidation)
+		return overlappingWindowError(r.FromCurrency, r.ToCurrency, overlaps)
 	}
 	return nil
 }
@@ -453,4 +442,47 @@ func (s *fxRateService) validateCurrencies(ctx context.Context, from, to string)
 func (s *fxRateService) customCurrencyConfig(ctx context.Context) (types.CustomCurrencyConfig, error) {
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	return GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+}
+
+// conversionAvailable reports whether from converts to the billing currency (custom factor or
+// published tenant rate). Only a missing rate is "unavailable"; other lookup errors are returned.
+func conversionAvailable(ctx context.Context, params ServiceParams, ccCfg types.CustomCurrencyConfig, from, to string) (bool, error) {
+	if ccCfg.IsCustom(from) {
+		return !ccCfg.RateFor(from, to).IsZero(), nil
+	}
+	if _, err := params.FXRateRepo.GetTenantRate(ctx, from, to); err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// fxPairKey is the "from->to" form used in error details (missing_pairs).
+func fxPairKey(from, to string) string {
+	return fmt.Sprintf("%s->%s", strings.ToLower(from), strings.ToLower(to))
+}
+
+// fxPairLabel is the "USD → INR" form used in user-facing messages.
+func fxPairLabel(from, to string) string {
+	return fmt.Sprintf("%s → %s", strings.ToUpper(from), strings.ToUpper(to))
+}
+
+// fxPairKeysLabel turns sorted "from->to" keys into "USD → EUR, GBP → EUR".
+func fxPairKeysLabel(keys []string) string {
+	labels := make([]string, 0, len(keys))
+	for _, key := range keys {
+		from, to, _ := strings.Cut(key, "->")
+		labels = append(labels, fxPairLabel(from, to))
+	}
+	return strings.Join(labels, ", ")
+}
+
+// overlappingWindowError reports an override whose window overlaps others for the same scope and pair.
+func overlappingWindowError(from, to string, overlaps []*fxrate.FXRate) error {
+	return ierr.NewErrorf("overlapping FX rate window for %s → %s", from, to).
+		WithHintf("Another %s override overlaps this period.", fxPairLabel(from, to)).
+		WithReportableDetails(map[string]any{"overlapping_fx_rate_ids": lo.Map(overlaps, func(r *fxrate.FXRate, _ int) string { return r.ID })}).
+		Mark(ierr.ErrValidation)
 }

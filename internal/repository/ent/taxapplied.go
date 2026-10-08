@@ -192,6 +192,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 		SetTaxableAmount(ta.TaxableAmount).
 		SetTaxAmount(ta.TaxAmount).
 		SetTaxBehavior(ta.TaxBehavior).
+		SetCurrency(ta.Currency).
 		SetMetadata(ta.Metadata).
 		SetStatus(string(ta.Status)).
 		SetUpdatedAt(time.Now().UTC()).

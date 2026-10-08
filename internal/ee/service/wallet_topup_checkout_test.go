@@ -6,6 +6,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -212,6 +214,58 @@ func (s *WalletServiceSuite) TestHandlePurchasedCreditInvoiced_PayFirstForcesPen
 	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.testData.wallet.ID)
 	s.Require().NoError(err)
 	s.True(balanceBefore.Equal(w.CreditBalance), "pay-first must not credit before payment")
+}
+
+func (s *WalletServiceSuite) TestHandlePurchasedCreditInvoiced_PayFirstAppliesCustomerTax() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	pct := decimal.NewFromInt(10)
+	tr := &taxrate.TaxRate{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
+		Name:            "Wallet Topup Tax",
+		Code:            "wallet_topup_tax_" + types.GenerateUUIDWithPrefix("code"),
+		TaxRateStatus:   types.TaxRateStatusActive,
+		TaxRateType:     types.TaxRateTypePercentage,
+		PercentageValue: &pct,
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().TaxRateRepo.Create(ctx, tr))
+	s.Require().NoError(s.GetStores().TaxAssociationRepo.Create(ctx, &taxassociation.TaxAssociation{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
+		TaxRateID:     tr.ID,
+		EntityType:    types.TaxRateEntityTypeCustomer,
+		EntityID:      s.testData.customer.ID,
+		Priority:      100,
+		AutoApply:     true,
+		Currency:      "usd",
+		StartDate:     time.Now().UTC().Add(-24 * time.Hour),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	ws := s.service.(*walletService)
+	topup := func(key string, checkout *dto.CheckoutParams) *dto.InvoiceResponse {
+		_, invID, err := ws.handlePurchasedCreditInvoicedTransaction(ctx, s.testData.wallet.ID, lo.ToPtr(key), &dto.TopUpWalletRequest{
+			CreditsToAdd:      decimal.NewFromInt(100),
+			TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+			Checkout:          checkout,
+		})
+		s.Require().NoError(err)
+		inv, err := NewInvoiceService(s.buildServiceParams()).GetInvoice(ctx, invID)
+		s.Require().NoError(err)
+		return inv
+	}
+
+	payFirst := topup("payfirst-tax", s.checkoutParamsRazorpay())
+	payLater := topup("paylater-tax", nil)
+
+	s.Equal(types.InvoiceStatusDraft, payFirst.InvoiceStatus)
+	s.True(payFirst.TotalTax.Equal(decimal.NewFromInt(10)), "pay-first draft must carry customer tax, got %s", payFirst.TotalTax)
+	s.True(payFirst.AmountDue.Equal(decimal.NewFromInt(110)), "amount due must include tax, got %s", payFirst.AmountDue)
+	s.True(payFirst.TotalTax.Equal(payLater.TotalTax), "pay-first and pay-later tax must match")
+	s.True(payFirst.Total.Equal(payLater.Total), "pay-first and pay-later total must match")
 }
 
 func (s *WalletServiceSuite) TestCompleteWalletTopupCheckout_CreditsWalletAndBonus() {
