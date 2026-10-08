@@ -9,11 +9,24 @@ Branch: `docs/activity-log-erd`
 
 ## 1. Overview
 
-### 1.1 Goal
+### 1.1 Goals
 
 Tenants can see who created, updated, archived or deleted their billing entities, and when, from the
-dashboard and the public API. Each entry records the actor, the request it came from, and the entity's
-state right after the change.
+dashboard and the public API.
+
+- **Every change is recorded.** Each create, update, archive and delete of a registered entity made
+  through Flexprice (API, dashboard, workflows, consumers, scripts) produces an entry.
+- **Who did it.** Each entry names its actor: a user, an API key, or the system. Work the platform does
+  on a user's behalf is attributed to the system.
+- **Where it came from.** Each entry carries its request id, source, IP address and user agent. All
+  changes from one request can be viewed together.
+- **State at that time.** Each entry holds a snapshot of the entity right after the change, with the
+  same field names as the public API.
+- **Rolled up by customer.** A customer's activity includes changes to everything that belongs to
+  them, including entities linked only through a subscription or invoice.
+- **Filters.** Activity can be listed for the whole tenant, or narrowed by entity, customer, actor
+  (type or id), action, request and time range.
+- **One year of history.** Activity stays queryable for one year, then is archived to Parquet.
 
 ### 1.2 Principles
 
