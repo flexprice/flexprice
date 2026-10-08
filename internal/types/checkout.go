@@ -17,6 +17,7 @@ const (
 	CheckoutStatusCompleted CheckoutStatus = "completed"
 	CheckoutStatusFailed    CheckoutStatus = "failed"
 	CheckoutStatusExpired   CheckoutStatus = "expired"
+	CheckoutStatusCancelled CheckoutStatus = "cancelled"
 )
 
 func (s CheckoutStatus) String() string { return string(s) }
@@ -28,10 +29,11 @@ func (s CheckoutStatus) Validate() error {
 		CheckoutStatusCompleted,
 		CheckoutStatusFailed,
 		CheckoutStatusExpired,
+		CheckoutStatusCancelled,
 	}
 	if s != "" && !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid checkout status").
-			WithHint("Allowed values: initiated, pending, completed, failed, expired").
+			WithHint("Allowed values: initiated, pending, completed, failed, expired, cancelled").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -49,7 +51,7 @@ func ActiveCheckoutStatuses() []CheckoutStatus {
 // was otherwise retyped by hand at every call site.
 func (s CheckoutStatus) IsTerminal() bool {
 	switch s {
-	case CheckoutStatusCompleted, CheckoutStatusFailed, CheckoutStatusExpired:
+	case CheckoutStatusCompleted, CheckoutStatusFailed, CheckoutStatusExpired, CheckoutStatusCancelled:
 		return true
 	default:
 		return false

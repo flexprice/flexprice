@@ -211,7 +211,7 @@ func (s *PortalWalletSuite) TestTopUpSupersedesSessionInFlight() {
 
 	superseded, err := s.GetStores().CheckoutSessionRepo.Get(s.ctx, "cs_inflight")
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusExpired, superseded.CheckoutStatus)
+	s.Equal(types.CheckoutStatusCancelled, superseded.CheckoutStatus)
 }
 
 func (s *PortalWalletSuite) TestTopUpUseSavedMethodValidation() {

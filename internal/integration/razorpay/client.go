@@ -53,6 +53,8 @@ type RazorpayClient interface {
 	// "created" | "partially_paid" | "paid" | "expired" | "cancelled", and its
 	// "payments" array carries the underlying pay_xxx attempts once any exist.
 	FetchPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error)
+	CancelInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
+	CancelPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -642,6 +644,46 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPais
 
 	c.logger.Info(ctx, "successfully refunded Razorpay payment",
 		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
+	return result, nil
+}
+
+func (c *Client) CancelInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Invoice.Cancel(invoiceID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to cancel Razorpay invoice", "error", err, "invoice_id", invoiceID)
+		return nil, ierr.NewError("failed to cancel Razorpay invoice").
+			WithHint("Unable to cancel the invoice in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": invoiceID,
+				"error":      err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+	return result, nil
+}
+
+func (c *Client) CancelPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.PaymentLink.Cancel(paymentLinkID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to cancel Razorpay payment link", "error", err, "payment_link_id", paymentLinkID)
+		return nil, ierr.NewError("failed to cancel Razorpay payment link").
+			WithHint("Unable to cancel the payment link in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_link_id": paymentLinkID,
+				"error":           err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
 	return result, nil
 }
 

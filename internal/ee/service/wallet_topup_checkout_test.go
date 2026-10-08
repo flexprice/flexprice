@@ -134,7 +134,7 @@ func (s *WalletServiceSuite) TestTopUpWallet_CheckoutExistingSessionSuperseded()
 
 	superseded, err := s.GetStores().CheckoutSessionRepo.Get(ctx, existing.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusExpired, superseded.CheckoutStatus)
+	s.Equal(types.CheckoutStatusCancelled, superseded.CheckoutStatus)
 }
 
 func (s *WalletServiceSuite) TestTopUpWallet_CheckoutSessionCreateFailureArchivesDraft() {
@@ -241,7 +241,7 @@ func (s *WalletServiceSuite) TestCompleteWalletTopupCheckout_CreditsWalletAndBon
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusDraft, draftInv.InvoiceStatus)
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	checkoutSvc := NewCheckoutSessionService(params).(*checkoutSessionService)
 	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
 	s.Require().NoError(err)
 

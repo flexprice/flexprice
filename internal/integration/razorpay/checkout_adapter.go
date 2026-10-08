@@ -125,3 +125,68 @@ func (a *CheckoutAdapter) FetchPaymentState(
 			Mark(ierr.ErrValidation)
 	}
 }
+
+func (a *CheckoutAdapter) CancelOpenCharge(ctx context.Context, gatewayTrackingID string) (interfaces.OpenChargeResult, error) {
+	if a == nil || a.Svc == nil {
+		return interfaces.OpenChargeResult{}, ierr.NewError("razorpay checkout adapter is not configured").
+			Mark(ierr.ErrNotImplemented)
+	}
+
+	switch {
+	case strings.HasPrefix(gatewayTrackingID, invoicePrefix):
+		inv, err := a.Svc.GetInvoiceStatus(ctx, gatewayTrackingID)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		if inv.Status == "paid" || inv.Status == "partially_paid" {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: inv.RazorpayPaymentID}, nil
+		}
+		if err := a.Svc.CancelInvoice(ctx, gatewayTrackingID); err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		return interfaces.OpenChargeResult{}, nil
+
+	case strings.HasPrefix(gatewayTrackingID, paymentLinkPrefix):
+		link, err := a.Svc.GetPaymentLinkStatus(ctx, gatewayTrackingID)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		if link.Status == "paid" || link.Status == "partially_paid" {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: link.RazorpayPaymentID}, nil
+		}
+		if err := a.Svc.CancelPaymentLink(ctx, gatewayTrackingID); err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		return interfaces.OpenChargeResult{}, nil
+
+	case strings.HasPrefix(gatewayTrackingID, paymentPrefix):
+		rawStatus, err := a.Svc.GetPaymentStatus(ctx, gatewayTrackingID)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		if rawStatus == string(integrations.RazorpayPaymentStatusCaptured) {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: gatewayTrackingID}, nil
+		}
+		return interfaces.OpenChargeResult{}, uncancellableChargeError(gatewayTrackingID)
+
+	case strings.HasPrefix(gatewayTrackingID, orderPrefix):
+		order, err := a.Svc.GetOrderStatus(ctx, gatewayTrackingID)
+		if err != nil {
+			return interfaces.OpenChargeResult{}, err
+		}
+		if order.Status == string(integrations.RazorpayOrderStatusPaid) && order.RazorpayPaymentID != "" {
+			return interfaces.OpenChargeResult{Captured: true, GatewayPaymentID: order.RazorpayPaymentID}, nil
+		}
+		return interfaces.OpenChargeResult{}, uncancellableChargeError(gatewayTrackingID)
+
+	default:
+		return interfaces.OpenChargeResult{}, uncancellableChargeError(gatewayTrackingID)
+	}
+}
+
+func uncancellableChargeError(gatewayTrackingID string) error {
+	return ierr.NewError("razorpay charge cannot be cancelled").
+		WithHint("The stored gateway tracking ID does not reference a cancellable Razorpay object").
+		WithReportableDetails(map[string]interface{}{"gateway_tracking_id": gatewayTrackingID}).
+		Mark(ierr.ErrNotImplemented)
+}

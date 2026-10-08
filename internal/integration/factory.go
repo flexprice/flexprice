@@ -1651,6 +1651,45 @@ func (f *Factory) SetCheckoutProvider(provider interfaces.CheckoutProvider) {
 	f.checkoutProvider = provider
 }
 
+// GetProviderPaymentService returns the provider payment service when that provider
+// is connected. A missing connection returns nil so the caller can settle locally.
+func (f *Factory) GetProviderPaymentService(ctx context.Context, provider types.CheckoutPaymentProvider) (interfaces.GatewayPaymentService, error) {
+	switch provider {
+	case types.CheckoutPaymentProviderRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !i.Client.HasRazorpayConnection(ctx) {
+			return nil, nil
+		}
+		return i.PaymentSvc, nil
+	case types.CheckoutPaymentProviderStripe:
+		i, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !i.Client.HasStripeConnection(ctx) {
+			return nil, nil
+		}
+		return i.PaymentSvc, nil
+	case types.CheckoutPaymentProviderChargebee:
+		i, err := f.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !i.Client.HasChargebeeConnection(ctx) {
+			return nil, nil
+		}
+		return i.PaymentSvc, nil
+	default:
+		return nil, ierr.NewError("payment provider not supported for checkout").
+			WithHint("No payment service exists for this provider").
+			WithReportableDetails(map[string]any{"provider": provider}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
 // Returns ErrValidation for providers that do not support hosted checkout.
 func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {

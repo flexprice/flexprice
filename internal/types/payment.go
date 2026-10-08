@@ -74,12 +74,14 @@ var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 		PaymentStatusSucceeded,
 		PaymentStatusOverpaid,
 		PaymentStatusFailed,
+		PaymentStatusVoided,
 	},
 	PaymentStatusProcessing: {
 		PaymentStatusProcessing,
 		PaymentStatusSucceeded,
 		PaymentStatusOverpaid,
 		PaymentStatusFailed,
+		PaymentStatusVoided,
 	},
 	PaymentStatusSucceeded: {
 		PaymentStatusSucceeded,

@@ -139,11 +139,12 @@ const (
 
 // payment event names
 const (
-	WebhookEventPaymentCreated WebhookEventName = "payment.created"
-	WebhookEventPaymentUpdated WebhookEventName = "payment.updated"
-	WebhookEventPaymentFailed  WebhookEventName = "payment.failed"
-	WebhookEventPaymentSuccess WebhookEventName = "payment.success"
-	WebhookEventPaymentPending WebhookEventName = "payment.pending"
+	WebhookEventPaymentCreated       WebhookEventName = "payment.created"
+	WebhookEventPaymentUpdated       WebhookEventName = "payment.updated"
+	WebhookEventPaymentFailed        WebhookEventName = "payment.failed"
+	WebhookEventPaymentAttemptFailed WebhookEventName = "payment.attempt.failed"
+	WebhookEventPaymentSuccess       WebhookEventName = "payment.success"
+	WebhookEventPaymentPending       WebhookEventName = "payment.pending"
 )
 
 // refund event names
@@ -215,6 +216,7 @@ const (
 	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
+	WebhookEventCheckoutSessionCancelled WebhookEventName = "checkout.session.cancelled"
 )
 
 // event (usage ingestion) webhook event names

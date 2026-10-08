@@ -316,10 +316,15 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		// A session that is no longer pending has already been cleaned up, so nothing
 		// can settle this payment now and the decline is final.
 		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
+			sessionID := ""
+			if session != nil {
+				sessionID = session.ID
+			}
 			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
 				FlexpricePaymentID: flexpricePaymentID,
 				GatewayPaymentID:   payment.ID,
 				ErrorMessage:       errorMsg,
+				CheckoutSessionID:  sessionID,
 			}); err != nil {
 				h.logger.Error(ctx, "failed to record failed attempt for payment link",
 					"error", err,
@@ -493,7 +498,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"razorpay_payment_id", razorpayPaymentID,
 			)
 		}
-	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed, types.CheckoutStatusCancelled:
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
 				"error", err,

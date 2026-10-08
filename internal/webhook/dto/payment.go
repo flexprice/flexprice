@@ -13,6 +13,17 @@ type InternalPaymentEvent struct {
 	TenantID  string `json:"tenant_id"`
 }
 
+// InternalPaymentAttemptEvent is the internal payload for payment.attempt.failed.
+// The outbound body is built from these fields and does not reload the payment.
+type InternalPaymentAttemptEvent struct {
+	PaymentID         string `json:"payment_id"`
+	TenantID          string `json:"tenant_id"`
+	AttemptNumber     int    `json:"attempt_number"`
+	GatewayAttemptID  string `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage      string `json:"error_message,omitempty"`
+	CheckoutSessionID string `json:"checkout_session_id,omitempty"`
+}
+
 type Payment struct {
 	ID                string                       `json:"id"`
 	DestinationType   types.PaymentDestinationType `json:"destination_type"`
@@ -59,4 +70,25 @@ type PaymentWebhookPayload struct {
 
 func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.WebhookEventName) *PaymentWebhookPayload {
 	return &PaymentWebhookPayload{EventType: eventType, Payment: NewPayment(payment)}
+}
+
+// PaymentAttemptWebhookPayload is the outbound body for payment.attempt.failed.
+type PaymentAttemptWebhookPayload struct {
+	EventType         types.WebhookEventName `json:"event_type"`
+	PaymentID         string                 `json:"payment_id"`
+	AttemptNumber     int                    `json:"attempt_number"`
+	GatewayAttemptID  string                 `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage      string                 `json:"error_message,omitempty"`
+	CheckoutSessionID string                 `json:"checkout_session_id,omitempty"`
+}
+
+func NewPaymentAttemptWebhookPayload(ev InternalPaymentAttemptEvent, eventType types.WebhookEventName) *PaymentAttemptWebhookPayload {
+	return &PaymentAttemptWebhookPayload{
+		EventType:         eventType,
+		PaymentID:         ev.PaymentID,
+		AttemptNumber:     ev.AttemptNumber,
+		GatewayAttemptID:  ev.GatewayAttemptID,
+		ErrorMessage:      ev.ErrorMessage,
+		CheckoutSessionID: ev.CheckoutSessionID,
+	}
 }

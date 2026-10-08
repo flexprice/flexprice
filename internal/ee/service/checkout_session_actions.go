@@ -228,8 +228,7 @@ func (s *checkoutSessionService) recordGatewayHandles(
 		return
 	}
 
-	paySvc := NewPaymentService(s.ServiceParams)
-	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
+	if _, err := s.paymentService.UpdatePayment(ctx, paymentID, updateReq); err != nil {
 		s.Logger.Error(ctx, "failed to record gateway handles on checkout payment",
 			"payment_id", paymentID, "error", err)
 	}
@@ -503,13 +502,12 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 		attemptReq.GatewayAttemptID = id
 	}
 
-	paySvc := NewPaymentService(s.ServiceParams)
-	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
+	if _, err := s.paymentService.UpdatePayment(ctx, paymentID, updateReq); err != nil {
 		return err
 	}
 
 	// After the settle, so a payment that never succeeded leaves no succeeded attempt.
-	if err := paySvc.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
+	if _, err := s.paymentService.RecordAttempt(ctx, paymentID, attemptReq); err != nil {
 		s.Logger.Error(ctx, "failed to record succeeded attempt",
 			"payment_id", paymentID, "error", err)
 	}

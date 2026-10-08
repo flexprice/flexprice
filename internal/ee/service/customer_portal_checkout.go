@@ -7,28 +7,17 @@ import (
 )
 
 func (s *customerPortalService) GetCheckoutSession(ctx context.Context, sessionID string) (*dto.PortalCheckoutSessionResponse, error) {
-	session, err := s.authorizeSession(ctx, sessionID)
-	if err != nil {
+	if _, err := s.authorizeSession(ctx, sessionID); err != nil {
 		return nil, err
 	}
 
-	// This is the read a customer's browser sits on while the provider settles, so
-	// it carries the same read-triggered reconciliation as the tenant-facing GET: a
-	// lost webhook must not leave them watching a spinner. Never fails the read.
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.ServiceParams}
-	reconciled := checkoutSvc.refreshSessionFromGateway(ctx, session)
-	if reconciled.completed {
-		// Completion mutated the row; the copy above is behind it.
-		session, err = s.CheckoutSessionRepo.Get(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
+	// Same read-triggered reconciliation as the tenant-facing GET. A lost webhook
+	// must not leave the customer watching a spinner. Never fails the read.
+	resp, err := NewCheckoutSessionService(s.ServiceParams).GetAndReconcile(ctx, sessionID)
+	if err != nil {
+		return nil, err
 	}
-
-	resp := toPortalCheckoutSession(dto.ToCheckoutSessionResponse(session))
-	resp.Stale = reconciled.stale
-	resp.NextPollAfterMs = checkoutPollInterval(session).Milliseconds()
-	return resp, nil
+	return toPortalCheckoutSession(resp), nil
 }
 
 // CancelCheckoutSession terminates an in-flight session owned by this customer.
@@ -66,5 +55,7 @@ func toPortalCheckoutSession(resp *dto.CheckoutSessionResponse) *dto.PortalCheck
 		CancelledAt:          resp.CancelledAt,
 		FailureReason:        resp.FailureReason,
 		EntityCreationResult: resp.EntityCreationResult,
+		Stale:                resp.Stale,
+		NextPollAfterMs:      resp.NextPollAfterMs,
 	}
 }

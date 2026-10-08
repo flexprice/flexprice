@@ -17,6 +17,10 @@
             "description": "A Checkout Session was created and a payment URL was returned to the customer."
         },
         {
+            "name": "checkout.session.cancelled",
+            "description": "The Checkout Session was cancelled before payment."
+        },
+        {
             "name": "credit_note.created",
             "description": "Fired when a credit note is created"
         },
@@ -111,6 +115,10 @@
         {
             "name": "payment.failed",
             "description": "Fired when a payment attempt fails"
+        },
+        {
+            "name": "payment.attempt.failed",
+            "description": "Fired when a charge attempt fails and the payment stays open for retry"
         },
         {
             "name": "payment.pending",

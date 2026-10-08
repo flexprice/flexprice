@@ -1061,7 +1061,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"flexprice_payment_id", flexpricePaymentID,
 				"stripe_payment_intent_id", stripePaymentIntentID)
 		}
-	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed, types.CheckoutStatusCancelled:
 		h.refundLateCapturedPayment(ctx, session, flexpricePaymentID, stripePaymentIntentID, services)
 	default:
 		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
