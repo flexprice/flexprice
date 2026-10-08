@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/ent/wallettransaction"
 	"github.com/flexprice/flexprice/internal/config"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -109,6 +110,13 @@ func TestWalletLedgerFacts(t *testing.T) {
 		got, err := repo.GetTransactionByID(ctx, debit.ID)
 		require.NoError(t, err)
 		require.Len(t, got.ConsumptionBreakdown, 2)
+
+		// A credit carries no breakdown: the column is SQL NULL, not a JSON null.
+		withoutBreakdown, err := client.Reader(ctx).WalletTransaction.Query().
+			Where(wallettransaction.ID(first.ID), wallettransaction.ConsumptionBreakdownIsNil()).
+			Count(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 1, withoutBreakdown)
 		require.True(t, got.ConsumptionBreakdown[1].Credits.Equal(decimal.RequireFromString("20.5")))
 		require.Equal(t, "inv_debit_"+runID, got.SourceID)
 
