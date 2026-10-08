@@ -252,7 +252,8 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 		if t.WalletID != walletID ||
 			t.Type != types.TransactionTypeCredit ||
 			t.CreditsAvailable.LessThanOrEqual(decimal.Zero) ||
-			t.Status != types.StatusPublished {
+			t.Status != types.StatusPublished ||
+			t.TxStatus != types.TransactionStatusCompleted {
 			return false
 		}
 
@@ -321,8 +322,8 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 }
 
 // ConsumeCredits consumes credits from a wallet
-func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]*wallet.Transaction, error) {
-	consumedCredits := make([]*wallet.Transaction, 0)
+func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
+	consumed := make([]types.WalletTxConsumption, 0, len(credits))
 	remainingAmount := amount
 
 	for _, credit := range credits {
@@ -339,7 +340,7 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 
 		// Update credit's available amount
 		if err := s.transactions.Update(ctx, credit.ID, credit); err != nil {
-			return consumedCredits, ierr.WithError(err).
+			return consumed, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -349,10 +350,10 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCredits = append(consumedCredits, credit)
+		consumed = append(consumed, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
-	return consumedCredits, nil
+	return consumed, nil
 }
 
 // CreateTransaction creates a new wallet transaction record
@@ -631,6 +632,10 @@ func (s *InMemoryWalletStore) UpdateTransaction(ctx context.Context, tx *wallet.
 	existing.CreditBalanceBefore = tx.CreditBalanceBefore
 	existing.CreditBalanceAfter = tx.CreditBalanceAfter
 	existing.CreditsAvailable = tx.CreditsAvailable
+	if existing.SourceType == "" {
+		existing.SourceType = tx.SourceType
+		existing.SourceID = tx.SourceID
+	}
 	existing.UpdatedAt = time.Now().UTC()
 	existing.UpdatedBy = types.GetUserID(ctx)
 

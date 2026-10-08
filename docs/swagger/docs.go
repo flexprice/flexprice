@@ -25202,6 +25202,17 @@ const docTemplate = `{
                 }
             }
         },
+        "TopUpCoupon": {
+            "type": "object",
+            "required": [
+                "coupon_code"
+            ],
+            "properties": {
+                "coupon_code": {
+                    "type": "string"
+                }
+            }
+        },
         "TopUpWalletRequest": {
             "type": "object",
             "required": [
@@ -25227,6 +25238,13 @@ const docTemplate = `{
                             "$ref": "#/definitions/CheckoutParams"
                         }
                     ]
+                },
+                "coupons": {
+                    "description": "coupons discount this top-up's invoice, applied in order before tax. Credits granted\nare unchanged. Only for PURCHASED_CREDIT_INVOICED, and not with checkout.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/TopUpCoupon"
+                    }
                 },
                 "credits_to_add": {
                     "description": "credits_to_add is the number of credits to add to the wallet",
@@ -26734,6 +26752,13 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "consumption_breakdown": {
+                    "description": "ConsumptionBreakdown is set on debits: the credits drawn from each credit batch.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.WalletTxConsumption"
+                    }
+                },
                 "conversion_rate": {
                     "description": "conversion_rate is the conversion rate for the transaction to the currency",
                     "type": "string"
@@ -26798,6 +26823,17 @@ const docTemplate = `{
                 },
                 "reference_type": {
                     "$ref": "#/definitions/types.WalletTxReferenceType"
+                },
+                "source_id": {
+                    "type": "string"
+                },
+                "source_type": {
+                    "description": "SourceType/SourceID identify the entity this transaction's value comes from or goes to\n(e.g. an invoice). Empty when there is none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WalletTxSourceType"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -32283,6 +32319,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.WalletTxConsumption": {
+            "type": "object",
+            "properties": {
+                "credit_transaction_id": {
+                    "type": "string"
+                },
+                "credits": {
+                    "type": "string"
+                }
+            }
+        },
         "types.WalletTxReferenceType": {
             "type": "string",
             "enum": [
@@ -32296,6 +32343,15 @@ const docTemplate = `{
                 "WalletTxReferenceTypeExternal",
                 "WalletTxReferenceTypeRequest",
                 "WalletTxReferenceTypeInvoice"
+            ]
+        },
+        "types.WalletTxSourceType": {
+            "type": "string",
+            "enum": [
+                "INVOICE"
+            ],
+            "x-enum-varnames": [
+                "WalletTxSourceTypeInvoice"
             ]
         },
         "types.WalletType": {
@@ -33787,6 +33843,12 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "consumption_breakdown": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.WalletTxConsumption"
+                    }
+                },
                 "credit_amount": {
                     "type": "string"
                 },
@@ -33819,6 +33881,12 @@ const docTemplate = `{
                 },
                 "reference_type": {
                     "$ref": "#/definitions/types.WalletTxReferenceType"
+                },
+                "source_id": {
+                    "type": "string"
+                },
+                "source_type": {
+                    "$ref": "#/definitions/types.WalletTxSourceType"
                 },
                 "transaction_reason": {
                     "$ref": "#/definitions/types.TransactionReason"

@@ -59,7 +59,7 @@ The usage rate only decides *how many* credits a debit takes; it never affects r
 
 1. **Discounts come in as coupons**, entered by `coupon_code`, using the existing coupon model. Percentage and fixed coupons both work.
 2. **Only invoiced purchases** (`PURCHASED_CREDIT_INVOICED`) take coupons. Direct purchases carry no discount.
-3. **Credits are granted when the invoice is paid.** Exception: tenants with `auto_complete_purchased_credit_transaction` on (off by default) get credits immediately and the invoice is marked paid at finalize — existing behaviour.
+3. **Credits are granted when the invoice is paid.** Tenants with `auto_complete_purchased_credit_transaction` on (off by default) get credits before payment, so they cannot use coupons on top-ups.
 4. **Coupons are one-time, per top-up.** Each coupon applies once to that top-up's invoice.
 5. **Multiple coupons** apply in order on the running subtotal, before tax. The API accepts a list; the dashboard sends one, as it does for subscriptions.
 6. **Credits are never reduced** by a coupon; only the invoice is.
@@ -90,6 +90,7 @@ Response unchanged (`wallet_transaction`, `invoice_id`, `wallet`). The invoice s
 |---|---|
 | `coupons` with any reason other than `PURCHASED_CREDIT_INVOICED` | 400 |
 | `coupons` together with `checkout` | 400 |
+| `coupons` while the tenant has auto-complete on | 400 |
 | Same code twice in one request | 400 |
 | Unknown or unpublished code | 404 |
 | Outside `redeem_after` / `redeem_before` | 400 |
@@ -149,7 +150,7 @@ Reuses the subscription-create coupon components as-is. [Mockup](https://claude.
 | Batch | Lookup |
 |---|---|
 | Invoiced purchase | `source_type = INVOICE` → invoice and its `coupon_applications` |
-| Bonus | `parent_transaction_id` → the purchase |
+| Bonus | `source_type = INVOICE` → the purchase's invoice; `parent_transaction_id` → the purchase |
 | Direct purchase | `topup_conversion_rate` on the row |
 | Free / subscription grant | `transaction_reason` → 0 |
 | Refund to wallet | `source_type = INVOICE` → the refunded invoice: what was paid on it and which batches its debits drew from |
@@ -159,11 +160,11 @@ The revenue service should record each batch's cost once, when the credits are g
 ## Top-up flow
 
 1. `TopUpWalletRequest` gets `coupons: [{ coupon_code }]`. Request validation rejects coupons with a non-invoiced reason, with `checkout`, or with duplicate codes.
-2. `TopUpWallet` resolves each code (`CouponRepo.GetByCode`) and validates it with a new `ValidateCouponForWallet` = existing `ValidateCoupon(coupon, nil)` (published, dates, redemptions) + currency vs the wallet for fixed-amount coupons. Any failure rejects the top-up.
-3. `handlePurchasedCreditInvoicedTransaction` passes the coupons on a new server-only field `CreateInvoiceRequest.PreparedInvoiceCoupons` (`json:"-"`). `CreateOneOffInvoice` appends it to `InvoiceCoupons` after its own validation, so pre-validated coupons are never silently dropped and public callers cannot bypass validation.
+2. `handlePurchasedCreditInvoicedTransaction` rejects coupons when auto-complete applies, then resolves each code (`CouponRepo.GetByCode`) and validates it with the existing `ValidateCoupon(coupon, nil)` (published, dates, redemptions), plus the wallet's currency for fixed-amount coupons. Any failure rejects the top-up.
+3. `handlePurchasedCreditInvoicedTransaction` passes the coupon IDs in `CreateInvoiceRequest.Coupons`, the existing input of `CreateOneOffInvoice`, which re-validates them into `InvoiceCoupons`. Its currency check already covers only fixed-amount coupons, because percentage coupons are stored without a currency.
 4. The existing compute applies the coupons, writes `coupon_applications`, counts redemptions and taxes the net amount. The purchase row is written as today (pending, before the invoice), in the same DB transaction.
-5. **On completion** set `source_type = INVOICE`, `source_id = invoice ID`, in the same write that flips the status to completed. The pending row is created before its invoice and the link today is one-way (`invoice.metadata.wallet_transaction_id`), so `CompletePurchasedCreditTransactionWithRetry` gains an `invoiceID` parameter. Every caller already holds the invoice: `payment_processor.go` (gateway payment), the two payment-status updates in `invoice.go`, and the $0 path below. Auto-complete top-ups are completed at creation, so they set `source_*` right after the invoice is created, in the same DB transaction.
-6. **$0 invoice (100% coupon):** `FinalizeInvoice` marks a $0 invoice paid without calling the payment hook, which would leave the credits pending forever. For a top-up invoice (`metadata.wallet_transaction_id` present) finalized at $0, call `CompletePurchasedCreditTransactionWithRetry`.
+5. **On completion** set `source_type = INVOICE`, `source_id = invoice ID`, in the same write that flips the status to completed. The pending row is created before its invoice and the link today is one-way (`invoice.metadata.wallet_transaction_id`), so `CompletePurchasedCreditTransactionWithRetry` gains an `invoiceID` parameter. Every caller already holds the invoice: `payment_processor.go` (gateway payment), the two payment-status updates in `invoice.go`, and the $0 path below. The bonus row completed with it gets the same source. Auto-complete top-ups take no coupons and are left as they are: no source.
+6. **$0 invoice (100% coupon):** `FinalizeInvoice` marks a $0 invoice paid without calling the payment hook, which would leave the credits pending forever. `handlePurchasedCreditInvoicedTransaction` sees the invoice already paid and calls `CompletePurchasedCreditTransactionWithRetry` right after its DB transaction commits. Not from inside `FinalizeInvoice`: that runs inside the top-up's open transaction, so the completion webhook would fire before commit.
 
 ## Refund flow
 
@@ -188,7 +189,7 @@ The revenue service should record each batch's cost once, when the credits are g
 - Covers every debit type: usage payment, credit adjustment, expiry settlement, expiry, termination, manual.
 - **Debits applied to an invoice** (`CREDIT_ADJUSTMENT`, including expiry settlement) also get `source_type = INVOICE`, `source_id` = that invoice. This duplicates `reference_id`, on purpose: the revenue service reads only `source_*`, on every row. Expiry, termination and manual debits have no invoice, so `source_*` stays null.
 - `amount` and `credit_amount` are unchanged, so balances, invoices and payments are unaffected.
-- Breakdown credits always sum to `credit_amount`. A manual debit that overdraws records the uncovered credits as an entry with no batch ID.
+- Breakdown credits sum to `credit_amount`, except for a manual debit that overdraws: only the credits real batches covered are recorded.
 - `metadata.consumed_credit_tx_ids` keeps being written for backward compatibility.
 - Debits from before this change have no breakdown; the revenue service treats them as unattributed.
 
@@ -205,10 +206,8 @@ The revenue service should record each batch's cost once, when the credits are g
 | `internal/repository/ent/wallet.go` | `ConsumeCredits` returns per-batch credits; setters in `CreateTransaction`; `UpdateTransaction` writes `source_*` while null |
 | `internal/testutil/inmemory_wallet_store.go` | Same; align its batch ordering and status filter with the ent repo |
 | `internal/api/dto/wallet.go` | `coupons` on `TopUpWalletRequest` + validation |
-| `internal/api/dto/invoice.go` | `PreparedInvoiceCoupons` (`json:"-"`) |
-| `internal/ee/service/coupon_validation.go` | `ValidateCouponForWallet` |
-| `internal/ee/service/wallet.go` | Coupon resolution in `TopUpWallet`; pass coupons in `handlePurchasedCreditInvoicedTransaction`; `invoiceID` on `CompletePurchasedCreditTransactionWithRetry` and `source_*` on completion and auto-complete; `source_*` accepted on top-up and debit requests (server-only); breakdown in `processWalletOperation` |
-| `internal/ee/service/invoice.go` | Append `PreparedInvoiceCoupons` in `CreateOneOffInvoice`; complete $0 top-up invoices in `FinalizeInvoice`; pass the invoice ID to completion |
+| `internal/ee/service/wallet.go` | Coupon resolution in `TopUpWallet`; pass coupons in `handlePurchasedCreditInvoicedTransaction`; `invoiceID` on `CompletePurchasedCreditTransactionWithRetry` and `source_*` on completion (purchase and bonus); reject coupons when auto-complete is on; complete $0 top-up invoices after commit; `source_*` accepted on top-up and debit requests (server-only); breakdown in `processWalletOperation` |
+| `internal/ee/service/invoice.go` | Pass the invoice ID to completion |
 | `internal/ee/service/payment_processor.go` | Pass the invoice ID to completion |
 | `internal/ee/service/refund.go` | Pass the refunded invoice as `source_*` |
 | `internal/ee/service/credit_adjustment.go` | Pass the invoice as `source_*` on credit-adjustment debits |
@@ -230,13 +229,13 @@ The revenue service should record each batch's cost once, when the credits are g
 2. Two coupons both apply, in order, each with its own `coupon_applications` row and +1 redemption.
 3. Each error case in the API table rejects the top-up and creates no transaction, invoice or redemption.
 4. A 100% coupon produces a $0 invoice and the credits are granted immediately.
-5. With auto-complete on, credits are granted at once and the invoice is paid at the discounted amount.
+5. With auto-complete on, a top-up with coupons is rejected; one without coupons behaves as today.
 6. Top-ups without coupons behave exactly as before.
 7. Dashboard: one coupon via Link Coupon; no Skip invoice for purchased credits; Checkout link disabled while a coupon is selected; switching to Free clears the coupon.
 
 **Ledger**
 
-8. `source_type = INVOICE` with the right `source_id` on: completed invoiced purchases (pay-later, auto-complete, $0), refunds to the wallet, and credit-adjustment debits. Null on expiry, termination and manual debits.
+8. `source_type = INVOICE` with the right `source_id` on: completed invoiced purchases and their bonus (pay-later, $0), refunds to the wallet, and credit-adjustment debits. Null on auto-complete purchases and on expiry, termination and manual debits.
 9. Every debit type writes a `consumption_breakdown`; its credits sum to `credit_amount`; batch IDs match the batches whose `credits_available` went down.
 10. Balances, invoice totals and payments are unchanged versus today for the same operations.
 

@@ -76,7 +76,13 @@ type WalletTransaction struct {
 	Priority *int `json:"priority,omitempty"`
 	// ParentTransactionID holds the value of the "parent_transaction_id" field.
 	ParentTransactionID string `json:"parent_transaction_id,omitempty"`
-	selectValues        sql.SelectValues
+	// SourceType holds the value of the "source_type" field.
+	SourceType *types.WalletTxSourceType `json:"source_type,omitempty"`
+	// SourceID holds the value of the "source_id" field.
+	SourceID *string `json:"source_id,omitempty"`
+	// ConsumptionBreakdown holds the value of the "consumption_breakdown" field.
+	ConsumptionBreakdown []types.WalletTxConsumption `json:"consumption_breakdown,omitempty"`
+	selectValues         sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -86,13 +92,13 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case wallettransaction.FieldConversionRate, wallettransaction.FieldTopupConversionRate:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case wallettransaction.FieldMetadata:
+		case wallettransaction.FieldMetadata, wallettransaction.FieldConsumptionBreakdown:
 			values[i] = new([]byte)
 		case wallettransaction.FieldAmount, wallettransaction.FieldCreditAmount, wallettransaction.FieldCreditBalanceBefore, wallettransaction.FieldCreditBalanceAfter, wallettransaction.FieldCreditsAvailable:
 			values[i] = new(decimal.Decimal)
 		case wallettransaction.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldCustomerID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldCurrency, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason, wallettransaction.FieldParentTransactionID:
+		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldCustomerID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldCurrency, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason, wallettransaction.FieldParentTransactionID, wallettransaction.FieldSourceType, wallettransaction.FieldSourceID:
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt, wallettransaction.FieldExpiryDate:
 			values[i] = new(sql.NullTime)
@@ -292,6 +298,28 @@ func (_m *WalletTransaction) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				_m.ParentTransactionID = value.String
 			}
+		case wallettransaction.FieldSourceType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_type", values[i])
+			} else if value.Valid {
+				_m.SourceType = new(types.WalletTxSourceType)
+				*_m.SourceType = types.WalletTxSourceType(value.String)
+			}
+		case wallettransaction.FieldSourceID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_id", values[i])
+			} else if value.Valid {
+				_m.SourceID = new(string)
+				*_m.SourceID = value.String
+			}
+		case wallettransaction.FieldConsumptionBreakdown:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field consumption_breakdown", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ConsumptionBreakdown); err != nil {
+					return fmt.Errorf("unmarshal field consumption_breakdown: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -421,6 +449,19 @@ func (_m *WalletTransaction) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("parent_transaction_id=")
 	builder.WriteString(_m.ParentTransactionID)
+	builder.WriteString(", ")
+	if v := _m.SourceType; v != nil {
+		builder.WriteString("source_type=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SourceID; v != nil {
+		builder.WriteString("source_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("consumption_breakdown=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ConsumptionBreakdown))
 	builder.WriteByte(')')
 	return builder.String()
 }

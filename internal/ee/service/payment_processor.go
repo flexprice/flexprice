@@ -797,7 +797,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			// Only complete the transaction if payment is fully succeeded
 			if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 				walletService := NewWalletService(p.ServiceParams)
-				if err := walletService.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID); err != nil {
+				if err := walletService.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID, invoice.ID); err != nil {
 					p.Logger.Error(ctx, "failed to complete purchased credit transaction",
 						"error", err,
 						"invoice_id", invoice.ID,

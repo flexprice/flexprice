@@ -320,6 +320,8 @@ func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) 
 			Metadata:          metadata,
 			IdempotencyKey:    lo.ToPtr(row.ID),
 			Description:       fmt.Sprintf("Refund for invoice %s", lo.FromPtrOr(inv.InvoiceNumber, inv.ID)),
+			SourceType:        types.WalletTxSourceTypeInvoice,
+			SourceID:          row.InvoiceID,
 		})
 		if err != nil {
 			return err
