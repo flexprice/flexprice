@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -244,6 +245,24 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 				"invoice_id": invoice.ID,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// A cross-currency draft is only payable after it converts at finalize.
+	if invoice.InvoiceStatus == types.InvoiceStatusDraft && invoice.FxConversion == nil {
+		cust, err := s.CustomerRepo.Get(ctx, invoice.CustomerID)
+		if err != nil {
+			return err
+		}
+		if cust.BillingCurrency != nil && *cust.BillingCurrency != "" &&
+			!types.IsMatchingCurrency(*cust.BillingCurrency, invoice.Currency) {
+			return ierr.NewError("invoice must be finalized before payment").
+				WithHintf("Finalize the invoice first; it will be issued in %s.", strings.ToUpper(*cust.BillingCurrency)).
+				WithReportableDetails(map[string]interface{}{
+					"invoice_currency": invoice.Currency,
+					"billing_currency": *cust.BillingCurrency,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	if !types.IsMatchingCurrency(invoice.Currency, p.Currency) {

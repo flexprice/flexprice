@@ -22983,6 +22983,7 @@ type CustomerMutation struct {
 	name                *string
 	email               *string
 	contact             *string
+	billing_currency    *string
 	address_line1       *string
 	address_line2       *string
 	address_city        *string
@@ -23611,6 +23612,55 @@ func (m *CustomerMutation) ResetContact() {
 	delete(m.clearedFields, customer.FieldContact)
 }
 
+// SetBillingCurrency sets the "billing_currency" field.
+func (m *CustomerMutation) SetBillingCurrency(s string) {
+	m.billing_currency = &s
+}
+
+// BillingCurrency returns the value of the "billing_currency" field in the mutation.
+func (m *CustomerMutation) BillingCurrency() (r string, exists bool) {
+	v := m.billing_currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingCurrency returns the old "billing_currency" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldBillingCurrency(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingCurrency: %w", err)
+	}
+	return oldValue.BillingCurrency, nil
+}
+
+// ClearBillingCurrency clears the value of the "billing_currency" field.
+func (m *CustomerMutation) ClearBillingCurrency() {
+	m.billing_currency = nil
+	m.clearedFields[customer.FieldBillingCurrency] = struct{}{}
+}
+
+// BillingCurrencyCleared returns if the "billing_currency" field was cleared in this mutation.
+func (m *CustomerMutation) BillingCurrencyCleared() bool {
+	_, ok := m.clearedFields[customer.FieldBillingCurrency]
+	return ok
+}
+
+// ResetBillingCurrency resets all changes to the "billing_currency" field.
+func (m *CustomerMutation) ResetBillingCurrency() {
+	m.billing_currency = nil
+	delete(m.clearedFields, customer.FieldBillingCurrency)
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (m *CustomerMutation) SetAddressLine1(s string) {
 	m.address_line1 = &s
@@ -24024,7 +24074,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -24060,6 +24110,9 @@ func (m *CustomerMutation) Fields() []string {
 	}
 	if m.contact != nil {
 		fields = append(fields, customer.FieldContact)
+	}
+	if m.billing_currency != nil {
+		fields = append(fields, customer.FieldBillingCurrency)
 	}
 	if m.address_line1 != nil {
 		fields = append(fields, customer.FieldAddressLine1)
@@ -24117,6 +24170,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.Email()
 	case customer.FieldContact:
 		return m.Contact()
+	case customer.FieldBillingCurrency:
+		return m.BillingCurrency()
 	case customer.FieldAddressLine1:
 		return m.AddressLine1()
 	case customer.FieldAddressLine2:
@@ -24166,6 +24221,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldEmail(ctx)
 	case customer.FieldContact:
 		return m.OldContact(ctx)
+	case customer.FieldBillingCurrency:
+		return m.OldBillingCurrency(ctx)
 	case customer.FieldAddressLine1:
 		return m.OldAddressLine1(ctx)
 	case customer.FieldAddressLine2:
@@ -24275,6 +24332,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetContact(v)
 		return nil
+	case customer.FieldBillingCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingCurrency(v)
+		return nil
 	case customer.FieldAddressLine1:
 		v, ok := value.(string)
 		if !ok {
@@ -24379,6 +24443,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldContact) {
 		fields = append(fields, customer.FieldContact)
 	}
+	if m.FieldCleared(customer.FieldBillingCurrency) {
+		fields = append(fields, customer.FieldBillingCurrency)
+	}
 	if m.FieldCleared(customer.FieldAddressLine1) {
 		fields = append(fields, customer.FieldAddressLine1)
 	}
@@ -24431,6 +24498,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldContact:
 		m.ClearContact()
+		return nil
+	case customer.FieldBillingCurrency:
+		m.ClearBillingCurrency()
 		return nil
 	case customer.FieldAddressLine1:
 		m.ClearAddressLine1()
@@ -24496,6 +24566,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldContact:
 		m.ResetContact()
+		return nil
+	case customer.FieldBillingCurrency:
+		m.ResetBillingCurrency()
 		return nil
 	case customer.FieldAddressLine1:
 		m.ResetAddressLine1()
@@ -35042,6 +35115,7 @@ type InvoiceMutation struct {
 	total_discount                *decimal.Decimal
 	total                         *decimal.Decimal
 	custom_currency               **types.CustomCurrency
+	fx_conversion                 **types.FxConversion
 	description                   *string
 	due_date                      *time.Time
 	paid_at                       *time.Time
@@ -36200,6 +36274,55 @@ func (m *InvoiceMutation) CustomCurrencyCleared() bool {
 func (m *InvoiceMutation) ResetCustomCurrency() {
 	m.custom_currency = nil
 	delete(m.clearedFields, invoice.FieldCustomCurrency)
+}
+
+// SetFxConversion sets the "fx_conversion" field.
+func (m *InvoiceMutation) SetFxConversion(tc *types.FxConversion) {
+	m.fx_conversion = &tc
+}
+
+// FxConversion returns the value of the "fx_conversion" field in the mutation.
+func (m *InvoiceMutation) FxConversion() (r *types.FxConversion, exists bool) {
+	v := m.fx_conversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFxConversion returns the old "fx_conversion" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldFxConversion(ctx context.Context) (v *types.FxConversion, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFxConversion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFxConversion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFxConversion: %w", err)
+	}
+	return oldValue.FxConversion, nil
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (m *InvoiceMutation) ClearFxConversion() {
+	m.fx_conversion = nil
+	m.clearedFields[invoice.FieldFxConversion] = struct{}{}
+}
+
+// FxConversionCleared returns if the "fx_conversion" field was cleared in this mutation.
+func (m *InvoiceMutation) FxConversionCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldFxConversion]
+	return ok
+}
+
+// ResetFxConversion resets all changes to the "fx_conversion" field.
+func (m *InvoiceMutation) ResetFxConversion() {
+	m.fx_conversion = nil
+	delete(m.clearedFields, invoice.FieldFxConversion)
 }
 
 // SetDescription sets the "description" field.
@@ -37437,7 +37560,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 46)
+	fields := make([]string, 0, 47)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -37509,6 +37632,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.custom_currency != nil {
 		fields = append(fields, invoice.FieldCustomCurrency)
+	}
+	if m.fx_conversion != nil {
+		fields = append(fields, invoice.FieldFxConversion)
 	}
 	if m.description != nil {
 		fields = append(fields, invoice.FieldDescription)
@@ -37632,6 +37758,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.Total()
 	case invoice.FieldCustomCurrency:
 		return m.CustomCurrency()
+	case invoice.FieldFxConversion:
+		return m.FxConversion()
 	case invoice.FieldDescription:
 		return m.Description()
 	case invoice.FieldDueDate:
@@ -37733,6 +37861,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTotal(ctx)
 	case invoice.FieldCustomCurrency:
 		return m.OldCustomCurrency(ctx)
+	case invoice.FieldFxConversion:
+		return m.OldFxConversion(ctx)
 	case invoice.FieldDescription:
 		return m.OldDescription(ctx)
 	case invoice.FieldDueDate:
@@ -37953,6 +38083,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCustomCurrency(v)
+		return nil
+	case invoice.FieldFxConversion:
+		v, ok := value.(*types.FxConversion)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFxConversion(v)
 		return nil
 	case invoice.FieldDescription:
 		v, ok := value.(string)
@@ -38201,6 +38338,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldCustomCurrency) {
 		fields = append(fields, invoice.FieldCustomCurrency)
 	}
+	if m.FieldCleared(invoice.FieldFxConversion) {
+		fields = append(fields, invoice.FieldFxConversion)
+	}
 	if m.FieldCleared(invoice.FieldDescription) {
 		fields = append(fields, invoice.FieldDescription)
 	}
@@ -38310,6 +38450,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldCustomCurrency:
 		m.ClearCustomCurrency()
+		return nil
+	case invoice.FieldFxConversion:
+		m.ClearFxConversion()
 		return nil
 	case invoice.FieldDescription:
 		m.ClearDescription()
@@ -38450,6 +38593,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldCustomCurrency:
 		m.ResetCustomCurrency()
+		return nil
+	case invoice.FieldFxConversion:
+		m.ResetFxConversion()
 		return nil
 	case invoice.FieldDescription:
 		m.ResetDescription()
@@ -38671,6 +38817,7 @@ type InvoiceLineItemMutation struct {
 	adjusted_entitlement_quantity *decimal.Decimal
 	parent_line_item_id           *string
 	custom_currency               **types.CustomCurrencyLineItem
+	fx_conversion                 **types.FxConversion
 	clearedFields                 map[string]struct{}
 	invoice                       *string
 	clearedinvoice                bool
@@ -40384,6 +40531,55 @@ func (m *InvoiceLineItemMutation) ResetCustomCurrency() {
 	delete(m.clearedFields, invoicelineitem.FieldCustomCurrency)
 }
 
+// SetFxConversion sets the "fx_conversion" field.
+func (m *InvoiceLineItemMutation) SetFxConversion(tc *types.FxConversion) {
+	m.fx_conversion = &tc
+}
+
+// FxConversion returns the value of the "fx_conversion" field in the mutation.
+func (m *InvoiceLineItemMutation) FxConversion() (r *types.FxConversion, exists bool) {
+	v := m.fx_conversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFxConversion returns the old "fx_conversion" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldFxConversion(ctx context.Context) (v *types.FxConversion, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFxConversion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFxConversion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFxConversion: %w", err)
+	}
+	return oldValue.FxConversion, nil
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (m *InvoiceLineItemMutation) ClearFxConversion() {
+	m.fx_conversion = nil
+	m.clearedFields[invoicelineitem.FieldFxConversion] = struct{}{}
+}
+
+// FxConversionCleared returns if the "fx_conversion" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) FxConversionCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldFxConversion]
+	return ok
+}
+
+// ResetFxConversion resets all changes to the "fx_conversion" field.
+func (m *InvoiceLineItemMutation) ResetFxConversion() {
+	m.fx_conversion = nil
+	delete(m.clearedFields, invoicelineitem.FieldFxConversion)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -40499,7 +40695,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -40605,6 +40801,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.custom_currency != nil {
 		fields = append(fields, invoicelineitem.FieldCustomCurrency)
 	}
+	if m.fx_conversion != nil {
+		fields = append(fields, invoicelineitem.FieldFxConversion)
+	}
 	return fields
 }
 
@@ -40683,6 +40882,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.ParentLineItemID()
 	case invoicelineitem.FieldCustomCurrency:
 		return m.CustomCurrency()
+	case invoicelineitem.FieldFxConversion:
+		return m.FxConversion()
 	}
 	return nil, false
 }
@@ -40762,6 +40963,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldParentLineItemID(ctx)
 	case invoicelineitem.FieldCustomCurrency:
 		return m.OldCustomCurrency(ctx)
+	case invoicelineitem.FieldFxConversion:
+		return m.OldFxConversion(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -41016,6 +41219,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCustomCurrency(v)
 		return nil
+	case invoicelineitem.FieldFxConversion:
+		v, ok := value.(*types.FxConversion)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFxConversion(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -41124,6 +41334,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldCustomCurrency) {
 		fields = append(fields, invoicelineitem.FieldCustomCurrency)
 	}
+	if m.FieldCleared(invoicelineitem.FieldFxConversion) {
+		fields = append(fields, invoicelineitem.FieldFxConversion)
+	}
 	return fields
 }
 
@@ -41215,6 +41428,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldCustomCurrency:
 		m.ClearCustomCurrency()
+		return nil
+	case invoicelineitem.FieldFxConversion:
+		m.ClearFxConversion()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -41328,6 +41544,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldCustomCurrency:
 		m.ResetCustomCurrency()
+		return nil
+	case invoicelineitem.FieldFxConversion:
+		m.ResetFxConversion()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)

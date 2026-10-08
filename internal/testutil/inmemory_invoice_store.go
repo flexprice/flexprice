@@ -43,6 +43,15 @@ func (s *InMemoryInvoiceStore) SetLineItemStore(lineItemStore *InMemoryInvoiceLi
 }
 
 // Helper to copy invoice
+// clonePtr returns a pointer to a copy of *p, or nil, so stored records are not aliased.
+func clonePtr[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
 func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 	if inv == nil {
 		return nil
@@ -78,6 +87,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			Metadata:                    item.Metadata,
 			CommitmentInfo:              item.CommitmentInfo,
 			CustomCurrency:              item.CustomCurrency,
+			FxConversion:                clonePtr(item.FxConversion),
 			PrepaidCreditsApplied:       item.PrepaidCreditsApplied,
 			LineItemDiscount:            item.LineItemDiscount,
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
@@ -101,6 +111,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountDue:                  inv.AmountDue,
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
+		FxConversion:               clonePtr(inv.FxConversion),
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -281,6 +292,12 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	if updated.CustomCurrency == nil {
 		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
 			updated.CustomCurrency = existing.CustomCurrency
+		}
+	}
+	// fx_conversion is frozen at finalize and never cleared; preserve it like custom_currency.
+	if updated.FxConversion == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.FxConversion = existing.FxConversion
 		}
 	}
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)

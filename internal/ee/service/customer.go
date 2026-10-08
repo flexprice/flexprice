@@ -42,6 +42,12 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 			Mark(ierr.ErrValidation)
 	}
 
+	if cust.BillingCurrency != nil {
+		if err := s.validateBillingCurrency(ctx, cust.ID, cust.BillingCurrency); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
 			// No need to wrap the error as the repository already returns properly formatted errors
@@ -238,6 +244,16 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 	if req.Contact != nil {
 		cust.Contact = req.Contact
+	}
+	if req.BillingCurrency != nil {
+		normalized := dto.NormalizeBillingCurrency(req.BillingCurrency)
+		// Clients that resend the whole customer must not trip the guardrails when nothing changes.
+		if lo.FromPtr(normalized) != lo.FromPtr(cust.BillingCurrency) {
+			if err := s.validateBillingCurrency(ctx, cust.ID, normalized); err != nil {
+				return nil, err
+			}
+		}
+		cust.BillingCurrency = normalized
 	}
 
 	// Update address fields

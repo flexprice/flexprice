@@ -153,7 +153,8 @@ func (r *fxRateRepository) Count(ctx context.Context, filter *types.FXRateFilter
 	defer FinishSpan(span)
 
 	query := r.client.Reader(ctx).FXRate.Query()
-	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	// Filters only: a COUNT with the page's OFFSET returns no row and fails.
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
 		SetSpanError(span, err)
@@ -302,25 +303,12 @@ func (r *fxRateRepository) FindOverlapping(ctx context.Context, scope types.FXRa
 
 	overlapping := make([]*domainFXRate.FXRate, 0)
 	for _, e := range rates {
-		if windowsOverlap(e.StartDate, e.EndDate, startDate, endDate) {
+		if types.FXRateWindowsOverlap(e.StartDate, e.EndDate, startDate, endDate) {
 			overlapping = append(overlapping, domainFXRate.FromEnt(e))
 		}
 	}
 	SetSpanSuccess(span)
 	return overlapping, nil
-}
-
-// windowsOverlap reports whether two half-open [from, to) windows intersect.
-// A nil from is −∞ and a nil to is +∞.
-func windowsOverlap(aFrom, aTo, bFrom, bTo *time.Time) bool {
-	// a starts before b ends, and b starts before a ends
-	if aFrom != nil && bTo != nil && !aFrom.Before(*bTo) {
-		return false
-	}
-	if bFrom != nil && aTo != nil && !bFrom.Before(*aTo) {
-		return false
-	}
-	return true
 }
 
 // FXRateQuery type alias for readability.

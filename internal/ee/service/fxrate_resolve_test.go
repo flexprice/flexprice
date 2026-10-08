@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -65,13 +66,12 @@ func (s *FXRateResolveSuite) TestResolveRate() {
 		name      string
 		req       ResolveFXRateRequest
 		wantRate  string
-		wantScope string
+		wantScope types.FXRateScope
 		wantErr   bool
 	}{
 		{"subscription wins", ResolveFXRateRequest{From: "usd", To: "inr", CustomerID: "cust_a", SubscriptionID: "subs_p"}, "82", "subscription", false},
 		{"customer fallback", ResolveFXRateRequest{From: "usd", To: "inr", CustomerID: "cust_a"}, "84.5", "customer", false},
 		{"tenant fallback", ResolveFXRateRequest{From: "usd", To: "inr"}, "83", "tenant", false},
-		{"identity no query", ResolveFXRateRequest{From: "usd", To: "usd"}, "1", "identity", false},
 		{"reverse pair not found", ResolveFXRateRequest{From: "inr", To: "usd"}, "", "", true},
 		{"missing pair not found", ResolveFXRateRequest{From: "eur", To: "inr"}, "", "", true},
 	}
@@ -96,17 +96,8 @@ func (s *FXRateResolveSuite) TestResolveRate_EndDateIsExclusive() {
 	res, err := s.svc.(*fxRateService).resolveRateAt(s.GetContext(),
 		ResolveFXRateRequest{From: "usd", To: "inr", CustomerID: "cust_a", SubscriptionID: "subs_p"}, novFirst)
 	s.NoError(err)
-	s.Equal("customer", res.Scope, "end_date is exclusive; subscription window ends at Nov 1")
+	s.Equal(types.FXRateScopeCustomer, res.Scope, "end_date is exclusive; subscription window ends at Nov 1")
 	s.True(decimal.RequireFromString("84.5").Equal(res.Rate))
-}
-
-func (s *FXRateResolveSuite) TestResolveRate_IdentityNeedsNoRates() {
-	s.GetStores().FXRateRepo.(*testutil.InMemoryFXRateStore).Clear()
-	res, err := s.svc.ResolveRate(s.GetContext(), ResolveFXRateRequest{From: "usd", To: "usd"})
-	s.NoError(err)
-	s.True(decimal.NewFromInt(1).Equal(res.Rate))
-	s.Equal("identity", res.Scope)
-	s.Equal(types.FXRateSourceFixed, res.Source)
 }
 
 func (s *FXRateResolveSuite) TestResolveRate_ReturnsSource() {
@@ -128,4 +119,25 @@ func (s *FXRateResolveSuite) TestResolveRate_MarketRateNotSupportedYet() {
 	_, err := s.svc.ResolveRate(ctx, ResolveFXRateRequest{From: "eur", To: "jpy"})
 	s.Error(err)
 	s.True(ierr.IsInvalidOperation(err), "market rate resolution should be rejected until the integration lands")
+}
+
+func TestConversionAvailable(t *testing.T) {
+	ctx := context.Background()
+	cfg := types.CustomCurrencyConfig{}
+
+	ok, err := conversionAvailable(ctx, ServiceParams{FXRateRepo: failingFXRateRepo{}}, cfg, "usd", "inr")
+	if err == nil || !ierr.IsDatabase(err) || ok {
+		t.Fatalf("db error: want (false, database error), got (%v, %v)", ok, err)
+	}
+
+	ok, err = conversionAvailable(ctx, ServiceParams{FXRateRepo: notFoundFXRateRepo{}}, cfg, "usd", "inr")
+	if err != nil || ok {
+		t.Fatalf("missing rate: want (false, nil), got (%v, %v)", ok, err)
+	}
+}
+
+type notFoundFXRateRepo struct{ fxrate.Repository }
+
+func (notFoundFXRateRepo) GetTenantRate(_ context.Context, _, _ string) (*fxrate.FXRate, error) {
+	return nil, ierr.NewError("fx rate not found").Mark(ierr.ErrNotFound)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
@@ -63,6 +64,7 @@ type Client interface {
 	CouponAssociations() CouponAssociationOps
 	TaxRates() TaxRateOps
 	TaxAssociations() TaxAssociationOps
+	Payments() PaymentOps
 }
 
 type CustomerOps interface {
@@ -178,6 +180,57 @@ type TaxAssociationOps interface {
 	Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error)
 }
 
+// SavedPaymentMethod is the subset of a saved-methods listing the payment probes read.
+type SavedPaymentMethod struct {
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	IsDefault     bool   `json:"is_default"`
+	CanAutoCharge bool   `json:"can_auto_charge"`
+}
+
+// PaymentOps covers checkout sessions and saved payment methods. Methods named
+// Portal* authenticate with a customer-portal session token instead of the API
+// key. The saved-method, setup, mapping and portal endpoints are not in the SDK
+// and go over raw HTTP.
+type PaymentOps interface {
+	CreateCheckoutSession(ctx context.Context, req types.CreateCheckoutSessionRequest) (*dtos.CreateCheckoutSessionResponse, error)
+	GetCheckoutSession(ctx context.Context, id string) (*dtos.GetCheckoutSessionResponse, error)
+	CancelCheckoutSession(ctx context.Context, id string) (*dtos.CancelCheckoutSessionResponse, error)
+	// CreateCheckoutInvoice creates a one-off invoice; with req.Checkout set it is
+	// gated on a checkout session.
+	CreateCheckoutInvoice(ctx context.Context, req types.CreateInvoiceRequest) (*dtos.CreateInvoiceResponse, error)
+	// ListPayments reads payments without reconciling with the gateway, unlike
+	// GET /payments/{id}, so it shows only what webhooks have delivered.
+	ListPayments(ctx context.Context, req dtos.ListPaymentsRequest) (*dtos.ListPaymentsResponse, error)
+
+	ListSavedMethods(ctx context.Context, customerID, provider string) ([]SavedPaymentMethod, error)
+	// CreateSetupLink returns the hosted page URL for adding a card (Stripe setup intent).
+	CreateSetupLink(ctx context.Context, customerID, provider, returnURL string) (string, error)
+	// GetGatewayCustomerID returns the customer's id at the gateway, "" when not yet synced.
+	GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error)
+	CreatePortalSession(ctx context.Context, externalCustomerID string) (token string, err error)
+
+	PortalListSavedMethods(ctx context.Context, token, provider string) ([]SavedPaymentMethod, error)
+	// PortalAddMethod returns the hosted page URL the customer adds a method on.
+	PortalAddMethod(ctx context.Context, token, provider, returnURL string) (string, error)
+	PortalSetDefaultMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error)
+	PortalDeleteMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error)
+
+	// ExecuteSubscriptionModify applies a subscription change; with req.Checkout set
+	// and a net charge, it is gated on a checkout session.
+	ExecuteSubscriptionModify(ctx context.Context, subscriptionID string, req types.ExecuteSubscriptionModifyRequest) (*dtos.ExecuteSubscriptionModifyResponse, error)
+	// AddSubscriptionAddon attaches an addon; with req.Checkout set and prorations
+	// requested, it is gated on a checkout session.
+	AddSubscriptionAddon(ctx context.Context, req types.AddAddonRequest) (*dtos.AddSubscriptionAddonResponse, error)
+	GetSubscriptionAddonAssociations(ctx context.Context, subscriptionID string) (*dtos.GetSubscriptionAddonAssociationsResponse, error)
+	GetAddonByLookupKey(ctx context.Context, lookupKey string) (*dtos.GetAddonByLookupKeyResponse, error)
+	CreateAddon(ctx context.Context, req types.CreateAddonRequest) (*dtos.CreateAddonResponse, error)
+
+	// CreateCreditNote issues a credit note; against a paid invoice it is a refund.
+	CreateCreditNote(ctx context.Context, req types.CreateCreditNoteRequest) (*dtos.CreateCreditNoteResponse, error)
+	ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error)
+}
+
 type AsyncEventClient interface {
 	Enqueue(eventName, externalCustomerID string, properties map[string]any) error
 	EnqueueWithOptions(opts flexprice.EventOptions) error
@@ -227,6 +280,18 @@ func (c *sdkClient) CouponAssociations() CouponAssociationOps {
 func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
 func (c *sdkClient) TaxAssociations() TaxAssociationOps {
 	return taxAssociationOps{c.sdk.TaxAssociations}
+}
+func (c *sdkClient) Payments() PaymentOps {
+	return paymentOps{
+		checkout:      c.sdk.Checkout,
+		payments:      c.sdk.Payments,
+		invoices:      c.sdk.Invoices,
+		subscriptions: c.sdk.Subscriptions,
+		addons:        c.sdk.Addons,
+		creditNotes:   c.sdk.CreditNotes,
+		refunds:       c.sdk.Refunds,
+		parent:        c,
+	}
 }
 
 // --- adapters ---
@@ -589,4 +654,209 @@ func (o taxAssociationOps) List(ctx context.Context, entityType, entityID, exter
 }
 func (o taxAssociationOps) Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error) {
 	return o.s.DeleteTaxAssociation(ctx, id)
+}
+
+type paymentOps struct {
+	checkout      *flexprice.Checkout
+	payments      *flexprice.Payments
+	invoices      *flexprice.Invoices
+	subscriptions *flexprice.Subscriptions
+	addons        *flexprice.Addons
+	creditNotes   *flexprice.CreditNotes
+	refunds       *flexprice.Refunds
+	parent        *sdkClient
+}
+
+func (o paymentOps) CreateCheckoutSession(ctx context.Context, req types.CreateCheckoutSessionRequest) (*dtos.CreateCheckoutSessionResponse, error) {
+	return o.checkout.CreateCheckoutSession(ctx, req)
+}
+func (o paymentOps) GetCheckoutSession(ctx context.Context, id string) (*dtos.GetCheckoutSessionResponse, error) {
+	return o.checkout.GetCheckoutSession(ctx, id)
+}
+func (o paymentOps) CancelCheckoutSession(ctx context.Context, id string) (*dtos.CancelCheckoutSessionResponse, error) {
+	return o.checkout.CancelCheckoutSession(ctx, id)
+}
+func (o paymentOps) CreateCheckoutInvoice(ctx context.Context, req types.CreateInvoiceRequest) (*dtos.CreateInvoiceResponse, error) {
+	return o.invoices.CreateInvoice(ctx, req)
+}
+func (o paymentOps) ListPayments(ctx context.Context, req dtos.ListPaymentsRequest) (*dtos.ListPaymentsResponse, error) {
+	return o.payments.ListPayments(ctx, req)
+}
+
+func (o paymentOps) ExecuteSubscriptionModify(ctx context.Context, subscriptionID string, req types.ExecuteSubscriptionModifyRequest) (*dtos.ExecuteSubscriptionModifyResponse, error) {
+	return o.subscriptions.ExecuteSubscriptionModify(ctx, subscriptionID, req)
+}
+func (o paymentOps) AddSubscriptionAddon(ctx context.Context, req types.AddAddonRequest) (*dtos.AddSubscriptionAddonResponse, error) {
+	return o.subscriptions.AddSubscriptionAddon(ctx, req)
+}
+func (o paymentOps) GetSubscriptionAddonAssociations(ctx context.Context, subscriptionID string) (*dtos.GetSubscriptionAddonAssociationsResponse, error) {
+	return o.subscriptions.GetSubscriptionAddonAssociations(ctx, subscriptionID)
+}
+func (o paymentOps) GetAddonByLookupKey(ctx context.Context, lookupKey string) (*dtos.GetAddonByLookupKeyResponse, error) {
+	return o.addons.GetAddonByLookupKey(ctx, lookupKey)
+}
+func (o paymentOps) CreateAddon(ctx context.Context, req types.CreateAddonRequest) (*dtos.CreateAddonResponse, error) {
+	return o.addons.CreateAddon(ctx, req)
+}
+func (o paymentOps) CreateCreditNote(ctx context.Context, req types.CreateCreditNoteRequest) (*dtos.CreateCreditNoteResponse, error) {
+	return o.creditNotes.CreateCreditNote(ctx, req)
+}
+func (o paymentOps) ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error) {
+	return o.refunds.ListRefunds(ctx, req)
+}
+
+// savedMethodsResponse is the server's SavedPaymentMethodsResponse: one block per gateway.
+type savedMethodsResponse struct {
+	Providers []struct {
+		Provider string               `json:"provider"`
+		Items    []SavedPaymentMethod `json:"items"`
+		Error    *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	} `json:"providers"`
+}
+
+// methodsFor picks provider's block, failing when it is missing or reports an error.
+func (r savedMethodsResponse) methodsFor(provider string) ([]SavedPaymentMethod, error) {
+	for _, block := range r.Providers {
+		if block.Provider != provider {
+			continue
+		}
+		if block.Error != nil {
+			return nil, fmt.Errorf("%s reported: %s", provider, block.Error.Message)
+		}
+		return block.Items, nil
+	}
+	return nil, fmt.Errorf("saved-methods response has no %s block", provider)
+}
+
+func (o paymentOps) ListSavedMethods(ctx context.Context, customerID, provider string) ([]SavedPaymentMethod, error) {
+	var out savedMethodsResponse
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/customers/"+url.PathEscape(customerID)+"/payment-methods?providers="+url.QueryEscape(provider), "", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.methodsFor(provider)
+}
+
+func (o paymentOps) CreateSetupLink(ctx context.Context, customerID, provider, returnURL string) (string, error) {
+	var out struct {
+		CheckoutURL string `json:"checkout_url"`
+	}
+	body := map[string]any{"provider": provider, "success_url": returnURL, "cancel_url": returnURL}
+	if err := o.parent.doRaw(ctx, http.MethodPost, "/payments/customers/"+url.PathEscape(customerID)+"/setup/intent", "", body, &out); err != nil {
+		return "", err
+	}
+	return out.CheckoutURL, nil
+}
+
+func (o paymentOps) GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error) {
+	var out struct {
+		Items []struct {
+			ProviderType     string `json:"provider_type"`
+			ProviderEntityID string `json:"provider_entity_id"`
+		} `json:"items"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/integrations/mappings?entity_type=customer&entity_id="+url.QueryEscape(customerID), "", nil, &out); err != nil {
+		return "", err
+	}
+	for _, m := range out.Items {
+		if m.ProviderType == provider && m.ProviderEntityID != "" {
+			return m.ProviderEntityID, nil
+		}
+	}
+	return "", nil
+}
+
+func (o paymentOps) CreatePortalSession(ctx context.Context, externalCustomerID string) (string, error) {
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/customers/portal/"+url.PathEscape(externalCustomerID), "", nil, &out); err != nil {
+		return "", err
+	}
+	if out.Token == "" {
+		return "", fmt.Errorf("portal session returned no token")
+	}
+	return out.Token, nil
+}
+
+func (o paymentOps) PortalListSavedMethods(ctx context.Context, token, provider string) ([]SavedPaymentMethod, error) {
+	var out savedMethodsResponse
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/customer/portal/payment-methods?providers="+url.QueryEscape(provider), token, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.methodsFor(provider)
+}
+
+func (o paymentOps) PortalAddMethod(ctx context.Context, token, provider, returnURL string) (string, error) {
+	var out struct {
+		Action struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"action"`
+	}
+	body := map[string]any{"payment_provider": provider, "success_url": returnURL, "cancel_url": returnURL}
+	if err := o.parent.doRaw(ctx, http.MethodPost, "/customer/portal/payment-methods", token, body, &out); err != nil {
+		return "", err
+	}
+	return out.Action.URL, nil
+}
+
+func (o paymentOps) PortalSetDefaultMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error) {
+	return o.portalMutateMethod(ctx, "/customer/portal/payment-methods/default", token, provider, methodID)
+}
+
+func (o paymentOps) PortalDeleteMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error) {
+	return o.portalMutateMethod(ctx, "/customer/portal/payment-methods/delete", token, provider, methodID)
+}
+
+func (o paymentOps) portalMutateMethod(ctx context.Context, path, token, provider, methodID string) ([]SavedPaymentMethod, error) {
+	var out savedMethodsResponse
+	body := map[string]any{"payment_provider": provider, "payment_method_id": methodID}
+	if err := o.parent.doRaw(ctx, http.MethodPost, path, token, body, &out); err != nil {
+		return nil, err
+	}
+	return out.methodsFor(provider)
+}
+
+// doRaw sends a JSON request to the Flexprice API and decodes a 2xx body into out.
+// A non-empty sessionToken authenticates as a portal customer instead of the API key.
+func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string, body, out any) error {
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshal request: %w", err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.apiHost, "/")+path, reader)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	if sessionToken != "" {
+		httpReq.Header.Set("X-Session-Token", sessionToken)
+	} else {
+		httpReq.Header.Set("x-api-key", c.apiKey)
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	return nil
 }

@@ -38,6 +38,8 @@ const (
 	FieldEmail = "email"
 	// FieldContact holds the string denoting the contact field in the database.
 	FieldContact = "contact"
+	// FieldBillingCurrency holds the string denoting the billing_currency field in the database.
+	FieldBillingCurrency = "billing_currency"
 	// FieldAddressLine1 holds the string denoting the address_line1 field in the database.
 	FieldAddressLine1 = "address_line1"
 	// FieldAddressLine2 holds the string denoting the address_line2 field in the database.
@@ -73,6 +75,7 @@ var Columns = []string{
 	FieldName,
 	FieldEmail,
 	FieldContact,
+	FieldBillingCurrency,
 	FieldAddressLine1,
 	FieldAddressLine2,
 	FieldAddressCity,
@@ -179,6 +182,11 @@ func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 // ByContact orders the results by the contact field.
 func ByContact(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContact, opts...).ToFunc()
+}
+
+// ByBillingCurrency orders the results by the billing_currency field.
+func ByBillingCurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingCurrency, opts...).ToFunc()
 }
 
 // ByAddressLine1 orders the results by the address_line1 field.

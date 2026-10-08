@@ -1132,6 +1132,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
+		FXRateRepo:                 s.GetStores().FXRateRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),

@@ -1690,6 +1690,16 @@ func CustomCurrencyNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldCustomCurrency))
 }
 
+// FxConversionIsNil applies the IsNil predicate on the "fx_conversion" field.
+func FxConversionIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldFxConversion))
+}
+
+// FxConversionNotNil applies the NotNil predicate on the "fx_conversion" field.
+func FxConversionNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldFxConversion))
+}
+
 // DescriptionEQ applies the EQ predicate on the "description" field.
 func DescriptionEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDescription, v))

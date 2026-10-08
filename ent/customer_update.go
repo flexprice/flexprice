@@ -149,6 +149,26 @@ func (_u *CustomerUpdate) ClearContact() *CustomerUpdate {
 	return _u
 }
 
+// SetBillingCurrency sets the "billing_currency" field.
+func (_u *CustomerUpdate) SetBillingCurrency(v string) *CustomerUpdate {
+	_u.mutation.SetBillingCurrency(v)
+	return _u
+}
+
+// SetNillableBillingCurrency sets the "billing_currency" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableBillingCurrency(v *string) *CustomerUpdate {
+	if v != nil {
+		_u.SetBillingCurrency(*v)
+	}
+	return _u
+}
+
+// ClearBillingCurrency clears the value of the "billing_currency" field.
+func (_u *CustomerUpdate) ClearBillingCurrency() *CustomerUpdate {
+	_u.mutation.ClearBillingCurrency()
+	return _u
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (_u *CustomerUpdate) SetAddressLine1(v string) *CustomerUpdate {
 	_u.mutation.SetAddressLine1(v)
@@ -418,6 +438,12 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ContactCleared() {
 		_spec.ClearField(customer.FieldContact, field.TypeString)
 	}
+	if value, ok := _u.mutation.BillingCurrency(); ok {
+		_spec.SetField(customer.FieldBillingCurrency, field.TypeString, value)
+	}
+	if _u.mutation.BillingCurrencyCleared() {
+		_spec.ClearField(customer.FieldBillingCurrency, field.TypeString)
+	}
 	if value, ok := _u.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
 	}
@@ -600,6 +626,26 @@ func (_u *CustomerUpdateOne) SetNillableContact(v *string) *CustomerUpdateOne {
 // ClearContact clears the value of the "contact" field.
 func (_u *CustomerUpdateOne) ClearContact() *CustomerUpdateOne {
 	_u.mutation.ClearContact()
+	return _u
+}
+
+// SetBillingCurrency sets the "billing_currency" field.
+func (_u *CustomerUpdateOne) SetBillingCurrency(v string) *CustomerUpdateOne {
+	_u.mutation.SetBillingCurrency(v)
+	return _u
+}
+
+// SetNillableBillingCurrency sets the "billing_currency" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableBillingCurrency(v *string) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetBillingCurrency(*v)
+	}
+	return _u
+}
+
+// ClearBillingCurrency clears the value of the "billing_currency" field.
+func (_u *CustomerUpdateOne) ClearBillingCurrency() *CustomerUpdateOne {
+	_u.mutation.ClearBillingCurrency()
 	return _u
 }
 
@@ -901,6 +947,12 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.ContactCleared() {
 		_spec.ClearField(customer.FieldContact, field.TypeString)
+	}
+	if value, ok := _u.mutation.BillingCurrency(); ok {
+		_spec.SetField(customer.FieldBillingCurrency, field.TypeString, value)
+	}
+	if _u.mutation.BillingCurrencyCleared() {
+		_spec.ClearField(customer.FieldBillingCurrency, field.TypeString)
 	}
 	if value, ok := _u.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)

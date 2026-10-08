@@ -79,7 +79,7 @@ func (s *walletService) settleExpiringCredit(ctx context.Context, tx *wallet.Tra
 	expiry := lo.FromPtr(tx.ExpiryDate)
 	allocations := make([]draftAllocation, 0, len(subs))
 	for _, sub := range subs {
-		targets, err := s.settlementTargets(ctx, sub, expiry)
+		targets, err := s.settlementTargets(ctx, sub, tx.CreatedAt, expiry)
 		if err != nil {
 			return nil, err
 		}
@@ -195,8 +195,9 @@ func (s *walletService) settlementSubscriptions(ctx context.Context, tx *wallet.
 }
 
 // settlementTargets returns the subscription's unfinalized cycle drafts with usage before the
-// expiry, oldest first. The current period's draft is created only if it has such usage.
-func (s *walletService) settlementTargets(ctx context.Context, sub *subscription.Subscription, expiry time.Time) ([]settlementTarget, error) {
+// expiry, oldest first, for periods ending after the credit was added. The current period's draft
+// is created only if it has such usage.
+func (s *walletService) settlementTargets(ctx context.Context, sub *subscription.Subscription, addedAt, expiry time.Time) ([]settlementTarget, error) {
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	startedBefore := sub.CurrentPeriodStart
 	if expiry.Before(startedBefore) {
@@ -209,6 +210,10 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 
 	targets := make([]settlementTarget, 0, len(earlier)+1)
 	for _, inv := range earlier {
+		// As at finalization, a credit pays only invoices for periods that ended after it was added.
+		if !inv.PeriodEnd.After(addedAt) {
+			continue
+		}
 		// Its usage is final only once computed after the period ended.
 		if inv.LastComputedAt == nil || inv.LastComputedAt.Before(*inv.PeriodEnd) {
 			computed, skipped, err := invoiceService.ComputeInvoice(ctx, inv.ID, nil)

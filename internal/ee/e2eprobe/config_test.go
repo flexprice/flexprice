@@ -229,3 +229,120 @@ func TestLoadConfig_APIKeyWinsOverCredentials(t *testing.T) {
 		t.Fatal("an explicit API key must take precedence over credentials")
 	}
 }
+
+func TestLoadConfig_Payments(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		check   func(t *testing.T, p PaymentsConfig)
+	}{
+		{
+			name: "unset disables payment probes",
+			check: func(t *testing.T, p PaymentsConfig) {
+				if len(p.Providers) != 0 {
+					t.Errorf("providers = %+v, want none", p.Providers)
+				}
+				if p.SettleTimeout != 90*time.Second {
+					t.Errorf("SettleTimeout = %s, want 90s", p.SettleTimeout)
+				}
+			},
+		},
+		{
+			name: "providers with defaults and credentials",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":          " Stripe ,razorpay,chargebee",
+				"E2EPROBE_STRIPE_TEST_SECRET_KEY":      "sk_test_abc",
+				"E2EPROBE_CHARGEBEE_TEST_SITE":         "acme-test",
+				"E2EPROBE_CHARGEBEE_TEST_API_KEY":      "test_abc",
+				"E2EPROBE_PAYMENTS_CHARGEBEE_CURRENCY": "eur",
+				"E2EPROBE_PAYMENTS_SETTLE_TIMEOUT":     "2m",
+			},
+			check: func(t *testing.T, p PaymentsConfig) {
+				if len(p.Providers) != 3 {
+					t.Fatalf("providers = %+v, want 3", p.Providers)
+				}
+				if p.Providers[0].Provider != "stripe" || p.Providers[0].Currency != "USD" || p.Providers[0].StripeSecretKey != "sk_test_abc" {
+					t.Errorf("stripe = %+v", p.Providers[0])
+				}
+				if p.Providers[1].Provider != "razorpay" || p.Providers[1].Currency != "INR" {
+					t.Errorf("razorpay = %+v", p.Providers[1])
+				}
+				if p.Providers[2].Currency != "EUR" || p.Providers[2].ChargebeeSite != "acme-test" {
+					t.Errorf("chargebee = %+v", p.Providers[2])
+				}
+				if p.SettleTimeout != 2*time.Minute {
+					t.Errorf("SettleTimeout = %s, want 2m", p.SettleTimeout)
+				}
+			},
+		},
+		{
+			name:    "unknown provider",
+			env:     map[string]string{"E2EPROBE_PAYMENTS_PROVIDERS": "paypal"},
+			wantErr: true,
+		},
+		{
+			name: "live stripe key refused",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":     "stripe",
+				"E2EPROBE_STRIPE_TEST_SECRET_KEY": "sk_live_abc",
+			},
+			wantErr: true,
+		},
+		{
+			name: "chargebee live site refused",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":     "chargebee",
+				"E2EPROBE_CHARGEBEE_TEST_SITE":    "acme",
+				"E2EPROBE_CHARGEBEE_TEST_API_KEY": "test_abc",
+			},
+			wantErr: true,
+		},
+		{
+			name: "chargebee live key refused",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":     "chargebee",
+				"E2EPROBE_CHARGEBEE_TEST_SITE":    "acme-test",
+				"E2EPROBE_CHARGEBEE_TEST_API_KEY": "live_abc",
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+			t.Setenv("E2EPROBE_API_KEY", "k")
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			c, err := LoadConfig()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			tt.check(t, c.Payments)
+		})
+	}
+}
+
+func TestLoadConfig_PaymentsSettleTimeoutPerProvider(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+	t.Setenv("E2EPROBE_API_KEY", "k")
+	t.Setenv("E2EPROBE_PAYMENTS_PROVIDERS", "razorpay,stripe")
+	t.Setenv("E2EPROBE_PAYMENTS_STRIPE_SETTLE_TIMEOUT", "2m")
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := c.Payments.Providers[0].SettleTimeout; got != 10*time.Minute {
+		t.Errorf("razorpay SettleTimeout = %s, want 10m default", got)
+	}
+	if got := c.Payments.Providers[1].SettleTimeout; got != 2*time.Minute {
+		t.Errorf("stripe SettleTimeout = %s, want 2m override", got)
+	}
+}

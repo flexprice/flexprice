@@ -43,6 +43,8 @@ type Customer struct {
 	Email string `json:"email,omitempty"`
 	// Contact holds the value of the "contact" field.
 	Contact *string `json:"contact,omitempty"`
+	// BillingCurrency holds the value of the "billing_currency" field.
+	BillingCurrency *string `json:"billing_currency,omitempty"`
 	// AddressLine1 holds the value of the "address_line1" field.
 	AddressLine1 string `json:"address_line1,omitempty"`
 	// AddressLine2 holds the value of the "address_line2" field.
@@ -69,7 +71,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata:
 			values[i] = new([]byte)
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment:
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -168,6 +170,13 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Contact = new(string)
 				*_m.Contact = value.String
+			}
+		case customer.FieldBillingCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_currency", values[i])
+			} else if value.Valid {
+				_m.BillingCurrency = new(string)
+				*_m.BillingCurrency = value.String
 			}
 		case customer.FieldAddressLine1:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -288,6 +297,11 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	if v := _m.Contact; v != nil {
 		builder.WriteString("contact=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BillingCurrency; v != nil {
+		builder.WriteString("billing_currency=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

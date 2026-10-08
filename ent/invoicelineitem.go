@@ -91,6 +91,8 @@ type InvoiceLineItem struct {
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
 	// CustomCurrency holds the value of the "custom_currency" field.
 	CustomCurrency *types.CustomCurrencyLineItem `json:"custom_currency,omitempty"`
+	// FxConversion holds the value of the "fx_conversion" field.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -135,7 +137,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedEntitlementQuantity:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo, invoicelineitem.FieldCustomCurrency:
+		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo, invoicelineitem.FieldCustomCurrency, invoicelineitem.FieldFxConversion:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
@@ -400,6 +402,14 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field custom_currency: %w", err)
 				}
 			}
+		case invoicelineitem.FieldFxConversion:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field fx_conversion", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.FxConversion); err != nil {
+					return fmt.Errorf("unmarshal field fx_conversion: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -590,6 +600,9 @@ func (_m *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("custom_currency=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CustomCurrency))
+	builder.WriteString(", ")
+	builder.WriteString("fx_conversion=")
+	builder.WriteString(fmt.Sprintf("%v", _m.FxConversion))
 	builder.WriteByte(')')
 	return builder.String()
 }

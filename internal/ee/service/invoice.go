@@ -122,6 +122,10 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 		}
 	}
 
+	if err := s.validateInvoiceBillingCurrency(ctx, req); err != nil {
+		return nil, err
+	}
+
 	// Validate coupons
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
 	validCoupons := make([]dto.InvoiceCoupon, 0)
@@ -397,6 +401,15 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 }
 
 func (s *invoiceService) CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error) {
+	// Compute only falls back to resolving tax for subscription invoices, so resolve it here.
+	if req.PreparedTaxRates == nil {
+		preparedTaxRates, err := NewTaxService(s.ServiceParams).PrepareTaxRatesForInvoice(ctx, req)
+		if err != nil {
+			return nil, false, err
+		}
+		req.PreparedTaxRates = preparedTaxRates
+	}
+
 	draftResp, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
 	if err != nil {
 		return nil, false, err
@@ -1166,10 +1179,12 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		// One-off and credit invoices already have credits and taxes applied
 		// during ComputeInvoice, so we skip them here.
 		// For subscription invoices, credits and taxes are deferred to this
-		// step so wallet debits only happen when the invoice is sealed.
+		// step so wallet debits only happen when the invoice is sealed. Drafts
+		// converted at checkout are skipped; their paid amount is final.
 		// ====================================================================
 
-		if lockedInv.InvoiceType == types.InvoiceTypeSubscription {
+		taxSubscriptionInvoice := false
+		if lockedInv.InvoiceType == types.InvoiceTypeSubscription && lockedInv.FxConversion == nil {
 			// Load line items — ApplyCreditsToInvoice needs them
 			lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, lockedInv.ID)
 			if err != nil {
@@ -1211,15 +1226,25 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 				if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 					return err
 				}
-
-				// Recalculate taxes with credits factored in
-				if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
-					return err
-				}
-				// Tax was produced in fiat, so it is divided back into the denomination.
-				lockedInv.MirrorTaxIntoDenomination()
-
+				taxSubscriptionInvoice = true
 			}
+		}
+
+		// ====================================================================
+		// Convert to the billing currency and re-tax. A missing rate leaves the
+		// invoice DRAFT.
+		// ====================================================================
+		if err := s.convertToBillingCurrency(txCtx, lockedInv); err != nil {
+			return err
+		}
+
+		// A converted invoice was already taxed in the billing currency above; tax the rest here.
+		if taxSubscriptionInvoice && lockedInv.FxConversion == nil {
+			if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
+				return err
+			}
+			// Tax was produced in fiat, so it is divided back into the denomination.
+			lockedInv.MirrorTaxIntoDenomination()
 		}
 
 		// ====================================================================
@@ -3941,6 +3966,18 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 				"current_status": inv.InvoiceStatus,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// A converted checkout draft is frozen: recalculating would rate the subscription in the charge
+	// currency onto a billing-currency invoice, and finalize would then skip conversion.
+	if inv.FxConversion != nil {
+		return nil, ierr.NewError("invoice has already been converted to the billing currency").
+			WithHint("A converted draft cannot be recalculated; void it and issue a new one.").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": inv.ID,
+				"currency":   inv.Currency,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Validate this is a subscription invoice

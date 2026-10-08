@@ -57,6 +57,12 @@ func (Customer) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.String("billing_currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
+			Optional().
+			Nillable(),
 		// Address fields
 		field.String("address_line1").
 			SchemaType(map[string]string{

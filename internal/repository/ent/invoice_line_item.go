@@ -52,7 +52,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		item.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	_, err := r.client.Writer(ctx).InvoiceLineItem.Create().
+	builder := r.client.Writer(ctx).InvoiceLineItem.Create().
 		SetID(item.ID).
 		SetTenantID(types.GetTenantID(ctx)).
 		SetInvoiceID(item.InvoiceID).
@@ -88,8 +88,12 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetCreatedBy(item.CreatedBy).
 		SetUpdatedBy(item.UpdatedBy).
 		SetCreatedAt(item.CreatedAt).
-		SetUpdatedAt(item.UpdatedAt).
-		Save(ctx)
+		SetUpdatedAt(item.UpdatedAt)
+	// fx_conversion stays SQL NULL until conversion.
+	if item.FxConversion != nil {
+		builder = builder.SetFxConversion(item.FxConversion)
+	}
+	_, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -177,6 +181,9 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetUpdatedBy(item.UpdatedBy).
 				SetCreatedAt(item.CreatedAt).
 				SetUpdatedAt(item.UpdatedAt)
+			if item.FxConversion != nil {
+				bulk[i].SetFxConversion(item.FxConversion)
+			}
 		}
 
 		for i := 0; i < len(bulk); i += invoiceLineItemBatchSize {
@@ -267,6 +274,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		).
 		SetAmount(item.Amount).
 		SetQuantity(item.Quantity).
+		SetCurrency(item.Currency).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -277,6 +285,9 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
+	if item.FxConversion != nil {
+		q = q.SetFxConversion(item.FxConversion)
+	}
 	if item.AdjustedEntitlementQuantity != nil {
 		q = q.SetAdjustedEntitlementQuantity(*item.AdjustedEntitlementQuantity)
 	} else {

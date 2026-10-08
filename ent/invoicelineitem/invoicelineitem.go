@@ -85,6 +85,8 @@ const (
 	FieldParentLineItemID = "parent_line_item_id"
 	// FieldCustomCurrency holds the string denoting the custom_currency field in the database.
 	FieldCustomCurrency = "custom_currency"
+	// FieldFxConversion holds the string denoting the fx_conversion field in the database.
+	FieldFxConversion = "fx_conversion"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -145,6 +147,7 @@ var Columns = []string{
 	FieldAdjustedEntitlementQuantity,
 	FieldParentLineItemID,
 	FieldCustomCurrency,
+	FieldFxConversion,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

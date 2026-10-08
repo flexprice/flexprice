@@ -422,3 +422,45 @@ func TestCreateSubscriptionRequestToSubscription_DefaultsLineItemGrouping(t *tes
 		t.Errorf("LineItemGrouping = %q, want %q when omitted", sub.LineItemGrouping, types.LineItemGroupingPerChargePeriod)
 	}
 }
+
+func TestCreateSubscriptionRequestValidate_FxRates(t *testing.T) {
+	at := func(day int) *time.Time {
+		v := time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC)
+		return &v
+	}
+	rate := func(r string, from, to *time.Time) InlineFXRate {
+		return InlineFXRate{Rate: decimal.RequireFromString(r), StartDate: from, EndDate: to}
+	}
+	cases := []struct {
+		name    string
+		rates   []InlineFXRate
+		wantErr string
+	}{
+		{name: "none"},
+		{name: "single open-ended", rates: []InlineFXRate{rate("83", nil, nil)}},
+		{name: "consecutive windows", rates: []InlineFXRate{rate("83", nil, at(5)), rate("84", at(5), nil)}},
+		{name: "zero rate", rates: []InlineFXRate{rate("0", nil, nil)}, wantErr: "fx_rates[0].rate"},
+		{name: "start not before end", rates: []InlineFXRate{rate("83", at(5), at(5))}, wantErr: "fx_rates[0].start_date"},
+		{name: "two open-ended rows overlap", rates: []InlineFXRate{rate("83", nil, nil), rate("84", nil, nil)}, wantErr: "overlap"},
+		{name: "partial overlap", rates: []InlineFXRate{rate("83", at(1), at(6)), rate("84", at(5), at(9))}, wantErr: "overlap"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.FxRates = tc.rates
+			err := req.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}

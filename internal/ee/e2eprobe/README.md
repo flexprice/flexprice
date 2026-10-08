@@ -27,6 +27,7 @@ make run-e2eprobe
 9. **10 subscriptions** — one per persistent customer — on the e2eprobe plan (monthly, anniversary cycle). New subs carry a $5/mo commitment (1.5× overage factor); cust #1's sub additionally carries the shared coupon via SubscriptionCoupons. Draft subscriptions are activated automatically.
 10. **1 tax association** linking the shared tax rate to persistent cust #0's subscription (idempotent — covers both new and existing subs).
 11. **3 wallets** on the first 3 persistent customers (`e2eprobe-cust-persistent-0/1/2`), each topped up to $100.00 USD.
+12. **Payments plan per currency** (`e2eprobe_payments_plan_<currency>`) with one in-advance fixed price, created by payment-autocharge-probe the first time it runs for that currency.
 
 Subscription line items snapshot the plan at create time, so a feature seeded
 after the persistent subs were created is invisible to every usage read path
@@ -126,6 +127,15 @@ Adding a new probe: write `internal/ee/e2eprobe/checks/<name>.go` implementing `
 | `E2EPROBE_JANITOR_MAX_AGE` | Minimum age of an ephemeral entity before the janitor deletes it (applies to both in-memory sweep and Flexprice orphan scan) | `1h` |
 | `E2EPROBE_CHECK_<NAME>_ENABLED` | Per-check kill switch | `true` |
 | `E2EPROBE_CHECK_<NAME>_INTERVAL` | Per-check interval override (Go duration) | per-check default |
+| `E2EPROBE_PAYMENTS_PROVIDERS` | Gateways connected to the probe environment that the payment probes exercise: `stripe`, `chargebee`, `razorpay` (comma-separated). Empty disables payment probes | empty |
+| `E2EPROBE_PAYMENTS_<PROVIDER>_CURRENCY` | Currency the gateway's probes bill in | `USD` (stripe, chargebee), `INR` (razorpay) |
+| `E2EPROBE_PAYMENTS_SETTLE_TIMEOUT` | How long a payment or checkout session may take to settle | `90s` |
+| `E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT` | Per-gateway override of the settle timeout | `10m` for razorpay (test-mode mandate debits capture up to minutes later), else the global value |
+| `E2EPROBE_STRIPE_TEST_SECRET_KEY` | Stripe **test-mode** key (`sk_test_`/`rk_test_`) of the account the environment's Stripe connection uses. Enables card vaulting and payment-autocharge-probe. Live keys are refused at startup | empty |
+| `E2EPROBE_CHARGEBEE_TEST_SITE` / `E2EPROBE_CHARGEBEE_TEST_API_KEY` | Chargebee **test** site (must end in `-test`) and its `test_` API key. Enables card vaulting and payment-autocharge-probe | empty |
+| `E2EPROBE_RAZORPAY_MANDATE_CUSTOMER` | External id of a persistent customer whose Razorpay mandate was authorized by hand; enables payment-autocharge-probe-razorpay on that customer (no decline leg) | empty |
+| `E2EPROBE_PAYMENTS_ASSERT_KNOWN_ISSUES` | Run legs that fail on known, unfixed product bugs (listed in `knownIssueLegs`, e.g. Chargebee refund and decline). Off reports them under `skipped_legs` instead of failing | `false` |
+| `E2EPROBE_CHARGEBEE_DECLINE_CARD` | Card number the Chargebee test gateway vaults but declines; the decline leg is skipped when empty | empty |
 
 Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchanged.
 
@@ -153,6 +163,9 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | coupon-application-probe | 15m | Ephemeral sub w/ SubscriptionCoupons → preview → assert `preview.CouponApplications` references the seed coupon |
 | probe | persistent-billing-invariants-probe | 30m | Cycle invoices for pers cust #0/#1 → assert tax on latest + coupon on oldest (ONCE cadence) |
 | scenario | entitlement-grant-additive-probe | 15m | Ephemeral sub inheriting plan additive grant → ingest 200 events → assert usage summary populates |
+| scenario | payment-link-probe-`<gateway>` | 20m | Ephemeral customer, no saved method → pay_invoice / wallet_topup / auto-charge-fallback each issue a pending session with a payment URL; cancel expires it with no payment or credit; unattended auto-charge is refused with a 4xx. Natural expiry: each run leaves one top-up link untouched on `e2eprobe-cust-pay-<gateway>-expiry`; a later run (past expiry + one 30m cleanup cycle) asserts the cleanup job failed the top-up, removed its draft invoice/payment, credited nothing and expired the session |
+| scenario | payment-method-probe-`<gateway>` | 30m | Saved-method listing (API + portal), setup / add-method links; with gateway test credentials, vault a card → listed and auto-chargeable → set default → delete. Unsupported operations must 4xx |
+| scenario | payment-autocharge-probe-`<gateway>` | 30m | Requires gateway test credentials, or (Razorpay) a fixed customer with a hand-authorized mandate. Legs run independently and one report lists every failing leg (`failed_legs`, `leg.<name>.step`). Vault a card → auto-charged top-up settles via webhook before any reconciling read, completes, credits exactly once; pay_invoice ends SUCCEEDED with full amount; create_subscription ends active; a paid quantity change (modify_subscription) and a prorated in-advance addon (add_addon) are gated on checkout and applied on payment; a full back-to-source refund of the paid invoice marks it REFUNDED and settles to the card (Chargebee, Razorpay) or the wallet (Stripe, which has no gateway refunds); a declining card neither completes nor credits. Self-provisions `e2eprobe_payments_addon_<currency>` |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers (Phase 2) and orphan tax associations (Phase 3) and deletes them |
 
 ## Webhook pipeline verification (low-balance-alert-probe + low-wallet-alert-listener)

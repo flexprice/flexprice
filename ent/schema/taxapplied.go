@@ -85,12 +85,12 @@ func (TaxApplied) Fields() []ent.Field {
 			Comment("Calculated tax amount"),
 
 		// Currency and localization
+		// Not immutable: a converted invoice re-taxes in its billing currency and rewrites this row.
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
 			NotEmpty().
-			Immutable().
 			Comment("Currency code (ISO 4217)"),
 
 		field.Time("applied_at").

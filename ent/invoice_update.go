@@ -120,6 +120,20 @@ func (_u *InvoiceUpdate) SetNillablePaymentStatus(v *types.PaymentStatus) *Invoi
 	return _u
 }
 
+// SetCurrency sets the "currency" field.
+func (_u *InvoiceUpdate) SetCurrency(v string) *InvoiceUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableCurrency(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
 // SetAmountDue sets the "amount_due" field.
 func (_u *InvoiceUpdate) SetAmountDue(v decimal.Decimal) *InvoiceUpdate {
 	_u.mutation.SetAmountDue(v)
@@ -291,6 +305,18 @@ func (_u *InvoiceUpdate) SetCustomCurrency(v *types.CustomCurrency) *InvoiceUpda
 // ClearCustomCurrency clears the value of the "custom_currency" field.
 func (_u *InvoiceUpdate) ClearCustomCurrency() *InvoiceUpdate {
 	_u.mutation.ClearCustomCurrency()
+	return _u
+}
+
+// SetFxConversion sets the "fx_conversion" field.
+func (_u *InvoiceUpdate) SetFxConversion(v *types.FxConversion) *InvoiceUpdate {
+	_u.mutation.SetFxConversion(v)
+	return _u
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (_u *InvoiceUpdate) ClearFxConversion() *InvoiceUpdate {
+	_u.mutation.ClearFxConversion()
 	return _u
 }
 
@@ -761,7 +787,30 @@ func (_u *InvoiceUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *InvoiceUpdate) check() error {
+	if v, ok := _u.mutation.InvoiceStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PaymentStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := invoice.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Invoice.currency": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(invoice.Table, invoice.Columns, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -802,6 +851,9 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)
@@ -853,6 +905,12 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoice.FieldCustomCurrency, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.FxConversion(); ok {
+		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
+	}
+	if _u.mutation.FxConversionCleared() {
+		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
@@ -1172,6 +1230,20 @@ func (_u *InvoiceUpdateOne) SetNillablePaymentStatus(v *types.PaymentStatus) *In
 	return _u
 }
 
+// SetCurrency sets the "currency" field.
+func (_u *InvoiceUpdateOne) SetCurrency(v string) *InvoiceUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableCurrency(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
+	}
+	return _u
+}
+
 // SetAmountDue sets the "amount_due" field.
 func (_u *InvoiceUpdateOne) SetAmountDue(v decimal.Decimal) *InvoiceUpdateOne {
 	_u.mutation.SetAmountDue(v)
@@ -1343,6 +1415,18 @@ func (_u *InvoiceUpdateOne) SetCustomCurrency(v *types.CustomCurrency) *InvoiceU
 // ClearCustomCurrency clears the value of the "custom_currency" field.
 func (_u *InvoiceUpdateOne) ClearCustomCurrency() *InvoiceUpdateOne {
 	_u.mutation.ClearCustomCurrency()
+	return _u
+}
+
+// SetFxConversion sets the "fx_conversion" field.
+func (_u *InvoiceUpdateOne) SetFxConversion(v *types.FxConversion) *InvoiceUpdateOne {
+	_u.mutation.SetFxConversion(v)
+	return _u
+}
+
+// ClearFxConversion clears the value of the "fx_conversion" field.
+func (_u *InvoiceUpdateOne) ClearFxConversion() *InvoiceUpdateOne {
+	_u.mutation.ClearFxConversion()
 	return _u
 }
 
@@ -1826,7 +1910,30 @@ func (_u *InvoiceUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *InvoiceUpdateOne) check() error {
+	if v, ok := _u.mutation.InvoiceStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PaymentStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Currency(); ok {
+		if err := invoice.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Invoice.currency": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(invoice.Table, invoice.Columns, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -1885,6 +1992,9 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if value, ok := _u.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Currency(); ok {
+		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)
 	}
@@ -1935,6 +2045,12 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if _u.mutation.CustomCurrencyCleared() {
 		_spec.ClearField(invoice.FieldCustomCurrency, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.FxConversion(); ok {
+		_spec.SetField(invoice.FieldFxConversion, field.TypeJSON, value)
+	}
+	if _u.mutation.FxConversionCleared() {
+		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
