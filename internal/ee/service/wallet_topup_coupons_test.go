@@ -182,6 +182,13 @@ func (s *WalletServiceSuite) TestTopUpCoupons_InvalidCouponRejectsTheWholeTopUp(
 			},
 		},
 		{
+			name: "same coupon in a different case",
+			seed: func() { s.seedCoupon("topup10", nil) },
+			req: func(req *dto.TopUpWalletRequest) {
+				req.Coupons = []dto.TopUpCoupon{{CouponCode: "TOPUP10"}, {CouponCode: "topup10"}}
+			},
+		},
+		{
 			name:         "unknown code",
 			seed:         func() {},
 			wantNotFound: true,
