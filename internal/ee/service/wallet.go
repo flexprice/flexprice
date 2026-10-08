@@ -964,6 +964,18 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction &&
 		!isPayFirst && !req.TriggeringActor.IsEndCustomer()
 
+	// Auto-complete grants credits before payment; a discount there is not supported.
+	if autoCompleteEnabled && len(req.Coupons) > 0 {
+		return "", "", ierr.NewError("coupons are not supported when purchased credits auto-complete").
+			WithHint("Turn off auto_complete_purchased_credit_transaction, or top up without coupons").
+			Mark(ierr.ErrValidation)
+	}
+
+	couponIDs, err := s.resolveTopUpCoupons(ctx, walletID, req.Coupons)
+	if err != nil {
+		return "", "", err
+	}
+
 	s.Logger.Debug(ctx, "processing purchased credit transaction",
 		"wallet_id", walletID,
 		"auto_complete_enabled", autoCompleteEnabled,
@@ -1172,6 +1184,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		})
 
 		invReq := dto.CreateInvoiceRequest{
+			Coupons:        couponIDs,
 			CustomerID:     w.CustomerID,
 			AmountDue:      amount,
 			AmountPaid:     amountPaid,
@@ -1271,6 +1284,51 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	}
 
 	return walletTransactionID, invoiceID, err
+}
+
+// resolveTopUpCoupons looks up each coupon code, validates it for the wallet and returns the
+// coupon IDs. Any invalid coupon rejects the whole top-up, so nothing is created.
+func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCoupon) ([]string, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	validationService := NewCouponValidationService(s.ServiceParams)
+	couponIDs := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
+		if err != nil {
+			return nil, err
+		}
+		// Cadence only applies to subscriptions, so validate without one.
+		if err := validationService.ValidateCoupon(ctx, *c, nil); err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Coupon '%s' cannot be applied: %s", input.CouponCode, err.Error()).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_code": input.CouponCode,
+					"wallet_id":   walletID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		// Only fixed-amount coupons carry a currency; a percentage coupon is stored without one.
+		if c.Currency != "" && !types.IsMatchingCurrency(c.Currency, w.Currency) {
+			return nil, ierr.NewError("coupon currency does not match the wallet currency").
+				WithHintf("Coupon '%s' is in %s; the wallet is in %s", input.CouponCode, c.Currency, w.Currency).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_code":     input.CouponCode,
+					"coupon_currency": c.Currency,
+					"wallet_currency": w.Currency,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		couponIDs = append(couponIDs, c.ID)
+	}
+	return couponIDs, nil
 }
 
 // CompletePurchasedCreditTransactionWithRetry completes a pending wallet transaction when payment succeeds

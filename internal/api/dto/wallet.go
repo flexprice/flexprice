@@ -362,6 +362,10 @@ type TopUpWalletRequest struct {
 	// Omit for today's pay-later / auto-complete behavior.
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
+	// coupons discount this top-up's invoice, applied in order before tax. Credits granted
+	// are unchanged. Only for PURCHASED_CREDIT_INVOICED, and not with checkout.
+	Coupons []TopUpCoupon `json:"coupons,omitempty"`
+
 	// TriggeringActor records who drove this top-up. An end customer never gets
 	// auto-complete: granting credits before the invoice is paid is a net-terms
 	// arrangement a tenant makes, not one a customer may take for itself.
@@ -370,6 +374,11 @@ type TopUpWalletRequest struct {
 	// SourceType/SourceID set the transaction's source; server-only.
 	SourceType types.WalletTxSourceType `json:"-"`
 	SourceID   string                   `json:"-"`
+}
+
+// TopUpCoupon names a coupon to apply to a top-up invoice.
+type TopUpCoupon struct {
+	CouponCode string `json:"coupon_code" validate:"required"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -445,6 +454,47 @@ func (r *TopUpWalletRequest) Validate() error {
 		}
 	}
 
+	if len(r.Coupons) > 0 {
+		if err := r.validateCoupons(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *TopUpWalletRequest) validateCoupons() error {
+	if r.TransactionReason != types.TransactionReasonPurchasedCreditInvoiced {
+		return ierr.NewError("coupons are only supported for PURCHASED_CREDIT_INVOICED").
+			WithHint("Omit coupons, or set transaction_reason to PURCHASED_CREDIT_INVOICED").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_reason": r.TransactionReason,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if r.Checkout != nil {
+		return ierr.NewError("coupons are not supported with checkout").
+			WithHint("Omit either coupons or checkout").
+			Mark(ierr.ErrValidation)
+	}
+
+	seen := make(map[string]bool, len(r.Coupons))
+	for _, c := range r.Coupons {
+		if c.CouponCode == "" {
+			return ierr.NewError("coupon_code is required").
+				WithHint("Provide a coupon_code for each coupon").
+				Mark(ierr.ErrValidation)
+		}
+		if seen[c.CouponCode] {
+			return ierr.NewError("duplicate coupon_code").
+				WithHintf("Coupon '%s' is listed more than once", c.CouponCode).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_code": c.CouponCode,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		seen[c.CouponCode] = true
+	}
 	return nil
 }
 

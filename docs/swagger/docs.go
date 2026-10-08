@@ -25202,6 +25202,17 @@ const docTemplate = `{
                 }
             }
         },
+        "TopUpCoupon": {
+            "type": "object",
+            "required": [
+                "coupon_code"
+            ],
+            "properties": {
+                "coupon_code": {
+                    "type": "string"
+                }
+            }
+        },
         "TopUpWalletRequest": {
             "type": "object",
             "required": [
@@ -25227,6 +25238,13 @@ const docTemplate = `{
                             "$ref": "#/definitions/CheckoutParams"
                         }
                     ]
+                },
+                "coupons": {
+                    "description": "coupons discount this top-up's invoice, applied in order before tax. Credits granted\nare unchanged. Only for PURCHASED_CREDIT_INVOICED, and not with checkout.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/TopUpCoupon"
+                    }
                 },
                 "credits_to_add": {
                     "description": "credits_to_add is the number of credits to add to the wallet",

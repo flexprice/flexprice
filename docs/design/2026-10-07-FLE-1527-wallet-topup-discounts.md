@@ -160,8 +160,8 @@ The revenue service should record each batch's cost once, when the credits are g
 ## Top-up flow
 
 1. `TopUpWalletRequest` gets `coupons: [{ coupon_code }]`. Request validation rejects coupons with a non-invoiced reason, with `checkout`, or with duplicate codes.
-2. `TopUpWallet` resolves each code (`CouponRepo.GetByCode`) and validates it with a new `ValidateCouponForWallet` = existing `ValidateCoupon(coupon, nil)` (published, dates, redemptions) + currency vs the wallet for fixed-amount coupons. Any failure rejects the top-up.
-3. `handlePurchasedCreditInvoicedTransaction` passes the coupons on a new server-only field `CreateInvoiceRequest.PreparedInvoiceCoupons` (`json:"-"`). `CreateOneOffInvoice` appends it to `InvoiceCoupons` after its own validation, so pre-validated coupons are never silently dropped and public callers cannot bypass validation.
+2. `handlePurchasedCreditInvoicedTransaction` rejects coupons when auto-complete applies, then resolves each code (`CouponRepo.GetByCode`) and validates it with the existing `ValidateCoupon(coupon, nil)` (published, dates, redemptions), plus the wallet's currency for fixed-amount coupons. Any failure rejects the top-up.
+3. `handlePurchasedCreditInvoicedTransaction` passes the coupon IDs in `CreateInvoiceRequest.Coupons`, the existing input of `CreateOneOffInvoice`, which re-validates them into `InvoiceCoupons`. Its currency check already covers only fixed-amount coupons, because percentage coupons are stored without a currency.
 4. The existing compute applies the coupons, writes `coupon_applications`, counts redemptions and taxes the net amount. The purchase row is written as today (pending, before the invoice), in the same DB transaction.
 5. **On completion** set `source_type = INVOICE`, `source_id = invoice ID`, in the same write that flips the status to completed. The pending row is created before its invoice and the link today is one-way (`invoice.metadata.wallet_transaction_id`), so `CompletePurchasedCreditTransactionWithRetry` gains an `invoiceID` parameter. Every caller already holds the invoice: `payment_processor.go` (gateway payment), the two payment-status updates in `invoice.go`, and the $0 path below. The bonus row completed with it gets the same source. Auto-complete top-ups take no coupons and are left as they are: no source.
 6. **$0 invoice (100% coupon):** `FinalizeInvoice` marks a $0 invoice paid without calling the payment hook, which would leave the credits pending forever. `handlePurchasedCreditInvoicedTransaction` sees the invoice already paid and calls `CompletePurchasedCreditTransactionWithRetry` right after its DB transaction commits. Not from inside `FinalizeInvoice`: that runs inside the top-up's open transaction, so the completion webhook would fire before commit.
@@ -206,10 +206,8 @@ The revenue service should record each batch's cost once, when the credits are g
 | `internal/repository/ent/wallet.go` | `ConsumeCredits` returns per-batch credits; setters in `CreateTransaction`; `UpdateTransaction` writes `source_*` while null |
 | `internal/testutil/inmemory_wallet_store.go` | Same; align its batch ordering and status filter with the ent repo |
 | `internal/api/dto/wallet.go` | `coupons` on `TopUpWalletRequest` + validation |
-| `internal/api/dto/invoice.go` | `PreparedInvoiceCoupons` (`json:"-"`) |
-| `internal/ee/service/coupon_validation.go` | `ValidateCouponForWallet` |
 | `internal/ee/service/wallet.go` | Coupon resolution in `TopUpWallet`; pass coupons in `handlePurchasedCreditInvoicedTransaction`; `invoiceID` on `CompletePurchasedCreditTransactionWithRetry` and `source_*` on completion (purchase and bonus); reject coupons when auto-complete is on; complete $0 top-up invoices after commit; `source_*` accepted on top-up and debit requests (server-only); breakdown in `processWalletOperation` |
-| `internal/ee/service/invoice.go` | Append `PreparedInvoiceCoupons` in `CreateOneOffInvoice`; pass the invoice ID to completion |
+| `internal/ee/service/invoice.go` | Pass the invoice ID to completion |
 | `internal/ee/service/payment_processor.go` | Pass the invoice ID to completion |
 | `internal/ee/service/refund.go` | Pass the refunded invoice as `source_*` |
 | `internal/ee/service/credit_adjustment.go` | Pass the invoice as `source_*` on credit-adjustment debits |
