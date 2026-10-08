@@ -471,7 +471,21 @@ SETTINGS deduplicate_merge_projection_mode = 'rebuild';
   entry is opened.
 - **TTL** at 13 months is a safety net. The archiver normally drops a month after exporting it.
 
-The access paths are checked with `EXPLAIN` on realistic volume before rollout.
+The access paths are checked with `EXPLAIN` before rollout.
+
+**Replicated clusters.** Like `events` and `meter_usage`, the table ships in both ClickHouse
+baselines. The single-node form is above. The replicated form keeps the same columns, projections,
+indexes, partitioning, ordering, TTL and settings, and changes only the statement and the engine:
+
+```sql
+CREATE TABLE activity_logs ON CLUSTER '{cluster}'
+( … same as above … )
+ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}', ingested_at)
+…
+```
+
+Every replica holds a copy, and a retried insert of the same batch is deduplicated by the engine.
+Every DDL or delete on this table in a replicated cluster runs `ON CLUSTER '{cluster}'`.
 
 ### 6.2 Retention and archive
 
@@ -485,10 +499,10 @@ flowchart LR
 
 - A Temporal cron finds months older than one year, exports each with ClickHouse's `s3()` table
   function to `activity_logs/tenant_id=<t>/year=<yyyy>/month=<mm>/`, verifies counts, then drops
-  the partition.
+  the partition (`ALTER TABLE … ON CLUSTER '{cluster}' DROP PARTITION …` on replicated clusters).
 - A month is dropped only after a verified export.
-- Erasure for a customer: lightweight `DELETE` in ClickHouse, and a rewrite of that tenant's
-  Parquet files. A runbook, not an endpoint.
+- Erasure for a customer: lightweight `DELETE` in ClickHouse (`ON CLUSTER` on replicated clusters),
+  and a rewrite of that tenant's Parquet files. A runbook, not an endpoint.
 
 ---
 
