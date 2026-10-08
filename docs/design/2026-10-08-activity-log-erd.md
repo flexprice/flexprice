@@ -242,6 +242,23 @@ A delete's snapshot is the row as it was when deleted.
 - On rollback the collector is dropped with the other post-commit work.
 - A write outside any transaction goes to the publisher right after it succeeds.
 
+### 3.6 Suppress
+
+`activity.Suppress(ctx, reason)` returns a context in which the hook records nothing. It is for
+system paths that keep data up to date as a side effect of other work, not changes anyone made.
+
+```go
+evalCtx := activity.Suppress(ctx, "wallet balance evaluation")
+balance, err := s.GetWalletBalanceV2(evalCtx, walletID)
+```
+
+The wallet's running balance is recomputed every time usage arrives. That evaluation runs under
+`Suppress`, so it never fills the customer's timeline. Only code that receives `evalCtx` is
+skipped: an auto top-up started from the same flow uses the normal context and is logged.
+
+- A reason is required and is logged at info level, so suppression always leaves a trace.
+- It is only for system maintenance paths. Using it on a path a tenant acts on would hide their changes.
+
 ---
 
 ## 4. Delivery
