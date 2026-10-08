@@ -101,11 +101,10 @@ Response unchanged (`wallet_transaction`, `invoice_id`, `wallet`). The invoice s
 
 Reuses the subscription-create coupon components as-is. [Mockup](https://claude.ai/artifact/6bGcPduhdEUpKWrVkxumg2)
 
-- **Purchased** shows a **Discounts** section (`SubscriptionDiscountTable`): an Add button opens the **Link Coupon** dialog (`CouponModal`), and the chosen coupon shows as one row (name, discount, type, currency, remove). One coupon.
+- **Purchased** shows a **Discounts** section (`SubscriptionDiscountTable`): an Add button opens the **Link Coupon** dialog (`CouponModal`), and the chosen coupon shows as one row (coupon name, discount, type, currency, remove). One coupon.
 - Coupons are filtered with `filterValidCoupons` (redeem window, max redemptions, fixed-coupon currency). The label drops the cadence suffix ("10% off", not "10% off forever"), since cadence does not apply to top-ups.
 - No invoice preview, as on subscription create.
-- **Skip invoice is removed** for purchased credits. The API still accepts `PURCHASED_CREDIT_DIRECT`.
-- **Checkout link** (Razorpay) is disabled while a coupon is selected, with a hint, because the API rejects coupons with checkout.
+- **Skip invoice** (direct purchase) and **Checkout link** (Razorpay) are disabled while a coupon is selected, with one hint, because coupons only discount a generated invoice.
 - Switching to **Free** clears and hides the coupon.
 
 ## Out of scope (v1)
@@ -218,7 +217,7 @@ The revenue service should record each batch's cost once, when the credits are g
 
 | Area | Change |
 |---|---|
-| `src/components/molecules/WalletTopupCard/` | Discounts section reusing `SubscriptionDiscountTable` + `CouponModal` (one coupon); remove Skip invoice; disable Checkout link while a coupon is selected; clear on Free |
+| `src/components/molecules/WalletTopupCard/` | Discounts section reusing `SubscriptionDiscountTable` + `CouponModal` (one coupon); disable Skip invoice and Checkout link while a coupon is selected; clear on Free |
 | `src/utils/common/format_coupon_name.ts` | Option to omit the cadence suffix |
 | `src/models/WalletTransaction.ts` | New fields |
 
@@ -231,7 +230,7 @@ The revenue service should record each batch's cost once, when the credits are g
 4. A 100% coupon produces a $0 invoice and the credits are granted immediately.
 5. With auto-complete on, a top-up with coupons is rejected; one without coupons behaves as today.
 6. Top-ups without coupons behave exactly as before.
-7. Dashboard: one coupon via Link Coupon; no Skip invoice for purchased credits; Checkout link disabled while a coupon is selected; switching to Free clears the coupon.
+7. Dashboard: one coupon via Link Coupon; Skip invoice and Checkout link disabled while a coupon is selected; switching to Free clears the coupon.
 
 **Ledger**
 
