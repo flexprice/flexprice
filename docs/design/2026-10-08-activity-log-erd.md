@@ -42,7 +42,7 @@ state right after the change.
 | Snapshot | The entity's state right after the change, in the same field names as the public API |
 | Registered entity | An entity type that is logged. Each one has a registration (section 6) |
 | Collector | The in-memory list of entries for one database transaction |
-| `SaveReturning` / `ExecReturning` | Generated ent methods that run a bulk update or delete and return the changed rows (section 3.3) |
+| `SaveReturning` / `ExecReturning` | Generated ent methods that run a bulk update or delete and return the changed rows (section 3.4) |
 
 ---
 
@@ -116,7 +116,27 @@ flowchart LR
 
 ## 3. Capture
 
-### 3.1 Actor and request context
+### 3.1 Ent hook
+
+Ent lets a function wrap every create, update and delete made through a client. The activity hook
+is one such function, installed once on the writer client (`client.Use(activity.Hook(registry))`)
+when `activity.enabled` is on. Every repository write passes through it, so no service code calls
+it.
+
+For each write it:
+
+1. Checks the registry. Unregistered entities, and contexts under `Suppress`, pass straight through.
+2. Lets the write run.
+3. Takes the rows the write returned: the created entity, or the rows from `SaveReturning` /
+   `ExecReturning`.
+4. For each row, builds an entry from the actor and request context in `ctx`, the action, and the
+   snapshot (the domain model's JSON, dropped and redacted per registration).
+5. Adds the entries to the transaction's collector.
+
+It makes no database calls and never returns an error to the write. If building an entry fails,
+the entry is skipped and `activity_capture_failed_total` is incremented.
+
+### 3.2 Actor and request context
 
 Every entry point puts an actor and a request context into the Go context. The hook reads both at the
 moment of each write.
@@ -139,10 +159,9 @@ Request middleware adds the request id, IP address and user agent. System work h
 
 A write with no actor is logged as `system / unknown` and counted. It never fails the write.
 
-### 3.2 How each write is captured
+### 3.3 How each write is captured
 
-The ent hook runs on the writer client for registered entities only. It never queries the database.
-It records the rows that ent hands back from the write.
+The hook records the rows that each write hands back:
 
 | Write | Rows come from | Extra round trips |
 | --- | --- | --- |
@@ -159,7 +178,7 @@ That fails in tests and local runs, and increments `activity_uncaptured_total` i
 **Action** is `created`, `updated`, `archived` (status moves to archived or deleted) or `deleted`
 (row removed).
 
-### 3.3 `SaveReturning` and `ExecReturning`
+### 3.4 `SaveReturning` and `ExecReturning`
 
 Ent's own bulk `Save` and `Exec` return only a row count. Two methods are added to every entity
 through an ent code-generation template, `ent/template/returning.tmpl`:
@@ -207,7 +226,7 @@ are exactly the ones this statement changed, in their state after the change.
 `SaveReturning` against a recording driver and checks that the SQL differs only by `RETURNING`. The
 tests run on every ent upgrade, since the template depends on ent's generated internals.
 
-### 3.4 Snapshot
+### 3.5 Snapshot
 
 The snapshot is the entity's domain model serialized to JSON, using the existing `FromEnt`
 conversion. Field names, types and formats are therefore the same as the public API. Nested objects
@@ -233,7 +252,7 @@ Each registration drops internal fields and redacts sensitive ones (section 6).
 
 A delete's snapshot is the row as it was when deleted.
 
-### 3.5 Collector
+### 3.6 Collector
 
 - `WithTx` installs one collector per transaction. Nested `WithTx` calls reuse it.
 - Several writes to one entity in a transaction become one entry with the last snapshot. A create
@@ -242,7 +261,7 @@ A delete's snapshot is the row as it was when deleted.
 - On rollback the collector is dropped with the other post-commit work.
 - A write outside any transaction goes to the publisher right after it succeeds.
 
-### 3.6 Suppress
+### 3.7 Suppress
 
 `activity.Suppress(ctx, reason)` returns a context in which the hook records nothing. It is for
 system paths that keep data up to date as a side effect of other work, not changes anyone made.
@@ -507,6 +526,7 @@ The dashboard shows that entries can take a few seconds to appear.
 | `activity_uncaptured_total` (by entity) | Any non-zero value |
 | `activity_customer_unresolved_total` | Sustained growth |
 | `activity_unknown_actor_total` (by entry point) | Any non-zero value |
+| `activity_capture_failed_total` (by entity) | Any non-zero value |
 
 - The feature sits behind `activity.enabled`. When off, no hook or collector is installed.
 - Scripts that change data install the hook with a `script:<name>` actor.
