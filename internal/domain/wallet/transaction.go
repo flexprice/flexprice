@@ -35,8 +35,8 @@ type Transaction struct {
 	// (the purchase tx, for a bonus grant). Empty for ordinary transactions.
 	ParentTransactionID string `db:"parent_transaction_id" json:"parent_transaction_id,omitempty"`
 
-	// SourceType/SourceID link the transaction to the invoice that paid for, refunded or
-	// consumed its credits. Empty when there is none.
+	// SourceType/SourceID identify the entity this transaction's value comes from or goes to
+	// (e.g. an invoice). Empty when there is none.
 	SourceType types.WalletTxSourceType `db:"source_type" json:"source_type,omitempty"`
 	SourceID   string                   `db:"source_id" json:"source_id,omitempty"`
 

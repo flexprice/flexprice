@@ -26828,7 +26828,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "source_type": {
-                    "description": "SourceType/SourceID link the transaction to the invoice that paid for, refunded or\nconsumed its credits. Empty when there is none.",
+                    "description": "SourceType/SourceID identify the entity this transaction's value comes from or goes to\n(e.g. an invoice). Empty when there is none.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.WalletTxSourceType"

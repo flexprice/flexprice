@@ -102,8 +102,7 @@ func (t TransactionReason) Validate() error {
 	return nil
 }
 
-// WalletTxSourceType is the document a transaction is linked to for revenue:
-// the invoice that paid for, refunded, or consumed the credits.
+// WalletTxSourceType is the kind of entity a wallet transaction's source_id points to.
 type WalletTxSourceType string
 
 const (
