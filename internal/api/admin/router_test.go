@@ -238,3 +238,117 @@ func TestCreateTenantErrors(t *testing.T) {
 		})
 	}
 }
+
+type fakeUserService struct {
+	called bool
+	req    admindto.AddUserRequest
+	resp   *admindto.UserResponse
+	err    error
+}
+
+func (f *fakeUserService) AddUser(_ context.Context, req admindto.AddUserRequest) (*admindto.UserResponse, error) {
+	f.called = true
+	f.req = req
+	return f.resp, f.err
+}
+
+func newUserTestServer(users *fakeUserService) *Server {
+	return NewRouter(Handlers{
+		Health:      v1.NewHealthHandler(),
+		Environment: v1.NewEnvironmentHandler(&fakeEnvironmentService{}),
+		Tenant:      v1.NewTenantHandler(&fakeTenantService{}),
+		User:        v1.NewUserHandler(users),
+	}, nil, "test-secret")
+}
+
+func postUser(server *Server, body, secret string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/users", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	if secret != "" {
+		req.Header.Set(secretHeader, secret)
+	}
+	rec := httptest.NewRecorder()
+	server.engine.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestAddUser(t *testing.T) {
+	fake := &fakeUserService{
+		resp: &admindto.UserResponse{
+			UserID:   "user_1",
+			Email:    "teammate@acme.com",
+			TenantID: "tenant_1",
+			Roles:    []string{"all_writer"},
+		},
+	}
+	server := newUserTestServer(fake)
+
+	rec := postUser(server, `{"tenant_id":"tenant_1","email":"teammate@acme.com","password":"chosen-by-operator","role":"all_writer"}`, "test-secret")
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, admindto.AddUserRequest{
+		TenantID: "tenant_1",
+		Email:    "teammate@acme.com",
+		Password: "chosen-by-operator",
+		Role:     "all_writer",
+	}, fake.req)
+
+	var resp admindto.UserResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "user_1", resp.UserID)
+	assert.Equal(t, "tenant_1", resp.TenantID)
+	assert.Equal(t, []string{"all_writer"}, resp.Roles)
+	assert.NotContains(t, rec.Body.String(), "chosen-by-operator")
+}
+
+func TestAddUserErrors(t *testing.T) {
+	body := `{"tenant_id":"tenant_1","email":"teammate@acme.com","password":"chosen-by-operator"}`
+	tests := []struct {
+		name       string
+		body       string
+		secret     string
+		serviceErr error
+		wantStatus int
+		wantCalled bool
+	}{
+		{
+			name:       "missing secret",
+			body:       body,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "malformed body",
+			body:       `{"tenant_id":`,
+			secret:     "test-secret",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "unknown tenant",
+			body:       body,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("tenant not found").Mark(ierr.ErrNotFound),
+			wantStatus: http.StatusNotFound,
+			wantCalled: true,
+		},
+		{
+			name:       "email already in use",
+			body:       body,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("email already in use").Mark(ierr.ErrAlreadyExists),
+			wantStatus: http.StatusConflict,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeUserService{err: tt.serviceErr}
+			server := newUserTestServer(fake)
+
+			rec := postUser(server, tt.body, tt.secret)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantCalled, fake.called)
+		})
+	}
+}
