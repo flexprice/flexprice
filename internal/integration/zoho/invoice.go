@@ -149,6 +149,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
+	reqPayload.AccountID = settings.ZohoReceivableAccountID()
 	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
 	// Ordered least to most specific: Zoho keeps the last write to a given field.
 	reqPayload.CustomFields = append(globalCustomFields(settings),

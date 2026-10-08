@@ -30169,6 +30169,10 @@ const docTemplate = `{
                     "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode.",
                     "type": "string"
                 },
+                "receivable_account_id": {
+                    "description": "Zoho chart-of-accounts id for Accounts Receivable, set on contacts and invoices.\nEmpty leaves Zoho's org default.",
+                    "type": "string"
+                },
                 "service_period_custom_fields": {
                     "description": "Zoho custom fields that receive the invoice's service start and end dates.",
                     "allOf": [

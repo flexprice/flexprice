@@ -93,6 +93,10 @@ type ZohoInvoiceSyncSettings struct {
 	// Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
 	// Undeposited Funds default.a
 	DepositToAccountID string `json:"deposit_to_account_id,omitempty"`
+
+	// Zoho chart-of-accounts id for Accounts Receivable, set on contacts and invoices.
+	// Empty leaves Zoho's org default.
+	ReceivableAccountID string `json:"receivable_account_id,omitempty"`
 }
 
 // IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the
@@ -118,6 +122,13 @@ func (s *InvoiceSyncSettings) ZohoDepositToAccountID() string {
 	return strings.TrimSpace(s.DepositToAccountID)
 }
 
+func (s *InvoiceSyncSettings) ZohoReceivableAccountID() string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.ReceivableAccountID)
+}
+
 // The payment mode is deliberately not checked against Zoho's built-in list: merchants edit
 // that list and add their own modes.
 func (s *InvoiceSyncSettings) ValidateZohoPaymentSettings() error {
@@ -131,25 +142,32 @@ func (s *InvoiceSyncSettings) ValidateZohoPaymentSettings() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Zoho entity ids are numeric, so rejecting anything else catches the likely
-	// misconfiguration - pasting the account name - at save time instead of during mark-paid.
-	accountID := strings.TrimSpace(s.DepositToAccountID)
+	if err := validateZohoAccountID("deposit_to_account_id", s.DepositToAccountID); err != nil {
+		return err
+	}
+	
+	return validateZohoAccountID("receivable_account_id", s.ReceivableAccountID)
+}
+
+// Zoho entity ids are numeric, so rejecting anything else catches the likely
+// misconfiguration - pasting the account name - at save time instead of during sync.
+func validateZohoAccountID(field, accountID string) error {
+	accountID = strings.TrimSpace(accountID)
 	if accountID == "" {
 		return nil
 	}
 	if len(accountID) > maxZohoAccountIDLen {
-		return ierr.NewError("zoho deposit to account id is too long").
-			WithHint(fmt.Sprintf("deposit_to_account_id must be at most %d characters", maxZohoAccountIDLen)).
+		return ierr.NewError("zoho account id is too long").
+			WithHint(fmt.Sprintf("%s must be at most %d characters", field, maxZohoAccountIDLen)).
 			Mark(ierr.ErrValidation)
 	}
 	for _, r := range accountID {
 		if r < '0' || r > '9' {
-			return ierr.NewError("invalid zoho deposit to account id").
-				WithHint("deposit_to_account_id must be the numeric Zoho chart-of-accounts id, not the account name").
+			return ierr.NewError("invalid zoho account id").
+				WithHint(field + " must be the numeric Zoho chart-of-accounts id, not the account name").
 				Mark(ierr.ErrValidation)
 		}
 	}
-
 	return nil
 }
 

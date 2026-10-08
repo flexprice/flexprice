@@ -32,7 +32,7 @@ type ContactPerson struct {
 	FirstName        string `json:"first_name,omitempty"`
 	LastName         string `json:"last_name,omitempty"`
 	Email            string `json:"email,omitempty"`
-	Phone            string `json:"phone,omitempty"`
+	Mobile           string `json:"mobile,omitempty"`
 	IsPrimaryContact bool   `json:"is_primary_contact,omitempty"`
 }
 
@@ -57,6 +57,7 @@ type ContactCreateRequest struct {
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`
 	ShippingAddress *ContactAddress `json:"shipping_address,omitempty"`
 	ContactPersons  []ContactPerson `json:"contact_persons,omitempty"`
+	AccountID       string          `json:"account_id,omitempty"`
 
 	// India (GST) edition fields. Omitted entirely for non-Indian contacts.
 	GSTNo          string `json:"gst_no,omitempty"`
@@ -158,6 +159,7 @@ type InvoiceCreateRequest struct {
 	Adjustment          decimal.Decimal   `json:"adjustment,omitzero"`
 	DiscountType        string            `json:"discount_type,omitempty"`
 	IsDiscountBeforeTax bool              `json:"is_discount_before_tax,omitempty"`
+	AccountID           string            `json:"account_id,omitempty"`
 
 	// PlaceOfSupply is the GST state code the supply is made to. It drives Zoho's
 	// IGST vs CGST/SGST split. Zoho falls back to the contact's place_of_contact

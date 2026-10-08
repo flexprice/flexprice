@@ -2,6 +2,8 @@ package zoho
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
@@ -9,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/nyaruka/phonenumbers"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
 )
@@ -51,7 +54,11 @@ func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexprice
 		}
 	}
 
-	contact, err := s.client.CreateContact(ctx, buildContactRequest(flexpriceCustomer))
+	accountID, err := s.receivableAccountID(ctx)
+	if err != nil {
+		return "", err
+	}
+	contact, err := s.client.CreateContact(ctx, buildContactRequest(flexpriceCustomer, accountID))
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +84,11 @@ func (s *CustomerService) SyncCustomerUpdate(ctx context.Context, flexpriceCusto
 		return nil
 	}
 
-	if _, err := s.client.UpdateContact(ctx, mapping.ProviderEntityID, buildContactRequest(flexpriceCustomer)); err != nil {
+	accountID, err := s.receivableAccountID(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.client.UpdateContact(ctx, mapping.ProviderEntityID, buildContactRequest(flexpriceCustomer, accountID)); err != nil {
 		return err
 	}
 
@@ -103,8 +114,16 @@ func (s *CustomerService) findMapping(ctx context.Context, customerID string) (*
 	return mappings[0], nil
 }
 
+func (s *CustomerService) receivableAccountID(ctx context.Context) (string, error) {
+	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
+	if err != nil || syncConfig == nil {
+		return "", err
+	}
+	return syncConfig.InvoiceSyncSettings.ZohoReceivableAccountID(), nil
+}
+
 // buildContactRequest maps a FlexPrice customer onto the Zoho contact payload.
-func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
+func buildContactRequest(c *customerDomain.Customer, receivableAccountID string) *ContactCreateRequest {
 	req := &ContactCreateRequest{
 		ContactName:     c.Name,
 		CompanyName:     c.Name,
@@ -112,6 +131,7 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 		TraderName:      c.Name,
 		ContactType:     "customer",
 		CustomerSubType: "business",
+		AccountID:       receivableAccountID,
 	}
 
 	req.BillingAddress = toContactAddress(
@@ -134,7 +154,7 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	if c.Email != "" || c.Contact != nil {
 		person := ContactPerson{IsPrimaryContact: true, Email: c.Email}
 		if c.Contact != nil {
-			person.Phone = *c.Contact
+			person.Mobile = formatMobile(*c.Contact, c.AddressCountry)
 		}
 		req.ContactPersons = []ContactPerson{person}
 	}
@@ -163,6 +183,16 @@ func toContactAddress(attention, line1, line2, city, state, postalCode, country 
 		}
 	}
 	return addr
+}
+
+// formatMobile renders a number as "+<dial code>-<national number>", the form Zoho accepts
+// without a warning. Unparseable numbers are returned unchanged.
+func formatMobile(number, country string) string {
+	parsed, err := phonenumbers.Parse(number, strings.ToUpper(country))
+	if err != nil {
+		return number
+	}
+	return fmt.Sprintf("+%d-%s", parsed.GetCountryCode(), phonenumbers.GetNationalSignificantNumber(parsed))
 }
 
 func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *customerDomain.Customer, contact *ContactResponse) error {

@@ -367,6 +367,24 @@ func TestSyncInvoiceToZoho_NormalizedQuantityKeepsLineTotalDiscount(t *testing.T
 	assert.True(t, decimal.NewFromInt(600).Equal(li.Discount), "discount = %s, want 600", li.Discount)
 }
 
+func TestSyncInvoiceToZoho_ReceivableAccount(t *testing.T) {
+	line := []testLineItem{{name: "Charge", priceID: "price_1", amount: "100"}}
+
+	svc, client := newSyncTestService(buildTestInvoice("INR", "0", "", "", line), nil)
+	_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+	require.NoError(t, err)
+	assert.Empty(t, client.createInvoiceReq.AccountID, "unset leaves Zoho's default")
+
+	svc, client = newSyncTestService(buildTestInvoice("INR", "0", "", "", line), &types.SyncConfig{
+		InvoiceSyncSettings: &types.InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{ReceivableAccountID: " 460000000000462 "},
+		},
+	})
+	_, err = svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+	require.NoError(t, err)
+	assert.Equal(t, "460000000000462", client.createInvoiceReq.AccountID)
+}
+
 // Zero-amount line items are skipped, and they can never carry a discount.
 func TestSyncInvoiceToZoho_SkipsZeroAmountLines(t *testing.T) {
 	inv := buildTestInvoice("INR", "600", "", "", []testLineItem{

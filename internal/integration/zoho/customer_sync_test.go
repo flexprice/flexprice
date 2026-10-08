@@ -28,6 +28,11 @@ type fakeContactClient struct {
 	updateCalls  int
 	updateErr    error
 	queryByEmail *ContactResponse
+	syncConfig   *types.SyncConfig
+}
+
+func (f *fakeContactClient) GetZohoBooksSyncConfig(_ context.Context) (*types.SyncConfig, error) {
+	return f.syncConfig, nil
 }
 
 func (f *fakeContactClient) QueryContactByEmail(_ context.Context, _ string) (*ContactResponse, error) {
@@ -137,8 +142,21 @@ func TestCreateContactCarriesGSTFields(t *testing.T) {
 	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.TraderName)
 
 	require.Len(t, req.ContactPersons, 1)
-	assert.Equal(t, "9311916570", req.ContactPersons[0].Phone, "contact phone must not be dropped")
+	assert.Equal(t, "+91-9311916570", req.ContactPersons[0].Mobile)
 	assert.Equal(t, "billing@mcgill.example", req.ContactPersons[0].Email)
+}
+
+func TestContactCarriesReceivableAccount(t *testing.T) {
+	client := &fakeContactClient{syncConfig: &types.SyncConfig{
+		InvoiceSyncSettings: &types.InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{ReceivableAccountID: "460000000000462"},
+		},
+	}}
+	svc := newTestCustomerService(client, &writableMappingRepo{})
+
+	_, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer())
+	require.NoError(t, err)
+	assert.Equal(t, "460000000000462", client.createReq.AccountID)
 }
 
 func TestNonIndianCustomerOmitsGSTFields(t *testing.T) {
@@ -248,7 +266,7 @@ func TestSyncCustomerUpdate(t *testing.T) {
 }
 
 func TestGSTTreatmentIsNotSent(t *testing.T) {
-	raw, err := json.Marshal(buildContactRequest(indianCustomer()))
+	raw, err := json.Marshal(buildContactRequest(indianCustomer(), ""))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "gst_treatment",
 		"gst_treatment is optional in Zoho and cannot express SEZ/deemed-export; we omit it")
@@ -277,4 +295,24 @@ func TestToContactAddress(t *testing.T) {
 	}
 
 	assert.Nil(t, toContactAddress("Acme", "", "", "", "", "", ""), "attention alone is not an address")
+}
+
+func TestFormatMobile(t *testing.T) {
+	tests := []struct {
+		name    string
+		number  string
+		country string
+		want    string
+	}{
+		{name: "national number uses the address country", number: "9581401234", country: "IN", want: "+91-9581401234"},
+		{name: "own plus prefix wins over the address country", number: "+1 415 555 2671", country: "IN", want: "+1-4155552671"},
+		{name: "lowercase country", number: "09581401234", country: "in", want: "+91-9581401234"},
+		{name: "no country and no prefix is sent unchanged", number: "9581401234", country: "", want: "9581401234"},
+		{name: "garbage is sent unchanged", number: "call me", country: "IN", want: "call me"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatMobile(tt.number, tt.country))
+		})
+	}
 }
