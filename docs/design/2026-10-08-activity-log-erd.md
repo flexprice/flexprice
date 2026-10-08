@@ -386,11 +386,11 @@ Runs in the consumer deployment, registered with the router's `AddNoPublishHandl
    - Linked through a parent: look the customer up on the Postgres read replica, with a cache. If the
      parent is not on the replica yet, the consumer fails the message and Kafka redelivers it with
      backoff. After the retry limit it goes to the DLQ and `activity_customer_unresolved_total` is
-     incremented. Reprocessing is safe because entries are deduplicated by id.
+     incremented. Nothing is inserted until every entry in the message is resolved.
    - No customer: stored with an empty customer, no lookup and no retry.
 3. Computes `entity_label` from the snapshot using the registration.
-4. Batch-inserts into ClickHouse. A redelivered message carries the same entry ids, so duplicates
-   are removed by id (section 6.1).
+4. Batch-inserts into ClickHouse. A message redelivered after a successful insert carries the same
+   entry ids, and reads deduplicate by id (section 6.1).
 
 ---
 
@@ -451,12 +451,11 @@ CREATE TABLE activity_logs
     -- Related changes: every entry from one request, bounded to that request's day.
     INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 4
 )
-ENGINE = ReplacingMergeTree(ingested_at)
+ENGINE = MergeTree
 PARTITION BY toYYYYMM(occurred_at)
 -- Tenant feed: everything in one tenant and environment, newest first.
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE
-SETTINGS deduplicate_merge_projection_mode = 'rebuild';
+TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
 ```
 
 - **Sort key** serves the tenant feed: one tenant and environment, newest first.
@@ -464,11 +463,10 @@ SETTINGS deduplicate_merge_projection_mode = 'rebuild';
   because lists never return it, so they stay small.
 - **Skip indexes** on `actor_id` and `request_id` serve occasional lookups (an actor's history after
   an incident, a request's related changes) without the storage cost of another projection.
-- **`ReplacingMergeTree`** collapses rows with the same id, keeping the latest `ingested_at`. This
-  happens in background merges, so reads also deduplicate: list queries use `LIMIT 1 BY id` and the
-  detail lookup uses `FINAL`. Projections on a `ReplacingMergeTree` need
-  `deduplicate_merge_projection_mode = 'rebuild'` (ClickHouse 24.8 and later) so they are rebuilt
-  when merges remove duplicates.
+- **`MergeTree`**, because the table is append-only: rows are never updated, only dropped with their
+  month or erased. Kafka delivers at least once, so a redelivered message can insert an entry twice.
+  Reads deduplicate by id: list queries use `LIMIT 1 BY id`, and the detail lookup returns one row
+  for the id.
 - **`state`** is JSON text compressed with ZSTD. It is never filtered on, only returned when an
   entry is opened.
 - **TTL** at 13 months is a safety net. The archiver normally drops a month after exporting it.
@@ -477,12 +475,12 @@ The access paths are checked with `EXPLAIN` before rollout.
 
 **Replicated clusters.** Like `events` and `meter_usage`, the table ships in both ClickHouse
 baselines. The single-node form is above. The replicated form keeps the same columns, projections,
-indexes, partitioning, ordering, TTL and settings, and changes only the statement and the engine:
+indexes, partitioning, ordering and TTL, and changes only the statement and the engine:
 
 ```sql
 CREATE TABLE activity_logs ON CLUSTER '{cluster}'
 ( … same as above … )
-ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}', ingested_at)
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}')
 …
 ```
 
@@ -499,9 +497,10 @@ flowchart LR
     DROP --> COLD["Parquet on S3<br/>retrieval on request"]
 ```
 
-- A Temporal cron finds months older than one year, exports each with ClickHouse's `s3()` table
-  function to `activity_logs/tenant_id=<t>/year=<yyyy>/month=<mm>/`, verifies counts, then drops
-  the partition (`ALTER TABLE … ON CLUSTER '{cluster}' DROP PARTITION …` on replicated clusters).
+- A Temporal cron finds months older than one year and exports each, deduplicated by id, with
+  ClickHouse's `s3()` table function to `activity_logs/tenant_id=<t>/year=<yyyy>/month=<mm>/`. It
+  verifies counts, then drops the partition (`ALTER TABLE … ON CLUSTER '{cluster}' DROP PARTITION …`
+  on replicated clusters).
 - A month is dropped only after a verified export.
 - Erasure for a customer: lightweight `DELETE` in ClickHouse (`ON CLUSTER` on replicated clusters),
   and a rewrite of that tenant's Parquet files. A runbook, not an endpoint.
@@ -590,7 +589,7 @@ The dashboard shows that entries can take a few seconds to appear.
 | Completeness | Best-effort. Publisher drops are counted and alerted. Entries in memory when a process crashes after commit are lost without being counted |
 | Correctness | Every stored entry is self-contained and holds exactly the row its write produced |
 | Order | By commit time. Two changes to one entity within milliseconds on different pods can show in either order |
-| Duplicates | Collapsed by entry id |
+| Duplicates | Removed at read time by entry id |
 | Lag | A few seconds |
 | Coverage | Writes through Flexprice code to registered entities. Direct SQL outside the application is not logged |
 | Retention | One year queryable, then Parquet on S3 |
