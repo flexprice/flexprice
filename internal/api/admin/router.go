@@ -55,6 +55,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 		user := group.Group("/users")
 		{
 			user.POST("", handlers.User.AddUser)
+			user.POST("/remove", handlers.User.RemoveUser)
 		}
 
 		settings := group.Group("/settings")

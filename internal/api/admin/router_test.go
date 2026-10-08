@@ -244,12 +244,23 @@ type fakeUserService struct {
 	req    admindto.AddUserRequest
 	resp   *admindto.UserResponse
 	err    error
+
+	removeCalled bool
+	removeReq    admindto.RemoveUserRequest
+	removeResp   *admindto.RemoveUserResponse
+	removeErr    error
 }
 
 func (f *fakeUserService) AddUser(_ context.Context, req admindto.AddUserRequest) (*admindto.UserResponse, error) {
 	f.called = true
 	f.req = req
 	return f.resp, f.err
+}
+
+func (f *fakeUserService) RemoveUser(_ context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error) {
+	f.removeCalled = true
+	f.removeReq = req
+	return f.removeResp, f.removeErr
 }
 
 func newUserTestServer(users *fakeUserService) *Server {
@@ -456,4 +467,80 @@ func TestOnlyTenantConfigIsExposed(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.False(t, fake.called)
+}
+
+func postRemoveUser(server *Server, body, secret string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/remove", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	if secret != "" {
+		req.Header.Set(secretHeader, secret)
+	}
+	rec := httptest.NewRecorder()
+	server.engine.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestRemoveUser(t *testing.T) {
+	fake := &fakeUserService{
+		removeResp: &admindto.RemoveUserResponse{UserID: "user_1", Email: "teammate@acme.com", TenantID: "tenant_1", Status: "archived"},
+	}
+	server := newUserTestServer(fake)
+
+	rec := postRemoveUser(server, `{"tenant_id":"tenant_1","email":"teammate@acme.com"}`, "test-secret")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, admindto.RemoveUserRequest{TenantID: "tenant_1", Email: "teammate@acme.com"}, fake.removeReq)
+	assert.JSONEq(t, `{"user_id":"user_1","email":"teammate@acme.com","tenant_id":"tenant_1","status":"archived"}`, rec.Body.String())
+}
+
+func TestRemoveUserErrors(t *testing.T) {
+	body := `{"tenant_id":"tenant_1","email":"teammate@acme.com"}`
+	tests := []struct {
+		name       string
+		body       string
+		secret     string
+		serviceErr error
+		wantStatus int
+		wantCalled bool
+	}{
+		{
+			name:       "missing secret",
+			body:       body,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "malformed body",
+			body:       `{"tenant_id":`,
+			secret:     "test-secret",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "user not in this tenant",
+			body:       body,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("user not found in this tenant").Mark(ierr.ErrNotFound),
+			wantStatus: http.StatusNotFound,
+			wantCalled: true,
+		},
+		{
+			name:       "last user of the tenant",
+			body:       body,
+			secret:     "test-secret",
+			serviceErr: ierr.NewError("cannot remove the last user in the tenant").Mark(ierr.ErrValidation),
+			wantStatus: http.StatusBadRequest,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeUserService{removeErr: tt.serviceErr}
+			server := newUserTestServer(fake)
+
+			rec := postRemoveUser(server, tt.body, tt.secret)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantCalled, fake.removeCalled)
+		})
+	}
 }

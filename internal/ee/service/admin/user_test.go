@@ -2,7 +2,10 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
@@ -11,6 +14,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/nedpals/supabase-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -171,6 +175,165 @@ func TestAddUserValidation(t *testing.T) {
 
 			created, _ := d.supabase.counts()
 			assert.Zero(t, created)
+		})
+	}
+}
+
+// seedLogin gives the fake Supabase a login for an existing user.
+func seedLogin(f *fakeSupabase, userID, email string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.users[userID] = supabase.AdminUserParams{Email: email}
+}
+
+// failingDeleteSupabase finds every user but fails every delete, like a Supabase outage mid-removal.
+func failingDeleteSupabase(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": http.StatusInternalServerError, "msg": "boom"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": strings.TrimPrefix(r.URL.Path, supabaseUsersPath+"/")})
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+func TestRemoveUser(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "tenant_acme"
+	removeTeammate := admindto.RemoveUserRequest{TenantID: tenantID, Email: "teammate@acme.com"}
+
+	// withMembers gives the tenant a user with a Supabase login for each email.
+	withMembers := func(t *testing.T, emails ...string) *tenantTestDeps {
+		t.Helper()
+		d := newTenantTestDeps(t)
+		for _, email := range emails {
+			u := user.NewUser(email, tenantID)
+			require.NoError(t, d.users.Create(ctx, u))
+			seedLogin(d.supabase, u.ID, email)
+		}
+		return d
+	}
+
+	// state reports a user's row status and whether Supabase still has their login.
+	state := func(t *testing.T, d *tenantTestDeps, email string) (types.Status, bool) {
+		t.Helper()
+		u, err := d.users.GetByEmail(ctx, email)
+		require.NoError(t, err)
+		_, hasLogin := d.supabase.user(u.ID)
+		return u.Status, hasLogin
+	}
+
+	t.Run("archives the user and deletes their supabase login", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		teammate, err := d.users.GetByEmail(ctx, "teammate@acme.com")
+		require.NoError(t, err)
+
+		resp, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.NoError(t, err)
+		assert.Equal(t, &admindto.RemoveUserResponse{
+			UserID:   teammate.ID,
+			Email:    "teammate@acme.com",
+			TenantID: tenantID,
+			Status:   types.StatusArchived,
+		}, resp)
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusArchived, status)
+		assert.False(t, hasLogin)
+
+		status, hasLogin = state(t, d, "owner@acme.com")
+		assert.Equal(t, types.StatusPublished, status, "other users must stay")
+		assert.True(t, hasLogin)
+	})
+
+	t.Run("refuses an email with no user", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, admindto.RemoveUserRequest{TenantID: tenantID, Email: "ghost@acme.com"})
+		require.Error(t, err)
+		assert.True(t, ierr.IsNotFound(err))
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin)
+	})
+
+	t.Run("refuses a user of another tenant", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		outsider := user.NewUser("outsider@other.com", "tenant_other")
+		require.NoError(t, d.users.Create(ctx, outsider))
+		seedLogin(d.supabase, outsider.ID, "outsider@other.com")
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, admindto.RemoveUserRequest{TenantID: tenantID, Email: "outsider@other.com"})
+		require.Error(t, err)
+		assert.True(t, ierr.IsNotFound(err))
+
+		status, hasLogin := state(t, d, "outsider@other.com")
+		assert.Equal(t, types.StatusPublished, status, "a user of another tenant must not be touched")
+		assert.True(t, hasLogin)
+	})
+
+	t.Run("refuses to remove the tenant's last user", func(t *testing.T) {
+		d := withMembers(t, "teammate@acme.com")
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
+		assert.True(t, ierr.IsValidation(err))
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin)
+	})
+
+	t.Run("keeps the user when supabase cannot delete the login", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		d.params.Config.Auth.Supabase.BaseURL = failingDeleteSupabase(t)
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
+
+		u, err := d.users.GetByEmail(ctx, "teammate@acme.com")
+		require.NoError(t, err)
+		assert.Equal(t, types.StatusPublished, u.Status, "the row must stay while the login still exists")
+	})
+
+	t.Run("refuses to run without supabase auth", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		d.params.Config.Auth.Provider = types.AuthProviderFlexprice
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
+		assert.True(t, ierr.IsInvalidOperation(err))
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin)
+	})
+}
+
+func TestRemoveUserValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		req  admindto.RemoveUserRequest
+	}{
+		{name: "missing tenant id", req: admindto.RemoveUserRequest{Email: "teammate@acme.com"}},
+		{name: "missing email", req: admindto.RemoveUserRequest{TenantID: "tenant_acme"}},
+		{name: "malformed email", req: admindto.RemoveUserRequest{TenantID: "tenant_acme", Email: "teammate-at-acme"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newTenantTestDeps(t)
+
+			resp, err := NewUserService(d.params).RemoveUser(context.Background(), tt.req)
+			require.Error(t, err)
+			assert.True(t, ierr.IsValidation(err))
+			assert.Nil(t, resp)
 		})
 	}
 }

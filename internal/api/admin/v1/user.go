@@ -34,3 +34,21 @@ func (h *UserHandler) AddUser(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, resp)
 }
+
+func (h *UserHandler) RemoveUser(c *gin.Context) {
+	var req admin.RemoveUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.RemoveUser(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

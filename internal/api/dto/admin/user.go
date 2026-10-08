@@ -76,3 +76,58 @@ func NewUserResponse(u *user.User) *UserResponse {
 		Roles:    u.Roles,
 	}
 }
+
+// RemoveUserRequest removes a user from a tenant, picked by email.
+type RemoveUserRequest struct {
+	TenantID string `json:"tenant_id"`
+	Email    string `json:"email"`
+}
+
+func (r *RemoveUserRequest) Validate() error {
+	if r == nil {
+		return ierr.NewError("request is required").
+			WithHint("Provide a request body").
+			Mark(ierr.ErrValidation)
+	}
+
+	r.TenantID = strings.TrimSpace(r.TenantID)
+	r.Email = strings.TrimSpace(r.Email)
+
+	if r.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Provide the id of the tenant to remove the user from").
+			Mark(ierr.ErrValidation)
+	}
+	if r.Email == "" {
+		return ierr.NewError("email is required").
+			WithHint("Provide the email of the user to remove").
+			Mark(ierr.ErrValidation)
+	}
+	if !types.IsValidEmail(r.Email) {
+		return ierr.NewError("invalid email").
+			WithHint("Provide a valid email for the user").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// RemoveUserResponse confirms which user was removed; their row stays archived for history.
+type RemoveUserResponse struct {
+	UserID   string       `json:"user_id"`
+	Email    string       `json:"email"`
+	TenantID string       `json:"tenant_id"`
+	Status   types.Status `json:"status"`
+}
+
+// NewRemoveUserResponse confirms the removal of u, whose row is now archived.
+func NewRemoveUserResponse(u *user.User) *RemoveUserResponse {
+	if u == nil {
+		return nil
+	}
+	return &RemoveUserResponse{
+		UserID:   u.ID,
+		Email:    u.Email,
+		TenantID: u.TenantID,
+		Status:   types.StatusArchived,
+	}
+}
