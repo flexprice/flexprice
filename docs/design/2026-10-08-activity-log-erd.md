@@ -340,7 +340,13 @@ skipped: an auto top-up started from the same flow uses the normal context and i
 ### 5.1 Publisher
 
 - In-process, with a bounded buffer and background workers using the existing Kafka producer.
-- One Kafka message per committed transaction, split into several messages above 100 entries.
+- One Kafka message per committed transaction. A transaction's entries are split into several
+  messages when a message would exceed 100 entries or 512 KB, whichever comes first. This follows
+  the existing bulk publish bound (`bulk_max_batch_bytes`) and stays under Kafka's 1 MB message
+  limit.
+- A single entry whose snapshot exceeds 256 KB is still published, with `state` cut down to the
+  entity's id and label fields and `state_truncated: true`. `activity_snapshot_truncated_total` is
+  incremented.
 - Never blocks the request. A full buffer, or a publish that still fails after retries, drops the
   message and increments `activity_dropped_total`.
 - On shutdown it drains the buffer, with a timeout, before the process exits.
@@ -574,6 +580,7 @@ The dashboard shows that entries can take a few seconds to appear.
 | `activity_customer_unresolved_total` | Sustained growth |
 | `activity_unknown_actor_total` (by entry point) | Any non-zero value |
 | `activity_capture_failed_total` (by entity) | Any non-zero value |
+| `activity_snapshot_truncated_total` (by entity) | Any non-zero value |
 
 - The feature sits behind `activity.enabled`. When off, no hook or collector is installed.
 - Scripts that change data install the hook with a `script:<name>` actor.
