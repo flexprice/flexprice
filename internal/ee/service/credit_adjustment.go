@@ -314,6 +314,8 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				ReferenceType:     types.WalletTxReferenceTypeInvoice,
 				ReferenceID:       inv.ID,
 				Description:       fmt.Sprintf("Amount applied as credit adjustment to invoice %s from wallet %s", inv.ID, walletID),
+				SourceType:        types.WalletTxSourceTypeInvoice,
+				SourceID:          inv.ID,
 				TransactionReason: types.TransactionReasonCreditAdjustment,
 				IdempotencyKey:    idempotencyKey,
 				InvoiceID:         lo.ToPtr(inv.ID),
@@ -446,6 +448,8 @@ func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
 			ReferenceType:     types.WalletTxReferenceTypeInvoice,
 			ReferenceID:       inv.ID,
 			Description:       fmt.Sprintf("Credit %s applied to invoice %s for usage before its expiry", creditTx.ID, inv.ID),
+			SourceType:        types.WalletTxSourceTypeInvoice,
+			SourceID:          inv.ID,
 			TransactionReason: types.TransactionReasonCreditAdjustment,
 			IdempotencyKey:    idempotencyKey,
 			Metadata: types.Metadata{

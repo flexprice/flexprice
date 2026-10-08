@@ -4115,7 +4115,7 @@ func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBo
 	s.NoError(err)
 	s.True(decimal.NewFromInt(1000).Equal(balanceBefore.CreditBalance))
 
-	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID, lo.FromPtr(resp.InvoiceID))
 	s.NoError(err)
 
 	purchaseTx, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
@@ -4143,7 +4143,7 @@ func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_NoLinkedBonu
 	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
 	s.NoError(err)
 
-	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID, lo.FromPtr(resp.InvoiceID))
 	s.NoError(err, "completion must succeed even when GetPendingTransactionByParent finds nothing")
 
 	purchaseTx, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
@@ -4163,14 +4163,14 @@ func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBo
 	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
 	s.NoError(err)
 
-	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID, lo.FromPtr(resp.InvoiceID))
 	s.NoError(err)
 
 	w1, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
 	s.NoError(err)
 
 	// second call must be a no-op: the top-of-function pending-check short-circuits
-	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID, lo.FromPtr(resp.InvoiceID))
 	s.NoError(err)
 
 	w2, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
@@ -4226,7 +4226,7 @@ func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBo
 	// Call the non-retrying entrypoint directly: CompletePurchasedCreditTransactionWithRetry
 	// would retry and, since the mock has no rollback, find the purchase tx already marked
 	// completed from the first (failed) attempt and short-circuit as a false success.
-	err = failingService.completePurchasedCreditTransaction(s.GetContext(), resp.WalletTransaction.ID)
+	err = failingService.completePurchasedCreditTransaction(s.GetContext(), resp.WalletTransaction.ID, lo.FromPtr(resp.InvoiceID))
 	s.Error(err, "the injected failure on the bonus half must surface as an error")
 }
 

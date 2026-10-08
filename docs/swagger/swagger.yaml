@@ -9180,6 +9180,12 @@ definitions:
     properties:
       amount:
         type: string
+      consumption_breakdown:
+        description: 'ConsumptionBreakdown is set on debits: the credits drawn from
+          each credit batch.'
+        items:
+          $ref: '#/definitions/types.WalletTxConsumption'
+        type: array
       conversion_rate:
         description: conversion_rate is the conversion rate for the transaction to
           the currency
@@ -9227,6 +9233,14 @@ definitions:
         type: string
       reference_type:
         $ref: '#/definitions/types.WalletTxReferenceType'
+      source_id:
+        type: string
+      source_type:
+        allOf:
+        - $ref: '#/definitions/types.WalletTxSourceType'
+        description: |-
+          SourceType/SourceID link the transaction to the invoice that paid for, refunded or
+          consumed its credits. Empty when there is none.
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -13307,6 +13321,13 @@ definitions:
       type:
         $ref: '#/definitions/types.TransactionType'
     type: object
+  types.WalletTxConsumption:
+    properties:
+      credit_transaction_id:
+        type: string
+      credits:
+        type: string
+    type: object
   types.WalletTxReferenceType:
     enum:
     - PAYMENT
@@ -13319,6 +13340,12 @@ definitions:
     - WalletTxReferenceTypeExternal
     - WalletTxReferenceTypeRequest
     - WalletTxReferenceTypeInvoice
+  types.WalletTxSourceType:
+    enum:
+    - INVOICE
+    type: string
+    x-enum-varnames:
+    - WalletTxSourceTypeInvoice
   types.WalletType:
     enum:
     - PRE_PAID
@@ -14350,6 +14377,10 @@ definitions:
     properties:
       amount:
         type: string
+      consumption_breakdown:
+        items:
+          $ref: '#/definitions/types.WalletTxConsumption'
+        type: array
       credit_amount:
         type: string
       credit_balance_after:
@@ -14372,6 +14403,10 @@ definitions:
         type: string
       reference_type:
         $ref: '#/definitions/types.WalletTxReferenceType'
+      source_id:
+        type: string
+      source_type:
+        $ref: '#/definitions/types.WalletTxSourceType'
       transaction_reason:
         $ref: '#/definitions/types.TransactionReason'
       transaction_status:

@@ -68,6 +68,10 @@ type WalletTransaction struct {
 	TransactionReason   types.TransactionReason     `json:"transaction_reason"`
 	Currency            string                      `json:"currency"`
 	Metadata            types.Metadata              `json:"metadata,omitempty"`
+
+	SourceType           types.WalletTxSourceType    `json:"source_type,omitempty"`
+	SourceID             string                      `json:"source_id,omitempty"`
+	ConsumptionBreakdown []types.WalletTxConsumption `json:"consumption_breakdown,omitempty"`
 }
 
 func NewWalletTransaction(resp *dto.WalletTransactionResponse) *WalletTransaction {
@@ -75,22 +79,25 @@ func NewWalletTransaction(resp *dto.WalletTransactionResponse) *WalletTransactio
 		return nil
 	}
 	return &WalletTransaction{
-		ID:                  resp.ID,
-		WalletID:            resp.WalletID,
-		CustomerID:          resp.CustomerID,
-		Type:                resp.Type,
-		Amount:              resp.Amount,
-		CreditAmount:        resp.CreditAmount,
-		CreditBalanceBefore: resp.CreditBalanceBefore,
-		CreditBalanceAfter:  resp.CreditBalanceAfter,
-		TxStatus:            resp.TxStatus,
-		ReferenceType:       resp.ReferenceType,
-		ReferenceID:         resp.ReferenceID,
-		Description:         resp.Description,
-		ExpiryDate:          resp.ExpiryDate,
-		TransactionReason:   resp.TransactionReason,
-		Currency:            resp.Currency,
-		Metadata:            resp.Metadata,
+		ID:                   resp.ID,
+		WalletID:             resp.WalletID,
+		CustomerID:           resp.CustomerID,
+		Type:                 resp.Type,
+		Amount:               resp.Amount,
+		CreditAmount:         resp.CreditAmount,
+		CreditBalanceBefore:  resp.CreditBalanceBefore,
+		CreditBalanceAfter:   resp.CreditBalanceAfter,
+		TxStatus:             resp.TxStatus,
+		ReferenceType:        resp.ReferenceType,
+		ReferenceID:          resp.ReferenceID,
+		Description:          resp.Description,
+		ExpiryDate:           resp.ExpiryDate,
+		TransactionReason:    resp.TransactionReason,
+		Currency:             resp.Currency,
+		Metadata:             resp.Metadata,
+		SourceType:           resp.SourceType,
+		SourceID:             resp.SourceID,
+		ConsumptionBreakdown: resp.ConsumptionBreakdown,
 	}
 }
 

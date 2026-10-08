@@ -152,6 +152,25 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			Optional().
 			Immutable(),
+		field.String("source_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.WalletTxSourceType("")),
+		field.String("source_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.JSON("consumption_breakdown", []types.WalletTxConsumption{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional().
+			Immutable(),
 	}
 }
 
@@ -178,5 +197,7 @@ func (WalletTransaction) Indexes() []ent.Index {
 			StorageKey("idx_tenant_environment_idempotency_key"),
 		index.Fields("tenant_id", "environment_id", "parent_transaction_id", "transaction_status").
 			StorageKey("idx_tenant_environment_parent_transaction_status"),
+		index.Fields("tenant_id", "environment_id", "source_type", "source_id").
+			StorageKey("idx_wallet_transactions_tenant_env_source"),
 	}
 }

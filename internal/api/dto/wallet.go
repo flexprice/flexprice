@@ -366,6 +366,10 @@ type TopUpWalletRequest struct {
 	// auto-complete: granting credits before the invoice is paid is a net-terms
 	// arrangement a tenant makes, not one a customer may take for itself.
 	TriggeringActor types.TriggeringActor `json:"-"`
+
+	// SourceType/SourceID link the credits to the invoice behind them (e.g. the refunded invoice).
+	SourceType types.WalletTxSourceType `json:"-"`
+	SourceID   string                   `json:"-"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {

@@ -287,6 +287,46 @@ func (_u *WalletTransactionUpdate) ClearPriority() *WalletTransactionUpdate {
 	return _u
 }
 
+// SetSourceType sets the "source_type" field.
+func (_u *WalletTransactionUpdate) SetSourceType(v types.WalletTxSourceType) *WalletTransactionUpdate {
+	_u.mutation.SetSourceType(v)
+	return _u
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_u *WalletTransactionUpdate) SetNillableSourceType(v *types.WalletTxSourceType) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetSourceType(*v)
+	}
+	return _u
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (_u *WalletTransactionUpdate) ClearSourceType() *WalletTransactionUpdate {
+	_u.mutation.ClearSourceType()
+	return _u
+}
+
+// SetSourceID sets the "source_id" field.
+func (_u *WalletTransactionUpdate) SetSourceID(v string) *WalletTransactionUpdate {
+	_u.mutation.SetSourceID(v)
+	return _u
+}
+
+// SetNillableSourceID sets the "source_id" field if the given value is not nil.
+func (_u *WalletTransactionUpdate) SetNillableSourceID(v *string) *WalletTransactionUpdate {
+	if v != nil {
+		_u.SetSourceID(*v)
+	}
+	return _u
+}
+
+// ClearSourceID clears the value of the "source_id" field.
+func (_u *WalletTransactionUpdate) ClearSourceID() *WalletTransactionUpdate {
+	_u.mutation.ClearSourceID()
+	return _u
+}
+
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (_u *WalletTransactionUpdate) Mutation() *WalletTransactionMutation {
 	return _u.mutation
@@ -452,6 +492,21 @@ func (_u *WalletTransactionUpdate) sqlSave(ctx context.Context) (_node int, err 
 	}
 	if _u.mutation.ParentTransactionIDCleared() {
 		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceType(); ok {
+		_spec.SetField(wallettransaction.FieldSourceType, field.TypeString, value)
+	}
+	if _u.mutation.SourceTypeCleared() {
+		_spec.ClearField(wallettransaction.FieldSourceType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceID(); ok {
+		_spec.SetField(wallettransaction.FieldSourceID, field.TypeString, value)
+	}
+	if _u.mutation.SourceIDCleared() {
+		_spec.ClearField(wallettransaction.FieldSourceID, field.TypeString)
+	}
+	if _u.mutation.ConsumptionBreakdownCleared() {
+		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -730,6 +785,46 @@ func (_u *WalletTransactionUpdateOne) ClearPriority() *WalletTransactionUpdateOn
 	return _u
 }
 
+// SetSourceType sets the "source_type" field.
+func (_u *WalletTransactionUpdateOne) SetSourceType(v types.WalletTxSourceType) *WalletTransactionUpdateOne {
+	_u.mutation.SetSourceType(v)
+	return _u
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_u *WalletTransactionUpdateOne) SetNillableSourceType(v *types.WalletTxSourceType) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetSourceType(*v)
+	}
+	return _u
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (_u *WalletTransactionUpdateOne) ClearSourceType() *WalletTransactionUpdateOne {
+	_u.mutation.ClearSourceType()
+	return _u
+}
+
+// SetSourceID sets the "source_id" field.
+func (_u *WalletTransactionUpdateOne) SetSourceID(v string) *WalletTransactionUpdateOne {
+	_u.mutation.SetSourceID(v)
+	return _u
+}
+
+// SetNillableSourceID sets the "source_id" field if the given value is not nil.
+func (_u *WalletTransactionUpdateOne) SetNillableSourceID(v *string) *WalletTransactionUpdateOne {
+	if v != nil {
+		_u.SetSourceID(*v)
+	}
+	return _u
+}
+
+// ClearSourceID clears the value of the "source_id" field.
+func (_u *WalletTransactionUpdateOne) ClearSourceID() *WalletTransactionUpdateOne {
+	_u.mutation.ClearSourceID()
+	return _u
+}
+
 // Mutation returns the WalletTransactionMutation object of the builder.
 func (_u *WalletTransactionUpdateOne) Mutation() *WalletTransactionMutation {
 	return _u.mutation
@@ -925,6 +1020,21 @@ func (_u *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Walle
 	}
 	if _u.mutation.ParentTransactionIDCleared() {
 		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceType(); ok {
+		_spec.SetField(wallettransaction.FieldSourceType, field.TypeString, value)
+	}
+	if _u.mutation.SourceTypeCleared() {
+		_spec.ClearField(wallettransaction.FieldSourceType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceID(); ok {
+		_spec.SetField(wallettransaction.FieldSourceID, field.TypeString, value)
+	}
+	if _u.mutation.SourceIDCleared() {
+		_spec.ClearField(wallettransaction.FieldSourceID, field.TypeString)
+	}
+	if _u.mutation.ConsumptionBreakdownCleared() {
+		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON)
 	}
 	_node = &WalletTransaction{config: _u.config}
 	_spec.Assign = _node.assignValues

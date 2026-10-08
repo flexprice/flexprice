@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -316,7 +317,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 }
 
 // ConsumeCredits processes debit operation across multiple credits
-func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]*walletdomain.Transaction, error) {
+func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "consume_credits", map[string]interface{}{
 		"credits_count": len(credits),
@@ -325,7 +326,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
-	consumedCreditTransactions := make([]*walletdomain.Transaction, 0)
+	consumed := make([]types.WalletTxConsumption, 0, len(credits))
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -345,7 +346,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 			Save(ctx)
 
 		if err != nil {
-			return consumedCreditTransactions, ierr.WithError(err).
+			return consumed, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -355,10 +356,10 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCreditTransactions = append(consumedCreditTransactions, credit)
+		consumed = append(consumed, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
-	return consumedCreditTransactions, nil
+	return consumed, nil
 }
 
 // CreateTransaction creates a new wallet transaction record
@@ -414,6 +415,9 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetIdempotencyKey(tx.IdempotencyKey).
 		SetNillablePriority(tx.Priority).
 		SetNillableParentTransactionID(parentTransactionID).
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID)).
+		SetConsumptionBreakdown(tx.ConsumptionBreakdown).
 		Save(ctx)
 
 	if err != nil {
@@ -869,6 +873,30 @@ func (r *walletRepository) UpdateTransaction(ctx context.Context, tx *walletdoma
 				"transaction_id": tx.ID,
 			}).
 			Mark(ierr.ErrNotFound)
+	}
+
+	if tx.SourceType == "" {
+		return nil
+	}
+
+	// The source is set once: a row that already has one keeps it.
+	_, err = client.WalletTransaction.Update().
+		Where(
+			wallettransaction.ID(tx.ID),
+			wallettransaction.TenantID(types.GetTenantID(ctx)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
+			wallettransaction.SourceTypeIsNil(),
+		).
+		SetSourceType(tx.SourceType).
+		SetSourceID(tx.SourceID).
+		Save(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to set transaction source").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": tx.ID,
+			}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil

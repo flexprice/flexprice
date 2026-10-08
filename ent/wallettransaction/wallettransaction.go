@@ -71,6 +71,12 @@ const (
 	FieldPriority = "priority"
 	// FieldParentTransactionID holds the string denoting the parent_transaction_id field in the database.
 	FieldParentTransactionID = "parent_transaction_id"
+	// FieldSourceType holds the string denoting the source_type field in the database.
+	FieldSourceType = "source_type"
+	// FieldSourceID holds the string denoting the source_id field in the database.
+	FieldSourceID = "source_id"
+	// FieldConsumptionBreakdown holds the string denoting the consumption_breakdown field in the database.
+	FieldConsumptionBreakdown = "consumption_breakdown"
 	// Table holds the table name of the wallettransaction in the database.
 	Table = "wallet_transactions"
 )
@@ -106,6 +112,9 @@ var Columns = []string{
 	FieldTransactionReason,
 	FieldPriority,
 	FieldParentTransactionID,
+	FieldSourceType,
+	FieldSourceID,
+	FieldConsumptionBreakdown,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -288,4 +297,14 @@ func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 // ByParentTransactionID orders the results by the parent_transaction_id field.
 func ByParentTransactionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentTransactionID, opts...).ToFunc()
+}
+
+// BySourceType orders the results by the source_type field.
+func BySourceType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceType, opts...).ToFunc()
+}
+
+// BySourceID orders the results by the source_id field.
+func BySourceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceID, opts...).ToFunc()
 }

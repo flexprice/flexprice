@@ -116,8 +116,9 @@ type WalletService interface {
 	// to prevent duplicate credits on retries.
 	TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string, idempotencyKey string) (*dto.WalletTransactionResponse, error)
 
-	// CompletePurchasedCreditTransaction completes a pending wallet transaction when payment succeeds
-	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error
+	// CompletePurchasedCreditTransactionWithRetry completes a pending purchase when its invoice is paid
+	// and links the purchase to that invoice.
+	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string, invoiceID string) error
 
 	// FailPurchasedCreditTransaction marks a pending purchased-credit transaction failed
 	// when its payment never settles. Balance-neutral: the pending path never credited.
@@ -813,6 +814,8 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		Priority:          req.Priority,
 		BonusCreditAmount: req.BonusCreditsToAdd,
 		BonusExpiryDate:   req.BonusCreditsExpiryDateUTC,
+		SourceType:        req.SourceType,
+		SourceID:          req.SourceID,
 	}
 
 	// Process wallet credit immediately
@@ -970,6 +973,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 	var walletTransactionID string
 	var invoiceID string
+	var paidAtCreation bool
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Only take the wallet advisory lock when this tx actually mutates the wallet balance (auto-complete branch).
 		// In the pending path we only record a tx snapshot; the balance write is deferred to completePurchasedCreditTransaction
@@ -1220,8 +1224,16 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		}
 
 		invoiceID = inv.ID
+		paidAtCreation = inv.PaymentStatus == types.PaymentStatusSucceeded
 
 		if autoCompleteEnabled {
+			// Completed at creation, so the completion step that links the invoice never runs.
+			tx.SourceType = types.WalletTxSourceTypeInvoice
+			tx.SourceID = inv.ID
+			if err := s.WalletRepo.UpdateTransaction(ctx, tx); err != nil {
+				return err
+			}
+
 			s.Logger.Info(ctx, "created auto-completed credit purchase",
 				"wallet_transaction_id", walletTransactionID,
 				"invoice_id", inv.ID,
@@ -1254,17 +1266,28 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, walletTransactionID)
 	}
 
+	// A $0 invoice (e.g. a 100% coupon) is paid at finalize, so no payment event will ever grant it.
+	if !autoCompleteEnabled && paidAtCreation {
+		if err := s.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID, invoiceID); err != nil {
+			s.Logger.Error(ctx, "failed to complete purchased credits paid at invoice creation",
+				"error", err,
+				"wallet_transaction_id", walletTransactionID,
+				"invoice_id", invoiceID,
+			)
+		}
+	}
+
 	return walletTransactionID, invoiceID, err
 }
 
 // CompletePurchasedCreditTransactionWithRetry completes a pending wallet transaction when payment succeeds
 // Includes simple retry logic for transient failures
-func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error {
+func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string, invoiceID string) error {
 	maxRetries := 3
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := s.completePurchasedCreditTransaction(ctx, walletTransactionID)
+		err := s.completePurchasedCreditTransaction(ctx, walletTransactionID, invoiceID)
 		if err == nil {
 			if attempt > 0 {
 				s.Logger.Info(ctx, "successfully completed purchased credit transaction after retry",
@@ -1304,8 +1327,8 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 	return lastErr
 }
 
-// completePurchasedCreditTransaction performs the actual completion logic
-func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, walletTransactionID string) error {
+// completePurchasedCreditTransaction grants a pending purchase and links it to invoiceID, the invoice that paid for it.
+func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, walletTransactionID string, invoiceID string) error {
 	// Fast-path pre-check to skip the lock for terminal / wrong-type txns; the
 	// authoritative status check runs again under the lock below.
 	tx, err := s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
@@ -1401,6 +1424,8 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 		tx.TxStatus = types.TransactionStatusCompleted
 		tx.CreditBalanceBefore = w.CreditBalance
 		tx.CreditBalanceAfter = newCreditBalance
+		tx.SourceType = types.WalletTxSourceTypeInvoice
+		tx.SourceID = invoiceID
 
 		// Compute credits available for the transaction
 		tx.CreditsAvailable, err = tx.ComputeCreditsAvailable()
@@ -2271,7 +2296,7 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 }
 
 // processDebitOperation handles the debit operation with credit selection and consumption
-func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) ([]*wallet.Transaction, error) {
+func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) ([]types.WalletTxConsumption, error) {
 	// Find eligible credits with pagination
 	credits := []*wallet.Transaction{}
 	var err error
@@ -2325,12 +2350,21 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	// Process debit across credits
-	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
+	consumed, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
 	if err != nil {
 		return nil, err
 	}
 
-	return consumedCredits, nil
+	// A manual debit may overdraw; the credits no batch covered are recorded without a batch.
+	covered := decimal.Zero
+	for _, c := range consumed {
+		covered = covered.Add(c.Credits)
+	}
+	if uncovered := req.CreditAmount.Sub(covered); uncovered.IsPositive() {
+		consumed = append(consumed, types.WalletTxConsumption{Credits: uncovered})
+	}
+
+	return consumed, nil
 }
 
 // processWalletOperation handles both credit and debit operations
@@ -2370,20 +2404,22 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		}
 
 		// Step 4: Process operation-specific logic
+		var consumed []types.WalletTxConsumption
 		if req.Type == types.TransactionTypeDebit {
 			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
 			// Process debit operation (credit selection and consumption)
-			consumedCredits, err := s.processDebitOperation(ctx, req)
+			consumed, err = s.processDebitOperation(ctx, req)
 			if err != nil {
 				return err
 			}
 
-			if len(consumedCredits) > 0 {
-				consumedCreditsIDs := make([]string, 0)
-				for _, c := range consumedCredits {
-					consumedCreditsIDs = append(consumedCreditsIDs, c.ID)
+			consumedCreditsIDs := make([]string, 0, len(consumed))
+			for _, c := range consumed {
+				if c.CreditTransactionID != "" {
+					consumedCreditsIDs = append(consumedCreditsIDs, c.CreditTransactionID)
 				}
-
+			}
+			if len(consumedCreditsIDs) > 0 {
 				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
@@ -2395,26 +2431,29 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 		// Step 5: Create transaction record
 		tx = &wallet.Transaction{
-			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
-			WalletID:            req.WalletID,
-			CustomerID:          w.CustomerID,
-			Type:                req.Type,
-			Amount:              req.Amount,
-			CreditAmount:        req.CreditAmount,
-			ReferenceType:       req.ReferenceType,
-			ReferenceID:         req.ReferenceID,
-			Description:         req.Description,
-			Metadata:            metadata,
-			TxStatus:            types.TransactionStatusCompleted,
-			TransactionReason:   req.TransactionReason,
-			ExpiryDate:          req.ResolvedExpiryDate(),
-			Priority:            req.Priority,
-			CreditBalanceBefore: w.CreditBalance,
-			CreditBalanceAfter:  newCreditBalance,
-			Currency:            w.Currency,
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			IdempotencyKey:      req.IdempotencyKey,
-			BaseModel:           types.GetDefaultBaseModel(ctx),
+			ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			WalletID:             req.WalletID,
+			CustomerID:           w.CustomerID,
+			Type:                 req.Type,
+			Amount:               req.Amount,
+			CreditAmount:         req.CreditAmount,
+			ReferenceType:        req.ReferenceType,
+			ReferenceID:          req.ReferenceID,
+			Description:          req.Description,
+			Metadata:             metadata,
+			TxStatus:             types.TransactionStatusCompleted,
+			TransactionReason:    req.TransactionReason,
+			ExpiryDate:           req.ResolvedExpiryDate(),
+			Priority:             req.Priority,
+			CreditBalanceBefore:  w.CreditBalance,
+			CreditBalanceAfter:   newCreditBalance,
+			Currency:             w.Currency,
+			EnvironmentID:        types.GetEnvironmentID(ctx),
+			IdempotencyKey:       req.IdempotencyKey,
+			SourceType:           req.SourceType,
+			SourceID:             req.SourceID,
+			ConsumptionBreakdown: consumed,
+			BaseModel:            types.GetDefaultBaseModel(ctx),
 		}
 
 		// Compute credits available for the transaction
