@@ -14,8 +14,10 @@ Branch: `docs/activity-log-erd`
 Tenants can see who created, updated, archived or deleted their billing entities, and when, from the
 dashboard and the public API.
 
-- **Every change is recorded.** Each create, update, archive and delete of a registered entity made
-  through Flexprice (API, dashboard, workflows, consumers, scripts) produces an entry.
+- **Every change is recorded.** Each committed create, update, archive and delete of a registered
+  entity made through Flexprice (API, dashboard, workflows, consumers, scripts) produces an entry.
+  Several writes to one entity in one transaction produce one entry with its final state, since the
+  intermediate states were never visible outside the transaction.
 - **Who did it.** Each entry names its actor: a user, an API key, or the system. Work the platform does
   on a user's behalf is attributed to the system.
 - **Where it came from.** Each entry carries its request id, source, IP address and user agent. All
