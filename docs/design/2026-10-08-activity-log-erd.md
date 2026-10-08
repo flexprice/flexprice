@@ -139,7 +139,7 @@ Each logged entity has one registration, next to its repository:
 | Snapshot | The entity's `FromEnt` conversion to its domain model |
 | Drop | Fields left out of the snapshot (for example `version`, `synced_price_sequence`) |
 | Redact | Fields stored as `"[redacted]"` (for example payment method details) |
-| Customer | The customer id field, or the parent lookup the consumer uses |
+| Customer | The customer id field, the parent lookup the consumer uses, or none |
 | Label | The human name shown in lists (for example invoice number, customer name) |
 
 Entities without a registration are never logged.
@@ -379,12 +379,13 @@ entries stay readable. The message carries no customer id; the consumer resolves
 Runs in the consumer deployment, registered with the router's `AddNoPublishHandler` and its DLQ.
 
 1. Splits the message into rows and copies the request context and commit time onto each.
-2. Resolves `customer_id` for every entry using the registration. If the entity has a customer
-   field, it reads it from `state`. Otherwise it looks the customer up through the parent on the
-   Postgres read replica, with a cache. If the parent is not on the replica yet, it retries with
-   backoff, then stores an empty customer and increments `activity_customer_unresolved_total`. A
-   periodic repair job re-resolves recent entries with an empty customer and inserts them again with
-   the same id; the newer `ingested_at` replaces the old row (section 6.1).
+2. Resolves `customer_id` using the registration, which says whether the entity has a customer.
+   - Has a customer field: read it from `state`.
+   - Linked through a parent: look the customer up on the Postgres read replica, with a cache. If the
+     parent is not on the replica yet, the consumer fails the message and Kafka redelivers it with
+     backoff. After the retry limit it goes to the DLQ and `activity_customer_unresolved_total` is
+     incremented. Reprocessing is safe because entries are deduplicated by id.
+   - No customer: stored with an empty customer, no lookup and no retry.
 3. Computes `entity_label` from the snapshot using the registration.
 4. Batch-inserts into ClickHouse. A redelivered message carries the same entry ids, so duplicates
    are removed by id (section 6.1).
