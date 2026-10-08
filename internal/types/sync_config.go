@@ -94,7 +94,7 @@ type ZohoInvoiceSyncSettings struct {
 	// Undeposited Funds default.a
 	DepositToAccountID string `json:"deposit_to_account_id,omitempty"`
 
-	// Zoho chart-of-accounts id for Accounts Receivable, set on contacts and invoices.
+	// Zoho chart-of-accounts id for Accounts Receivable, set on synced invoices.
 	// Empty leaves Zoho's org default.
 	ReceivableAccountID string `json:"receivable_account_id,omitempty"`
 }
@@ -145,7 +145,7 @@ func (s *InvoiceSyncSettings) ValidateZohoPaymentSettings() error {
 	if err := validateZohoAccountID("deposit_to_account_id", s.DepositToAccountID); err != nil {
 		return err
 	}
-	
+
 	return validateZohoAccountID("receivable_account_id", s.ReceivableAccountID)
 }
 

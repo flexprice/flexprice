@@ -30170,7 +30170,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "receivable_account_id": {
-                    "description": "Zoho chart-of-accounts id for Accounts Receivable, set on contacts and invoices.\nEmpty leaves Zoho's org default.",
+                    "description": "Zoho chart-of-accounts id for Accounts Receivable, set on synced invoices.\nEmpty leaves Zoho's org default.",
                     "type": "string"
                 },
                 "service_period_custom_fields": {

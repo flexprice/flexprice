@@ -57,7 +57,6 @@ type ContactCreateRequest struct {
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`
 	ShippingAddress *ContactAddress `json:"shipping_address,omitempty"`
 	ContactPersons  []ContactPerson `json:"contact_persons,omitempty"`
-	AccountID       string          `json:"account_id,omitempty"`
 
 	// India (GST) edition fields. Omitted entirely for non-Indian contacts.
 	GSTNo          string `json:"gst_no,omitempty"`

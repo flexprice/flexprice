@@ -28,11 +28,6 @@ type fakeContactClient struct {
 	updateCalls  int
 	updateErr    error
 	queryByEmail *ContactResponse
-	syncConfig   *types.SyncConfig
-}
-
-func (f *fakeContactClient) GetZohoBooksSyncConfig(_ context.Context) (*types.SyncConfig, error) {
-	return f.syncConfig, nil
 }
 
 func (f *fakeContactClient) QueryContactByEmail(_ context.Context, _ string) (*ContactResponse, error) {
@@ -146,19 +141,6 @@ func TestCreateContactCarriesGSTFields(t *testing.T) {
 	assert.Equal(t, "billing@mcgill.example", req.ContactPersons[0].Email)
 }
 
-func TestContactCarriesReceivableAccount(t *testing.T) {
-	client := &fakeContactClient{syncConfig: &types.SyncConfig{
-		InvoiceSyncSettings: &types.InvoiceSyncSettings{
-			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{ReceivableAccountID: "460000000000462"},
-		},
-	}}
-	svc := newTestCustomerService(client, &writableMappingRepo{})
-
-	_, err := svc.GetOrCreateZohoCustomer(context.Background(), indianCustomer())
-	require.NoError(t, err)
-	assert.Equal(t, "460000000000462", client.createReq.AccountID)
-}
-
 func TestNonIndianCustomerOmitsGSTFields(t *testing.T) {
 	client := &fakeContactClient{}
 	svc := newTestCustomerService(client, &writableMappingRepo{})
@@ -266,7 +248,7 @@ func TestSyncCustomerUpdate(t *testing.T) {
 }
 
 func TestGSTTreatmentIsNotSent(t *testing.T) {
-	raw, err := json.Marshal(buildContactRequest(indianCustomer(), ""))
+	raw, err := json.Marshal(buildContactRequest(indianCustomer()))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "gst_treatment",
 		"gst_treatment is optional in Zoho and cannot express SEZ/deemed-export; we omit it")

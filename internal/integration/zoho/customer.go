@@ -54,11 +54,7 @@ func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexprice
 		}
 	}
 
-	accountID, err := s.receivableAccountID(ctx)
-	if err != nil {
-		return "", err
-	}
-	contact, err := s.client.CreateContact(ctx, buildContactRequest(flexpriceCustomer, accountID))
+	contact, err := s.client.CreateContact(ctx, buildContactRequest(flexpriceCustomer))
 	if err != nil {
 		return "", err
 	}
@@ -84,11 +80,7 @@ func (s *CustomerService) SyncCustomerUpdate(ctx context.Context, flexpriceCusto
 		return nil
 	}
 
-	accountID, err := s.receivableAccountID(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := s.client.UpdateContact(ctx, mapping.ProviderEntityID, buildContactRequest(flexpriceCustomer, accountID)); err != nil {
+	if _, err := s.client.UpdateContact(ctx, mapping.ProviderEntityID, buildContactRequest(flexpriceCustomer)); err != nil {
 		return err
 	}
 
@@ -114,16 +106,8 @@ func (s *CustomerService) findMapping(ctx context.Context, customerID string) (*
 	return mappings[0], nil
 }
 
-func (s *CustomerService) receivableAccountID(ctx context.Context) (string, error) {
-	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
-	if err != nil || syncConfig == nil {
-		return "", err
-	}
-	return syncConfig.InvoiceSyncSettings.ZohoReceivableAccountID(), nil
-}
-
 // buildContactRequest maps a FlexPrice customer onto the Zoho contact payload.
-func buildContactRequest(c *customerDomain.Customer, receivableAccountID string) *ContactCreateRequest {
+func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	req := &ContactCreateRequest{
 		ContactName:     c.Name,
 		CompanyName:     c.Name,
@@ -131,7 +115,6 @@ func buildContactRequest(c *customerDomain.Customer, receivableAccountID string)
 		TraderName:      c.Name,
 		ContactType:     "customer",
 		CustomerSubType: "business",
-		AccountID:       receivableAccountID,
 	}
 
 	req.BillingAddress = toContactAddress(

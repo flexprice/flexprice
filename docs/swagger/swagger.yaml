@@ -11736,7 +11736,7 @@ definitions:
         type: string
       receivable_account_id:
         description: |-
-          Zoho chart-of-accounts id for Accounts Receivable, set on contacts and invoices.
+          Zoho chart-of-accounts id for Accounts Receivable, set on synced invoices.
           Empty leaves Zoho's org default.
         type: string
       service_period_custom_fields:
