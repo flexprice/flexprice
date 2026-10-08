@@ -971,7 +971,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			Mark(ierr.ErrValidation)
 	}
 
-	invoiceCoupons, err := s.resolveTopUpCoupons(ctx, walletID, req.Coupons)
+	couponIDs, err := s.resolveTopUpCoupons(ctx, walletID, req.Coupons)
 	if err != nil {
 		return "", "", err
 	}
@@ -1184,16 +1184,16 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		})
 
 		invReq := dto.CreateInvoiceRequest{
-			PreparedInvoiceCoupons: invoiceCoupons,
-			CustomerID:             w.CustomerID,
-			AmountDue:              amount,
-			AmountPaid:             amountPaid,
-			Subtotal:               amount,
-			Total:                  amount,
-			Currency:               w.Currency,
-			InvoiceType:            types.InvoiceTypeOneOff,
-			DueDate:                lo.ToPtr(time.Now().UTC()),
-			IdempotencyKey:         idempotencyKey,
+			Coupons:        couponIDs,
+			CustomerID:     w.CustomerID,
+			AmountDue:      amount,
+			AmountPaid:     amountPaid,
+			Subtotal:       amount,
+			Total:          amount,
+			Currency:       w.Currency,
+			InvoiceType:    types.InvoiceTypeOneOff,
+			DueDate:        lo.ToPtr(time.Now().UTC()),
+			IdempotencyKey: idempotencyKey,
 			LineItems: []dto.CreateInvoiceLineItemRequest{
 				{
 					Amount:      amount,
@@ -1286,9 +1286,9 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	return walletTransactionID, invoiceID, err
 }
 
-// resolveTopUpCoupons looks up each coupon code and validates it for the wallet. Any invalid
-// coupon rejects the whole top-up, so nothing is created.
-func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCoupon) ([]dto.InvoiceCoupon, error) {
+// resolveTopUpCoupons looks up each coupon code, validates it for the wallet and returns the
+// coupon IDs. Any invalid coupon rejects the whole top-up, so nothing is created.
+func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCoupon) ([]string, error) {
 	if len(inputs) == 0 {
 		return nil, nil
 	}
@@ -1299,7 +1299,7 @@ func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string
 	}
 
 	validationService := NewCouponValidationService(s.ServiceParams)
-	invoiceCoupons := make([]dto.InvoiceCoupon, 0, len(inputs))
+	couponIDs := make([]string, 0, len(inputs))
 	for _, input := range inputs {
 		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
 		if err != nil {
@@ -1326,9 +1326,9 @@ func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		invoiceCoupons = append(invoiceCoupons, dto.InvoiceCoupon{CouponID: c.ID})
+		couponIDs = append(couponIDs, c.ID)
 	}
-	return invoiceCoupons, nil
+	return couponIDs, nil
 }
 
 // CompletePurchasedCreditTransactionWithRetry completes a pending wallet transaction when payment succeeds

@@ -136,7 +136,8 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 			continue
 		}
 		// ValidateCoupon only checks currency when given a subscription, and there is none here.
-		if coupon.Currency != "" && !types.IsMatchingCurrency(coupon.Currency, req.Currency) {
+		// Only a fixed amount is in a currency; a percentage applies to any invoice.
+		if coupon.Type == types.CouponTypeFixed && !types.IsMatchingCurrency(coupon.Currency, req.Currency) {
 			s.Logger.Info(ctx, "skipping coupon - currency mismatch",
 				"coupon_id", couponID,
 				"coupon_currency", coupon.Currency,
@@ -147,7 +148,7 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 			CouponID: couponID,
 		})
 	}
-	req.InvoiceCoupons = append(validCoupons, req.PreparedInvoiceCoupons...)
+	req.InvoiceCoupons = validCoupons
 
 	// Prepare tax rates
 	taxService := NewTaxService(s.ServiceParams)
