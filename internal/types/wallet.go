@@ -111,9 +111,8 @@ const (
 )
 
 // WalletTxConsumption is the credits a debit drew from one credit batch.
-// CreditTransactionID is empty for credits a manual debit took below zero.
 type WalletTxConsumption struct {
-	CreditTransactionID string          `json:"credit_transaction_id,omitempty"`
+	CreditTransactionID string          `json:"credit_transaction_id"`
 	Credits             decimal.Decimal `json:"credits" swaggertype:"string"`
 }
 

@@ -70,20 +70,6 @@ func (s *WalletServiceSuite) TestLedgerFacts_DebitRecordsPerBatchConsumption() {
 	s.True(decimal.NewFromInt(10).Equal(remaining.CreditsAvailable), "breakdown matches what left the batch")
 }
 
-func (s *WalletServiceSuite) TestLedgerFacts_ManualOverdraftRecordsUncoveredCredits() {
-	s.resetWalletBalance()
-	only := s.grantFreeCredits("ledger_overdraft_credit", 10, 1)
-
-	debit := s.debit("ledger_overdraft_debit", 25, types.TransactionReasonManualBalanceDebit)
-
-	s.Require().Len(debit.ConsumptionBreakdown, 2)
-	s.Equal(only.ID, debit.ConsumptionBreakdown[0].CreditTransactionID)
-	s.True(decimal.NewFromInt(10).Equal(debit.ConsumptionBreakdown[0].Credits))
-	s.Empty(debit.ConsumptionBreakdown[1].CreditTransactionID, "credits below zero come from no batch")
-	s.True(decimal.NewFromInt(15).Equal(debit.ConsumptionBreakdown[1].Credits))
-	s.True(debit.CreditAmount.Equal(sumConsumed(debit.ConsumptionBreakdown)))
-}
-
 func (s *WalletServiceSuite) TestLedgerFacts_CreditsHaveNoBreakdown() {
 	credit := s.grantFreeCredits("ledger_credit_only", 10, 1)
 
@@ -96,6 +82,7 @@ func (s *WalletServiceSuite) TestLedgerFacts_PaidPurchaseLinksItsInvoice() {
 
 	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
 		CreditsToAdd:      decimal.NewFromInt(100),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(10)),
 		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
 		IdempotencyKey:    lo.ToPtr("ledger_paid_purchase"),
 	})
@@ -110,23 +97,12 @@ func (s *WalletServiceSuite) TestLedgerFacts_PaidPurchaseLinksItsInvoice() {
 	s.Equal(types.TransactionStatusCompleted, purchase.TxStatus)
 	s.Equal(types.WalletTxSourceTypeInvoice, purchase.SourceType)
 	s.Equal(invoiceID, purchase.SourceID)
-}
 
-func (s *WalletServiceSuite) TestLedgerFacts_AutoCompletedPurchaseLinksItsInvoice() {
-	s.seedAutoComplete(true)
-
-	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
-		CreditsToAdd:      decimal.NewFromInt(100),
-		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
-		IdempotencyKey:    lo.ToPtr("ledger_auto_complete"),
-	})
-	s.Require().NoError(err)
-
-	purchase, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
-	s.Require().NoError(err)
-	s.Equal(types.TransactionStatusCompleted, purchase.TxStatus)
-	s.Equal(types.WalletTxSourceTypeInvoice, purchase.SourceType)
-	s.Equal(lo.FromPtr(resp.InvoiceID), purchase.SourceID)
+	bonus := s.bonusTxByParent(purchase.ID)
+	s.Require().NotNil(bonus)
+	s.Equal(types.TransactionStatusCompleted, bonus.TxStatus)
+	s.Equal(types.WalletTxSourceTypeInvoice, bonus.SourceType, "bonus credits carry the purchase's invoice too")
+	s.Equal(invoiceID, bonus.SourceID)
 }
 
 func (s *CreditExpiryInvoiceRaceSuite) TestLedgerFacts_CreditAdjustmentDebitLinksItsInvoice() {

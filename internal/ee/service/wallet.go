@@ -1227,13 +1227,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		paidAtCreation = inv.PaymentStatus == types.PaymentStatusSucceeded
 
 		if autoCompleteEnabled {
-			// Completed at creation, so the completion step that links the invoice never runs.
-			tx.SourceType = types.WalletTxSourceTypeInvoice
-			tx.SourceID = inv.ID
-			if err := s.WalletRepo.UpdateTransaction(ctx, tx); err != nil {
-				return err
-			}
-
 			s.Logger.Info(ctx, "created auto-completed credit purchase",
 				"wallet_transaction_id", walletTransactionID,
 				"invoice_id", inv.ID,
@@ -1465,6 +1458,8 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 		}
 		if bonusTx != nil {
 			bonusTx.TxStatus = types.TransactionStatusCompleted
+			bonusTx.SourceType = types.WalletTxSourceTypeInvoice
+			bonusTx.SourceID = invoiceID
 			bonusTx.CreditBalanceBefore = newCreditBalance
 			bonusTx.CreditBalanceAfter = newCreditBalance.Add(bonusTx.CreditAmount)
 			if bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable(); err != nil {
@@ -2355,15 +2350,6 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		return nil, err
 	}
 
-	// A manual debit may overdraw; the credits no batch covered are recorded without a batch.
-	covered := decimal.Zero
-	for _, c := range consumed {
-		covered = covered.Add(c.Credits)
-	}
-	if uncovered := req.CreditAmount.Sub(covered); uncovered.IsPositive() {
-		consumed = append(consumed, types.WalletTxConsumption{Credits: uncovered})
-	}
-
 	return consumed, nil
 }
 
@@ -2413,13 +2399,11 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 				return err
 			}
 
-			consumedCreditsIDs := make([]string, 0, len(consumed))
-			for _, c := range consumed {
-				if c.CreditTransactionID != "" {
+			if len(consumed) > 0 {
+				consumedCreditsIDs := make([]string, 0, len(consumed))
+				for _, c := range consumed {
 					consumedCreditsIDs = append(consumedCreditsIDs, c.CreditTransactionID)
 				}
-			}
-			if len(consumedCreditsIDs) > 0 {
 				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
