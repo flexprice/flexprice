@@ -173,7 +173,9 @@ func (s *WalletServiceSuite) TestTopUpCoupons_InvalidCouponRejectsTheWholeTopUp(
 		{
 			name: "reason other than invoiced purchase",
 			seed: func() { s.seedCoupon("TOPUP10", nil) },
-			req:  func(req *dto.TopUpWalletRequest) { req.TransactionReason = types.TransactionReasonPurchasedCreditDirect },
+			req: func(req *dto.TopUpWalletRequest) {
+				req.TransactionReason = types.TransactionReasonPurchasedCreditDirect
+			},
 		},
 		{
 			name: "together with checkout",

@@ -27,8 +27,6 @@ type CouponValidationService interface {
 	ValidateCoupon(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error
 	// Basic coupon validation (status, validity, etc.)
 	ValidateCouponBasic(coupon coupon.Coupon) error
-	// ValidateCouponForWallet validates a coupon for a one-time wallet top-up invoice.
-	ValidateCouponForWallet(ctx context.Context, coupon coupon.Coupon, walletCurrency string) error
 }
 
 // couponValidationService implements CouponValidationService
@@ -80,28 +78,6 @@ func (s *couponValidationService) ValidateCoupon(ctx context.Context, coupon cou
 	s.Logger.Info(ctx, "coupon validation for subscription successful",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscriptionID)
-
-	return nil
-}
-
-// ValidateCouponForWallet runs the subscription-free checks (status, dates, redemptions) and,
-// for a fixed-amount coupon, requires the wallet's currency. Cadence does not apply to a top-up.
-func (s *couponValidationService) ValidateCouponForWallet(ctx context.Context, coupon coupon.Coupon, walletCurrency string) error {
-	if err := s.ValidateCoupon(ctx, coupon, nil); err != nil {
-		return err
-	}
-
-	if coupon.Type == types.CouponTypeFixed && !types.IsMatchingCurrency(coupon.Currency, walletCurrency) {
-		return &CouponValidationError{
-			Code:    types.CouponValidationErrorCodeCurrencyMismatch,
-			Message: "Coupon currency does not match the wallet currency",
-			Details: map[string]interface{}{
-				"coupon_id":       coupon.ID,
-				"coupon_currency": coupon.Currency,
-				"wallet_currency": walletCurrency,
-			},
-		}
-	}
 
 	return nil
 }

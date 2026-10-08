@@ -454,13 +454,16 @@ func (r *TopUpWalletRequest) Validate() error {
 		}
 	}
 
-	return r.validateCoupons()
+	if len(r.Coupons) > 0 {
+		if err := r.validateCoupons(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *TopUpWalletRequest) validateCoupons() error {
-	if len(r.Coupons) == 0 {
-		return nil
-	}
 	if r.TransactionReason != types.TransactionReasonPurchasedCreditInvoiced {
 		return ierr.NewError("coupons are only supported for PURCHASED_CREDIT_INVOICED").
 			WithHint("Omit coupons, or set transaction_reason to PURCHASED_CREDIT_INVOICED").
