@@ -301,8 +301,9 @@ Raw SQL bypasses ent, so the repository passes the rows from its own `RETURNING 
 A plain `Save` or `Exec` on a registered entity returns only a count, so the hook cannot capture it.
 That fails in tests and local runs, and increments `activity_uncaptured_total` in production.
 
-**Action** is `created`, `updated`, `archived` (status moves to archived or deleted) or `deleted`
-(row removed).
+**Action** is `created`, `updated`, `archived` or `deleted` (row removed). The hook sees only the
+row after the write, so `archived` means the update set the status to archived or deleted, which the
+hook reads from the mutation. Re-archiving an already archived entity is also logged as `archived`.
 
 ### 4.7 Suppress
 
@@ -367,7 +368,7 @@ skipped: an auto top-up started from the same flow uses the normal context and i
 }
 ```
 
-Entry ids are ULIDs created in the process. Their embedded time bounds lookups by id.
+Entry ids are ULIDs created in the process. Their embedded time bounds lookups by id (section 7.2).
 
 `schema_version` is a constant in the activity package that describes the message and snapshot
 format. It changes only on a breaking change to that format, and is stored with every row so old
@@ -381,10 +382,12 @@ Runs in the consumer deployment, registered with the router's `AddNoPublishHandl
 2. Resolves `customer_id` for every entry using the registration. If the entity has a customer
    field, it reads it from `state`. Otherwise it looks the customer up through the parent on the
    Postgres read replica, with a cache. If the parent is not on the replica yet, it retries with
-   backoff, then stores an empty customer and increments `activity_customer_unresolved_total`.
+   backoff, then stores an empty customer and increments `activity_customer_unresolved_total`. A
+   periodic repair job re-resolves recent entries with an empty customer and inserts them again with
+   the same id; the newer `ingested_at` replaces the old row (section 6.1).
 3. Computes `entity_label` from the snapshot using the registration.
-4. Batch-inserts into ClickHouse. A redelivered message carries the same entry ids, which the table
-   deduplicates.
+4. Batch-inserts into ClickHouse. A redelivered message carries the same entry ids, so duplicates
+   are removed by id (section 6.1).
 
 ---
 
@@ -449,7 +452,8 @@ ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(occurred_at)
 -- Tenant feed: everything in one tenant and environment, newest first.
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
+TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE
+SETTINGS deduplicate_merge_projection_mode = 'rebuild';
 ```
 
 - **Sort key** serves the tenant feed: one tenant and environment, newest first.
@@ -457,7 +461,11 @@ TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
   because lists never return it, so they stay small.
 - **Skip indexes** on `actor_id` and `request_id` serve occasional lookups (an actor's history after
   an incident, a request's related changes) without the storage cost of another projection.
-- **`ReplacingMergeTree`** collapses redelivered entries with the same id.
+- **`ReplacingMergeTree`** collapses rows with the same id, keeping the latest `ingested_at`. This
+  happens in background merges, so reads also deduplicate: list queries use `LIMIT 1 BY id` and the
+  detail lookup uses `FINAL`. Projections on a `ReplacingMergeTree` need
+  `deduplicate_merge_projection_mode = 'rebuild'` (ClickHouse 24.8 and later) so they are rebuilt
+  when merges remove duplicates.
 - **`state`** is JSON text compressed with ZSTD. It is never filtered on, only returned when an
   entry is opened.
 - **TTL** at 13 months is a safety net. The archiver normally drops a month after exporting it.
@@ -522,8 +530,10 @@ flowchart LR
 
 ### 7.2 Detail
 
-`GET /v1/activity/{id}` returns the row plus `state` and `schema_version`. The id's embedded time
-bounds the lookup to one partition.
+`GET /v1/activity/{id}` returns the row plus `state` and `schema_version`. The id's embedded time is
+when the entry was built, shortly before its commit time, and a transaction can commit in the next
+month. The lookup therefore searches from that time to one day after it, which touches at most two
+partitions.
 
 ### 7.3 Access
 
