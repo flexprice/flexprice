@@ -1288,7 +1288,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 // resolveTopUpCoupons looks up each coupon code and validates it for the wallet. Any invalid
 // coupon rejects the whole top-up, so nothing is created.
-func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCouponInput) ([]dto.InvoiceCoupon, error) {
+func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string, inputs []dto.TopUpCoupon) ([]dto.InvoiceCoupon, error) {
 	if len(inputs) == 0 {
 		return nil, nil
 	}

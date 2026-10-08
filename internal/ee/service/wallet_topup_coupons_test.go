@@ -45,7 +45,7 @@ func percentOff(pct int64) func(c *coupon.Coupon) {
 }
 
 func (s *WalletServiceSuite) topUpWithCoupons(key string, credits int64, codes ...string) (*dto.TopUpWalletResponse, error) {
-	coupons := lo.Map(codes, func(code string, _ int) dto.TopUpCouponInput { return dto.TopUpCouponInput{CouponCode: code} })
+	coupons := lo.Map(codes, func(code string, _ int) dto.TopUpCoupon { return dto.TopUpCoupon{CouponCode: code} })
 	return s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
 		CreditsToAdd:      decimal.NewFromInt(credits),
 		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
@@ -186,7 +186,7 @@ func (s *WalletServiceSuite) TestTopUpCoupons_InvalidCouponRejectsTheWholeTopUp(
 			name: "same code twice",
 			seed: func() { s.seedCoupon("TOPUP10", nil) },
 			req: func(req *dto.TopUpWalletRequest) {
-				req.Coupons = append(req.Coupons, dto.TopUpCouponInput{CouponCode: "TOPUP10"})
+				req.Coupons = append(req.Coupons, dto.TopUpCoupon{CouponCode: "TOPUP10"})
 			},
 		},
 		{
@@ -239,7 +239,7 @@ func (s *WalletServiceSuite) TestTopUpCoupons_InvalidCouponRejectsTheWholeTopUp(
 				CreditsToAdd:      decimal.NewFromInt(500),
 				TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
 				IdempotencyKey:    lo.ToPtr("coupon_reject"),
-				Coupons:           []dto.TopUpCouponInput{{CouponCode: "TOPUP10"}},
+				Coupons:           []dto.TopUpCoupon{{CouponCode: "TOPUP10"}},
 			}
 			if tt.req != nil {
 				tt.req(req)
