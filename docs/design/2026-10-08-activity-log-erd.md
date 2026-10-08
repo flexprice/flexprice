@@ -73,16 +73,16 @@ flowchart LR
     CH --> READ["GET /v1/activity<br/>service → repository"]
 ```
 
-**Flow for one request.** A user removes three addons from a subscription:
+**Flow of a write.**
 
 | Step | Where | What happens |
 | --- | --- | --- |
-| 1 | Auth middleware | Context gets the actor (`user`, "Manish") and request context (id, IP, user agent) |
-| 2 | Repository, inside `WithTx` | `AddonAssociationRepo.CancelBulk` with `SaveReturning`. Postgres returns the three cancelled addon associations; the hook adds three entries |
+| 1 | Entry point | The actor and request context (id, IP, user agent) are set in the context |
+| 2 | Repository, inside `WithTx` | A write to a registered entity (`Create`, `SaveReturning`, `ExecReturning`). Postgres returns the changed rows, and the hook adds one entry per row to the collector |
 | 3 | `WithTx` commits | The post-commit hook hands the collector to the publisher. On rollback the collector is dropped |
-| 4 | Publisher | One Kafka message with three entries. The request returns without waiting |
-| 5 | Consumer | Resolves the customer through the subscription, computes labels, inserts three rows into ClickHouse |
-| 6 | Dashboard | Three entries, grouped by request id, a few seconds after the change |
+| 4 | Publisher | One Kafka message per transaction. The request returns without waiting |
+| 5 | Consumer | Resolves the customer and label for each entry, and batch-inserts the rows into ClickHouse |
+| 6 | Dashboard and API | The entries appear a few seconds after the change, grouped by request id |
 
 ### 2.1 Why this design
 
