@@ -52,7 +52,7 @@ type WalletOperation struct {
 	// BonusExpiryDate is the expiry timestamp applied to the bonus tx (independent of the
 	// purchase tx's ExpiryDate/ExpiryDateTime). nil means the bonus never expires.
 	BonusExpiryDate *time.Time `json:"-"`
-	// SourceType/SourceID link the transaction to the invoice behind it (see Transaction).
+	// SourceType/SourceID set the transaction's source (see Transaction).
 	SourceType types.WalletTxSourceType `json:"-"`
 	SourceID   string                   `json:"-"`
 }

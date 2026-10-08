@@ -367,7 +367,7 @@ type TopUpWalletRequest struct {
 	// arrangement a tenant makes, not one a customer may take for itself.
 	TriggeringActor types.TriggeringActor `json:"-"`
 
-	// SourceType/SourceID link the credits to the invoice behind them (e.g. the refunded invoice).
+	// SourceType/SourceID set the transaction's source; server-only.
 	SourceType types.WalletTxSourceType `json:"-"`
 	SourceID   string                   `json:"-"`
 }

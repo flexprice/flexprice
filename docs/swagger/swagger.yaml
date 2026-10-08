@@ -9239,8 +9239,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.WalletTxSourceType'
         description: |-
-          SourceType/SourceID link the transaction to the invoice that paid for, refunded or
-          consumed its credits. Empty when there is none.
+          SourceType/SourceID identify the entity this transaction's value comes from or goes to
+          (e.g. an invoice). Empty when there is none.
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
