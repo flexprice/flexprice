@@ -7,18 +7,20 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/gin-gonic/gin"
 )
 
 // AnalyticsHandler handles ad-hoc and view analytics query endpoints.
 type AnalyticsHandler struct {
-	svc service.AnalyticsService
-	log *logger.Logger
+	svc        service.AnalyticsService
+	revenueSvc interfaces.RevenueService
+	log        *logger.Logger
 }
 
-func NewAnalyticsHandler(svc service.AnalyticsService, log *logger.Logger) *AnalyticsHandler {
-	return &AnalyticsHandler{svc: svc, log: log}
+func NewAnalyticsHandler(svc service.AnalyticsService, revenueSvc interfaces.RevenueService, log *logger.Logger) *AnalyticsHandler {
+	return &AnalyticsHandler{svc: svc, revenueSvc: revenueSvc, log: log}
 }
 
 // Query runs an ad-hoc analytics query against a view definition.
@@ -147,6 +149,42 @@ func (h *AnalyticsHandler) QueryView(c *gin.Context) {
 	res, err := h.svc.QueryView(ctx, id, req.Variables)
 	if err != nil {
 		h.log.Error(ctx, "failed to query analytics view", "error", err, "view_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// GetRevenueAnalytics aggregates revenue facts into grouped, time-bucketed rows.
+// @Summary Query revenue analytics
+// @Description Aggregates revenue_facts by the requested dimensions at day/period/total granularity. allocation_policy places whole-period charges on their booked day (billed) or spreads them across the period (amortized); include_adjustments breaks out true-up/overage/revert amounts as labeled rows. Requires the tenant's revenue analytics setting.
+// @ID getRevenueAnalytics
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.RevenueAnalyticsRequest true "Revenue analytics request"
+// @Success 200 {object} dto.RevenueAnalyticsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Revenue analytics not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/revenue [post]
+func (h *AnalyticsHandler) GetRevenueAnalytics(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.RevenueAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	res, err := h.revenueSvc.GetRevenueAnalytics(ctx, &req)
+	if err != nil {
+		h.log.Error(ctx, "failed to query revenue analytics", "error", err)
 		c.Error(err)
 		return
 	}

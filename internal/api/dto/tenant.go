@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 type TenantBillingDetails struct {
@@ -118,13 +119,72 @@ func NewTenantResponse(t *tenant.Tenant) *TenantResponse {
 }
 
 type UpdateTenantRequest struct {
-	Name           *string               `json:"name,omitempty"`
-	BillingDetails *TenantBillingDetails `json:"billing_details,omitempty"`
-	Metadata       *types.Metadata       `json:"metadata,omitempty"`
+	Name           *string                     `json:"name,omitempty"`
+	BillingDetails *UpdateTenantBillingDetails `json:"billing_details,omitempty"`
+	Metadata       *types.Metadata             `json:"metadata,omitempty"`
+}
+
+// UpdateTenantBillingDetails is a partial update: an omitted field keeps the stored value, "" clears it.
+type UpdateTenantBillingDetails struct {
+	Email     *string              `json:"email,omitempty"`
+	HelpEmail *string              `json:"help_email,omitempty"`
+	Phone     *string              `json:"phone,omitempty"`
+	Address   *UpdateTenantAddress `json:"address,omitempty"`
+}
+
+// UpdateTenantAddress is a partial address update with the same semantics as UpdateTenantBillingDetails.
+type UpdateTenantAddress struct {
+	Line1      *string `json:"address_line1,omitempty"`
+	Line2      *string `json:"address_line2,omitempty"`
+	City       *string `json:"address_city,omitempty"`
+	State      *string `json:"address_state,omitempty"`
+	PostalCode *string `json:"address_postal_code,omitempty"`
+	Country    *string `json:"address_country,omitempty"`
 }
 
 func (r *UpdateTenantRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if r.BillingDetails == nil || r.BillingDetails.Address == nil {
+		return nil
+	}
+	// Validate the provided values with the Address rules, where "" is allowed.
+	a := r.BillingDetails.Address
+	return validator.ValidateRequest(Address{
+		Line1:      lo.FromPtr(a.Line1),
+		Line2:      lo.FromPtr(a.Line2),
+		City:       lo.FromPtr(a.City),
+		State:      lo.FromPtr(a.State),
+		PostalCode: lo.FromPtr(a.PostalCode),
+		Country:    lo.FromPtr(a.Country),
+	})
+}
+
+// MergeInto returns existing with every provided field replaced.
+func (r *UpdateTenantBillingDetails) MergeInto(existing tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+	if r == nil {
+		return existing
+	}
+	merged := existing
+	setIfProvided(&merged.Email, r.Email)
+	setIfProvided(&merged.HelpEmail, r.HelpEmail)
+	setIfProvided(&merged.Phone, r.Phone)
+	if a := r.Address; a != nil {
+		setIfProvided(&merged.Address.Line1, a.Line1)
+		setIfProvided(&merged.Address.Line2, a.Line2)
+		setIfProvided(&merged.Address.City, a.City)
+		setIfProvided(&merged.Address.State, a.State)
+		setIfProvided(&merged.Address.PostalCode, a.PostalCode)
+		setIfProvided(&merged.Address.Country, a.Country)
+	}
+	return merged
+}
+
+func setIfProvided(dst *string, src *string) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 type TenantBillingUsage struct {

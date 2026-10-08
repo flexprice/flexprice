@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 )
 
@@ -18,6 +19,7 @@ const (
 	CtxDBTransaction ContextKey = "ctx_db_transaction"
 	CtxForceWriter   ContextKey = "ctx_force_writer" // Force DB operations to use writer connection
 	CtxWriterPin     ContextKey = "ctx_writer_pin"   // Mutable read-your-writes pin, installed per unit of work
+	CtxPostCommit    ContextKey = "ctx_post_commit"  // Mutable post-commit hook list, installed per transaction
 	CtxRoles         ContextKey = "ctx_roles"        // RBAC roles array for permission checks
 
 	// Default values
@@ -203,4 +205,81 @@ func ValidateTenantContext(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// postCommitHooks collects work deferred until the current transaction
+// commits. The transaction wrapper installs it; callers queue through
+// RegisterPostCommit.
+type postCommitHooks struct {
+	mu     sync.Mutex
+	funcs  []func()
+	closed bool
+}
+
+// WithPostCommitHooks installs an empty hook list for one transaction.
+func WithPostCommitHooks(ctx context.Context) context.Context {
+	return context.WithValue(ctx, CtxPostCommit, &postCommitHooks{})
+}
+
+// RegisterPostCommit queues fn to run once the current transaction commits,
+// reporting false when there is nothing to wait for — no transaction, or one
+// that has already finished — so the caller runs fn itself. Work that reads
+// what the transaction wrote must go through here: uncommitted rows are
+// invisible on any other connection.
+func RegisterPostCommit(ctx context.Context, fn func()) bool {
+	hooks, ok := ctx.Value(CtxPostCommit).(*postCommitHooks)
+	if !ok || hooks == nil {
+		return false
+	}
+	hooks.mu.Lock()
+	defer hooks.mu.Unlock()
+	if hooks.closed {
+		return false
+	}
+	hooks.funcs = append(hooks.funcs, fn)
+	return true
+}
+
+// RunPostCommitHooks closes registration and runs what was queued.
+func RunPostCommitHooks(ctx context.Context) {
+	for _, fn := range closePostCommitHooks(ctx) {
+		fn()
+	}
+}
+
+// DiscardPostCommitHooks closes registration and drops what was queued — the
+// rollback path, where the writes the work would read never landed.
+func DiscardPostCommitHooks(ctx context.Context) {
+	_ = closePostCommitHooks(ctx)
+}
+
+// closePostCommitHooks takes the queued hooks and closes the list, so a
+// registration arriving afterwards is told to run inline rather than queueing
+// onto a list nobody will drain again.
+func closePostCommitHooks(ctx context.Context) []func() {
+	hooks, ok := ctx.Value(CtxPostCommit).(*postCommitHooks)
+	if !ok || hooks == nil {
+		return nil
+	}
+	hooks.mu.Lock()
+	defer hooks.mu.Unlock()
+	queued := hooks.funcs
+	hooks.funcs = nil
+	hooks.closed = true
+	return queued
+}
+
+// WithoutDBTransaction strips any open transaction from ctx.
+//
+// Work that outlives the request — a detached goroutine, anything queued —
+// must never inherit the caller's transaction. The request commits and hands
+// that connection back to the pool while the detached work is still issuing
+// statements on it, which desynchronizes the Postgres wire protocol
+// ("unexpected Parse response") and poisons the connection for whoever picks
+// it up next, so failures surface in unrelated requests.
+func WithoutDBTransaction(ctx context.Context) context.Context {
+	if ctx.Value(CtxDBTransaction) == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, CtxDBTransaction, nil)
 }

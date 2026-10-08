@@ -67,7 +67,7 @@ func (c *Client) buildStripeClient(conn *connection.Connection) (*stripe.Client,
 
 	// OTel-instrumented backend so outbound Stripe calls surface in SigNoz; 80s
 	// mirrors the Stripe SDK's default HTTP timeout.
-	backends := stripe.NewBackends(httpclient.NewOtelHTTPClient(80 * time.Second))
+	backends := stripe.NewBackends(httpclient.NewProviderHTTPClient(80*time.Second, c.logger, string(types.SecretProviderStripe)))
 	stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
 
 	return stripeClient, stripeConfig, nil

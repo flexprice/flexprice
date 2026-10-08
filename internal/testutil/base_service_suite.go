@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -37,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -91,6 +93,7 @@ type Stores struct {
 	CreditNoteRepo               creditnote.Repository
 	CreditNoteLineItemRepo       creditnote.CreditNoteLineItemRepository
 	TaxRateRepo                  taxrate.Repository
+	FXRateRepo                   fxrate.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	CouponRepo                   coupon.Repository
@@ -109,6 +112,7 @@ type Stores struct {
 	CheckoutSessionRepo          domainCheckout.Repository
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
+	RevenueFactRepo              revenuefact.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -217,6 +221,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	invLineItemStore := NewInMemoryInvoiceLineItemStore()
 	invoiceStore := NewInMemoryInvoiceStore()
 	invoiceStore.SetLineItemStore(invLineItemStore)
+	subStore.SetInvoiceStore(invoiceStore)
 	priceStore := NewInMemoryPriceStore()
 	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
 	couponStore := NewInMemoryCouponStore()
@@ -250,6 +255,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditNoteRepo:               NewInMemoryCreditNoteStore(),
 		CreditNoteLineItemRepo:       NewInMemoryCreditNoteLineItemStore(),
 		TaxRateRepo:                  NewInMemoryTaxRateStore(),
+		FXRateRepo:                   NewInMemoryFXRateStore(),
 		TaxAppliedRepo:               NewInMemoryTaxAppliedStore(),
 		TaxAssociationRepo:           NewInMemoryTaxAssociationStore(),
 		CouponRepo:                   couponStore,
@@ -268,6 +274,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
+		RevenueFactRepo:              NewInMemoryRevenueFactStore(),
 	}
 
 	// Cache stores
@@ -313,6 +320,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.ConnectionRepo.(*InMemoryConnectionStore).Clear()
 	s.stores.EntityIntegrationMappingRepo.(*InMemoryEntityIntegrationMappingStore).Clear()
 	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
+	s.stores.FXRateRepo.(*InMemoryFXRateStore).Clear()
 	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
 	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 	s.stores.CouponRepo.(*InMemoryCouponStore).Clear()
@@ -331,6 +339,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()
+	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

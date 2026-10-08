@@ -175,6 +175,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		priceSyncSvc,
 		f.invoiceRepo,
 		f.paymentRepo,
+		f.locker,
 		f.logger,
 	)
 
@@ -1574,8 +1575,7 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 
 // GetPaymentMethodProvider returns the PaymentMethodProvider adapter for the given
 // gateway. ErrNotImplemented means the provider cannot manage saved methods at all
-// — the permanent answer for Razorpay, whose tokens need a mandate — and callers
-// must treat it as a capability answer rather than a failure.
+// and callers must treat it as a capability answer rather than a failure.
 func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.PaymentGatewayType, customerSvc interfaces.CustomerService) (interfaces.PaymentMethodProvider, error) {
 	if f.paymentMethodProvider != nil {
 		return f.paymentMethodProvider, nil
@@ -1591,6 +1591,23 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
 			Logger:      f.logger,
 		}, nil
+	case types.PaymentGatewayTypeStripe:
+		i, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &stripe.PaymentMethodAdapter{
+			Client:            i.Client,
+			StripeCustomerSvc: i.CustomerSvc,
+			CustomerSvc:       customerSvc,
+			Logger:            f.logger,
+		}, nil
+	case types.PaymentGatewayTypeRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.PaymentMethodAdapter{CustomerSvc: i.CustomerSvc}, nil
 	default:
 		return nil, ierr.NewError("saved payment methods are not supported for this provider").
 			WithHintf("%s cannot manage saved payment methods", gateway).
@@ -1656,6 +1673,18 @@ func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.Checko
 			Client:      i.Client,
 			CustomerSvc: i.CustomerSvc,
 			InvoiceSvc:  i.InvoiceSvc,
+			Logger:      f.logger,
+		}, nil
+	case types.CheckoutPaymentProviderStripe:
+		i, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &stripe.CheckoutAdapter{
+			Client:      i.Client,
+			PaymentSvc:  i.PaymentSvc,
+			CustomerSvc: customerSvc,
+			InvoiceSvc:  invoiceSvc,
 			Logger:      f.logger,
 		}, nil
 	default:

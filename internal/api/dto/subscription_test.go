@@ -39,6 +39,26 @@ func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("defaults overage factor when only time buckets are set", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			IsWindowCommitment: lo.ToPtr(true),
+			CommitmentTimeBuckets: []CommitmentBucketRequest{{
+				ID:              "bkt_existing",
+				Start:           types.Bucket{Hour: 8},
+				End:             types.Bucket{Hour: 20},
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(10),
+			}},
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if c.OverageFactor == nil || !c.OverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default overage factor 1, got: %v", c.OverageFactor)
+		}
+	})
 }
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {

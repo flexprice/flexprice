@@ -23,6 +23,8 @@ type Repository interface {
 	Create(ctx context.Context, g *EntitlementGrant) (*EntitlementGrant, error)
 	Get(ctx context.Context, id string) (*EntitlementGrant, error)
 	List(ctx context.Context, filter *types.EntitlementGrantFilter) ([]*EntitlementGrant, error)
+
+	ListLatestWindows(ctx context.Context, filter *types.EntitlementGrantFilter, perSlot int) ([]*EntitlementGrant, error)
 	Count(ctx context.Context, filter *types.EntitlementGrantFilter) (int, error)
 	Update(ctx context.Context, g *EntitlementGrant) (*EntitlementGrant, error)
 	Delete(ctx context.Context, id string) error

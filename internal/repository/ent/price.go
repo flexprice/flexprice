@@ -652,6 +652,10 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		}
 	}
 
+	if f.UpdatedAfter != nil {
+		query = query.Where(price.UpdatedAtGTE(*f.UpdatedAfter))
+	}
+
 	if !f.AllowExpiredPrices {
 		now := time.Now().UTC()
 
@@ -767,6 +771,82 @@ func (r *priceRepository) GetByGroupIDs(ctx context.Context, groupIDs []string) 
 			Mark(ierr.ErrDatabase)
 	}
 	return domainPrice.FromEntList(prices), nil
+}
+
+// ListByIDs returns the prices whose ids are in ids; missing ids are absent
+// from the result, not an error. Archived prices are included: line items can
+// reference prices that were archived after billing. Cached prices are read
+// with one bulk redis call; only the misses hit the database.
+func (r *priceRepository) ListByIDs(ctx context.Context, ids []string) ([]*domainPrice.Price, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	span := StartRepositorySpan(ctx, "price", "list_by_ids", map[string]interface{}{
+		"price_ids_count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	ids = lo.Uniq(lo.Filter(ids, func(id string, _ int) bool { return id != "" }))
+
+	keys := make([]string, len(ids))
+	idByKey := make(map[string]string, len(ids))
+	for i, id := range ids {
+		keys[i] = cache.GenerateKey(ctx, cache.PrefixPrice, id)
+		idByKey[keys[i]] = id
+	}
+
+	cacheSpan, ctx := cache.StartRedisCacheSpan(ctx, "price", "get_bulk", map[string]interface{}{
+		"price_ids_count": len(ids),
+	})
+	foundValues, missingKeys := r.redisCache.GetBulk(ctx, keys)
+	cache.FinishSpan(cacheSpan)
+
+	result := make([]*domainPrice.Price, 0, len(ids))
+	missingIDs := make([]string, 0, len(missingKeys))
+	for _, key := range keys {
+		value, ok := foundValues[key]
+		if !ok {
+			continue
+		}
+		if p, ok := cache.UnmarshalCacheValue[domainPrice.Price](value); ok {
+			result = append(result, p)
+			continue
+		}
+		// A corrupt cache entry falls back to the database.
+		missingIDs = append(missingIDs, idByKey[key])
+	}
+	for _, key := range missingKeys {
+		missingIDs = append(missingIDs, idByKey[key])
+	}
+
+	if len(missingIDs) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	fetched, err := r.client.Reader(ctx).Price.Query().
+		Where(
+			price.IDIn(missingIDs...),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices by ids").
+			WithReportableDetails(map[string]interface{}{"price_ids": missingIDs}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, p := range domainPrice.FromEntList(fetched) {
+		r.SetCache(ctx, p)
+		result = append(result, p)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
 }
 
 func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) error {

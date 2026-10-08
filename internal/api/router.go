@@ -49,6 +49,7 @@ type Handlers struct {
 	CreditNote               *v1.CreditNoteHandler
 	Refund                   *v1.RefundHandler
 	Tax                      *v1.TaxHandler
+	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
@@ -214,7 +215,6 @@ func NewRouter(
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
-			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
 			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
@@ -233,6 +233,7 @@ func NewRouter(
 		analytics := v1Private.Group("/analytics")
 		{
 			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
+			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
 			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
 			analytics.POST("/views/:id/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryView)
 		}
@@ -295,6 +296,7 @@ func NewRouter(
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
 			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
+			customer.GET("/:id/payment-methods", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentMethods)
 			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation. Minting a session token is an
@@ -533,6 +535,17 @@ func NewRouter(
 			taxRates.GET("/:id", handlers.Tax.GetTaxRate)
 			taxRates.PUT("/:id", write(types.EntityTax, types.ActionWrite), handlers.Tax.UpdateTaxRate)
 			taxRates.DELETE("/:id", write(types.EntityTax, types.ActionWrite), handlers.Tax.DeleteTaxRate)
+		}
+
+		// FX rate routes. /resolve and /search are registered before /:id so the
+		// param route does not capture them.
+		fxRates := v1Private.Group("/forex")
+		{
+			fxRates.POST("", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.CreateFXRate)
+			fxRates.POST("/query", handlers.FXRate.QueryFXRates)
+			fxRates.GET("/:id", handlers.FXRate.GetFXRate)
+			fxRates.PUT("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.UpdateFXRate)
+			fxRates.DELETE("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.DeleteFXRate)
 		}
 
 		taxAssociations := tax.Group("/associations")

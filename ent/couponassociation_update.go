@@ -25,184 +25,184 @@ type CouponAssociationUpdate struct {
 }
 
 // Where appends a list predicates to the CouponAssociationUpdate builder.
-func (cau *CouponAssociationUpdate) Where(ps ...predicate.CouponAssociation) *CouponAssociationUpdate {
-	cau.mutation.Where(ps...)
-	return cau
+func (_u *CouponAssociationUpdate) Where(ps ...predicate.CouponAssociation) *CouponAssociationUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cau *CouponAssociationUpdate) SetStatus(s string) *CouponAssociationUpdate {
-	cau.mutation.SetStatus(s)
-	return cau
+func (_u *CouponAssociationUpdate) SetStatus(v string) *CouponAssociationUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cau *CouponAssociationUpdate) SetNillableStatus(s *string) *CouponAssociationUpdate {
-	if s != nil {
-		cau.SetStatus(*s)
+func (_u *CouponAssociationUpdate) SetNillableStatus(v *string) *CouponAssociationUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cau
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cau *CouponAssociationUpdate) SetUpdatedAt(t time.Time) *CouponAssociationUpdate {
-	cau.mutation.SetUpdatedAt(t)
-	return cau
+func (_u *CouponAssociationUpdate) SetUpdatedAt(v time.Time) *CouponAssociationUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cau *CouponAssociationUpdate) SetUpdatedBy(s string) *CouponAssociationUpdate {
-	cau.mutation.SetUpdatedBy(s)
-	return cau
+func (_u *CouponAssociationUpdate) SetUpdatedBy(v string) *CouponAssociationUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cau *CouponAssociationUpdate) SetNillableUpdatedBy(s *string) *CouponAssociationUpdate {
-	if s != nil {
-		cau.SetUpdatedBy(*s)
+func (_u *CouponAssociationUpdate) SetNillableUpdatedBy(v *string) *CouponAssociationUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cau
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cau *CouponAssociationUpdate) ClearUpdatedBy() *CouponAssociationUpdate {
-	cau.mutation.ClearUpdatedBy()
-	return cau
+func (_u *CouponAssociationUpdate) ClearUpdatedBy() *CouponAssociationUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
-func (cau *CouponAssociationUpdate) SetSubscriptionLineItemID(s string) *CouponAssociationUpdate {
-	cau.mutation.SetSubscriptionLineItemID(s)
-	return cau
+func (_u *CouponAssociationUpdate) SetSubscriptionLineItemID(v string) *CouponAssociationUpdate {
+	_u.mutation.SetSubscriptionLineItemID(v)
+	return _u
 }
 
 // SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
-func (cau *CouponAssociationUpdate) SetNillableSubscriptionLineItemID(s *string) *CouponAssociationUpdate {
-	if s != nil {
-		cau.SetSubscriptionLineItemID(*s)
+func (_u *CouponAssociationUpdate) SetNillableSubscriptionLineItemID(v *string) *CouponAssociationUpdate {
+	if v != nil {
+		_u.SetSubscriptionLineItemID(*v)
 	}
-	return cau
+	return _u
 }
 
 // ClearSubscriptionLineItemID clears the value of the "subscription_line_item_id" field.
-func (cau *CouponAssociationUpdate) ClearSubscriptionLineItemID() *CouponAssociationUpdate {
-	cau.mutation.ClearSubscriptionLineItemID()
-	return cau
+func (_u *CouponAssociationUpdate) ClearSubscriptionLineItemID() *CouponAssociationUpdate {
+	_u.mutation.ClearSubscriptionLineItemID()
+	return _u
 }
 
 // SetSubscriptionPhaseID sets the "subscription_phase_id" field.
-func (cau *CouponAssociationUpdate) SetSubscriptionPhaseID(s string) *CouponAssociationUpdate {
-	cau.mutation.SetSubscriptionPhaseID(s)
-	return cau
+func (_u *CouponAssociationUpdate) SetSubscriptionPhaseID(v string) *CouponAssociationUpdate {
+	_u.mutation.SetSubscriptionPhaseID(v)
+	return _u
 }
 
 // SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
-func (cau *CouponAssociationUpdate) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationUpdate {
-	if s != nil {
-		cau.SetSubscriptionPhaseID(*s)
+func (_u *CouponAssociationUpdate) SetNillableSubscriptionPhaseID(v *string) *CouponAssociationUpdate {
+	if v != nil {
+		_u.SetSubscriptionPhaseID(*v)
 	}
-	return cau
+	return _u
 }
 
 // ClearSubscriptionPhaseID clears the value of the "subscription_phase_id" field.
-func (cau *CouponAssociationUpdate) ClearSubscriptionPhaseID() *CouponAssociationUpdate {
-	cau.mutation.ClearSubscriptionPhaseID()
-	return cau
+func (_u *CouponAssociationUpdate) ClearSubscriptionPhaseID() *CouponAssociationUpdate {
+	_u.mutation.ClearSubscriptionPhaseID()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (cau *CouponAssociationUpdate) SetEndDate(t time.Time) *CouponAssociationUpdate {
-	cau.mutation.SetEndDate(t)
-	return cau
+func (_u *CouponAssociationUpdate) SetEndDate(v time.Time) *CouponAssociationUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cau *CouponAssociationUpdate) SetNillableEndDate(t *time.Time) *CouponAssociationUpdate {
-	if t != nil {
-		cau.SetEndDate(*t)
+func (_u *CouponAssociationUpdate) SetNillableEndDate(v *time.Time) *CouponAssociationUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return cau
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (cau *CouponAssociationUpdate) ClearEndDate() *CouponAssociationUpdate {
-	cau.mutation.ClearEndDate()
-	return cau
+func (_u *CouponAssociationUpdate) ClearEndDate() *CouponAssociationUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cau *CouponAssociationUpdate) SetMetadata(m map[string]string) *CouponAssociationUpdate {
-	cau.mutation.SetMetadata(m)
-	return cau
+func (_u *CouponAssociationUpdate) SetMetadata(v map[string]string) *CouponAssociationUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cau *CouponAssociationUpdate) ClearMetadata() *CouponAssociationUpdate {
-	cau.mutation.ClearMetadata()
-	return cau
+func (_u *CouponAssociationUpdate) ClearMetadata() *CouponAssociationUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionLineItem sets the "subscription_line_item" edge to the SubscriptionLineItem entity.
-func (cau *CouponAssociationUpdate) SetSubscriptionLineItem(s *SubscriptionLineItem) *CouponAssociationUpdate {
-	return cau.SetSubscriptionLineItemID(s.ID)
+func (_u *CouponAssociationUpdate) SetSubscriptionLineItem(v *SubscriptionLineItem) *CouponAssociationUpdate {
+	return _u.SetSubscriptionLineItemID(v.ID)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (cau *CouponAssociationUpdate) AddCouponApplicationIDs(ids ...string) *CouponAssociationUpdate {
-	cau.mutation.AddCouponApplicationIDs(ids...)
-	return cau
+func (_u *CouponAssociationUpdate) AddCouponApplicationIDs(ids ...string) *CouponAssociationUpdate {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (cau *CouponAssociationUpdate) AddCouponApplications(c ...*CouponApplication) *CouponAssociationUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponAssociationUpdate) AddCouponApplications(v ...*CouponApplication) *CouponAssociationUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cau.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the CouponAssociationMutation object of the builder.
-func (cau *CouponAssociationUpdate) Mutation() *CouponAssociationMutation {
-	return cau.mutation
+func (_u *CouponAssociationUpdate) Mutation() *CouponAssociationMutation {
+	return _u.mutation
 }
 
 // ClearSubscriptionLineItem clears the "subscription_line_item" edge to the SubscriptionLineItem entity.
-func (cau *CouponAssociationUpdate) ClearSubscriptionLineItem() *CouponAssociationUpdate {
-	cau.mutation.ClearSubscriptionLineItem()
-	return cau
+func (_u *CouponAssociationUpdate) ClearSubscriptionLineItem() *CouponAssociationUpdate {
+	_u.mutation.ClearSubscriptionLineItem()
+	return _u
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (cau *CouponAssociationUpdate) ClearCouponApplications() *CouponAssociationUpdate {
-	cau.mutation.ClearCouponApplications()
-	return cau
+func (_u *CouponAssociationUpdate) ClearCouponApplications() *CouponAssociationUpdate {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (cau *CouponAssociationUpdate) RemoveCouponApplicationIDs(ids ...string) *CouponAssociationUpdate {
-	cau.mutation.RemoveCouponApplicationIDs(ids...)
-	return cau
+func (_u *CouponAssociationUpdate) RemoveCouponApplicationIDs(ids ...string) *CouponAssociationUpdate {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (cau *CouponAssociationUpdate) RemoveCouponApplications(c ...*CouponApplication) *CouponAssociationUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponAssociationUpdate) RemoveCouponApplications(v ...*CouponApplication) *CouponAssociationUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cau.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cau *CouponAssociationUpdate) Save(ctx context.Context) (int, error) {
-	cau.defaults()
-	return withHooks(ctx, cau.sqlSave, cau.mutation, cau.hooks)
+func (_u *CouponAssociationUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cau *CouponAssociationUpdate) SaveX(ctx context.Context) int {
-	affected, err := cau.Save(ctx)
+func (_u *CouponAssociationUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -210,86 +210,86 @@ func (cau *CouponAssociationUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cau *CouponAssociationUpdate) Exec(ctx context.Context) error {
-	_, err := cau.Save(ctx)
+func (_u *CouponAssociationUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cau *CouponAssociationUpdate) ExecX(ctx context.Context) {
-	if err := cau.Exec(ctx); err != nil {
+func (_u *CouponAssociationUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cau *CouponAssociationUpdate) defaults() {
-	if _, ok := cau.mutation.UpdatedAt(); !ok {
+func (_u *CouponAssociationUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := couponassociation.UpdateDefaultUpdatedAt()
-		cau.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cau *CouponAssociationUpdate) check() error {
-	if cau.mutation.CouponCleared() && len(cau.mutation.CouponIDs()) > 0 {
+func (_u *CouponAssociationUpdate) check() error {
+	if _u.mutation.CouponCleared() && len(_u.mutation.CouponIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CouponAssociation.coupon"`)
 	}
-	if cau.mutation.SubscriptionCleared() && len(cau.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CouponAssociation.subscription"`)
 	}
 	return nil
 }
 
-func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cau.check(); err != nil {
-		return n, err
+func (_u *CouponAssociationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(couponassociation.Table, couponassociation.Columns, sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString))
-	if ps := cau.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cau.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(couponassociation.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cau.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cau.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(couponassociation.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cau.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cau.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(couponassociation.FieldUpdatedBy, field.TypeString)
 	}
-	if cau.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(couponassociation.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cau.mutation.SubscriptionPhaseID(); ok {
+	if value, ok := _u.mutation.SubscriptionPhaseID(); ok {
 		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
 	}
-	if cau.mutation.SubscriptionPhaseIDCleared() {
+	if _u.mutation.SubscriptionPhaseIDCleared() {
 		_spec.ClearField(couponassociation.FieldSubscriptionPhaseID, field.TypeString)
 	}
-	if value, ok := cau.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
 	}
-	if cau.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(couponassociation.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := cau.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)
 	}
-	if cau.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(couponassociation.FieldMetadata, field.TypeJSON)
 	}
-	if cau.mutation.SubscriptionLineItemCleared() {
+	if _u.mutation.SubscriptionLineItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -302,7 +302,7 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cau.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -318,7 +318,7 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cau.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -331,7 +331,7 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cau.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !cau.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -347,7 +347,7 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cau.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -363,7 +363,7 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cau.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{couponassociation.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -371,8 +371,8 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		return 0, err
 	}
-	cau.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CouponAssociationUpdateOne is the builder for updating a single CouponAssociation entity.
@@ -384,191 +384,191 @@ type CouponAssociationUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cauo *CouponAssociationUpdateOne) SetStatus(s string) *CouponAssociationUpdateOne {
-	cauo.mutation.SetStatus(s)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetStatus(v string) *CouponAssociationUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cauo *CouponAssociationUpdateOne) SetNillableStatus(s *string) *CouponAssociationUpdateOne {
-	if s != nil {
-		cauo.SetStatus(*s)
+func (_u *CouponAssociationUpdateOne) SetNillableStatus(v *string) *CouponAssociationUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cauo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cauo *CouponAssociationUpdateOne) SetUpdatedAt(t time.Time) *CouponAssociationUpdateOne {
-	cauo.mutation.SetUpdatedAt(t)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetUpdatedAt(v time.Time) *CouponAssociationUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cauo *CouponAssociationUpdateOne) SetUpdatedBy(s string) *CouponAssociationUpdateOne {
-	cauo.mutation.SetUpdatedBy(s)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetUpdatedBy(v string) *CouponAssociationUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cauo *CouponAssociationUpdateOne) SetNillableUpdatedBy(s *string) *CouponAssociationUpdateOne {
-	if s != nil {
-		cauo.SetUpdatedBy(*s)
+func (_u *CouponAssociationUpdateOne) SetNillableUpdatedBy(v *string) *CouponAssociationUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cauo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cauo *CouponAssociationUpdateOne) ClearUpdatedBy() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearUpdatedBy()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearUpdatedBy() *CouponAssociationUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
-func (cauo *CouponAssociationUpdateOne) SetSubscriptionLineItemID(s string) *CouponAssociationUpdateOne {
-	cauo.mutation.SetSubscriptionLineItemID(s)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetSubscriptionLineItemID(v string) *CouponAssociationUpdateOne {
+	_u.mutation.SetSubscriptionLineItemID(v)
+	return _u
 }
 
 // SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
-func (cauo *CouponAssociationUpdateOne) SetNillableSubscriptionLineItemID(s *string) *CouponAssociationUpdateOne {
-	if s != nil {
-		cauo.SetSubscriptionLineItemID(*s)
+func (_u *CouponAssociationUpdateOne) SetNillableSubscriptionLineItemID(v *string) *CouponAssociationUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionLineItemID(*v)
 	}
-	return cauo
+	return _u
 }
 
 // ClearSubscriptionLineItemID clears the value of the "subscription_line_item_id" field.
-func (cauo *CouponAssociationUpdateOne) ClearSubscriptionLineItemID() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearSubscriptionLineItemID()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearSubscriptionLineItemID() *CouponAssociationUpdateOne {
+	_u.mutation.ClearSubscriptionLineItemID()
+	return _u
 }
 
 // SetSubscriptionPhaseID sets the "subscription_phase_id" field.
-func (cauo *CouponAssociationUpdateOne) SetSubscriptionPhaseID(s string) *CouponAssociationUpdateOne {
-	cauo.mutation.SetSubscriptionPhaseID(s)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetSubscriptionPhaseID(v string) *CouponAssociationUpdateOne {
+	_u.mutation.SetSubscriptionPhaseID(v)
+	return _u
 }
 
 // SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
-func (cauo *CouponAssociationUpdateOne) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationUpdateOne {
-	if s != nil {
-		cauo.SetSubscriptionPhaseID(*s)
+func (_u *CouponAssociationUpdateOne) SetNillableSubscriptionPhaseID(v *string) *CouponAssociationUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionPhaseID(*v)
 	}
-	return cauo
+	return _u
 }
 
 // ClearSubscriptionPhaseID clears the value of the "subscription_phase_id" field.
-func (cauo *CouponAssociationUpdateOne) ClearSubscriptionPhaseID() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearSubscriptionPhaseID()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearSubscriptionPhaseID() *CouponAssociationUpdateOne {
+	_u.mutation.ClearSubscriptionPhaseID()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (cauo *CouponAssociationUpdateOne) SetEndDate(t time.Time) *CouponAssociationUpdateOne {
-	cauo.mutation.SetEndDate(t)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetEndDate(v time.Time) *CouponAssociationUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cauo *CouponAssociationUpdateOne) SetNillableEndDate(t *time.Time) *CouponAssociationUpdateOne {
-	if t != nil {
-		cauo.SetEndDate(*t)
+func (_u *CouponAssociationUpdateOne) SetNillableEndDate(v *time.Time) *CouponAssociationUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return cauo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (cauo *CouponAssociationUpdateOne) ClearEndDate() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearEndDate()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearEndDate() *CouponAssociationUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cauo *CouponAssociationUpdateOne) SetMetadata(m map[string]string) *CouponAssociationUpdateOne {
-	cauo.mutation.SetMetadata(m)
-	return cauo
+func (_u *CouponAssociationUpdateOne) SetMetadata(v map[string]string) *CouponAssociationUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cauo *CouponAssociationUpdateOne) ClearMetadata() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearMetadata()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearMetadata() *CouponAssociationUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionLineItem sets the "subscription_line_item" edge to the SubscriptionLineItem entity.
-func (cauo *CouponAssociationUpdateOne) SetSubscriptionLineItem(s *SubscriptionLineItem) *CouponAssociationUpdateOne {
-	return cauo.SetSubscriptionLineItemID(s.ID)
+func (_u *CouponAssociationUpdateOne) SetSubscriptionLineItem(v *SubscriptionLineItem) *CouponAssociationUpdateOne {
+	return _u.SetSubscriptionLineItemID(v.ID)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (cauo *CouponAssociationUpdateOne) AddCouponApplicationIDs(ids ...string) *CouponAssociationUpdateOne {
-	cauo.mutation.AddCouponApplicationIDs(ids...)
-	return cauo
+func (_u *CouponAssociationUpdateOne) AddCouponApplicationIDs(ids ...string) *CouponAssociationUpdateOne {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (cauo *CouponAssociationUpdateOne) AddCouponApplications(c ...*CouponApplication) *CouponAssociationUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponAssociationUpdateOne) AddCouponApplications(v ...*CouponApplication) *CouponAssociationUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cauo.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the CouponAssociationMutation object of the builder.
-func (cauo *CouponAssociationUpdateOne) Mutation() *CouponAssociationMutation {
-	return cauo.mutation
+func (_u *CouponAssociationUpdateOne) Mutation() *CouponAssociationMutation {
+	return _u.mutation
 }
 
 // ClearSubscriptionLineItem clears the "subscription_line_item" edge to the SubscriptionLineItem entity.
-func (cauo *CouponAssociationUpdateOne) ClearSubscriptionLineItem() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearSubscriptionLineItem()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearSubscriptionLineItem() *CouponAssociationUpdateOne {
+	_u.mutation.ClearSubscriptionLineItem()
+	return _u
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (cauo *CouponAssociationUpdateOne) ClearCouponApplications() *CouponAssociationUpdateOne {
-	cauo.mutation.ClearCouponApplications()
-	return cauo
+func (_u *CouponAssociationUpdateOne) ClearCouponApplications() *CouponAssociationUpdateOne {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (cauo *CouponAssociationUpdateOne) RemoveCouponApplicationIDs(ids ...string) *CouponAssociationUpdateOne {
-	cauo.mutation.RemoveCouponApplicationIDs(ids...)
-	return cauo
+func (_u *CouponAssociationUpdateOne) RemoveCouponApplicationIDs(ids ...string) *CouponAssociationUpdateOne {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (cauo *CouponAssociationUpdateOne) RemoveCouponApplications(c ...*CouponApplication) *CouponAssociationUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponAssociationUpdateOne) RemoveCouponApplications(v ...*CouponApplication) *CouponAssociationUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cauo.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Where appends a list predicates to the CouponAssociationUpdate builder.
-func (cauo *CouponAssociationUpdateOne) Where(ps ...predicate.CouponAssociation) *CouponAssociationUpdateOne {
-	cauo.mutation.Where(ps...)
-	return cauo
+func (_u *CouponAssociationUpdateOne) Where(ps ...predicate.CouponAssociation) *CouponAssociationUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cauo *CouponAssociationUpdateOne) Select(field string, fields ...string) *CouponAssociationUpdateOne {
-	cauo.fields = append([]string{field}, fields...)
-	return cauo
+func (_u *CouponAssociationUpdateOne) Select(field string, fields ...string) *CouponAssociationUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CouponAssociation entity.
-func (cauo *CouponAssociationUpdateOne) Save(ctx context.Context) (*CouponAssociation, error) {
-	cauo.defaults()
-	return withHooks(ctx, cauo.sqlSave, cauo.mutation, cauo.hooks)
+func (_u *CouponAssociationUpdateOne) Save(ctx context.Context) (*CouponAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cauo *CouponAssociationUpdateOne) SaveX(ctx context.Context) *CouponAssociation {
-	node, err := cauo.Save(ctx)
+func (_u *CouponAssociationUpdateOne) SaveX(ctx context.Context) *CouponAssociation {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -576,48 +576,48 @@ func (cauo *CouponAssociationUpdateOne) SaveX(ctx context.Context) *CouponAssoci
 }
 
 // Exec executes the query on the entity.
-func (cauo *CouponAssociationUpdateOne) Exec(ctx context.Context) error {
-	_, err := cauo.Save(ctx)
+func (_u *CouponAssociationUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cauo *CouponAssociationUpdateOne) ExecX(ctx context.Context) {
-	if err := cauo.Exec(ctx); err != nil {
+func (_u *CouponAssociationUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cauo *CouponAssociationUpdateOne) defaults() {
-	if _, ok := cauo.mutation.UpdatedAt(); !ok {
+func (_u *CouponAssociationUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := couponassociation.UpdateDefaultUpdatedAt()
-		cauo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cauo *CouponAssociationUpdateOne) check() error {
-	if cauo.mutation.CouponCleared() && len(cauo.mutation.CouponIDs()) > 0 {
+func (_u *CouponAssociationUpdateOne) check() error {
+	if _u.mutation.CouponCleared() && len(_u.mutation.CouponIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CouponAssociation.coupon"`)
 	}
-	if cauo.mutation.SubscriptionCleared() && len(cauo.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CouponAssociation.subscription"`)
 	}
 	return nil
 }
 
-func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *CouponAssociation, err error) {
-	if err := cauo.check(); err != nil {
+func (_u *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *CouponAssociation, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(couponassociation.Table, couponassociation.Columns, sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString))
-	id, ok := cauo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CouponAssociation.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cauo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, couponassociation.FieldID)
 		for _, f := range fields {
@@ -629,50 +629,50 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 			}
 		}
 	}
-	if ps := cauo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cauo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(couponassociation.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cauo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cauo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(couponassociation.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cauo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cauo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(couponassociation.FieldUpdatedBy, field.TypeString)
 	}
-	if cauo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(couponassociation.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cauo.mutation.SubscriptionPhaseID(); ok {
+	if value, ok := _u.mutation.SubscriptionPhaseID(); ok {
 		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
 	}
-	if cauo.mutation.SubscriptionPhaseIDCleared() {
+	if _u.mutation.SubscriptionPhaseIDCleared() {
 		_spec.ClearField(couponassociation.FieldSubscriptionPhaseID, field.TypeString)
 	}
-	if value, ok := cauo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
 	}
-	if cauo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(couponassociation.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := cauo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)
 	}
-	if cauo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(couponassociation.FieldMetadata, field.TypeJSON)
 	}
-	if cauo.mutation.SubscriptionLineItemCleared() {
+	if _u.mutation.SubscriptionLineItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -685,7 +685,7 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cauo.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -701,7 +701,7 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cauo.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -714,7 +714,7 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cauo.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !cauo.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -730,7 +730,7 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cauo.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -746,10 +746,10 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &CouponAssociation{config: cauo.config}
+	_node = &CouponAssociation{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cauo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{couponassociation.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -757,6 +757,6 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 		}
 		return nil, err
 	}
-	cauo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

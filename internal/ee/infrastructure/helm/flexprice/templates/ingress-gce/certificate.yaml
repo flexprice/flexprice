@@ -1,0 +1,40 @@
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+{{- if eq $gce.tls.mode "certManager" }}
+{{- if $gce.tls.clusterIssuer }}
+# Own Certificate; DNS-01 issues before the LB serves.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "flexprice.gceIngressCertName" . }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  secretName: {{ include "flexprice.gceIngressSecretName" . }}
+  dnsNames:
+    {{- range include "flexprice.gceIngressHosts" . | fromYamlArray }}
+    - {{ . | quote }}
+    {{- end }}
+  issuerRef:
+    name: {{ $gce.tls.clusterIssuer | quote }}
+    kind: {{ $gce.tls.issuerKind }}
+{{- end }}
+{{- end }}
+{{- if eq $gce.tls.mode "managed" }}
+# Google-managed certificate. Validation is over HTTP against the load balancer,
+# so the DNS record must ALREADY point at this Ingress's static IP before the
+# certificate can go Active, and provisioning takes 15-60 minutes. That inverts
+# the safe cutover order; prefer tls.mode=certManager with a DNS-01 issuer.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ include "flexprice.gceIngressCertName" . }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  domains:
+    {{- range include "flexprice.gceIngressHosts" . | fromYamlArray }}
+    - {{ . | quote }}
+    {{- end }}
+{{- end }}
+{{- end }}

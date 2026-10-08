@@ -313,4 +313,3 @@ func TestCreateWalletActionConfig_ToDTO(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid parameters")
 	})
 }
-

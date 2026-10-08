@@ -1,7 +1,10 @@
 package service
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
+	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -16,21 +19,37 @@ const (
 	StateActionCancel StateAction = "cancel"
 )
 
-func NewSubscriptionStateHandler(subscription *subscription.Subscription, grant *creditgrant.CreditGrant) *SubscriptionStateHandler {
+func NewSubscriptionStateHandler(
+	subscription *subscription.Subscription,
+	grant *creditgrant.CreditGrant,
+	cga *domainCreditGrantApplication.CreditGrantApplication,
+	creditGrantService CreditGrantService,
+) *SubscriptionStateHandler {
 	return &SubscriptionStateHandler{
-		subscription: subscription,
-		grant:        grant,
+		subscription:       subscription,
+		grant:              grant,
+		cga:                cga,
+		creditGrantService: creditGrantService,
 	}
 }
 
 type SubscriptionStateHandler struct {
-	subscription *subscription.Subscription
-	grant        *creditgrant.CreditGrant
+	subscription       *subscription.Subscription
+	grant              *creditgrant.CreditGrant
+	cga                *domainCreditGrantApplication.CreditGrantApplication
+	creditGrantService CreditGrantService
 }
 
-func (h *SubscriptionStateHandler) DetermineCreditGrantAction() (StateAction, error) {
+func (h *SubscriptionStateHandler) DetermineCreditGrantAction(ctx context.Context) (StateAction, error) {
 	switch h.subscription.SubscriptionStatus {
 	case types.SubscriptionStatusActive:
+		gated, err := h.creditGrantService.ShouldGateApplicationOnPayment(ctx, h.subscription, h.cga)
+		if err != nil {
+			return "", err
+		}
+		if gated {
+			return StateActionDefer, nil
+		}
 		return StateActionApply, nil
 
 	case types.SubscriptionStatusTrialing:

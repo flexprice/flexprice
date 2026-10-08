@@ -2,6 +2,7 @@ package razorpay
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -22,43 +23,115 @@ func fromPaise(paise float64) decimal.Decimal {
 	return decimal.NewFromFloat(paise).Div(decimal.NewFromInt(100))
 }
 
-// NormalizeRazorpayToken converts a raw token object (as returned by
-// Client.GetCustomerTokens) into the generic interfaces.ProviderPaymentMethod shape.
-// Returns nil, nil for non-confirmed tokens so callers skip them cleanly.
 func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPaymentMethod, error) {
-	details, _ := raw["recurring_details"].(map[string]interface{})
-	status, _ := details["status"].(string)
-	if status != "confirmed" {
-		return nil, nil
+	body, err := json.Marshal(raw)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read Razorpay token").Mark(ierr.ErrInternal)
+	}
+
+	var token Token
+	if err := json.Unmarshal(body, &token); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to parse Razorpay token").Mark(ierr.ErrInternal)
 	}
 
 	pm := &interfaces.ProviderPaymentMethod{
-		GatewayMethodID:  lo.ValueOr(raw, "id", "").(string),
+		GatewayMethodID:  token.ID,
 		ProviderMetadata: map[string]string{},
-		Active:           status == "confirmed",
+		Active:           token.Status == "" || token.Status == "active",
 	}
 
-	method, _ := raw["method"].(string)
-	switch method {
+	switch token.Method {
 	case "upi":
 		pm.Method = types.PaymentMethodTypeUPI
+		pm.UPI = token.upiDetails()
 	case "card":
 		pm.Method = types.PaymentMethodTypeCard
+		pm.Card = token.cardDetails()
+	default:
+		return nil, nil
 	}
 
-	if paise, ok := raw["max_amount"].(float64); ok && paise > 0 {
-		major := fromPaise(paise)
-		pm.MaxAmount = &major
+	if token.CreatedAt > 0 {
+		pm.CreatedAt = time.Unix(token.CreatedAt, 0).UTC()
 	}
-	if expiredAtUnix, ok := raw["expired_at"].(float64); ok && expiredAtUnix > 0 {
-		t := time.Unix(int64(expiredAtUnix), 0).UTC()
-		pm.ExpiresAt = &t
-	}
-	if createdAtUnix, ok := raw["created_at"].(float64); ok {
-		pm.CreatedAt = time.Unix(int64(createdAtUnix), 0).UTC()
+	if token.Recurring {
+		pm.Recurring = token.recurringDetails()
 	}
 
 	return pm, nil
+}
+
+func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
+	status := ""
+	if t.RecurringDetails != nil {
+		status = t.RecurringDetails.Status
+	}
+	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status)}
+
+	// Razorpay declines charges on a card whose issuer no longer supports recurring,
+	// even while the mandate still reads confirmed.
+	if t.cardRecurringUnsupported() && out.Status == types.RecurringPaymentStatusActive {
+		out.Status = types.RecurringPaymentStatusRejected
+	}
+
+	if t.MaxAmount > 0 {
+		major := fromPaise(t.MaxAmount)
+		out.MaxAmount = &major
+	}
+
+	if t.ExpiredAt > 0 {
+		expiresAt := time.Unix(t.ExpiredAt, 0).UTC()
+		out.AutoChargeableTill = &expiresAt
+
+		if time.Now().UTC().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
+			types.RecurringPaymentStatusRejected, types.RecurringPaymentStatusCancelled,
+		}, out.Status) {
+			out.Status = types.RecurringPaymentStatusExpired
+		}
+	}
+
+	return out
+}
+
+func (t Token) cardRecurringUnsupported() bool {
+	return t.Card != nil && t.Card.Flows != nil && t.Card.Flows.Recurring != nil && !*t.Card.Flows.Recurring
+}
+
+func (t Token) cardDetails() *interfaces.ProviderCardDetails {
+	if t.Card == nil {
+		return nil
+	}
+
+	return &interfaces.ProviderCardDetails{
+		Brand:    t.Card.Network,
+		Last4:    t.Card.Last4,
+		ExpMonth: int(t.Card.ExpiryMonth),
+		ExpYear:  int(t.Card.ExpiryYear),
+	}
+}
+
+func (t Token) upiDetails() *interfaces.ProviderUPIDetails {
+	if t.VPA == nil || t.VPA.Username == "" || t.VPA.Handle == "" {
+		return nil
+	}
+	return &interfaces.ProviderUPIDetails{VPA: t.VPA.Username + "@" + t.VPA.Handle}
+}
+
+func toRecurringPaymentStatus(status string) types.RecurringPaymentStatus {
+	switch status {
+	case "initiated":
+		return types.RecurringPaymentStatusPending
+	case "confirmed":
+		return types.RecurringPaymentStatusActive
+	case "paused":
+		return types.RecurringPaymentStatusPaused
+	case "rejected":
+		return types.RecurringPaymentStatusRejected
+	case "cancelled":
+		return types.RecurringPaymentStatusCancelled
+	default:
+		return types.RecurringPaymentStatusUnknown
+	}
 }
 
 // SelectUsableToken applies the deterministic selection algorithm: filter for
@@ -72,14 +145,18 @@ func SelectUsableToken(
 ) (*interfaces.ProviderPaymentMethod, bool) {
 	now := time.Now().UTC()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
+		expiresAt, maxAmount := pm.RecurringAutoChargeableTill(), pm.RecurringMaxAmount()
+
 		return pm.Active &&
+			pm.RecurringStatus() == types.RecurringPaymentStatusActive &&
 			pm.Method == preferredMethod &&
-			(pm.ExpiresAt == nil || !now.After(*pm.ExpiresAt)) &&
-			(pm.MaxAmount == nil || !pm.MaxAmount.LessThan(invoiceTotal))
+			(expiresAt == nil || !now.After(*expiresAt)) &&
+			(maxAmount == nil || !maxAmount.LessThan(invoiceTotal))
 	})
 	if len(usable) == 0 {
 		return nil, false
 	}
+
 	return lo.MaxBy(usable, func(a, b *interfaces.ProviderPaymentMethod) bool {
 		return a.CreatedAt.After(b.CreatedAt)
 	}), true
@@ -145,7 +222,12 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		data["expire_by"] = req.ExpiresAt.Unix()
 	}
 
-	subReg := map[string]interface{}{"method": method}
+	// as_presented allows another debit in the same period, still capped by max_amount.
+	// A fixed frequency rejects a second charge until that window ends.
+	subReg := map[string]interface{}{
+		"method":    method,
+		"frequency": "as_presented",
+	}
 	if req.MaxAmount != nil {
 		subReg["max_amount"] = toPaise(*req.MaxAmount)
 	}
@@ -225,7 +307,7 @@ func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, req inter
 		return false, nil
 	}
 
-	_, tokens, err := a.Svc.customerSvc.ListConfirmedCustomerTokens(ctx, req.CustomerID)
+	_, tokens, err := a.Svc.customerSvc.ListCustomerTokens(ctx, req.CustomerID)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			return false, nil
@@ -240,4 +322,3 @@ func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, req inter
 	_, ok := selectAutoChargeToken(tokens, "", amount)
 	return ok, nil
 }
-

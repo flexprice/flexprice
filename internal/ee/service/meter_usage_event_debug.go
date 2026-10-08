@@ -8,23 +8,16 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 const eventLookupMaxVersions = 50
 
-// nanoUSDMultiplier scales a per-unit cost to the nano-USD unit that
-// HuggingFace expects. Kept as a package-level var to avoid re-parsing on
-// every request.
-var nanoUSDMultiplier = decimal.NewFromInt(1_000_000_000)
-
 // DebugEvent powers GET /events/:id (event debugger UI).
 // Reads meter_usage instead of the removed feature_usage table.
-func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error) {
-	rawEvents, err := s.EventRepo.ListEventsByID(ctx, eventID, eventLookupMaxVersions)
+func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, eventID string, window events.TimeRange) (*dto.GetEventByIDResponse, error) {
+	rawEvents, err := s.EventRepo.ListEventsByID(ctx, externalCustomerID, eventID, window, eventLookupMaxVersions)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from events table").
@@ -32,9 +25,12 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 	}
 	if len(rawEvents) == 0 {
 		return nil, ierr.NewError("event not found").
-			WithHint("Event not found in events table").
+			WithHint("Event not found in events table for this time range; pass start_time and end_time to search a different window").
 			WithReportableDetails(map[string]interface{}{
-				"event_id": eventID,
+				"event_id":             eventID,
+				"external_customer_id": externalCustomerID,
+				"start_time":           window.Start,
+				"end_time":             window.End,
 			}).
 			Mark(ierr.ErrNotFound)
 	}
@@ -47,7 +43,7 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, eventID string) (*dt
 		Event: eventToDTO(event),
 	}
 
-	meterUsage, err := s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, eventID)
+	meterUsage, err := s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, externalCustomerID, eventID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from meter_usage table").
@@ -351,7 +347,7 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 	tracker.AttributedToCustomer = &dto.AttributedToCustomerResult{Status: types.DebugTrackerStatusUnprocessed}
 	mu := meterUsage
 	if mu == nil {
-		mu, err = s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, event.ID)
+		mu, err = s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID)
 		if err != nil {
 			status, code := ierr.ResolveError(err)
 			errResp := &ierr.ErrorResponse{Code: code, Message: err.Error(), HTTPStatusCode: status}
@@ -374,129 +370,6 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 	}
 	tracker.FailurePoint = nil
 	return tracker
-}
-
-// GetHuggingFaceBillingData resolves per-event cost in nano-USD for the
-// requested event IDs. Powers /events/huggingface-billing under the
-// meter-usage pipeline. Docs: https://docs.flexprice.io/api-reference/events/get-hugging-face-inference-data
-func (s *meterUsageService) GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error) {
-	empty := &dto.GetHuggingFaceBillingDataResponse{Data: make([]dto.EventCostInfo, 0)}
-	if len(req.EventIDs) == 0 {
-		return empty, nil
-	}
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-
-	priceService := NewPriceService(s.ServiceParams)
-	// customer cache: external_customer_id -> customer.ID (empty string = miss)
-	custCache := map[string]string{}
-	// line-item cache: (customer.ID, meter.ID) -> resolved price (nil = no match)
-	// ponytail: naive per-request cache, N events tenants rarely repeat; drop if usage tightens
-	type liKey struct{ CustID, MeterID string }
-	priceCache := map[liKey]interface{}{} // *price.Price or nil
-
-	out := make([]dto.EventCostInfo, 0, len(req.EventIDs))
-	for _, eventID := range req.EventIDs {
-		mu, err := s.MeterUsageRepo.GetByEventID(ctx, tenantID, envID, eventID)
-		if err != nil {
-			s.Logger.Info(ctx, "hf-billing: failed to load meter_usage", "event_id", eventID, "error", err)
-			out = append(out, dto.EventCostInfo{EventID: eventID, CostInNanoUSD: decimal.Zero})
-			continue
-		}
-		if mu == nil {
-			out = append(out, dto.EventCostInfo{EventID: eventID, CostInNanoUSD: decimal.Zero})
-			continue
-		}
-
-		custID, cached := custCache[mu.ExternalCustomerID]
-		if !cached {
-			cust, err := s.CustomerRepo.GetByLookupKey(ctx, mu.ExternalCustomerID)
-			if err == nil && cust != nil {
-				custID = cust.ID
-			}
-			custCache[mu.ExternalCustomerID] = custID
-		}
-		if custID == "" {
-			out = append(out, dto.EventCostInfo{EventID: eventID, CostInNanoUSD: decimal.Zero})
-			continue
-		}
-
-		key := liKey{CustID: custID, MeterID: mu.MeterID}
-		resolvedPrice, seen := priceCache[key]
-		if !seen {
-			resolvedPrice = s.resolveActivePriceForCustomerMeter(ctx, custID, mu.MeterID, mu.Timestamp)
-			priceCache[key] = resolvedPrice
-		}
-		p := resolvedPrice
-		if p == nil {
-			out = append(out, dto.EventCostInfo{EventID: eventID, CostInNanoUSD: decimal.Zero})
-			continue
-		}
-
-		cost := priceService.CalculateCost(ctx, priceFromCache(p), mu.QtyTotal)
-		out = append(out, dto.EventCostInfo{
-			EventID:       eventID,
-			CostInNanoUSD: cost.Mul(nanoUSDMultiplier),
-		})
-	}
-	return &dto.GetHuggingFaceBillingDataResponse{Data: out}, nil
-}
-
-// resolveActivePriceForCustomerMeter finds the price on the customer's active
-// subscription line item that references the given meter at eventTime. Returns
-// nil when no active line item matches. Wrapped as interface{} in the cache so
-// misses can be memoised alongside hits.
-func (s *meterUsageService) resolveActivePriceForCustomerMeter(ctx context.Context, customerID, meterID string, eventTime time.Time) interface{} {
-	subFilter := types.NewSubscriptionFilter()
-	subFilter.CustomerID = customerID
-	subFilter.WithLineItems = true
-	subFilter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-	}
-	subs, err := NewSubscriptionService(s.ServiceParams).ListSubscriptions(ctx, subFilter)
-	if err != nil || len(subs.Items) == 0 {
-		return nil
-	}
-	subIDs := make([]string, len(subs.Items))
-	for i, sub := range subs.Items {
-		subIDs[i] = sub.ID
-	}
-	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	liFilter.SubscriptionIDs = subIDs
-	liFilter.MeterIDs = []string{meterID}
-	liFilter.ActiveFilter = false
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, liFilter)
-	if err != nil {
-		return nil
-	}
-	var priceID string
-	for _, li := range lineItems {
-		if !li.IsUsage() || !li.IsActive(eventTime) {
-			continue
-		}
-		priceID = li.PriceID
-		break
-	}
-	if priceID == "" {
-		return nil
-	}
-	p, err := s.PriceRepo.Get(ctx, priceID)
-	if err != nil {
-		return nil
-	}
-	return p
-}
-
-// priceFromCache unpacks the interface{} used to memoise nil resolutions.
-func priceFromCache(v interface{}) *price.Price {
-	if v == nil {
-		return nil
-	}
-	if p, ok := v.(*price.Price); ok {
-		return p
-	}
-	return nil
 }
 
 // debugMeterMatches checks that every meter filter has a matching event property.

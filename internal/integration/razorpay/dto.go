@@ -1,6 +1,8 @@
 package razorpay
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -135,3 +137,52 @@ const (
 	RazorpayInvoiceStatusExpired       RazorpayInvoiceStatus = "expired"
 	RazorpayInvoiceStatusDeleted       RazorpayInvoiceStatus = "deleted"
 )
+
+type Token struct {
+	ID               string                 `json:"id"`
+	Method           string                 `json:"method"`
+	Status           string                 `json:"status"`
+	Recurring        bool                   `json:"recurring"`
+	RecurringDetails *TokenRecurringDetails `json:"recurring_details"`
+	Card             *TokenCard             `json:"card"`
+	VPA              *TokenVPA              `json:"vpa"`
+	MaxAmount        float64                `json:"max_amount"`
+	ExpiredAt        int64                  `json:"expired_at"`
+	CreatedAt        int64                  `json:"created_at"`
+}
+
+type TokenRecurringDetails struct {
+	Status string `json:"status"`
+}
+
+type TokenCard struct {
+	Last4       string          `json:"last4"`
+	Network     string          `json:"network"`
+	ExpiryMonth flexInt         `json:"expiry_month"`
+	ExpiryYear  flexInt         `json:"expiry_year"`
+	Flows       *TokenCardFlows `json:"flows"`
+}
+
+type TokenCardFlows struct {
+	Recurring *bool `json:"recurring"`
+}
+
+type TokenVPA struct {
+	Username string `json:"username"`
+	Handle   string `json:"handle"`
+}
+
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return nil
+	}
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	*f = flexInt(i)
+	return nil
+}

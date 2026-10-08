@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	WorkflowMoyasarAuthPaymentSettlement       = "MoyasarAuthPaymentSettlementWorkflow"
+	WorkflowMoyasarAuthPaymentSettlement      = "MoyasarAuthPaymentSettlementWorkflow"
 	ActivityReconcilePendingAuthPayments      = "ReconcilePendingAuthPaymentsActivity"
 	ActivityVoidOrRefundSucceededAuthPayments = "VoidOrRefundSucceededAuthPaymentsActivity"
 )

@@ -262,5 +262,10 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence", "id").
 			Annotations(entsql.IndexWhere(
 				"(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))")),
+		// Holds only active payment-gated subscriptions, so the overdue sweep skips everything else.
+		index.Fields("tenant_id", "environment_id").
+			StorageKey("idx_subscriptions_gated_active").
+			Annotations(entsql.IndexWhere(
+				"(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))")),
 	}
 }

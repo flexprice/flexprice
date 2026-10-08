@@ -23,131 +23,131 @@ type CostsheetUpdate struct {
 }
 
 // Where appends a list predicates to the CostsheetUpdate builder.
-func (cu *CostsheetUpdate) Where(ps ...predicate.Costsheet) *CostsheetUpdate {
-	cu.mutation.Where(ps...)
-	return cu
+func (_u *CostsheetUpdate) Where(ps ...predicate.Costsheet) *CostsheetUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cu *CostsheetUpdate) SetStatus(s string) *CostsheetUpdate {
-	cu.mutation.SetStatus(s)
-	return cu
+func (_u *CostsheetUpdate) SetStatus(v string) *CostsheetUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableStatus(s *string) *CostsheetUpdate {
-	if s != nil {
-		cu.SetStatus(*s)
+func (_u *CostsheetUpdate) SetNillableStatus(v *string) *CostsheetUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cu *CostsheetUpdate) SetUpdatedAt(t time.Time) *CostsheetUpdate {
-	cu.mutation.SetUpdatedAt(t)
-	return cu
+func (_u *CostsheetUpdate) SetUpdatedAt(v time.Time) *CostsheetUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cu *CostsheetUpdate) SetUpdatedBy(s string) *CostsheetUpdate {
-	cu.mutation.SetUpdatedBy(s)
-	return cu
+func (_u *CostsheetUpdate) SetUpdatedBy(v string) *CostsheetUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableUpdatedBy(s *string) *CostsheetUpdate {
-	if s != nil {
-		cu.SetUpdatedBy(*s)
+func (_u *CostsheetUpdate) SetNillableUpdatedBy(v *string) *CostsheetUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cu *CostsheetUpdate) ClearUpdatedBy() *CostsheetUpdate {
-	cu.mutation.ClearUpdatedBy()
-	return cu
+func (_u *CostsheetUpdate) ClearUpdatedBy() *CostsheetUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cu *CostsheetUpdate) SetMetadata(m map[string]string) *CostsheetUpdate {
-	cu.mutation.SetMetadata(m)
-	return cu
+func (_u *CostsheetUpdate) SetMetadata(v map[string]string) *CostsheetUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cu *CostsheetUpdate) ClearMetadata() *CostsheetUpdate {
-	cu.mutation.ClearMetadata()
-	return cu
+func (_u *CostsheetUpdate) ClearMetadata() *CostsheetUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cu *CostsheetUpdate) SetName(s string) *CostsheetUpdate {
-	cu.mutation.SetName(s)
-	return cu
+func (_u *CostsheetUpdate) SetName(v string) *CostsheetUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableName(s *string) *CostsheetUpdate {
-	if s != nil {
-		cu.SetName(*s)
+func (_u *CostsheetUpdate) SetNillableName(v *string) *CostsheetUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (cu *CostsheetUpdate) SetLookupKey(s string) *CostsheetUpdate {
-	cu.mutation.SetLookupKey(s)
-	return cu
+func (_u *CostsheetUpdate) SetLookupKey(v string) *CostsheetUpdate {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableLookupKey(s *string) *CostsheetUpdate {
-	if s != nil {
-		cu.SetLookupKey(*s)
+func (_u *CostsheetUpdate) SetNillableLookupKey(v *string) *CostsheetUpdate {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (cu *CostsheetUpdate) ClearLookupKey() *CostsheetUpdate {
-	cu.mutation.ClearLookupKey()
-	return cu
+func (_u *CostsheetUpdate) ClearLookupKey() *CostsheetUpdate {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (cu *CostsheetUpdate) SetDescription(s string) *CostsheetUpdate {
-	cu.mutation.SetDescription(s)
-	return cu
+func (_u *CostsheetUpdate) SetDescription(v string) *CostsheetUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableDescription(s *string) *CostsheetUpdate {
-	if s != nil {
-		cu.SetDescription(*s)
+func (_u *CostsheetUpdate) SetNillableDescription(v *string) *CostsheetUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (cu *CostsheetUpdate) ClearDescription() *CostsheetUpdate {
-	cu.mutation.ClearDescription()
-	return cu
+func (_u *CostsheetUpdate) ClearDescription() *CostsheetUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // Mutation returns the CostsheetMutation object of the builder.
-func (cu *CostsheetUpdate) Mutation() *CostsheetMutation {
-	return cu.mutation
+func (_u *CostsheetUpdate) Mutation() *CostsheetMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cu *CostsheetUpdate) Save(ctx context.Context) (int, error) {
-	cu.defaults()
-	return withHooks(ctx, cu.sqlSave, cu.mutation, cu.hooks)
+func (_u *CostsheetUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cu *CostsheetUpdate) SaveX(ctx context.Context) int {
-	affected, err := cu.Save(ctx)
+func (_u *CostsheetUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -155,29 +155,29 @@ func (cu *CostsheetUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cu *CostsheetUpdate) Exec(ctx context.Context) error {
-	_, err := cu.Save(ctx)
+func (_u *CostsheetUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cu *CostsheetUpdate) ExecX(ctx context.Context) {
-	if err := cu.Exec(ctx); err != nil {
+func (_u *CostsheetUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cu *CostsheetUpdate) defaults() {
-	if _, ok := cu.mutation.UpdatedAt(); !ok {
+func (_u *CostsheetUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := costsheet.UpdateDefaultUpdatedAt()
-		cu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cu *CostsheetUpdate) check() error {
-	if v, ok := cu.mutation.Name(); ok {
+func (_u *CostsheetUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := costsheet.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Costsheet.name": %w`, err)}
 		}
@@ -185,58 +185,58 @@ func (cu *CostsheetUpdate) check() error {
 	return nil
 }
 
-func (cu *CostsheetUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cu.check(); err != nil {
-		return n, err
+func (_u *CostsheetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(costsheet.Table, costsheet.Columns, sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString))
-	if ps := cu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(costsheet.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(costsheet.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(costsheet.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(costsheet.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(costsheet.FieldUpdatedBy, field.TypeString)
 	}
-	if cu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(costsheet.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(costsheet.FieldMetadata, field.TypeJSON, value)
 	}
-	if cu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(costsheet.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(costsheet.FieldName, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(costsheet.FieldLookupKey, field.TypeString, value)
 	}
-	if cu.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(costsheet.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := cu.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(costsheet.FieldDescription, field.TypeString, value)
 	}
-	if cu.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(costsheet.FieldDescription, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{costsheet.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -244,8 +244,8 @@ func (cu *CostsheetUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	cu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CostsheetUpdateOne is the builder for updating a single Costsheet entity.
@@ -257,138 +257,138 @@ type CostsheetUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cuo *CostsheetUpdateOne) SetStatus(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetStatus(s)
-	return cuo
+func (_u *CostsheetUpdateOne) SetStatus(v string) *CostsheetUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableStatus(s *string) *CostsheetUpdateOne {
-	if s != nil {
-		cuo.SetStatus(*s)
+func (_u *CostsheetUpdateOne) SetNillableStatus(v *string) *CostsheetUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cuo *CostsheetUpdateOne) SetUpdatedAt(t time.Time) *CostsheetUpdateOne {
-	cuo.mutation.SetUpdatedAt(t)
-	return cuo
+func (_u *CostsheetUpdateOne) SetUpdatedAt(v time.Time) *CostsheetUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cuo *CostsheetUpdateOne) SetUpdatedBy(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetUpdatedBy(s)
-	return cuo
+func (_u *CostsheetUpdateOne) SetUpdatedBy(v string) *CostsheetUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableUpdatedBy(s *string) *CostsheetUpdateOne {
-	if s != nil {
-		cuo.SetUpdatedBy(*s)
+func (_u *CostsheetUpdateOne) SetNillableUpdatedBy(v *string) *CostsheetUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cuo *CostsheetUpdateOne) ClearUpdatedBy() *CostsheetUpdateOne {
-	cuo.mutation.ClearUpdatedBy()
-	return cuo
+func (_u *CostsheetUpdateOne) ClearUpdatedBy() *CostsheetUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cuo *CostsheetUpdateOne) SetMetadata(m map[string]string) *CostsheetUpdateOne {
-	cuo.mutation.SetMetadata(m)
-	return cuo
+func (_u *CostsheetUpdateOne) SetMetadata(v map[string]string) *CostsheetUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cuo *CostsheetUpdateOne) ClearMetadata() *CostsheetUpdateOne {
-	cuo.mutation.ClearMetadata()
-	return cuo
+func (_u *CostsheetUpdateOne) ClearMetadata() *CostsheetUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cuo *CostsheetUpdateOne) SetName(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetName(s)
-	return cuo
+func (_u *CostsheetUpdateOne) SetName(v string) *CostsheetUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableName(s *string) *CostsheetUpdateOne {
-	if s != nil {
-		cuo.SetName(*s)
+func (_u *CostsheetUpdateOne) SetNillableName(v *string) *CostsheetUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (cuo *CostsheetUpdateOne) SetLookupKey(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetLookupKey(s)
-	return cuo
+func (_u *CostsheetUpdateOne) SetLookupKey(v string) *CostsheetUpdateOne {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableLookupKey(s *string) *CostsheetUpdateOne {
-	if s != nil {
-		cuo.SetLookupKey(*s)
+func (_u *CostsheetUpdateOne) SetNillableLookupKey(v *string) *CostsheetUpdateOne {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (cuo *CostsheetUpdateOne) ClearLookupKey() *CostsheetUpdateOne {
-	cuo.mutation.ClearLookupKey()
-	return cuo
+func (_u *CostsheetUpdateOne) ClearLookupKey() *CostsheetUpdateOne {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (cuo *CostsheetUpdateOne) SetDescription(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetDescription(s)
-	return cuo
+func (_u *CostsheetUpdateOne) SetDescription(v string) *CostsheetUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableDescription(s *string) *CostsheetUpdateOne {
-	if s != nil {
-		cuo.SetDescription(*s)
+func (_u *CostsheetUpdateOne) SetNillableDescription(v *string) *CostsheetUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (cuo *CostsheetUpdateOne) ClearDescription() *CostsheetUpdateOne {
-	cuo.mutation.ClearDescription()
-	return cuo
+func (_u *CostsheetUpdateOne) ClearDescription() *CostsheetUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // Mutation returns the CostsheetMutation object of the builder.
-func (cuo *CostsheetUpdateOne) Mutation() *CostsheetMutation {
-	return cuo.mutation
+func (_u *CostsheetUpdateOne) Mutation() *CostsheetMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the CostsheetUpdate builder.
-func (cuo *CostsheetUpdateOne) Where(ps ...predicate.Costsheet) *CostsheetUpdateOne {
-	cuo.mutation.Where(ps...)
-	return cuo
+func (_u *CostsheetUpdateOne) Where(ps ...predicate.Costsheet) *CostsheetUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cuo *CostsheetUpdateOne) Select(field string, fields ...string) *CostsheetUpdateOne {
-	cuo.fields = append([]string{field}, fields...)
-	return cuo
+func (_u *CostsheetUpdateOne) Select(field string, fields ...string) *CostsheetUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Costsheet entity.
-func (cuo *CostsheetUpdateOne) Save(ctx context.Context) (*Costsheet, error) {
-	cuo.defaults()
-	return withHooks(ctx, cuo.sqlSave, cuo.mutation, cuo.hooks)
+func (_u *CostsheetUpdateOne) Save(ctx context.Context) (*Costsheet, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cuo *CostsheetUpdateOne) SaveX(ctx context.Context) *Costsheet {
-	node, err := cuo.Save(ctx)
+func (_u *CostsheetUpdateOne) SaveX(ctx context.Context) *Costsheet {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -396,29 +396,29 @@ func (cuo *CostsheetUpdateOne) SaveX(ctx context.Context) *Costsheet {
 }
 
 // Exec executes the query on the entity.
-func (cuo *CostsheetUpdateOne) Exec(ctx context.Context) error {
-	_, err := cuo.Save(ctx)
+func (_u *CostsheetUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cuo *CostsheetUpdateOne) ExecX(ctx context.Context) {
-	if err := cuo.Exec(ctx); err != nil {
+func (_u *CostsheetUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cuo *CostsheetUpdateOne) defaults() {
-	if _, ok := cuo.mutation.UpdatedAt(); !ok {
+func (_u *CostsheetUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := costsheet.UpdateDefaultUpdatedAt()
-		cuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cuo *CostsheetUpdateOne) check() error {
-	if v, ok := cuo.mutation.Name(); ok {
+func (_u *CostsheetUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := costsheet.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Costsheet.name": %w`, err)}
 		}
@@ -426,17 +426,17 @@ func (cuo *CostsheetUpdateOne) check() error {
 	return nil
 }
 
-func (cuo *CostsheetUpdateOne) sqlSave(ctx context.Context) (_node *Costsheet, err error) {
-	if err := cuo.check(); err != nil {
+func (_u *CostsheetUpdateOne) sqlSave(ctx context.Context) (_node *Costsheet, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(costsheet.Table, costsheet.Columns, sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString))
-	id, ok := cuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Costsheet.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, costsheet.FieldID)
 		for _, f := range fields {
@@ -448,56 +448,56 @@ func (cuo *CostsheetUpdateOne) sqlSave(ctx context.Context) (_node *Costsheet, e
 			}
 		}
 	}
-	if ps := cuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(costsheet.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(costsheet.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(costsheet.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(costsheet.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(costsheet.FieldUpdatedBy, field.TypeString)
 	}
-	if cuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(costsheet.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(costsheet.FieldMetadata, field.TypeJSON, value)
 	}
-	if cuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(costsheet.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(costsheet.FieldName, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(costsheet.FieldLookupKey, field.TypeString, value)
 	}
-	if cuo.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(costsheet.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := cuo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(costsheet.FieldDescription, field.TypeString, value)
 	}
-	if cuo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(costsheet.FieldDescription, field.TypeString)
 	}
-	_node = &Costsheet{config: cuo.config}
+	_node = &Costsheet{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{costsheet.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -505,6 +505,6 @@ func (cuo *CostsheetUpdateOne) sqlSave(ctx context.Context) (_node *Costsheet, e
 		}
 		return nil, err
 	}
-	cuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

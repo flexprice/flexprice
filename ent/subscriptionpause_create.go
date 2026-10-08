@@ -22,250 +22,250 @@ type SubscriptionPauseCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (spc *SubscriptionPauseCreate) SetTenantID(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetTenantID(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetTenantID(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (spc *SubscriptionPauseCreate) SetStatus(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetStatus(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetStatus(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableStatus(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetStatus(*s)
+func (_c *SubscriptionPauseCreate) SetNillableStatus(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (spc *SubscriptionPauseCreate) SetCreatedAt(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetCreatedAt(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetCreatedAt(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableCreatedAt(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetCreatedAt(*t)
+func (_c *SubscriptionPauseCreate) SetNillableCreatedAt(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spc *SubscriptionPauseCreate) SetUpdatedAt(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetUpdatedAt(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetUpdatedAt(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableUpdatedAt(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetUpdatedAt(*t)
+func (_c *SubscriptionPauseCreate) SetNillableUpdatedAt(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (spc *SubscriptionPauseCreate) SetCreatedBy(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetCreatedBy(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetCreatedBy(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableCreatedBy(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetCreatedBy(*s)
+func (_c *SubscriptionPauseCreate) SetNillableCreatedBy(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spc *SubscriptionPauseCreate) SetUpdatedBy(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetUpdatedBy(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetUpdatedBy(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableUpdatedBy(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetUpdatedBy(*s)
+func (_c *SubscriptionPauseCreate) SetNillableUpdatedBy(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (spc *SubscriptionPauseCreate) SetEnvironmentID(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetEnvironmentID(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetEnvironmentID(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableEnvironmentID(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetEnvironmentID(*s)
+func (_c *SubscriptionPauseCreate) SetNillableEnvironmentID(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spc *SubscriptionPauseCreate) SetSubscriptionID(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetSubscriptionID(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetSubscriptionID(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (spc *SubscriptionPauseCreate) SetPauseStatus(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetPauseStatus(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetPauseStatus(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetPauseStatus(v)
+	return _c
 }
 
 // SetPauseMode sets the "pause_mode" field.
-func (spc *SubscriptionPauseCreate) SetPauseMode(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetPauseMode(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetPauseMode(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetPauseMode(v)
+	return _c
 }
 
 // SetNillablePauseMode sets the "pause_mode" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillablePauseMode(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetPauseMode(*s)
+func (_c *SubscriptionPauseCreate) SetNillablePauseMode(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetPauseMode(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetResumeMode sets the "resume_mode" field.
-func (spc *SubscriptionPauseCreate) SetResumeMode(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetResumeMode(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetResumeMode(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetResumeMode(v)
+	return _c
 }
 
 // SetNillableResumeMode sets the "resume_mode" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableResumeMode(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetResumeMode(*s)
+func (_c *SubscriptionPauseCreate) SetNillableResumeMode(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetResumeMode(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetPauseStart sets the "pause_start" field.
-func (spc *SubscriptionPauseCreate) SetPauseStart(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetPauseStart(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetPauseStart(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetPauseStart(v)
+	return _c
 }
 
 // SetNillablePauseStart sets the "pause_start" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillablePauseStart(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetPauseStart(*t)
+func (_c *SubscriptionPauseCreate) SetNillablePauseStart(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetPauseStart(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetPauseEnd sets the "pause_end" field.
-func (spc *SubscriptionPauseCreate) SetPauseEnd(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetPauseEnd(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetPauseEnd(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetPauseEnd(v)
+	return _c
 }
 
 // SetNillablePauseEnd sets the "pause_end" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillablePauseEnd(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetPauseEnd(*t)
+func (_c *SubscriptionPauseCreate) SetNillablePauseEnd(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetPauseEnd(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetResumedAt sets the "resumed_at" field.
-func (spc *SubscriptionPauseCreate) SetResumedAt(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetResumedAt(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetResumedAt(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetResumedAt(v)
+	return _c
 }
 
 // SetNillableResumedAt sets the "resumed_at" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableResumedAt(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetResumedAt(*t)
+func (_c *SubscriptionPauseCreate) SetNillableResumedAt(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetResumedAt(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetOriginalPeriodStart sets the "original_period_start" field.
-func (spc *SubscriptionPauseCreate) SetOriginalPeriodStart(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetOriginalPeriodStart(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetOriginalPeriodStart(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetOriginalPeriodStart(v)
+	return _c
 }
 
 // SetNillableOriginalPeriodStart sets the "original_period_start" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableOriginalPeriodStart(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetOriginalPeriodStart(*t)
+func (_c *SubscriptionPauseCreate) SetNillableOriginalPeriodStart(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetOriginalPeriodStart(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetOriginalPeriodEnd sets the "original_period_end" field.
-func (spc *SubscriptionPauseCreate) SetOriginalPeriodEnd(t time.Time) *SubscriptionPauseCreate {
-	spc.mutation.SetOriginalPeriodEnd(t)
-	return spc
+func (_c *SubscriptionPauseCreate) SetOriginalPeriodEnd(v time.Time) *SubscriptionPauseCreate {
+	_c.mutation.SetOriginalPeriodEnd(v)
+	return _c
 }
 
 // SetNillableOriginalPeriodEnd sets the "original_period_end" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableOriginalPeriodEnd(t *time.Time) *SubscriptionPauseCreate {
-	if t != nil {
-		spc.SetOriginalPeriodEnd(*t)
+func (_c *SubscriptionPauseCreate) SetNillableOriginalPeriodEnd(v *time.Time) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetOriginalPeriodEnd(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetReason sets the "reason" field.
-func (spc *SubscriptionPauseCreate) SetReason(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetReason(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetReason(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetReason(v)
+	return _c
 }
 
 // SetNillableReason sets the "reason" field if the given value is not nil.
-func (spc *SubscriptionPauseCreate) SetNillableReason(s *string) *SubscriptionPauseCreate {
-	if s != nil {
-		spc.SetReason(*s)
+func (_c *SubscriptionPauseCreate) SetNillableReason(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetReason(*v)
 	}
-	return spc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (spc *SubscriptionPauseCreate) SetMetadata(m map[string]string) *SubscriptionPauseCreate {
-	spc.mutation.SetMetadata(m)
-	return spc
+func (_c *SubscriptionPauseCreate) SetMetadata(v map[string]string) *SubscriptionPauseCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (spc *SubscriptionPauseCreate) SetID(s string) *SubscriptionPauseCreate {
-	spc.mutation.SetID(s)
-	return spc
+func (_c *SubscriptionPauseCreate) SetID(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spc *SubscriptionPauseCreate) SetSubscription(s *Subscription) *SubscriptionPauseCreate {
-	return spc.SetSubscriptionID(s.ID)
+func (_c *SubscriptionPauseCreate) SetSubscription(v *Subscription) *SubscriptionPauseCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPauseMutation object of the builder.
-func (spc *SubscriptionPauseCreate) Mutation() *SubscriptionPauseMutation {
-	return spc.mutation
+func (_c *SubscriptionPauseCreate) Mutation() *SubscriptionPauseMutation {
+	return _c.mutation
 }
 
 // Save creates the SubscriptionPause in the database.
-func (spc *SubscriptionPauseCreate) Save(ctx context.Context) (*SubscriptionPause, error) {
-	spc.defaults()
-	return withHooks(ctx, spc.sqlSave, spc.mutation, spc.hooks)
+func (_c *SubscriptionPauseCreate) Save(ctx context.Context) (*SubscriptionPause, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (spc *SubscriptionPauseCreate) SaveX(ctx context.Context) *SubscriptionPause {
-	v, err := spc.Save(ctx)
+func (_c *SubscriptionPauseCreate) SaveX(ctx context.Context) *SubscriptionPause {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -273,118 +273,118 @@ func (spc *SubscriptionPauseCreate) SaveX(ctx context.Context) *SubscriptionPaus
 }
 
 // Exec executes the query.
-func (spc *SubscriptionPauseCreate) Exec(ctx context.Context) error {
-	_, err := spc.Save(ctx)
+func (_c *SubscriptionPauseCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spc *SubscriptionPauseCreate) ExecX(ctx context.Context) {
-	if err := spc.Exec(ctx); err != nil {
+func (_c *SubscriptionPauseCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spc *SubscriptionPauseCreate) defaults() {
-	if _, ok := spc.mutation.Status(); !ok {
+func (_c *SubscriptionPauseCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := subscriptionpause.DefaultStatus
-		spc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := spc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionpause.DefaultCreatedAt()
-		spc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := spc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := subscriptionpause.DefaultUpdatedAt()
-		spc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := spc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := subscriptionpause.DefaultEnvironmentID
-		spc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := spc.mutation.PauseMode(); !ok {
+	if _, ok := _c.mutation.PauseMode(); !ok {
 		v := subscriptionpause.DefaultPauseMode
-		spc.mutation.SetPauseMode(v)
+		_c.mutation.SetPauseMode(v)
 	}
-	if _, ok := spc.mutation.PauseStart(); !ok {
+	if _, ok := _c.mutation.PauseStart(); !ok {
 		v := subscriptionpause.DefaultPauseStart()
-		spc.mutation.SetPauseStart(v)
+		_c.mutation.SetPauseStart(v)
 	}
-	if _, ok := spc.mutation.OriginalPeriodStart(); !ok {
+	if _, ok := _c.mutation.OriginalPeriodStart(); !ok {
 		v := subscriptionpause.DefaultOriginalPeriodStart()
-		spc.mutation.SetOriginalPeriodStart(v)
+		_c.mutation.SetOriginalPeriodStart(v)
 	}
-	if _, ok := spc.mutation.OriginalPeriodEnd(); !ok {
+	if _, ok := _c.mutation.OriginalPeriodEnd(); !ok {
 		v := subscriptionpause.DefaultOriginalPeriodEnd()
-		spc.mutation.SetOriginalPeriodEnd(v)
+		_c.mutation.SetOriginalPeriodEnd(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spc *SubscriptionPauseCreate) check() error {
-	if _, ok := spc.mutation.TenantID(); !ok {
+func (_c *SubscriptionPauseCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "SubscriptionPause.tenant_id"`)}
 	}
-	if v, ok := spc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := subscriptionpause.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SubscriptionPause.status"`)}
 	}
-	if _, ok := spc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionPause.created_at"`)}
 	}
-	if _, ok := spc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SubscriptionPause.updated_at"`)}
 	}
-	if _, ok := spc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "SubscriptionPause.subscription_id"`)}
 	}
-	if v, ok := spc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := subscriptionpause.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.PauseStatus(); !ok {
+	if _, ok := _c.mutation.PauseStatus(); !ok {
 		return &ValidationError{Name: "pause_status", err: errors.New(`ent: missing required field "SubscriptionPause.pause_status"`)}
 	}
-	if v, ok := spc.mutation.PauseStatus(); ok {
+	if v, ok := _c.mutation.PauseStatus(); ok {
 		if err := subscriptionpause.PauseStatusValidator(v); err != nil {
 			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_status": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.PauseMode(); !ok {
+	if _, ok := _c.mutation.PauseMode(); !ok {
 		return &ValidationError{Name: "pause_mode", err: errors.New(`ent: missing required field "SubscriptionPause.pause_mode"`)}
 	}
-	if v, ok := spc.mutation.PauseMode(); ok {
+	if v, ok := _c.mutation.PauseMode(); ok {
 		if err := subscriptionpause.PauseModeValidator(v); err != nil {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
 		}
 	}
-	if _, ok := spc.mutation.PauseStart(); !ok {
+	if _, ok := _c.mutation.PauseStart(); !ok {
 		return &ValidationError{Name: "pause_start", err: errors.New(`ent: missing required field "SubscriptionPause.pause_start"`)}
 	}
-	if _, ok := spc.mutation.OriginalPeriodStart(); !ok {
+	if _, ok := _c.mutation.OriginalPeriodStart(); !ok {
 		return &ValidationError{Name: "original_period_start", err: errors.New(`ent: missing required field "SubscriptionPause.original_period_start"`)}
 	}
-	if _, ok := spc.mutation.OriginalPeriodEnd(); !ok {
+	if _, ok := _c.mutation.OriginalPeriodEnd(); !ok {
 		return &ValidationError{Name: "original_period_end", err: errors.New(`ent: missing required field "SubscriptionPause.original_period_end"`)}
 	}
-	if len(spc.mutation.SubscriptionIDs()) == 0 {
+	if len(_c.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionPause.subscription"`)}
 	}
 	return nil
 }
 
-func (spc *SubscriptionPauseCreate) sqlSave(ctx context.Context) (*SubscriptionPause, error) {
-	if err := spc.check(); err != nil {
+func (_c *SubscriptionPauseCreate) sqlSave(ctx context.Context) (*SubscriptionPause, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := spc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, spc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -397,89 +397,89 @@ func (spc *SubscriptionPauseCreate) sqlSave(ctx context.Context) (*SubscriptionP
 			return nil, fmt.Errorf("unexpected SubscriptionPause.ID type: %T", _spec.ID.Value)
 		}
 	}
-	spc.mutation.id = &_node.ID
-	spc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (spc *SubscriptionPauseCreate) createSpec() (*SubscriptionPause, *sqlgraph.CreateSpec) {
+func (_c *SubscriptionPauseCreate) createSpec() (*SubscriptionPause, *sqlgraph.CreateSpec) {
 	var (
-		_node = &SubscriptionPause{config: spc.config}
+		_node = &SubscriptionPause{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(subscriptionpause.Table, sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString))
 	)
-	if id, ok := spc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := spc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(subscriptionpause.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := spc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(subscriptionpause.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := spc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := spc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := spc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(subscriptionpause.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := spc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := spc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(subscriptionpause.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := spc.mutation.PauseStatus(); ok {
+	if value, ok := _c.mutation.PauseStatus(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStatus, field.TypeString, value)
 		_node.PauseStatus = value
 	}
-	if value, ok := spc.mutation.PauseMode(); ok {
+	if value, ok := _c.mutation.PauseMode(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseMode, field.TypeString, value)
 		_node.PauseMode = value
 	}
-	if value, ok := spc.mutation.ResumeMode(); ok {
+	if value, ok := _c.mutation.ResumeMode(); ok {
 		_spec.SetField(subscriptionpause.FieldResumeMode, field.TypeString, value)
 		_node.ResumeMode = value
 	}
-	if value, ok := spc.mutation.PauseStart(); ok {
+	if value, ok := _c.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)
 		_node.PauseStart = value
 	}
-	if value, ok := spc.mutation.PauseEnd(); ok {
+	if value, ok := _c.mutation.PauseEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseEnd, field.TypeTime, value)
 		_node.PauseEnd = &value
 	}
-	if value, ok := spc.mutation.ResumedAt(); ok {
+	if value, ok := _c.mutation.ResumedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldResumedAt, field.TypeTime, value)
 		_node.ResumedAt = &value
 	}
-	if value, ok := spc.mutation.OriginalPeriodStart(); ok {
+	if value, ok := _c.mutation.OriginalPeriodStart(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodStart, field.TypeTime, value)
 		_node.OriginalPeriodStart = value
 	}
-	if value, ok := spc.mutation.OriginalPeriodEnd(); ok {
+	if value, ok := _c.mutation.OriginalPeriodEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodEnd, field.TypeTime, value)
 		_node.OriginalPeriodEnd = value
 	}
-	if value, ok := spc.mutation.Reason(); ok {
+	if value, ok := _c.mutation.Reason(); ok {
 		_spec.SetField(subscriptionpause.FieldReason, field.TypeString, value)
 		_node.Reason = value
 	}
-	if value, ok := spc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionpause.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if nodes := spc.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -507,16 +507,16 @@ type SubscriptionPauseCreateBulk struct {
 }
 
 // Save creates the SubscriptionPause entities in the database.
-func (spcb *SubscriptionPauseCreateBulk) Save(ctx context.Context) ([]*SubscriptionPause, error) {
-	if spcb.err != nil {
-		return nil, spcb.err
+func (_c *SubscriptionPauseCreateBulk) Save(ctx context.Context) ([]*SubscriptionPause, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(spcb.builders))
-	nodes := make([]*SubscriptionPause, len(spcb.builders))
-	mutators := make([]Mutator, len(spcb.builders))
-	for i := range spcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*SubscriptionPause, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := spcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SubscriptionPauseMutation)
@@ -530,11 +530,11 @@ func (spcb *SubscriptionPauseCreateBulk) Save(ctx context.Context) ([]*Subscript
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, spcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, spcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -554,7 +554,7 @@ func (spcb *SubscriptionPauseCreateBulk) Save(ctx context.Context) ([]*Subscript
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, spcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -562,8 +562,8 @@ func (spcb *SubscriptionPauseCreateBulk) Save(ctx context.Context) ([]*Subscript
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spcb *SubscriptionPauseCreateBulk) SaveX(ctx context.Context) []*SubscriptionPause {
-	v, err := spcb.Save(ctx)
+func (_c *SubscriptionPauseCreateBulk) SaveX(ctx context.Context) []*SubscriptionPause {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -571,14 +571,14 @@ func (spcb *SubscriptionPauseCreateBulk) SaveX(ctx context.Context) []*Subscript
 }
 
 // Exec executes the query.
-func (spcb *SubscriptionPauseCreateBulk) Exec(ctx context.Context) error {
-	_, err := spcb.Save(ctx)
+func (_c *SubscriptionPauseCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spcb *SubscriptionPauseCreateBulk) ExecX(ctx context.Context) {
-	if err := spcb.Exec(ctx); err != nil {
+func (_c *SubscriptionPauseCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

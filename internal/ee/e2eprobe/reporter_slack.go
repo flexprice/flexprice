@@ -12,18 +12,32 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
+const slackPostMessageURL = "https://slack.com/api/chat.postMessage"
+
+// NewSlackReporter posts failures to an incoming-webhook URL.
 func NewSlackReporter(webhookURL, channel string, client *http.Client, lg *logger.Logger) Reporter {
+	return &slackReporter{endpoint: webhookURL, channel: channel, client: slackHTTPClient(client), lg: lg}
+}
+
+// NewSlackBotReporter posts failures via chat.postMessage using a bot token.
+// channel is required: unlike a webhook, a bot token has no default channel.
+func NewSlackBotReporter(botToken, channel string, client *http.Client, lg *logger.Logger) Reporter {
+	return &slackReporter{endpoint: slackPostMessageURL, botToken: botToken, channel: channel, client: slackHTTPClient(client), lg: lg}
+}
+
+func slackHTTPClient(client *http.Client) *http.Client {
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		return &http.Client{Timeout: 5 * time.Second}
 	}
-	return &slackReporter{webhookURL: webhookURL, channel: channel, client: client, lg: lg}
+	return client
 }
 
 type slackReporter struct {
-	webhookURL string
-	channel    string
-	client     *http.Client
-	lg         *logger.Logger
+	endpoint string
+	botToken string
+	channel  string
+	client   *http.Client
+	lg       *logger.Logger
 }
 
 func (s *slackReporter) Report(ctx context.Context, r FailureReport) {
@@ -33,31 +47,48 @@ func (s *slackReporter) Report(ctx context.Context, r FailureReport) {
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
-		s.logWarn(ctx,"marshal", err, r.CheckName)
+		s.logErr(ctx, "marshal", err, r.CheckName)
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.webhookURL, bytes.NewReader(buf))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint, bytes.NewReader(buf))
 	if err != nil {
-		s.logWarn(ctx,"build_request", err, r.CheckName)
+		s.logErr(ctx, "build_request", err, r.CheckName)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if s.botToken != "" {
+		req.Header.Set("Authorization", "Bearer "+s.botToken)
+	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logWarn(ctx,"transport", err, r.CheckName)
+		s.logErr(ctx, "transport", err, r.CheckName)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.logWarn(ctx,"non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
+		s.logErr(ctx, "non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
+		return
+	}
+	// chat.postMessage returns 200 with {"ok":false,"error":...} on logical failure.
+	if s.botToken != "" {
+		var ack struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&ack); err != nil {
+			s.logErr(ctx, "decode_ack", err, r.CheckName)
+			return
+		}
+		if !ack.OK {
+			s.logErr(ctx, "slack_api", fmt.Errorf("slack error %q", ack.Error), r.CheckName)
+		}
 	}
 }
 
-func (s *slackReporter) logWarn(ctx context.Context, step string, err error, check string) {
+func (s *slackReporter) logErr(ctx context.Context, step string, err error, check string) {
 	if s.lg == nil {
 		return
 	}
-	// Slack delivery failed → Error level per LL003 (Warn is bootstrap-only).
 	s.lg.Error(ctx, "slack reporter delivery failed", "error", err.Error(), "step", step, "check", check)
 }
 

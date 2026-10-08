@@ -27,536 +27,536 @@ type SubscriptionLineItemUpdate struct {
 }
 
 // Where appends a list predicates to the SubscriptionLineItemUpdate builder.
-func (sliu *SubscriptionLineItemUpdate) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemUpdate {
-	sliu.mutation.Where(ps...)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (sliu *SubscriptionLineItemUpdate) SetStatus(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetStatus(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetStatus(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableStatus(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetStatus(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableStatus(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (sliu *SubscriptionLineItemUpdate) SetUpdatedAt(t time.Time) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetUpdatedAt(t)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetUpdatedAt(v time.Time) *SubscriptionLineItemUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (sliu *SubscriptionLineItemUpdate) SetUpdatedBy(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetUpdatedBy(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetUpdatedBy(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableUpdatedBy(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetUpdatedBy(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableUpdatedBy(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (sliu *SubscriptionLineItemUpdate) ClearUpdatedBy() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearUpdatedBy()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearUpdatedBy() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (sliu *SubscriptionLineItemUpdate) SetEntityID(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetEntityID(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetEntityID(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableEntityID(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetEntityID(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableEntityID(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (sliu *SubscriptionLineItemUpdate) ClearEntityID() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearEntityID()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearEntityID() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
-func (sliu *SubscriptionLineItemUpdate) SetPlanDisplayName(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetPlanDisplayName(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetPlanDisplayName(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetPlanDisplayName(v)
+	return _u
 }
 
 // SetNillablePlanDisplayName sets the "plan_display_name" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillablePlanDisplayName(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetPlanDisplayName(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillablePlanDisplayName(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetPlanDisplayName(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearPlanDisplayName clears the value of the "plan_display_name" field.
-func (sliu *SubscriptionLineItemUpdate) ClearPlanDisplayName() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearPlanDisplayName()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearPlanDisplayName() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearPlanDisplayName()
+	return _u
 }
 
 // SetPriceID sets the "price_id" field.
-func (sliu *SubscriptionLineItemUpdate) SetPriceID(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetPriceID(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetPriceID(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetPriceID(v)
+	return _u
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillablePriceID(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetPriceID(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillablePriceID(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetPriceID(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetPriceType sets the "price_type" field.
-func (sliu *SubscriptionLineItemUpdate) SetPriceType(tt types.PriceType) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetPriceType(tt)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetPriceType(v types.PriceType) *SubscriptionLineItemUpdate {
+	_u.mutation.SetPriceType(v)
+	return _u
 }
 
 // SetNillablePriceType sets the "price_type" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillablePriceType(tt *types.PriceType) *SubscriptionLineItemUpdate {
-	if tt != nil {
-		sliu.SetPriceType(*tt)
+func (_u *SubscriptionLineItemUpdate) SetNillablePriceType(v *types.PriceType) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetPriceType(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearPriceType clears the value of the "price_type" field.
-func (sliu *SubscriptionLineItemUpdate) ClearPriceType() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearPriceType()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearPriceType() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearPriceType()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (sliu *SubscriptionLineItemUpdate) SetMeterID(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetMeterID(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetMeterID(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableMeterID(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetMeterID(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableMeterID(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (sliu *SubscriptionLineItemUpdate) ClearMeterID() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearMeterID()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearMeterID() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetMeterDisplayName sets the "meter_display_name" field.
-func (sliu *SubscriptionLineItemUpdate) SetMeterDisplayName(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetMeterDisplayName(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetMeterDisplayName(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetMeterDisplayName(v)
+	return _u
 }
 
 // SetNillableMeterDisplayName sets the "meter_display_name" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableMeterDisplayName(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetMeterDisplayName(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableMeterDisplayName(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetMeterDisplayName(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearMeterDisplayName clears the value of the "meter_display_name" field.
-func (sliu *SubscriptionLineItemUpdate) ClearMeterDisplayName() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearMeterDisplayName()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearMeterDisplayName() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearMeterDisplayName()
+	return _u
 }
 
 // SetPriceUnitID sets the "price_unit_id" field.
-func (sliu *SubscriptionLineItemUpdate) SetPriceUnitID(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetPriceUnitID(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetPriceUnitID(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetPriceUnitID(v)
+	return _u
 }
 
 // SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnitID(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetPriceUnitID(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillablePriceUnitID(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetPriceUnitID(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearPriceUnitID clears the value of the "price_unit_id" field.
-func (sliu *SubscriptionLineItemUpdate) ClearPriceUnitID() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearPriceUnitID()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearPriceUnitID() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearPriceUnitID()
+	return _u
 }
 
 // SetPriceUnit sets the "price_unit" field.
-func (sliu *SubscriptionLineItemUpdate) SetPriceUnit(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetPriceUnit(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetPriceUnit(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetPriceUnit(v)
+	return _u
 }
 
 // SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetPriceUnit(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillablePriceUnit(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetPriceUnit(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearPriceUnit clears the value of the "price_unit" field.
-func (sliu *SubscriptionLineItemUpdate) ClearPriceUnit() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearPriceUnit()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearPriceUnit() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearPriceUnit()
+	return _u
 }
 
 // SetDisplayName sets the "display_name" field.
-func (sliu *SubscriptionLineItemUpdate) SetDisplayName(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetDisplayName(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetDisplayName(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetDisplayName(v)
+	return _u
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableDisplayName(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetDisplayName(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableDisplayName(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetDisplayName(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearDisplayName clears the value of the "display_name" field.
-func (sliu *SubscriptionLineItemUpdate) ClearDisplayName() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearDisplayName()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearDisplayName() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearDisplayName()
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (sliu *SubscriptionLineItemUpdate) SetQuantity(d decimal.Decimal) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetQuantity(d)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetQuantity(v decimal.Decimal) *SubscriptionLineItemUpdate {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdate {
-	if d != nil {
-		sliu.SetQuantity(*d)
+func (_u *SubscriptionLineItemUpdate) SetNillableQuantity(v *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (sliu *SubscriptionLineItemUpdate) SetCurrency(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCurrency(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCurrency(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCurrency(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetCurrency(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableCurrency(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (sliu *SubscriptionLineItemUpdate) SetBillingPeriod(tp types.BillingPeriod) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetBillingPeriod(tp)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetBillingPeriod(v types.BillingPeriod) *SubscriptionLineItemUpdate {
+	_u.mutation.SetBillingPeriod(v)
+	return _u
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableBillingPeriod(tp *types.BillingPeriod) *SubscriptionLineItemUpdate {
-	if tp != nil {
-		sliu.SetBillingPeriod(*tp)
+func (_u *SubscriptionLineItemUpdate) SetNillableBillingPeriod(v *types.BillingPeriod) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetBillingPeriod(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetBillingPeriodCount sets the "billing_period_count" field.
-func (sliu *SubscriptionLineItemUpdate) SetBillingPeriodCount(i int) *SubscriptionLineItemUpdate {
-	sliu.mutation.ResetBillingPeriodCount()
-	sliu.mutation.SetBillingPeriodCount(i)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetBillingPeriodCount(v int) *SubscriptionLineItemUpdate {
+	_u.mutation.ResetBillingPeriodCount()
+	_u.mutation.SetBillingPeriodCount(v)
+	return _u
 }
 
 // SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemUpdate {
-	if i != nil {
-		sliu.SetBillingPeriodCount(*i)
+func (_u *SubscriptionLineItemUpdate) SetNillableBillingPeriodCount(v *int) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetBillingPeriodCount(*v)
 	}
-	return sliu
+	return _u
 }
 
-// AddBillingPeriodCount adds i to the "billing_period_count" field.
-func (sliu *SubscriptionLineItemUpdate) AddBillingPeriodCount(i int) *SubscriptionLineItemUpdate {
-	sliu.mutation.AddBillingPeriodCount(i)
-	return sliu
+// AddBillingPeriodCount adds value to the "billing_period_count" field.
+func (_u *SubscriptionLineItemUpdate) AddBillingPeriodCount(v int) *SubscriptionLineItemUpdate {
+	_u.mutation.AddBillingPeriodCount(v)
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (sliu *SubscriptionLineItemUpdate) SetStartDate(t time.Time) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetStartDate(t)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetStartDate(v time.Time) *SubscriptionLineItemUpdate {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableStartDate(t *time.Time) *SubscriptionLineItemUpdate {
-	if t != nil {
-		sliu.SetStartDate(*t)
+func (_u *SubscriptionLineItemUpdate) SetNillableStartDate(v *time.Time) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (sliu *SubscriptionLineItemUpdate) ClearStartDate() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearStartDate()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearStartDate() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (sliu *SubscriptionLineItemUpdate) SetEndDate(t time.Time) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetEndDate(t)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetEndDate(v time.Time) *SubscriptionLineItemUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableEndDate(t *time.Time) *SubscriptionLineItemUpdate {
-	if t != nil {
-		sliu.SetEndDate(*t)
+func (_u *SubscriptionLineItemUpdate) SetNillableEndDate(v *time.Time) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (sliu *SubscriptionLineItemUpdate) ClearEndDate() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearEndDate()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearEndDate() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (sliu *SubscriptionLineItemUpdate) SetMetadata(m map[string]string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetMetadata(m)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetMetadata(v map[string]string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (sliu *SubscriptionLineItemUpdate) ClearMetadata() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearMetadata()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearMetadata() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCommitmentAmount sets the "commitment_amount" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentAmount(d)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentAmount(v decimal.Decimal) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentAmount(v)
+	return _u
 }
 
 // SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionLineItemUpdate {
-	if d != nil {
-		sliu.SetCommitmentAmount(*d)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentAmount(v *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentAmount(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearCommitmentAmount clears the value of the "commitment_amount" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentAmount() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentAmount()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentAmount() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentAmount()
+	return _u
 }
 
 // SetCommitmentQuantity sets the "commitment_quantity" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentQuantity(d decimal.Decimal) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentQuantity(d)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentQuantity(v decimal.Decimal) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentQuantity(v)
+	return _u
 }
 
 // SetNillableCommitmentQuantity sets the "commitment_quantity" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdate {
-	if d != nil {
-		sliu.SetCommitmentQuantity(*d)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentQuantity(v *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentQuantity(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearCommitmentQuantity clears the value of the "commitment_quantity" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentQuantity() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentQuantity()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentQuantity() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentQuantity()
+	return _u
 }
 
 // SetCommitmentType sets the "commitment_type" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentType(s string) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentType(s)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentType(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentType(v)
+	return _u
 }
 
 // SetNillableCommitmentType sets the "commitment_type" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentType(s *string) *SubscriptionLineItemUpdate {
-	if s != nil {
-		sliu.SetCommitmentType(*s)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentType(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentType(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearCommitmentType clears the value of the "commitment_type" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentType() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentType()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentType() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentType()
+	return _u
 }
 
 // SetCommitmentOverageFactor sets the "commitment_overage_factor" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentOverageFactor(d decimal.Decimal) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentOverageFactor(d)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentOverageFactor(v decimal.Decimal) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentOverageFactor(v)
+	return _u
 }
 
 // SetNillableCommitmentOverageFactor sets the "commitment_overage_factor" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentOverageFactor(d *decimal.Decimal) *SubscriptionLineItemUpdate {
-	if d != nil {
-		sliu.SetCommitmentOverageFactor(*d)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentOverageFactor(v *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentOverageFactor(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearCommitmentOverageFactor clears the value of the "commitment_overage_factor" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentOverageFactor() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentOverageFactor()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentOverageFactor() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentOverageFactor()
+	return _u
 }
 
 // SetCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentTrueUpEnabled(b bool) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentTrueUpEnabled(b)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentTrueUpEnabled(v bool) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentTrueUpEnabled(v)
+	return _u
 }
 
 // SetNillableCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentTrueUpEnabled(b *bool) *SubscriptionLineItemUpdate {
-	if b != nil {
-		sliu.SetCommitmentTrueUpEnabled(*b)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentTrueUpEnabled(v *bool) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentTrueUpEnabled(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetCommitmentWindowed sets the "commitment_windowed" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentWindowed(b bool) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentWindowed(b)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentWindowed(v bool) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentWindowed(v)
+	return _u
 }
 
 // SetNillableCommitmentWindowed sets the "commitment_windowed" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentWindowed(b *bool) *SubscriptionLineItemUpdate {
-	if b != nil {
-		sliu.SetCommitmentWindowed(*b)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentWindowed(v *bool) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentWindowed(*v)
 	}
-	return sliu
+	return _u
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentDuration(tp)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentDuration(v types.BillingPeriod) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentDuration(v)
+	return _u
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemUpdate {
-	if tp != nil {
-		sliu.SetCommitmentDuration(*tp)
+func (_u *SubscriptionLineItemUpdate) SetNillableCommitmentDuration(v *types.BillingPeriod) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetCommitmentDuration(*v)
 	}
-	return sliu
+	return _u
 }
 
 // ClearCommitmentDuration clears the value of the "commitment_duration" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentDuration() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentDuration()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentDuration() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentDuration()
+	return _u
 }
 
 // SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentTimeBuckets(todb)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) SetCommitmentTimeBuckets(v types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
+	_u.mutation.SetCommitmentTimeBuckets(v)
+	return _u
 }
 
-// AppendCommitmentTimeBuckets appends todb to the "commitment_time_buckets" field.
-func (sliu *SubscriptionLineItemUpdate) AppendCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
-	sliu.mutation.AppendCommitmentTimeBuckets(todb)
-	return sliu
+// AppendCommitmentTimeBuckets appends value to the "commitment_time_buckets" field.
+func (_u *SubscriptionLineItemUpdate) AppendCommitmentTimeBuckets(v types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
+	_u.mutation.AppendCommitmentTimeBuckets(v)
+	return _u
 }
 
 // ClearCommitmentTimeBuckets clears the value of the "commitment_time_buckets" field.
-func (sliu *SubscriptionLineItemUpdate) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCommitmentTimeBuckets()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCommitmentTimeBuckets()
+	return _u
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
-	sliu.mutation.AddCouponAssociationIDs(ids...)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (sliu *SubscriptionLineItemUpdate) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionLineItemUpdate) AddCouponAssociations(v ...*CouponAssociation) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return sliu.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
-func (sliu *SubscriptionLineItemUpdate) Mutation() *SubscriptionLineItemMutation {
-	return sliu.mutation
+func (_u *SubscriptionLineItemUpdate) Mutation() *SubscriptionLineItemMutation {
+	return _u.mutation
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (sliu *SubscriptionLineItemUpdate) ClearCouponAssociations() *SubscriptionLineItemUpdate {
-	sliu.mutation.ClearCouponAssociations()
-	return sliu
+func (_u *SubscriptionLineItemUpdate) ClearCouponAssociations() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (sliu *SubscriptionLineItemUpdate) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
-	sliu.mutation.RemoveCouponAssociationIDs(ids...)
-	return sliu
+func (_u *SubscriptionLineItemUpdate) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (sliu *SubscriptionLineItemUpdate) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionLineItemUpdate) RemoveCouponAssociations(v ...*CouponAssociation) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return sliu.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (sliu *SubscriptionLineItemUpdate) Save(ctx context.Context) (int, error) {
-	sliu.defaults()
-	return withHooks(ctx, sliu.sqlSave, sliu.mutation, sliu.hooks)
+func (_u *SubscriptionLineItemUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (sliu *SubscriptionLineItemUpdate) SaveX(ctx context.Context) int {
-	affected, err := sliu.Save(ctx)
+func (_u *SubscriptionLineItemUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -564,230 +564,230 @@ func (sliu *SubscriptionLineItemUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (sliu *SubscriptionLineItemUpdate) Exec(ctx context.Context) error {
-	_, err := sliu.Save(ctx)
+func (_u *SubscriptionLineItemUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sliu *SubscriptionLineItemUpdate) ExecX(ctx context.Context) {
-	if err := sliu.Exec(ctx); err != nil {
+func (_u *SubscriptionLineItemUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (sliu *SubscriptionLineItemUpdate) defaults() {
-	if _, ok := sliu.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionLineItemUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionlineitem.UpdateDefaultUpdatedAt()
-		sliu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (sliu *SubscriptionLineItemUpdate) check() error {
-	if v, ok := sliu.mutation.PriceID(); ok {
+func (_u *SubscriptionLineItemUpdate) check() error {
+	if v, ok := _u.mutation.PriceID(); ok {
 		if err := subscriptionlineitem.PriceIDValidator(v); err != nil {
 			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_id": %w`, err)}
 		}
 	}
-	if v, ok := sliu.mutation.PriceType(); ok {
+	if v, ok := _u.mutation.PriceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "price_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_type": %w`, err)}
 		}
 	}
-	if v, ok := sliu.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := subscriptionlineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.currency": %w`, err)}
 		}
 	}
-	if v, ok := sliu.mutation.BillingPeriod(); ok {
+	if v, ok := _u.mutation.BillingPeriod(); ok {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
 		}
 	}
-	if v, ok := sliu.mutation.CommitmentDuration(); ok {
+	if v, ok := _u.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
 		}
 	}
-	if sliu.mutation.SubscriptionCleared() && len(sliu.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionLineItem.subscription"`)
 	}
 	return nil
 }
 
-func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := sliu.check(); err != nil {
-		return n, err
+func (_u *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionlineitem.Table, subscriptionlineitem.Columns, sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString))
-	if ps := sliu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := sliu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := sliu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if sliu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := sliu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if sliu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if sliu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEntityID, field.TypeString, value)
 	}
-	if sliu.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEntityID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.PlanDisplayName(); ok {
+	if value, ok := _u.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
 	}
-	if sliu.mutation.PlanDisplayNameCleared() {
+	if _u.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString)
 	}
-	if value, ok := sliu.mutation.PriceID(); ok {
+	if value, ok := _u.mutation.PriceID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceID, field.TypeString, value)
 	}
-	if value, ok := sliu.mutation.PriceType(); ok {
+	if value, ok := _u.mutation.PriceType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceType, field.TypeString, value)
 	}
-	if sliu.mutation.PriceTypeCleared() {
+	if _u.mutation.PriceTypeCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceType, field.TypeString)
 	}
-	if value, ok := sliu.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterID, field.TypeString, value)
 	}
-	if sliu.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.MeterDisplayName(); ok {
+	if value, ok := _u.mutation.MeterDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString, value)
 	}
-	if sliu.mutation.MeterDisplayNameCleared() {
+	if _u.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString)
 	}
-	if value, ok := sliu.mutation.PriceUnitID(); ok {
+	if value, ok := _u.mutation.PriceUnitID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
 	}
-	if sliu.mutation.PriceUnitIDCleared() {
+	if _u.mutation.PriceUnitIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceUnitID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.PriceUnit(); ok {
+	if value, ok := _u.mutation.PriceUnit(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
 	}
-	if sliu.mutation.PriceUnitCleared() {
+	if _u.mutation.PriceUnitCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
 	}
-	if value, ok := sliu.mutation.DisplayName(); ok {
+	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)
 	}
-	if sliu.mutation.DisplayNameCleared() {
+	if _u.mutation.DisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldDisplayName, field.TypeString)
 	}
-	if value, ok := sliu.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := sliu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := sliu.mutation.BillingPeriod(); ok {
+	if value, ok := _u.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
 	}
-	if value, ok := sliu.mutation.BillingPeriodCount(); ok {
+	if value, ok := _u.mutation.BillingPeriodCount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 	}
-	if value, ok := sliu.mutation.AddedBillingPeriodCount(); ok {
+	if value, ok := _u.mutation.AddedBillingPeriodCount(); ok {
 		_spec.AddField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 	}
-	if sliu.mutation.InvoiceCadenceCleared() {
+	if _u.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString)
 	}
-	if value, ok := sliu.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStartDate, field.TypeTime, value)
 	}
-	if sliu.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := sliu.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEndDate, field.TypeTime, value)
 	}
-	if sliu.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEndDate, field.TypeTime)
 	}
-	if sliu.mutation.SubscriptionPhaseIDCleared() {
+	if _u.mutation.SubscriptionPhaseIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString)
 	}
-	if sliu.mutation.AddonAssociationIDCleared() {
+	if _u.mutation.AddonAssociationIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString)
 	}
-	if value, ok := sliu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if sliu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := sliu.mutation.CommitmentAmount(); ok {
+	if value, ok := _u.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther, value)
 	}
-	if sliu.mutation.CommitmentAmountCleared() {
+	if _u.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther)
 	}
-	if value, ok := sliu.mutation.CommitmentQuantity(); ok {
+	if value, ok := _u.mutation.CommitmentQuantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther, value)
 	}
-	if sliu.mutation.CommitmentQuantityCleared() {
+	if _u.mutation.CommitmentQuantityCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther)
 	}
-	if value, ok := sliu.mutation.CommitmentType(); ok {
+	if value, ok := _u.mutation.CommitmentType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentType, field.TypeString, value)
 	}
-	if sliu.mutation.CommitmentTypeCleared() {
+	if _u.mutation.CommitmentTypeCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentType, field.TypeString)
 	}
-	if value, ok := sliu.mutation.CommitmentOverageFactor(); ok {
+	if value, ok := _u.mutation.CommitmentOverageFactor(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentOverageFactor, field.TypeOther, value)
 	}
-	if sliu.mutation.CommitmentOverageFactorCleared() {
+	if _u.mutation.CommitmentOverageFactorCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentOverageFactor, field.TypeOther)
 	}
-	if value, ok := sliu.mutation.CommitmentTrueUpEnabled(); ok {
+	if value, ok := _u.mutation.CommitmentTrueUpEnabled(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTrueUpEnabled, field.TypeBool, value)
 	}
-	if value, ok := sliu.mutation.CommitmentWindowed(); ok {
+	if value, ok := _u.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
 	}
-	if value, ok := sliu.mutation.CommitmentDuration(); ok {
+	if value, ok := _u.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
 	}
-	if sliu.mutation.CommitmentDurationCleared() {
+	if _u.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
 	}
-	if value, ok := sliu.mutation.CommitmentTimeBuckets(); ok {
+	if value, ok := _u.mutation.CommitmentTimeBuckets(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
 	}
-	if value, ok := sliu.mutation.AppendedCommitmentTimeBuckets(); ok {
+	if value, ok := _u.mutation.AppendedCommitmentTimeBuckets(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, subscriptionlineitem.FieldCommitmentTimeBuckets, value)
 		})
 	}
-	if sliu.mutation.CommitmentTimeBucketsCleared() {
+	if _u.mutation.CommitmentTimeBucketsCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON)
 	}
-	if sliu.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -800,7 +800,7 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := sliu.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !sliu.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -816,7 +816,7 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := sliu.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -832,7 +832,7 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, sliu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionlineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -840,8 +840,8 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		return 0, err
 	}
-	sliu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SubscriptionLineItemUpdateOne is the builder for updating a single SubscriptionLineItem entity.
@@ -853,543 +853,543 @@ type SubscriptionLineItemUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetStatus(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetStatus(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetStatus(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableStatus(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetStatus(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableStatus(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetUpdatedAt(t time.Time) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetUpdatedAt(t)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetUpdatedBy(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetUpdatedBy(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetUpdatedBy(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableUpdatedBy(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetUpdatedBy(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableUpdatedBy(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearUpdatedBy() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearUpdatedBy()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearUpdatedBy() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetEntityID(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetEntityID(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetEntityID(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableEntityID(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetEntityID(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableEntityID(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearEntityID() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearEntityID()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearEntityID() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetPlanDisplayName(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetPlanDisplayName(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetPlanDisplayName(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetPlanDisplayName(v)
+	return _u
 }
 
 // SetNillablePlanDisplayName sets the "plan_display_name" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePlanDisplayName(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetPlanDisplayName(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillablePlanDisplayName(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetPlanDisplayName(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearPlanDisplayName clears the value of the "plan_display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearPlanDisplayName() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearPlanDisplayName()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearPlanDisplayName() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearPlanDisplayName()
+	return _u
 }
 
 // SetPriceID sets the "price_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetPriceID(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetPriceID(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetPriceID(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetPriceID(v)
+	return _u
 }
 
 // SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceID(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetPriceID(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillablePriceID(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetPriceID(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetPriceType sets the "price_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetPriceType(tt types.PriceType) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetPriceType(tt)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetPriceType(v types.PriceType) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetPriceType(v)
+	return _u
 }
 
 // SetNillablePriceType sets the "price_type" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceType(tt *types.PriceType) *SubscriptionLineItemUpdateOne {
-	if tt != nil {
-		sliuo.SetPriceType(*tt)
+func (_u *SubscriptionLineItemUpdateOne) SetNillablePriceType(v *types.PriceType) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetPriceType(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearPriceType clears the value of the "price_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceType() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearPriceType()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearPriceType() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearPriceType()
+	return _u
 }
 
 // SetMeterID sets the "meter_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetMeterID(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetMeterID(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetMeterID(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetMeterID(v)
+	return _u
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableMeterID(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetMeterID(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableMeterID(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetMeterID(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearMeterID clears the value of the "meter_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearMeterID() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearMeterID()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearMeterID() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearMeterID()
+	return _u
 }
 
 // SetMeterDisplayName sets the "meter_display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetMeterDisplayName(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetMeterDisplayName(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetMeterDisplayName(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetMeterDisplayName(v)
+	return _u
 }
 
 // SetNillableMeterDisplayName sets the "meter_display_name" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableMeterDisplayName(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetMeterDisplayName(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableMeterDisplayName(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetMeterDisplayName(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearMeterDisplayName clears the value of the "meter_display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearMeterDisplayName() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearMeterDisplayName()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearMeterDisplayName() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearMeterDisplayName()
+	return _u
 }
 
 // SetPriceUnitID sets the "price_unit_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnitID(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetPriceUnitID(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetPriceUnitID(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetPriceUnitID(v)
+	return _u
 }
 
 // SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnitID(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetPriceUnitID(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillablePriceUnitID(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetPriceUnitID(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearPriceUnitID clears the value of the "price_unit_id" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnitID() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearPriceUnitID()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearPriceUnitID() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearPriceUnitID()
+	return _u
 }
 
 // SetPriceUnit sets the "price_unit" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetPriceUnit(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetPriceUnit(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetPriceUnit(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetPriceUnit(v)
+	return _u
 }
 
 // SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillablePriceUnit(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetPriceUnit(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillablePriceUnit(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetPriceUnit(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearPriceUnit clears the value of the "price_unit" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearPriceUnit() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearPriceUnit()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearPriceUnit() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearPriceUnit()
+	return _u
 }
 
 // SetDisplayName sets the "display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetDisplayName(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetDisplayName(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetDisplayName(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetDisplayName(v)
+	return _u
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableDisplayName(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetDisplayName(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableDisplayName(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetDisplayName(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearDisplayName clears the value of the "display_name" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearDisplayName() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearDisplayName()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearDisplayName() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearDisplayName()
+	return _u
 }
 
 // SetQuantity sets the "quantity" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetQuantity(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetQuantity(d)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetQuantity(v decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetQuantity(v)
+	return _u
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	if d != nil {
-		sliuo.SetQuantity(*d)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableQuantity(v *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetQuantity(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCurrency(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCurrency(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCurrency(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCurrency(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetCurrency(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCurrency(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetBillingPeriod(tp types.BillingPeriod) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetBillingPeriod(tp)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetBillingPeriod(v types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetBillingPeriod(v)
+	return _u
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableBillingPeriod(tp *types.BillingPeriod) *SubscriptionLineItemUpdateOne {
-	if tp != nil {
-		sliuo.SetBillingPeriod(*tp)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableBillingPeriod(v *types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetBillingPeriod(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetBillingPeriodCount sets the "billing_period_count" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetBillingPeriodCount(i int) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ResetBillingPeriodCount()
-	sliuo.mutation.SetBillingPeriodCount(i)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetBillingPeriodCount(v int) *SubscriptionLineItemUpdateOne {
+	_u.mutation.ResetBillingPeriodCount()
+	_u.mutation.SetBillingPeriodCount(v)
+	return _u
 }
 
 // SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemUpdateOne {
-	if i != nil {
-		sliuo.SetBillingPeriodCount(*i)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableBillingPeriodCount(v *int) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetBillingPeriodCount(*v)
 	}
-	return sliuo
+	return _u
 }
 
-// AddBillingPeriodCount adds i to the "billing_period_count" field.
-func (sliuo *SubscriptionLineItemUpdateOne) AddBillingPeriodCount(i int) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.AddBillingPeriodCount(i)
-	return sliuo
+// AddBillingPeriodCount adds value to the "billing_period_count" field.
+func (_u *SubscriptionLineItemUpdateOne) AddBillingPeriodCount(v int) *SubscriptionLineItemUpdateOne {
+	_u.mutation.AddBillingPeriodCount(v)
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetStartDate(t time.Time) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetStartDate(t)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetStartDate(v time.Time) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableStartDate(t *time.Time) *SubscriptionLineItemUpdateOne {
-	if t != nil {
-		sliuo.SetStartDate(*t)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableStartDate(v *time.Time) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearStartDate() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearStartDate()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearStartDate() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetEndDate(t time.Time) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetEndDate(t)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetEndDate(v time.Time) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableEndDate(t *time.Time) *SubscriptionLineItemUpdateOne {
-	if t != nil {
-		sliuo.SetEndDate(*t)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableEndDate(v *time.Time) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearEndDate() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearEndDate()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearEndDate() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetMetadata(m map[string]string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetMetadata(m)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetMetadata(v map[string]string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearMetadata() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearMetadata()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearMetadata() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCommitmentAmount sets the "commitment_amount" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentAmount(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentAmount(d)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentAmount(v decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentAmount(v)
+	return _u
 }
 
 // SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	if d != nil {
-		sliuo.SetCommitmentAmount(*d)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentAmount(v *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentAmount(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearCommitmentAmount clears the value of the "commitment_amount" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentAmount() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentAmount()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentAmount() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentAmount()
+	return _u
 }
 
 // SetCommitmentQuantity sets the "commitment_quantity" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentQuantity(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentQuantity(d)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentQuantity(v decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentQuantity(v)
+	return _u
 }
 
 // SetNillableCommitmentQuantity sets the "commitment_quantity" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	if d != nil {
-		sliuo.SetCommitmentQuantity(*d)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentQuantity(v *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentQuantity(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearCommitmentQuantity clears the value of the "commitment_quantity" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentQuantity() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentQuantity()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentQuantity() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentQuantity()
+	return _u
 }
 
 // SetCommitmentType sets the "commitment_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentType(s string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentType(s)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentType(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentType(v)
+	return _u
 }
 
 // SetNillableCommitmentType sets the "commitment_type" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentType(s *string) *SubscriptionLineItemUpdateOne {
-	if s != nil {
-		sliuo.SetCommitmentType(*s)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentType(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentType(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearCommitmentType clears the value of the "commitment_type" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentType() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentType()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentType() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentType()
+	return _u
 }
 
 // SetCommitmentOverageFactor sets the "commitment_overage_factor" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentOverageFactor(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentOverageFactor(d)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentOverageFactor(v decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentOverageFactor(v)
+	return _u
 }
 
 // SetNillableCommitmentOverageFactor sets the "commitment_overage_factor" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentOverageFactor(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
-	if d != nil {
-		sliuo.SetCommitmentOverageFactor(*d)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentOverageFactor(v *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentOverageFactor(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearCommitmentOverageFactor clears the value of the "commitment_overage_factor" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentOverageFactor() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentOverageFactor()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentOverageFactor() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentOverageFactor()
+	return _u
 }
 
 // SetCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentTrueUpEnabled(b bool) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentTrueUpEnabled(b)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentTrueUpEnabled(v bool) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentTrueUpEnabled(v)
+	return _u
 }
 
 // SetNillableCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentTrueUpEnabled(b *bool) *SubscriptionLineItemUpdateOne {
-	if b != nil {
-		sliuo.SetCommitmentTrueUpEnabled(*b)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentTrueUpEnabled(v *bool) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentTrueUpEnabled(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetCommitmentWindowed sets the "commitment_windowed" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentWindowed(b bool) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentWindowed(b)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentWindowed(v bool) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentWindowed(v)
+	return _u
 }
 
 // SetNillableCommitmentWindowed sets the "commitment_windowed" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentWindowed(b *bool) *SubscriptionLineItemUpdateOne {
-	if b != nil {
-		sliuo.SetCommitmentWindowed(*b)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentWindowed(v *bool) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentWindowed(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentDuration(tp)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentDuration(v types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentDuration(v)
+	return _u
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemUpdateOne {
-	if tp != nil {
-		sliuo.SetCommitmentDuration(*tp)
+func (_u *SubscriptionLineItemUpdateOne) SetNillableCommitmentDuration(v *types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetCommitmentDuration(*v)
 	}
-	return sliuo
+	return _u
 }
 
 // ClearCommitmentDuration clears the value of the "commitment_duration" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentDuration() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentDuration()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentDuration() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentDuration()
+	return _u
 }
 
 // SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentTimeBuckets(todb)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) SetCommitmentTimeBuckets(v types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetCommitmentTimeBuckets(v)
+	return _u
 }
 
-// AppendCommitmentTimeBuckets appends todb to the "commitment_time_buckets" field.
-func (sliuo *SubscriptionLineItemUpdateOne) AppendCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.AppendCommitmentTimeBuckets(todb)
-	return sliuo
+// AppendCommitmentTimeBuckets appends value to the "commitment_time_buckets" field.
+func (_u *SubscriptionLineItemUpdateOne) AppendCommitmentTimeBuckets(v types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
+	_u.mutation.AppendCommitmentTimeBuckets(v)
+	return _u
 }
 
 // ClearCommitmentTimeBuckets clears the value of the "commitment_time_buckets" field.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCommitmentTimeBuckets()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCommitmentTimeBuckets()
+	return _u
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.AddCouponAssociationIDs(ids...)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionLineItemUpdateOne) AddCouponAssociations(v ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return sliuo.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
-func (sliuo *SubscriptionLineItemUpdateOne) Mutation() *SubscriptionLineItemMutation {
-	return sliuo.mutation
+func (_u *SubscriptionLineItemUpdateOne) Mutation() *SubscriptionLineItemMutation {
+	return _u.mutation
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (sliuo *SubscriptionLineItemUpdateOne) ClearCouponAssociations() *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.ClearCouponAssociations()
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) ClearCouponAssociations() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (sliuo *SubscriptionLineItemUpdateOne) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.RemoveCouponAssociationIDs(ids...)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) RemoveCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (sliuo *SubscriptionLineItemUpdateOne) RemoveCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *SubscriptionLineItemUpdateOne) RemoveCouponAssociations(v ...*CouponAssociation) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return sliuo.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionLineItemUpdate builder.
-func (sliuo *SubscriptionLineItemUpdateOne) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.Where(ps...)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (sliuo *SubscriptionLineItemUpdateOne) Select(field string, fields ...string) *SubscriptionLineItemUpdateOne {
-	sliuo.fields = append([]string{field}, fields...)
-	return sliuo
+func (_u *SubscriptionLineItemUpdateOne) Select(field string, fields ...string) *SubscriptionLineItemUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated SubscriptionLineItem entity.
-func (sliuo *SubscriptionLineItemUpdateOne) Save(ctx context.Context) (*SubscriptionLineItem, error) {
-	sliuo.defaults()
-	return withHooks(ctx, sliuo.sqlSave, sliuo.mutation, sliuo.hooks)
+func (_u *SubscriptionLineItemUpdateOne) Save(ctx context.Context) (*SubscriptionLineItem, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (sliuo *SubscriptionLineItemUpdateOne) SaveX(ctx context.Context) *SubscriptionLineItem {
-	node, err := sliuo.Save(ctx)
+func (_u *SubscriptionLineItemUpdateOne) SaveX(ctx context.Context) *SubscriptionLineItem {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1397,70 +1397,70 @@ func (sliuo *SubscriptionLineItemUpdateOne) SaveX(ctx context.Context) *Subscrip
 }
 
 // Exec executes the query on the entity.
-func (sliuo *SubscriptionLineItemUpdateOne) Exec(ctx context.Context) error {
-	_, err := sliuo.Save(ctx)
+func (_u *SubscriptionLineItemUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sliuo *SubscriptionLineItemUpdateOne) ExecX(ctx context.Context) {
-	if err := sliuo.Exec(ctx); err != nil {
+func (_u *SubscriptionLineItemUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (sliuo *SubscriptionLineItemUpdateOne) defaults() {
-	if _, ok := sliuo.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionLineItemUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionlineitem.UpdateDefaultUpdatedAt()
-		sliuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (sliuo *SubscriptionLineItemUpdateOne) check() error {
-	if v, ok := sliuo.mutation.PriceID(); ok {
+func (_u *SubscriptionLineItemUpdateOne) check() error {
+	if v, ok := _u.mutation.PriceID(); ok {
 		if err := subscriptionlineitem.PriceIDValidator(v); err != nil {
 			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_id": %w`, err)}
 		}
 	}
-	if v, ok := sliuo.mutation.PriceType(); ok {
+	if v, ok := _u.mutation.PriceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "price_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_type": %w`, err)}
 		}
 	}
-	if v, ok := sliuo.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := subscriptionlineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.currency": %w`, err)}
 		}
 	}
-	if v, ok := sliuo.mutation.BillingPeriod(); ok {
+	if v, ok := _u.mutation.BillingPeriod(); ok {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
 		}
 	}
-	if v, ok := sliuo.mutation.CommitmentDuration(); ok {
+	if v, ok := _u.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
 		}
 	}
-	if sliuo.mutation.SubscriptionCleared() && len(sliuo.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionLineItem.subscription"`)
 	}
 	return nil
 }
 
-func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionLineItem, err error) {
-	if err := sliuo.check(); err != nil {
+func (_u *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionLineItem, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionlineitem.Table, subscriptionlineitem.Columns, sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString))
-	id, ok := sliuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "SubscriptionLineItem.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := sliuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionlineitem.FieldID)
 		for _, f := range fields {
@@ -1472,172 +1472,172 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 			}
 		}
 	}
-	if ps := sliuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := sliuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := sliuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if sliuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if sliuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if sliuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEntityID, field.TypeString, value)
 	}
-	if sliuo.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEntityID, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.PlanDisplayName(); ok {
+	if value, ok := _u.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
 	}
-	if sliuo.mutation.PlanDisplayNameCleared() {
+	if _u.mutation.PlanDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.PriceID(); ok {
+	if value, ok := _u.mutation.PriceID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceID, field.TypeString, value)
 	}
-	if value, ok := sliuo.mutation.PriceType(); ok {
+	if value, ok := _u.mutation.PriceType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceType, field.TypeString, value)
 	}
-	if sliuo.mutation.PriceTypeCleared() {
+	if _u.mutation.PriceTypeCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceType, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.MeterID(); ok {
+	if value, ok := _u.mutation.MeterID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterID, field.TypeString, value)
 	}
-	if sliuo.mutation.MeterIDCleared() {
+	if _u.mutation.MeterIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterID, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.MeterDisplayName(); ok {
+	if value, ok := _u.mutation.MeterDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString, value)
 	}
-	if sliuo.mutation.MeterDisplayNameCleared() {
+	if _u.mutation.MeterDisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.PriceUnitID(); ok {
+	if value, ok := _u.mutation.PriceUnitID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
 	}
-	if sliuo.mutation.PriceUnitIDCleared() {
+	if _u.mutation.PriceUnitIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceUnitID, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.PriceUnit(); ok {
+	if value, ok := _u.mutation.PriceUnit(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
 	}
-	if sliuo.mutation.PriceUnitCleared() {
+	if _u.mutation.PriceUnitCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldPriceUnit, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.DisplayName(); ok {
+	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)
 	}
-	if sliuo.mutation.DisplayNameCleared() {
+	if _u.mutation.DisplayNameCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldDisplayName, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.Quantity(); ok {
+	if value, ok := _u.mutation.Quantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldQuantity, field.TypeOther, value)
 	}
-	if value, ok := sliuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := sliuo.mutation.BillingPeriod(); ok {
+	if value, ok := _u.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
 	}
-	if value, ok := sliuo.mutation.BillingPeriodCount(); ok {
+	if value, ok := _u.mutation.BillingPeriodCount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 	}
-	if value, ok := sliuo.mutation.AddedBillingPeriodCount(); ok {
+	if value, ok := _u.mutation.AddedBillingPeriodCount(); ok {
 		_spec.AddField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 	}
-	if sliuo.mutation.InvoiceCadenceCleared() {
+	if _u.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStartDate, field.TypeTime, value)
 	}
-	if sliuo.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := sliuo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEndDate, field.TypeTime, value)
 	}
-	if sliuo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEndDate, field.TypeTime)
 	}
-	if sliuo.mutation.SubscriptionPhaseIDCleared() {
+	if _u.mutation.SubscriptionPhaseIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString)
 	}
-	if sliuo.mutation.AddonAssociationIDCleared() {
+	if _u.mutation.AddonAssociationIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if sliuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := sliuo.mutation.CommitmentAmount(); ok {
+	if value, ok := _u.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther, value)
 	}
-	if sliuo.mutation.CommitmentAmountCleared() {
+	if _u.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther)
 	}
-	if value, ok := sliuo.mutation.CommitmentQuantity(); ok {
+	if value, ok := _u.mutation.CommitmentQuantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther, value)
 	}
-	if sliuo.mutation.CommitmentQuantityCleared() {
+	if _u.mutation.CommitmentQuantityCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther)
 	}
-	if value, ok := sliuo.mutation.CommitmentType(); ok {
+	if value, ok := _u.mutation.CommitmentType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentType, field.TypeString, value)
 	}
-	if sliuo.mutation.CommitmentTypeCleared() {
+	if _u.mutation.CommitmentTypeCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentType, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.CommitmentOverageFactor(); ok {
+	if value, ok := _u.mutation.CommitmentOverageFactor(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentOverageFactor, field.TypeOther, value)
 	}
-	if sliuo.mutation.CommitmentOverageFactorCleared() {
+	if _u.mutation.CommitmentOverageFactorCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentOverageFactor, field.TypeOther)
 	}
-	if value, ok := sliuo.mutation.CommitmentTrueUpEnabled(); ok {
+	if value, ok := _u.mutation.CommitmentTrueUpEnabled(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTrueUpEnabled, field.TypeBool, value)
 	}
-	if value, ok := sliuo.mutation.CommitmentWindowed(); ok {
+	if value, ok := _u.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
 	}
-	if value, ok := sliuo.mutation.CommitmentDuration(); ok {
+	if value, ok := _u.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
 	}
-	if sliuo.mutation.CommitmentDurationCleared() {
+	if _u.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
 	}
-	if value, ok := sliuo.mutation.CommitmentTimeBuckets(); ok {
+	if value, ok := _u.mutation.CommitmentTimeBuckets(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
 	}
-	if value, ok := sliuo.mutation.AppendedCommitmentTimeBuckets(); ok {
+	if value, ok := _u.mutation.AppendedCommitmentTimeBuckets(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, subscriptionlineitem.FieldCommitmentTimeBuckets, value)
 		})
 	}
-	if sliuo.mutation.CommitmentTimeBucketsCleared() {
+	if _u.mutation.CommitmentTimeBucketsCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON)
 	}
-	if sliuo.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1650,7 +1650,7 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := sliuo.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !sliuo.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1666,7 +1666,7 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := sliuo.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1682,10 +1682,10 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &SubscriptionLineItem{config: sliuo.config}
+	_node = &SubscriptionLineItem{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, sliuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionlineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1693,6 +1693,6 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		return nil, err
 	}
-	sliuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

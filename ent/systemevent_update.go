@@ -23,218 +23,218 @@ type SystemEventUpdate struct {
 }
 
 // Where appends a list predicates to the SystemEventUpdate builder.
-func (seu *SystemEventUpdate) Where(ps ...predicate.SystemEvent) *SystemEventUpdate {
-	seu.mutation.Where(ps...)
-	return seu
+func (_u *SystemEventUpdate) Where(ps ...predicate.SystemEvent) *SystemEventUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (seu *SystemEventUpdate) SetStatus(s string) *SystemEventUpdate {
-	seu.mutation.SetStatus(s)
-	return seu
+func (_u *SystemEventUpdate) SetStatus(v string) *SystemEventUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableStatus(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetStatus(*s)
+func (_u *SystemEventUpdate) SetNillableStatus(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return seu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (seu *SystemEventUpdate) SetUpdatedAt(t time.Time) *SystemEventUpdate {
-	seu.mutation.SetUpdatedAt(t)
-	return seu
+func (_u *SystemEventUpdate) SetUpdatedAt(v time.Time) *SystemEventUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (seu *SystemEventUpdate) SetUpdatedBy(s string) *SystemEventUpdate {
-	seu.mutation.SetUpdatedBy(s)
-	return seu
+func (_u *SystemEventUpdate) SetUpdatedBy(v string) *SystemEventUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableUpdatedBy(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetUpdatedBy(*s)
+func (_u *SystemEventUpdate) SetNillableUpdatedBy(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (seu *SystemEventUpdate) ClearUpdatedBy() *SystemEventUpdate {
-	seu.mutation.ClearUpdatedBy()
-	return seu
+func (_u *SystemEventUpdate) ClearUpdatedBy() *SystemEventUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEventName sets the "event_name" field.
-func (seu *SystemEventUpdate) SetEventName(s string) *SystemEventUpdate {
-	seu.mutation.SetEventName(s)
-	return seu
+func (_u *SystemEventUpdate) SetEventName(v string) *SystemEventUpdate {
+	_u.mutation.SetEventName(v)
+	return _u
 }
 
 // SetNillableEventName sets the "event_name" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableEventName(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetEventName(*s)
+func (_u *SystemEventUpdate) SetNillableEventName(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetEventName(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearEventName clears the value of the "event_name" field.
-func (seu *SystemEventUpdate) ClearEventName() *SystemEventUpdate {
-	seu.mutation.ClearEventName()
-	return seu
+func (_u *SystemEventUpdate) ClearEventName() *SystemEventUpdate {
+	_u.mutation.ClearEventName()
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (seu *SystemEventUpdate) SetEntityType(s string) *SystemEventUpdate {
-	seu.mutation.SetEntityType(s)
-	return seu
+func (_u *SystemEventUpdate) SetEntityType(v string) *SystemEventUpdate {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableEntityType(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetEntityType(*s)
+func (_u *SystemEventUpdate) SetNillableEntityType(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearEntityType clears the value of the "entity_type" field.
-func (seu *SystemEventUpdate) ClearEntityType() *SystemEventUpdate {
-	seu.mutation.ClearEntityType()
-	return seu
+func (_u *SystemEventUpdate) ClearEntityType() *SystemEventUpdate {
+	_u.mutation.ClearEntityType()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (seu *SystemEventUpdate) SetEntityID(s string) *SystemEventUpdate {
-	seu.mutation.SetEntityID(s)
-	return seu
+func (_u *SystemEventUpdate) SetEntityID(v string) *SystemEventUpdate {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableEntityID(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetEntityID(*s)
+func (_u *SystemEventUpdate) SetNillableEntityID(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (seu *SystemEventUpdate) ClearEntityID() *SystemEventUpdate {
-	seu.mutation.ClearEntityID()
-	return seu
+func (_u *SystemEventUpdate) ClearEntityID() *SystemEventUpdate {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetWebhookMessageID sets the "webhook_message_id" field.
-func (seu *SystemEventUpdate) SetWebhookMessageID(s string) *SystemEventUpdate {
-	seu.mutation.SetWebhookMessageID(s)
-	return seu
+func (_u *SystemEventUpdate) SetWebhookMessageID(v string) *SystemEventUpdate {
+	_u.mutation.SetWebhookMessageID(v)
+	return _u
 }
 
 // SetNillableWebhookMessageID sets the "webhook_message_id" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableWebhookMessageID(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetWebhookMessageID(*s)
+func (_u *SystemEventUpdate) SetNillableWebhookMessageID(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetWebhookMessageID(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearWebhookMessageID clears the value of the "webhook_message_id" field.
-func (seu *SystemEventUpdate) ClearWebhookMessageID() *SystemEventUpdate {
-	seu.mutation.ClearWebhookMessageID()
-	return seu
+func (_u *SystemEventUpdate) ClearWebhookMessageID() *SystemEventUpdate {
+	_u.mutation.ClearWebhookMessageID()
+	return _u
 }
 
 // SetPublishedAt sets the "published_at" field.
-func (seu *SystemEventUpdate) SetPublishedAt(t time.Time) *SystemEventUpdate {
-	seu.mutation.SetPublishedAt(t)
-	return seu
+func (_u *SystemEventUpdate) SetPublishedAt(v time.Time) *SystemEventUpdate {
+	_u.mutation.SetPublishedAt(v)
+	return _u
 }
 
 // SetNillablePublishedAt sets the "published_at" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillablePublishedAt(t *time.Time) *SystemEventUpdate {
-	if t != nil {
-		seu.SetPublishedAt(*t)
+func (_u *SystemEventUpdate) SetNillablePublishedAt(v *time.Time) *SystemEventUpdate {
+	if v != nil {
+		_u.SetPublishedAt(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearPublishedAt clears the value of the "published_at" field.
-func (seu *SystemEventUpdate) ClearPublishedAt() *SystemEventUpdate {
-	seu.mutation.ClearPublishedAt()
-	return seu
+func (_u *SystemEventUpdate) ClearPublishedAt() *SystemEventUpdate {
+	_u.mutation.ClearPublishedAt()
+	return _u
 }
 
 // SetPayload sets the "payload" field.
-func (seu *SystemEventUpdate) SetPayload(m map[string]interface{}) *SystemEventUpdate {
-	seu.mutation.SetPayload(m)
-	return seu
+func (_u *SystemEventUpdate) SetPayload(v map[string]interface{}) *SystemEventUpdate {
+	_u.mutation.SetPayload(v)
+	return _u
 }
 
 // ClearPayload clears the value of the "payload" field.
-func (seu *SystemEventUpdate) ClearPayload() *SystemEventUpdate {
-	seu.mutation.ClearPayload()
-	return seu
+func (_u *SystemEventUpdate) ClearPayload() *SystemEventUpdate {
+	_u.mutation.ClearPayload()
+	return _u
 }
 
 // SetFailureCount sets the "failure_count" field.
-func (seu *SystemEventUpdate) SetFailureCount(i int) *SystemEventUpdate {
-	seu.mutation.ResetFailureCount()
-	seu.mutation.SetFailureCount(i)
-	return seu
+func (_u *SystemEventUpdate) SetFailureCount(v int) *SystemEventUpdate {
+	_u.mutation.ResetFailureCount()
+	_u.mutation.SetFailureCount(v)
+	return _u
 }
 
 // SetNillableFailureCount sets the "failure_count" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableFailureCount(i *int) *SystemEventUpdate {
-	if i != nil {
-		seu.SetFailureCount(*i)
+func (_u *SystemEventUpdate) SetNillableFailureCount(v *int) *SystemEventUpdate {
+	if v != nil {
+		_u.SetFailureCount(*v)
 	}
-	return seu
+	return _u
 }
 
-// AddFailureCount adds i to the "failure_count" field.
-func (seu *SystemEventUpdate) AddFailureCount(i int) *SystemEventUpdate {
-	seu.mutation.AddFailureCount(i)
-	return seu
+// AddFailureCount adds value to the "failure_count" field.
+func (_u *SystemEventUpdate) AddFailureCount(v int) *SystemEventUpdate {
+	_u.mutation.AddFailureCount(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (seu *SystemEventUpdate) SetFailureReason(s string) *SystemEventUpdate {
-	seu.mutation.SetFailureReason(s)
-	return seu
+func (_u *SystemEventUpdate) SetFailureReason(v string) *SystemEventUpdate {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (seu *SystemEventUpdate) SetNillableFailureReason(s *string) *SystemEventUpdate {
-	if s != nil {
-		seu.SetFailureReason(*s)
+func (_u *SystemEventUpdate) SetNillableFailureReason(v *string) *SystemEventUpdate {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return seu
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (seu *SystemEventUpdate) ClearFailureReason() *SystemEventUpdate {
-	seu.mutation.ClearFailureReason()
-	return seu
+func (_u *SystemEventUpdate) ClearFailureReason() *SystemEventUpdate {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // Mutation returns the SystemEventMutation object of the builder.
-func (seu *SystemEventUpdate) Mutation() *SystemEventMutation {
-	return seu.mutation
+func (_u *SystemEventUpdate) Mutation() *SystemEventMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (seu *SystemEventUpdate) Save(ctx context.Context) (int, error) {
-	seu.defaults()
-	return withHooks(ctx, seu.sqlSave, seu.mutation, seu.hooks)
+func (_u *SystemEventUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (seu *SystemEventUpdate) SaveX(ctx context.Context) int {
-	affected, err := seu.Save(ctx)
+func (_u *SystemEventUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -242,102 +242,102 @@ func (seu *SystemEventUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (seu *SystemEventUpdate) Exec(ctx context.Context) error {
-	_, err := seu.Save(ctx)
+func (_u *SystemEventUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (seu *SystemEventUpdate) ExecX(ctx context.Context) {
-	if err := seu.Exec(ctx); err != nil {
+func (_u *SystemEventUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (seu *SystemEventUpdate) defaults() {
-	if _, ok := seu.mutation.UpdatedAt(); !ok {
+func (_u *SystemEventUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := systemevent.UpdateDefaultUpdatedAt()
-		seu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (seu *SystemEventUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *SystemEventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(systemevent.Table, systemevent.Columns, sqlgraph.NewFieldSpec(systemevent.FieldID, field.TypeString))
-	if ps := seu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := seu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(systemevent.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := seu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(systemevent.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if seu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(systemevent.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := seu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(systemevent.FieldUpdatedBy, field.TypeString, value)
 	}
-	if seu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(systemevent.FieldUpdatedBy, field.TypeString)
 	}
-	if seu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(systemevent.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := seu.mutation.EventName(); ok {
+	if value, ok := _u.mutation.EventName(); ok {
 		_spec.SetField(systemevent.FieldEventName, field.TypeString, value)
 	}
-	if seu.mutation.EventNameCleared() {
+	if _u.mutation.EventNameCleared() {
 		_spec.ClearField(systemevent.FieldEventName, field.TypeString)
 	}
-	if value, ok := seu.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(systemevent.FieldEntityType, field.TypeString, value)
 	}
-	if seu.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(systemevent.FieldEntityType, field.TypeString)
 	}
-	if value, ok := seu.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(systemevent.FieldEntityID, field.TypeString, value)
 	}
-	if seu.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(systemevent.FieldEntityID, field.TypeString)
 	}
-	if value, ok := seu.mutation.WebhookMessageID(); ok {
+	if value, ok := _u.mutation.WebhookMessageID(); ok {
 		_spec.SetField(systemevent.FieldWebhookMessageID, field.TypeString, value)
 	}
-	if seu.mutation.WebhookMessageIDCleared() {
+	if _u.mutation.WebhookMessageIDCleared() {
 		_spec.ClearField(systemevent.FieldWebhookMessageID, field.TypeString)
 	}
-	if value, ok := seu.mutation.PublishedAt(); ok {
+	if value, ok := _u.mutation.PublishedAt(); ok {
 		_spec.SetField(systemevent.FieldPublishedAt, field.TypeTime, value)
 	}
-	if seu.mutation.PublishedAtCleared() {
+	if _u.mutation.PublishedAtCleared() {
 		_spec.ClearField(systemevent.FieldPublishedAt, field.TypeTime)
 	}
-	if value, ok := seu.mutation.Payload(); ok {
+	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(systemevent.FieldPayload, field.TypeJSON, value)
 	}
-	if seu.mutation.PayloadCleared() {
+	if _u.mutation.PayloadCleared() {
 		_spec.ClearField(systemevent.FieldPayload, field.TypeJSON)
 	}
-	if value, ok := seu.mutation.FailureCount(); ok {
+	if value, ok := _u.mutation.FailureCount(); ok {
 		_spec.SetField(systemevent.FieldFailureCount, field.TypeInt, value)
 	}
-	if value, ok := seu.mutation.AddedFailureCount(); ok {
+	if value, ok := _u.mutation.AddedFailureCount(); ok {
 		_spec.AddField(systemevent.FieldFailureCount, field.TypeInt, value)
 	}
-	if value, ok := seu.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(systemevent.FieldFailureReason, field.TypeString, value)
 	}
-	if seu.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(systemevent.FieldFailureReason, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, seu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{systemevent.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -345,8 +345,8 @@ func (seu *SystemEventUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	seu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SystemEventUpdateOne is the builder for updating a single SystemEvent entity.
@@ -358,225 +358,225 @@ type SystemEventUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (seuo *SystemEventUpdateOne) SetStatus(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetStatus(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetStatus(v string) *SystemEventUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableStatus(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetStatus(*s)
+func (_u *SystemEventUpdateOne) SetNillableStatus(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return seuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (seuo *SystemEventUpdateOne) SetUpdatedAt(t time.Time) *SystemEventUpdateOne {
-	seuo.mutation.SetUpdatedAt(t)
-	return seuo
+func (_u *SystemEventUpdateOne) SetUpdatedAt(v time.Time) *SystemEventUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (seuo *SystemEventUpdateOne) SetUpdatedBy(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetUpdatedBy(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetUpdatedBy(v string) *SystemEventUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableUpdatedBy(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetUpdatedBy(*s)
+func (_u *SystemEventUpdateOne) SetNillableUpdatedBy(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (seuo *SystemEventUpdateOne) ClearUpdatedBy() *SystemEventUpdateOne {
-	seuo.mutation.ClearUpdatedBy()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearUpdatedBy() *SystemEventUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEventName sets the "event_name" field.
-func (seuo *SystemEventUpdateOne) SetEventName(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetEventName(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetEventName(v string) *SystemEventUpdateOne {
+	_u.mutation.SetEventName(v)
+	return _u
 }
 
 // SetNillableEventName sets the "event_name" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableEventName(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetEventName(*s)
+func (_u *SystemEventUpdateOne) SetNillableEventName(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetEventName(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearEventName clears the value of the "event_name" field.
-func (seuo *SystemEventUpdateOne) ClearEventName() *SystemEventUpdateOne {
-	seuo.mutation.ClearEventName()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearEventName() *SystemEventUpdateOne {
+	_u.mutation.ClearEventName()
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (seuo *SystemEventUpdateOne) SetEntityType(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetEntityType(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetEntityType(v string) *SystemEventUpdateOne {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableEntityType(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetEntityType(*s)
+func (_u *SystemEventUpdateOne) SetNillableEntityType(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearEntityType clears the value of the "entity_type" field.
-func (seuo *SystemEventUpdateOne) ClearEntityType() *SystemEventUpdateOne {
-	seuo.mutation.ClearEntityType()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearEntityType() *SystemEventUpdateOne {
+	_u.mutation.ClearEntityType()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (seuo *SystemEventUpdateOne) SetEntityID(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetEntityID(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetEntityID(v string) *SystemEventUpdateOne {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableEntityID(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetEntityID(*s)
+func (_u *SystemEventUpdateOne) SetNillableEntityID(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (seuo *SystemEventUpdateOne) ClearEntityID() *SystemEventUpdateOne {
-	seuo.mutation.ClearEntityID()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearEntityID() *SystemEventUpdateOne {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetWebhookMessageID sets the "webhook_message_id" field.
-func (seuo *SystemEventUpdateOne) SetWebhookMessageID(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetWebhookMessageID(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetWebhookMessageID(v string) *SystemEventUpdateOne {
+	_u.mutation.SetWebhookMessageID(v)
+	return _u
 }
 
 // SetNillableWebhookMessageID sets the "webhook_message_id" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableWebhookMessageID(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetWebhookMessageID(*s)
+func (_u *SystemEventUpdateOne) SetNillableWebhookMessageID(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetWebhookMessageID(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearWebhookMessageID clears the value of the "webhook_message_id" field.
-func (seuo *SystemEventUpdateOne) ClearWebhookMessageID() *SystemEventUpdateOne {
-	seuo.mutation.ClearWebhookMessageID()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearWebhookMessageID() *SystemEventUpdateOne {
+	_u.mutation.ClearWebhookMessageID()
+	return _u
 }
 
 // SetPublishedAt sets the "published_at" field.
-func (seuo *SystemEventUpdateOne) SetPublishedAt(t time.Time) *SystemEventUpdateOne {
-	seuo.mutation.SetPublishedAt(t)
-	return seuo
+func (_u *SystemEventUpdateOne) SetPublishedAt(v time.Time) *SystemEventUpdateOne {
+	_u.mutation.SetPublishedAt(v)
+	return _u
 }
 
 // SetNillablePublishedAt sets the "published_at" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillablePublishedAt(t *time.Time) *SystemEventUpdateOne {
-	if t != nil {
-		seuo.SetPublishedAt(*t)
+func (_u *SystemEventUpdateOne) SetNillablePublishedAt(v *time.Time) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetPublishedAt(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearPublishedAt clears the value of the "published_at" field.
-func (seuo *SystemEventUpdateOne) ClearPublishedAt() *SystemEventUpdateOne {
-	seuo.mutation.ClearPublishedAt()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearPublishedAt() *SystemEventUpdateOne {
+	_u.mutation.ClearPublishedAt()
+	return _u
 }
 
 // SetPayload sets the "payload" field.
-func (seuo *SystemEventUpdateOne) SetPayload(m map[string]interface{}) *SystemEventUpdateOne {
-	seuo.mutation.SetPayload(m)
-	return seuo
+func (_u *SystemEventUpdateOne) SetPayload(v map[string]interface{}) *SystemEventUpdateOne {
+	_u.mutation.SetPayload(v)
+	return _u
 }
 
 // ClearPayload clears the value of the "payload" field.
-func (seuo *SystemEventUpdateOne) ClearPayload() *SystemEventUpdateOne {
-	seuo.mutation.ClearPayload()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearPayload() *SystemEventUpdateOne {
+	_u.mutation.ClearPayload()
+	return _u
 }
 
 // SetFailureCount sets the "failure_count" field.
-func (seuo *SystemEventUpdateOne) SetFailureCount(i int) *SystemEventUpdateOne {
-	seuo.mutation.ResetFailureCount()
-	seuo.mutation.SetFailureCount(i)
-	return seuo
+func (_u *SystemEventUpdateOne) SetFailureCount(v int) *SystemEventUpdateOne {
+	_u.mutation.ResetFailureCount()
+	_u.mutation.SetFailureCount(v)
+	return _u
 }
 
 // SetNillableFailureCount sets the "failure_count" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableFailureCount(i *int) *SystemEventUpdateOne {
-	if i != nil {
-		seuo.SetFailureCount(*i)
+func (_u *SystemEventUpdateOne) SetNillableFailureCount(v *int) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetFailureCount(*v)
 	}
-	return seuo
+	return _u
 }
 
-// AddFailureCount adds i to the "failure_count" field.
-func (seuo *SystemEventUpdateOne) AddFailureCount(i int) *SystemEventUpdateOne {
-	seuo.mutation.AddFailureCount(i)
-	return seuo
+// AddFailureCount adds value to the "failure_count" field.
+func (_u *SystemEventUpdateOne) AddFailureCount(v int) *SystemEventUpdateOne {
+	_u.mutation.AddFailureCount(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (seuo *SystemEventUpdateOne) SetFailureReason(s string) *SystemEventUpdateOne {
-	seuo.mutation.SetFailureReason(s)
-	return seuo
+func (_u *SystemEventUpdateOne) SetFailureReason(v string) *SystemEventUpdateOne {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (seuo *SystemEventUpdateOne) SetNillableFailureReason(s *string) *SystemEventUpdateOne {
-	if s != nil {
-		seuo.SetFailureReason(*s)
+func (_u *SystemEventUpdateOne) SetNillableFailureReason(v *string) *SystemEventUpdateOne {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return seuo
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (seuo *SystemEventUpdateOne) ClearFailureReason() *SystemEventUpdateOne {
-	seuo.mutation.ClearFailureReason()
-	return seuo
+func (_u *SystemEventUpdateOne) ClearFailureReason() *SystemEventUpdateOne {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // Mutation returns the SystemEventMutation object of the builder.
-func (seuo *SystemEventUpdateOne) Mutation() *SystemEventMutation {
-	return seuo.mutation
+func (_u *SystemEventUpdateOne) Mutation() *SystemEventMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the SystemEventUpdate builder.
-func (seuo *SystemEventUpdateOne) Where(ps ...predicate.SystemEvent) *SystemEventUpdateOne {
-	seuo.mutation.Where(ps...)
-	return seuo
+func (_u *SystemEventUpdateOne) Where(ps ...predicate.SystemEvent) *SystemEventUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (seuo *SystemEventUpdateOne) Select(field string, fields ...string) *SystemEventUpdateOne {
-	seuo.fields = append([]string{field}, fields...)
-	return seuo
+func (_u *SystemEventUpdateOne) Select(field string, fields ...string) *SystemEventUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated SystemEvent entity.
-func (seuo *SystemEventUpdateOne) Save(ctx context.Context) (*SystemEvent, error) {
-	seuo.defaults()
-	return withHooks(ctx, seuo.sqlSave, seuo.mutation, seuo.hooks)
+func (_u *SystemEventUpdateOne) Save(ctx context.Context) (*SystemEvent, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (seuo *SystemEventUpdateOne) SaveX(ctx context.Context) *SystemEvent {
-	node, err := seuo.Save(ctx)
+func (_u *SystemEventUpdateOne) SaveX(ctx context.Context) *SystemEvent {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -584,34 +584,34 @@ func (seuo *SystemEventUpdateOne) SaveX(ctx context.Context) *SystemEvent {
 }
 
 // Exec executes the query on the entity.
-func (seuo *SystemEventUpdateOne) Exec(ctx context.Context) error {
-	_, err := seuo.Save(ctx)
+func (_u *SystemEventUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (seuo *SystemEventUpdateOne) ExecX(ctx context.Context) {
-	if err := seuo.Exec(ctx); err != nil {
+func (_u *SystemEventUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (seuo *SystemEventUpdateOne) defaults() {
-	if _, ok := seuo.mutation.UpdatedAt(); !ok {
+func (_u *SystemEventUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := systemevent.UpdateDefaultUpdatedAt()
-		seuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (seuo *SystemEventUpdateOne) sqlSave(ctx context.Context) (_node *SystemEvent, err error) {
+func (_u *SystemEventUpdateOne) sqlSave(ctx context.Context) (_node *SystemEvent, err error) {
 	_spec := sqlgraph.NewUpdateSpec(systemevent.Table, systemevent.Columns, sqlgraph.NewFieldSpec(systemevent.FieldID, field.TypeString))
-	id, ok := seuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "SystemEvent.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := seuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, systemevent.FieldID)
 		for _, f := range fields {
@@ -623,83 +623,83 @@ func (seuo *SystemEventUpdateOne) sqlSave(ctx context.Context) (_node *SystemEve
 			}
 		}
 	}
-	if ps := seuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := seuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(systemevent.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := seuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(systemevent.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if seuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(systemevent.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := seuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(systemevent.FieldUpdatedBy, field.TypeString, value)
 	}
-	if seuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(systemevent.FieldUpdatedBy, field.TypeString)
 	}
-	if seuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(systemevent.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := seuo.mutation.EventName(); ok {
+	if value, ok := _u.mutation.EventName(); ok {
 		_spec.SetField(systemevent.FieldEventName, field.TypeString, value)
 	}
-	if seuo.mutation.EventNameCleared() {
+	if _u.mutation.EventNameCleared() {
 		_spec.ClearField(systemevent.FieldEventName, field.TypeString)
 	}
-	if value, ok := seuo.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(systemevent.FieldEntityType, field.TypeString, value)
 	}
-	if seuo.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(systemevent.FieldEntityType, field.TypeString)
 	}
-	if value, ok := seuo.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(systemevent.FieldEntityID, field.TypeString, value)
 	}
-	if seuo.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(systemevent.FieldEntityID, field.TypeString)
 	}
-	if value, ok := seuo.mutation.WebhookMessageID(); ok {
+	if value, ok := _u.mutation.WebhookMessageID(); ok {
 		_spec.SetField(systemevent.FieldWebhookMessageID, field.TypeString, value)
 	}
-	if seuo.mutation.WebhookMessageIDCleared() {
+	if _u.mutation.WebhookMessageIDCleared() {
 		_spec.ClearField(systemevent.FieldWebhookMessageID, field.TypeString)
 	}
-	if value, ok := seuo.mutation.PublishedAt(); ok {
+	if value, ok := _u.mutation.PublishedAt(); ok {
 		_spec.SetField(systemevent.FieldPublishedAt, field.TypeTime, value)
 	}
-	if seuo.mutation.PublishedAtCleared() {
+	if _u.mutation.PublishedAtCleared() {
 		_spec.ClearField(systemevent.FieldPublishedAt, field.TypeTime)
 	}
-	if value, ok := seuo.mutation.Payload(); ok {
+	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(systemevent.FieldPayload, field.TypeJSON, value)
 	}
-	if seuo.mutation.PayloadCleared() {
+	if _u.mutation.PayloadCleared() {
 		_spec.ClearField(systemevent.FieldPayload, field.TypeJSON)
 	}
-	if value, ok := seuo.mutation.FailureCount(); ok {
+	if value, ok := _u.mutation.FailureCount(); ok {
 		_spec.SetField(systemevent.FieldFailureCount, field.TypeInt, value)
 	}
-	if value, ok := seuo.mutation.AddedFailureCount(); ok {
+	if value, ok := _u.mutation.AddedFailureCount(); ok {
 		_spec.AddField(systemevent.FieldFailureCount, field.TypeInt, value)
 	}
-	if value, ok := seuo.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(systemevent.FieldFailureReason, field.TypeString, value)
 	}
-	if seuo.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(systemevent.FieldFailureReason, field.TypeString)
 	}
-	_node = &SystemEvent{config: seuo.config}
+	_node = &SystemEvent{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, seuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{systemevent.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -707,6 +707,6 @@ func (seuo *SystemEventUpdateOne) sqlSave(ctx context.Context) (_node *SystemEve
 		}
 		return nil, err
 	}
-	seuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

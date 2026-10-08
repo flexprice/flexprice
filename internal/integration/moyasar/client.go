@@ -58,7 +58,7 @@ func NewClient(
 		logger:            logger,
 		httpClient: &http.Client{
 			Timeout:   30 * time.Second,
-			Transport: httpclient.OtelTransport(nil),
+			Transport: httpclient.ProviderTransport(nil, logger, string(types.SecretProviderMoyasar)),
 		},
 	}
 }
@@ -176,77 +176,6 @@ func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, err
 	return conn, nil
 }
 
-// sanitizeRequestBody removes sensitive fields from request body for logging
-// This prevents PCI-DSS violations by not logging card numbers, CVC, cardholder names, etc.
-func sanitizeRequestBody(bodyBytes []byte) string {
-	var body map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &body); err != nil {
-		// If unmarshaling fails, return redacted message
-		return "[REDACTED: invalid JSON]"
-	}
-
-	// Sanitize source object if present (contains card details)
-	if source, ok := body["source"].(map[string]interface{}); ok {
-		// Remove sensitive card fields
-		if _, exists := source["number"]; exists {
-			source["number"] = "[REDACTED]"
-		}
-		if _, exists := source["cvc"]; exists {
-			source["cvc"] = "[REDACTED]"
-		}
-		if _, exists := source["name"]; exists {
-			source["name"] = "[REDACTED]"
-		}
-		// Keep token, type, and other non-sensitive fields
-	}
-
-	// Sanitize any other sensitive fields at top level
-	sanitized, err := json.Marshal(body)
-	if err != nil {
-		return "[REDACTED: failed to sanitize]"
-	}
-
-	return string(sanitized)
-}
-
-// sanitizeResponseBody removes sensitive fields from response body for logging
-func sanitizeResponseBody(bodyBytes []byte) string {
-	var body map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &body); err != nil {
-		// If unmarshaling fails, return redacted message
-		return "[REDACTED: invalid JSON]"
-	}
-
-	// Sanitize source object if present
-	if source, ok := body["source"].(map[string]interface{}); ok {
-		// Remove sensitive card fields
-		if _, exists := source["number"]; exists {
-			source["number"] = "[REDACTED]"
-		}
-		if _, exists := source["cvc"]; exists {
-			source["cvc"] = "[REDACTED]"
-		}
-		if _, exists := source["name"]; exists {
-			source["name"] = "[REDACTED]"
-		}
-	}
-
-	// Redact payment URLs if present
-	if url, ok := body["url"].(string); ok && url != "" {
-		body["url"] = "[REDACTED]"
-	}
-	if transactionURL, ok := body["transaction_url"].(string); ok && transactionURL != "" {
-		body["transaction_url"] = "[REDACTED]"
-	}
-
-	sanitized, err := json.Marshal(body)
-	if err != nil {
-		return "[REDACTED: failed to sanitize]"
-	}
-
-	return string(sanitized)
-}
-
 // getSignaturePreview returns a safe preview of the signature for logging
 func getSignaturePreview(signature string) string {
 	if len(signature) == 0 {
@@ -284,11 +213,6 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	httpReq.SetBasicAuth(config.SecretKey, "")
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Log the request for debugging (sanitized to remove sensitive card data)
-	c.logger.Info(ctx, "sending request to Moyasar",
-		"url", BaseURL+"/payments",
-		"request_body", sanitizeRequestBody(bodyBytes))
-
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -304,11 +228,6 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	if err != nil {
 		return nil, ierr.NewError("failed to read Moyasar response").Mark(ierr.ErrInternal)
 	}
-
-	// Log response for debugging (sanitized to remove sensitive data)
-	c.logger.Info(ctx, "received response from Moyasar",
-		"status_code", resp.StatusCode,
-		"response_body", sanitizeResponseBody(respBody))
 
 	// Handle non-2xx responses
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -367,11 +286,6 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	httpReq.SetBasicAuth(config.SecretKey, "")
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Log the request for debugging (sanitized to remove sensitive data)
-	c.logger.Info(ctx, "sending invoice request to Moyasar",
-		"url", BaseURL+"/invoices",
-		"request_body", sanitizeRequestBody(bodyBytes))
-
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -387,11 +301,6 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	if err != nil {
 		return nil, ierr.NewError("failed to read Moyasar response").Mark(ierr.ErrInternal)
 	}
-
-	// Log response for debugging (sanitized to remove sensitive data)
-	c.logger.Info(ctx, "received invoice response from Moyasar",
-		"status_code", resp.StatusCode,
-		"response_body", sanitizeResponseBody(respBody))
 
 	// Handle non-2xx responses
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

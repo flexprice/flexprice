@@ -118,15 +118,15 @@ func TestOverage(t *testing.T) {
 func TestIsExhausted(t *testing.T) {
 	g := baseGrant()
 	g.Usage = decimal.NewFromInt(99)
-	if g.IsExhausted() {
+	if g.IsExhausted(g.Usage) {
 		t.Fatalf("99/100 should not be exhausted")
 	}
 	g.Usage = decimal.NewFromInt(100)
-	if !g.IsExhausted() {
+	if !g.IsExhausted(g.Usage) {
 		t.Fatalf("100/100 should be exhausted")
 	}
 	g.Usage = decimal.NewFromInt(101)
-	if !g.IsExhausted() {
+	if !g.IsExhausted(g.Usage) {
 		t.Fatalf("101/100 should be exhausted")
 	}
 }

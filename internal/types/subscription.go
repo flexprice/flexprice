@@ -147,6 +147,23 @@ func (p PaymentBehavior) String() string {
 	return string(p)
 }
 
+// CancellationReasonPaymentOverdue is set by auto-cancellation when an invoice stays unpaid past due date + grace.
+const CancellationReasonPaymentOverdue = "payment_overdue"
+
+// IncompletePaymentBehaviors returns the behaviors that gate a subscription on invoice payment.
+func IncompletePaymentBehaviors() []PaymentBehavior {
+	return []PaymentBehavior{
+		PaymentBehaviorAllowIncomplete,
+		PaymentBehaviorDefaultIncomplete,
+		PaymentBehaviorErrorIfIncomplete,
+	}
+}
+
+// IsIncompleteType reports whether the behavior gates the subscription on invoice payment.
+func (p PaymentBehavior) IsIncompleteType() bool {
+	return lo.Contains(IncompletePaymentBehaviors(), p)
+}
+
 func (p PaymentBehavior) Validate() error {
 	allowed := []PaymentBehavior{
 		PaymentBehaviorAllowIncomplete,

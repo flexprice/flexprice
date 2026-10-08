@@ -31,44 +31,44 @@ type CreditNoteQuery struct {
 }
 
 // Where adds a new predicate for the CreditNoteQuery builder.
-func (cnq *CreditNoteQuery) Where(ps ...predicate.CreditNote) *CreditNoteQuery {
-	cnq.predicates = append(cnq.predicates, ps...)
-	return cnq
+func (_q *CreditNoteQuery) Where(ps ...predicate.CreditNote) *CreditNoteQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (cnq *CreditNoteQuery) Limit(limit int) *CreditNoteQuery {
-	cnq.ctx.Limit = &limit
-	return cnq
+func (_q *CreditNoteQuery) Limit(limit int) *CreditNoteQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (cnq *CreditNoteQuery) Offset(offset int) *CreditNoteQuery {
-	cnq.ctx.Offset = &offset
-	return cnq
+func (_q *CreditNoteQuery) Offset(offset int) *CreditNoteQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (cnq *CreditNoteQuery) Unique(unique bool) *CreditNoteQuery {
-	cnq.ctx.Unique = &unique
-	return cnq
+func (_q *CreditNoteQuery) Unique(unique bool) *CreditNoteQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (cnq *CreditNoteQuery) Order(o ...creditnote.OrderOption) *CreditNoteQuery {
-	cnq.order = append(cnq.order, o...)
-	return cnq
+func (_q *CreditNoteQuery) Order(o ...creditnote.OrderOption) *CreditNoteQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryLineItems chains the current query on the "line_items" edge.
-func (cnq *CreditNoteQuery) QueryLineItems() *CreditNoteLineItemQuery {
-	query := (&CreditNoteLineItemClient{config: cnq.config}).Query()
+func (_q *CreditNoteQuery) QueryLineItems() *CreditNoteLineItemQuery {
+	query := (&CreditNoteLineItemClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cnq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := cnq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (cnq *CreditNoteQuery) QueryLineItems() *CreditNoteLineItemQuery {
 			sqlgraph.To(creditnotelineitem.Table, creditnotelineitem.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, creditnote.LineItemsTable, creditnote.LineItemsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(cnq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -85,8 +85,8 @@ func (cnq *CreditNoteQuery) QueryLineItems() *CreditNoteLineItemQuery {
 
 // First returns the first CreditNote entity from the query.
 // Returns a *NotFoundError when no CreditNote was found.
-func (cnq *CreditNoteQuery) First(ctx context.Context) (*CreditNote, error) {
-	nodes, err := cnq.Limit(1).All(setContextOp(ctx, cnq.ctx, ent.OpQueryFirst))
+func (_q *CreditNoteQuery) First(ctx context.Context) (*CreditNote, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +97,8 @@ func (cnq *CreditNoteQuery) First(ctx context.Context) (*CreditNote, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (cnq *CreditNoteQuery) FirstX(ctx context.Context) *CreditNote {
-	node, err := cnq.First(ctx)
+func (_q *CreditNoteQuery) FirstX(ctx context.Context) *CreditNote {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -107,9 +107,9 @@ func (cnq *CreditNoteQuery) FirstX(ctx context.Context) *CreditNote {
 
 // FirstID returns the first CreditNote ID from the query.
 // Returns a *NotFoundError when no CreditNote ID was found.
-func (cnq *CreditNoteQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *CreditNoteQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cnq.Limit(1).IDs(setContextOp(ctx, cnq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -120,8 +120,8 @@ func (cnq *CreditNoteQuery) FirstID(ctx context.Context) (id string, err error) 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (cnq *CreditNoteQuery) FirstIDX(ctx context.Context) string {
-	id, err := cnq.FirstID(ctx)
+func (_q *CreditNoteQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -131,8 +131,8 @@ func (cnq *CreditNoteQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single CreditNote entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one CreditNote entity is found.
 // Returns a *NotFoundError when no CreditNote entities are found.
-func (cnq *CreditNoteQuery) Only(ctx context.Context) (*CreditNote, error) {
-	nodes, err := cnq.Limit(2).All(setContextOp(ctx, cnq.ctx, ent.OpQueryOnly))
+func (_q *CreditNoteQuery) Only(ctx context.Context) (*CreditNote, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +147,8 @@ func (cnq *CreditNoteQuery) Only(ctx context.Context) (*CreditNote, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (cnq *CreditNoteQuery) OnlyX(ctx context.Context) *CreditNote {
-	node, err := cnq.Only(ctx)
+func (_q *CreditNoteQuery) OnlyX(ctx context.Context) *CreditNote {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -158,9 +158,9 @@ func (cnq *CreditNoteQuery) OnlyX(ctx context.Context) *CreditNote {
 // OnlyID is like Only, but returns the only CreditNote ID in the query.
 // Returns a *NotSingularError when more than one CreditNote ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (cnq *CreditNoteQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *CreditNoteQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cnq.Limit(2).IDs(setContextOp(ctx, cnq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -175,8 +175,8 @@ func (cnq *CreditNoteQuery) OnlyID(ctx context.Context) (id string, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (cnq *CreditNoteQuery) OnlyIDX(ctx context.Context) string {
-	id, err := cnq.OnlyID(ctx)
+func (_q *CreditNoteQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -184,18 +184,18 @@ func (cnq *CreditNoteQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of CreditNotes.
-func (cnq *CreditNoteQuery) All(ctx context.Context) ([]*CreditNote, error) {
-	ctx = setContextOp(ctx, cnq.ctx, ent.OpQueryAll)
-	if err := cnq.prepareQuery(ctx); err != nil {
+func (_q *CreditNoteQuery) All(ctx context.Context) ([]*CreditNote, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*CreditNote, *CreditNoteQuery]()
-	return withInterceptors[[]*CreditNote](ctx, cnq, qr, cnq.inters)
+	return withInterceptors[[]*CreditNote](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (cnq *CreditNoteQuery) AllX(ctx context.Context) []*CreditNote {
-	nodes, err := cnq.All(ctx)
+func (_q *CreditNoteQuery) AllX(ctx context.Context) []*CreditNote {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -203,20 +203,20 @@ func (cnq *CreditNoteQuery) AllX(ctx context.Context) []*CreditNote {
 }
 
 // IDs executes the query and returns a list of CreditNote IDs.
-func (cnq *CreditNoteQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if cnq.ctx.Unique == nil && cnq.path != nil {
-		cnq.Unique(true)
+func (_q *CreditNoteQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, cnq.ctx, ent.OpQueryIDs)
-	if err = cnq.Select(creditnote.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(creditnote.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (cnq *CreditNoteQuery) IDsX(ctx context.Context) []string {
-	ids, err := cnq.IDs(ctx)
+func (_q *CreditNoteQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -224,17 +224,17 @@ func (cnq *CreditNoteQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (cnq *CreditNoteQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, cnq.ctx, ent.OpQueryCount)
-	if err := cnq.prepareQuery(ctx); err != nil {
+func (_q *CreditNoteQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, cnq, querierCount[*CreditNoteQuery](), cnq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*CreditNoteQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (cnq *CreditNoteQuery) CountX(ctx context.Context) int {
-	count, err := cnq.Count(ctx)
+func (_q *CreditNoteQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -242,9 +242,9 @@ func (cnq *CreditNoteQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (cnq *CreditNoteQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, cnq.ctx, ent.OpQueryExist)
-	switch _, err := cnq.FirstID(ctx); {
+func (_q *CreditNoteQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -255,8 +255,8 @@ func (cnq *CreditNoteQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (cnq *CreditNoteQuery) ExistX(ctx context.Context) bool {
-	exist, err := cnq.Exist(ctx)
+func (_q *CreditNoteQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -265,32 +265,32 @@ func (cnq *CreditNoteQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the CreditNoteQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (cnq *CreditNoteQuery) Clone() *CreditNoteQuery {
-	if cnq == nil {
+func (_q *CreditNoteQuery) Clone() *CreditNoteQuery {
+	if _q == nil {
 		return nil
 	}
 	return &CreditNoteQuery{
-		config:        cnq.config,
-		ctx:           cnq.ctx.Clone(),
-		order:         append([]creditnote.OrderOption{}, cnq.order...),
-		inters:        append([]Interceptor{}, cnq.inters...),
-		predicates:    append([]predicate.CreditNote{}, cnq.predicates...),
-		withLineItems: cnq.withLineItems.Clone(),
+		config:        _q.config,
+		ctx:           _q.ctx.Clone(),
+		order:         append([]creditnote.OrderOption{}, _q.order...),
+		inters:        append([]Interceptor{}, _q.inters...),
+		predicates:    append([]predicate.CreditNote{}, _q.predicates...),
+		withLineItems: _q.withLineItems.Clone(),
 		// clone intermediate query.
-		sql:  cnq.sql.Clone(),
-		path: cnq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithLineItems tells the query-builder to eager-load the nodes that are connected to
 // the "line_items" edge. The optional arguments are used to configure the query builder of the edge.
-func (cnq *CreditNoteQuery) WithLineItems(opts ...func(*CreditNoteLineItemQuery)) *CreditNoteQuery {
-	query := (&CreditNoteLineItemClient{config: cnq.config}).Query()
+func (_q *CreditNoteQuery) WithLineItems(opts ...func(*CreditNoteLineItemQuery)) *CreditNoteQuery {
+	query := (&CreditNoteLineItemClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	cnq.withLineItems = query
-	return cnq
+	_q.withLineItems = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -307,10 +307,10 @@ func (cnq *CreditNoteQuery) WithLineItems(opts ...func(*CreditNoteLineItemQuery)
 //		GroupBy(creditnote.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (cnq *CreditNoteQuery) GroupBy(field string, fields ...string) *CreditNoteGroupBy {
-	cnq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &CreditNoteGroupBy{build: cnq}
-	grbuild.flds = &cnq.ctx.Fields
+func (_q *CreditNoteQuery) GroupBy(field string, fields ...string) *CreditNoteGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &CreditNoteGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = creditnote.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -328,58 +328,58 @@ func (cnq *CreditNoteQuery) GroupBy(field string, fields ...string) *CreditNoteG
 //	client.CreditNote.Query().
 //		Select(creditnote.FieldTenantID).
 //		Scan(ctx, &v)
-func (cnq *CreditNoteQuery) Select(fields ...string) *CreditNoteSelect {
-	cnq.ctx.Fields = append(cnq.ctx.Fields, fields...)
-	sbuild := &CreditNoteSelect{CreditNoteQuery: cnq}
+func (_q *CreditNoteQuery) Select(fields ...string) *CreditNoteSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &CreditNoteSelect{CreditNoteQuery: _q}
 	sbuild.label = creditnote.Label
-	sbuild.flds, sbuild.scan = &cnq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a CreditNoteSelect configured with the given aggregations.
-func (cnq *CreditNoteQuery) Aggregate(fns ...AggregateFunc) *CreditNoteSelect {
-	return cnq.Select().Aggregate(fns...)
+func (_q *CreditNoteQuery) Aggregate(fns ...AggregateFunc) *CreditNoteSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (cnq *CreditNoteQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range cnq.inters {
+func (_q *CreditNoteQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, cnq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range cnq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !creditnote.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if cnq.path != nil {
-		prev, err := cnq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		cnq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (cnq *CreditNoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CreditNote, error) {
+func (_q *CreditNoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CreditNote, error) {
 	var (
 		nodes       = []*CreditNote{}
-		_spec       = cnq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
-			cnq.withLineItems != nil,
+			_q.withLineItems != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*CreditNote).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &CreditNote{config: cnq.config}
+		node := &CreditNote{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -387,14 +387,14 @@ func (cnq *CreditNoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, cnq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := cnq.withLineItems; query != nil {
-		if err := cnq.loadLineItems(ctx, query, nodes,
+	if query := _q.withLineItems; query != nil {
+		if err := _q.loadLineItems(ctx, query, nodes,
 			func(n *CreditNote) { n.Edges.LineItems = []*CreditNoteLineItem{} },
 			func(n *CreditNote, e *CreditNoteLineItem) { n.Edges.LineItems = append(n.Edges.LineItems, e) }); err != nil {
 			return nil, err
@@ -403,7 +403,7 @@ func (cnq *CreditNoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	return nodes, nil
 }
 
-func (cnq *CreditNoteQuery) loadLineItems(ctx context.Context, query *CreditNoteLineItemQuery, nodes []*CreditNote, init func(*CreditNote), assign func(*CreditNote, *CreditNoteLineItem)) error {
+func (_q *CreditNoteQuery) loadLineItems(ctx context.Context, query *CreditNoteLineItemQuery, nodes []*CreditNote, init func(*CreditNote), assign func(*CreditNote, *CreditNoteLineItem)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*CreditNote)
 	for i := range nodes {
@@ -434,24 +434,24 @@ func (cnq *CreditNoteQuery) loadLineItems(ctx context.Context, query *CreditNote
 	return nil
 }
 
-func (cnq *CreditNoteQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := cnq.querySpec()
-	_spec.Node.Columns = cnq.ctx.Fields
-	if len(cnq.ctx.Fields) > 0 {
-		_spec.Unique = cnq.ctx.Unique != nil && *cnq.ctx.Unique
+func (_q *CreditNoteQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, cnq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (cnq *CreditNoteQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *CreditNoteQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(creditnote.Table, creditnote.Columns, sqlgraph.NewFieldSpec(creditnote.FieldID, field.TypeString))
-	_spec.From = cnq.sql
-	if unique := cnq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if cnq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := cnq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditnote.FieldID)
 		for i := range fields {
@@ -460,20 +460,20 @@ func (cnq *CreditNoteQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := cnq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := cnq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := cnq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := cnq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -483,33 +483,33 @@ func (cnq *CreditNoteQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (cnq *CreditNoteQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(cnq.driver.Dialect())
+func (_q *CreditNoteQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(creditnote.Table)
-	columns := cnq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = creditnote.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if cnq.sql != nil {
-		selector = cnq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if cnq.ctx.Unique != nil && *cnq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range cnq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range cnq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := cnq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := cnq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -522,41 +522,41 @@ type CreditNoteGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (cngb *CreditNoteGroupBy) Aggregate(fns ...AggregateFunc) *CreditNoteGroupBy {
-	cngb.fns = append(cngb.fns, fns...)
-	return cngb
+func (_g *CreditNoteGroupBy) Aggregate(fns ...AggregateFunc) *CreditNoteGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cngb *CreditNoteGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cngb.build.ctx, ent.OpQueryGroupBy)
-	if err := cngb.build.prepareQuery(ctx); err != nil {
+func (_g *CreditNoteGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CreditNoteQuery, *CreditNoteGroupBy](ctx, cngb.build, cngb, cngb.build.inters, v)
+	return scanWithInterceptors[*CreditNoteQuery, *CreditNoteGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (cngb *CreditNoteGroupBy) sqlScan(ctx context.Context, root *CreditNoteQuery, v any) error {
+func (_g *CreditNoteGroupBy) sqlScan(ctx context.Context, root *CreditNoteQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(cngb.fns))
-	for _, fn := range cngb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*cngb.flds)+len(cngb.fns))
-		for _, f := range *cngb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*cngb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cngb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -570,27 +570,27 @@ type CreditNoteSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (cns *CreditNoteSelect) Aggregate(fns ...AggregateFunc) *CreditNoteSelect {
-	cns.fns = append(cns.fns, fns...)
-	return cns
+func (_s *CreditNoteSelect) Aggregate(fns ...AggregateFunc) *CreditNoteSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cns *CreditNoteSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cns.ctx, ent.OpQuerySelect)
-	if err := cns.prepareQuery(ctx); err != nil {
+func (_s *CreditNoteSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CreditNoteQuery, *CreditNoteSelect](ctx, cns.CreditNoteQuery, cns, cns.inters, v)
+	return scanWithInterceptors[*CreditNoteQuery, *CreditNoteSelect](ctx, _s.CreditNoteQuery, _s, _s.inters, v)
 }
 
-func (cns *CreditNoteSelect) sqlScan(ctx context.Context, root *CreditNoteQuery, v any) error {
+func (_s *CreditNoteSelect) sqlScan(ctx context.Context, root *CreditNoteQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(cns.fns))
-	for _, fn := range cns.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*cns.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -598,7 +598,7 @@ func (cns *CreditNoteSelect) sqlScan(ctx context.Context, root *CreditNoteQuery,
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cns.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

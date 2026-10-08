@@ -1,6 +1,7 @@
 package paddle_test
 
 import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"testing"
 
 	paddleactivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
@@ -37,5 +38,5 @@ func TestPullAndUpdatePaddleInvoice_NoPaddleConnection(t *testing.T) {
 	var appErr *temporal.ApplicationError
 	require.ErrorAs(t, err, &appErr)
 	assert.True(t, appErr.NonRetryable(), "error must be non-retryable")
-	assert.Equal(t, "ConnectionNotFound", appErr.Type())
+	assert.Equal(t, ierr.ErrConnectionNotFound, appErr.Type())
 }

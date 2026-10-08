@@ -34,6 +34,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	req.ApplyDefaults()
 	// 2. Validate request (including date bounds when sub is passed)
 	if err := req.Validate(nil, sub); err != nil {
 		return nil, err
@@ -189,8 +190,8 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				Entries: []LineItemProrationEntry{
 					{
 						LineItem:    lineItem,
-						Price:       priceResp.Price,
 						Action:      types.ProrationActionAddItem,
+						NewPrice:    priceResp.Price,
 						NewQuantity: lineItem.Quantity,
 					},
 				},
@@ -485,9 +486,10 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 						IdempotencyKey: types.GenerateUUIDWithPrefix("proration_del"),
 						Entries: []LineItemProrationEntry{
 							{
-								LineItem: &lineItemForProration,
-								Price:    priceResp.Price,
-								Action:   types.ProrationActionRemoveItem,
+								LineItem:        &lineItemForProration,
+								Action:          types.ProrationActionRemoveItem,
+								CurrentPrice:    priceResp.Price,
+								CurrentQuantity: lineItemForProration.Quantity,
 							},
 						},
 					}
@@ -763,6 +765,8 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				TierMode:          req.TierMode,
 				Tiers:             req.Tiers,
 				TransformQuantity: req.TransformQuantity,
+				PriceUnitAmount:   req.PriceUnitAmount,
+				PriceUnitTiers:    req.PriceUnitTiers,
 				BucketSize:        req.BucketSize,
 			}
 			priceMap := map[string]*dto.PriceResponse{locked.PriceID: price}
@@ -975,6 +979,18 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 		}
 	}
 
+	if lineItem.CommitmentOverageFactor == nil {
+		lineItem.CommitmentOverageFactor = types.DefaultOverageFactor()
+	}
+	if lineItem.CommitmentOverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("commitment_overage_factor must be at least 1.0").
+			WithHint("Overage factor determines the multiplier for usage beyond commitment").
+			WithReportableDetails(map[string]interface{}{
+				"commitment_overage_factor": lineItem.CommitmentOverageFactor,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Rules for the top-level commitment fields only -------------------------
 	// (Per-bucket commitment fields are validated by TimeOfDayBucket.Validate.)
 	if !lineItem.HasCommitment() {
@@ -1001,22 +1017,6 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			WithReportableDetails(map[string]interface{}{
 				"commitment_amount":   lineItem.CommitmentAmount,
 				"commitment_quantity": lineItem.CommitmentQuantity,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Rule 2: Overage factor is optional and defaults to 1.0 when a commitment is
-	// set without one — usage beyond commitment then bills at the base rate.
-	// When supplied it must be at least 1.0.
-	if lineItem.CommitmentOverageFactor == nil {
-		lineItem.CommitmentOverageFactor = types.DefaultOverageFactor()
-	}
-
-	if lineItem.CommitmentOverageFactor.LessThan(decimal.NewFromInt(1)) {
-		return ierr.NewError("commitment_overage_factor must be at least 1.0").
-			WithHint("Overage factor determines the multiplier for usage beyond commitment").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_overage_factor": lineItem.CommitmentOverageFactor,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -1070,6 +1070,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	if !ok || cfg == nil {
 		return nil, nil
 	}
+	cfg.ApplyDefaults()
 
 	if cfg.CommitmentAmount != nil {
 		lineItem.CommitmentAmount = cfg.CommitmentAmount

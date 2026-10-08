@@ -38,6 +38,9 @@ type fakeCheckoutProvider struct {
 	// linkRequests records what callCheckoutProvider asked for, so a test can assert on
 	// the expiry we send rather than recomputing it.
 	linkRequests []interfaces.CheckoutProviderRequest
+
+	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
+	charged bool
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(
@@ -75,7 +78,10 @@ func (f *fakeCheckoutProvider) CreateAuthorizationLink(context.Context, interfac
 	return nil, ierr.NewError("not used").Mark(ierr.ErrNotImplemented)
 }
 func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, bool, error) {
-	return nil, false, nil
+	if !f.charged {
+		return nil, false, nil
+	}
+	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged"}, true, nil
 }
 func (f *fakeCheckoutProvider) HasAutoChargeableMethod(context.Context, interfaces.HasAutoChargeableMethodRequest) (bool, error) {
 	return false, nil
@@ -772,6 +778,40 @@ func (s *CheckoutPollSuite) TestLinkExpirySentToProviderDerivesFromTheSessionDea
 		"the link must close before the session even when fulfilment is slow")
 	s.Equal(session.PaymentProvider.SessionGrace(), session.ExpiresAt.Sub(*sent),
 		"the gap between them is exactly the grace window")
+}
+
+// A mandate debit lands 24-36h after the charge is submitted. A session that expired
+// first would have its drafts torn down and the late capture refunded.
+func (s *CheckoutPollSuite) TestSavedMethodChargeExtendsSessionPastSettlement() {
+	for _, provider := range []types.CheckoutPaymentProvider{
+		types.CheckoutPaymentProviderRazorpay,
+		types.CheckoutPaymentProviderChargebee,
+	} {
+		s.Run(string(provider), func() {
+			ctx := s.GetContext()
+			s.provider.charged = true
+			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+			session.PaymentProvider = provider
+			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
+				&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
+			)
+			linkExpiry := session.ExpiresAt
+
+			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+			s.Require().NoError(err)
+
+			_, err = s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+			s.Require().NoError(err)
+
+			settlement := provider.SavedMethodSettlement()
+			if settlement == 0 {
+				s.Equal(linkExpiry, session.ExpiresAt, "an instant charge keeps the link-sized expiry")
+				return
+			}
+			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(settlement-time.Minute)),
+				"the session must outlive the debit it is waiting on")
+		})
+	}
 }
 
 // recordGatewayHandles is best effort — it must not fail a checkout whose money may

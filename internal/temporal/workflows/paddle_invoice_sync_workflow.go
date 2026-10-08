@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -25,7 +26,7 @@ const (
 //     errors (e.g. customer has no email or no address country) so operators see a clear
 //     failure reason in the Temporal UI without waiting for retries to be exhausted.
 //  3. Sync invoice to Paddle — create the Paddle transaction and persist the checkout URL.
-func PaddleInvoiceSyncWorkflow(ctx workflow.Context, input models.PaddleInvoiceSyncWorkflowInput) error {
+func PaddleInvoiceSyncWorkflow(ctx workflow.Context, input models.PaddleInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Paddle invoice sync workflow",
@@ -38,6 +39,10 @@ func PaddleInvoiceSyncWorkflow(ctx workflow.Context, input models.PaddleInvoiceS
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderPaddle, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,

@@ -291,9 +291,9 @@ func TestComputeCommitmentMath_ZeroCommitmentCharge(t *testing.T) {
 	overage2x := decimal.NewFromInt(2)
 
 	charge, utilized, overage, trueUp := computeCommitmentMath(usage, decimal.Zero, overage2x, true)
-	assert.True(t, usage.Equal(charge), "charge %s", charge)
+	assert.True(t, decimal.NewFromInt(20).Equal(charge), "charge %s", charge)
 	assert.True(t, utilized.IsZero(), "utilized %s", utilized)
-	assert.True(t, overage.IsZero(), "overage %s", overage)
+	assert.True(t, decimal.NewFromInt(20).Equal(overage), "overage %s", overage)
 	assert.True(t, trueUp.IsZero(), "true-up %s", trueUp)
 }
 
@@ -392,10 +392,8 @@ func TestApplyWindowCommitment_PerBucket_QuantityAndBaseRate(t *testing.T) {
 	require.NotNil(t, info)
 
 	assert.True(t, decimal.NewFromInt(31).Equal(total), "expected $31 got %s", total)
-	// utilized: $4 bucket commit only. Out-of-bucket $15 is billed at base rate
-	// and is not commitment utilization — there is no line-item commitment.
 	assert.True(t, decimal.NewFromInt(4).Equal(info.ComputedCommitmentUtilizedAmount), "utilized %s", info.ComputedCommitmentUtilizedAmount)
-	assert.True(t, decimal.NewFromInt(12).Equal(info.ComputedOverageAmount), "overage %s", info.ComputedOverageAmount)
+	assert.True(t, decimal.NewFromInt(27).Equal(info.ComputedOverageAmount), "overage %s", info.ComputedOverageAmount)
 	assert.True(t, info.ComputedTrueUpAmount.IsZero(), "true-up %s", info.ComputedTrueUpAmount)
 }
 
@@ -468,8 +466,8 @@ func TestApplyWindowCommitment_PerBucket_PriceOverrideFromWindowSize(t *testing.
 
 	assert.True(t, decimal.NewFromInt(530).Equal(total),
 		"expected $530 (bucket price override applied per window); got %s — $130 would mean the override was ignored", total)
-	assert.True(t, decimal.NewFromInt(400).Equal(info.ComputedOverageAmount),
-		"expected overage $400 from the $5 override base, got %s", info.ComputedOverageAmount)
+	assert.True(t, decimal.NewFromInt(430).Equal(info.ComputedOverageAmount),
+		"expected overage $430 ($400 in-bucket + $30 out-of-bucket), got %s", info.ComputedOverageAmount)
 	assert.True(t, decimal.NewFromInt(100).Equal(info.ComputedCommitmentUtilizedAmount),
 		"expected utilized $100 (two in-bucket windows at $50; out-of-bucket has no commitment), got %s", info.ComputedCommitmentUtilizedAmount)
 	assert.True(t, info.ComputedTrueUpAmount.IsZero(),

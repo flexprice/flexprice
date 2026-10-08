@@ -51,7 +51,7 @@ func (a *InvoiceSyncActivities) MarkWhopInvoicePaid(
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError(
 				"Whop connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}
@@ -94,7 +94,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToWhop(
 				"invoice_id", input.InvoiceID)
 			return temporal.NewNonRetryableApplicationError(
 				"Whop connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

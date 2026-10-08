@@ -7,6 +7,7 @@ import (
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +45,7 @@ func TestInMemoryCheckoutSessionStore_List_SubscriptionIDMatchesBothParamsBlobs(
 		ModifySubscriptionParams: &types.ModifySubscriptionParams{
 			SubscriptionID: subID,
 			LineItemModifications: []types.ModifySubscriptionLineItem{
-				{LineItemID: "subs_li_1", Quantity: decimal.NewFromInt(2)},
+				{LineItemID: "subs_li_1", Quantity: lo.ToPtr(decimal.NewFromInt(2))},
 			},
 		},
 	})

@@ -40,7 +40,7 @@ func TestOTELReporter_RecordsErrorSpan(t *testing.T) {
 		"e2eprobe.check.kind": "probe",
 		"e2eprobe.step":       "assert-debit",
 		"e2eprobe.run_id":     "abc",
-		"wallet_id":            "wal_1",
+		"wallet_id":           "wal_1",
 	} {
 		if got[k] != want {
 			t.Errorf("attr[%s]=%q want %q", k, got[k], want)

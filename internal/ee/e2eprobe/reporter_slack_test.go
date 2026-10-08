@@ -44,6 +44,40 @@ func TestSlackReporter_Posts(t *testing.T) {
 	}
 }
 
+func TestSlackBotReporter_PostsWithBearer(t *testing.T) {
+	var gotAuth string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+	rep := &slackReporter{endpoint: srv.URL, botToken: "xoxb-test", channel: "#syn", client: srv.Client()}
+	rep.Report(context.Background(), FailureReport{CheckName: "cycle-invoice-probe", CheckKind: KindProbe})
+	if gotAuth != "Bearer xoxb-test" {
+		t.Errorf("auth=%q", gotAuth)
+	}
+	var p map[string]any
+	if err := json.Unmarshal(gotBody, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if p["channel"] != "#syn" {
+		t.Errorf("channel=%v", p["channel"])
+	}
+}
+
+func TestSlackBotReporter_SwallowsAPIErr(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"ok":false,"error":"channel_not_found"}`))
+	}))
+	defer srv.Close()
+	rep := &slackReporter{endpoint: srv.URL, botToken: "xoxb-test", channel: "#x", client: srv.Client()}
+	rep.Report(context.Background(), FailureReport{CheckName: "x"})
+}
+
 func TestSlackReporter_SwallowsHTTPErr(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(500)

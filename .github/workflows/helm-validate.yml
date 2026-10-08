@@ -85,6 +85,18 @@ jobs:
             --set secrets.existingSecret=flexprice-secrets \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
+      - name: helm lint (values-gce.example)
+        run: helm lint internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-gce.example.yaml
+
+      - name: helm template + kubeconform (values-gce.example)
+        run: |
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            -f internal/ee/infrastructure/helm/values-gce.example.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+
+      - name: GCE render and defaults guard
+        run: ./internal/ee/infrastructure/helm/scripts/validate-gce-render.sh
+
   install-dry-run-kind:
     name: helm install --dry-run on kind
     runs-on: ubuntu-latest

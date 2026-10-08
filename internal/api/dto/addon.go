@@ -90,12 +90,6 @@ type AddAddonToSubscriptionRequest struct {
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
-	// SkipEntityValidation is used to skip the entitlement check for the addon
-	// This is used to add an addon to a subscription without checking the entitlement compatibility
-	// This is used when we are adding an addon to a subscription that already has an active instance of the addon
-	// In that case we don't need to check the entitlement compatibility
-	SkipEntityValidation bool `json:"-"`
-
 	// PreviewOnly quotes the attach without writing anything. Server-set: callers reach it
 	// through the preview endpoint, never by sending it.
 	PreviewOnly bool `json:"-"`
@@ -119,6 +113,13 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+}
+
+func (r *AddAddonToSubscriptionRequest) ApplyDefaults() {
+	if r == nil {
+		return
+	}
+	applyLineItemCommitmentDefaults(r.LineItemCommitments)
 }
 
 func (r *AddAddonToSubscriptionRequest) Validate() error {

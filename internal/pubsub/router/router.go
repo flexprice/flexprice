@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
@@ -138,6 +139,25 @@ func consumerContextMiddleware(tracingSvc *tracing.Service) message.HandlerMiddl
 	}
 }
 
+// errMessageLost marks a failure caused by the consumer losing the message
+// (rebalance or shutdown); such messages are nacked for redelivery, not dead-lettered.
+var errMessageLost = errors.New("message context done before handling finished")
+
+// markMessageLost must sit directly outside Retry: it captures the same ctx
+// Retry watches, so inner SetContext calls can't hide a lost session.
+func markMessageLost(h message.HandlerFunc) message.HandlerFunc {
+	return func(msg *message.Message) ([]*message.Message, error) {
+		msgCtx := msg.Context()
+
+		msgs, err := h(msg)
+		if err != nil && msgCtx.Err() != nil {
+			return msgs, errors.Join(errMessageLost, err)
+		}
+
+		return msgs, err
+	}
+}
+
 // AddNoPublishHandler adds a handler that doesn't publish messages.
 // topicDLQ overrides the global DLQ topic for this handler; pass "" to use
 // the global kafka.topic_dlq fallback.
@@ -160,10 +180,11 @@ func (r *Router) AddNoPublishHandler(
 			// Detach from msg.Context() cancellation so a consumer-group rebalance
 			// or subscriber shutdown doesn't kill an in-flight handler mid-write.
 			// WithoutCancel keeps values (tracing span, writer pin, handler name)
-			// but strips cancellation, so the 600s below is a real floor, not just
+			// but strips cancellation, so the timeout below is a real floor, not just
 			// a ceiling under whichever cancels first. Safe because unacked messages
 			// are redelivered on the next session and handlers are idempotent.
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(msg.Context()), 600*time.Second)
+			// 4m keeps one retry for a handler stuck the full timeout, since the retry budget is 5m.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(msg.Context()), 4*time.Minute)
 			defer cancel()
 			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
@@ -183,14 +204,16 @@ func (r *Router) AddNoPublishHandler(
 
 	// PoisonQueue must be outermost so it catches failures after retries are exhausted
 	if r.dlqPublisher != nil && topicDLQ != "" {
-		pq, err := middleware.PoisonQueue(r.dlqPublisher, topicDLQ)
+		pq, err := middleware.PoisonQueueWithFilter(r.dlqPublisher, topicDLQ, func(err error) bool {
+			return !errors.Is(err, errMessageLost)
+		})
 		if err != nil {
 			r.logger.Error(context.Background(), "failed to create poison queue middleware, DLQ disabled for handler",
 				"handler", handlerName,
 				"error", err,
 			)
 		} else {
-			handler.AddMiddleware(pq)
+			handler.AddMiddleware(pq, markMessageLost)
 		}
 	}
 
@@ -199,7 +222,7 @@ func (r *Router) AddNoPublishHandler(
 		InitialInterval:     1 * time.Second,
 		MaxInterval:         10 * time.Second,
 		Multiplier:          2.0,
-		MaxElapsedTime:      2 * time.Minute,
+		MaxElapsedTime:      5 * time.Minute,
 		RandomizationFactor: 0.5,
 		Logger:              watermill.NewStdLogger(r.debugLogs, false),
 		OnRetryHook: func(retryNum int, delay time.Duration) {

@@ -91,6 +91,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 
 		_, totalUsageCost, err := billingSvc.CalculateMeterUsageCharges(
 			ctx, sub, usage, sub.CurrentPeriodStart, now, types.UsageSourceInvoiceCreation,
+			nil,
 		)
 		if err != nil {
 			s.Logger.Error(ctx, "spend alerts: failed to calculate meter usage charges", "error", err, "subscription_id", sub.ID)
@@ -332,8 +333,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		// overage accrued before detection is never billed: pro-customer,
 		// bounded by the debounce delay. If exactness is ever needed, the
 		// upgrade path is the binary-searched crossing (see ERD decisions).
+		// Unlimited windows track usage for display but have no ceiling to cross,
+		// so they never stamp a crossing and never bill overage.
 		cross := g.QuotaCrossedAt
-		if cross == nil && usage.GreaterThanOrEqual(g.Quota) {
+		if cross == nil && g.IsExhausted(usage) {
 			cross = &at
 		}
 
@@ -343,7 +346,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			WithUsage(usage).
 			WithLastComputedAt(&at).
 			WithQuotaCrossedAt(cross)
-		if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
+		if g.IsExhausted(usage) && g.GrantStatus == types.EntitlementGrantStatusActive {
 			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
 		}
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
@@ -420,13 +423,14 @@ func (s *alertService) transitionEntitlementGrantAlert(
 	usage decimal.Decimal,
 	at time.Time,
 ) error {
-	if !g.Quota.IsPositive() {
+	if !g.IsExhausted(usage) {
 		return nil
 	}
-	ratio := usage.Div(g.Quota)
-	if ratio.LessThan(decimal.NewFromInt(1)) {
-		// not exhausted yet, AlertStateOk
-		return nil
+
+	// Zero quota is spent by definition, and dividing by it would panic.
+	ratio := decimal.NewFromInt(1)
+	if g.Quota.IsPositive() {
+		ratio = usage.Div(g.Quota)
 	}
 
 	parentEntityType := string(types.AlertEntityTypeSubscription)

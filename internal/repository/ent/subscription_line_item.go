@@ -117,6 +117,7 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 		SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 		SetCommitmentWindowed(item.CommitmentWindowed).
+		SetNillableCommitmentDuration(item.CommitmentDuration).
 		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetTenantID(item.TenantID).
 		SetEnvironmentID(item.EnvironmentID).
@@ -321,6 +322,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 		SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 		SetCommitmentWindowed(item.CommitmentWindowed).
+		SetNillableCommitmentDuration(item.CommitmentDuration).
 		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
@@ -483,14 +485,14 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetNillableAddonAssociationID(item.AddonAssociationID).
-			SetQuantity(item.Quantity).
-			SetCurrency(item.Currency).
-			SetBillingPeriod(item.BillingPeriod).
-			SetInvoiceCadence(item.InvoiceCadence).
-			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
-			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
-			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetMetadata(item.Metadata).
+			SetNillableCommitmentAmount(item.CommitmentAmount).
+			SetNillableCommitmentQuantity(item.CommitmentQuantity).
+			SetNillableCommitmentType(types.ToNillableString(string(item.CommitmentType))).
+			SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
+			SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
+			SetCommitmentWindowed(item.CommitmentWindowed).
+			SetNillableCommitmentDuration(item.CommitmentDuration).
 			SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 			SetTenantID(item.TenantID).
 			SetEnvironmentID(item.EnvironmentID).
@@ -654,6 +656,36 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 
 // GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
 // subscription line items with commitment true-up enabled.
+func (r *subscriptionLineItemRepository) SubscriptionIDsWithWindowedCommitment(ctx context.Context) ([]string, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription_line_item", "subscription_ids_windowed_commitment", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+	})
+	defer FinishSpan(span)
+
+	ids, err := r.client.Reader(ctx).SubscriptionLineItem.Query().
+		Where(
+			subscriptionlineitem.TenantID(tenantID),
+			subscriptionlineitem.EnvironmentID(envID),
+			subscriptionlineitem.Status(string(types.StatusPublished)),
+			subscriptionlineitem.CommitmentWindowed(true),
+		).
+		GroupBy(subscriptionlineitem.FieldSubscriptionID).
+		Strings(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list subscriptions with windowed commitments").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return ids, nil
+}
+
 func (r *subscriptionLineItemRepository) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)

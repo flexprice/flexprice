@@ -23,198 +23,198 @@ type SubscriptionScheduleCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (ssc *SubscriptionScheduleCreate) SetTenantID(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetTenantID(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetTenantID(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (ssc *SubscriptionScheduleCreate) SetStatus(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetStatus(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetStatus(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableStatus(s *string) *SubscriptionScheduleCreate {
-	if s != nil {
-		ssc.SetStatus(*s)
+func (_c *SubscriptionScheduleCreate) SetNillableStatus(v *string) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (ssc *SubscriptionScheduleCreate) SetCreatedAt(t time.Time) *SubscriptionScheduleCreate {
-	ssc.mutation.SetCreatedAt(t)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetCreatedAt(v time.Time) *SubscriptionScheduleCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableCreatedAt(t *time.Time) *SubscriptionScheduleCreate {
-	if t != nil {
-		ssc.SetCreatedAt(*t)
+func (_c *SubscriptionScheduleCreate) SetNillableCreatedAt(v *time.Time) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ssc *SubscriptionScheduleCreate) SetUpdatedAt(t time.Time) *SubscriptionScheduleCreate {
-	ssc.mutation.SetUpdatedAt(t)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetUpdatedAt(v time.Time) *SubscriptionScheduleCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableUpdatedAt(t *time.Time) *SubscriptionScheduleCreate {
-	if t != nil {
-		ssc.SetUpdatedAt(*t)
+func (_c *SubscriptionScheduleCreate) SetNillableUpdatedAt(v *time.Time) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (ssc *SubscriptionScheduleCreate) SetCreatedBy(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetCreatedBy(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetCreatedBy(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableCreatedBy(s *string) *SubscriptionScheduleCreate {
-	if s != nil {
-		ssc.SetCreatedBy(*s)
+func (_c *SubscriptionScheduleCreate) SetNillableCreatedBy(v *string) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ssc *SubscriptionScheduleCreate) SetUpdatedBy(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetUpdatedBy(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetUpdatedBy(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableUpdatedBy(s *string) *SubscriptionScheduleCreate {
-	if s != nil {
-		ssc.SetUpdatedBy(*s)
+func (_c *SubscriptionScheduleCreate) SetNillableUpdatedBy(v *string) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (ssc *SubscriptionScheduleCreate) SetEnvironmentID(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetEnvironmentID(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetEnvironmentID(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableEnvironmentID(s *string) *SubscriptionScheduleCreate {
-	if s != nil {
-		ssc.SetEnvironmentID(*s)
+func (_c *SubscriptionScheduleCreate) SetNillableEnvironmentID(v *string) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (ssc *SubscriptionScheduleCreate) SetMetadata(m map[string]string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetMetadata(m)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetMetadata(v map[string]string) *SubscriptionScheduleCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (ssc *SubscriptionScheduleCreate) SetSubscriptionID(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetSubscriptionID(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetSubscriptionID(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetScheduleType sets the "schedule_type" field.
-func (ssc *SubscriptionScheduleCreate) SetScheduleType(tsct types.SubscriptionScheduleChangeType) *SubscriptionScheduleCreate {
-	ssc.mutation.SetScheduleType(tsct)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetScheduleType(v types.SubscriptionScheduleChangeType) *SubscriptionScheduleCreate {
+	_c.mutation.SetScheduleType(v)
+	return _c
 }
 
 // SetScheduledAt sets the "scheduled_at" field.
-func (ssc *SubscriptionScheduleCreate) SetScheduledAt(t time.Time) *SubscriptionScheduleCreate {
-	ssc.mutation.SetScheduledAt(t)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetScheduledAt(v time.Time) *SubscriptionScheduleCreate {
+	_c.mutation.SetScheduledAt(v)
+	return _c
 }
 
 // SetConfiguration sets the "configuration" field.
-func (ssc *SubscriptionScheduleCreate) SetConfiguration(m map[string]interface{}) *SubscriptionScheduleCreate {
-	ssc.mutation.SetConfiguration(m)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetConfiguration(v map[string]interface{}) *SubscriptionScheduleCreate {
+	_c.mutation.SetConfiguration(v)
+	return _c
 }
 
 // SetExecutedAt sets the "executed_at" field.
-func (ssc *SubscriptionScheduleCreate) SetExecutedAt(t time.Time) *SubscriptionScheduleCreate {
-	ssc.mutation.SetExecutedAt(t)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetExecutedAt(v time.Time) *SubscriptionScheduleCreate {
+	_c.mutation.SetExecutedAt(v)
+	return _c
 }
 
 // SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableExecutedAt(t *time.Time) *SubscriptionScheduleCreate {
-	if t != nil {
-		ssc.SetExecutedAt(*t)
+func (_c *SubscriptionScheduleCreate) SetNillableExecutedAt(v *time.Time) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetExecutedAt(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (ssc *SubscriptionScheduleCreate) SetCancelledAt(t time.Time) *SubscriptionScheduleCreate {
-	ssc.mutation.SetCancelledAt(t)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetCancelledAt(v time.Time) *SubscriptionScheduleCreate {
+	_c.mutation.SetCancelledAt(v)
+	return _c
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableCancelledAt(t *time.Time) *SubscriptionScheduleCreate {
-	if t != nil {
-		ssc.SetCancelledAt(*t)
+func (_c *SubscriptionScheduleCreate) SetNillableCancelledAt(v *time.Time) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetCancelledAt(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetExecutionResult sets the "execution_result" field.
-func (ssc *SubscriptionScheduleCreate) SetExecutionResult(m map[string]interface{}) *SubscriptionScheduleCreate {
-	ssc.mutation.SetExecutionResult(m)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetExecutionResult(v map[string]interface{}) *SubscriptionScheduleCreate {
+	_c.mutation.SetExecutionResult(v)
+	return _c
 }
 
 // SetErrorMessage sets the "error_message" field.
-func (ssc *SubscriptionScheduleCreate) SetErrorMessage(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetErrorMessage(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetErrorMessage(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetErrorMessage(v)
+	return _c
 }
 
 // SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (ssc *SubscriptionScheduleCreate) SetNillableErrorMessage(s *string) *SubscriptionScheduleCreate {
-	if s != nil {
-		ssc.SetErrorMessage(*s)
+func (_c *SubscriptionScheduleCreate) SetNillableErrorMessage(v *string) *SubscriptionScheduleCreate {
+	if v != nil {
+		_c.SetErrorMessage(*v)
 	}
-	return ssc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (ssc *SubscriptionScheduleCreate) SetID(s string) *SubscriptionScheduleCreate {
-	ssc.mutation.SetID(s)
-	return ssc
+func (_c *SubscriptionScheduleCreate) SetID(v string) *SubscriptionScheduleCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (ssc *SubscriptionScheduleCreate) SetSubscription(s *Subscription) *SubscriptionScheduleCreate {
-	return ssc.SetSubscriptionID(s.ID)
+func (_c *SubscriptionScheduleCreate) SetSubscription(v *Subscription) *SubscriptionScheduleCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionScheduleMutation object of the builder.
-func (ssc *SubscriptionScheduleCreate) Mutation() *SubscriptionScheduleMutation {
-	return ssc.mutation
+func (_c *SubscriptionScheduleCreate) Mutation() *SubscriptionScheduleMutation {
+	return _c.mutation
 }
 
 // Save creates the SubscriptionSchedule in the database.
-func (ssc *SubscriptionScheduleCreate) Save(ctx context.Context) (*SubscriptionSchedule, error) {
-	ssc.defaults()
-	return withHooks(ctx, ssc.sqlSave, ssc.mutation, ssc.hooks)
+func (_c *SubscriptionScheduleCreate) Save(ctx context.Context) (*SubscriptionSchedule, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (ssc *SubscriptionScheduleCreate) SaveX(ctx context.Context) *SubscriptionSchedule {
-	v, err := ssc.Save(ctx)
+func (_c *SubscriptionScheduleCreate) SaveX(ctx context.Context) *SubscriptionSchedule {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -222,91 +222,91 @@ func (ssc *SubscriptionScheduleCreate) SaveX(ctx context.Context) *SubscriptionS
 }
 
 // Exec executes the query.
-func (ssc *SubscriptionScheduleCreate) Exec(ctx context.Context) error {
-	_, err := ssc.Save(ctx)
+func (_c *SubscriptionScheduleCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ssc *SubscriptionScheduleCreate) ExecX(ctx context.Context) {
-	if err := ssc.Exec(ctx); err != nil {
+func (_c *SubscriptionScheduleCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ssc *SubscriptionScheduleCreate) defaults() {
-	if _, ok := ssc.mutation.Status(); !ok {
+func (_c *SubscriptionScheduleCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := subscriptionschedule.DefaultStatus
-		ssc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := ssc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionschedule.DefaultCreatedAt()
-		ssc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := ssc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := subscriptionschedule.DefaultUpdatedAt()
-		ssc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := ssc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := subscriptionschedule.DefaultEnvironmentID
-		ssc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ssc *SubscriptionScheduleCreate) check() error {
-	if _, ok := ssc.mutation.TenantID(); !ok {
+func (_c *SubscriptionScheduleCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "SubscriptionSchedule.tenant_id"`)}
 	}
-	if v, ok := ssc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := subscriptionschedule.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := ssc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SubscriptionSchedule.status"`)}
 	}
-	if _, ok := ssc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionSchedule.created_at"`)}
 	}
-	if _, ok := ssc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SubscriptionSchedule.updated_at"`)}
 	}
-	if _, ok := ssc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "SubscriptionSchedule.subscription_id"`)}
 	}
-	if v, ok := ssc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := subscriptionschedule.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := ssc.mutation.ScheduleType(); !ok {
+	if _, ok := _c.mutation.ScheduleType(); !ok {
 		return &ValidationError{Name: "schedule_type", err: errors.New(`ent: missing required field "SubscriptionSchedule.schedule_type"`)}
 	}
-	if v, ok := ssc.mutation.ScheduleType(); ok {
+	if v, ok := _c.mutation.ScheduleType(); ok {
 		if err := subscriptionschedule.ScheduleTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "schedule_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.schedule_type": %w`, err)}
 		}
 	}
-	if _, ok := ssc.mutation.ScheduledAt(); !ok {
+	if _, ok := _c.mutation.ScheduledAt(); !ok {
 		return &ValidationError{Name: "scheduled_at", err: errors.New(`ent: missing required field "SubscriptionSchedule.scheduled_at"`)}
 	}
-	if _, ok := ssc.mutation.Configuration(); !ok {
+	if _, ok := _c.mutation.Configuration(); !ok {
 		return &ValidationError{Name: "configuration", err: errors.New(`ent: missing required field "SubscriptionSchedule.configuration"`)}
 	}
-	if len(ssc.mutation.SubscriptionIDs()) == 0 {
+	if len(_c.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionSchedule.subscription"`)}
 	}
 	return nil
 }
 
-func (ssc *SubscriptionScheduleCreate) sqlSave(ctx context.Context) (*SubscriptionSchedule, error) {
-	if err := ssc.check(); err != nil {
+func (_c *SubscriptionScheduleCreate) sqlSave(ctx context.Context) (*SubscriptionSchedule, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := ssc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, ssc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -319,81 +319,81 @@ func (ssc *SubscriptionScheduleCreate) sqlSave(ctx context.Context) (*Subscripti
 			return nil, fmt.Errorf("unexpected SubscriptionSchedule.ID type: %T", _spec.ID.Value)
 		}
 	}
-	ssc.mutation.id = &_node.ID
-	ssc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (ssc *SubscriptionScheduleCreate) createSpec() (*SubscriptionSchedule, *sqlgraph.CreateSpec) {
+func (_c *SubscriptionScheduleCreate) createSpec() (*SubscriptionSchedule, *sqlgraph.CreateSpec) {
 	var (
-		_node = &SubscriptionSchedule{config: ssc.config}
+		_node = &SubscriptionSchedule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(subscriptionschedule.Table, sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString))
 	)
-	if id, ok := ssc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := ssc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(subscriptionschedule.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := ssc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(subscriptionschedule.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := ssc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := ssc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := ssc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(subscriptionschedule.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := ssc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := ssc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(subscriptionschedule.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := ssc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionschedule.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := ssc.mutation.ScheduleType(); ok {
+	if value, ok := _c.mutation.ScheduleType(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduleType, field.TypeString, value)
 		_node.ScheduleType = value
 	}
-	if value, ok := ssc.mutation.ScheduledAt(); ok {
+	if value, ok := _c.mutation.ScheduledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduledAt, field.TypeTime, value)
 		_node.ScheduledAt = value
 	}
-	if value, ok := ssc.mutation.Configuration(); ok {
+	if value, ok := _c.mutation.Configuration(); ok {
 		_spec.SetField(subscriptionschedule.FieldConfiguration, field.TypeJSON, value)
 		_node.Configuration = value
 	}
-	if value, ok := ssc.mutation.ExecutedAt(); ok {
+	if value, ok := _c.mutation.ExecutedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutedAt, field.TypeTime, value)
 		_node.ExecutedAt = &value
 	}
-	if value, ok := ssc.mutation.CancelledAt(); ok {
+	if value, ok := _c.mutation.CancelledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldCancelledAt, field.TypeTime, value)
 		_node.CancelledAt = &value
 	}
-	if value, ok := ssc.mutation.ExecutionResult(); ok {
+	if value, ok := _c.mutation.ExecutionResult(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutionResult, field.TypeJSON, value)
 		_node.ExecutionResult = value
 	}
-	if value, ok := ssc.mutation.ErrorMessage(); ok {
+	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(subscriptionschedule.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = &value
 	}
-	if nodes := ssc.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -421,16 +421,16 @@ type SubscriptionScheduleCreateBulk struct {
 }
 
 // Save creates the SubscriptionSchedule entities in the database.
-func (sscb *SubscriptionScheduleCreateBulk) Save(ctx context.Context) ([]*SubscriptionSchedule, error) {
-	if sscb.err != nil {
-		return nil, sscb.err
+func (_c *SubscriptionScheduleCreateBulk) Save(ctx context.Context) ([]*SubscriptionSchedule, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(sscb.builders))
-	nodes := make([]*SubscriptionSchedule, len(sscb.builders))
-	mutators := make([]Mutator, len(sscb.builders))
-	for i := range sscb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*SubscriptionSchedule, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := sscb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SubscriptionScheduleMutation)
@@ -444,11 +444,11 @@ func (sscb *SubscriptionScheduleCreateBulk) Save(ctx context.Context) ([]*Subscr
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, sscb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, sscb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -468,7 +468,7 @@ func (sscb *SubscriptionScheduleCreateBulk) Save(ctx context.Context) ([]*Subscr
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, sscb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -476,8 +476,8 @@ func (sscb *SubscriptionScheduleCreateBulk) Save(ctx context.Context) ([]*Subscr
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (sscb *SubscriptionScheduleCreateBulk) SaveX(ctx context.Context) []*SubscriptionSchedule {
-	v, err := sscb.Save(ctx)
+func (_c *SubscriptionScheduleCreateBulk) SaveX(ctx context.Context) []*SubscriptionSchedule {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -485,14 +485,14 @@ func (sscb *SubscriptionScheduleCreateBulk) SaveX(ctx context.Context) []*Subscr
 }
 
 // Exec executes the query.
-func (sscb *SubscriptionScheduleCreateBulk) Exec(ctx context.Context) error {
-	_, err := sscb.Save(ctx)
+func (_c *SubscriptionScheduleCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sscb *SubscriptionScheduleCreateBulk) ExecX(ctx context.Context) {
-	if err := sscb.Exec(ctx); err != nil {
+func (_c *SubscriptionScheduleCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -15,6 +15,7 @@ type ScheduleID string
 const (
 	ScheduleIDCreditGrantProcessing                   ScheduleID = "credit-grants-processing"
 	ScheduleIDSubscriptionAutoCancellation            ScheduleID = "subscription-auto-cancellation"
+	ScheduleIDSubscriptionOverdueInvoices             ScheduleID = "subscription-overdue-invoices"
 	ScheduleIDWalletCreditExpiry                      ScheduleID = "wallet-credit-expiry"
 	ScheduleIDSubscriptionBilling                     ScheduleID = "subscription-billing"
 	ScheduleIDSubscriptionRenewalAlerts               ScheduleID = "subscription-renewal-due-alerts"
@@ -28,6 +29,9 @@ const (
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
 	ScheduleIDDailyDraftAndCompute                    ScheduleID = "daily-draft-and-compute"
 	ScheduleIDDraftInvoiceFinalization                ScheduleID = "draft-invoice-finalization"
+	// ScheduleIDRevenueRollup drives RevenueRollupWorkflow; gated off by default
+	// via analytics.revenue_rollup.enabled (see EnsureSchedules).
+	ScheduleIDRevenueRollup ScheduleID = "revenue-rollup"
 )
 
 // String returns the raw schedule id.
@@ -39,6 +43,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 	return []ScheduleID{
 		ScheduleIDCreditGrantProcessing,
 		ScheduleIDSubscriptionAutoCancellation,
+		ScheduleIDSubscriptionOverdueInvoices,
 		ScheduleIDWalletCreditExpiry,
 		ScheduleIDSubscriptionBilling,
 		ScheduleIDSubscriptionRenewalAlerts,
@@ -52,6 +57,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDMarketplaceUsageReport,
 		ScheduleIDDailyDraftAndCompute,
 		ScheduleIDDraftInvoiceFinalization,
+		ScheduleIDRevenueRollup,
 	}
 }
 

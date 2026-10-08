@@ -25,208 +25,208 @@ type SubscriptionScheduleUpdate struct {
 }
 
 // Where appends a list predicates to the SubscriptionScheduleUpdate builder.
-func (ssu *SubscriptionScheduleUpdate) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleUpdate {
-	ssu.mutation.Where(ps...)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (ssu *SubscriptionScheduleUpdate) SetStatus(s string) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetStatus(s)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetStatus(v string) *SubscriptionScheduleUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableStatus(s *string) *SubscriptionScheduleUpdate {
-	if s != nil {
-		ssu.SetStatus(*s)
+func (_u *SubscriptionScheduleUpdate) SetNillableStatus(v *string) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return ssu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ssu *SubscriptionScheduleUpdate) SetUpdatedAt(t time.Time) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetUpdatedAt(t)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetUpdatedAt(v time.Time) *SubscriptionScheduleUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ssu *SubscriptionScheduleUpdate) SetUpdatedBy(s string) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetUpdatedBy(s)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetUpdatedBy(v string) *SubscriptionScheduleUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableUpdatedBy(s *string) *SubscriptionScheduleUpdate {
-	if s != nil {
-		ssu.SetUpdatedBy(*s)
+func (_u *SubscriptionScheduleUpdate) SetNillableUpdatedBy(v *string) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return ssu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (ssu *SubscriptionScheduleUpdate) ClearUpdatedBy() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearUpdatedBy()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearUpdatedBy() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (ssu *SubscriptionScheduleUpdate) SetMetadata(m map[string]string) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetMetadata(m)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetMetadata(v map[string]string) *SubscriptionScheduleUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (ssu *SubscriptionScheduleUpdate) ClearMetadata() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearMetadata()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearMetadata() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (ssu *SubscriptionScheduleUpdate) SetSubscriptionID(s string) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetSubscriptionID(s)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetSubscriptionID(v string) *SubscriptionScheduleUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableSubscriptionID(s *string) *SubscriptionScheduleUpdate {
-	if s != nil {
-		ssu.SetSubscriptionID(*s)
+func (_u *SubscriptionScheduleUpdate) SetNillableSubscriptionID(v *string) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return ssu
+	return _u
 }
 
 // SetScheduleType sets the "schedule_type" field.
-func (ssu *SubscriptionScheduleUpdate) SetScheduleType(tsct types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetScheduleType(tsct)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetScheduleType(v types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdate {
+	_u.mutation.SetScheduleType(v)
+	return _u
 }
 
 // SetNillableScheduleType sets the "schedule_type" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableScheduleType(tsct *types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdate {
-	if tsct != nil {
-		ssu.SetScheduleType(*tsct)
+func (_u *SubscriptionScheduleUpdate) SetNillableScheduleType(v *types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetScheduleType(*v)
 	}
-	return ssu
+	return _u
 }
 
 // SetScheduledAt sets the "scheduled_at" field.
-func (ssu *SubscriptionScheduleUpdate) SetScheduledAt(t time.Time) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetScheduledAt(t)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetScheduledAt(v time.Time) *SubscriptionScheduleUpdate {
+	_u.mutation.SetScheduledAt(v)
+	return _u
 }
 
 // SetNillableScheduledAt sets the "scheduled_at" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableScheduledAt(t *time.Time) *SubscriptionScheduleUpdate {
-	if t != nil {
-		ssu.SetScheduledAt(*t)
+func (_u *SubscriptionScheduleUpdate) SetNillableScheduledAt(v *time.Time) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetScheduledAt(*v)
 	}
-	return ssu
+	return _u
 }
 
 // SetConfiguration sets the "configuration" field.
-func (ssu *SubscriptionScheduleUpdate) SetConfiguration(m map[string]interface{}) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetConfiguration(m)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetConfiguration(v map[string]interface{}) *SubscriptionScheduleUpdate {
+	_u.mutation.SetConfiguration(v)
+	return _u
 }
 
 // SetExecutedAt sets the "executed_at" field.
-func (ssu *SubscriptionScheduleUpdate) SetExecutedAt(t time.Time) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetExecutedAt(t)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetExecutedAt(v time.Time) *SubscriptionScheduleUpdate {
+	_u.mutation.SetExecutedAt(v)
+	return _u
 }
 
 // SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableExecutedAt(t *time.Time) *SubscriptionScheduleUpdate {
-	if t != nil {
-		ssu.SetExecutedAt(*t)
+func (_u *SubscriptionScheduleUpdate) SetNillableExecutedAt(v *time.Time) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetExecutedAt(*v)
 	}
-	return ssu
+	return _u
 }
 
 // ClearExecutedAt clears the value of the "executed_at" field.
-func (ssu *SubscriptionScheduleUpdate) ClearExecutedAt() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearExecutedAt()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearExecutedAt() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearExecutedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (ssu *SubscriptionScheduleUpdate) SetCancelledAt(t time.Time) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetCancelledAt(t)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetCancelledAt(v time.Time) *SubscriptionScheduleUpdate {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableCancelledAt(t *time.Time) *SubscriptionScheduleUpdate {
-	if t != nil {
-		ssu.SetCancelledAt(*t)
+func (_u *SubscriptionScheduleUpdate) SetNillableCancelledAt(v *time.Time) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return ssu
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (ssu *SubscriptionScheduleUpdate) ClearCancelledAt() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearCancelledAt()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearCancelledAt() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetExecutionResult sets the "execution_result" field.
-func (ssu *SubscriptionScheduleUpdate) SetExecutionResult(m map[string]interface{}) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetExecutionResult(m)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetExecutionResult(v map[string]interface{}) *SubscriptionScheduleUpdate {
+	_u.mutation.SetExecutionResult(v)
+	return _u
 }
 
 // ClearExecutionResult clears the value of the "execution_result" field.
-func (ssu *SubscriptionScheduleUpdate) ClearExecutionResult() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearExecutionResult()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearExecutionResult() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearExecutionResult()
+	return _u
 }
 
 // SetErrorMessage sets the "error_message" field.
-func (ssu *SubscriptionScheduleUpdate) SetErrorMessage(s string) *SubscriptionScheduleUpdate {
-	ssu.mutation.SetErrorMessage(s)
-	return ssu
+func (_u *SubscriptionScheduleUpdate) SetErrorMessage(v string) *SubscriptionScheduleUpdate {
+	_u.mutation.SetErrorMessage(v)
+	return _u
 }
 
 // SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (ssu *SubscriptionScheduleUpdate) SetNillableErrorMessage(s *string) *SubscriptionScheduleUpdate {
-	if s != nil {
-		ssu.SetErrorMessage(*s)
+func (_u *SubscriptionScheduleUpdate) SetNillableErrorMessage(v *string) *SubscriptionScheduleUpdate {
+	if v != nil {
+		_u.SetErrorMessage(*v)
 	}
-	return ssu
+	return _u
 }
 
 // ClearErrorMessage clears the value of the "error_message" field.
-func (ssu *SubscriptionScheduleUpdate) ClearErrorMessage() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearErrorMessage()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearErrorMessage() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearErrorMessage()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (ssu *SubscriptionScheduleUpdate) SetSubscription(s *Subscription) *SubscriptionScheduleUpdate {
-	return ssu.SetSubscriptionID(s.ID)
+func (_u *SubscriptionScheduleUpdate) SetSubscription(v *Subscription) *SubscriptionScheduleUpdate {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionScheduleMutation object of the builder.
-func (ssu *SubscriptionScheduleUpdate) Mutation() *SubscriptionScheduleMutation {
-	return ssu.mutation
+func (_u *SubscriptionScheduleUpdate) Mutation() *SubscriptionScheduleMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (ssu *SubscriptionScheduleUpdate) ClearSubscription() *SubscriptionScheduleUpdate {
-	ssu.mutation.ClearSubscription()
-	return ssu
+func (_u *SubscriptionScheduleUpdate) ClearSubscription() *SubscriptionScheduleUpdate {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (ssu *SubscriptionScheduleUpdate) Save(ctx context.Context) (int, error) {
-	ssu.defaults()
-	return withHooks(ctx, ssu.sqlSave, ssu.mutation, ssu.hooks)
+func (_u *SubscriptionScheduleUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ssu *SubscriptionScheduleUpdate) SaveX(ctx context.Context) int {
-	affected, err := ssu.Save(ctx)
+func (_u *SubscriptionScheduleUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -234,114 +234,114 @@ func (ssu *SubscriptionScheduleUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (ssu *SubscriptionScheduleUpdate) Exec(ctx context.Context) error {
-	_, err := ssu.Save(ctx)
+func (_u *SubscriptionScheduleUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ssu *SubscriptionScheduleUpdate) ExecX(ctx context.Context) {
-	if err := ssu.Exec(ctx); err != nil {
+func (_u *SubscriptionScheduleUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ssu *SubscriptionScheduleUpdate) defaults() {
-	if _, ok := ssu.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionScheduleUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionschedule.UpdateDefaultUpdatedAt()
-		ssu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ssu *SubscriptionScheduleUpdate) check() error {
-	if v, ok := ssu.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionScheduleUpdate) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionschedule.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := ssu.mutation.ScheduleType(); ok {
+	if v, ok := _u.mutation.ScheduleType(); ok {
 		if err := subscriptionschedule.ScheduleTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "schedule_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.schedule_type": %w`, err)}
 		}
 	}
-	if ssu.mutation.SubscriptionCleared() && len(ssu.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionSchedule.subscription"`)
 	}
 	return nil
 }
 
-func (ssu *SubscriptionScheduleUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := ssu.check(); err != nil {
-		return n, err
+func (_u *SubscriptionScheduleUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionschedule.Table, subscriptionschedule.Columns, sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString))
-	if ps := ssu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := ssu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionschedule.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := ssu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ssu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionschedule.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := ssu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedBy, field.TypeString, value)
 	}
-	if ssu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionschedule.FieldUpdatedBy, field.TypeString)
 	}
-	if ssu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionschedule.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := ssu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionschedule.FieldMetadata, field.TypeJSON, value)
 	}
-	if ssu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionschedule.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := ssu.mutation.ScheduleType(); ok {
+	if value, ok := _u.mutation.ScheduleType(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduleType, field.TypeString, value)
 	}
-	if value, ok := ssu.mutation.ScheduledAt(); ok {
+	if value, ok := _u.mutation.ScheduledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduledAt, field.TypeTime, value)
 	}
-	if value, ok := ssu.mutation.Configuration(); ok {
+	if value, ok := _u.mutation.Configuration(); ok {
 		_spec.SetField(subscriptionschedule.FieldConfiguration, field.TypeJSON, value)
 	}
-	if value, ok := ssu.mutation.ExecutedAt(); ok {
+	if value, ok := _u.mutation.ExecutedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutedAt, field.TypeTime, value)
 	}
-	if ssu.mutation.ExecutedAtCleared() {
+	if _u.mutation.ExecutedAtCleared() {
 		_spec.ClearField(subscriptionschedule.FieldExecutedAt, field.TypeTime)
 	}
-	if value, ok := ssu.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldCancelledAt, field.TypeTime, value)
 	}
-	if ssu.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(subscriptionschedule.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := ssu.mutation.ExecutionResult(); ok {
+	if value, ok := _u.mutation.ExecutionResult(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutionResult, field.TypeJSON, value)
 	}
-	if ssu.mutation.ExecutionResultCleared() {
+	if _u.mutation.ExecutionResultCleared() {
 		_spec.ClearField(subscriptionschedule.FieldExecutionResult, field.TypeJSON)
 	}
-	if value, ok := ssu.mutation.ErrorMessage(); ok {
+	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(subscriptionschedule.FieldErrorMessage, field.TypeString, value)
 	}
-	if ssu.mutation.ErrorMessageCleared() {
+	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(subscriptionschedule.FieldErrorMessage, field.TypeString)
 	}
-	if ssu.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -354,7 +354,7 @@ func (ssu *SubscriptionScheduleUpdate) sqlSave(ctx context.Context) (n int, err 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ssu.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -370,7 +370,7 @@ func (ssu *SubscriptionScheduleUpdate) sqlSave(ctx context.Context) (n int, err 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, ssu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionschedule.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -378,8 +378,8 @@ func (ssu *SubscriptionScheduleUpdate) sqlSave(ctx context.Context) (n int, err 
 		}
 		return 0, err
 	}
-	ssu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SubscriptionScheduleUpdateOne is the builder for updating a single SubscriptionSchedule entity.
@@ -391,215 +391,215 @@ type SubscriptionScheduleUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetStatus(s string) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetStatus(s)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetStatus(v string) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableStatus(s *string) *SubscriptionScheduleUpdateOne {
-	if s != nil {
-		ssuo.SetStatus(*s)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableStatus(v *string) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetUpdatedAt(t time.Time) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetUpdatedAt(t)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetUpdatedBy(s string) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetUpdatedBy(s)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetUpdatedBy(v string) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableUpdatedBy(s *string) *SubscriptionScheduleUpdateOne {
-	if s != nil {
-		ssuo.SetUpdatedBy(*s)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableUpdatedBy(v *string) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearUpdatedBy() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearUpdatedBy()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearUpdatedBy() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetMetadata(m map[string]string) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetMetadata(m)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetMetadata(v map[string]string) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearMetadata() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearMetadata()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearMetadata() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetSubscriptionID(s string) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetSubscriptionID(s)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetSubscriptionID(v string) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableSubscriptionID(s *string) *SubscriptionScheduleUpdateOne {
-	if s != nil {
-		ssuo.SetSubscriptionID(*s)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableSubscriptionID(v *string) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // SetScheduleType sets the "schedule_type" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetScheduleType(tsct types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetScheduleType(tsct)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetScheduleType(v types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetScheduleType(v)
+	return _u
 }
 
 // SetNillableScheduleType sets the "schedule_type" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableScheduleType(tsct *types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdateOne {
-	if tsct != nil {
-		ssuo.SetScheduleType(*tsct)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableScheduleType(v *types.SubscriptionScheduleChangeType) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetScheduleType(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // SetScheduledAt sets the "scheduled_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetScheduledAt(t time.Time) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetScheduledAt(t)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetScheduledAt(v time.Time) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetScheduledAt(v)
+	return _u
 }
 
 // SetNillableScheduledAt sets the "scheduled_at" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableScheduledAt(t *time.Time) *SubscriptionScheduleUpdateOne {
-	if t != nil {
-		ssuo.SetScheduledAt(*t)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableScheduledAt(v *time.Time) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetScheduledAt(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // SetConfiguration sets the "configuration" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetConfiguration(m map[string]interface{}) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetConfiguration(m)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetConfiguration(v map[string]interface{}) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetConfiguration(v)
+	return _u
 }
 
 // SetExecutedAt sets the "executed_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetExecutedAt(t time.Time) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetExecutedAt(t)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetExecutedAt(v time.Time) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetExecutedAt(v)
+	return _u
 }
 
 // SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableExecutedAt(t *time.Time) *SubscriptionScheduleUpdateOne {
-	if t != nil {
-		ssuo.SetExecutedAt(*t)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableExecutedAt(v *time.Time) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetExecutedAt(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // ClearExecutedAt clears the value of the "executed_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearExecutedAt() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearExecutedAt()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearExecutedAt() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearExecutedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetCancelledAt(t time.Time) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetCancelledAt(t)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetCancelledAt(v time.Time) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableCancelledAt(t *time.Time) *SubscriptionScheduleUpdateOne {
-	if t != nil {
-		ssuo.SetCancelledAt(*t)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableCancelledAt(v *time.Time) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearCancelledAt() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearCancelledAt()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearCancelledAt() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetExecutionResult sets the "execution_result" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetExecutionResult(m map[string]interface{}) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetExecutionResult(m)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetExecutionResult(v map[string]interface{}) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetExecutionResult(v)
+	return _u
 }
 
 // ClearExecutionResult clears the value of the "execution_result" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearExecutionResult() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearExecutionResult()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearExecutionResult() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearExecutionResult()
+	return _u
 }
 
 // SetErrorMessage sets the "error_message" field.
-func (ssuo *SubscriptionScheduleUpdateOne) SetErrorMessage(s string) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.SetErrorMessage(s)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) SetErrorMessage(v string) *SubscriptionScheduleUpdateOne {
+	_u.mutation.SetErrorMessage(v)
+	return _u
 }
 
 // SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (ssuo *SubscriptionScheduleUpdateOne) SetNillableErrorMessage(s *string) *SubscriptionScheduleUpdateOne {
-	if s != nil {
-		ssuo.SetErrorMessage(*s)
+func (_u *SubscriptionScheduleUpdateOne) SetNillableErrorMessage(v *string) *SubscriptionScheduleUpdateOne {
+	if v != nil {
+		_u.SetErrorMessage(*v)
 	}
-	return ssuo
+	return _u
 }
 
 // ClearErrorMessage clears the value of the "error_message" field.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearErrorMessage() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearErrorMessage()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearErrorMessage() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearErrorMessage()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (ssuo *SubscriptionScheduleUpdateOne) SetSubscription(s *Subscription) *SubscriptionScheduleUpdateOne {
-	return ssuo.SetSubscriptionID(s.ID)
+func (_u *SubscriptionScheduleUpdateOne) SetSubscription(v *Subscription) *SubscriptionScheduleUpdateOne {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionScheduleMutation object of the builder.
-func (ssuo *SubscriptionScheduleUpdateOne) Mutation() *SubscriptionScheduleMutation {
-	return ssuo.mutation
+func (_u *SubscriptionScheduleUpdateOne) Mutation() *SubscriptionScheduleMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (ssuo *SubscriptionScheduleUpdateOne) ClearSubscription() *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.ClearSubscription()
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) ClearSubscription() *SubscriptionScheduleUpdateOne {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Where appends a list predicates to the SubscriptionScheduleUpdate builder.
-func (ssuo *SubscriptionScheduleUpdateOne) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleUpdateOne {
-	ssuo.mutation.Where(ps...)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (ssuo *SubscriptionScheduleUpdateOne) Select(field string, fields ...string) *SubscriptionScheduleUpdateOne {
-	ssuo.fields = append([]string{field}, fields...)
-	return ssuo
+func (_u *SubscriptionScheduleUpdateOne) Select(field string, fields ...string) *SubscriptionScheduleUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated SubscriptionSchedule entity.
-func (ssuo *SubscriptionScheduleUpdateOne) Save(ctx context.Context) (*SubscriptionSchedule, error) {
-	ssuo.defaults()
-	return withHooks(ctx, ssuo.sqlSave, ssuo.mutation, ssuo.hooks)
+func (_u *SubscriptionScheduleUpdateOne) Save(ctx context.Context) (*SubscriptionSchedule, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ssuo *SubscriptionScheduleUpdateOne) SaveX(ctx context.Context) *SubscriptionSchedule {
-	node, err := ssuo.Save(ctx)
+func (_u *SubscriptionScheduleUpdateOne) SaveX(ctx context.Context) *SubscriptionSchedule {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -607,55 +607,55 @@ func (ssuo *SubscriptionScheduleUpdateOne) SaveX(ctx context.Context) *Subscript
 }
 
 // Exec executes the query on the entity.
-func (ssuo *SubscriptionScheduleUpdateOne) Exec(ctx context.Context) error {
-	_, err := ssuo.Save(ctx)
+func (_u *SubscriptionScheduleUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ssuo *SubscriptionScheduleUpdateOne) ExecX(ctx context.Context) {
-	if err := ssuo.Exec(ctx); err != nil {
+func (_u *SubscriptionScheduleUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ssuo *SubscriptionScheduleUpdateOne) defaults() {
-	if _, ok := ssuo.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionScheduleUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionschedule.UpdateDefaultUpdatedAt()
-		ssuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ssuo *SubscriptionScheduleUpdateOne) check() error {
-	if v, ok := ssuo.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionScheduleUpdateOne) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionschedule.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := ssuo.mutation.ScheduleType(); ok {
+	if v, ok := _u.mutation.ScheduleType(); ok {
 		if err := subscriptionschedule.ScheduleTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "schedule_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionSchedule.schedule_type": %w`, err)}
 		}
 	}
-	if ssuo.mutation.SubscriptionCleared() && len(ssuo.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionSchedule.subscription"`)
 	}
 	return nil
 }
 
-func (ssuo *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionSchedule, err error) {
-	if err := ssuo.check(); err != nil {
+func (_u *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionSchedule, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionschedule.Table, subscriptionschedule.Columns, sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString))
-	id, ok := ssuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "SubscriptionSchedule.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := ssuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionschedule.FieldID)
 		for _, f := range fields {
@@ -667,71 +667,71 @@ func (ssuo *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *
 			}
 		}
 	}
-	if ps := ssuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := ssuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionschedule.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := ssuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if ssuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionschedule.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := ssuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionschedule.FieldUpdatedBy, field.TypeString, value)
 	}
-	if ssuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionschedule.FieldUpdatedBy, field.TypeString)
 	}
-	if ssuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionschedule.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := ssuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionschedule.FieldMetadata, field.TypeJSON, value)
 	}
-	if ssuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionschedule.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := ssuo.mutation.ScheduleType(); ok {
+	if value, ok := _u.mutation.ScheduleType(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduleType, field.TypeString, value)
 	}
-	if value, ok := ssuo.mutation.ScheduledAt(); ok {
+	if value, ok := _u.mutation.ScheduledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldScheduledAt, field.TypeTime, value)
 	}
-	if value, ok := ssuo.mutation.Configuration(); ok {
+	if value, ok := _u.mutation.Configuration(); ok {
 		_spec.SetField(subscriptionschedule.FieldConfiguration, field.TypeJSON, value)
 	}
-	if value, ok := ssuo.mutation.ExecutedAt(); ok {
+	if value, ok := _u.mutation.ExecutedAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutedAt, field.TypeTime, value)
 	}
-	if ssuo.mutation.ExecutedAtCleared() {
+	if _u.mutation.ExecutedAtCleared() {
 		_spec.ClearField(subscriptionschedule.FieldExecutedAt, field.TypeTime)
 	}
-	if value, ok := ssuo.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(subscriptionschedule.FieldCancelledAt, field.TypeTime, value)
 	}
-	if ssuo.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(subscriptionschedule.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := ssuo.mutation.ExecutionResult(); ok {
+	if value, ok := _u.mutation.ExecutionResult(); ok {
 		_spec.SetField(subscriptionschedule.FieldExecutionResult, field.TypeJSON, value)
 	}
-	if ssuo.mutation.ExecutionResultCleared() {
+	if _u.mutation.ExecutionResultCleared() {
 		_spec.ClearField(subscriptionschedule.FieldExecutionResult, field.TypeJSON)
 	}
-	if value, ok := ssuo.mutation.ErrorMessage(); ok {
+	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(subscriptionschedule.FieldErrorMessage, field.TypeString, value)
 	}
-	if ssuo.mutation.ErrorMessageCleared() {
+	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(subscriptionschedule.FieldErrorMessage, field.TypeString)
 	}
-	if ssuo.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -744,7 +744,7 @@ func (ssuo *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := ssuo.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -760,10 +760,10 @@ func (ssuo *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &SubscriptionSchedule{config: ssuo.config}
+	_node = &SubscriptionSchedule{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, ssuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionschedule.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -771,6 +771,6 @@ func (ssuo *SubscriptionScheduleUpdateOne) sqlSave(ctx context.Context) (_node *
 		}
 		return nil, err
 	}
-	ssuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

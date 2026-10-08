@@ -47,6 +47,30 @@ type AggregatedFeature struct {
 	Sources     []*EntitlementSource   `json:"sources"`
 }
 
+// GrantState is the runtime half of a grant-backed entitlement: what the customer
+// can spend right now, and what led up to it.
+type GrantState struct {
+	Allowances []*GrantAllowanceState `json:"allowances"`
+}
+
+// GrantAllowanceState is one span of a grant-backed entitlement: what the customer
+// was given over [ValidFrom, ValidTo) and what they spent against it.
+type GrantAllowanceState struct {
+	GrantID        string                        `json:"grant_id"`
+	EntitlementID  string                        `json:"entitlement_id"`
+	Measure        types.EntitlementGrantMeasure `json:"measure"`
+	Unlimited      bool                          `json:"unlimited"`
+	Quota          decimal.Decimal               `json:"quota" swaggertype:"string"`
+	Usage          decimal.Decimal               `json:"usage" swaggertype:"string"`
+	Remaining      *decimal.Decimal              `json:"remaining,omitempty" swaggertype:"string"`
+	ValidFrom      time.Time                     `json:"valid_from"`
+	ValidTo        time.Time                     `json:"valid_to"`
+	Status         types.EntitlementGrantStatus  `json:"status"`
+	IsActive       bool                          `json:"is_active"`
+	LastComputedAt *time.Time                    `json:"last_computed_at,omitempty"`
+	QuotaCrossedAt *time.Time                    `json:"quota_crossed_at,omitempty"`
+}
+
 // AggregatedEntitlement contains the final calculated entitlement values.
 //
 // For parallel aggregation, Buckets carries the per-entitlement view — each
@@ -60,17 +84,24 @@ type AggregatedEntitlement struct {
 	ConfigValues     []map[string]any                  `json:"config_values,omitempty"`
 	AggregationMode  types.EntitlementAggregationMode  `json:"aggregation_mode,omitempty"`
 	Buckets          []*AggregatedEntitlementBucket    `json:"buckets,omitempty"`
+	GrantConfig
+	GrantState *GrantState `json:"grant_state,omitempty"`
 }
 
-// AggregatedEntitlementBucket is one independent budget within a parallel feature.
-type AggregatedEntitlementBucket struct {
-	EntitlementID      string                             `json:"entitlement_id"`
-	SourceEntityID     string                             `json:"source_entity_id"`
-	UsageLimit         *int64                             `json:"usage_limit,omitempty"`
+type GrantConfig struct {
 	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
 	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
 	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
 	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantUnlimited     bool                               `json:"grant_unlimited,omitempty"`
+}
+
+// AggregatedEntitlementBucket is one independent budget within a parallel feature.
+type AggregatedEntitlementBucket struct {
+	EntitlementID  string `json:"entitlement_id"`
+	SourceEntityID string `json:"source_entity_id"`
+	UsageLimit     *int64 `json:"usage_limit,omitempty"`
+	GrantConfig
 }
 
 // EntitlementSourceType defines the type of entitlement source
@@ -153,4 +184,13 @@ type FeatureUsageSummary struct {
 	IsSoftLimit      bool                 `json:"is_soft_limit"`
 	NextUsageResetAt *time.Time           `json:"next_usage_reset_at"`
 	Sources          []*EntitlementSource `json:"sources"`
+	GrantState       *GrantState          `json:"grant_state,omitempty"`
+
+	GrantConfig
+
+	// Buckets is one entry per independent budget on a parallel feature. The scalar
+	// figures above cannot describe several budgets at once — a sum is not spendable
+	// from any one of them — so a client showing a parallel feature reads these instead.
+	// Empty for additive features, where the scalars are the whole truth.
+	Buckets []*AggregatedEntitlementBucket `json:"buckets,omitempty"`
 }

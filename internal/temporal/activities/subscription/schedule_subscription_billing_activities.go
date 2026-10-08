@@ -139,6 +139,8 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 			totalProcessed++
 		}
 
+		activity.RecordHeartbeat(ctx, offset+len(subs.Items))
+
 		// Check if we got fewer results than batch size (last page)
 		if len(subs.Items) < batchSize {
 			logger.Info("Reached last page of subscriptions", "total_processed", totalProcessed)

@@ -13,87 +13,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// attachAddon attaches an addon and settles the proration it raises. It is a one-entry adapter
-// over AddonChangeService.
-func (s *subscriptionService) attachAddon(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	req *dto.AddAddonToSubscriptionRequest,
-	checkout *dto.CheckoutParams,
-) (*dto.AddonChangeResult, error) {
-	// Deliberately above the spine: the batch API does not inherit this guard, or the swap it
-	// rejects could never be expressed.
-	if !req.SkipEntityValidation {
-		if err := s.validateEntitlementCompatibility(ctx, sub.ID, req.AddonID); err != nil {
-			return nil, err
-		}
-	}
-
-	changeSvc := NewAddonChangeService(s.ServiceParams)
-	changeReq := AddonChangeRequest{
-		Subscription: sub,
-		Adds:         []AddonAdd{{Request: req}},
-	}
-
-	if req.PreviewOnly {
-		config, settled, err := changeSvc.Preview(ctx, changeReq)
-		if err != nil {
-			return nil, err
-		}
-
-		return attachChangeResult(config, settled), nil
-	}
-
-	if checkout != nil {
-		gated, err := changeSvc.ExecutePayFirst(ctx, changeReq, checkout)
-		if err != nil {
-			return nil, err
-		}
-
-		if gated != nil {
-			return &dto.AddonChangeResult{
-				Association:     gated.getConfig().getAttaches()[0].getAssociation(),
-				CheckoutSession: gated.getSession(),
-				Invoice:         gated.getSettled().GetDraft(),
-			}, nil
-		}
-		// Zero or negative net → nothing to collect, so fall through and attach immediately.
-	}
-
-	config, settled, err := changeSvc.Execute(ctx, changeReq)
-	if err != nil {
-		return nil, err
-	}
-
-	return attachChangeResult(config, settled), nil
-}
-
-func attachChangeResult(config *addonChangeConfig, settled *SettleProrationResult) *dto.AddonChangeResult {
-	attach := config.getAttaches()[0]
-
-	return &dto.AddonChangeResult{
-		Association:      attach.getAssociation(),
-		CreatedLineItems: attach.getLineItems(),
-		ChangedInvoices:  settled.GetChanged(),
-		EffectiveDate:    attach.getEffectiveDate(),
-	}
-}
-
-// anyPendingCheckoutSession returns the outstanding payment-gated change on a subscription, if
-// any. At most one can exist: starting a second is rejected against this very lookup.
-func anyPendingCheckoutSession(
-	ctx context.Context,
-	sp ServiceParams,
-	customerID string,
-	subscriptionID string,
-) ([]*domainCheckout.CheckoutSession, error) {
-	filter := pendingCheckoutSessionFilter(customerID, subscriptionID,
-		types.CheckoutActionModifySubscription, types.CheckoutActionAddAddon)
-	filter.Limit = lo.ToPtr(1)
-
-	return sp.CheckoutSessionRepo.List(ctx, filter)
-}
-
 // pendingAddAddonCheckoutSessions returns EVERY open addon checkout on the subscription.
 // A scan for one association has to see all of them, not whichever row came back first.
 func pendingAddAddonCheckoutSessions(
@@ -104,24 +23,6 @@ func pendingAddAddonCheckoutSessions(
 ) ([]*domainCheckout.CheckoutSession, error) {
 	return sp.CheckoutSessionRepo.List(ctx,
 		pendingCheckoutSessionFilter(customerID, subscriptionID, types.CheckoutActionAddAddon))
-}
-
-// pendingCheckoutSessionFilter matches the subscription's checkouts that are still open.
-func pendingCheckoutSessionFilter(
-	customerID string,
-	subscriptionID string,
-	actions ...types.CheckoutAction,
-) *types.CheckoutSessionFilter {
-	return &types.CheckoutSessionFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
-		CustomerIDs: []string{customerID},
-		Actions:     actions,
-		CheckoutStatuses: []types.CheckoutStatus{
-			types.CheckoutStatusInitiated,
-			types.CheckoutStatusPending,
-		},
-		Configuration: &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
-	}
 }
 
 // pendingCheckoutSessionForAssociation reports whether an outstanding checkout already gates this
@@ -286,89 +187,17 @@ func (s *subscriptionService) replayAddonChangeRequest(
 
 		req.Adds = append(req.Adds, AddonAdd{
 			Request: &dto.AddAddonToSubscriptionRequest{
-				AddonID:              ref.AddonID,
-				Cadence:              ref.Cadence,
-				StartDate:            lo.ToPtr(ref.StartDate),
-				ProrationBehavior:    ref.ProrationBehavior,
-				Metadata:             association.Metadata,
-				SkipEntityValidation: true,
+				AddonID:           ref.AddonID,
+				Cadence:           ref.Cadence,
+				StartDate:         lo.ToPtr(ref.StartDate),
+				ProrationBehavior: ref.ProrationBehavior,
+				Metadata:          association.Metadata,
 			},
 			Existing: association,
 		})
 	}
 
 	return req, nil
-}
-
-// detachAddon removes an addon and credits back the unused prepaid time it paid for. It is a
-// one-entry adapter over AddonChangeService.
-func (s *subscriptionService) detachAddon(
-	ctx context.Context,
-	req *dto.RemoveAddonRequest,
-	subscriptionId string,
-) (*dto.AddonChangeResult, error) {
-	sub, err := s.subscriptionForDetach(ctx, req.AddonAssociationID, subscriptionId)
-	if err != nil {
-		return nil, err
-	}
-
-	changeSvc := NewAddonChangeService(s.ServiceParams)
-	changeReq := AddonChangeRequest{
-		Subscription: sub,
-		Removes:      []*dto.RemoveAddonRequest{req},
-	}
-
-	if req.PreviewOnly {
-		config, settled, err := changeSvc.Preview(ctx, changeReq)
-		if err != nil {
-			return nil, err
-		}
-
-		detach := config.getDetaches()[0]
-		// The cancelled association Persist would write, built but not saved.
-		cancelled := addonassociation.NewAddonAssociationBuilder(detach.getAssociation()).
-			WithCancellation(detach.getEffectiveDate(), detach.getReason()).
-			Build()
-
-		return &dto.AddonChangeResult{
-			Association:     cancelled,
-			EndedLineItems:  detach.getLineItems(),
-			ChangedInvoices: settled.GetChanged(),
-			EffectiveDate:   detach.getEffectiveDate(),
-		}, nil
-	}
-
-	config, settled, err := changeSvc.Execute(ctx, changeReq)
-	if err != nil {
-		return nil, err
-	}
-
-	detach := config.getDetaches()[0]
-
-	return &dto.AddonChangeResult{
-		Association:     detach.getAssociation(),
-		EndedLineItems:  detach.getLineItems(),
-		ChangedInvoices: settled.GetChanged(),
-		EffectiveDate:   detach.getEffectiveDate(),
-	}, nil
-}
-
-// subscriptionForDetach resolves the subscription a removal targets. The deprecated
-// DELETE /subscriptions/addon route carries only the association, so it is read back off that.
-func (s *subscriptionService) subscriptionForDetach(
-	ctx context.Context,
-	associationID string,
-	subscriptionID string,
-) (*subscription.Subscription, error) {
-	if subscriptionID == "" {
-		association, err := s.AddonAssociationRepo.GetByID(ctx, associationID)
-		if err != nil {
-			return nil, err
-		}
-		subscriptionID = association.EntityID
-	}
-
-	return s.SubRepo.Get(ctx, subscriptionID)
 }
 
 // createAddonDetachParams resolves everything a removal needs — validations, the association,

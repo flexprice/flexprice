@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -134,7 +135,7 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_Checkout_RejectsConflictin
 			r.DueDate = lo.ToPtr(time.Now().UTC().Add(-time.Hour))
 		}, "due_date must be in the future"},
 		{"unsupported_provider", func(r *dto.CreateInvoiceRequest) {
-			r.Checkout.PaymentProvider = types.CheckoutPaymentProvider("stripe")
+			r.Checkout.PaymentProvider = types.CheckoutPaymentProvider("unsupported")
 		}, "invalid checkout payment provider"},
 	}
 
@@ -199,9 +200,45 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_Checkout_ProviderLinkFailu
 		Actions:     []types.CheckoutAction{types.CheckoutActionPayInvoice},
 	})
 	s.Require().NoError(listErr)
+	s.Require().NotEmpty(sessions)
 	for _, sess := range sessions {
-		s.True(sess.CheckoutStatus.IsTerminal(), "a failed fulfilment must leave the session terminal")
+		s.Equal(types.CheckoutStatusFailed, sess.CheckoutStatus, "a failed fulfilment must leave the session failed")
+		s.NotNil(sess.FailureReason)
 	}
+
+	// The caller got an error and never saw the session, so no session webhook is owed.
+	s.Empty(s.checkoutSessionEvents(), "creation-time failure must not publish checkout session events")
+}
+
+// A provider-reported failure on a live session still owes its subscribers the terminal event.
+func (s *InvoiceServiceSuite) TestPayInvoiceCheckout_ProviderFailurePublishesFailed() {
+	provider := s.stubCheckoutProvider()
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, s.gatedInvoiceRequest())
+	s.Require().NoError(err)
+
+	checkoutSvc := s.checkoutServiceWith(provider)
+	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, resp.CheckoutSession.ID, errors.New("payment link expired by provider")))
+
+	session, err := s.GetStores().CheckoutSessionRepo.Get(ctx, resp.CheckoutSession.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusFailed, session.CheckoutStatus)
+	s.Equal([]types.WebhookEventName{
+		types.WebhookEventCheckoutSessionInitiated,
+		types.WebhookEventCheckoutSessionFailed,
+	}, s.checkoutSessionEvents())
+}
+
+// checkoutSessionEvents returns the names of the checkout session webhooks published so far.
+func (s *InvoiceServiceSuite) checkoutSessionEvents() []types.WebhookEventName {
+	var names []types.WebhookEventName
+	for _, ev := range s.GetPublishedWebhooks() {
+		if ev.EntityType == types.SystemEntityTypeCheckoutSession {
+			names = append(names, ev.EventName)
+		}
+	}
+	return names
 }
 
 func (s *InvoiceServiceSuite) TestCompletePayInvoiceCheckout_FinalizesAndMarksPaid() {
@@ -249,6 +286,11 @@ func (s *InvoiceServiceSuite) TestPayInvoiceCheckout_ExpiryVoidsAndArchives() {
 	inv, err := s.GetStores().InvoiceRepo.Get(ctx, resp.ID)
 	s.Require().NoError(err)
 	s.Equal(types.StatusDeleted, inv.Status)
+
+	s.Equal([]types.WebhookEventName{
+		types.WebhookEventCheckoutSessionInitiated,
+		types.WebhookEventCheckoutSessionExpired,
+	}, s.checkoutSessionEvents())
 }
 
 func (s *InvoiceServiceSuite) TestPayInvoiceCheckout_CleanupIsIdempotent() {

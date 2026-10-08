@@ -36,6 +36,7 @@ const (
 	// InvoiceMetadataKeyCollapsedInvoiceDisplayName is the customer-facing label to use when a
 	// collector clubs the invoice lines into a single amount due item.
 	InvoiceMetadataKeyCollapsedInvoiceDisplayName InvoiceMetadataKey = "collapsed_invoice_display_name"
+	InvoiceMetadataKeyStripeHostedInvoiceURL      InvoiceMetadataKey = "stripe_hosted_invoice_url"
 )
 
 func CollapsedInvoiceDisplayName(md Metadata) string {
@@ -347,6 +348,16 @@ func (r InvoiceBillingReason) IsFirstSubscriptionOpenInvoiceReason() bool {
 	}
 }
 
+// IsPaymentGatingAllowedInvoiceReason reports whether this invoice's payment can change subscription status or grants.
+func (r InvoiceBillingReason) IsPaymentGatingAllowedInvoiceReason() bool {
+	return lo.Contains([]InvoiceBillingReason{
+		InvoiceBillingReasonSubscriptionCreate,
+		InvoiceBillingReasonSubscriptionTrialEnd,
+		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonSubscriptionCycle,
+	}, r)
+}
+
 const (
 	// InvoiceDefaultDueDays is the default number of days after invoice creation when payment is due
 	InvoiceDefaultDueDays = 1
@@ -517,6 +528,11 @@ type InvoiceFilter struct {
 	PeriodEndGTE *time.Time `json:"period_end_gte,omitempty" form:"period_end_gte" validate:"omitempty,time_rfc3339"`
 	// period_end_lte filters invoices with period_end <= value
 	PeriodEndLTE *time.Time `json:"period_end_lte,omitempty" form:"period_end_lte" validate:"omitempty,time_rfc3339"`
+
+	// finalized_at_gte filters invoices finalized at or after the given instant
+	FinalizedAtGTE *time.Time `json:"finalized_at_gte,omitempty" form:"finalized_at_gte" validate:"omitempty,time_rfc3339"`
+	// voided_at_gte filters invoices voided at or after the given instant
+	VoidedAtGTE *time.Time `json:"voided_at_gte,omitempty" form:"voided_at_gte" validate:"omitempty,time_rfc3339"`
 
 	// SkipLineItems if true, will not include line items in the response
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`

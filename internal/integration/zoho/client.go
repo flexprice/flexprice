@@ -62,7 +62,7 @@ func NewClient(
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
-		httpClient:        &http.Client{Timeout: 30 * time.Second, Transport: httpclient.OtelTransport(nil)},
+		httpClient:        &http.Client{Timeout: 30 * time.Second, Transport: httpclient.ProviderTransport(nil, logger, string(types.SecretProviderZohoBooks))},
 		logger:            logger,
 	}
 }

@@ -11,6 +11,7 @@ type Repository interface {
 	// Core operations
 	Create(ctx context.Context, entitlement *Entitlement) (*Entitlement, error)
 	Get(ctx context.Context, id string) (*Entitlement, error)
+	GetForUpdate(ctx context.Context, id string) (*Entitlement, error)
 	List(ctx context.Context, filter *types.EntitlementFilter) ([]*Entitlement, error)
 	Count(ctx context.Context, filter *types.EntitlementFilter) (int, error)
 	Update(ctx context.Context, entitlement *Entitlement) (*Entitlement, error)

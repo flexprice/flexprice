@@ -25,11 +25,11 @@ func (s *LineItemProrationServiceSuite) mixedQuote(effectiveDate time.Time) (*Li
 		Entries: []LineItemProrationEntry{
 			{
 				LineItem:    s.td.lineItem,
-				Price:       s.td.fixedPrice,
+				NewPrice:    s.td.fixedPrice,
 				Action:      types.ProrationActionAddItem,
 				NewQuantity: s.td.lineItem.Quantity,
 			},
-			{LineItem: outgoing, Price: s.td.fixedPrice, Action: types.ProrationActionRemoveItem},
+			{LineItem: outgoing, CurrentPrice: s.td.fixedPrice, CurrentQuantity: outgoing.Quantity, Action: types.ProrationActionRemoveItem},
 		},
 	}
 
@@ -435,7 +435,7 @@ func (s *LineItemProrationServiceSuite) TestCharacteriseSettlement_ChargesOnly()
 		IdempotencyKey: "characterise_charges_only",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -472,9 +472,9 @@ func (s *LineItemProrationServiceSuite) TestCharacteriseSettlement_CreditsOnly()
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "characterise_credits_only",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -510,14 +510,14 @@ func (s *LineItemProrationServiceSuite) TestSettlement_Mixed_NetsToOneDocument()
 		Entries: []LineItemProrationEntry{
 			{
 				LineItem:    s.td.lineItem,
-				Price:       s.td.fixedPrice,
+				NewPrice:    s.td.fixedPrice,
 				Action:      types.ProrationActionAddItem,
 				NewQuantity: s.td.lineItem.Quantity,
 			},
 			{
-				LineItem: outgoing,
-				Price:    s.td.fixedPrice,
-				Action:   types.ProrationActionRemoveItem,
+				LineItem:     outgoing,
+				CurrentPrice: s.td.fixedPrice, CurrentQuantity: outgoing.Quantity,
+				Action: types.ProrationActionRemoveItem,
 			},
 		},
 	}
@@ -551,9 +551,9 @@ func (s *LineItemProrationServiceSuite) TestCharacteriseSettlement_BehaviourNone
 		EffectiveDate: effectiveDate,
 		Behavior:      types.ProrationBehaviorNone,
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -582,7 +582,7 @@ func (s *LineItemProrationServiceSuite) TestCharacteriseSettlement_ChargeInvoice
 		IdempotencyKey: "characterise_request_shape",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},

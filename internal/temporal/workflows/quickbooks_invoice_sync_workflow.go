@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -19,7 +20,7 @@ const (
 // Steps:
 // 1. Sleep for 5 seconds to allow the invoice DB transaction to commit before fetching.
 // 2. Sync invoice to QuickBooks.
-func QuickBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.QuickBooksInvoiceSyncWorkflowInput) error {
+func QuickBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.QuickBooksInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting QuickBooks invoice sync workflow",
@@ -31,6 +32,10 @@ func QuickBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.QuickBooks
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderQuickBooks, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -45,7 +50,7 @@ func QuickBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.QuickBooks
 		return err
 	}
 
-	err := workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToQuickBooks, input).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToQuickBooks, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to sync invoice to QuickBooks",
 			"error", err,

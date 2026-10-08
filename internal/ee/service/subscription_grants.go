@@ -34,6 +34,10 @@ type GrantSource struct {
 	// EffectiveDate is when this source joins or leaves: it anchors the source's credit
 	// grant chain and dates its entitlement grant proration.
 	EffectiveDate time.Time
+	// This is the date used for validations and not for proration because prorations date
+	// is affected by other factors too like price start date which is not the same
+	// as requested date asked by caller
+	RequestedDate time.Time
 	// EndDate caps recurring grants at a time-bounded (onetime) addon's boundary.
 	EndDate  *time.Time
 	Behavior types.ProrationBehavior
@@ -41,6 +45,14 @@ type GrantSource struct {
 	// AddonID is the source's identity: credit grant templates and entitlement configs are
 	// both read from it, and removal targets the grants it materialized.
 	AddonID string
+}
+
+// requestedDate is what the caller asked for, falling back to the resolved date.
+func (src GrantSource) requestedDate() time.Time {
+	if src.RequestedDate.IsZero() {
+		return src.EffectiveDate
+	}
+	return src.RequestedDate
 }
 
 type GrantChangeRequest struct {
@@ -68,6 +80,8 @@ type GrantChangeConfig struct {
 
 	// entitlementChangeAt is the instant every window of this change is cut at.
 	entitlementChangeAt time.Time
+
+	entitlementChangeOrigin grantProrationSource
 }
 
 type subscriptionGrantService struct {
@@ -86,6 +100,10 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 	if req.Sub == nil {
 		return nil, ierr.NewError("subscription is required to resolve grant changes").
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.validateEntitlementCompatibility(ctx, req); err != nil {
+		return nil, err
 	}
 
 	cfg := &GrantChangeConfig{sub: req.Sub}
@@ -116,8 +134,55 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 		return nil, err
 	}
 
-	cfg.entitlementChangeAt = entitlementChangeAt(req)
+	now := time.Now().UTC()
+	cfg.entitlementChangeAt = entitlementChangeAt(req, now)
+
+	if err := s.validateChangeBoundary(ctx, cfg, now); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// closing at future date is not allowed right now because that leads
+// to us opening a grant for which usage is not correct as it's in future
+func (s *subscriptionGrantService) validateChangeBoundary(
+	ctx context.Context,
+	cfg *GrantChangeConfig,
+	now time.Time,
+) error {
+	if !cfg.entitlementChangeAt.After(now) {
+		return nil
+	}
+	if len(cfg.incomingECs) == 0 && len(cfg.entitlementsToRemove) == 0 {
+		return nil
+	}
+
+	live, err := NewEntitlementGrantService(s.ServiceParams).
+		LiveGrantsByFeature(ctx, cfg.sub, cfg.entitlementChangeAt)
+	if err != nil {
+		return err
+	}
+
+	// Asks Apply's own helper what it would close, so the two cannot drift apart.
+	toClose, _ := s.removalClosures(ctx, cfg, live)
+	for _, ec := range cfg.incomingECs {
+		toClose = append(toClose, live[ec.FeatureID]...)
+	}
+
+	closing := lo.FirstOrEmpty(lo.Compact(toClose))
+	if closing == nil {
+		return nil
+	}
+
+	return ierr.NewError("a future-dated change cannot cut a live entitlement grant window").
+		WithHint("Apply this change immediately, or schedule it for the period end").
+		WithReportableDetails(map[string]any{
+			"feature_id":     closing.FeatureID(),
+			"grant_id":       closing.ID,
+			"effective_date": cfg.entitlementChangeAt,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 func (s *subscriptionGrantService) Apply(ctx context.Context, cfg *GrantChangeConfig) error {
@@ -126,14 +191,17 @@ func (s *subscriptionGrantService) Apply(ctx context.Context, cfg *GrantChangeCo
 	}
 
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
-	for _, req := range cfg.creditGrantsToAdd {
-		if err := creditGrantService.CreateSubscriptionCreditGrants(ctx, req); err != nil {
+
+	// Cancellations run first: they target by addon id, which a re-attach of the same addon
+	// shares, so cancelling afterwards would end the grants this change just created.
+	for _, req := range cfg.creditGrantsToCancel {
+		if err := creditGrantService.CancelFutureSubscriptionGrants(ctx, req); err != nil {
 			return err
 		}
 	}
 
-	for _, req := range cfg.creditGrantsToCancel {
-		if err := creditGrantService.CancelFutureSubscriptionGrants(ctx, req); err != nil {
+	for _, req := range cfg.creditGrantsToAdd {
+		if err := creditGrantService.CreateSubscriptionCreditGrants(ctx, req); err != nil {
 			return err
 		}
 	}
@@ -141,10 +209,8 @@ func (s *subscriptionGrantService) Apply(ctx context.Context, cfg *GrantChangeCo
 	return s.applyEntitlementGrantChange(ctx, cfg)
 }
 
-// entitlementChangeAt is the instant the change cuts this cycle's windows: never in the past,
-// since a window already measured cannot be re-cut.
-func entitlementChangeAt(req GrantChangeRequest) time.Time {
-	at := time.Now().UTC()
+func entitlementChangeAt(req GrantChangeRequest, now time.Time) time.Time {
+	at := now
 	for _, src := range append(append([]GrantSource{}, req.Incoming...), req.Removed...) {
 		if src.ChangeType != types.ScheduleTypePeriodEnd {
 			at = types.LatestOf(at, src.EffectiveDate)
@@ -398,8 +464,6 @@ func (s *subscriptionGrantService) resolveIncomingGrants(
 				continue
 			}
 
-			// The audit metadata stays the first source's: the pooled row has one coefficient
-			// only while the sources share a date, which is what the cycle filter guarantees.
 			pooled[featureID] = entitlementgrant.NewEntitlementGrantBuilder(prior).
 				WithQuota(prior.Quota.Add(grant.Quota)).
 				WithWindow(types.EarliestOf(prior.ValidFrom, grant.ValidFrom), prior.ValidTo).

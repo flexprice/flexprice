@@ -20,7 +20,7 @@ type RazorpayCustomerService interface {
 	SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error)
 	GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error)
 	UpdateRazorpayCustomerNotes(ctx context.Context, razorpayCustomerID string, notes map[string]interface{}) error
-	ListConfirmedCustomerTokens(ctx context.Context, customerID string) (razorpayCustomerID string, tokens []*interfaces.ProviderPaymentMethod, err error)
+	ListCustomerTokens(ctx context.Context, customerID string) (razorpayCustomerID string, tokens []*interfaces.ProviderPaymentMethod, err error)
 }
 
 // CustomerService handles Razorpay customer operations
@@ -267,9 +267,9 @@ func (s *CustomerService) GetRazorpayCustomerID(ctx context.Context, customerID 
 	return mappings[0].ProviderEntityID, nil
 }
 
-// ListConfirmedCustomerTokens resolves the Razorpay customer ID and returns
-// confirmed tokens normalized to ProviderPaymentMethod.
-func (s *CustomerService) ListConfirmedCustomerTokens(
+// ListCustomerTokens resolves the Razorpay customer ID and returns
+// tokens normalized to ProviderPaymentMethod.
+func (s *CustomerService) ListCustomerTokens(
 	ctx context.Context,
 	customerID string,
 ) (string, []*interfaces.ProviderPaymentMethod, error) {
@@ -287,6 +287,7 @@ func (s *CustomerService) ListConfirmedCustomerTokens(
 		pm, normErr := NormalizeRazorpayToken(raw)
 		return pm, normErr == nil && pm != nil
 	})
+
 	return razorpayCustomerID, tokens, nil
 }
 

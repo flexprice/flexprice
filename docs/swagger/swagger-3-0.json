@@ -961,6 +961,76 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/analytics/revenue": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Query revenue analytics",
+        "description": "Aggregates revenue_facts by the requested dimensions at day/period/total granularity. allocation_policy places whole-period charges on their booked day (billed) or spreads them across the period (amortized); include_adjustments breaks out true-up/overage/revert amounts as labeled rows. Requires the tenant's revenue analytics setting.",
+        "operationId": "getRevenueAnalytics",
+        "requestBody": {
+          "description": "Revenue analytics request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevenueAnalyticsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Revenue analytics not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/analytics/views": {
       "post": {
         "tags": [
@@ -3968,6 +4038,88 @@
         ]
       }
     },
+    "/customers/{id}/payment-methods": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "List customer payment methods",
+        "description": "Use when you need a customer's saved payment methods across every connected gateway, including whether each can be auto-charged. Only gateways that can list saved methods are included.",
+        "operationId": "listCustomerPaymentMethods",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Customer ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providers",
+            "in": "query",
+            "description": "Limit to these payment gateways",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPaymentMethodsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/customers/{id}/wallets": {
       "get": {
         "tags": [
@@ -4652,55 +4804,6 @@
         "x-codegen-request-body-name": "event"
       }
     },
-    "/events/huggingface-inference": {
-      "post": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "Get Hugging Face inference data",
-        "description": "Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation). Reads the meter-usage pipeline.",
-        "operationId": "getHuggingfaceInferenceData",
-        "requestBody": {
-          "description": "Request body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetHuggingFaceBillingDataRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetHuggingFaceBillingDataResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
     "/events/lookup": {
       "get": {
         "tags": [
@@ -4718,6 +4821,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "external_customer_id",
+            "in": "query",
+            "description": "External customer ID the event was ingested with",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "Start of the event timestamp window (RFC3339); defaults to 14 days before end_time",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "End of the event timestamp window (RFC3339); defaults to now",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4727,6 +4855,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GetEventByIDResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing event ID or external customer ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
                 }
               }
             }
@@ -5299,6 +5437,310 @@
         ],
         "x-scope": "write",
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/forex": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Create an FX rate",
+        "description": "Configure a fixed exchange rate at tenant, customer or subscription scope. Overrides need a tenant rate for the same pair.",
+        "operationId": "createFXRate",
+        "requestBody": {
+          "description": "FX rate to create",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFXRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "fx_rate"
+      }
+    },
+    "/forex/query": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Query FX rates",
+        "description": "Filter FX rates via a request body (POST used for a complex query, but read-only).",
+        "operationId": "queryFXRates",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.FXRateFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFXRatesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/forex/{id}": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Get an FX rate",
+        "description": "Load a single FX rate by ID.",
+        "operationId": "getFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Update an FX rate",
+        "description": "Update a rate's value, validity window (overrides only) or metadata. Scope, scope_id and the currency pair are immutable.",
+        "operationId": "updateFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "FX rate fields to update",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFXRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXRateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "fx_rate"
+      },
+      "delete": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Delete an FX rate",
+        "description": "Archive a customer or subscription override. Tenant rates cannot be deleted.",
+        "operationId": "deleteFXRate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "FX rate ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/groups": {
@@ -9858,6 +10300,56 @@
             }
           },
           {
+            "name": "subscription_ids",
+            "in": "query",
+            "description": "Filter by subscription IDs",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "schedule_type",
+            "in": "query",
+            "description": "Filter by schedule type",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "plan_change",
+                  "cancellation"
+                ]
+              }
+            }
+          },
+          {
+            "name": "schedule_status",
+            "in": "query",
+            "description": "Filter by schedule status",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "executing",
+                  "executed",
+                  "cancelled",
+                  "failed"
+                ]
+              }
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Limit results",
@@ -10975,7 +11467,7 @@
           "Subscriptions"
         ],
         "summary": "Execute subscription modification",
-        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).",
+        "description": "Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).\nType \"quantity_change\" is deprecated: use \"line_item_change\", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.",
         "operationId": "executeSubscriptionModify",
         "parameters": [
           {
@@ -11056,7 +11548,7 @@
           "Subscriptions"
         ],
         "summary": "Preview subscription modification",
-        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.",
+        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.\nType \"quantity_change\" is deprecated: use \"line_item_change\".",
         "operationId": "previewSubscriptionModify",
         "parameters": [
           {
@@ -16363,9 +16855,6 @@
               "$ref": "#/components/schemas/types.Metric"
             }
           },
-          "name": {
-            "type": "string"
-          },
           "shape": {
             "$ref": "#/components/schemas/types.Shape"
           },
@@ -17041,6 +17530,24 @@
               }
             }
           },
+          "grant_duration_unit": {
+            "$ref": "#/components/schemas/types.EntitlementGrantDurationUnit"
+          },
+          "grant_duration_value": {
+            "type": "integer"
+          },
+          "grant_measure": {
+            "$ref": "#/components/schemas/types.EntitlementGrantMeasure"
+          },
+          "grant_quota": {
+            "type": "string"
+          },
+          "grant_state": {
+            "$ref": "#/components/schemas/GrantState"
+          },
+          "grant_unlimited": {
+            "type": "boolean"
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -17078,6 +17585,9 @@
           },
           "grant_quota": {
             "type": "string"
+          },
+          "grant_unlimited": {
+            "type": "boolean"
           },
           "source_entity_id": {
             "type": "string"
@@ -17548,6 +18058,43 @@
           }
         }
       },
+      "ChangedAddonAssociation": {
+        "type": "object",
+        "properties": {
+          "addon_id": {
+            "type": "string"
+          },
+          "addon_status": {
+            "$ref": "#/components/schemas/types.AddonStatus"
+          },
+          "change_action": {
+            "$ref": "#/components/schemas/ChangedAddonAssociationAction"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChangedAddonAssociationAction": {
+        "type": "string",
+        "description": "created | ended",
+        "enum": [
+          "created",
+          "ended"
+        ],
+        "x-enum-varnames": [
+          "ChangedAddonAssociationActionCreated",
+          "ChangedAddonAssociationActionEnded"
+        ]
+      },
       "ChangedInvoice": {
         "type": "object",
         "properties": {
@@ -17633,6 +18180,12 @@
       "ChangedResources": {
         "type": "object",
         "properties": {
+          "addon_associations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangedAddonAssociation"
+            }
+          },
           "invoices": {
             "type": "array",
             "items": {
@@ -17695,6 +18248,9 @@
         "properties": {
           "cancel_url": {
             "type": "string"
+          },
+          "entity_creation_options": {
+            "$ref": "#/components/schemas/EntityCreationOptions"
           },
           "failure_url": {
             "type": "string"
@@ -17765,6 +18321,9 @@
           },
           "customer_id": {
             "type": "string"
+          },
+          "entity_creation_result": {
+            "$ref": "#/components/schemas/EntityCreationResult"
           },
           "expires_at": {
             "type": "string",
@@ -17901,6 +18460,14 @@
           },
           "true_up_enabled": {
             "type": "boolean"
+          }
+        }
+      },
+      "ConfigurationDetails": {
+        "type": "object",
+        "properties": {
+          "plan_change": {
+            "$ref": "#/components/schemas/PlanChangeScheduleDetails"
           }
         }
       },
@@ -18474,6 +19041,9 @@
           "customer_external_id": {
             "type": "string"
           },
+          "entity_creation_options": {
+            "$ref": "#/components/schemas/EntityCreationOptions"
+          },
           "failure_url": {
             "type": "string"
           },
@@ -18862,6 +19432,9 @@
           "grant_quota": {
             "type": "string"
           },
+          "grant_unlimited": {
+            "type": "boolean"
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -18915,6 +19488,48 @@
           },
           "provider_type": {
             "maxLength": 50,
+            "type": "string"
+          }
+        }
+      },
+      "CreateFXRateRequest": {
+        "required": [
+          "from_currency",
+          "scope",
+          "to_currency"
+        ],
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FXRateSource"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to_currency": {
             "type": "string"
           }
         }
@@ -20872,6 +21487,33 @@
           }
         }
       },
+      "EntityCreationConflictPolicies": {
+        "type": "object",
+        "properties": {
+          "on_existing_entity": {
+            "$ref": "#/components/schemas/types.OnExistingEntityPolicy"
+          }
+        }
+      },
+      "EntityCreationOptions": {
+        "type": "object",
+        "properties": {
+          "entity_creation_conflict_policies": {
+            "$ref": "#/components/schemas/EntityCreationConflictPolicies"
+          }
+        }
+      },
+      "EntityCreationResult": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.EntityCreationStatus"
+          }
+        }
+      },
       "EntityIntegrationMappingResponse": {
         "type": "object",
         "properties": {
@@ -20953,17 +21595,6 @@
           }
         }
       },
-      "EventCostInfo": {
-        "type": "object",
-        "properties": {
-          "costNanoUsd": {
-            "type": "string"
-          },
-          "requestId": {
-            "type": "string"
-          }
-        }
-      },
       "ExecuteInvoiceModifyRequest": {
         "required": [
           "type"
@@ -21002,6 +21633,9 @@
           "inheritance_params": {
             "$ref": "#/components/schemas/SubModifyInheritanceRequest"
           },
+          "line_item_change_params": {
+            "$ref": "#/components/schemas/SubModifyLineItemChangeRequest"
+          },
           "quantity_change_params": {
             "$ref": "#/components/schemas/SubModifyQuantityChangeRequest"
           },
@@ -21013,6 +21647,77 @@
           },
           "type": {
             "$ref": "#/components/schemas/SubscriptionModifyType"
+          }
+        }
+      },
+      "ExecutionDetails": {
+        "type": "object",
+        "properties": {
+          "plan_change": {
+            "$ref": "#/components/schemas/PlanChangeScheduleResult"
+          }
+        }
+      },
+      "FXRateResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FXRateSource"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "to_currency": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
           }
         }
       },
@@ -21119,11 +21824,36 @@
       "FeatureUsageSummary": {
         "type": "object",
         "properties": {
+          "buckets": {
+            "type": "array",
+            "description": "Buckets is one entry per independent budget on a parallel feature. The scalar\nfigures above cannot describe several budgets at once \u2014 a sum is not spendable\nfrom any one of them \u2014 so a client showing a parallel feature reads these instead.\nEmpty for additive features, where the scalars are the whole truth.",
+            "items": {
+              "$ref": "#/components/schemas/AggregatedEntitlementBucket"
+            }
+          },
           "current_usage": {
             "type": "string"
           },
           "feature": {
             "$ref": "#/components/schemas/FeatureResponse"
+          },
+          "grant_duration_unit": {
+            "$ref": "#/components/schemas/types.EntitlementGrantDurationUnit"
+          },
+          "grant_duration_value": {
+            "type": "integer"
+          },
+          "grant_measure": {
+            "$ref": "#/components/schemas/types.EntitlementGrantMeasure"
+          },
+          "grant_quota": {
+            "type": "string"
+          },
+          "grant_state": {
+            "$ref": "#/components/schemas/GrantState"
+          },
+          "grant_unlimited": {
+            "type": "boolean"
           },
           "is_enabled": {
             "type": "boolean"
@@ -21412,32 +22142,6 @@
           },
           "total_count": {
             "type": "integer"
-          }
-        }
-      },
-      "GetHuggingFaceBillingDataRequest": {
-        "required": [
-          "requestIds"
-        ],
-        "type": "object",
-        "properties": {
-          "requestIds": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "GetHuggingFaceBillingDataResponse": {
-        "type": "object",
-        "properties": {
-          "requests": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EventCostInfo"
-            }
           }
         }
       },
@@ -21799,6 +22503,63 @@
           },
           "value": {
             "type": "number"
+          }
+        }
+      },
+      "GrantAllowanceState": {
+        "type": "object",
+        "properties": {
+          "entitlement_id": {
+            "type": "string"
+          },
+          "grant_id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "last_computed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/types.EntitlementGrantMeasure"
+          },
+          "quota": {
+            "type": "string"
+          },
+          "quota_crossed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "remaining": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.EntitlementGrantStatus"
+          },
+          "unlimited": {
+            "type": "boolean"
+          },
+          "usage": {
+            "type": "string"
+          },
+          "valid_from": {
+            "type": "string"
+          },
+          "valid_to": {
+            "type": "string"
+          }
+        }
+      },
+      "GrantState": {
+        "type": "object",
+        "properties": {
+          "allowances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrantAllowanceState"
+            }
           }
         }
       },
@@ -22572,6 +23333,28 @@
           }
         }
       },
+      "LineItemChange": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Amount reprices the charge. Flat fee only for now."
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        }
+      },
       "LineItemCommitmentConfig": {
         "type": "object",
         "properties": {
@@ -22714,6 +23497,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/EntityIntegrationMappingResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListFXRatesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FXRateResponse"
             }
           },
           "pagination": {
@@ -22937,6 +23734,9 @@
         ],
         "type": "object",
         "properties": {
+          "aggregation_mode": {
+            "$ref": "#/components/schemas/types.EntitlementAggregationMode"
+          },
           "config_value": {
             "type": "object",
             "additionalProperties": true,
@@ -22945,6 +23745,24 @@
           "entitlement_id": {
             "type": "string",
             "description": "EntitlementID references the plan/addon entitlement to override"
+          },
+          "grant_allocation_behavior": {
+            "$ref": "#/components/schemas/types.EntitlementGrantAllocationBehavior"
+          },
+          "grant_duration_unit": {
+            "$ref": "#/components/schemas/types.EntitlementGrantDurationUnit"
+          },
+          "grant_duration_value": {
+            "type": "integer"
+          },
+          "grant_measure": {
+            "$ref": "#/components/schemas/types.EntitlementGrantMeasure"
+          },
+          "grant_quota": {
+            "type": "string"
+          },
+          "grant_unlimited": {
+            "type": "boolean"
           },
           "is_enabled": {
             "type": "boolean",
@@ -23156,6 +23974,45 @@
           "voided_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PlanChangeScheduleDetails": {
+        "type": "object",
+        "properties": {
+          "billing_period_behaviour": {
+            "$ref": "#/components/schemas/types.BillingPeriodBehaviour"
+          },
+          "entity_policies": {
+            "$ref": "#/components/schemas/SubscriptionChangeEntityPolicies"
+          },
+          "target_plan_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PlanChangeScheduleResult": {
+        "type": "object",
+        "properties": {
+          "change_type": {
+            "type": "string"
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from_plan_id": {
+            "type": "string"
+          },
+          "previous_subscription_id": {
+            "type": "string",
+            "description": "previous_subscription_id is set when the change replaced the subscription with a new one"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "to_plan_id": {
+            "type": "string"
           }
         }
       },
@@ -23632,6 +24489,31 @@
           }
         }
       },
+      "ProviderError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ProviderSavedPaymentMethods": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ProviderError"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedPaymentMethod"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.PaymentGatewayType"
+          }
+        }
+      },
       "RefundResponse": {
         "type": "object",
         "properties": {
@@ -23807,6 +24689,231 @@
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "RevenueAnalyticsRequest": {
+        "required": [
+          "start_time"
+        ],
+        "type": "object",
+        "properties": {
+          "allocation_policy": {
+            "$ref": "#/components/schemas/types.RevenueAllocationPolicy"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "description": "Filters restrict the rows before aggregation.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "granularity": {
+            "$ref": "#/components/schemas/types.RevenueGranularity"
+          },
+          "group_by": {
+            "type": "array",
+            "description": "GroupBy dimensions: revenue_source, source (the event source recorded in\nmeter_usage; requires customer_ids or subscription_ids), customer_id,\nsubscription_id, price_id, meter_id, currency. revenue_source is always\napplied \u2014 every row says what kind of revenue it is \u2014 and requested\ndimensions are added on top.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "include_adjustments": {
+            "type": "boolean",
+            "description": "IncludeAdjustments breaks the non-obvious components \u2014 commitment\ntrue-ups, overage and revert (contra) rows \u2014 out as their own rows,\neach labeled with its kind in adjustment_type. Off, they fold into\ntheir parent buckets (true-up/overage into usage, reverts into their\nown source) so visible rows read as plain usage/fixed. Totals are\nidentical either way."
+          },
+          "meter_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "price_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "description": "StartTime/EndTime bound the day range (inclusive days derived in UTC).\nEndTime is optional and defaults to now.",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.FactStatus"
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RevenueAnalyticsResponse": {
+        "type": "object",
+        "properties": {
+          "contains_allocated": {
+            "type": "boolean",
+            "description": "ContainsAllocated is true when any bucket includes whole-period amounts\nspread across days (amortized) or booked on a single day (billed) \u2014\ni.e. the day view carries period-shaped charges, not only true daily\naccruals."
+          },
+          "query": {
+            "$ref": "#/components/schemas/RevenueAnalyticsRequest"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevenueAnalyticsRow"
+            }
+          }
+        }
+      },
+      "RevenueAnalyticsRow": {
+        "type": "object",
+        "properties": {
+          "adjustment_type": {
+            "type": "string",
+            "description": "AdjustmentType labels rows broken out by include_adjustments:\n\"commitment_trueup\", \"overage\" or \"revert\". Empty for plain rows."
+          },
+          "billable_qty": {
+            "type": "number"
+          },
+          "day": {
+            "type": "string",
+            "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period."
+          },
+          "entitlement_amount": {
+            "type": "number"
+          },
+          "entitlement_qty": {
+            "type": "number"
+          },
+          "group": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Group holds the requested dimensions and their values for this bucket."
+          },
+          "invoice_discount": {
+            "type": "number"
+          },
+          "line_discount": {
+            "type": "number"
+          },
+          "net_amount": {
+            "type": "number"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.FactStatus"
+          },
+          "tier_delta": {
+            "type": "number"
+          },
+          "usage_at_list_rate": {
+            "type": "number"
+          }
+        }
+      },
+      "SavedCardDetails": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "SavedPaymentMethod": {
+        "type": "object",
+        "properties": {
+          "can_auto_charge": {
+            "type": "boolean",
+            "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate."
+          },
+          "card": {
+            "$ref": "#/components/schemas/SavedCardDetails"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instantly_chargeable": {
+            "type": "boolean"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Which method to use when several are saved at this provider.\nScoped to the provider: two providers means two defaults."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.PaymentGatewayType"
+          },
+          "recurring": {
+            "$ref": "#/components/schemas/SavedRecurringPaymentDetails"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.PaymentMethodStatus"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentMethodType"
+          },
+          "upi": {
+            "$ref": "#/components/schemas/SavedUPIDetails"
+          }
+        }
+      },
+      "SavedPaymentMethodsResponse": {
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderSavedPaymentMethods"
+            }
+          }
+        }
+      },
+      "SavedRecurringPaymentDetails": {
+        "type": "object",
+        "properties": {
+          "auto_chargeable_till": {
+            "type": "string"
+          },
+          "max_amount": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.RecurringPaymentStatus"
+          }
+        }
+      },
+      "SavedUPIDetails": {
+        "type": "object",
+        "properties": {
+          "vpa": {
             "type": "string"
           }
         }
@@ -24063,6 +25170,21 @@
             "description": "ExternalCustomerIDsToRemove is used for action=\"remove\".",
             "items": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "SubModifyLineItemChangeRequest": {
+        "required": [
+          "line_items"
+        ],
+        "type": "object",
+        "properties": {
+          "line_items": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineItemChange"
             }
           }
         }
@@ -24674,7 +25796,8 @@
           "trial_end",
           "coupon",
           "tax",
-          "addon"
+          "addon",
+          "line_item_change"
         ],
         "x-enum-varnames": [
           "SubscriptionModifyTypeInheritance",
@@ -24683,7 +25806,8 @@
           "SubscriptionModifyTypeTrialEnd",
           "SubscriptionModifyTypeCoupon",
           "SubscriptionModifyTypeTax",
-          "SubscriptionModifyTypeAddon"
+          "SubscriptionModifyTypeAddon",
+          "SubscriptionModifyTypeLineItemChange"
         ]
       },
       "SubscriptionPhaseCreateRequest": {
@@ -25370,7 +26494,10 @@
           "configuration": {
             "type": "object",
             "additionalProperties": true,
-            "description": "configuration contains type-specific configuration (e.g., target_plan_id for plan changes)"
+            "description": "configuration is the raw type-specific configuration. Deprecated: use configuration_details."
+          },
+          "configuration_details": {
+            "$ref": "#/components/schemas/ConfigurationDetails"
           },
           "created_at": {
             "type": "string",
@@ -25390,10 +26517,13 @@
             "description": "executed_at is when the schedule was executed",
             "format": "date-time"
           },
+          "execution_details": {
+            "$ref": "#/components/schemas/ExecutionDetails"
+          },
           "execution_result": {
             "type": "object",
             "additionalProperties": true,
-            "description": "execution_result contains type-specific execution result"
+            "description": "execution_result is the raw type-specific execution result. Deprecated: use execution_details."
           },
           "id": {
             "type": "string",
@@ -26234,10 +27364,6 @@
           "aggregation_mode": {
             "$ref": "#/components/schemas/types.EntitlementAggregationMode"
           },
-          "clear_grant_config": {
-            "type": "boolean",
-            "description": "Grant config \u2014 nil fields leave the current value alone.\nClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement)."
-          },
           "config_value": {
             "type": "object",
             "additionalProperties": true
@@ -26257,6 +27383,9 @@
           "grant_quota": {
             "type": "string"
           },
+          "grant_unlimited": {
+            "type": "boolean"
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -26271,6 +27400,28 @@
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
+          }
+        }
+      },
+      "UpdateFXRateRequest": {
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "rate": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -26613,6 +27764,17 @@
               "type": "string"
             },
             "description": "Metadata for the new line item"
+          },
+          "price_unit_amount": {
+            "type": "string",
+            "description": "PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE billing models)"
+          },
+          "price_unit_tiers": {
+            "type": "array",
+            "description": "PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED billing model)",
+            "items": {
+              "$ref": "#/components/schemas/CreatePriceTier"
+            }
           },
           "tier_mode": {
             "$ref": "#/components/schemas/types.BillingTier"
@@ -29341,11 +30503,13 @@
         "type": "string",
         "enum": [
           "razorpay",
-          "chargebee"
+          "chargebee",
+          "stripe"
         ],
         "x-enum-varnames": [
           "CheckoutPaymentProviderRazorpay",
-          "CheckoutPaymentProviderChargebee"
+          "CheckoutPaymentProviderChargebee",
+          "CheckoutPaymentProviderStripe"
         ],
         "x-speakeasy-name-override": "CheckoutPaymentProvider"
       },
@@ -30059,6 +31223,18 @@
         ],
         "x-speakeasy-name-override": "EntitlementGrantMeasure"
       },
+      "types.EntitlementGrantStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "exhausted"
+        ],
+        "x-enum-varnames": [
+          "EntitlementGrantStatusActive",
+          "EntitlementGrantStatusExhausted"
+        ],
+        "x-speakeasy-name-override": "EntitlementGrantStatus"
+      },
       "types.EntitlementUsageResetPeriod": {
         "type": "string",
         "enum": [
@@ -30094,6 +31270,20 @@
           "EntityChangeBehaviourAdd"
         ],
         "x-speakeasy-name-override": "EntityChangeBehaviour"
+      },
+      "types.EntityCreationStatus": {
+        "type": "string",
+        "enum": [
+          "created",
+          "superseded",
+          "failed_already_exists"
+        ],
+        "x-enum-varnames": [
+          "EntityCreationStatusCreated",
+          "EntityCreationStatusSuperseded",
+          "EntityCreationStatusFailedAlreadyExists"
+        ],
+        "x-speakeasy-name-override": "EntityCreationStatus"
       },
       "types.EntitySyncConfig": {
         "type": "object",
@@ -30183,6 +31373,110 @@
           }
         },
         "x-speakeasy-name-override": "ExportMetadataField"
+      },
+      "types.FXRateFilter": {
+        "type": "object",
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "fx_rate_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "scope_id": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "to_currency": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "FXRateFilter"
+      },
+      "types.FXRateScope": {
+        "type": "string",
+        "enum": [
+          "tenant",
+          "customer",
+          "subscription"
+        ],
+        "x-enum-varnames": [
+          "FXRateScopeTenant",
+          "FXRateScopeCustomer",
+          "FXRateScopeSubscription"
+        ],
+        "x-speakeasy-name-override": "FXRateScope"
+      },
+      "types.FXRateSource": {
+        "type": "string",
+        "enum": [
+          "fixed",
+          "market"
+        ],
+        "x-enum-varnames": [
+          "FXRateSourceFixed",
+          "FXRateSourceMarket"
+        ],
+        "x-speakeasy-name-override": "FXRateSource"
+      },
+      "types.FactStatus": {
+        "type": "string",
+        "enum": [
+          "PROVISIONAL",
+          "FINAL"
+        ],
+        "x-enum-varnames": [
+          "FactProvisional",
+          "FactFinal"
+        ],
+        "x-speakeasy-name-override": "FactStatus"
       },
       "types.FailurePoint": {
         "type": "object",
@@ -30576,6 +31870,11 @@
               "$ref": "#/components/schemas/types.FilterCondition"
             }
           },
+          "finalized_at_gte": {
+            "type": "string",
+            "description": "finalized_at_gte filters invoices finalized at or after the given instant",
+            "format": "date-time"
+          },
           "invoice_ids": {
             "type": "array",
             "description": "invoice_ids restricts results to invoices with the specified IDs\nUse this to retrieve specific invoices when you know their exact identifiers",
@@ -30659,6 +31958,11 @@
           "subscription_id": {
             "type": "string",
             "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing"
+          },
+          "voided_at_gte": {
+            "type": "string",
+            "description": "voided_at_gte filters invoices voided at or after the given instant",
+            "format": "date-time"
           }
         },
         "x-speakeasy-name-override": "InvoiceFilter"
@@ -30817,6 +32121,9 @@
       "types.ModifySubscriptionLineItem": {
         "type": "object",
         "properties": {
+          "amount": {
+            "type": "string"
+          },
           "effective_date": {
             "type": "string",
             "format": "date-time"
@@ -30839,11 +32146,38 @@
               "$ref": "#/components/schemas/types.ModifySubscriptionLineItem"
             }
           },
+          "modify_type": {
+            "$ref": "#/components/schemas/types.ModifySubscriptionType"
+          },
           "subscription_id": {
             "type": "string"
           }
         },
         "x-speakeasy-name-override": "ModifySubscriptionParams"
+      },
+      "types.ModifySubscriptionType": {
+        "type": "string",
+        "enum": [
+          "quantity_change",
+          "line_item_change"
+        ],
+        "x-enum-varnames": [
+          "ModifySubscriptionTypeQuantityChange",
+          "ModifySubscriptionTypeLineItemChange"
+        ],
+        "x-speakeasy-name-override": "ModifySubscriptionType"
+      },
+      "types.OnExistingEntityPolicy": {
+        "type": "string",
+        "enum": [
+          "reject",
+          "supersede"
+        ],
+        "x-enum-varnames": [
+          "OnExistingEntityPolicyReject",
+          "OnExistingEntityPolicySupersede"
+        ],
+        "x-speakeasy-name-override": "OnExistingEntityPolicy"
       },
       "types.OnPendingSchedulePolicy": {
         "type": "string",
@@ -30989,6 +32323,20 @@
           "PaymentGatewayTypeChargebee"
         ],
         "x-speakeasy-name-override": "PaymentGatewayType"
+      },
+      "types.PaymentMethodStatus": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "INACTIVE",
+          "EXPIRED"
+        ],
+        "x-enum-varnames": [
+          "PaymentMethodStatusActive",
+          "PaymentMethodStatusInactive",
+          "PaymentMethodStatusExpired"
+        ],
+        "x-speakeasy-name-override": "PaymentMethodStatus"
       },
       "types.PaymentMethodType": {
         "type": "string",
@@ -31227,6 +32575,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "updated_after": {
+            "type": "string",
+            "description": "UpdatedAfter matches prices edited since the given time. TimeRangeFilter\nabove filters on created_at, so it cannot see an edit to an existing\nprice."
           }
         },
         "x-speakeasy-name-override": "PriceFilter"
@@ -31356,6 +32708,28 @@
           }
         },
         "x-speakeasy-name-override": "QueryFilter"
+      },
+      "types.RecurringPaymentStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "ACTIVE",
+          "PAUSED",
+          "REJECTED",
+          "CANCELLED",
+          "EXPIRED",
+          "UNKNOWN"
+        ],
+        "x-enum-varnames": [
+          "RecurringPaymentStatusPending",
+          "RecurringPaymentStatusActive",
+          "RecurringPaymentStatusPaused",
+          "RecurringPaymentStatusRejected",
+          "RecurringPaymentStatusCancelled",
+          "RecurringPaymentStatusExpired",
+          "RecurringPaymentStatusUnknown"
+        ],
+        "x-speakeasy-name-override": "RecurringPaymentStatus"
       },
       "types.RefundDestination": {
         "type": "string",
@@ -31496,6 +32870,32 @@
         ],
         "x-speakeasy-name-override": "ResumeMode"
       },
+      "types.RevenueAllocationPolicy": {
+        "type": "string",
+        "enum": [
+          "billed",
+          "amortized"
+        ],
+        "x-enum-varnames": [
+          "RevenueAllocationBilled",
+          "RevenueAllocationAmortized"
+        ],
+        "x-speakeasy-name-override": "RevenueAllocationPolicy"
+      },
+      "types.RevenueGranularity": {
+        "type": "string",
+        "enum": [
+          "day",
+          "period",
+          "total"
+        ],
+        "x-enum-varnames": [
+          "RevenueGranularityDay",
+          "RevenueGranularityPeriod",
+          "RevenueGranularityTotal"
+        ],
+        "x-speakeasy-name-override": "RevenueGranularity"
+      },
       "types.RoundType": {
         "type": "string",
         "enum": [
@@ -31613,14 +33013,16 @@
           "invoice",
           "credit_topups",
           "credit_usage",
-          "usage_analytics"
+          "usage_analytics",
+          "revenue_facts"
         ],
         "x-enum-varnames": [
           "ScheduledTaskEntityTypeEvents",
           "ScheduledTaskEntityTypeInvoice",
           "ScheduledTaskEntityTypeCreditTopups",
           "ScheduledTaskEntityTypeCreditUsage",
-          "ScheduledTaskEntityTypeUsageAnalytics"
+          "ScheduledTaskEntityTypeUsageAnalytics",
+          "ScheduledTaskEntityTypeRevenueFacts"
         ],
         "x-speakeasy-name-override": "ScheduledTaskEntityType"
       },

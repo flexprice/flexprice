@@ -23,346 +23,346 @@ type PaymentCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (pc *PaymentCreate) SetTenantID(s string) *PaymentCreate {
-	pc.mutation.SetTenantID(s)
-	return pc
+func (_c *PaymentCreate) SetTenantID(v string) *PaymentCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (pc *PaymentCreate) SetStatus(s string) *PaymentCreate {
-	pc.mutation.SetStatus(s)
-	return pc
+func (_c *PaymentCreate) SetStatus(v string) *PaymentCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableStatus(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetStatus(*s)
+func (_c *PaymentCreate) SetNillableStatus(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (pc *PaymentCreate) SetCreatedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetCreatedAt(t)
-	return pc
+func (_c *PaymentCreate) SetCreatedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableCreatedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetCreatedAt(*t)
+func (_c *PaymentCreate) SetNillableCreatedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (pc *PaymentCreate) SetUpdatedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetUpdatedAt(t)
-	return pc
+func (_c *PaymentCreate) SetUpdatedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableUpdatedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetUpdatedAt(*t)
+func (_c *PaymentCreate) SetNillableUpdatedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (pc *PaymentCreate) SetCreatedBy(s string) *PaymentCreate {
-	pc.mutation.SetCreatedBy(s)
-	return pc
+func (_c *PaymentCreate) SetCreatedBy(v string) *PaymentCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableCreatedBy(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetCreatedBy(*s)
+func (_c *PaymentCreate) SetNillableCreatedBy(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (pc *PaymentCreate) SetUpdatedBy(s string) *PaymentCreate {
-	pc.mutation.SetUpdatedBy(s)
-	return pc
+func (_c *PaymentCreate) SetUpdatedBy(v string) *PaymentCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableUpdatedBy(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetUpdatedBy(*s)
+func (_c *PaymentCreate) SetNillableUpdatedBy(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (pc *PaymentCreate) SetEnvironmentID(s string) *PaymentCreate {
-	pc.mutation.SetEnvironmentID(s)
-	return pc
+func (_c *PaymentCreate) SetEnvironmentID(v string) *PaymentCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableEnvironmentID(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetEnvironmentID(*s)
+func (_c *PaymentCreate) SetNillableEnvironmentID(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (pc *PaymentCreate) SetIdempotencyKey(s string) *PaymentCreate {
-	pc.mutation.SetIdempotencyKey(s)
-	return pc
+func (_c *PaymentCreate) SetIdempotencyKey(v string) *PaymentCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
 }
 
 // SetDestinationType sets the "destination_type" field.
-func (pc *PaymentCreate) SetDestinationType(s string) *PaymentCreate {
-	pc.mutation.SetDestinationType(s)
-	return pc
+func (_c *PaymentCreate) SetDestinationType(v string) *PaymentCreate {
+	_c.mutation.SetDestinationType(v)
+	return _c
 }
 
 // SetDestinationID sets the "destination_id" field.
-func (pc *PaymentCreate) SetDestinationID(s string) *PaymentCreate {
-	pc.mutation.SetDestinationID(s)
-	return pc
+func (_c *PaymentCreate) SetDestinationID(v string) *PaymentCreate {
+	_c.mutation.SetDestinationID(v)
+	return _c
 }
 
 // SetPaymentMethodType sets the "payment_method_type" field.
-func (pc *PaymentCreate) SetPaymentMethodType(s string) *PaymentCreate {
-	pc.mutation.SetPaymentMethodType(s)
-	return pc
+func (_c *PaymentCreate) SetPaymentMethodType(v string) *PaymentCreate {
+	_c.mutation.SetPaymentMethodType(v)
+	return _c
 }
 
 // SetPaymentMethodID sets the "payment_method_id" field.
-func (pc *PaymentCreate) SetPaymentMethodID(s string) *PaymentCreate {
-	pc.mutation.SetPaymentMethodID(s)
-	return pc
+func (_c *PaymentCreate) SetPaymentMethodID(v string) *PaymentCreate {
+	_c.mutation.SetPaymentMethodID(v)
+	return _c
 }
 
 // SetNillablePaymentMethodID sets the "payment_method_id" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillablePaymentMethodID(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetPaymentMethodID(*s)
+func (_c *PaymentCreate) SetNillablePaymentMethodID(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetPaymentMethodID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetPaymentGateway sets the "payment_gateway" field.
-func (pc *PaymentCreate) SetPaymentGateway(s string) *PaymentCreate {
-	pc.mutation.SetPaymentGateway(s)
-	return pc
+func (_c *PaymentCreate) SetPaymentGateway(v string) *PaymentCreate {
+	_c.mutation.SetPaymentGateway(v)
+	return _c
 }
 
 // SetNillablePaymentGateway sets the "payment_gateway" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillablePaymentGateway(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetPaymentGateway(*s)
+func (_c *PaymentCreate) SetNillablePaymentGateway(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetPaymentGateway(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetGatewayPaymentID sets the "gateway_payment_id" field.
-func (pc *PaymentCreate) SetGatewayPaymentID(s string) *PaymentCreate {
-	pc.mutation.SetGatewayPaymentID(s)
-	return pc
+func (_c *PaymentCreate) SetGatewayPaymentID(v string) *PaymentCreate {
+	_c.mutation.SetGatewayPaymentID(v)
+	return _c
 }
 
 // SetNillableGatewayPaymentID sets the "gateway_payment_id" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableGatewayPaymentID(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetGatewayPaymentID(*s)
+func (_c *PaymentCreate) SetNillableGatewayPaymentID(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetGatewayPaymentID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetGatewayTrackingID sets the "gateway_tracking_id" field.
-func (pc *PaymentCreate) SetGatewayTrackingID(s string) *PaymentCreate {
-	pc.mutation.SetGatewayTrackingID(s)
-	return pc
+func (_c *PaymentCreate) SetGatewayTrackingID(v string) *PaymentCreate {
+	_c.mutation.SetGatewayTrackingID(v)
+	return _c
 }
 
 // SetNillableGatewayTrackingID sets the "gateway_tracking_id" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableGatewayTrackingID(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetGatewayTrackingID(*s)
+func (_c *PaymentCreate) SetNillableGatewayTrackingID(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetGatewayTrackingID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetGatewayMetadata sets the "gateway_metadata" field.
-func (pc *PaymentCreate) SetGatewayMetadata(m map[string]string) *PaymentCreate {
-	pc.mutation.SetGatewayMetadata(m)
-	return pc
+func (_c *PaymentCreate) SetGatewayMetadata(v map[string]string) *PaymentCreate {
+	_c.mutation.SetGatewayMetadata(v)
+	return _c
 }
 
 // SetAmount sets the "amount" field.
-func (pc *PaymentCreate) SetAmount(d decimal.Decimal) *PaymentCreate {
-	pc.mutation.SetAmount(d)
-	return pc
+func (_c *PaymentCreate) SetAmount(v decimal.Decimal) *PaymentCreate {
+	_c.mutation.SetAmount(v)
+	return _c
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableAmount(d *decimal.Decimal) *PaymentCreate {
-	if d != nil {
-		pc.SetAmount(*d)
+func (_c *PaymentCreate) SetNillableAmount(v *decimal.Decimal) *PaymentCreate {
+	if v != nil {
+		_c.SetAmount(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (pc *PaymentCreate) SetCurrency(s string) *PaymentCreate {
-	pc.mutation.SetCurrency(s)
-	return pc
+func (_c *PaymentCreate) SetCurrency(v string) *PaymentCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetPaymentStatus sets the "payment_status" field.
-func (pc *PaymentCreate) SetPaymentStatus(s string) *PaymentCreate {
-	pc.mutation.SetPaymentStatus(s)
-	return pc
+func (_c *PaymentCreate) SetPaymentStatus(v string) *PaymentCreate {
+	_c.mutation.SetPaymentStatus(v)
+	return _c
 }
 
 // SetTrackAttempts sets the "track_attempts" field.
-func (pc *PaymentCreate) SetTrackAttempts(b bool) *PaymentCreate {
-	pc.mutation.SetTrackAttempts(b)
-	return pc
+func (_c *PaymentCreate) SetTrackAttempts(v bool) *PaymentCreate {
+	_c.mutation.SetTrackAttempts(v)
+	return _c
 }
 
 // SetNillableTrackAttempts sets the "track_attempts" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableTrackAttempts(b *bool) *PaymentCreate {
-	if b != nil {
-		pc.SetTrackAttempts(*b)
+func (_c *PaymentCreate) SetNillableTrackAttempts(v *bool) *PaymentCreate {
+	if v != nil {
+		_c.SetTrackAttempts(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (pc *PaymentCreate) SetMetadata(m map[string]string) *PaymentCreate {
-	pc.mutation.SetMetadata(m)
-	return pc
+func (_c *PaymentCreate) SetMetadata(v map[string]string) *PaymentCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetSucceededAt sets the "succeeded_at" field.
-func (pc *PaymentCreate) SetSucceededAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetSucceededAt(t)
-	return pc
+func (_c *PaymentCreate) SetSucceededAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetSucceededAt(v)
+	return _c
 }
 
 // SetNillableSucceededAt sets the "succeeded_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableSucceededAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetSucceededAt(*t)
+func (_c *PaymentCreate) SetNillableSucceededAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetSucceededAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetFailedAt sets the "failed_at" field.
-func (pc *PaymentCreate) SetFailedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetFailedAt(t)
-	return pc
+func (_c *PaymentCreate) SetFailedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetFailedAt(v)
+	return _c
 }
 
 // SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableFailedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetFailedAt(*t)
+func (_c *PaymentCreate) SetNillableFailedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetFailedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetRefundedAt sets the "refunded_at" field.
-func (pc *PaymentCreate) SetRefundedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetRefundedAt(t)
-	return pc
+func (_c *PaymentCreate) SetRefundedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetRefundedAt(v)
+	return _c
 }
 
 // SetNillableRefundedAt sets the "refunded_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableRefundedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetRefundedAt(*t)
+func (_c *PaymentCreate) SetNillableRefundedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetRefundedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetVoidedAt sets the "voided_at" field.
-func (pc *PaymentCreate) SetVoidedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetVoidedAt(t)
-	return pc
+func (_c *PaymentCreate) SetVoidedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetVoidedAt(v)
+	return _c
 }
 
 // SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableVoidedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetVoidedAt(*t)
+func (_c *PaymentCreate) SetNillableVoidedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetVoidedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetRecordedAt sets the "recorded_at" field.
-func (pc *PaymentCreate) SetRecordedAt(t time.Time) *PaymentCreate {
-	pc.mutation.SetRecordedAt(t)
-	return pc
+func (_c *PaymentCreate) SetRecordedAt(v time.Time) *PaymentCreate {
+	_c.mutation.SetRecordedAt(v)
+	return _c
 }
 
 // SetNillableRecordedAt sets the "recorded_at" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableRecordedAt(t *time.Time) *PaymentCreate {
-	if t != nil {
-		pc.SetRecordedAt(*t)
+func (_c *PaymentCreate) SetNillableRecordedAt(v *time.Time) *PaymentCreate {
+	if v != nil {
+		_c.SetRecordedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetErrorMessage sets the "error_message" field.
-func (pc *PaymentCreate) SetErrorMessage(s string) *PaymentCreate {
-	pc.mutation.SetErrorMessage(s)
-	return pc
+func (_c *PaymentCreate) SetErrorMessage(v string) *PaymentCreate {
+	_c.mutation.SetErrorMessage(v)
+	return _c
 }
 
 // SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (pc *PaymentCreate) SetNillableErrorMessage(s *string) *PaymentCreate {
-	if s != nil {
-		pc.SetErrorMessage(*s)
+func (_c *PaymentCreate) SetNillableErrorMessage(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetErrorMessage(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (pc *PaymentCreate) SetID(s string) *PaymentCreate {
-	pc.mutation.SetID(s)
-	return pc
+func (_c *PaymentCreate) SetID(v string) *PaymentCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // AddAttemptIDs adds the "attempts" edge to the PaymentAttempt entity by IDs.
-func (pc *PaymentCreate) AddAttemptIDs(ids ...string) *PaymentCreate {
-	pc.mutation.AddAttemptIDs(ids...)
-	return pc
+func (_c *PaymentCreate) AddAttemptIDs(ids ...string) *PaymentCreate {
+	_c.mutation.AddAttemptIDs(ids...)
+	return _c
 }
 
 // AddAttempts adds the "attempts" edges to the PaymentAttempt entity.
-func (pc *PaymentCreate) AddAttempts(p ...*PaymentAttempt) *PaymentCreate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
+func (_c *PaymentCreate) AddAttempts(v ...*PaymentAttempt) *PaymentCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return pc.AddAttemptIDs(ids...)
+	return _c.AddAttemptIDs(ids...)
 }
 
 // Mutation returns the PaymentMutation object of the builder.
-func (pc *PaymentCreate) Mutation() *PaymentMutation {
-	return pc.mutation
+func (_c *PaymentCreate) Mutation() *PaymentMutation {
+	return _c.mutation
 }
 
 // Save creates the Payment in the database.
-func (pc *PaymentCreate) Save(ctx context.Context) (*Payment, error) {
-	pc.defaults()
-	return withHooks(ctx, pc.sqlSave, pc.mutation, pc.hooks)
+func (_c *PaymentCreate) Save(ctx context.Context) (*Payment, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (pc *PaymentCreate) SaveX(ctx context.Context) *Payment {
-	v, err := pc.Save(ctx)
+func (_c *PaymentCreate) SaveX(ctx context.Context) *Payment {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -370,123 +370,123 @@ func (pc *PaymentCreate) SaveX(ctx context.Context) *Payment {
 }
 
 // Exec executes the query.
-func (pc *PaymentCreate) Exec(ctx context.Context) error {
-	_, err := pc.Save(ctx)
+func (_c *PaymentCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pc *PaymentCreate) ExecX(ctx context.Context) {
-	if err := pc.Exec(ctx); err != nil {
+func (_c *PaymentCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (pc *PaymentCreate) defaults() {
-	if _, ok := pc.mutation.Status(); !ok {
+func (_c *PaymentCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := payment.DefaultStatus
-		pc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := pc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := payment.DefaultCreatedAt()
-		pc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := pc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := payment.DefaultUpdatedAt()
-		pc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := pc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := payment.DefaultEnvironmentID
-		pc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := pc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		v := payment.DefaultAmount
-		pc.mutation.SetAmount(v)
+		_c.mutation.SetAmount(v)
 	}
-	if _, ok := pc.mutation.TrackAttempts(); !ok {
+	if _, ok := _c.mutation.TrackAttempts(); !ok {
 		v := payment.DefaultTrackAttempts
-		pc.mutation.SetTrackAttempts(v)
+		_c.mutation.SetTrackAttempts(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (pc *PaymentCreate) check() error {
-	if _, ok := pc.mutation.TenantID(); !ok {
+func (_c *PaymentCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Payment.tenant_id"`)}
 	}
-	if v, ok := pc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := payment.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Payment.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Payment.status"`)}
 	}
-	if _, ok := pc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Payment.created_at"`)}
 	}
-	if _, ok := pc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Payment.updated_at"`)}
 	}
-	if _, ok := pc.mutation.IdempotencyKey(); !ok {
+	if _, ok := _c.mutation.IdempotencyKey(); !ok {
 		return &ValidationError{Name: "idempotency_key", err: errors.New(`ent: missing required field "Payment.idempotency_key"`)}
 	}
-	if _, ok := pc.mutation.DestinationType(); !ok {
+	if _, ok := _c.mutation.DestinationType(); !ok {
 		return &ValidationError{Name: "destination_type", err: errors.New(`ent: missing required field "Payment.destination_type"`)}
 	}
-	if v, ok := pc.mutation.DestinationType(); ok {
+	if v, ok := _c.mutation.DestinationType(); ok {
 		if err := payment.DestinationTypeValidator(v); err != nil {
 			return &ValidationError{Name: "destination_type", err: fmt.Errorf(`ent: validator failed for field "Payment.destination_type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.DestinationID(); !ok {
+	if _, ok := _c.mutation.DestinationID(); !ok {
 		return &ValidationError{Name: "destination_id", err: errors.New(`ent: missing required field "Payment.destination_id"`)}
 	}
-	if v, ok := pc.mutation.DestinationID(); ok {
+	if v, ok := _c.mutation.DestinationID(); ok {
 		if err := payment.DestinationIDValidator(v); err != nil {
 			return &ValidationError{Name: "destination_id", err: fmt.Errorf(`ent: validator failed for field "Payment.destination_id": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.PaymentMethodType(); !ok {
+	if _, ok := _c.mutation.PaymentMethodType(); !ok {
 		return &ValidationError{Name: "payment_method_type", err: errors.New(`ent: missing required field "Payment.payment_method_type"`)}
 	}
-	if v, ok := pc.mutation.PaymentMethodType(); ok {
+	if v, ok := _c.mutation.PaymentMethodType(); ok {
 		if err := payment.PaymentMethodTypeValidator(v); err != nil {
 			return &ValidationError{Name: "payment_method_type", err: fmt.Errorf(`ent: validator failed for field "Payment.payment_method_type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "Payment.amount"`)}
 	}
-	if _, ok := pc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Payment.currency"`)}
 	}
-	if v, ok := pc.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := payment.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Payment.currency": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.PaymentStatus(); !ok {
+	if _, ok := _c.mutation.PaymentStatus(); !ok {
 		return &ValidationError{Name: "payment_status", err: errors.New(`ent: missing required field "Payment.payment_status"`)}
 	}
-	if v, ok := pc.mutation.PaymentStatus(); ok {
+	if v, ok := _c.mutation.PaymentStatus(); ok {
 		if err := payment.PaymentStatusValidator(v); err != nil {
 			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Payment.payment_status": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.TrackAttempts(); !ok {
+	if _, ok := _c.mutation.TrackAttempts(); !ok {
 		return &ValidationError{Name: "track_attempts", err: errors.New(`ent: missing required field "Payment.track_attempts"`)}
 	}
 	return nil
 }
 
-func (pc *PaymentCreate) sqlSave(ctx context.Context) (*Payment, error) {
-	if err := pc.check(); err != nil {
+func (_c *PaymentCreate) sqlSave(ctx context.Context) (*Payment, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := pc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, pc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -499,129 +499,129 @@ func (pc *PaymentCreate) sqlSave(ctx context.Context) (*Payment, error) {
 			return nil, fmt.Errorf("unexpected Payment.ID type: %T", _spec.ID.Value)
 		}
 	}
-	pc.mutation.id = &_node.ID
-	pc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (pc *PaymentCreate) createSpec() (*Payment, *sqlgraph.CreateSpec) {
+func (_c *PaymentCreate) createSpec() (*Payment, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Payment{config: pc.config}
+		_node = &Payment{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(payment.Table, sqlgraph.NewFieldSpec(payment.FieldID, field.TypeString))
 	)
-	if id, ok := pc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := pc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(payment.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := pc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(payment.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := pc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(payment.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := pc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(payment.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := pc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(payment.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := pc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(payment.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := pc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(payment.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := pc.mutation.IdempotencyKey(); ok {
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(payment.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = value
 	}
-	if value, ok := pc.mutation.DestinationType(); ok {
+	if value, ok := _c.mutation.DestinationType(); ok {
 		_spec.SetField(payment.FieldDestinationType, field.TypeString, value)
 		_node.DestinationType = value
 	}
-	if value, ok := pc.mutation.DestinationID(); ok {
+	if value, ok := _c.mutation.DestinationID(); ok {
 		_spec.SetField(payment.FieldDestinationID, field.TypeString, value)
 		_node.DestinationID = value
 	}
-	if value, ok := pc.mutation.PaymentMethodType(); ok {
+	if value, ok := _c.mutation.PaymentMethodType(); ok {
 		_spec.SetField(payment.FieldPaymentMethodType, field.TypeString, value)
 		_node.PaymentMethodType = value
 	}
-	if value, ok := pc.mutation.PaymentMethodID(); ok {
+	if value, ok := _c.mutation.PaymentMethodID(); ok {
 		_spec.SetField(payment.FieldPaymentMethodID, field.TypeString, value)
 		_node.PaymentMethodID = value
 	}
-	if value, ok := pc.mutation.PaymentGateway(); ok {
+	if value, ok := _c.mutation.PaymentGateway(); ok {
 		_spec.SetField(payment.FieldPaymentGateway, field.TypeString, value)
 		_node.PaymentGateway = &value
 	}
-	if value, ok := pc.mutation.GatewayPaymentID(); ok {
+	if value, ok := _c.mutation.GatewayPaymentID(); ok {
 		_spec.SetField(payment.FieldGatewayPaymentID, field.TypeString, value)
 		_node.GatewayPaymentID = &value
 	}
-	if value, ok := pc.mutation.GatewayTrackingID(); ok {
+	if value, ok := _c.mutation.GatewayTrackingID(); ok {
 		_spec.SetField(payment.FieldGatewayTrackingID, field.TypeString, value)
 		_node.GatewayTrackingID = &value
 	}
-	if value, ok := pc.mutation.GatewayMetadata(); ok {
+	if value, ok := _c.mutation.GatewayMetadata(); ok {
 		_spec.SetField(payment.FieldGatewayMetadata, field.TypeJSON, value)
 		_node.GatewayMetadata = value
 	}
-	if value, ok := pc.mutation.Amount(); ok {
+	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(payment.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := pc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(payment.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := pc.mutation.PaymentStatus(); ok {
+	if value, ok := _c.mutation.PaymentStatus(); ok {
 		_spec.SetField(payment.FieldPaymentStatus, field.TypeString, value)
 		_node.PaymentStatus = value
 	}
-	if value, ok := pc.mutation.TrackAttempts(); ok {
+	if value, ok := _c.mutation.TrackAttempts(); ok {
 		_spec.SetField(payment.FieldTrackAttempts, field.TypeBool, value)
 		_node.TrackAttempts = value
 	}
-	if value, ok := pc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(payment.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := pc.mutation.SucceededAt(); ok {
+	if value, ok := _c.mutation.SucceededAt(); ok {
 		_spec.SetField(payment.FieldSucceededAt, field.TypeTime, value)
 		_node.SucceededAt = &value
 	}
-	if value, ok := pc.mutation.FailedAt(); ok {
+	if value, ok := _c.mutation.FailedAt(); ok {
 		_spec.SetField(payment.FieldFailedAt, field.TypeTime, value)
 		_node.FailedAt = &value
 	}
-	if value, ok := pc.mutation.RefundedAt(); ok {
+	if value, ok := _c.mutation.RefundedAt(); ok {
 		_spec.SetField(payment.FieldRefundedAt, field.TypeTime, value)
 		_node.RefundedAt = &value
 	}
-	if value, ok := pc.mutation.VoidedAt(); ok {
+	if value, ok := _c.mutation.VoidedAt(); ok {
 		_spec.SetField(payment.FieldVoidedAt, field.TypeTime, value)
 		_node.VoidedAt = &value
 	}
-	if value, ok := pc.mutation.RecordedAt(); ok {
+	if value, ok := _c.mutation.RecordedAt(); ok {
 		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)
 		_node.RecordedAt = &value
 	}
-	if value, ok := pc.mutation.ErrorMessage(); ok {
+	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(payment.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = &value
 	}
-	if nodes := pc.mutation.AttemptsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.AttemptsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -648,16 +648,16 @@ type PaymentCreateBulk struct {
 }
 
 // Save creates the Payment entities in the database.
-func (pcb *PaymentCreateBulk) Save(ctx context.Context) ([]*Payment, error) {
-	if pcb.err != nil {
-		return nil, pcb.err
+func (_c *PaymentCreateBulk) Save(ctx context.Context) ([]*Payment, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(pcb.builders))
-	nodes := make([]*Payment, len(pcb.builders))
-	mutators := make([]Mutator, len(pcb.builders))
-	for i := range pcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Payment, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := pcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*PaymentMutation)
@@ -671,11 +671,11 @@ func (pcb *PaymentCreateBulk) Save(ctx context.Context) ([]*Payment, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, pcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, pcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -695,7 +695,7 @@ func (pcb *PaymentCreateBulk) Save(ctx context.Context) ([]*Payment, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, pcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -703,8 +703,8 @@ func (pcb *PaymentCreateBulk) Save(ctx context.Context) ([]*Payment, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (pcb *PaymentCreateBulk) SaveX(ctx context.Context) []*Payment {
-	v, err := pcb.Save(ctx)
+func (_c *PaymentCreateBulk) SaveX(ctx context.Context) []*Payment {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -712,14 +712,14 @@ func (pcb *PaymentCreateBulk) SaveX(ctx context.Context) []*Payment {
 }
 
 // Exec executes the query.
-func (pcb *PaymentCreateBulk) Exec(ctx context.Context) error {
-	_, err := pcb.Save(ctx)
+func (_c *PaymentCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pcb *PaymentCreateBulk) ExecX(ctx context.Context) {
-	if err := pcb.Exec(ctx); err != nil {
+func (_c *PaymentCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

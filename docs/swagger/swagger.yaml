@@ -273,8 +273,6 @@ definitions:
           - event_count
         minItems: 1
         type: array
-      name:
-        type: string
       shape:
         allOf:
         - $ref: '#/definitions/types.Shape'
@@ -745,6 +743,18 @@ definitions:
           additionalProperties: {}
           type: object
         type: array
+      grant_duration_unit:
+        $ref: '#/definitions/types.EntitlementGrantDurationUnit'
+      grant_duration_value:
+        type: integer
+      grant_measure:
+        $ref: '#/definitions/types.EntitlementGrantMeasure'
+      grant_quota:
+        type: string
+      grant_state:
+        $ref: '#/definitions/GrantState'
+      grant_unlimited:
+        type: boolean
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -770,6 +780,8 @@ definitions:
         $ref: '#/definitions/types.EntitlementGrantMeasure'
       grant_quota:
         type: string
+      grant_unlimited:
+        type: boolean
       source_entity_id:
         type: string
       usage_limit:
@@ -1107,6 +1119,34 @@ definitions:
       total_credit_amount:
         type: string
     type: object
+  ChangedAddonAssociation:
+    properties:
+      addon_id:
+        type: string
+      addon_status:
+        $ref: '#/definitions/types.AddonStatus'
+      change_action:
+        allOf:
+        - $ref: '#/definitions/ChangedAddonAssociationAction'
+        enum:
+        - created
+        - ended
+      end_date:
+        type: string
+      id:
+        type: string
+      start_date:
+        type: string
+    type: object
+  ChangedAddonAssociationAction:
+    description: created | ended
+    enum:
+    - created
+    - ended
+    type: string
+    x-enum-varnames:
+    - ChangedAddonAssociationActionCreated
+    - ChangedAddonAssociationActionEnded
   ChangedInvoice:
     properties:
       action:
@@ -1194,6 +1234,10 @@ definitions:
     - ChangedLineItemActionEnded
   ChangedResources:
     properties:
+      addon_associations:
+        items:
+          $ref: '#/definitions/ChangedAddonAssociation'
+        type: array
       invoices:
         items:
           $ref: '#/definitions/ChangedInvoice'
@@ -1233,6 +1277,8 @@ definitions:
     properties:
       cancel_url:
         type: string
+      entity_creation_options:
+        $ref: '#/definitions/EntityCreationOptions'
       failure_url:
         type: string
       idempotency_key:
@@ -1279,6 +1325,11 @@ definitions:
         type: string
       customer_id:
         type: string
+      entity_creation_result:
+        allOf:
+        - $ref: '#/definitions/EntityCreationResult'
+        description: Describes the call that returned this session, not the session
+          itself; never persisted.
       expires_at:
         type: string
       failure_reason:
@@ -1395,6 +1446,11 @@ definitions:
         $ref: '#/definitions/types.Bucket'
       true_up_enabled:
         type: boolean
+    type: object
+  ConfigurationDetails:
+    properties:
+      plan_change:
+        $ref: '#/definitions/PlanChangeScheduleDetails'
     type: object
   CostAnalyticItem:
     properties:
@@ -1782,6 +1838,8 @@ definitions:
         $ref: '#/definitions/types.CheckoutConfiguration'
       customer_external_id:
         type: string
+      entity_creation_options:
+        $ref: '#/definitions/EntityCreationOptions'
       failure_url:
         type: string
       idempotency_key:
@@ -2115,6 +2173,8 @@ definitions:
         description: Grant config — optional. All-or-nothing; see entitlement.validateGrantConfig.
       grant_quota:
         type: string
+      grant_unlimited:
+        type: boolean
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -2156,6 +2216,37 @@ definitions:
     - entity_type
     - provider_entity_id
     - provider_type
+    type: object
+  CreateFXRateRequest:
+    properties:
+      end_date:
+        type: string
+      from_currency:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      source:
+        allOf:
+        - $ref: '#/definitions/types.FXRateSource'
+        description: |-
+          Source defaults to "fixed". A fixed rate requires `rate`; a market rate ignores it
+          (the value comes from the market-rate integration at conversion time).
+      start_date:
+        type: string
+      to_currency:
+        type: string
+    required:
+    - from_currency
+    - scope
+    - to_currency
     type: object
   CreateFeatureRequest:
     properties:
@@ -3728,6 +3819,23 @@ definitions:
       reference_id:
         type: string
     type: object
+  EntityCreationConflictPolicies:
+    properties:
+      on_existing_entity:
+        $ref: '#/definitions/types.OnExistingEntityPolicy'
+    type: object
+  EntityCreationOptions:
+    properties:
+      entity_creation_conflict_policies:
+        $ref: '#/definitions/EntityCreationConflictPolicies'
+    type: object
+  EntityCreationResult:
+    properties:
+      entity_id:
+        type: string
+      status:
+        $ref: '#/definitions/types.EntityCreationStatus'
+    type: object
   EntityIntegrationMappingResponse:
     properties:
       created_at:
@@ -3780,13 +3888,6 @@ definitions:
       timestamp:
         type: string
     type: object
-  EventCostInfo:
-    properties:
-      costNanoUsd:
-        type: string
-      requestId:
-        type: string
-    type: object
   ExecuteInvoiceModifyRequest:
     properties:
       line_item_params:
@@ -3810,6 +3911,8 @@ definitions:
         $ref: '#/definitions/SubModifyGroupedInvoicingParams'
       inheritance_params:
         $ref: '#/definitions/SubModifyInheritanceRequest'
+      line_item_change_params:
+        $ref: '#/definitions/SubModifyLineItemChangeRequest'
       quantity_change_params:
         $ref: '#/definitions/SubModifyQuantityChangeRequest'
       tax_params:
@@ -3820,6 +3923,50 @@ definitions:
         $ref: '#/definitions/SubscriptionModifyType'
     required:
     - type
+    type: object
+  ExecutionDetails:
+    properties:
+      plan_change:
+        $ref: '#/definitions/PlanChangeScheduleResult'
+    type: object
+  FXRateResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      end_date:
+        type: string
+      environment_id:
+        type: string
+      from_currency:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      source:
+        $ref: '#/definitions/types.FXRateSource'
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      to_currency:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   FeatureResponse:
     properties:
@@ -3890,10 +4037,31 @@ definitions:
     type: object
   FeatureUsageSummary:
     properties:
+      buckets:
+        description: |-
+          Buckets is one entry per independent budget on a parallel feature. The scalar
+          figures above cannot describe several budgets at once — a sum is not spendable
+          from any one of them — so a client showing a parallel feature reads these instead.
+          Empty for additive features, where the scalars are the whole truth.
+        items:
+          $ref: '#/definitions/AggregatedEntitlementBucket'
+        type: array
       current_usage:
         type: string
       feature:
         $ref: '#/definitions/FeatureResponse'
+      grant_duration_unit:
+        $ref: '#/definitions/types.EntitlementGrantDurationUnit'
+      grant_duration_value:
+        type: integer
+      grant_measure:
+        $ref: '#/definitions/types.EntitlementGrantMeasure'
+      grant_quota:
+        type: string
+      grant_state:
+        $ref: '#/definitions/GrantState'
+      grant_unlimited:
+        type: boolean
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -4108,23 +4276,6 @@ definitions:
         type: integer
       total_count:
         type: integer
-    type: object
-  GetHuggingFaceBillingDataRequest:
-    properties:
-      requestIds:
-        items:
-          type: string
-        minItems: 1
-        type: array
-    required:
-    - requestIds
-    type: object
-  GetHuggingFaceBillingDataResponse:
-    properties:
-      requests:
-        items:
-          $ref: '#/definitions/EventCostInfo'
-        type: array
     type: object
   GetPendingSchedulesResponse:
     description: List of pending schedules for a subscription
@@ -4425,6 +4576,42 @@ definitions:
         $ref: '#/definitions/types.AggregationType'
       value:
         type: number
+    type: object
+  GrantAllowanceState:
+    properties:
+      entitlement_id:
+        type: string
+      grant_id:
+        type: string
+      is_active:
+        type: boolean
+      last_computed_at:
+        type: string
+      measure:
+        $ref: '#/definitions/types.EntitlementGrantMeasure'
+      quota:
+        type: string
+      quota_crossed_at:
+        type: string
+      remaining:
+        type: string
+      status:
+        $ref: '#/definitions/types.EntitlementGrantStatus'
+      unlimited:
+        type: boolean
+      usage:
+        type: string
+      valid_from:
+        type: string
+      valid_to:
+        type: string
+    type: object
+  GrantState:
+    properties:
+      allowances:
+        items:
+          $ref: '#/definitions/GrantAllowanceState'
+        type: array
     type: object
   GroupResponse:
     properties:
@@ -5041,6 +5228,20 @@ definitions:
         description: voided_at is the timestamp when this invoice was voided or cancelled
         type: string
     type: object
+  LineItemChange:
+    properties:
+      amount:
+        description: Amount reprices the charge. Flat fee only for now.
+        type: string
+      effective_date:
+        type: string
+      id:
+        type: string
+      quantity:
+        type: string
+    required:
+    - id
+    type: object
   LineItemCommitmentConfig:
     properties:
       commitment_amount:
@@ -5145,6 +5346,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/EntityIntegrationMappingResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListFXRatesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/FXRateResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -5287,6 +5497,8 @@ definitions:
     type: object
   OverrideEntitlementRequest:
     properties:
+      aggregation_mode:
+        $ref: '#/definitions/types.EntitlementAggregationMode'
       config_value:
         additionalProperties: true
         description: ConfigValue is the config value for config features
@@ -5294,6 +5506,18 @@ definitions:
       entitlement_id:
         description: EntitlementID references the plan/addon entitlement to override
         type: string
+      grant_allocation_behavior:
+        $ref: '#/definitions/types.EntitlementGrantAllocationBehavior'
+      grant_duration_unit:
+        $ref: '#/definitions/types.EntitlementGrantDurationUnit'
+      grant_duration_value:
+        type: integer
+      grant_measure:
+        $ref: '#/definitions/types.EntitlementGrantMeasure'
+      grant_quota:
+        type: string
+      grant_unlimited:
+        type: boolean
       is_enabled:
         description: IsEnabled determines if the entitlement is enabled or disabled
         type: boolean
@@ -5446,6 +5670,32 @@ definitions:
       updated_by:
         type: string
       voided_at:
+        type: string
+    type: object
+  PlanChangeScheduleDetails:
+    properties:
+      billing_period_behaviour:
+        $ref: '#/definitions/types.BillingPeriodBehaviour'
+      entity_policies:
+        $ref: '#/definitions/SubscriptionChangeEntityPolicies'
+      target_plan_id:
+        type: string
+    type: object
+  PlanChangeScheduleResult:
+    properties:
+      change_type:
+        type: string
+      effective_date:
+        type: string
+      from_plan_id:
+        type: string
+      previous_subscription_id:
+        description: previous_subscription_id is set when the change replaced the
+          subscription with a new one
+        type: string
+      subscription_id:
+        type: string
+      to_plan_id:
         type: string
     type: object
   PlanPriceSyncStatusResponse:
@@ -5799,6 +6049,22 @@ definitions:
         description: proration_date is the date used for proration calculations
         type: string
     type: object
+  ProviderError:
+    properties:
+      message:
+        type: string
+    type: object
+  ProviderSavedPaymentMethods:
+    properties:
+      error:
+        $ref: '#/definitions/ProviderError'
+      items:
+        items:
+          $ref: '#/definitions/SavedPaymentMethod'
+        type: array
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+    type: object
   RefundResponse:
     properties:
       amount:
@@ -5926,6 +6192,202 @@ definitions:
         type: string
     required:
     - addon_association_id
+    type: object
+  RevenueAnalyticsRequest:
+    properties:
+      allocation_policy:
+        allOf:
+        - $ref: '#/definitions/types.RevenueAllocationPolicy'
+        description: |-
+          AllocationPolicy applies to the day granularity: billed keeps
+          whole-period amounts on their booked day; amortized spreads them evenly
+          across their period's days.
+      currency:
+        type: string
+      customer_ids:
+        description: Filters restrict the rows before aggregation.
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      granularity:
+        allOf:
+        - $ref: '#/definitions/types.RevenueGranularity'
+        description: Granularity buckets results by day, by billing period, or into
+          one total.
+      group_by:
+        description: |-
+          GroupBy dimensions: revenue_source, source (the event source recorded in
+          meter_usage; requires customer_ids or subscription_ids), customer_id,
+          subscription_id, price_id, meter_id, currency. revenue_source is always
+          applied — every row says what kind of revenue it is — and requested
+          dimensions are added on top.
+        items:
+          type: string
+        type: array
+      include_adjustments:
+        description: |-
+          IncludeAdjustments breaks the non-obvious components — commitment
+          true-ups, overage and revert (contra) rows — out as their own rows,
+          each labeled with its kind in adjustment_type. Off, they fold into
+          their parent buckets (true-up/overage into usage, reverts into their
+          own source) so visible rows read as plain usage/fixed. Totals are
+          identical either way.
+        type: boolean
+      meter_ids:
+        items:
+          type: string
+        type: array
+      price_ids:
+        items:
+          type: string
+        type: array
+      start_time:
+        description: |-
+          StartTime/EndTime bound the day range (inclusive days derived in UTC).
+          EndTime is optional and defaults to now.
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/types.FactStatus'
+        description: |-
+          Status restricts the response to booked (FINAL) or in-progress
+          (PROVISIONAL) rows. Optional: left empty, both are returned and each
+          row says which it is, so the two are never silently summed together.
+      subscription_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - start_time
+    type: object
+  RevenueAnalyticsResponse:
+    properties:
+      contains_allocated:
+        description: |-
+          ContainsAllocated is true when any bucket includes whole-period amounts
+          spread across days (amortized) or booked on a single day (billed) —
+          i.e. the day view carries period-shaped charges, not only true daily
+          accruals.
+        type: boolean
+      query:
+        allOf:
+        - $ref: '#/definitions/RevenueAnalyticsRequest'
+        description: |-
+          Query echoes the request with defaults resolved. Rows carry only the
+          requested group dimensions, so this is what says which customers,
+          subscriptions and window they cover — add customer_id/subscription_id
+          to group_by for per-entity rows.
+      rows:
+        items:
+          $ref: '#/definitions/RevenueAnalyticsRow'
+        type: array
+    type: object
+  RevenueAnalyticsRow:
+    properties:
+      adjustment_type:
+        description: |-
+          AdjustmentType labels rows broken out by include_adjustments:
+          "commitment_trueup", "overage" or "revert". Empty for plain rows.
+        type: string
+      billable_qty:
+        type: number
+      day:
+        description: Day is set for day granularity; PeriodStart/PeriodEnd for period.
+        type: string
+      entitlement_amount:
+        type: number
+      entitlement_qty:
+        type: number
+      group:
+        additionalProperties:
+          type: string
+        description: Group holds the requested dimensions and their values for this
+          bucket.
+        type: object
+      invoice_discount:
+        type: number
+      line_discount:
+        type: number
+      net_amount:
+        type: number
+      period_end:
+        type: string
+      period_start:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/types.FactStatus'
+        description: |-
+          Status is the row's fact status. It is part of the row's identity, so a
+          FINAL and a PROVISIONAL row for the same bucket stay separate.
+      tier_delta:
+        type: number
+      usage_at_list_rate:
+        type: number
+    type: object
+  SavedCardDetails:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      last4:
+        type: string
+    type: object
+  SavedPaymentMethod:
+    properties:
+      can_auto_charge:
+        description: |-
+          Capability, not permission: could this be charged with nobody present.
+          True for any active Chargebee or Stripe card (both vault off-session by
+          construction); false for a Razorpay token without a mandate.
+        type: boolean
+      card:
+        $ref: '#/definitions/SavedCardDetails'
+      id:
+        type: string
+      instantly_chargeable:
+        type: boolean
+      is_default:
+        description: |-
+          Which method to use when several are saved at this provider.
+          Scoped to the provider: two providers means two defaults.
+        type: boolean
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+      recurring:
+        $ref: '#/definitions/SavedRecurringPaymentDetails'
+      status:
+        $ref: '#/definitions/types.PaymentMethodStatus'
+      type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      upi:
+        $ref: '#/definitions/SavedUPIDetails'
+    type: object
+  SavedPaymentMethodsResponse:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/ProviderSavedPaymentMethods'
+        type: array
+    type: object
+  SavedRecurringPaymentDetails:
+    properties:
+      auto_chargeable_till:
+        type: string
+      max_amount:
+        type: string
+      status:
+        $ref: '#/definitions/types.RecurringPaymentStatus'
+    type: object
+  SavedUPIDetails:
+    properties:
+      vpa:
+        type: string
     type: object
   ScheduledTaskResponse:
     properties:
@@ -6117,6 +6579,16 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  SubModifyLineItemChangeRequest:
+    properties:
+      line_items:
+        items:
+          $ref: '#/definitions/LineItemChange'
+        minItems: 1
+        type: array
+    required:
+    - line_items
     type: object
   SubModifyQuantityChangeRequest:
     properties:
@@ -6613,6 +7085,7 @@ definitions:
     - coupon
     - tax
     - addon
+    - line_item_change
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
@@ -6622,6 +7095,7 @@ definitions:
     - SubscriptionModifyTypeCoupon
     - SubscriptionModifyTypeTax
     - SubscriptionModifyTypeAddon
+    - SubscriptionModifyTypeLineItemChange
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -7200,9 +7674,13 @@ definitions:
         type: string
       configuration:
         additionalProperties: true
-        description: configuration contains type-specific configuration (e.g., target_plan_id
-          for plan changes)
+        description: 'configuration is the raw type-specific configuration. Deprecated:
+          use configuration_details.'
         type: object
+      configuration_details:
+        allOf:
+        - $ref: '#/definitions/ConfigurationDetails'
+        description: configuration_details is the typed counterpart of configuration
       created_at:
         description: created_at timestamp
         type: string
@@ -7215,9 +7693,14 @@ definitions:
       executed_at:
         description: executed_at is when the schedule was executed
         type: string
+      execution_details:
+        allOf:
+        - $ref: '#/definitions/ExecutionDetails'
+        description: execution_details is the typed counterpart of execution_result
       execution_result:
         additionalProperties: true
-        description: execution_result contains type-specific execution result
+        description: 'execution_result is the raw type-specific execution result.
+          Deprecated: use execution_details.'
         type: object
       id:
         description: id of the schedule
@@ -7833,11 +8316,6 @@ definitions:
     properties:
       aggregation_mode:
         $ref: '#/definitions/types.EntitlementAggregationMode'
-      clear_grant_config:
-        description: |-
-          Grant config — nil fields leave the current value alone.
-          ClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement).
-        type: boolean
       config_value:
         additionalProperties: true
         type: object
@@ -7851,6 +8329,8 @@ definitions:
         $ref: '#/definitions/types.EntitlementGrantMeasure'
       grant_quota:
         type: string
+      grant_unlimited:
+        type: boolean
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -7861,6 +8341,19 @@ definitions:
         type: integer
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
+    type: object
+  UpdateFXRateRequest:
+    properties:
+      end_date:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      rate:
+        type: string
+      start_date:
+        type: string
     type: object
   UpdateFeatureRequest:
     properties:
@@ -8121,6 +8614,16 @@ definitions:
           type: string
         description: Metadata for the new line item
         type: object
+      price_unit_amount:
+        description: PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE
+          billing models)
+        type: string
+      price_unit_tiers:
+        description: PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED
+          billing model)
+        items:
+          $ref: '#/definitions/CreatePriceTier'
+        type: array
       tier_mode:
         allOf:
         - $ref: '#/definitions/types.BillingTier'
@@ -10131,10 +10634,12 @@ definitions:
     enum:
     - razorpay
     - chargebee
+    - stripe
     type: string
     x-enum-varnames:
     - CheckoutPaymentProviderRazorpay
     - CheckoutPaymentProviderChargebee
+    - CheckoutPaymentProviderStripe
   types.CheckoutPaymentProviderConfig:
     properties:
       collection_method:
@@ -10629,6 +11134,14 @@ definitions:
     x-enum-varnames:
     - EntitlementGrantMeasureQuantity
     - EntitlementGrantMeasureAmount
+  types.EntitlementGrantStatus:
+    enum:
+    - active
+    - exhausted
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantStatusActive
+    - EntitlementGrantStatusExhausted
   types.EntitlementUsageResetPeriod:
     enum:
     - MONTHLY
@@ -10657,6 +11170,16 @@ definitions:
     - EntityChangeBehaviourCarry
     - EntityChangeBehaviourDrop
     - EntityChangeBehaviourAdd
+  types.EntityCreationStatus:
+    enum:
+    - created
+    - superseded
+    - failed_already_exists
+    type: string
+    x-enum-varnames:
+    - EntityCreationStatusCreated
+    - EntityCreationStatusSuperseded
+    - EntityCreationStatusFailedAlreadyExists
   types.EntitySyncConfig:
     properties:
       inbound:
@@ -10720,6 +11243,75 @@ definitions:
     - entity_type
     - field_key
     type: object
+  types.FXRateFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      from_currency:
+        type: string
+      fx_rate_ids:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      scope:
+        $ref: '#/definitions/types.FXRateScope'
+      scope_id:
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      to_currency:
+        type: string
+    type: object
+  types.FXRateScope:
+    enum:
+    - tenant
+    - customer
+    - subscription
+    type: string
+    x-enum-varnames:
+    - FXRateScopeTenant
+    - FXRateScopeCustomer
+    - FXRateScopeSubscription
+  types.FXRateSource:
+    enum:
+    - fixed
+    - market
+    type: string
+    x-enum-varnames:
+    - FXRateSourceFixed
+    - FXRateSourceMarket
+  types.FactStatus:
+    enum:
+    - PROVISIONAL
+    - FINAL
+    type: string
+    x-enum-varnames:
+    - FactProvisional
+    - FactFinal
   types.FailurePoint:
     properties:
       error:
@@ -11012,6 +11604,10 @@ definitions:
         items:
           $ref: '#/definitions/types.FilterCondition'
         type: array
+      finalized_at_gte:
+        description: finalized_at_gte filters invoices finalized at or after the given
+          instant
+        type: string
       invoice_ids:
         description: |-
           invoice_ids restricts results to invoices with the specified IDs
@@ -11084,6 +11680,9 @@ definitions:
         description: |-
           subscription_id filters invoices generated for a specific subscription
           Only returns invoices that were created as part of the specified subscription's billing
+        type: string
+      voided_at_gte:
+        description: voided_at_gte filters invoices voided at or after the given instant
         type: string
     type: object
   types.InvoiceSourceType:
@@ -11204,6 +11803,8 @@ definitions:
     - MetricEventCount
   types.ModifySubscriptionLineItem:
     properties:
+      amount:
+        type: string
       effective_date:
         type: string
       line_item_id:
@@ -11217,9 +11818,27 @@ definitions:
         items:
           $ref: '#/definitions/types.ModifySubscriptionLineItem'
         type: array
+      modify_type:
+        $ref: '#/definitions/types.ModifySubscriptionType'
       subscription_id:
         type: string
     type: object
+  types.ModifySubscriptionType:
+    enum:
+    - quantity_change
+    - line_item_change
+    type: string
+    x-enum-varnames:
+    - ModifySubscriptionTypeQuantityChange
+    - ModifySubscriptionTypeLineItemChange
+  types.OnExistingEntityPolicy:
+    enum:
+    - reject
+    - supersede
+    type: string
+    x-enum-varnames:
+    - OnExistingEntityPolicyReject
+    - OnExistingEntityPolicySupersede
   types.OnPendingSchedulePolicy:
     enum:
     - reject
@@ -11321,6 +11940,16 @@ definitions:
     - PaymentGatewayTypePaddle
     - PaymentGatewayTypeWhop
     - PaymentGatewayTypeChargebee
+  types.PaymentMethodStatus:
+    enum:
+    - ACTIVE
+    - INACTIVE
+    - EXPIRED
+    type: string
+    x-enum-varnames:
+    - PaymentMethodStatusActive
+    - PaymentMethodStatusInactive
+    - PaymentMethodStatusExpired
   types.PaymentMethodType:
     enum:
     - CARD
@@ -11492,6 +12121,12 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription_id:
         type: string
+      updated_after:
+        description: |-
+          UpdatedAfter matches prices edited since the given time. TimeRangeFilter
+          above filters on created_at, so it cannot see an edit to an existing
+          price.
+        type: string
     type: object
   types.PriceType:
     enum:
@@ -11577,6 +12212,24 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.RecurringPaymentStatus:
+    enum:
+    - PENDING
+    - ACTIVE
+    - PAUSED
+    - REJECTED
+    - CANCELLED
+    - EXPIRED
+    - UNKNOWN
+    type: string
+    x-enum-varnames:
+    - RecurringPaymentStatusPending
+    - RecurringPaymentStatusActive
+    - RecurringPaymentStatusPaused
+    - RecurringPaymentStatusRejected
+    - RecurringPaymentStatusCancelled
+    - RecurringPaymentStatusExpired
+    - RecurringPaymentStatusUnknown
   types.RefundDestination:
     enum:
     - GATEWAY
@@ -11675,6 +12328,24 @@ definitions:
     - ResumeModeImmediate
     - ResumeModeScheduled
     - ResumeModeAuto
+  types.RevenueAllocationPolicy:
+    enum:
+    - billed
+    - amortized
+    type: string
+    x-enum-varnames:
+    - RevenueAllocationBilled
+    - RevenueAllocationAmortized
+  types.RevenueGranularity:
+    enum:
+    - day
+    - period
+    - total
+    type: string
+    x-enum-varnames:
+    - RevenueGranularityDay
+    - RevenueGranularityPeriod
+    - RevenueGranularityTotal
   types.RoundType:
     enum:
     - up
@@ -11767,6 +12438,7 @@ definitions:
     - credit_topups
     - credit_usage
     - usage_analytics
+    - revenue_facts
     type: string
     x-enum-varnames:
     - ScheduledTaskEntityTypeEvents
@@ -11774,6 +12446,7 @@ definitions:
     - ScheduledTaskEntityTypeCreditTopups
     - ScheduledTaskEntityTypeCreditUsage
     - ScheduledTaskEntityTypeUsageAnalytics
+    - ScheduledTaskEntityTypeRevenueFacts
   types.ScheduledTaskInterval:
     enum:
     - 15MIN
@@ -14244,6 +14917,48 @@ paths:
       tags:
       - Analytics
       x-scope: read
+  /analytics/revenue:
+    post:
+      consumes:
+      - application/json
+      description: Aggregates revenue_facts by the requested dimensions at day/period/total
+        granularity. allocation_policy places whole-period charges on their booked
+        day (billed) or spreads them across the period (amortized); include_adjustments
+        breaks out true-up/overage/revert amounts as labeled rows. Requires the tenant's
+        revenue analytics setting.
+      operationId: getRevenueAnalytics
+      parameters:
+      - description: Revenue analytics request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RevenueAnalyticsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/RevenueAnalyticsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Revenue analytics not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query revenue analytics
+      tags:
+      - Analytics
+      x-scope: read
   /analytics/views:
     post:
       consumes:
@@ -15593,6 +16308,50 @@ paths:
       summary: Get customer invoice summary
       tags:
       - Invoices
+  /customers/{id}/payment-methods:
+    get:
+      description: Use when you need a customer's saved payment methods across every
+        connected gateway, including whether each can be auto-charged. Only gateways
+        that can list saved methods are included.
+      operationId: listCustomerPaymentMethods
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - collectionFormat: multi
+        description: Limit to these payment gateways
+        in: query
+        items:
+          type: string
+        name: providers
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SavedPaymentMethodsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customer payment methods
+      tags:
+      - Customers
+      x-scope: read
   /customers/{id}/wallets:
     get:
       consumes:
@@ -16237,37 +16996,6 @@ paths:
       summary: Bulk ingest events
       tags:
       - Events
-  /events/huggingface-inference:
-    post:
-      consumes:
-      - application/json
-      description: Use when fetching Hugging Face inference usage or billing data
-        (e.g. for HF-specific reporting or reconciliation). Reads the meter-usage
-        pipeline.
-      operationId: getHuggingfaceInferenceData
-      parameters:
-      - description: Request body
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/GetHuggingFaceBillingDataRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/GetHuggingFaceBillingDataResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get Hugging Face inference data
-      tags:
-      - Events
   /events/lookup:
     get:
       description: Use when debugging a specific event (e.g. why it failed or how
@@ -16281,6 +17009,20 @@ paths:
         name: id
         required: true
         type: string
+      - description: External customer ID the event was ingested with
+        in: query
+        name: external_customer_id
+        required: true
+        type: string
+      - description: Start of the event timestamp window (RFC3339); defaults to 14
+          days before end_time
+        in: query
+        name: start_time
+        type: string
+      - description: End of the event timestamp window (RFC3339); defaults to now
+        in: query
+        name: end_time
+        type: string
       produces:
       - application/json
       responses:
@@ -16288,6 +17030,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/GetEventByIDResponse'
+        "400":
+          description: Missing event ID or external customer ID
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
@@ -16602,6 +17348,179 @@ paths:
       summary: Query features
       tags:
       - Features
+  /forex:
+    post:
+      consumes:
+      - application/json
+      description: Configure a fixed exchange rate at tenant, customer or subscription
+        scope. Overrides need a tenant rate for the same pair.
+      operationId: createFXRate
+      parameters:
+      - description: FX rate to create
+        in: body
+        name: fx_rate
+        required: true
+        schema:
+          $ref: '#/definitions/CreateFXRateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create an FX rate
+      tags:
+      - FX Rates
+  /forex/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Archive a customer or subscription override. Tenant rates cannot
+        be deleted.
+      operationId: deleteFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an FX rate
+      tags:
+      - FX Rates
+    get:
+      consumes:
+      - application/json
+      description: Load a single FX rate by ID.
+      operationId: getFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an FX rate
+      tags:
+      - FX Rates
+    put:
+      consumes:
+      - application/json
+      description: Update a rate's value, validity window (overrides only) or metadata.
+        Scope, scope_id and the currency pair are immutable.
+      operationId: updateFXRate
+      parameters:
+      - description: FX rate ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: FX rate fields to update
+        in: body
+        name: fx_rate
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateFXRateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/FXRateResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update an FX rate
+      tags:
+      - FX Rates
+  /forex/query:
+    post:
+      consumes:
+      - application/json
+      description: Filter FX rates via a request body (POST used for a complex query,
+        but read-only).
+      operationId: queryFXRates
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.FXRateFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListFXRatesResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query FX rates
+      tags:
+      - FX Rates
+      x-scope: read
   /groups:
     post:
       consumes:
@@ -19444,9 +20363,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Execute a mid-cycle subscription modification (inheritance, quantity
-        change, grouped invoicing, trial end, coupon, tax, a single addon add/remove,
-        or a batch of addon adds and removes settled as one netted document).
+      description: |-
+        Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).
+        Type "quantity_change" is deprecated: use "line_item_change", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -19489,9 +20408,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview the impact of a mid-cycle subscription modification (inheritance,
-        quantity change, grouped invoicing, trial end, coupon, tax, a single addon
-        add/remove, or a batch of addon adds and removes) without committing changes.
+      description: |-
+        Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.
+        Type "quantity_change" is deprecated: use "line_item_change".
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -19787,6 +20706,36 @@ paths:
         in: query
         name: subscription_id
         type: string
+      - collectionFormat: multi
+        description: Filter by subscription IDs
+        in: query
+        items:
+          type: string
+        name: subscription_ids
+        type: array
+      - collectionFormat: multi
+        description: Filter by schedule type
+        in: query
+        items:
+          enum:
+          - plan_change
+          - cancellation
+          type: string
+        name: schedule_type
+        type: array
+      - collectionFormat: multi
+        description: Filter by schedule status
+        in: query
+        items:
+          enum:
+          - pending
+          - executing
+          - executed
+          - cancelled
+          - failed
+          type: string
+        name: schedule_status
+        type: array
       - description: Limit results
         in: query
         name: limit

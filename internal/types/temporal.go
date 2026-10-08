@@ -57,6 +57,7 @@ const (
 	// Workflow Types - only include implemented workflows
 	TemporalCreditGrantProcessingWorkflow                  TemporalWorkflowType = "CreditGrantProcessingWorkflow"
 	TemporalSubscriptionAutoCancellationWorkflow           TemporalWorkflowType = "SubscriptionAutoCancellationWorkflow"
+	TemporalSubscriptionOverdueInvoicesWorkflow            TemporalWorkflowType = "SubscriptionOverdueInvoicesWorkflow"
 	TemporalWalletCreditExpiryWorkflow                     TemporalWorkflowType = "WalletCreditExpiryWorkflow"
 	TemporalSubscriptionBillingPeriodsWorkflow             TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
 	TemporalSubscriptionRenewalDueAlertsWorkflow           TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
@@ -117,6 +118,7 @@ const (
 var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalCreditGrantProcessingWorkflow,
 	TemporalSubscriptionAutoCancellationWorkflow,
+	TemporalSubscriptionOverdueInvoicesWorkflow,
 	TemporalWalletCreditExpiryWorkflow,
 	TemporalSubscriptionBillingPeriodsWorkflow,
 	TemporalSubscriptionRenewalDueAlertsWorkflow,

@@ -22,175 +22,175 @@ type AlertSettingsCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (asc *AlertSettingsCreate) SetTenantID(s string) *AlertSettingsCreate {
-	asc.mutation.SetTenantID(s)
-	return asc
+func (_c *AlertSettingsCreate) SetTenantID(v string) *AlertSettingsCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (asc *AlertSettingsCreate) SetStatus(s string) *AlertSettingsCreate {
-	asc.mutation.SetStatus(s)
-	return asc
+func (_c *AlertSettingsCreate) SetStatus(v string) *AlertSettingsCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableStatus(s *string) *AlertSettingsCreate {
-	if s != nil {
-		asc.SetStatus(*s)
+func (_c *AlertSettingsCreate) SetNillableStatus(v *string) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (asc *AlertSettingsCreate) SetCreatedAt(t time.Time) *AlertSettingsCreate {
-	asc.mutation.SetCreatedAt(t)
-	return asc
+func (_c *AlertSettingsCreate) SetCreatedAt(v time.Time) *AlertSettingsCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableCreatedAt(t *time.Time) *AlertSettingsCreate {
-	if t != nil {
-		asc.SetCreatedAt(*t)
+func (_c *AlertSettingsCreate) SetNillableCreatedAt(v *time.Time) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (asc *AlertSettingsCreate) SetUpdatedAt(t time.Time) *AlertSettingsCreate {
-	asc.mutation.SetUpdatedAt(t)
-	return asc
+func (_c *AlertSettingsCreate) SetUpdatedAt(v time.Time) *AlertSettingsCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableUpdatedAt(t *time.Time) *AlertSettingsCreate {
-	if t != nil {
-		asc.SetUpdatedAt(*t)
+func (_c *AlertSettingsCreate) SetNillableUpdatedAt(v *time.Time) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (asc *AlertSettingsCreate) SetCreatedBy(s string) *AlertSettingsCreate {
-	asc.mutation.SetCreatedBy(s)
-	return asc
+func (_c *AlertSettingsCreate) SetCreatedBy(v string) *AlertSettingsCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableCreatedBy(s *string) *AlertSettingsCreate {
-	if s != nil {
-		asc.SetCreatedBy(*s)
+func (_c *AlertSettingsCreate) SetNillableCreatedBy(v *string) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (asc *AlertSettingsCreate) SetUpdatedBy(s string) *AlertSettingsCreate {
-	asc.mutation.SetUpdatedBy(s)
-	return asc
+func (_c *AlertSettingsCreate) SetUpdatedBy(v string) *AlertSettingsCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableUpdatedBy(s *string) *AlertSettingsCreate {
-	if s != nil {
-		asc.SetUpdatedBy(*s)
+func (_c *AlertSettingsCreate) SetNillableUpdatedBy(v *string) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (asc *AlertSettingsCreate) SetEnvironmentID(s string) *AlertSettingsCreate {
-	asc.mutation.SetEnvironmentID(s)
-	return asc
+func (_c *AlertSettingsCreate) SetEnvironmentID(v string) *AlertSettingsCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableEnvironmentID(s *string) *AlertSettingsCreate {
-	if s != nil {
-		asc.SetEnvironmentID(*s)
+func (_c *AlertSettingsCreate) SetNillableEnvironmentID(v *string) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetEnabled sets the "enabled" field.
-func (asc *AlertSettingsCreate) SetEnabled(b bool) *AlertSettingsCreate {
-	asc.mutation.SetEnabled(b)
-	return asc
+func (_c *AlertSettingsCreate) SetEnabled(v bool) *AlertSettingsCreate {
+	_c.mutation.SetEnabled(v)
+	return _c
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableEnabled(b *bool) *AlertSettingsCreate {
-	if b != nil {
-		asc.SetEnabled(*b)
+func (_c *AlertSettingsCreate) SetNillableEnabled(v *bool) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetEnabled(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (asc *AlertSettingsCreate) SetEntityType(tet types.AlertEntityType) *AlertSettingsCreate {
-	asc.mutation.SetEntityType(tet)
-	return asc
+func (_c *AlertSettingsCreate) SetEntityType(v types.AlertEntityType) *AlertSettingsCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (asc *AlertSettingsCreate) SetEntityID(s string) *AlertSettingsCreate {
-	asc.mutation.SetEntityID(s)
-	return asc
+func (_c *AlertSettingsCreate) SetEntityID(v string) *AlertSettingsCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetParentEntityType sets the "parent_entity_type" field.
-func (asc *AlertSettingsCreate) SetParentEntityType(tet types.AlertEntityType) *AlertSettingsCreate {
-	asc.mutation.SetParentEntityType(tet)
-	return asc
+func (_c *AlertSettingsCreate) SetParentEntityType(v types.AlertEntityType) *AlertSettingsCreate {
+	_c.mutation.SetParentEntityType(v)
+	return _c
 }
 
 // SetNillableParentEntityType sets the "parent_entity_type" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableParentEntityType(tet *types.AlertEntityType) *AlertSettingsCreate {
-	if tet != nil {
-		asc.SetParentEntityType(*tet)
+func (_c *AlertSettingsCreate) SetNillableParentEntityType(v *types.AlertEntityType) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetParentEntityType(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetParentEntityID sets the "parent_entity_id" field.
-func (asc *AlertSettingsCreate) SetParentEntityID(s string) *AlertSettingsCreate {
-	asc.mutation.SetParentEntityID(s)
-	return asc
+func (_c *AlertSettingsCreate) SetParentEntityID(v string) *AlertSettingsCreate {
+	_c.mutation.SetParentEntityID(v)
+	return _c
 }
 
 // SetNillableParentEntityID sets the "parent_entity_id" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableParentEntityID(s *string) *AlertSettingsCreate {
-	if s != nil {
-		asc.SetParentEntityID(*s)
+func (_c *AlertSettingsCreate) SetNillableParentEntityID(v *string) *AlertSettingsCreate {
+	if v != nil {
+		_c.SetParentEntityID(*v)
 	}
-	return asc
+	return _c
 }
 
 // SetConfig sets the "config" field.
-func (asc *AlertSettingsCreate) SetConfig(ts types.AlertSettings) *AlertSettingsCreate {
-	asc.mutation.SetConfig(ts)
-	return asc
+func (_c *AlertSettingsCreate) SetConfig(v types.AlertSettings) *AlertSettingsCreate {
+	_c.mutation.SetConfig(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (asc *AlertSettingsCreate) SetID(s string) *AlertSettingsCreate {
-	asc.mutation.SetID(s)
-	return asc
+func (_c *AlertSettingsCreate) SetID(v string) *AlertSettingsCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the AlertSettingsMutation object of the builder.
-func (asc *AlertSettingsCreate) Mutation() *AlertSettingsMutation {
-	return asc.mutation
+func (_c *AlertSettingsCreate) Mutation() *AlertSettingsMutation {
+	return _c.mutation
 }
 
 // Save creates the AlertSettings in the database.
-func (asc *AlertSettingsCreate) Save(ctx context.Context) (*AlertSettings, error) {
-	asc.defaults()
-	return withHooks(ctx, asc.sqlSave, asc.mutation, asc.hooks)
+func (_c *AlertSettingsCreate) Save(ctx context.Context) (*AlertSettings, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (asc *AlertSettingsCreate) SaveX(ctx context.Context) *AlertSettings {
-	v, err := asc.Save(ctx)
+func (_c *AlertSettingsCreate) SaveX(ctx context.Context) *AlertSettings {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -198,89 +198,89 @@ func (asc *AlertSettingsCreate) SaveX(ctx context.Context) *AlertSettings {
 }
 
 // Exec executes the query.
-func (asc *AlertSettingsCreate) Exec(ctx context.Context) error {
-	_, err := asc.Save(ctx)
+func (_c *AlertSettingsCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (asc *AlertSettingsCreate) ExecX(ctx context.Context) {
-	if err := asc.Exec(ctx); err != nil {
+func (_c *AlertSettingsCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (asc *AlertSettingsCreate) defaults() {
-	if _, ok := asc.mutation.Status(); !ok {
+func (_c *AlertSettingsCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := alertsettings.DefaultStatus
-		asc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := asc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := alertsettings.DefaultCreatedAt()
-		asc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := asc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := alertsettings.DefaultUpdatedAt()
-		asc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := asc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := alertsettings.DefaultEnvironmentID
-		asc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := asc.mutation.Enabled(); !ok {
+	if _, ok := _c.mutation.Enabled(); !ok {
 		v := alertsettings.DefaultEnabled
-		asc.mutation.SetEnabled(v)
+		_c.mutation.SetEnabled(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (asc *AlertSettingsCreate) check() error {
-	if _, ok := asc.mutation.TenantID(); !ok {
+func (_c *AlertSettingsCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "AlertSettings.tenant_id"`)}
 	}
-	if v, ok := asc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := alertsettings.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "AlertSettings.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := asc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "AlertSettings.status"`)}
 	}
-	if _, ok := asc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AlertSettings.created_at"`)}
 	}
-	if _, ok := asc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "AlertSettings.updated_at"`)}
 	}
-	if _, ok := asc.mutation.Enabled(); !ok {
+	if _, ok := _c.mutation.Enabled(); !ok {
 		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "AlertSettings.enabled"`)}
 	}
-	if _, ok := asc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "AlertSettings.entity_type"`)}
 	}
-	if v, ok := asc.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := alertsettings.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "AlertSettings.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := asc.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "AlertSettings.entity_id"`)}
 	}
-	if v, ok := asc.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := alertsettings.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "AlertSettings.entity_id": %w`, err)}
 		}
 	}
-	if v, ok := asc.mutation.ParentEntityType(); ok {
+	if v, ok := _c.mutation.ParentEntityType(); ok {
 		if err := alertsettings.ParentEntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "parent_entity_type", err: fmt.Errorf(`ent: validator failed for field "AlertSettings.parent_entity_type": %w`, err)}
 		}
 	}
-	if _, ok := asc.mutation.Config(); !ok {
+	if _, ok := _c.mutation.Config(); !ok {
 		return &ValidationError{Name: "config", err: errors.New(`ent: missing required field "AlertSettings.config"`)}
 	}
-	if v, ok := asc.mutation.Config(); ok {
+	if v, ok := _c.mutation.Config(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "config", err: fmt.Errorf(`ent: validator failed for field "AlertSettings.config": %w`, err)}
 		}
@@ -288,12 +288,12 @@ func (asc *AlertSettingsCreate) check() error {
 	return nil
 }
 
-func (asc *AlertSettingsCreate) sqlSave(ctx context.Context) (*AlertSettings, error) {
-	if err := asc.check(); err != nil {
+func (_c *AlertSettingsCreate) sqlSave(ctx context.Context) (*AlertSettings, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := asc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, asc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -306,69 +306,69 @@ func (asc *AlertSettingsCreate) sqlSave(ctx context.Context) (*AlertSettings, er
 			return nil, fmt.Errorf("unexpected AlertSettings.ID type: %T", _spec.ID.Value)
 		}
 	}
-	asc.mutation.id = &_node.ID
-	asc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (asc *AlertSettingsCreate) createSpec() (*AlertSettings, *sqlgraph.CreateSpec) {
+func (_c *AlertSettingsCreate) createSpec() (*AlertSettings, *sqlgraph.CreateSpec) {
 	var (
-		_node = &AlertSettings{config: asc.config}
+		_node = &AlertSettings{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(alertsettings.Table, sqlgraph.NewFieldSpec(alertsettings.FieldID, field.TypeString))
 	)
-	if id, ok := asc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := asc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(alertsettings.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := asc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(alertsettings.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := asc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(alertsettings.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := asc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := asc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(alertsettings.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := asc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := asc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(alertsettings.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := asc.mutation.Enabled(); ok {
+	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(alertsettings.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
 	}
-	if value, ok := asc.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(alertsettings.FieldEntityType, field.TypeEnum, value)
 		_node.EntityType = value
 	}
-	if value, ok := asc.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(alertsettings.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := asc.mutation.ParentEntityType(); ok {
+	if value, ok := _c.mutation.ParentEntityType(); ok {
 		_spec.SetField(alertsettings.FieldParentEntityType, field.TypeEnum, value)
 		_node.ParentEntityType = &value
 	}
-	if value, ok := asc.mutation.ParentEntityID(); ok {
+	if value, ok := _c.mutation.ParentEntityID(); ok {
 		_spec.SetField(alertsettings.FieldParentEntityID, field.TypeString, value)
 		_node.ParentEntityID = &value
 	}
-	if value, ok := asc.mutation.Config(); ok {
+	if value, ok := _c.mutation.Config(); ok {
 		_spec.SetField(alertsettings.FieldConfig, field.TypeJSON, value)
 		_node.Config = value
 	}
@@ -383,16 +383,16 @@ type AlertSettingsCreateBulk struct {
 }
 
 // Save creates the AlertSettings entities in the database.
-func (ascb *AlertSettingsCreateBulk) Save(ctx context.Context) ([]*AlertSettings, error) {
-	if ascb.err != nil {
-		return nil, ascb.err
+func (_c *AlertSettingsCreateBulk) Save(ctx context.Context) ([]*AlertSettings, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(ascb.builders))
-	nodes := make([]*AlertSettings, len(ascb.builders))
-	mutators := make([]Mutator, len(ascb.builders))
-	for i := range ascb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*AlertSettings, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := ascb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AlertSettingsMutation)
@@ -406,11 +406,11 @@ func (ascb *AlertSettingsCreateBulk) Save(ctx context.Context) ([]*AlertSettings
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, ascb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, ascb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -430,7 +430,7 @@ func (ascb *AlertSettingsCreateBulk) Save(ctx context.Context) ([]*AlertSettings
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, ascb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -438,8 +438,8 @@ func (ascb *AlertSettingsCreateBulk) Save(ctx context.Context) ([]*AlertSettings
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ascb *AlertSettingsCreateBulk) SaveX(ctx context.Context) []*AlertSettings {
-	v, err := ascb.Save(ctx)
+func (_c *AlertSettingsCreateBulk) SaveX(ctx context.Context) []*AlertSettings {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -447,14 +447,14 @@ func (ascb *AlertSettingsCreateBulk) SaveX(ctx context.Context) []*AlertSettings
 }
 
 // Exec executes the query.
-func (ascb *AlertSettingsCreateBulk) Exec(ctx context.Context) error {
-	_, err := ascb.Save(ctx)
+func (_c *AlertSettingsCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ascb *AlertSettingsCreateBulk) ExecX(ctx context.Context) {
-	if err := ascb.Exec(ctx); err != nil {
+func (_c *AlertSettingsCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

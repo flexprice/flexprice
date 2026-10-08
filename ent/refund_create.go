@@ -22,381 +22,381 @@ type RefundCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (rc *RefundCreate) SetTenantID(s string) *RefundCreate {
-	rc.mutation.SetTenantID(s)
-	return rc
+func (_c *RefundCreate) SetTenantID(v string) *RefundCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (rc *RefundCreate) SetStatus(s string) *RefundCreate {
-	rc.mutation.SetStatus(s)
-	return rc
+func (_c *RefundCreate) SetStatus(v string) *RefundCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableStatus(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetStatus(*s)
+func (_c *RefundCreate) SetNillableStatus(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (rc *RefundCreate) SetCreatedAt(t time.Time) *RefundCreate {
-	rc.mutation.SetCreatedAt(t)
-	return rc
+func (_c *RefundCreate) SetCreatedAt(v time.Time) *RefundCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableCreatedAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetCreatedAt(*t)
+func (_c *RefundCreate) SetNillableCreatedAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (rc *RefundCreate) SetUpdatedAt(t time.Time) *RefundCreate {
-	rc.mutation.SetUpdatedAt(t)
-	return rc
+func (_c *RefundCreate) SetUpdatedAt(v time.Time) *RefundCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableUpdatedAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetUpdatedAt(*t)
+func (_c *RefundCreate) SetNillableUpdatedAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (rc *RefundCreate) SetCreatedBy(s string) *RefundCreate {
-	rc.mutation.SetCreatedBy(s)
-	return rc
+func (_c *RefundCreate) SetCreatedBy(v string) *RefundCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableCreatedBy(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetCreatedBy(*s)
+func (_c *RefundCreate) SetNillableCreatedBy(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (rc *RefundCreate) SetUpdatedBy(s string) *RefundCreate {
-	rc.mutation.SetUpdatedBy(s)
-	return rc
+func (_c *RefundCreate) SetUpdatedBy(v string) *RefundCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableUpdatedBy(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetUpdatedBy(*s)
+func (_c *RefundCreate) SetNillableUpdatedBy(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (rc *RefundCreate) SetEnvironmentID(s string) *RefundCreate {
-	rc.mutation.SetEnvironmentID(s)
-	return rc
+func (_c *RefundCreate) SetEnvironmentID(v string) *RefundCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableEnvironmentID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetEnvironmentID(*s)
+func (_c *RefundCreate) SetNillableEnvironmentID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetPaymentID sets the "payment_id" field.
-func (rc *RefundCreate) SetPaymentID(s string) *RefundCreate {
-	rc.mutation.SetPaymentID(s)
-	return rc
+func (_c *RefundCreate) SetPaymentID(v string) *RefundCreate {
+	_c.mutation.SetPaymentID(v)
+	return _c
 }
 
 // SetNillablePaymentID sets the "payment_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillablePaymentID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetPaymentID(*s)
+func (_c *RefundCreate) SetNillablePaymentID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetPaymentID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (rc *RefundCreate) SetInvoiceID(s string) *RefundCreate {
-	rc.mutation.SetInvoiceID(s)
-	return rc
+func (_c *RefundCreate) SetInvoiceID(v string) *RefundCreate {
+	_c.mutation.SetInvoiceID(v)
+	return _c
 }
 
 // SetCreditNoteID sets the "credit_note_id" field.
-func (rc *RefundCreate) SetCreditNoteID(s string) *RefundCreate {
-	rc.mutation.SetCreditNoteID(s)
-	return rc
+func (_c *RefundCreate) SetCreditNoteID(v string) *RefundCreate {
+	_c.mutation.SetCreditNoteID(v)
+	return _c
 }
 
 // SetNillableCreditNoteID sets the "credit_note_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableCreditNoteID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetCreditNoteID(*s)
+func (_c *RefundCreate) SetNillableCreditNoteID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetCreditNoteID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetPaymentGateway sets the "payment_gateway" field.
-func (rc *RefundCreate) SetPaymentGateway(s string) *RefundCreate {
-	rc.mutation.SetPaymentGateway(s)
-	return rc
+func (_c *RefundCreate) SetPaymentGateway(v string) *RefundCreate {
+	_c.mutation.SetPaymentGateway(v)
+	return _c
 }
 
 // SetNillablePaymentGateway sets the "payment_gateway" field if the given value is not nil.
-func (rc *RefundCreate) SetNillablePaymentGateway(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetPaymentGateway(*s)
+func (_c *RefundCreate) SetNillablePaymentGateway(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetPaymentGateway(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetGatewayRefundID sets the "gateway_refund_id" field.
-func (rc *RefundCreate) SetGatewayRefundID(s string) *RefundCreate {
-	rc.mutation.SetGatewayRefundID(s)
-	return rc
+func (_c *RefundCreate) SetGatewayRefundID(v string) *RefundCreate {
+	_c.mutation.SetGatewayRefundID(v)
+	return _c
 }
 
 // SetNillableGatewayRefundID sets the "gateway_refund_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableGatewayRefundID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetGatewayRefundID(*s)
+func (_c *RefundCreate) SetNillableGatewayRefundID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetGatewayRefundID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetGatewayTrackingID sets the "gateway_tracking_id" field.
-func (rc *RefundCreate) SetGatewayTrackingID(s string) *RefundCreate {
-	rc.mutation.SetGatewayTrackingID(s)
-	return rc
+func (_c *RefundCreate) SetGatewayTrackingID(v string) *RefundCreate {
+	_c.mutation.SetGatewayTrackingID(v)
+	return _c
 }
 
 // SetNillableGatewayTrackingID sets the "gateway_tracking_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableGatewayTrackingID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetGatewayTrackingID(*s)
+func (_c *RefundCreate) SetNillableGatewayTrackingID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetGatewayTrackingID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetAmount sets the "amount" field.
-func (rc *RefundCreate) SetAmount(d decimal.Decimal) *RefundCreate {
-	rc.mutation.SetAmount(d)
-	return rc
+func (_c *RefundCreate) SetAmount(v decimal.Decimal) *RefundCreate {
+	_c.mutation.SetAmount(v)
+	return _c
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableAmount(d *decimal.Decimal) *RefundCreate {
-	if d != nil {
-		rc.SetAmount(*d)
+func (_c *RefundCreate) SetNillableAmount(v *decimal.Decimal) *RefundCreate {
+	if v != nil {
+		_c.SetAmount(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetSettledAmount sets the "settled_amount" field.
-func (rc *RefundCreate) SetSettledAmount(d decimal.Decimal) *RefundCreate {
-	rc.mutation.SetSettledAmount(d)
-	return rc
+func (_c *RefundCreate) SetSettledAmount(v decimal.Decimal) *RefundCreate {
+	_c.mutation.SetSettledAmount(v)
+	return _c
 }
 
 // SetNillableSettledAmount sets the "settled_amount" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableSettledAmount(d *decimal.Decimal) *RefundCreate {
-	if d != nil {
-		rc.SetSettledAmount(*d)
+func (_c *RefundCreate) SetNillableSettledAmount(v *decimal.Decimal) *RefundCreate {
+	if v != nil {
+		_c.SetSettledAmount(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (rc *RefundCreate) SetCurrency(s string) *RefundCreate {
-	rc.mutation.SetCurrency(s)
-	return rc
+func (_c *RefundCreate) SetCurrency(v string) *RefundCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (rc *RefundCreate) SetRefundStatus(s string) *RefundCreate {
-	rc.mutation.SetRefundStatus(s)
-	return rc
+func (_c *RefundCreate) SetRefundStatus(v string) *RefundCreate {
+	_c.mutation.SetRefundStatus(v)
+	return _c
 }
 
 // SetRefundReason sets the "refund_reason" field.
-func (rc *RefundCreate) SetRefundReason(s string) *RefundCreate {
-	rc.mutation.SetRefundReason(s)
-	return rc
+func (_c *RefundCreate) SetRefundReason(v string) *RefundCreate {
+	_c.mutation.SetRefundReason(v)
+	return _c
 }
 
 // SetRefundDestination sets the "refund_destination" field.
-func (rc *RefundCreate) SetRefundDestination(s string) *RefundCreate {
-	rc.mutation.SetRefundDestination(s)
-	return rc
+func (_c *RefundCreate) SetRefundDestination(v string) *RefundCreate {
+	_c.mutation.SetRefundDestination(v)
+	return _c
 }
 
 // SetNillableRefundDestination sets the "refund_destination" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableRefundDestination(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetRefundDestination(*s)
+func (_c *RefundCreate) SetNillableRefundDestination(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetRefundDestination(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetRefundDestinationID sets the "refund_destination_id" field.
-func (rc *RefundCreate) SetRefundDestinationID(s string) *RefundCreate {
-	rc.mutation.SetRefundDestinationID(s)
-	return rc
+func (_c *RefundCreate) SetRefundDestinationID(v string) *RefundCreate {
+	_c.mutation.SetRefundDestinationID(v)
+	return _c
 }
 
 // SetNillableRefundDestinationID sets the "refund_destination_id" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableRefundDestinationID(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetRefundDestinationID(*s)
+func (_c *RefundCreate) SetNillableRefundDestinationID(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetRefundDestinationID(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetAttempt sets the "attempt" field.
-func (rc *RefundCreate) SetAttempt(i int) *RefundCreate {
-	rc.mutation.SetAttempt(i)
-	return rc
+func (_c *RefundCreate) SetAttempt(v int) *RefundCreate {
+	_c.mutation.SetAttempt(v)
+	return _c
 }
 
 // SetNillableAttempt sets the "attempt" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableAttempt(i *int) *RefundCreate {
-	if i != nil {
-		rc.SetAttempt(*i)
+func (_c *RefundCreate) SetNillableAttempt(v *int) *RefundCreate {
+	if v != nil {
+		_c.SetAttempt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (rc *RefundCreate) SetIdempotencyKey(s string) *RefundCreate {
-	rc.mutation.SetIdempotencyKey(s)
-	return rc
+func (_c *RefundCreate) SetIdempotencyKey(v string) *RefundCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
 }
 
 // SetGatewayIdempotencyToken sets the "gateway_idempotency_token" field.
-func (rc *RefundCreate) SetGatewayIdempotencyToken(s string) *RefundCreate {
-	rc.mutation.SetGatewayIdempotencyToken(s)
-	return rc
+func (_c *RefundCreate) SetGatewayIdempotencyToken(v string) *RefundCreate {
+	_c.mutation.SetGatewayIdempotencyToken(v)
+	return _c
 }
 
 // SetNillableGatewayIdempotencyToken sets the "gateway_idempotency_token" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableGatewayIdempotencyToken(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetGatewayIdempotencyToken(*s)
+func (_c *RefundCreate) SetNillableGatewayIdempotencyToken(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetGatewayIdempotencyToken(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (rc *RefundCreate) SetFailureReason(s string) *RefundCreate {
-	rc.mutation.SetFailureReason(s)
-	return rc
+func (_c *RefundCreate) SetFailureReason(v string) *RefundCreate {
+	_c.mutation.SetFailureReason(v)
+	return _c
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableFailureReason(s *string) *RefundCreate {
-	if s != nil {
-		rc.SetFailureReason(*s)
+func (_c *RefundCreate) SetNillableFailureReason(v *string) *RefundCreate {
+	if v != nil {
+		_c.SetFailureReason(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (rc *RefundCreate) SetMetadata(m map[string]string) *RefundCreate {
-	rc.mutation.SetMetadata(m)
-	return rc
+func (_c *RefundCreate) SetMetadata(v map[string]string) *RefundCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetGatewayMetadata sets the "gateway_metadata" field.
-func (rc *RefundCreate) SetGatewayMetadata(m map[string]interface{}) *RefundCreate {
-	rc.mutation.SetGatewayMetadata(m)
-	return rc
+func (_c *RefundCreate) SetGatewayMetadata(v map[string]interface{}) *RefundCreate {
+	_c.mutation.SetGatewayMetadata(v)
+	return _c
 }
 
 // SetInitiatedAt sets the "initiated_at" field.
-func (rc *RefundCreate) SetInitiatedAt(t time.Time) *RefundCreate {
-	rc.mutation.SetInitiatedAt(t)
-	return rc
+func (_c *RefundCreate) SetInitiatedAt(v time.Time) *RefundCreate {
+	_c.mutation.SetInitiatedAt(v)
+	return _c
 }
 
 // SetNillableInitiatedAt sets the "initiated_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableInitiatedAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetInitiatedAt(*t)
+func (_c *RefundCreate) SetNillableInitiatedAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetInitiatedAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetSucceededAt sets the "succeeded_at" field.
-func (rc *RefundCreate) SetSucceededAt(t time.Time) *RefundCreate {
-	rc.mutation.SetSucceededAt(t)
-	return rc
+func (_c *RefundCreate) SetSucceededAt(v time.Time) *RefundCreate {
+	_c.mutation.SetSucceededAt(v)
+	return _c
 }
 
 // SetNillableSucceededAt sets the "succeeded_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableSucceededAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetSucceededAt(*t)
+func (_c *RefundCreate) SetNillableSucceededAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetSucceededAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetFailedAt sets the "failed_at" field.
-func (rc *RefundCreate) SetFailedAt(t time.Time) *RefundCreate {
-	rc.mutation.SetFailedAt(t)
-	return rc
+func (_c *RefundCreate) SetFailedAt(v time.Time) *RefundCreate {
+	_c.mutation.SetFailedAt(v)
+	return _c
 }
 
 // SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableFailedAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetFailedAt(*t)
+func (_c *RefundCreate) SetNillableFailedAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetFailedAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (rc *RefundCreate) SetCancelledAt(t time.Time) *RefundCreate {
-	rc.mutation.SetCancelledAt(t)
-	return rc
+func (_c *RefundCreate) SetCancelledAt(v time.Time) *RefundCreate {
+	_c.mutation.SetCancelledAt(v)
+	return _c
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (rc *RefundCreate) SetNillableCancelledAt(t *time.Time) *RefundCreate {
-	if t != nil {
-		rc.SetCancelledAt(*t)
+func (_c *RefundCreate) SetNillableCancelledAt(v *time.Time) *RefundCreate {
+	if v != nil {
+		_c.SetCancelledAt(*v)
 	}
-	return rc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (rc *RefundCreate) SetID(s string) *RefundCreate {
-	rc.mutation.SetID(s)
-	return rc
+func (_c *RefundCreate) SetID(v string) *RefundCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the RefundMutation object of the builder.
-func (rc *RefundCreate) Mutation() *RefundMutation {
-	return rc.mutation
+func (_c *RefundCreate) Mutation() *RefundMutation {
+	return _c.mutation
 }
 
 // Save creates the Refund in the database.
-func (rc *RefundCreate) Save(ctx context.Context) (*Refund, error) {
-	rc.defaults()
-	return withHooks(ctx, rc.sqlSave, rc.mutation, rc.hooks)
+func (_c *RefundCreate) Save(ctx context.Context) (*Refund, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (rc *RefundCreate) SaveX(ctx context.Context) *Refund {
-	v, err := rc.Save(ctx)
+func (_c *RefundCreate) SaveX(ctx context.Context) *Refund {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -404,121 +404,121 @@ func (rc *RefundCreate) SaveX(ctx context.Context) *Refund {
 }
 
 // Exec executes the query.
-func (rc *RefundCreate) Exec(ctx context.Context) error {
-	_, err := rc.Save(ctx)
+func (_c *RefundCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rc *RefundCreate) ExecX(ctx context.Context) {
-	if err := rc.Exec(ctx); err != nil {
+func (_c *RefundCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (rc *RefundCreate) defaults() {
-	if _, ok := rc.mutation.Status(); !ok {
+func (_c *RefundCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := refund.DefaultStatus
-		rc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := rc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := refund.DefaultCreatedAt()
-		rc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := rc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := refund.DefaultUpdatedAt()
-		rc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := rc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := refund.DefaultEnvironmentID
-		rc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := rc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		v := refund.DefaultAmount
-		rc.mutation.SetAmount(v)
+		_c.mutation.SetAmount(v)
 	}
-	if _, ok := rc.mutation.SettledAmount(); !ok {
+	if _, ok := _c.mutation.SettledAmount(); !ok {
 		v := refund.DefaultSettledAmount
-		rc.mutation.SetSettledAmount(v)
+		_c.mutation.SetSettledAmount(v)
 	}
-	if _, ok := rc.mutation.RefundDestination(); !ok {
+	if _, ok := _c.mutation.RefundDestination(); !ok {
 		v := refund.DefaultRefundDestination
-		rc.mutation.SetRefundDestination(v)
+		_c.mutation.SetRefundDestination(v)
 	}
-	if _, ok := rc.mutation.Attempt(); !ok {
+	if _, ok := _c.mutation.Attempt(); !ok {
 		v := refund.DefaultAttempt
-		rc.mutation.SetAttempt(v)
+		_c.mutation.SetAttempt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (rc *RefundCreate) check() error {
-	if _, ok := rc.mutation.TenantID(); !ok {
+func (_c *RefundCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Refund.tenant_id"`)}
 	}
-	if v, ok := rc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := refund.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Refund.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := rc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Refund.status"`)}
 	}
-	if _, ok := rc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Refund.created_at"`)}
 	}
-	if _, ok := rc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Refund.updated_at"`)}
 	}
-	if _, ok := rc.mutation.InvoiceID(); !ok {
+	if _, ok := _c.mutation.InvoiceID(); !ok {
 		return &ValidationError{Name: "invoice_id", err: errors.New(`ent: missing required field "Refund.invoice_id"`)}
 	}
-	if v, ok := rc.mutation.InvoiceID(); ok {
+	if v, ok := _c.mutation.InvoiceID(); ok {
 		if err := refund.InvoiceIDValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_id", err: fmt.Errorf(`ent: validator failed for field "Refund.invoice_id": %w`, err)}
 		}
 	}
-	if _, ok := rc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "Refund.amount"`)}
 	}
-	if _, ok := rc.mutation.SettledAmount(); !ok {
+	if _, ok := _c.mutation.SettledAmount(); !ok {
 		return &ValidationError{Name: "settled_amount", err: errors.New(`ent: missing required field "Refund.settled_amount"`)}
 	}
-	if _, ok := rc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Refund.currency"`)}
 	}
-	if v, ok := rc.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := refund.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Refund.currency": %w`, err)}
 		}
 	}
-	if _, ok := rc.mutation.RefundStatus(); !ok {
+	if _, ok := _c.mutation.RefundStatus(); !ok {
 		return &ValidationError{Name: "refund_status", err: errors.New(`ent: missing required field "Refund.refund_status"`)}
 	}
-	if v, ok := rc.mutation.RefundStatus(); ok {
+	if v, ok := _c.mutation.RefundStatus(); ok {
 		if err := refund.RefundStatusValidator(v); err != nil {
 			return &ValidationError{Name: "refund_status", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_status": %w`, err)}
 		}
 	}
-	if _, ok := rc.mutation.RefundReason(); !ok {
+	if _, ok := _c.mutation.RefundReason(); !ok {
 		return &ValidationError{Name: "refund_reason", err: errors.New(`ent: missing required field "Refund.refund_reason"`)}
 	}
-	if v, ok := rc.mutation.RefundReason(); ok {
+	if v, ok := _c.mutation.RefundReason(); ok {
 		if err := refund.RefundReasonValidator(v); err != nil {
 			return &ValidationError{Name: "refund_reason", err: fmt.Errorf(`ent: validator failed for field "Refund.refund_reason": %w`, err)}
 		}
 	}
-	if _, ok := rc.mutation.RefundDestination(); !ok {
+	if _, ok := _c.mutation.RefundDestination(); !ok {
 		return &ValidationError{Name: "refund_destination", err: errors.New(`ent: missing required field "Refund.refund_destination"`)}
 	}
-	if _, ok := rc.mutation.Attempt(); !ok {
+	if _, ok := _c.mutation.Attempt(); !ok {
 		return &ValidationError{Name: "attempt", err: errors.New(`ent: missing required field "Refund.attempt"`)}
 	}
-	if _, ok := rc.mutation.IdempotencyKey(); !ok {
+	if _, ok := _c.mutation.IdempotencyKey(); !ok {
 		return &ValidationError{Name: "idempotency_key", err: errors.New(`ent: missing required field "Refund.idempotency_key"`)}
 	}
-	if v, ok := rc.mutation.IdempotencyKey(); ok {
+	if v, ok := _c.mutation.IdempotencyKey(); ok {
 		if err := refund.IdempotencyKeyValidator(v); err != nil {
 			return &ValidationError{Name: "idempotency_key", err: fmt.Errorf(`ent: validator failed for field "Refund.idempotency_key": %w`, err)}
 		}
@@ -526,12 +526,12 @@ func (rc *RefundCreate) check() error {
 	return nil
 }
 
-func (rc *RefundCreate) sqlSave(ctx context.Context) (*Refund, error) {
-	if err := rc.check(); err != nil {
+func (_c *RefundCreate) sqlSave(ctx context.Context) (*Refund, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := rc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, rc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -544,137 +544,137 @@ func (rc *RefundCreate) sqlSave(ctx context.Context) (*Refund, error) {
 			return nil, fmt.Errorf("unexpected Refund.ID type: %T", _spec.ID.Value)
 		}
 	}
-	rc.mutation.id = &_node.ID
-	rc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (rc *RefundCreate) createSpec() (*Refund, *sqlgraph.CreateSpec) {
+func (_c *RefundCreate) createSpec() (*Refund, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Refund{config: rc.config}
+		_node = &Refund{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(refund.Table, sqlgraph.NewFieldSpec(refund.FieldID, field.TypeString))
 	)
-	if id, ok := rc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := rc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(refund.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := rc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(refund.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := rc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(refund.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := rc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(refund.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := rc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(refund.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := rc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(refund.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := rc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(refund.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := rc.mutation.PaymentID(); ok {
+	if value, ok := _c.mutation.PaymentID(); ok {
 		_spec.SetField(refund.FieldPaymentID, field.TypeString, value)
 		_node.PaymentID = &value
 	}
-	if value, ok := rc.mutation.InvoiceID(); ok {
+	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(refund.FieldInvoiceID, field.TypeString, value)
 		_node.InvoiceID = value
 	}
-	if value, ok := rc.mutation.CreditNoteID(); ok {
+	if value, ok := _c.mutation.CreditNoteID(); ok {
 		_spec.SetField(refund.FieldCreditNoteID, field.TypeString, value)
 		_node.CreditNoteID = &value
 	}
-	if value, ok := rc.mutation.PaymentGateway(); ok {
+	if value, ok := _c.mutation.PaymentGateway(); ok {
 		_spec.SetField(refund.FieldPaymentGateway, field.TypeString, value)
 		_node.PaymentGateway = &value
 	}
-	if value, ok := rc.mutation.GatewayRefundID(); ok {
+	if value, ok := _c.mutation.GatewayRefundID(); ok {
 		_spec.SetField(refund.FieldGatewayRefundID, field.TypeString, value)
 		_node.GatewayRefundID = &value
 	}
-	if value, ok := rc.mutation.GatewayTrackingID(); ok {
+	if value, ok := _c.mutation.GatewayTrackingID(); ok {
 		_spec.SetField(refund.FieldGatewayTrackingID, field.TypeString, value)
 		_node.GatewayTrackingID = &value
 	}
-	if value, ok := rc.mutation.Amount(); ok {
+	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(refund.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := rc.mutation.SettledAmount(); ok {
+	if value, ok := _c.mutation.SettledAmount(); ok {
 		_spec.SetField(refund.FieldSettledAmount, field.TypeOther, value)
 		_node.SettledAmount = value
 	}
-	if value, ok := rc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(refund.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := rc.mutation.RefundStatus(); ok {
+	if value, ok := _c.mutation.RefundStatus(); ok {
 		_spec.SetField(refund.FieldRefundStatus, field.TypeString, value)
 		_node.RefundStatus = value
 	}
-	if value, ok := rc.mutation.RefundReason(); ok {
+	if value, ok := _c.mutation.RefundReason(); ok {
 		_spec.SetField(refund.FieldRefundReason, field.TypeString, value)
 		_node.RefundReason = value
 	}
-	if value, ok := rc.mutation.RefundDestination(); ok {
+	if value, ok := _c.mutation.RefundDestination(); ok {
 		_spec.SetField(refund.FieldRefundDestination, field.TypeString, value)
 		_node.RefundDestination = value
 	}
-	if value, ok := rc.mutation.RefundDestinationID(); ok {
+	if value, ok := _c.mutation.RefundDestinationID(); ok {
 		_spec.SetField(refund.FieldRefundDestinationID, field.TypeString, value)
 		_node.RefundDestinationID = &value
 	}
-	if value, ok := rc.mutation.Attempt(); ok {
+	if value, ok := _c.mutation.Attempt(); ok {
 		_spec.SetField(refund.FieldAttempt, field.TypeInt, value)
 		_node.Attempt = value
 	}
-	if value, ok := rc.mutation.IdempotencyKey(); ok {
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(refund.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = value
 	}
-	if value, ok := rc.mutation.GatewayIdempotencyToken(); ok {
+	if value, ok := _c.mutation.GatewayIdempotencyToken(); ok {
 		_spec.SetField(refund.FieldGatewayIdempotencyToken, field.TypeString, value)
 		_node.GatewayIdempotencyToken = &value
 	}
-	if value, ok := rc.mutation.FailureReason(); ok {
+	if value, ok := _c.mutation.FailureReason(); ok {
 		_spec.SetField(refund.FieldFailureReason, field.TypeString, value)
 		_node.FailureReason = &value
 	}
-	if value, ok := rc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(refund.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := rc.mutation.GatewayMetadata(); ok {
+	if value, ok := _c.mutation.GatewayMetadata(); ok {
 		_spec.SetField(refund.FieldGatewayMetadata, field.TypeJSON, value)
 		_node.GatewayMetadata = value
 	}
-	if value, ok := rc.mutation.InitiatedAt(); ok {
+	if value, ok := _c.mutation.InitiatedAt(); ok {
 		_spec.SetField(refund.FieldInitiatedAt, field.TypeTime, value)
 		_node.InitiatedAt = &value
 	}
-	if value, ok := rc.mutation.SucceededAt(); ok {
+	if value, ok := _c.mutation.SucceededAt(); ok {
 		_spec.SetField(refund.FieldSucceededAt, field.TypeTime, value)
 		_node.SucceededAt = &value
 	}
-	if value, ok := rc.mutation.FailedAt(); ok {
+	if value, ok := _c.mutation.FailedAt(); ok {
 		_spec.SetField(refund.FieldFailedAt, field.TypeTime, value)
 		_node.FailedAt = &value
 	}
-	if value, ok := rc.mutation.CancelledAt(); ok {
+	if value, ok := _c.mutation.CancelledAt(); ok {
 		_spec.SetField(refund.FieldCancelledAt, field.TypeTime, value)
 		_node.CancelledAt = &value
 	}
@@ -689,16 +689,16 @@ type RefundCreateBulk struct {
 }
 
 // Save creates the Refund entities in the database.
-func (rcb *RefundCreateBulk) Save(ctx context.Context) ([]*Refund, error) {
-	if rcb.err != nil {
-		return nil, rcb.err
+func (_c *RefundCreateBulk) Save(ctx context.Context) ([]*Refund, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(rcb.builders))
-	nodes := make([]*Refund, len(rcb.builders))
-	mutators := make([]Mutator, len(rcb.builders))
-	for i := range rcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Refund, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := rcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*RefundMutation)
@@ -712,11 +712,11 @@ func (rcb *RefundCreateBulk) Save(ctx context.Context) ([]*Refund, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, rcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, rcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -736,7 +736,7 @@ func (rcb *RefundCreateBulk) Save(ctx context.Context) ([]*Refund, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, rcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -744,8 +744,8 @@ func (rcb *RefundCreateBulk) Save(ctx context.Context) ([]*Refund, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (rcb *RefundCreateBulk) SaveX(ctx context.Context) []*Refund {
-	v, err := rcb.Save(ctx)
+func (_c *RefundCreateBulk) SaveX(ctx context.Context) []*Refund {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -753,14 +753,14 @@ func (rcb *RefundCreateBulk) SaveX(ctx context.Context) []*Refund {
 }
 
 // Exec executes the query.
-func (rcb *RefundCreateBulk) Exec(ctx context.Context) error {
-	_, err := rcb.Save(ctx)
+func (_c *RefundCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rcb *RefundCreateBulk) ExecX(ctx context.Context) {
-	if err := rcb.Exec(ctx); err != nil {
+func (_c *RefundCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -74,7 +74,6 @@ type TimeSpec struct {
 }
 
 type ViewDefinition struct {
-	Name       string         `json:"name"`
 	Shape      types.Shape    `json:"shape" binding:"required" validate:"required" enums:"timeseries,breakdown"`
 	Metrics    []types.Metric `json:"metrics" binding:"required,min=1" validate:"required,min=1" enums:"usage_quantity,event_count"`
 	Dimensions []string       `json:"dimensions,omitempty"`
@@ -87,9 +86,9 @@ type ViewDefinition struct {
 	Variables []*Variable `json:"variables,omitempty"`
 }
 
-// NewViewDefinition builds a ViewDefinition from its constituent parts.
+// NewViewDefinition builds a ViewDefinition from its constituent parts. The
+// view's name lives on View, not here.
 func NewViewDefinition(
-	name string,
 	shape types.Shape,
 	metrics []types.Metric,
 	dimensions []string,
@@ -100,7 +99,6 @@ func NewViewDefinition(
 	variables []*Variable,
 ) ViewDefinition {
 	return ViewDefinition{
-		Name:       name,
 		Shape:      shape,
 		Metrics:    metrics,
 		Dimensions: dimensions,

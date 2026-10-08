@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -242,4 +243,57 @@ func (s *CustomerEntitlementsTestSuite) TestInheritedSubscriptionsSkipped() {
 	for _, sub := range resp.Subscriptions {
 		s.NotEqual(types.SubscriptionTypeInherited, sub.SubscriptionType)
 	}
+}
+
+// createGrantEntitlement builds the shape deriveGrantConfig produces for a metered
+// entitlement: the ceiling sits in GrantQuota and UsageLimit is cleared. A nil quota
+// is an unlimited allowance.
+func (s *CustomerEntitlementsTestSuite) createGrantEntitlement(planID, featureID string, quota *decimal.Decimal) *entitlement.Entitlement {
+	e := &entitlement.Entitlement{
+		ID:                "ent_grant_" + planID + "_" + featureID,
+		EntityType:        types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:          planID,
+		FeatureID:         featureID,
+		FeatureType:       types.FeatureTypeMetered,
+		IsEnabled:         true,
+		GrantMeasure:      types.EntitlementGrantMeasureQuantity,
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		AggregationMode:   types.EntitlementAggregationModeAdditive,
+		GrantQuota:        quota,
+		BaseModel:         types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), e)
+	s.NoError(err)
+	return e
+}
+
+// A capped allowance must not read as unlimited. Every metered entitlement now carries
+// its ceiling in GrantQuota with UsageLimit cleared, so aggregating on UsageLimit alone
+// reported each one as having no limit at all.
+func (s *CustomerEntitlementsTestSuite) TestGrantBackedEntitlementReportsItsQuota() {
+	s.createCustomer("cust_grant")
+	p := s.createPlan("plan_grant")
+	f := s.createFeature("feat_grant", types.FeatureTypeMetered)
+	s.createGrantEntitlement(p.ID, f.ID, lo.ToPtr(decimal.NewFromInt(100)))
+	s.createSubscription("sub_grant", "cust_grant", p.ID)
+
+	resp, err := s.service.GetCustomerEntitlements(s.GetContext(), "cust_grant", &dto.GetCustomerEntitlementsRequest{})
+	s.NoError(err)
+	s.Len(resp.Features, 1)
+	s.Require().NotNil(resp.Features[0].Entitlement.UsageLimit, "a capped allowance must report a limit")
+	s.Equal(int64(100), *resp.Features[0].Entitlement.UsageLimit)
+}
+
+// The other half of the same branch: no quota on a grant config means unlimited.
+func (s *CustomerEntitlementsTestSuite) TestUnlimitedGrantReportsNoLimit() {
+	s.createCustomer("cust_grant_unl")
+	p := s.createPlan("plan_grant_unl")
+	f := s.createFeature("feat_grant_unl", types.FeatureTypeMetered)
+	s.createGrantEntitlement(p.ID, f.ID, nil)
+	s.createSubscription("sub_grant_unl", "cust_grant_unl", p.ID)
+
+	resp, err := s.service.GetCustomerEntitlements(s.GetContext(), "cust_grant_unl", &dto.GetCustomerEntitlementsRequest{})
+	s.NoError(err)
+	s.Len(resp.Features, 1)
+	s.Nil(resp.Features[0].Entitlement.UsageLimit, "an unlimited allowance reports no limit")
 }

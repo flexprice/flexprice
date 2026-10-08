@@ -6,14 +6,14 @@ import (
 
 func TestEventDeck_DeterministicWithSeed(t *testing.T) {
 	a := NewEventDeck(EventDeckOpts{
-		Customers:   []string{"c0", "c1"},
-		EventNames:  []string{"e1", "e2"},
-		Seed:        42,
+		Customers:  []string{"c0", "c1"},
+		EventNames: []string{"e1", "e2"},
+		Seed:       42,
 	})
 	b := NewEventDeck(EventDeckOpts{
-		Customers:   []string{"c0", "c1"},
-		EventNames:  []string{"e1", "e2"},
-		Seed:        42,
+		Customers:  []string{"c0", "c1"},
+		EventNames: []string{"e1", "e2"},
+		Seed:       42,
 	})
 	for i := 0; i < 20; i++ {
 		ea := a.Next()
@@ -106,11 +106,11 @@ func TestEventDeck_AllCustomerSourceCombinationsReachable(t *testing.T) {
 
 func TestEventDeck_EmitsOrphanWhenConfigured(t *testing.T) {
 	d := NewEventDeck(EventDeckOpts{
-		Customers:        []string{"c0"},
-		EventNames:       []string{"e2eprobe_count"},
-		OrphanEventName:  "e2eprobe_orphan",
-		OrphanFrequency:  4,
-		Seed:             1,
+		Customers:       []string{"c0"},
+		EventNames:      []string{"e2eprobe_count"},
+		OrphanEventName: "e2eprobe_orphan",
+		OrphanFrequency: 4,
+		Seed:            1,
 	})
 	hits := 0
 	for i := 0; i < 16; i++ {

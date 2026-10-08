@@ -70,7 +70,7 @@ func (*AlertSettings) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the AlertSettings fields.
-func (as *AlertSettings) assignValues(columns []string, values []any) error {
+func (_m *AlertSettings) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -80,92 +80,92 @@ func (as *AlertSettings) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				as.ID = value.String
+				_m.ID = value.String
 			}
 		case alertsettings.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				as.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case alertsettings.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				as.Status = value.String
+				_m.Status = value.String
 			}
 		case alertsettings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				as.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case alertsettings.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				as.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case alertsettings.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				as.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case alertsettings.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				as.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case alertsettings.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				as.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case alertsettings.FieldEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field enabled", values[i])
 			} else if value.Valid {
-				as.Enabled = value.Bool
+				_m.Enabled = value.Bool
 			}
 		case alertsettings.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				as.EntityType = types.AlertEntityType(value.String)
+				_m.EntityType = types.AlertEntityType(value.String)
 			}
 		case alertsettings.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				as.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case alertsettings.FieldParentEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_entity_type", values[i])
 			} else if value.Valid {
-				as.ParentEntityType = new(types.AlertEntityType)
-				*as.ParentEntityType = types.AlertEntityType(value.String)
+				_m.ParentEntityType = new(types.AlertEntityType)
+				*_m.ParentEntityType = types.AlertEntityType(value.String)
 			}
 		case alertsettings.FieldParentEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_entity_id", values[i])
 			} else if value.Valid {
-				as.ParentEntityID = new(string)
-				*as.ParentEntityID = value.String
+				_m.ParentEntityID = new(string)
+				*_m.ParentEntityID = value.String
 			}
 		case alertsettings.FieldConfig:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field config", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &as.Config); err != nil {
+				if err := json.Unmarshal(*value, &_m.Config); err != nil {
 					return fmt.Errorf("unmarshal field config: %w", err)
 				}
 			}
 		default:
-			as.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -173,75 +173,75 @@ func (as *AlertSettings) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the AlertSettings.
 // This includes values selected through modifiers, order, etc.
-func (as *AlertSettings) Value(name string) (ent.Value, error) {
-	return as.selectValues.Get(name)
+func (_m *AlertSettings) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this AlertSettings.
 // Note that you need to call AlertSettings.Unwrap() before calling this method if this AlertSettings
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (as *AlertSettings) Update() *AlertSettingsUpdateOne {
-	return NewAlertSettingsClient(as.config).UpdateOne(as)
+func (_m *AlertSettings) Update() *AlertSettingsUpdateOne {
+	return NewAlertSettingsClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the AlertSettings entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (as *AlertSettings) Unwrap() *AlertSettings {
-	_tx, ok := as.config.driver.(*txDriver)
+func (_m *AlertSettings) Unwrap() *AlertSettings {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: AlertSettings is not a transactional entity")
 	}
-	as.config.driver = _tx.drv
-	return as
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (as *AlertSettings) String() string {
+func (_m *AlertSettings) String() string {
 	var builder strings.Builder
 	builder.WriteString("AlertSettings(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", as.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(as.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(as.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(as.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(as.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(as.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(as.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(as.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
-	builder.WriteString(fmt.Sprintf("%v", as.Enabled))
+	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(fmt.Sprintf("%v", as.EntityType))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntityType))
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(as.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
-	if v := as.ParentEntityType; v != nil {
+	if v := _m.ParentEntityType; v != nil {
 		builder.WriteString("parent_entity_type=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := as.ParentEntityID; v != nil {
+	if v := _m.ParentEntityID; v != nil {
 		builder.WriteString("parent_entity_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("config=")
-	builder.WriteString(fmt.Sprintf("%v", as.Config))
+	builder.WriteString(fmt.Sprintf("%v", _m.Config))
 	builder.WriteByte(')')
 	return builder.String()
 }

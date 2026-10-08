@@ -1312,3 +1312,103 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 
 	return result, nil
 }
+
+// ListEnvironmentsWithGatedActiveSubscriptions reads only idx_subscriptions_gated_active, so it stays cheap
+// however many subscriptions are not payment-gated.
+func (r *subscriptionRepository) ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "subscription", "list_environments_with_gated_active", nil)
+	defer FinishSpan(span)
+
+	var envs []types.TenantEnvironment
+	err := r.client.Reader(ctx).Subscription.Query().
+		Where(
+			subscription.Status(string(types.StatusPublished)),
+			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
+			subscription.PaymentBehaviorIn(types.IncompletePaymentBehaviors()...),
+		).
+		GroupBy(subscription.FieldTenantID, subscription.FieldEnvironmentID).
+		Scan(ctx, &envs)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments with payment-gated subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
+// markOverdueGatedIncompleteQuery is one UPDATE ... RETURNING, so the returned IDs are exactly the rows
+// changed. The subscription filter matches idx_subscriptions_gated_active; EXISTS re-checks the invoice at
+// write time, so an invoice paid mid-sweep never flips its subscription. $5 is due date minus grace.
+const markOverdueGatedIncompleteQuery = `
+	UPDATE subscriptions s
+	SET subscription_status = 'incomplete', updated_at = $3, updated_by = $4
+	WHERE s.tenant_id = $1
+		AND s.environment_id = $2
+		AND s.status = 'published'
+		AND s.subscription_status = 'active'
+		AND s.payment_behavior IN ('allow_incomplete', 'default_incomplete', 'error_if_incomplete')
+		AND EXISTS (
+			SELECT 1 FROM invoices i
+			WHERE i.tenant_id = s.tenant_id
+				AND i.environment_id = s.environment_id
+				AND i.subscription_id = s.id
+				AND i.status = 'published'
+				AND i.invoice_type = 'SUBSCRIPTION'
+				AND i.invoice_status = 'FINALIZED'
+				AND i.billing_reason = 'SUBSCRIPTION_CYCLE'
+				AND i.payment_status IN ('PENDING', 'FAILED')
+				AND i.amount_remaining > 0
+				AND i.due_date <= $3
+				AND i.due_date > $5)
+	RETURNING s.id`
+
+func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
+	span := StartRepositorySpan(ctx, "subscription", "mark_overdue_gated_incomplete", map[string]interface{}{
+		"grace_days": graceDays,
+	})
+	defer FinishSpan(span)
+
+	asOf = asOf.UTC()
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, markOverdueGatedIncompleteQuery,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		asOf,
+		types.GetUserID(ctx),
+		asOf.AddDate(0, 0, -graceDays),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to mark overdue subscriptions incomplete").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read subscription marked incomplete").
+				Mark(ierr.ErrDatabase)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read subscriptions marked incomplete").
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, id := range ids {
+		r.DeleteCache(ctx, id)
+	}
+
+	SetSpanSuccess(span)
+	return ids, nil
+}

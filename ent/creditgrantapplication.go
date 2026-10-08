@@ -88,7 +88,7 @@ func (*CreditGrantApplication) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CreditGrantApplication fields.
-func (cga *CreditGrantApplication) assignValues(columns []string, values []any) error {
+func (_m *CreditGrantApplication) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -98,139 +98,139 @@ func (cga *CreditGrantApplication) assignValues(columns []string, values []any) 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				cga.ID = value.String
+				_m.ID = value.String
 			}
 		case creditgrantapplication.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				cga.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case creditgrantapplication.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				cga.Status = value.String
+				_m.Status = value.String
 			}
 		case creditgrantapplication.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				cga.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case creditgrantapplication.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				cga.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case creditgrantapplication.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				cga.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case creditgrantapplication.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				cga.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case creditgrantapplication.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				cga.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case creditgrantapplication.FieldCreditGrantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_grant_id", values[i])
 			} else if value.Valid {
-				cga.CreditGrantID = value.String
+				_m.CreditGrantID = value.String
 			}
 		case creditgrantapplication.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				cga.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case creditgrantapplication.FieldScheduledFor:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field scheduled_for", values[i])
 			} else if value.Valid {
-				cga.ScheduledFor = value.Time
+				_m.ScheduledFor = value.Time
 			}
 		case creditgrantapplication.FieldAppliedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field applied_at", values[i])
 			} else if value.Valid {
-				cga.AppliedAt = new(time.Time)
-				*cga.AppliedAt = value.Time
+				_m.AppliedAt = new(time.Time)
+				*_m.AppliedAt = value.Time
 			}
 		case creditgrantapplication.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
 			} else if value.Valid {
-				cga.PeriodStart = value.Time
+				_m.PeriodStart = value.Time
 			}
 		case creditgrantapplication.FieldPeriodEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_end", values[i])
 			} else if value.Valid {
-				cga.PeriodEnd = new(time.Time)
-				*cga.PeriodEnd = value.Time
+				_m.PeriodEnd = new(time.Time)
+				*_m.PeriodEnd = value.Time
 			}
 		case creditgrantapplication.FieldApplicationStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field application_status", values[i])
 			} else if value.Valid {
-				cga.ApplicationStatus = types.ApplicationStatus(value.String)
+				_m.ApplicationStatus = types.ApplicationStatus(value.String)
 			}
 		case creditgrantapplication.FieldCredits:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
-				cga.Credits = *value
+				_m.Credits = *value
 			}
 		case creditgrantapplication.FieldApplicationReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field application_reason", values[i])
 			} else if value.Valid {
-				cga.ApplicationReason = types.CreditGrantApplicationReason(value.String)
+				_m.ApplicationReason = types.CreditGrantApplicationReason(value.String)
 			}
 		case creditgrantapplication.FieldSubscriptionStatusAtApplication:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_status_at_application", values[i])
 			} else if value.Valid {
-				cga.SubscriptionStatusAtApplication = types.SubscriptionStatus(value.String)
+				_m.SubscriptionStatusAtApplication = types.SubscriptionStatus(value.String)
 			}
 		case creditgrantapplication.FieldRetryCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field retry_count", values[i])
 			} else if value.Valid {
-				cga.RetryCount = int(value.Int64)
+				_m.RetryCount = int(value.Int64)
 			}
 		case creditgrantapplication.FieldFailureReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
 			} else if value.Valid {
-				cga.FailureReason = new(string)
-				*cga.FailureReason = value.String
+				_m.FailureReason = new(string)
+				*_m.FailureReason = value.String
 			}
 		case creditgrantapplication.FieldMetadata:
 			if value, ok := values[i].(*types.Metadata); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil {
-				cga.Metadata = *value
+				_m.Metadata = *value
 			}
 		case creditgrantapplication.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
-				cga.IdempotencyKey = value.String
+				_m.IdempotencyKey = value.String
 			}
 		default:
-			cga.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -238,101 +238,101 @@ func (cga *CreditGrantApplication) assignValues(columns []string, values []any) 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CreditGrantApplication.
 // This includes values selected through modifiers, order, etc.
-func (cga *CreditGrantApplication) Value(name string) (ent.Value, error) {
-	return cga.selectValues.Get(name)
+func (_m *CreditGrantApplication) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this CreditGrantApplication.
 // Note that you need to call CreditGrantApplication.Unwrap() before calling this method if this CreditGrantApplication
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (cga *CreditGrantApplication) Update() *CreditGrantApplicationUpdateOne {
-	return NewCreditGrantApplicationClient(cga.config).UpdateOne(cga)
+func (_m *CreditGrantApplication) Update() *CreditGrantApplicationUpdateOne {
+	return NewCreditGrantApplicationClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CreditGrantApplication entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (cga *CreditGrantApplication) Unwrap() *CreditGrantApplication {
-	_tx, ok := cga.config.driver.(*txDriver)
+func (_m *CreditGrantApplication) Unwrap() *CreditGrantApplication {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CreditGrantApplication is not a transactional entity")
 	}
-	cga.config.driver = _tx.drv
-	return cga
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (cga *CreditGrantApplication) String() string {
+func (_m *CreditGrantApplication) String() string {
 	var builder strings.Builder
 	builder.WriteString("CreditGrantApplication(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", cga.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(cga.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(cga.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(cga.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(cga.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(cga.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(cga.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(cga.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("credit_grant_id=")
-	builder.WriteString(cga.CreditGrantID)
+	builder.WriteString(_m.CreditGrantID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(cga.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("scheduled_for=")
-	builder.WriteString(cga.ScheduledFor.Format(time.ANSIC))
+	builder.WriteString(_m.ScheduledFor.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := cga.AppliedAt; v != nil {
+	if v := _m.AppliedAt; v != nil {
 		builder.WriteString("applied_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("period_start=")
-	builder.WriteString(cga.PeriodStart.Format(time.ANSIC))
+	builder.WriteString(_m.PeriodStart.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := cga.PeriodEnd; v != nil {
+	if v := _m.PeriodEnd; v != nil {
 		builder.WriteString("period_end=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("application_status=")
-	builder.WriteString(fmt.Sprintf("%v", cga.ApplicationStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.ApplicationStatus))
 	builder.WriteString(", ")
 	builder.WriteString("credits=")
-	builder.WriteString(fmt.Sprintf("%v", cga.Credits))
+	builder.WriteString(fmt.Sprintf("%v", _m.Credits))
 	builder.WriteString(", ")
 	builder.WriteString("application_reason=")
-	builder.WriteString(fmt.Sprintf("%v", cga.ApplicationReason))
+	builder.WriteString(fmt.Sprintf("%v", _m.ApplicationReason))
 	builder.WriteString(", ")
 	builder.WriteString("subscription_status_at_application=")
-	builder.WriteString(fmt.Sprintf("%v", cga.SubscriptionStatusAtApplication))
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionStatusAtApplication))
 	builder.WriteString(", ")
 	builder.WriteString("retry_count=")
-	builder.WriteString(fmt.Sprintf("%v", cga.RetryCount))
+	builder.WriteString(fmt.Sprintf("%v", _m.RetryCount))
 	builder.WriteString(", ")
-	if v := cga.FailureReason; v != nil {
+	if v := _m.FailureReason; v != nil {
 		builder.WriteString("failure_reason=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", cga.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("idempotency_key=")
-	builder.WriteString(cga.IdempotencyKey)
+	builder.WriteString(_m.IdempotencyKey)
 	builder.WriteByte(')')
 	return builder.String()
 }

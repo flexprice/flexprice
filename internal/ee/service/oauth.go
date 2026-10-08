@@ -852,7 +852,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-		resp, err := httpclient.NewOtelHTTPClient(30 * time.Second).Do(req)
+		resp, err := httpclient.NewProviderHTTPClient(30*time.Second, s.logger, string(types.SecretProviderZohoBooks)).Do(req)
 		if err != nil {
 			return "", ierr.WithError(err).WithHint("Failed to exchange Zoho auth code for tokens").Mark(ierr.ErrInternal)
 		}

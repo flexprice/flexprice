@@ -23,100 +23,100 @@ type InvoiceSequenceUpdate struct {
 }
 
 // Where appends a list predicates to the InvoiceSequenceUpdate builder.
-func (isu *InvoiceSequenceUpdate) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceUpdate {
-	isu.mutation.Where(ps...)
-	return isu
+func (_u *InvoiceSequenceUpdate) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (isu *InvoiceSequenceUpdate) SetTenantID(s string) *InvoiceSequenceUpdate {
-	isu.mutation.SetTenantID(s)
-	return isu
+func (_u *InvoiceSequenceUpdate) SetTenantID(v string) *InvoiceSequenceUpdate {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (isu *InvoiceSequenceUpdate) SetNillableTenantID(s *string) *InvoiceSequenceUpdate {
-	if s != nil {
-		isu.SetTenantID(*s)
+func (_u *InvoiceSequenceUpdate) SetNillableTenantID(v *string) *InvoiceSequenceUpdate {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return isu
+	return _u
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (isu *InvoiceSequenceUpdate) SetEnvironmentID(s string) *InvoiceSequenceUpdate {
-	isu.mutation.SetEnvironmentID(s)
-	return isu
+func (_u *InvoiceSequenceUpdate) SetEnvironmentID(v string) *InvoiceSequenceUpdate {
+	_u.mutation.SetEnvironmentID(v)
+	return _u
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (isu *InvoiceSequenceUpdate) SetNillableEnvironmentID(s *string) *InvoiceSequenceUpdate {
-	if s != nil {
-		isu.SetEnvironmentID(*s)
+func (_u *InvoiceSequenceUpdate) SetNillableEnvironmentID(v *string) *InvoiceSequenceUpdate {
+	if v != nil {
+		_u.SetEnvironmentID(*v)
 	}
-	return isu
+	return _u
 }
 
 // ClearEnvironmentID clears the value of the "environment_id" field.
-func (isu *InvoiceSequenceUpdate) ClearEnvironmentID() *InvoiceSequenceUpdate {
-	isu.mutation.ClearEnvironmentID()
-	return isu
+func (_u *InvoiceSequenceUpdate) ClearEnvironmentID() *InvoiceSequenceUpdate {
+	_u.mutation.ClearEnvironmentID()
+	return _u
 }
 
 // SetYearMonth sets the "year_month" field.
-func (isu *InvoiceSequenceUpdate) SetYearMonth(s string) *InvoiceSequenceUpdate {
-	isu.mutation.SetYearMonth(s)
-	return isu
+func (_u *InvoiceSequenceUpdate) SetYearMonth(v string) *InvoiceSequenceUpdate {
+	_u.mutation.SetYearMonth(v)
+	return _u
 }
 
 // SetNillableYearMonth sets the "year_month" field if the given value is not nil.
-func (isu *InvoiceSequenceUpdate) SetNillableYearMonth(s *string) *InvoiceSequenceUpdate {
-	if s != nil {
-		isu.SetYearMonth(*s)
+func (_u *InvoiceSequenceUpdate) SetNillableYearMonth(v *string) *InvoiceSequenceUpdate {
+	if v != nil {
+		_u.SetYearMonth(*v)
 	}
-	return isu
+	return _u
 }
 
 // SetLastValue sets the "last_value" field.
-func (isu *InvoiceSequenceUpdate) SetLastValue(i int64) *InvoiceSequenceUpdate {
-	isu.mutation.ResetLastValue()
-	isu.mutation.SetLastValue(i)
-	return isu
+func (_u *InvoiceSequenceUpdate) SetLastValue(v int64) *InvoiceSequenceUpdate {
+	_u.mutation.ResetLastValue()
+	_u.mutation.SetLastValue(v)
+	return _u
 }
 
 // SetNillableLastValue sets the "last_value" field if the given value is not nil.
-func (isu *InvoiceSequenceUpdate) SetNillableLastValue(i *int64) *InvoiceSequenceUpdate {
-	if i != nil {
-		isu.SetLastValue(*i)
+func (_u *InvoiceSequenceUpdate) SetNillableLastValue(v *int64) *InvoiceSequenceUpdate {
+	if v != nil {
+		_u.SetLastValue(*v)
 	}
-	return isu
+	return _u
 }
 
-// AddLastValue adds i to the "last_value" field.
-func (isu *InvoiceSequenceUpdate) AddLastValue(i int64) *InvoiceSequenceUpdate {
-	isu.mutation.AddLastValue(i)
-	return isu
+// AddLastValue adds value to the "last_value" field.
+func (_u *InvoiceSequenceUpdate) AddLastValue(v int64) *InvoiceSequenceUpdate {
+	_u.mutation.AddLastValue(v)
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (isu *InvoiceSequenceUpdate) SetUpdatedAt(t time.Time) *InvoiceSequenceUpdate {
-	isu.mutation.SetUpdatedAt(t)
-	return isu
+func (_u *InvoiceSequenceUpdate) SetUpdatedAt(v time.Time) *InvoiceSequenceUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the InvoiceSequenceMutation object of the builder.
-func (isu *InvoiceSequenceUpdate) Mutation() *InvoiceSequenceMutation {
-	return isu.mutation
+func (_u *InvoiceSequenceUpdate) Mutation() *InvoiceSequenceMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (isu *InvoiceSequenceUpdate) Save(ctx context.Context) (int, error) {
-	isu.defaults()
-	return withHooks(ctx, isu.sqlSave, isu.mutation, isu.hooks)
+func (_u *InvoiceSequenceUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (isu *InvoiceSequenceUpdate) SaveX(ctx context.Context) int {
-	affected, err := isu.Save(ctx)
+func (_u *InvoiceSequenceUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -124,34 +124,34 @@ func (isu *InvoiceSequenceUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (isu *InvoiceSequenceUpdate) Exec(ctx context.Context) error {
-	_, err := isu.Save(ctx)
+func (_u *InvoiceSequenceUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (isu *InvoiceSequenceUpdate) ExecX(ctx context.Context) {
-	if err := isu.Exec(ctx); err != nil {
+func (_u *InvoiceSequenceUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (isu *InvoiceSequenceUpdate) defaults() {
-	if _, ok := isu.mutation.UpdatedAt(); !ok {
+func (_u *InvoiceSequenceUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := invoicesequence.UpdateDefaultUpdatedAt()
-		isu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (isu *InvoiceSequenceUpdate) check() error {
-	if v, ok := isu.mutation.TenantID(); ok {
+func (_u *InvoiceSequenceUpdate) check() error {
+	if v, ok := _u.mutation.TenantID(); ok {
 		if err := invoicesequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.tenant_id": %w`, err)}
 		}
 	}
-	if v, ok := isu.mutation.YearMonth(); ok {
+	if v, ok := _u.mutation.YearMonth(); ok {
 		if err := invoicesequence.YearMonthValidator(v); err != nil {
 			return &ValidationError{Name: "year_month", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.year_month": %w`, err)}
 		}
@@ -159,40 +159,40 @@ func (isu *InvoiceSequenceUpdate) check() error {
 	return nil
 }
 
-func (isu *InvoiceSequenceUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := isu.check(); err != nil {
-		return n, err
+func (_u *InvoiceSequenceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(invoicesequence.Table, invoicesequence.Columns, sqlgraph.NewFieldSpec(invoicesequence.FieldID, field.TypeInt))
-	if ps := isu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := isu.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(invoicesequence.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := isu.mutation.EnvironmentID(); ok {
+	if value, ok := _u.mutation.EnvironmentID(); ok {
 		_spec.SetField(invoicesequence.FieldEnvironmentID, field.TypeString, value)
 	}
-	if isu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(invoicesequence.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := isu.mutation.YearMonth(); ok {
+	if value, ok := _u.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
 	}
-	if value, ok := isu.mutation.LastValue(); ok {
+	if value, ok := _u.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 	}
-	if value, ok := isu.mutation.AddedLastValue(); ok {
+	if value, ok := _u.mutation.AddedLastValue(); ok {
 		_spec.AddField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 	}
-	if value, ok := isu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicesequence.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, isu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{invoicesequence.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -200,8 +200,8 @@ func (isu *InvoiceSequenceUpdate) sqlSave(ctx context.Context) (n int, err error
 		}
 		return 0, err
 	}
-	isu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // InvoiceSequenceUpdateOne is the builder for updating a single InvoiceSequence entity.
@@ -213,107 +213,107 @@ type InvoiceSequenceUpdateOne struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (isuo *InvoiceSequenceUpdateOne) SetTenantID(s string) *InvoiceSequenceUpdateOne {
-	isuo.mutation.SetTenantID(s)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) SetTenantID(v string) *InvoiceSequenceUpdateOne {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (isuo *InvoiceSequenceUpdateOne) SetNillableTenantID(s *string) *InvoiceSequenceUpdateOne {
-	if s != nil {
-		isuo.SetTenantID(*s)
+func (_u *InvoiceSequenceUpdateOne) SetNillableTenantID(v *string) *InvoiceSequenceUpdateOne {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return isuo
+	return _u
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (isuo *InvoiceSequenceUpdateOne) SetEnvironmentID(s string) *InvoiceSequenceUpdateOne {
-	isuo.mutation.SetEnvironmentID(s)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) SetEnvironmentID(v string) *InvoiceSequenceUpdateOne {
+	_u.mutation.SetEnvironmentID(v)
+	return _u
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (isuo *InvoiceSequenceUpdateOne) SetNillableEnvironmentID(s *string) *InvoiceSequenceUpdateOne {
-	if s != nil {
-		isuo.SetEnvironmentID(*s)
+func (_u *InvoiceSequenceUpdateOne) SetNillableEnvironmentID(v *string) *InvoiceSequenceUpdateOne {
+	if v != nil {
+		_u.SetEnvironmentID(*v)
 	}
-	return isuo
+	return _u
 }
 
 // ClearEnvironmentID clears the value of the "environment_id" field.
-func (isuo *InvoiceSequenceUpdateOne) ClearEnvironmentID() *InvoiceSequenceUpdateOne {
-	isuo.mutation.ClearEnvironmentID()
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) ClearEnvironmentID() *InvoiceSequenceUpdateOne {
+	_u.mutation.ClearEnvironmentID()
+	return _u
 }
 
 // SetYearMonth sets the "year_month" field.
-func (isuo *InvoiceSequenceUpdateOne) SetYearMonth(s string) *InvoiceSequenceUpdateOne {
-	isuo.mutation.SetYearMonth(s)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) SetYearMonth(v string) *InvoiceSequenceUpdateOne {
+	_u.mutation.SetYearMonth(v)
+	return _u
 }
 
 // SetNillableYearMonth sets the "year_month" field if the given value is not nil.
-func (isuo *InvoiceSequenceUpdateOne) SetNillableYearMonth(s *string) *InvoiceSequenceUpdateOne {
-	if s != nil {
-		isuo.SetYearMonth(*s)
+func (_u *InvoiceSequenceUpdateOne) SetNillableYearMonth(v *string) *InvoiceSequenceUpdateOne {
+	if v != nil {
+		_u.SetYearMonth(*v)
 	}
-	return isuo
+	return _u
 }
 
 // SetLastValue sets the "last_value" field.
-func (isuo *InvoiceSequenceUpdateOne) SetLastValue(i int64) *InvoiceSequenceUpdateOne {
-	isuo.mutation.ResetLastValue()
-	isuo.mutation.SetLastValue(i)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) SetLastValue(v int64) *InvoiceSequenceUpdateOne {
+	_u.mutation.ResetLastValue()
+	_u.mutation.SetLastValue(v)
+	return _u
 }
 
 // SetNillableLastValue sets the "last_value" field if the given value is not nil.
-func (isuo *InvoiceSequenceUpdateOne) SetNillableLastValue(i *int64) *InvoiceSequenceUpdateOne {
-	if i != nil {
-		isuo.SetLastValue(*i)
+func (_u *InvoiceSequenceUpdateOne) SetNillableLastValue(v *int64) *InvoiceSequenceUpdateOne {
+	if v != nil {
+		_u.SetLastValue(*v)
 	}
-	return isuo
+	return _u
 }
 
-// AddLastValue adds i to the "last_value" field.
-func (isuo *InvoiceSequenceUpdateOne) AddLastValue(i int64) *InvoiceSequenceUpdateOne {
-	isuo.mutation.AddLastValue(i)
-	return isuo
+// AddLastValue adds value to the "last_value" field.
+func (_u *InvoiceSequenceUpdateOne) AddLastValue(v int64) *InvoiceSequenceUpdateOne {
+	_u.mutation.AddLastValue(v)
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (isuo *InvoiceSequenceUpdateOne) SetUpdatedAt(t time.Time) *InvoiceSequenceUpdateOne {
-	isuo.mutation.SetUpdatedAt(t)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) SetUpdatedAt(v time.Time) *InvoiceSequenceUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the InvoiceSequenceMutation object of the builder.
-func (isuo *InvoiceSequenceUpdateOne) Mutation() *InvoiceSequenceMutation {
-	return isuo.mutation
+func (_u *InvoiceSequenceUpdateOne) Mutation() *InvoiceSequenceMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the InvoiceSequenceUpdate builder.
-func (isuo *InvoiceSequenceUpdateOne) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceUpdateOne {
-	isuo.mutation.Where(ps...)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (isuo *InvoiceSequenceUpdateOne) Select(field string, fields ...string) *InvoiceSequenceUpdateOne {
-	isuo.fields = append([]string{field}, fields...)
-	return isuo
+func (_u *InvoiceSequenceUpdateOne) Select(field string, fields ...string) *InvoiceSequenceUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated InvoiceSequence entity.
-func (isuo *InvoiceSequenceUpdateOne) Save(ctx context.Context) (*InvoiceSequence, error) {
-	isuo.defaults()
-	return withHooks(ctx, isuo.sqlSave, isuo.mutation, isuo.hooks)
+func (_u *InvoiceSequenceUpdateOne) Save(ctx context.Context) (*InvoiceSequence, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (isuo *InvoiceSequenceUpdateOne) SaveX(ctx context.Context) *InvoiceSequence {
-	node, err := isuo.Save(ctx)
+func (_u *InvoiceSequenceUpdateOne) SaveX(ctx context.Context) *InvoiceSequence {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -321,34 +321,34 @@ func (isuo *InvoiceSequenceUpdateOne) SaveX(ctx context.Context) *InvoiceSequenc
 }
 
 // Exec executes the query on the entity.
-func (isuo *InvoiceSequenceUpdateOne) Exec(ctx context.Context) error {
-	_, err := isuo.Save(ctx)
+func (_u *InvoiceSequenceUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (isuo *InvoiceSequenceUpdateOne) ExecX(ctx context.Context) {
-	if err := isuo.Exec(ctx); err != nil {
+func (_u *InvoiceSequenceUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (isuo *InvoiceSequenceUpdateOne) defaults() {
-	if _, ok := isuo.mutation.UpdatedAt(); !ok {
+func (_u *InvoiceSequenceUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := invoicesequence.UpdateDefaultUpdatedAt()
-		isuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (isuo *InvoiceSequenceUpdateOne) check() error {
-	if v, ok := isuo.mutation.TenantID(); ok {
+func (_u *InvoiceSequenceUpdateOne) check() error {
+	if v, ok := _u.mutation.TenantID(); ok {
 		if err := invoicesequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.tenant_id": %w`, err)}
 		}
 	}
-	if v, ok := isuo.mutation.YearMonth(); ok {
+	if v, ok := _u.mutation.YearMonth(); ok {
 		if err := invoicesequence.YearMonthValidator(v); err != nil {
 			return &ValidationError{Name: "year_month", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.year_month": %w`, err)}
 		}
@@ -356,17 +356,17 @@ func (isuo *InvoiceSequenceUpdateOne) check() error {
 	return nil
 }
 
-func (isuo *InvoiceSequenceUpdateOne) sqlSave(ctx context.Context) (_node *InvoiceSequence, err error) {
-	if err := isuo.check(); err != nil {
+func (_u *InvoiceSequenceUpdateOne) sqlSave(ctx context.Context) (_node *InvoiceSequence, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(invoicesequence.Table, invoicesequence.Columns, sqlgraph.NewFieldSpec(invoicesequence.FieldID, field.TypeInt))
-	id, ok := isuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "InvoiceSequence.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := isuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, invoicesequence.FieldID)
 		for _, f := range fields {
@@ -378,38 +378,38 @@ func (isuo *InvoiceSequenceUpdateOne) sqlSave(ctx context.Context) (_node *Invoi
 			}
 		}
 	}
-	if ps := isuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := isuo.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(invoicesequence.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := isuo.mutation.EnvironmentID(); ok {
+	if value, ok := _u.mutation.EnvironmentID(); ok {
 		_spec.SetField(invoicesequence.FieldEnvironmentID, field.TypeString, value)
 	}
-	if isuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(invoicesequence.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := isuo.mutation.YearMonth(); ok {
+	if value, ok := _u.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
 	}
-	if value, ok := isuo.mutation.LastValue(); ok {
+	if value, ok := _u.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 	}
-	if value, ok := isuo.mutation.AddedLastValue(); ok {
+	if value, ok := _u.mutation.AddedLastValue(); ok {
 		_spec.AddField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 	}
-	if value, ok := isuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicesequence.FieldUpdatedAt, field.TypeTime, value)
 	}
-	_node = &InvoiceSequence{config: isuo.config}
+	_node = &InvoiceSequence{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, isuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{invoicesequence.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -417,6 +417,6 @@ func (isuo *InvoiceSequenceUpdateOne) sqlSave(ctx context.Context) (_node *Invoi
 		}
 		return nil, err
 	}
-	isuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

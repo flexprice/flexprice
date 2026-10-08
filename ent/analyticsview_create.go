@@ -22,141 +22,141 @@ type AnalyticsViewCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (avc *AnalyticsViewCreate) SetTenantID(s string) *AnalyticsViewCreate {
-	avc.mutation.SetTenantID(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetTenantID(v string) *AnalyticsViewCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (avc *AnalyticsViewCreate) SetStatus(s string) *AnalyticsViewCreate {
-	avc.mutation.SetStatus(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetStatus(v string) *AnalyticsViewCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableStatus(s *string) *AnalyticsViewCreate {
-	if s != nil {
-		avc.SetStatus(*s)
+func (_c *AnalyticsViewCreate) SetNillableStatus(v *string) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (avc *AnalyticsViewCreate) SetCreatedAt(t time.Time) *AnalyticsViewCreate {
-	avc.mutation.SetCreatedAt(t)
-	return avc
+func (_c *AnalyticsViewCreate) SetCreatedAt(v time.Time) *AnalyticsViewCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableCreatedAt(t *time.Time) *AnalyticsViewCreate {
-	if t != nil {
-		avc.SetCreatedAt(*t)
+func (_c *AnalyticsViewCreate) SetNillableCreatedAt(v *time.Time) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (avc *AnalyticsViewCreate) SetUpdatedAt(t time.Time) *AnalyticsViewCreate {
-	avc.mutation.SetUpdatedAt(t)
-	return avc
+func (_c *AnalyticsViewCreate) SetUpdatedAt(v time.Time) *AnalyticsViewCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableUpdatedAt(t *time.Time) *AnalyticsViewCreate {
-	if t != nil {
-		avc.SetUpdatedAt(*t)
+func (_c *AnalyticsViewCreate) SetNillableUpdatedAt(v *time.Time) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (avc *AnalyticsViewCreate) SetCreatedBy(s string) *AnalyticsViewCreate {
-	avc.mutation.SetCreatedBy(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetCreatedBy(v string) *AnalyticsViewCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableCreatedBy(s *string) *AnalyticsViewCreate {
-	if s != nil {
-		avc.SetCreatedBy(*s)
+func (_c *AnalyticsViewCreate) SetNillableCreatedBy(v *string) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (avc *AnalyticsViewCreate) SetUpdatedBy(s string) *AnalyticsViewCreate {
-	avc.mutation.SetUpdatedBy(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetUpdatedBy(v string) *AnalyticsViewCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableUpdatedBy(s *string) *AnalyticsViewCreate {
-	if s != nil {
-		avc.SetUpdatedBy(*s)
+func (_c *AnalyticsViewCreate) SetNillableUpdatedBy(v *string) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (avc *AnalyticsViewCreate) SetEnvironmentID(s string) *AnalyticsViewCreate {
-	avc.mutation.SetEnvironmentID(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetEnvironmentID(v string) *AnalyticsViewCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableEnvironmentID(s *string) *AnalyticsViewCreate {
-	if s != nil {
-		avc.SetEnvironmentID(*s)
+func (_c *AnalyticsViewCreate) SetNillableEnvironmentID(v *string) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetName sets the "name" field.
-func (avc *AnalyticsViewCreate) SetName(s string) *AnalyticsViewCreate {
-	avc.mutation.SetName(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetName(v string) *AnalyticsViewCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetVersion sets the "version" field.
-func (avc *AnalyticsViewCreate) SetVersion(i int) *AnalyticsViewCreate {
-	avc.mutation.SetVersion(i)
-	return avc
+func (_c *AnalyticsViewCreate) SetVersion(v int) *AnalyticsViewCreate {
+	_c.mutation.SetVersion(v)
+	return _c
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (avc *AnalyticsViewCreate) SetNillableVersion(i *int) *AnalyticsViewCreate {
-	if i != nil {
-		avc.SetVersion(*i)
+func (_c *AnalyticsViewCreate) SetNillableVersion(v *int) *AnalyticsViewCreate {
+	if v != nil {
+		_c.SetVersion(*v)
 	}
-	return avc
+	return _c
 }
 
 // SetDefinition sets the "definition" field.
-func (avc *AnalyticsViewCreate) SetDefinition(ad analytics.ViewDefinition) *AnalyticsViewCreate {
-	avc.mutation.SetDefinition(ad)
-	return avc
+func (_c *AnalyticsViewCreate) SetDefinition(v analytics.ViewDefinition) *AnalyticsViewCreate {
+	_c.mutation.SetDefinition(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (avc *AnalyticsViewCreate) SetID(s string) *AnalyticsViewCreate {
-	avc.mutation.SetID(s)
-	return avc
+func (_c *AnalyticsViewCreate) SetID(v string) *AnalyticsViewCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the AnalyticsViewMutation object of the builder.
-func (avc *AnalyticsViewCreate) Mutation() *AnalyticsViewMutation {
-	return avc.mutation
+func (_c *AnalyticsViewCreate) Mutation() *AnalyticsViewMutation {
+	return _c.mutation
 }
 
 // Save creates the AnalyticsView in the database.
-func (avc *AnalyticsViewCreate) Save(ctx context.Context) (*AnalyticsView, error) {
-	avc.defaults()
-	return withHooks(ctx, avc.sqlSave, avc.mutation, avc.hooks)
+func (_c *AnalyticsViewCreate) Save(ctx context.Context) (*AnalyticsView, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (avc *AnalyticsViewCreate) SaveX(ctx context.Context) *AnalyticsView {
-	v, err := avc.Save(ctx)
+func (_c *AnalyticsViewCreate) SaveX(ctx context.Context) *AnalyticsView {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -164,79 +164,79 @@ func (avc *AnalyticsViewCreate) SaveX(ctx context.Context) *AnalyticsView {
 }
 
 // Exec executes the query.
-func (avc *AnalyticsViewCreate) Exec(ctx context.Context) error {
-	_, err := avc.Save(ctx)
+func (_c *AnalyticsViewCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avc *AnalyticsViewCreate) ExecX(ctx context.Context) {
-	if err := avc.Exec(ctx); err != nil {
+func (_c *AnalyticsViewCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (avc *AnalyticsViewCreate) defaults() {
-	if _, ok := avc.mutation.Status(); !ok {
+func (_c *AnalyticsViewCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := analyticsview.DefaultStatus
-		avc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := avc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := analyticsview.DefaultCreatedAt()
-		avc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := avc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := analyticsview.DefaultUpdatedAt()
-		avc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := avc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := analyticsview.DefaultEnvironmentID
-		avc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := avc.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		v := analyticsview.DefaultVersion
-		avc.mutation.SetVersion(v)
+		_c.mutation.SetVersion(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (avc *AnalyticsViewCreate) check() error {
-	if _, ok := avc.mutation.TenantID(); !ok {
+func (_c *AnalyticsViewCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "AnalyticsView.tenant_id"`)}
 	}
-	if v, ok := avc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := analyticsview.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := avc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "AnalyticsView.status"`)}
 	}
-	if _, ok := avc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AnalyticsView.created_at"`)}
 	}
-	if _, ok := avc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "AnalyticsView.updated_at"`)}
 	}
-	if _, ok := avc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		return &ValidationError{Name: "environment_id", err: errors.New(`ent: missing required field "AnalyticsView.environment_id"`)}
 	}
-	if _, ok := avc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "AnalyticsView.name"`)}
 	}
-	if v, ok := avc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := analyticsview.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.name": %w`, err)}
 		}
 	}
-	if _, ok := avc.mutation.Version(); !ok {
+	if _, ok := _c.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "AnalyticsView.version"`)}
 	}
-	if _, ok := avc.mutation.Definition(); !ok {
+	if _, ok := _c.mutation.Definition(); !ok {
 		return &ValidationError{Name: "definition", err: errors.New(`ent: missing required field "AnalyticsView.definition"`)}
 	}
-	if v, ok := avc.mutation.Definition(); ok {
+	if v, ok := _c.mutation.Definition(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "definition", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.definition": %w`, err)}
 		}
@@ -244,12 +244,12 @@ func (avc *AnalyticsViewCreate) check() error {
 	return nil
 }
 
-func (avc *AnalyticsViewCreate) sqlSave(ctx context.Context) (*AnalyticsView, error) {
-	if err := avc.check(); err != nil {
+func (_c *AnalyticsViewCreate) sqlSave(ctx context.Context) (*AnalyticsView, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := avc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, avc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -262,57 +262,57 @@ func (avc *AnalyticsViewCreate) sqlSave(ctx context.Context) (*AnalyticsView, er
 			return nil, fmt.Errorf("unexpected AnalyticsView.ID type: %T", _spec.ID.Value)
 		}
 	}
-	avc.mutation.id = &_node.ID
-	avc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (avc *AnalyticsViewCreate) createSpec() (*AnalyticsView, *sqlgraph.CreateSpec) {
+func (_c *AnalyticsViewCreate) createSpec() (*AnalyticsView, *sqlgraph.CreateSpec) {
 	var (
-		_node = &AnalyticsView{config: avc.config}
+		_node = &AnalyticsView{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(analyticsview.Table, sqlgraph.NewFieldSpec(analyticsview.FieldID, field.TypeString))
 	)
-	if id, ok := avc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := avc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(analyticsview.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := avc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(analyticsview.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := avc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(analyticsview.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := avc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := avc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(analyticsview.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := avc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := avc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(analyticsview.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := avc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(analyticsview.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := avc.mutation.Version(); ok {
+	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(analyticsview.FieldVersion, field.TypeInt, value)
 		_node.Version = value
 	}
-	if value, ok := avc.mutation.Definition(); ok {
+	if value, ok := _c.mutation.Definition(); ok {
 		_spec.SetField(analyticsview.FieldDefinition, field.TypeJSON, value)
 		_node.Definition = value
 	}
@@ -327,16 +327,16 @@ type AnalyticsViewCreateBulk struct {
 }
 
 // Save creates the AnalyticsView entities in the database.
-func (avcb *AnalyticsViewCreateBulk) Save(ctx context.Context) ([]*AnalyticsView, error) {
-	if avcb.err != nil {
-		return nil, avcb.err
+func (_c *AnalyticsViewCreateBulk) Save(ctx context.Context) ([]*AnalyticsView, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(avcb.builders))
-	nodes := make([]*AnalyticsView, len(avcb.builders))
-	mutators := make([]Mutator, len(avcb.builders))
-	for i := range avcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*AnalyticsView, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := avcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AnalyticsViewMutation)
@@ -350,11 +350,11 @@ func (avcb *AnalyticsViewCreateBulk) Save(ctx context.Context) ([]*AnalyticsView
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, avcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, avcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -374,7 +374,7 @@ func (avcb *AnalyticsViewCreateBulk) Save(ctx context.Context) ([]*AnalyticsView
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, avcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -382,8 +382,8 @@ func (avcb *AnalyticsViewCreateBulk) Save(ctx context.Context) ([]*AnalyticsView
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (avcb *AnalyticsViewCreateBulk) SaveX(ctx context.Context) []*AnalyticsView {
-	v, err := avcb.Save(ctx)
+func (_c *AnalyticsViewCreateBulk) SaveX(ctx context.Context) []*AnalyticsView {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -391,14 +391,14 @@ func (avcb *AnalyticsViewCreateBulk) SaveX(ctx context.Context) []*AnalyticsView
 }
 
 // Exec executes the query.
-func (avcb *AnalyticsViewCreateBulk) Exec(ctx context.Context) error {
-	_, err := avcb.Save(ctx)
+func (_c *AnalyticsViewCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avcb *AnalyticsViewCreateBulk) ExecX(ctx context.Context) {
-	if err := avcb.Exec(ctx); err != nil {
+func (_c *AnalyticsViewCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

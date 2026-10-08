@@ -251,7 +251,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_ConcurrentDetachOfGatedRem
 	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
 	s.seedPayFirstAddonBatchCheckout("addon_pfg_in", outgoing, at)
 
-	_, err := s.service.(*subscriptionService).detachAddon(ctx, &dto.RemoveAddonRequest{
+	_, err := s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: outgoing,
 		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 	}, sub.ID)
@@ -265,7 +265,6 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_ConcurrentDetachOfGatedRem
 
 // An addon NOT named by the pending session is still detachable — the guard must be specific.
 func (s *SubscriptionServiceSuite) TestAddonsCheckout_DetachOfUngatedAddonStillAllowed() {
-	ctx := s.GetContext()
 	sub := s.monthlyPeriodSubscription()
 
 	s.seedFixedPriceAddon("addon_pfu_gated", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
@@ -277,7 +276,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_DetachOfUngatedAddonStillA
 	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
 	s.seedPayFirstAddonBatchCheckout("addon_pfu_in", gated, at)
 
-	_, err := s.service.(*subscriptionService).detachAddon(ctx, &dto.RemoveAddonRequest{
+	_, err := s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: free,
 		ProrationBehavior:  types.ProrationBehaviorNone,
 	}, sub.ID)
@@ -371,4 +370,38 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_ConcurrentGuard() {
 	blocked, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
 	s.Require().NoError(err)
 	s.Empty(blocked, "a batch rejected under the lock rolls back before writing anything")
+}
+
+// What a gated execute reports. The provider call cannot run in tests, so the session is built
+// the way ExecutePayFirst builds it and the response builders are checked against it.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_GatedResponse_ReportsPendingAssociationAndDraft() {
+	ctx := s.GetContext()
+	sub := s.monthlyPeriodSubscription()
+	s.seedFixedPriceAddon("addon_gated_resp", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	_, config, draft := s.seedPayFirstAddonBatchCheckout("addon_gated_resp", "", at)
+
+	reported := bulkAddonChangedAssociations(config, false)
+	s.Require().Len(reported, 1)
+	s.Equal(dto.ChangedAddonAssociationActionCreated, reported[0].ChangeAction)
+	s.Equal(types.AddonStatusPending, reported[0].AddonStatus, "nothing is live until payment lands")
+
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, reported[0].ID)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusPending, stored.AddonStatus, "the reported id names the pending row")
+
+	// Without this the caller sees a checkout session carrying only an invoice id, and cannot
+	// tell what it is about to be charged.
+	invoices := draftChangedInvoices(&SettleProrationResult{Draft: draft})
+	s.Require().Len(invoices, 1)
+	s.Equal(draft.ID, invoices[0].ID)
+	s.Equal(dto.ChangedInvoiceActionCreated, invoices[0].Action)
+	s.Require().NotNil(invoices[0].Invoice)
+	s.True(invoices[0].Invoice.AmountDue.Equal(config.getQuote().NetAmount()))
+}
+
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_GatedResponse_NoDraftReportsNoInvoice() {
+	s.Nil(draftChangedInvoices(&SettleProrationResult{}))
+	s.Nil(draftChangedInvoices(nil))
 }

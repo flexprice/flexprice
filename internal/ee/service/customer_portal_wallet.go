@@ -259,12 +259,12 @@ func (s *customerPortalService) validateSavedMethodForTopUp(
 	}
 
 	hasChargeableMethod := lo.ContainsBy(methods, func(m interfaces.ProviderPaymentMethod) bool {
-		return m.Active
+		return m.Active && m.InstantlyChargeable
 	})
 
 	if !hasChargeableMethod {
 		return ierr.NewError("instantaneous charge with saved payment method is not supported for provider").
-			WithHintf("Provider '%s' has no saved payment method that can be charged automatically. Please top up using standard checkout.", gateway).
+			WithHintf("Provider '%s' has no saved payment method that can be charged instantly. Please top up using standard checkout.", gateway).
 			WithReportableDetails(map[string]any{
 				"provider":    gateway,
 				"customer_id": customerID,
@@ -274,4 +274,3 @@ func (s *customerPortalService) validateSavedMethodForTopUp(
 
 	return nil
 }
-

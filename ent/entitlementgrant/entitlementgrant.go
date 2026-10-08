@@ -43,6 +43,8 @@ const (
 	FieldMeasure = "measure"
 	// FieldQuota holds the string denoting the quota field in the database.
 	FieldQuota = "quota"
+	// FieldUnlimited holds the string denoting the unlimited field in the database.
+	FieldUnlimited = "unlimited"
 	// FieldUsage holds the string denoting the usage field in the database.
 	FieldUsage = "usage"
 	// FieldValidFrom holds the string denoting the valid_from field in the database.
@@ -78,6 +80,7 @@ var Columns = []string{
 	FieldScopeEntityID,
 	FieldMeasure,
 	FieldQuota,
+	FieldUnlimited,
 	FieldUsage,
 	FieldValidFrom,
 	FieldValidTo,
@@ -122,6 +125,8 @@ var (
 	ScopeEntityIDValidator func(string) error
 	// MeasureValidator is a validator for the "measure" field. It is called by the builders before save.
 	MeasureValidator func(string) error
+	// DefaultUnlimited holds the default value on creation for the "unlimited" field.
+	DefaultUnlimited bool
 	// DefaultUsage holds the default value on creation for the "usage" field.
 	DefaultUsage decimal.Decimal
 	// DefaultGrantStatus holds the default value on creation for the "grant_status" field.
@@ -206,6 +211,11 @@ func ByMeasure(opts ...sql.OrderTermOption) OrderOption {
 // ByQuota orders the results by the quota field.
 func ByQuota(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuota, opts...).ToFunc()
+}
+
+// ByUnlimited orders the results by the unlimited field.
+func ByUnlimited(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUnlimited, opts...).ToFunc()
 }
 
 // ByUsage orders the results by the usage field.

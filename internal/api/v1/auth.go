@@ -6,9 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 

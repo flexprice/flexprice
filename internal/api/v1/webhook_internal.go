@@ -14,6 +14,7 @@ var _ = []any{
 	(*apidto.RetryOutboundWebhookResponse)(nil),
 	(*webhookDto.InvoiceWebhookPayload)(nil),
 	(*webhookDto.CommunicationWebhookPayload)(nil),
+	(*webhookDto.InvoiceSyncWebhookPayload)(nil),
 	(*webhookDto.SubscriptionWebhookPayload)(nil),
 	(*webhookDto.SubscriptionPhaseWebhookPayload)(nil),
 	(*webhookDto.CustomerWebhookPayload)(nil),
@@ -90,6 +91,26 @@ func WebhookEventInvoiceUpdate() {}
 // @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.payment.overdue [post]
 func WebhookEventInvoicePaymentOverdue() {}
+
+// WebhookEventInvoiceSyncSuccess godoc
+// @Summary invoice.sync.success
+// @Description Fired once per provider when an invoice is synced to that provider.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.sync.success [post]
+func WebhookEventInvoiceSyncSuccess() {}
+
+// WebhookEventInvoiceSyncFailed godoc
+// @Summary invoice.sync.failed
+// @Description Fired once per provider when an invoice sync fails after its last retry.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.sync.failed [post]
+func WebhookEventInvoiceSyncFailed() {}
 
 // WebhookEventInvoiceCommunicationTriggered godoc
 // @Summary invoice.communication.triggered

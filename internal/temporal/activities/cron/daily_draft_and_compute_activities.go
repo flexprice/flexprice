@@ -53,7 +53,10 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	}
 	result.TotalDueSubscriptions = len(subs)
 
-	for _, sub := range subs {
+	for i, sub := range subs {
+		if i%100 == 0 {
+			activity.RecordHeartbeat(ctx, i)
+		}
 		tenantEnvKey := sub.TenantID + "|" + sub.EnvironmentID
 		if _, seen := tenantEnvsSeen[tenantEnvKey]; !seen {
 			tenantEnvsSeen[tenantEnvKey] = struct{}{}

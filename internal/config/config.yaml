@@ -3,6 +3,8 @@ deployment:
 
 server:
   address: ":8080"
+  # Grace period for in-flight requests after SIGTERM. Clamped to 45s.
+  shutdown_timeout: 25s
 
 # Operator portal (deployment.mode=admin). Empty secret refuses that mode at boot.
 # Prod sets FLEXPRICE_ADMIN_SECRET from the secret manager. Header: X-Admin-Secret.
@@ -47,6 +49,11 @@ analytics:
   enabled: false # FLEXPRICE_ANALYTICS_ENABLED
   # FLEXPRICE_ANALYTICS_METER_USAGE_SINK_TOPIC. Future: .sink.backfill / .sink.lazy
   meter_usage_sink_topic: "analytics.meter_usage.sink.realtime"
+  # Periodic Temporal revenue_facts dirty-rollup (RevenueRollupWorkflow). Off by
+  # default — enable only once revenue_facts is trusted enough to run unattended.
+  revenue_rollup:
+    enabled: false # FLEXPRICE_ANALYTICS_REVENUE_ROLLUP_ENABLED
+    auto_correct: false # FLEXPRICE_ANALYTICS_REVENUE_ROLLUP_AUTO_CORRECT
 
 kafka:
   brokers: "localhost:29092" # For local mode
@@ -310,6 +317,8 @@ logging:
   # otel_auth_header: ""
   # otel_auth_value: ""
   otel_debug: false # synchronous SimpleProcessor for log export; use to confirm delivery
+  # Kill switch for provider call logs: FLEXPRICE_LOGGING_PROVIDER_CALLS_ENABLED=false
+  provider_calls_enabled: true
 
 webhook:
   enabled: true

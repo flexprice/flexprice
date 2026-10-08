@@ -132,6 +132,11 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			return nil, chargeErr
 		} else if charged {
 			resp = chargedResp
+			// The debit lands after the settlement window, so the session must outlive it
+			// or the late capture is refunded.
+			if settleBy := time.Now().UTC().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
+				session.ExpiresAt = settleBy
+			}
 			break
 		}
 
@@ -328,11 +333,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	paymentID := *session.CheckoutPaymentID
 
 	modSvc := &subscriptionModificationService{serviceParams: s.ServiceParams}
-	quantityChangeReq, err := modSvc.requestFromModifySubscriptionParams(ctx, params)
-	if err != nil {
-		return err
-	}
-	if _, err := modSvc.applyQuantityChange(ctx, quantityChangeReq); err != nil {
+	if err := modSvc.applyModifySubscriptionParams(ctx, params); err != nil {
 		return err
 	}
 

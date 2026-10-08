@@ -261,6 +261,9 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 		if t.ExpiryDate != nil && t.ExpiryDate.Before(timeReference) {
 			return false
 		}
+		if !t.CreatedAt.Before(timeReference) {
+			return false
+		}
 
 		return true
 	}, nil)

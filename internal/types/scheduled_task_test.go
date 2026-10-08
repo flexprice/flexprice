@@ -71,4 +71,3 @@ func TestStorageExportConfig_ValidateForProvider_RegionRequirement(t *testing.T)
 		assert.NoError(t, cfg.Validate())
 	})
 }
-

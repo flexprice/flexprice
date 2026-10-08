@@ -24,119 +24,119 @@ type CreditNoteLineItemUpdate struct {
 }
 
 // Where appends a list predicates to the CreditNoteLineItemUpdate builder.
-func (cnliu *CreditNoteLineItemUpdate) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemUpdate {
-	cnliu.mutation.Where(ps...)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cnliu *CreditNoteLineItemUpdate) SetStatus(s string) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetStatus(s)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetStatus(v string) *CreditNoteLineItemUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableStatus(s *string) *CreditNoteLineItemUpdate {
-	if s != nil {
-		cnliu.SetStatus(*s)
+func (_u *CreditNoteLineItemUpdate) SetNillableStatus(v *string) *CreditNoteLineItemUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cnliu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cnliu *CreditNoteLineItemUpdate) SetUpdatedAt(t time.Time) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetUpdatedAt(t)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetUpdatedAt(v time.Time) *CreditNoteLineItemUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cnliu *CreditNoteLineItemUpdate) SetUpdatedBy(s string) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetUpdatedBy(s)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetUpdatedBy(v string) *CreditNoteLineItemUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableUpdatedBy(s *string) *CreditNoteLineItemUpdate {
-	if s != nil {
-		cnliu.SetUpdatedBy(*s)
+func (_u *CreditNoteLineItemUpdate) SetNillableUpdatedBy(v *string) *CreditNoteLineItemUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cnliu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cnliu *CreditNoteLineItemUpdate) ClearUpdatedBy() *CreditNoteLineItemUpdate {
-	cnliu.mutation.ClearUpdatedBy()
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) ClearUpdatedBy() *CreditNoteLineItemUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetDisplayName sets the "display_name" field.
-func (cnliu *CreditNoteLineItemUpdate) SetDisplayName(s string) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetDisplayName(s)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetDisplayName(v string) *CreditNoteLineItemUpdate {
+	_u.mutation.SetDisplayName(v)
+	return _u
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableDisplayName(s *string) *CreditNoteLineItemUpdate {
-	if s != nil {
-		cnliu.SetDisplayName(*s)
+func (_u *CreditNoteLineItemUpdate) SetNillableDisplayName(v *string) *CreditNoteLineItemUpdate {
+	if v != nil {
+		_u.SetDisplayName(*v)
 	}
-	return cnliu
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (cnliu *CreditNoteLineItemUpdate) SetAmount(d decimal.Decimal) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetAmount(d)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetAmount(v decimal.Decimal) *CreditNoteLineItemUpdate {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableAmount(d *decimal.Decimal) *CreditNoteLineItemUpdate {
-	if d != nil {
-		cnliu.SetAmount(*d)
+func (_u *CreditNoteLineItemUpdate) SetNillableAmount(v *decimal.Decimal) *CreditNoteLineItemUpdate {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return cnliu
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (cnliu *CreditNoteLineItemUpdate) SetCurrency(s string) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetCurrency(s)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetCurrency(v string) *CreditNoteLineItemUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cnliu *CreditNoteLineItemUpdate) SetNillableCurrency(s *string) *CreditNoteLineItemUpdate {
-	if s != nil {
-		cnliu.SetCurrency(*s)
+func (_u *CreditNoteLineItemUpdate) SetNillableCurrency(v *string) *CreditNoteLineItemUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return cnliu
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cnliu *CreditNoteLineItemUpdate) SetMetadata(m map[string]string) *CreditNoteLineItemUpdate {
-	cnliu.mutation.SetMetadata(m)
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) SetMetadata(v map[string]string) *CreditNoteLineItemUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cnliu *CreditNoteLineItemUpdate) ClearMetadata() *CreditNoteLineItemUpdate {
-	cnliu.mutation.ClearMetadata()
-	return cnliu
+func (_u *CreditNoteLineItemUpdate) ClearMetadata() *CreditNoteLineItemUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CreditNoteLineItemMutation object of the builder.
-func (cnliu *CreditNoteLineItemUpdate) Mutation() *CreditNoteLineItemMutation {
-	return cnliu.mutation
+func (_u *CreditNoteLineItemUpdate) Mutation() *CreditNoteLineItemMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cnliu *CreditNoteLineItemUpdate) Save(ctx context.Context) (int, error) {
-	cnliu.defaults()
-	return withHooks(ctx, cnliu.sqlSave, cnliu.mutation, cnliu.hooks)
+func (_u *CreditNoteLineItemUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cnliu *CreditNoteLineItemUpdate) SaveX(ctx context.Context) int {
-	affected, err := cnliu.Save(ctx)
+func (_u *CreditNoteLineItemUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -144,90 +144,90 @@ func (cnliu *CreditNoteLineItemUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cnliu *CreditNoteLineItemUpdate) Exec(ctx context.Context) error {
-	_, err := cnliu.Save(ctx)
+func (_u *CreditNoteLineItemUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnliu *CreditNoteLineItemUpdate) ExecX(ctx context.Context) {
-	if err := cnliu.Exec(ctx); err != nil {
+func (_u *CreditNoteLineItemUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cnliu *CreditNoteLineItemUpdate) defaults() {
-	if _, ok := cnliu.mutation.UpdatedAt(); !ok {
+func (_u *CreditNoteLineItemUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditnotelineitem.UpdateDefaultUpdatedAt()
-		cnliu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cnliu *CreditNoteLineItemUpdate) check() error {
-	if v, ok := cnliu.mutation.DisplayName(); ok {
+func (_u *CreditNoteLineItemUpdate) check() error {
+	if v, ok := _u.mutation.DisplayName(); ok {
 		if err := creditnotelineitem.DisplayNameValidator(v); err != nil {
 			return &ValidationError{Name: "display_name", err: fmt.Errorf(`ent: validator failed for field "CreditNoteLineItem.display_name": %w`, err)}
 		}
 	}
-	if v, ok := cnliu.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := creditnotelineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "CreditNoteLineItem.currency": %w`, err)}
 		}
 	}
-	if cnliu.mutation.CreditNoteCleared() && len(cnliu.mutation.CreditNoteIDs()) > 0 {
+	if _u.mutation.CreditNoteCleared() && len(_u.mutation.CreditNoteIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CreditNoteLineItem.credit_note"`)
 	}
 	return nil
 }
 
-func (cnliu *CreditNoteLineItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cnliu.check(); err != nil {
-		return n, err
+func (_u *CreditNoteLineItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditnotelineitem.Table, creditnotelineitem.Columns, sqlgraph.NewFieldSpec(creditnotelineitem.FieldID, field.TypeString))
-	if ps := cnliu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cnliu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditnotelineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cnliu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditnotelineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cnliu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditnotelineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cnliu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditnotelineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cnliu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditnotelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if cnliu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditnotelineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cnliu.mutation.DisplayName(); ok {
+	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(creditnotelineitem.FieldDisplayName, field.TypeString, value)
 	}
-	if value, ok := cnliu.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(creditnotelineitem.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := cnliu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(creditnotelineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := cnliu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditnotelineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if cnliu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditnotelineitem.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cnliu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditnotelineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -235,8 +235,8 @@ func (cnliu *CreditNoteLineItemUpdate) sqlSave(ctx context.Context) (n int, err 
 		}
 		return 0, err
 	}
-	cnliu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CreditNoteLineItemUpdateOne is the builder for updating a single CreditNoteLineItem entity.
@@ -248,126 +248,126 @@ type CreditNoteLineItemUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetStatus(s string) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetStatus(s)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetStatus(v string) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableStatus(s *string) *CreditNoteLineItemUpdateOne {
-	if s != nil {
-		cnliuo.SetStatus(*s)
+func (_u *CreditNoteLineItemUpdateOne) SetNillableStatus(v *string) *CreditNoteLineItemUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cnliuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetUpdatedAt(t time.Time) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetUpdatedAt(t)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetUpdatedAt(v time.Time) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetUpdatedBy(s string) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetUpdatedBy(s)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetUpdatedBy(v string) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableUpdatedBy(s *string) *CreditNoteLineItemUpdateOne {
-	if s != nil {
-		cnliuo.SetUpdatedBy(*s)
+func (_u *CreditNoteLineItemUpdateOne) SetNillableUpdatedBy(v *string) *CreditNoteLineItemUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cnliuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) ClearUpdatedBy() *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.ClearUpdatedBy()
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) ClearUpdatedBy() *CreditNoteLineItemUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetDisplayName sets the "display_name" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetDisplayName(s string) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetDisplayName(s)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetDisplayName(v string) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetDisplayName(v)
+	return _u
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableDisplayName(s *string) *CreditNoteLineItemUpdateOne {
-	if s != nil {
-		cnliuo.SetDisplayName(*s)
+func (_u *CreditNoteLineItemUpdateOne) SetNillableDisplayName(v *string) *CreditNoteLineItemUpdateOne {
+	if v != nil {
+		_u.SetDisplayName(*v)
 	}
-	return cnliuo
+	return _u
 }
 
 // SetAmount sets the "amount" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetAmount(d decimal.Decimal) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetAmount(d)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetAmount(v decimal.Decimal) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetAmount(v)
+	return _u
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableAmount(d *decimal.Decimal) *CreditNoteLineItemUpdateOne {
-	if d != nil {
-		cnliuo.SetAmount(*d)
+func (_u *CreditNoteLineItemUpdateOne) SetNillableAmount(v *decimal.Decimal) *CreditNoteLineItemUpdateOne {
+	if v != nil {
+		_u.SetAmount(*v)
 	}
-	return cnliuo
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetCurrency(s string) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetCurrency(s)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetCurrency(v string) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetNillableCurrency(s *string) *CreditNoteLineItemUpdateOne {
-	if s != nil {
-		cnliuo.SetCurrency(*s)
+func (_u *CreditNoteLineItemUpdateOne) SetNillableCurrency(v *string) *CreditNoteLineItemUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return cnliuo
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) SetMetadata(m map[string]string) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.SetMetadata(m)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) SetMetadata(v map[string]string) *CreditNoteLineItemUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cnliuo *CreditNoteLineItemUpdateOne) ClearMetadata() *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.ClearMetadata()
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) ClearMetadata() *CreditNoteLineItemUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CreditNoteLineItemMutation object of the builder.
-func (cnliuo *CreditNoteLineItemUpdateOne) Mutation() *CreditNoteLineItemMutation {
-	return cnliuo.mutation
+func (_u *CreditNoteLineItemUpdateOne) Mutation() *CreditNoteLineItemMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the CreditNoteLineItemUpdate builder.
-func (cnliuo *CreditNoteLineItemUpdateOne) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemUpdateOne {
-	cnliuo.mutation.Where(ps...)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cnliuo *CreditNoteLineItemUpdateOne) Select(field string, fields ...string) *CreditNoteLineItemUpdateOne {
-	cnliuo.fields = append([]string{field}, fields...)
-	return cnliuo
+func (_u *CreditNoteLineItemUpdateOne) Select(field string, fields ...string) *CreditNoteLineItemUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CreditNoteLineItem entity.
-func (cnliuo *CreditNoteLineItemUpdateOne) Save(ctx context.Context) (*CreditNoteLineItem, error) {
-	cnliuo.defaults()
-	return withHooks(ctx, cnliuo.sqlSave, cnliuo.mutation, cnliuo.hooks)
+func (_u *CreditNoteLineItemUpdateOne) Save(ctx context.Context) (*CreditNoteLineItem, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cnliuo *CreditNoteLineItemUpdateOne) SaveX(ctx context.Context) *CreditNoteLineItem {
-	node, err := cnliuo.Save(ctx)
+func (_u *CreditNoteLineItemUpdateOne) SaveX(ctx context.Context) *CreditNoteLineItem {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -375,55 +375,55 @@ func (cnliuo *CreditNoteLineItemUpdateOne) SaveX(ctx context.Context) *CreditNot
 }
 
 // Exec executes the query on the entity.
-func (cnliuo *CreditNoteLineItemUpdateOne) Exec(ctx context.Context) error {
-	_, err := cnliuo.Save(ctx)
+func (_u *CreditNoteLineItemUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnliuo *CreditNoteLineItemUpdateOne) ExecX(ctx context.Context) {
-	if err := cnliuo.Exec(ctx); err != nil {
+func (_u *CreditNoteLineItemUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cnliuo *CreditNoteLineItemUpdateOne) defaults() {
-	if _, ok := cnliuo.mutation.UpdatedAt(); !ok {
+func (_u *CreditNoteLineItemUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditnotelineitem.UpdateDefaultUpdatedAt()
-		cnliuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cnliuo *CreditNoteLineItemUpdateOne) check() error {
-	if v, ok := cnliuo.mutation.DisplayName(); ok {
+func (_u *CreditNoteLineItemUpdateOne) check() error {
+	if v, ok := _u.mutation.DisplayName(); ok {
 		if err := creditnotelineitem.DisplayNameValidator(v); err != nil {
 			return &ValidationError{Name: "display_name", err: fmt.Errorf(`ent: validator failed for field "CreditNoteLineItem.display_name": %w`, err)}
 		}
 	}
-	if v, ok := cnliuo.mutation.Currency(); ok {
+	if v, ok := _u.mutation.Currency(); ok {
 		if err := creditnotelineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "CreditNoteLineItem.currency": %w`, err)}
 		}
 	}
-	if cnliuo.mutation.CreditNoteCleared() && len(cnliuo.mutation.CreditNoteIDs()) > 0 {
+	if _u.mutation.CreditNoteCleared() && len(_u.mutation.CreditNoteIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "CreditNoteLineItem.credit_note"`)
 	}
 	return nil
 }
 
-func (cnliuo *CreditNoteLineItemUpdateOne) sqlSave(ctx context.Context) (_node *CreditNoteLineItem, err error) {
-	if err := cnliuo.check(); err != nil {
+func (_u *CreditNoteLineItemUpdateOne) sqlSave(ctx context.Context) (_node *CreditNoteLineItem, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditnotelineitem.Table, creditnotelineitem.Columns, sqlgraph.NewFieldSpec(creditnotelineitem.FieldID, field.TypeString))
-	id, ok := cnliuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CreditNoteLineItem.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cnliuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditnotelineitem.FieldID)
 		for _, f := range fields {
@@ -435,50 +435,50 @@ func (cnliuo *CreditNoteLineItemUpdateOne) sqlSave(ctx context.Context) (_node *
 			}
 		}
 	}
-	if ps := cnliuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cnliuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditnotelineitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cnliuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditnotelineitem.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cnliuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditnotelineitem.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cnliuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditnotelineitem.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cnliuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditnotelineitem.FieldUpdatedBy, field.TypeString)
 	}
-	if cnliuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditnotelineitem.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cnliuo.mutation.DisplayName(); ok {
+	if value, ok := _u.mutation.DisplayName(); ok {
 		_spec.SetField(creditnotelineitem.FieldDisplayName, field.TypeString, value)
 	}
-	if value, ok := cnliuo.mutation.Amount(); ok {
+	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(creditnotelineitem.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := cnliuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(creditnotelineitem.FieldCurrency, field.TypeString, value)
 	}
-	if value, ok := cnliuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditnotelineitem.FieldMetadata, field.TypeJSON, value)
 	}
-	if cnliuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditnotelineitem.FieldMetadata, field.TypeJSON)
 	}
-	_node = &CreditNoteLineItem{config: cnliuo.config}
+	_node = &CreditNoteLineItem{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cnliuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditnotelineitem.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -486,6 +486,6 @@ func (cnliuo *CreditNoteLineItemUpdateOne) sqlSave(ctx context.Context) (_node *
 		}
 		return nil, err
 	}
-	cnliuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

@@ -22,167 +22,167 @@ type ScheduledTaskCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (stc *ScheduledTaskCreate) SetTenantID(s string) *ScheduledTaskCreate {
-	stc.mutation.SetTenantID(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetTenantID(v string) *ScheduledTaskCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (stc *ScheduledTaskCreate) SetStatus(s string) *ScheduledTaskCreate {
-	stc.mutation.SetStatus(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetStatus(v string) *ScheduledTaskCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableStatus(s *string) *ScheduledTaskCreate {
-	if s != nil {
-		stc.SetStatus(*s)
+func (_c *ScheduledTaskCreate) SetNillableStatus(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (stc *ScheduledTaskCreate) SetCreatedAt(t time.Time) *ScheduledTaskCreate {
-	stc.mutation.SetCreatedAt(t)
-	return stc
+func (_c *ScheduledTaskCreate) SetCreatedAt(v time.Time) *ScheduledTaskCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableCreatedAt(t *time.Time) *ScheduledTaskCreate {
-	if t != nil {
-		stc.SetCreatedAt(*t)
+func (_c *ScheduledTaskCreate) SetNillableCreatedAt(v *time.Time) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (stc *ScheduledTaskCreate) SetUpdatedAt(t time.Time) *ScheduledTaskCreate {
-	stc.mutation.SetUpdatedAt(t)
-	return stc
+func (_c *ScheduledTaskCreate) SetUpdatedAt(v time.Time) *ScheduledTaskCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableUpdatedAt(t *time.Time) *ScheduledTaskCreate {
-	if t != nil {
-		stc.SetUpdatedAt(*t)
+func (_c *ScheduledTaskCreate) SetNillableUpdatedAt(v *time.Time) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (stc *ScheduledTaskCreate) SetCreatedBy(s string) *ScheduledTaskCreate {
-	stc.mutation.SetCreatedBy(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetCreatedBy(v string) *ScheduledTaskCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableCreatedBy(s *string) *ScheduledTaskCreate {
-	if s != nil {
-		stc.SetCreatedBy(*s)
+func (_c *ScheduledTaskCreate) SetNillableCreatedBy(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (stc *ScheduledTaskCreate) SetUpdatedBy(s string) *ScheduledTaskCreate {
-	stc.mutation.SetUpdatedBy(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetUpdatedBy(v string) *ScheduledTaskCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableUpdatedBy(s *string) *ScheduledTaskCreate {
-	if s != nil {
-		stc.SetUpdatedBy(*s)
+func (_c *ScheduledTaskCreate) SetNillableUpdatedBy(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (stc *ScheduledTaskCreate) SetEnvironmentID(s string) *ScheduledTaskCreate {
-	stc.mutation.SetEnvironmentID(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetEnvironmentID(v string) *ScheduledTaskCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableEnvironmentID(s *string) *ScheduledTaskCreate {
-	if s != nil {
-		stc.SetEnvironmentID(*s)
+func (_c *ScheduledTaskCreate) SetNillableEnvironmentID(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetConnectionID sets the "connection_id" field.
-func (stc *ScheduledTaskCreate) SetConnectionID(s string) *ScheduledTaskCreate {
-	stc.mutation.SetConnectionID(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetConnectionID(v string) *ScheduledTaskCreate {
+	_c.mutation.SetConnectionID(v)
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (stc *ScheduledTaskCreate) SetEntityType(ttet types.ScheduledTaskEntityType) *ScheduledTaskCreate {
-	stc.mutation.SetEntityType(ttet)
-	return stc
+func (_c *ScheduledTaskCreate) SetEntityType(v types.ScheduledTaskEntityType) *ScheduledTaskCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetInterval sets the "interval" field.
-func (stc *ScheduledTaskCreate) SetInterval(tti types.ScheduledTaskInterval) *ScheduledTaskCreate {
-	stc.mutation.SetInterval(tti)
-	return stc
+func (_c *ScheduledTaskCreate) SetInterval(v types.ScheduledTaskInterval) *ScheduledTaskCreate {
+	_c.mutation.SetInterval(v)
+	return _c
 }
 
 // SetEnabled sets the "enabled" field.
-func (stc *ScheduledTaskCreate) SetEnabled(b bool) *ScheduledTaskCreate {
-	stc.mutation.SetEnabled(b)
-	return stc
+func (_c *ScheduledTaskCreate) SetEnabled(v bool) *ScheduledTaskCreate {
+	_c.mutation.SetEnabled(v)
+	return _c
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableEnabled(b *bool) *ScheduledTaskCreate {
-	if b != nil {
-		stc.SetEnabled(*b)
+func (_c *ScheduledTaskCreate) SetNillableEnabled(v *bool) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetEnabled(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetJobConfig sets the "job_config" field.
-func (stc *ScheduledTaskCreate) SetJobConfig(tc *types.S3JobConfig) *ScheduledTaskCreate {
-	stc.mutation.SetJobConfig(tc)
-	return stc
+func (_c *ScheduledTaskCreate) SetJobConfig(v *types.S3JobConfig) *ScheduledTaskCreate {
+	_c.mutation.SetJobConfig(v)
+	return _c
 }
 
 // SetTemporalScheduleID sets the "temporal_schedule_id" field.
-func (stc *ScheduledTaskCreate) SetTemporalScheduleID(s string) *ScheduledTaskCreate {
-	stc.mutation.SetTemporalScheduleID(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetTemporalScheduleID(v string) *ScheduledTaskCreate {
+	_c.mutation.SetTemporalScheduleID(v)
+	return _c
 }
 
 // SetNillableTemporalScheduleID sets the "temporal_schedule_id" field if the given value is not nil.
-func (stc *ScheduledTaskCreate) SetNillableTemporalScheduleID(s *string) *ScheduledTaskCreate {
-	if s != nil {
-		stc.SetTemporalScheduleID(*s)
+func (_c *ScheduledTaskCreate) SetNillableTemporalScheduleID(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetTemporalScheduleID(*v)
 	}
-	return stc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (stc *ScheduledTaskCreate) SetID(s string) *ScheduledTaskCreate {
-	stc.mutation.SetID(s)
-	return stc
+func (_c *ScheduledTaskCreate) SetID(v string) *ScheduledTaskCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the ScheduledTaskMutation object of the builder.
-func (stc *ScheduledTaskCreate) Mutation() *ScheduledTaskMutation {
-	return stc.mutation
+func (_c *ScheduledTaskCreate) Mutation() *ScheduledTaskMutation {
+	return _c.mutation
 }
 
 // Save creates the ScheduledTask in the database.
-func (stc *ScheduledTaskCreate) Save(ctx context.Context) (*ScheduledTask, error) {
-	stc.defaults()
-	return withHooks(ctx, stc.sqlSave, stc.mutation, stc.hooks)
+func (_c *ScheduledTaskCreate) Save(ctx context.Context) (*ScheduledTask, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (stc *ScheduledTaskCreate) SaveX(ctx context.Context) *ScheduledTask {
-	v, err := stc.Save(ctx)
+func (_c *ScheduledTaskCreate) SaveX(ctx context.Context) *ScheduledTask {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -190,89 +190,89 @@ func (stc *ScheduledTaskCreate) SaveX(ctx context.Context) *ScheduledTask {
 }
 
 // Exec executes the query.
-func (stc *ScheduledTaskCreate) Exec(ctx context.Context) error {
-	_, err := stc.Save(ctx)
+func (_c *ScheduledTaskCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (stc *ScheduledTaskCreate) ExecX(ctx context.Context) {
-	if err := stc.Exec(ctx); err != nil {
+func (_c *ScheduledTaskCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (stc *ScheduledTaskCreate) defaults() {
-	if _, ok := stc.mutation.Status(); !ok {
+func (_c *ScheduledTaskCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := scheduledtask.DefaultStatus
-		stc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := stc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := scheduledtask.DefaultCreatedAt()
-		stc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := stc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := scheduledtask.DefaultUpdatedAt()
-		stc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := stc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := scheduledtask.DefaultEnvironmentID
-		stc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := stc.mutation.Enabled(); !ok {
+	if _, ok := _c.mutation.Enabled(); !ok {
 		v := scheduledtask.DefaultEnabled
-		stc.mutation.SetEnabled(v)
+		_c.mutation.SetEnabled(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (stc *ScheduledTaskCreate) check() error {
-	if _, ok := stc.mutation.TenantID(); !ok {
+func (_c *ScheduledTaskCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "ScheduledTask.tenant_id"`)}
 	}
-	if v, ok := stc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := scheduledtask.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := stc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ScheduledTask.status"`)}
 	}
-	if _, ok := stc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ScheduledTask.created_at"`)}
 	}
-	if _, ok := stc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ScheduledTask.updated_at"`)}
 	}
-	if _, ok := stc.mutation.ConnectionID(); !ok {
+	if _, ok := _c.mutation.ConnectionID(); !ok {
 		return &ValidationError{Name: "connection_id", err: errors.New(`ent: missing required field "ScheduledTask.connection_id"`)}
 	}
-	if v, ok := stc.mutation.ConnectionID(); ok {
+	if v, ok := _c.mutation.ConnectionID(); ok {
 		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
 			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
 		}
 	}
-	if _, ok := stc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "ScheduledTask.entity_type"`)}
 	}
-	if v, ok := stc.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := scheduledtask.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := stc.mutation.Interval(); !ok {
+	if _, ok := _c.mutation.Interval(); !ok {
 		return &ValidationError{Name: "interval", err: errors.New(`ent: missing required field "ScheduledTask.interval"`)}
 	}
-	if v, ok := stc.mutation.Interval(); ok {
+	if v, ok := _c.mutation.Interval(); ok {
 		if err := scheduledtask.IntervalValidator(string(v)); err != nil {
 			return &ValidationError{Name: "interval", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.interval": %w`, err)}
 		}
 	}
-	if _, ok := stc.mutation.Enabled(); !ok {
+	if _, ok := _c.mutation.Enabled(); !ok {
 		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "ScheduledTask.enabled"`)}
 	}
-	if v, ok := stc.mutation.JobConfig(); ok {
+	if v, ok := _c.mutation.JobConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
 		}
@@ -280,12 +280,12 @@ func (stc *ScheduledTaskCreate) check() error {
 	return nil
 }
 
-func (stc *ScheduledTaskCreate) sqlSave(ctx context.Context) (*ScheduledTask, error) {
-	if err := stc.check(); err != nil {
+func (_c *ScheduledTaskCreate) sqlSave(ctx context.Context) (*ScheduledTask, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := stc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, stc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -298,69 +298,69 @@ func (stc *ScheduledTaskCreate) sqlSave(ctx context.Context) (*ScheduledTask, er
 			return nil, fmt.Errorf("unexpected ScheduledTask.ID type: %T", _spec.ID.Value)
 		}
 	}
-	stc.mutation.id = &_node.ID
-	stc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (stc *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpec) {
+func (_c *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpec) {
 	var (
-		_node = &ScheduledTask{config: stc.config}
+		_node = &ScheduledTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(scheduledtask.Table, sqlgraph.NewFieldSpec(scheduledtask.FieldID, field.TypeString))
 	)
-	if id, ok := stc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := stc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(scheduledtask.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := stc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(scheduledtask.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := stc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(scheduledtask.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := stc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := stc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(scheduledtask.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := stc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(scheduledtask.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := stc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(scheduledtask.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := stc.mutation.ConnectionID(); ok {
+	if value, ok := _c.mutation.ConnectionID(); ok {
 		_spec.SetField(scheduledtask.FieldConnectionID, field.TypeString, value)
 		_node.ConnectionID = value
 	}
-	if value, ok := stc.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(scheduledtask.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := stc.mutation.Interval(); ok {
+	if value, ok := _c.mutation.Interval(); ok {
 		_spec.SetField(scheduledtask.FieldInterval, field.TypeString, value)
 		_node.Interval = value
 	}
-	if value, ok := stc.mutation.Enabled(); ok {
+	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(scheduledtask.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
 	}
-	if value, ok := stc.mutation.JobConfig(); ok {
+	if value, ok := _c.mutation.JobConfig(); ok {
 		_spec.SetField(scheduledtask.FieldJobConfig, field.TypeJSON, value)
 		_node.JobConfig = value
 	}
-	if value, ok := stc.mutation.TemporalScheduleID(); ok {
+	if value, ok := _c.mutation.TemporalScheduleID(); ok {
 		_spec.SetField(scheduledtask.FieldTemporalScheduleID, field.TypeString, value)
 		_node.TemporalScheduleID = value
 	}
@@ -375,16 +375,16 @@ type ScheduledTaskCreateBulk struct {
 }
 
 // Save creates the ScheduledTask entities in the database.
-func (stcb *ScheduledTaskCreateBulk) Save(ctx context.Context) ([]*ScheduledTask, error) {
-	if stcb.err != nil {
-		return nil, stcb.err
+func (_c *ScheduledTaskCreateBulk) Save(ctx context.Context) ([]*ScheduledTask, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(stcb.builders))
-	nodes := make([]*ScheduledTask, len(stcb.builders))
-	mutators := make([]Mutator, len(stcb.builders))
-	for i := range stcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*ScheduledTask, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := stcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*ScheduledTaskMutation)
@@ -398,11 +398,11 @@ func (stcb *ScheduledTaskCreateBulk) Save(ctx context.Context) ([]*ScheduledTask
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, stcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, stcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -422,7 +422,7 @@ func (stcb *ScheduledTaskCreateBulk) Save(ctx context.Context) ([]*ScheduledTask
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, stcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -430,8 +430,8 @@ func (stcb *ScheduledTaskCreateBulk) Save(ctx context.Context) ([]*ScheduledTask
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (stcb *ScheduledTaskCreateBulk) SaveX(ctx context.Context) []*ScheduledTask {
-	v, err := stcb.Save(ctx)
+func (_c *ScheduledTaskCreateBulk) SaveX(ctx context.Context) []*ScheduledTask {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -439,14 +439,14 @@ func (stcb *ScheduledTaskCreateBulk) SaveX(ctx context.Context) []*ScheduledTask
 }
 
 // Exec executes the query.
-func (stcb *ScheduledTaskCreateBulk) Exec(ctx context.Context) error {
-	_, err := stcb.Save(ctx)
+func (_c *ScheduledTaskCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (stcb *ScheduledTaskCreateBulk) ExecX(ctx context.Context) {
-	if err := stcb.Exec(ctx); err != nil {
+func (_c *ScheduledTaskCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

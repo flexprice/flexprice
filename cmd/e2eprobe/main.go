@@ -148,7 +148,9 @@ func main() {
 	}()
 
 	reporters := []e2eprobe.Reporter{e2eprobe.NewLogReporter(lg)}
-	if cfg.Slack.WebhookURL != "" {
+	if cfg.Slack.BotToken != "" {
+		reporters = append(reporters, e2eprobe.NewSlackBotReporter(cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	} else if cfg.Slack.WebhookURL != "" {
 		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil, lg))
 	}
 	if tp != nil {
@@ -318,6 +320,32 @@ func main() {
 	if cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Enabled {
 		lbap := checks_pkg.NewLowBalanceAlertProbe(client, reg, lwl, runID, lg, checks_pkg.LowBalanceAlertOpts{})
 		runner.Add(lbap, e2eprobe.NewTickerScheduler(lbap, cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Interval))
+	}
+
+	// One instance of each payment probe per gateway connected to the probe
+	// environment, so Slack and heartbeats attribute failures to the gateway.
+	for _, provider := range cfg.Payments.Providers {
+		opts := checks_pkg.PaymentProbeOpts{
+			Provider:          provider,
+			Driver:            checks_pkg.NewGatewayDriver(provider),
+			SettleTimeout:     cfg.Payments.SettleTimeout,
+			AssertKnownIssues: cfg.Payments.AssertKnownIssues,
+		}
+		if provider.SettleTimeout > 0 {
+			opts.SettleTimeout = provider.SettleTimeout
+		}
+		if cfg.Checks["PAYMENT_LINK_PROBE"].Enabled {
+			plp := checks_pkg.NewPaymentLinkProbe(client, reg, runID, lg, opts)
+			runner.Add(plp, e2eprobe.NewTickerScheduler(plp, cfg.Checks["PAYMENT_LINK_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_METHOD_PROBE"].Enabled {
+			pmp := checks_pkg.NewPaymentMethodProbe(client, reg, runID, lg, opts)
+			runner.Add(pmp, e2eprobe.NewTickerScheduler(pmp, cfg.Checks["PAYMENT_METHOD_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && (opts.Driver != nil || provider.FixedCustomerExternalID != "") {
+			pap := checks_pkg.NewPaymentAutoChargeProbe(client, reg, runID, lg, opts)
+			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval))
+		}
 	}
 
 	if cfg.Checks["JANITOR"].Enabled {

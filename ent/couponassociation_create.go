@@ -25,219 +25,219 @@ type CouponAssociationCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cac *CouponAssociationCreate) SetTenantID(s string) *CouponAssociationCreate {
-	cac.mutation.SetTenantID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetTenantID(v string) *CouponAssociationCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cac *CouponAssociationCreate) SetStatus(s string) *CouponAssociationCreate {
-	cac.mutation.SetStatus(s)
-	return cac
+func (_c *CouponAssociationCreate) SetStatus(v string) *CouponAssociationCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableStatus(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetStatus(*s)
+func (_c *CouponAssociationCreate) SetNillableStatus(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cac *CouponAssociationCreate) SetCreatedAt(t time.Time) *CouponAssociationCreate {
-	cac.mutation.SetCreatedAt(t)
-	return cac
+func (_c *CouponAssociationCreate) SetCreatedAt(v time.Time) *CouponAssociationCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableCreatedAt(t *time.Time) *CouponAssociationCreate {
-	if t != nil {
-		cac.SetCreatedAt(*t)
+func (_c *CouponAssociationCreate) SetNillableCreatedAt(v *time.Time) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cac *CouponAssociationCreate) SetUpdatedAt(t time.Time) *CouponAssociationCreate {
-	cac.mutation.SetUpdatedAt(t)
-	return cac
+func (_c *CouponAssociationCreate) SetUpdatedAt(v time.Time) *CouponAssociationCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableUpdatedAt(t *time.Time) *CouponAssociationCreate {
-	if t != nil {
-		cac.SetUpdatedAt(*t)
+func (_c *CouponAssociationCreate) SetNillableUpdatedAt(v *time.Time) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cac *CouponAssociationCreate) SetCreatedBy(s string) *CouponAssociationCreate {
-	cac.mutation.SetCreatedBy(s)
-	return cac
+func (_c *CouponAssociationCreate) SetCreatedBy(v string) *CouponAssociationCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableCreatedBy(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetCreatedBy(*s)
+func (_c *CouponAssociationCreate) SetNillableCreatedBy(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cac *CouponAssociationCreate) SetUpdatedBy(s string) *CouponAssociationCreate {
-	cac.mutation.SetUpdatedBy(s)
-	return cac
+func (_c *CouponAssociationCreate) SetUpdatedBy(v string) *CouponAssociationCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableUpdatedBy(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetUpdatedBy(*s)
+func (_c *CouponAssociationCreate) SetNillableUpdatedBy(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cac *CouponAssociationCreate) SetEnvironmentID(s string) *CouponAssociationCreate {
-	cac.mutation.SetEnvironmentID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetEnvironmentID(v string) *CouponAssociationCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableEnvironmentID(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetEnvironmentID(*s)
+func (_c *CouponAssociationCreate) SetNillableEnvironmentID(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCouponID sets the "coupon_id" field.
-func (cac *CouponAssociationCreate) SetCouponID(s string) *CouponAssociationCreate {
-	cac.mutation.SetCouponID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetCouponID(v string) *CouponAssociationCreate {
+	_c.mutation.SetCouponID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cac *CouponAssociationCreate) SetSubscriptionID(s string) *CouponAssociationCreate {
-	cac.mutation.SetSubscriptionID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetSubscriptionID(v string) *CouponAssociationCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
-func (cac *CouponAssociationCreate) SetSubscriptionLineItemID(s string) *CouponAssociationCreate {
-	cac.mutation.SetSubscriptionLineItemID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetSubscriptionLineItemID(v string) *CouponAssociationCreate {
+	_c.mutation.SetSubscriptionLineItemID(v)
+	return _c
 }
 
 // SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableSubscriptionLineItemID(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetSubscriptionLineItemID(*s)
+func (_c *CouponAssociationCreate) SetNillableSubscriptionLineItemID(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetSubscriptionLineItemID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetSubscriptionPhaseID sets the "subscription_phase_id" field.
-func (cac *CouponAssociationCreate) SetSubscriptionPhaseID(s string) *CouponAssociationCreate {
-	cac.mutation.SetSubscriptionPhaseID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetSubscriptionPhaseID(v string) *CouponAssociationCreate {
+	_c.mutation.SetSubscriptionPhaseID(v)
+	return _c
 }
 
 // SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationCreate {
-	if s != nil {
-		cac.SetSubscriptionPhaseID(*s)
+func (_c *CouponAssociationCreate) SetNillableSubscriptionPhaseID(v *string) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetSubscriptionPhaseID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (cac *CouponAssociationCreate) SetStartDate(t time.Time) *CouponAssociationCreate {
-	cac.mutation.SetStartDate(t)
-	return cac
+func (_c *CouponAssociationCreate) SetStartDate(v time.Time) *CouponAssociationCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableStartDate(t *time.Time) *CouponAssociationCreate {
-	if t != nil {
-		cac.SetStartDate(*t)
+func (_c *CouponAssociationCreate) SetNillableStartDate(v *time.Time) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (cac *CouponAssociationCreate) SetEndDate(t time.Time) *CouponAssociationCreate {
-	cac.mutation.SetEndDate(t)
-	return cac
+func (_c *CouponAssociationCreate) SetEndDate(v time.Time) *CouponAssociationCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cac *CouponAssociationCreate) SetNillableEndDate(t *time.Time) *CouponAssociationCreate {
-	if t != nil {
-		cac.SetEndDate(*t)
+func (_c *CouponAssociationCreate) SetNillableEndDate(v *time.Time) *CouponAssociationCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cac *CouponAssociationCreate) SetMetadata(m map[string]string) *CouponAssociationCreate {
-	cac.mutation.SetMetadata(m)
-	return cac
+func (_c *CouponAssociationCreate) SetMetadata(v map[string]string) *CouponAssociationCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cac *CouponAssociationCreate) SetID(s string) *CouponAssociationCreate {
-	cac.mutation.SetID(s)
-	return cac
+func (_c *CouponAssociationCreate) SetID(v string) *CouponAssociationCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetCoupon sets the "coupon" edge to the Coupon entity.
-func (cac *CouponAssociationCreate) SetCoupon(c *Coupon) *CouponAssociationCreate {
-	return cac.SetCouponID(c.ID)
+func (_c *CouponAssociationCreate) SetCoupon(v *Coupon) *CouponAssociationCreate {
+	return _c.SetCouponID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (cac *CouponAssociationCreate) SetSubscription(s *Subscription) *CouponAssociationCreate {
-	return cac.SetSubscriptionID(s.ID)
+func (_c *CouponAssociationCreate) SetSubscription(v *Subscription) *CouponAssociationCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // SetSubscriptionLineItem sets the "subscription_line_item" edge to the SubscriptionLineItem entity.
-func (cac *CouponAssociationCreate) SetSubscriptionLineItem(s *SubscriptionLineItem) *CouponAssociationCreate {
-	return cac.SetSubscriptionLineItemID(s.ID)
+func (_c *CouponAssociationCreate) SetSubscriptionLineItem(v *SubscriptionLineItem) *CouponAssociationCreate {
+	return _c.SetSubscriptionLineItemID(v.ID)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (cac *CouponAssociationCreate) AddCouponApplicationIDs(ids ...string) *CouponAssociationCreate {
-	cac.mutation.AddCouponApplicationIDs(ids...)
-	return cac
+func (_c *CouponAssociationCreate) AddCouponApplicationIDs(ids ...string) *CouponAssociationCreate {
+	_c.mutation.AddCouponApplicationIDs(ids...)
+	return _c
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (cac *CouponAssociationCreate) AddCouponApplications(c ...*CouponApplication) *CouponAssociationCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *CouponAssociationCreate) AddCouponApplications(v ...*CouponApplication) *CouponAssociationCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cac.AddCouponApplicationIDs(ids...)
+	return _c.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the CouponAssociationMutation object of the builder.
-func (cac *CouponAssociationCreate) Mutation() *CouponAssociationMutation {
-	return cac.mutation
+func (_c *CouponAssociationCreate) Mutation() *CouponAssociationMutation {
+	return _c.mutation
 }
 
 // Save creates the CouponAssociation in the database.
-func (cac *CouponAssociationCreate) Save(ctx context.Context) (*CouponAssociation, error) {
-	cac.defaults()
-	return withHooks(ctx, cac.sqlSave, cac.mutation, cac.hooks)
+func (_c *CouponAssociationCreate) Save(ctx context.Context) (*CouponAssociation, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cac *CouponAssociationCreate) SaveX(ctx context.Context) *CouponAssociation {
-	v, err := cac.Save(ctx)
+func (_c *CouponAssociationCreate) SaveX(ctx context.Context) *CouponAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -245,95 +245,95 @@ func (cac *CouponAssociationCreate) SaveX(ctx context.Context) *CouponAssociatio
 }
 
 // Exec executes the query.
-func (cac *CouponAssociationCreate) Exec(ctx context.Context) error {
-	_, err := cac.Save(ctx)
+func (_c *CouponAssociationCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cac *CouponAssociationCreate) ExecX(ctx context.Context) {
-	if err := cac.Exec(ctx); err != nil {
+func (_c *CouponAssociationCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cac *CouponAssociationCreate) defaults() {
-	if _, ok := cac.mutation.Status(); !ok {
+func (_c *CouponAssociationCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := couponassociation.DefaultStatus
-		cac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := couponassociation.DefaultCreatedAt()
-		cac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := couponassociation.DefaultUpdatedAt()
-		cac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := couponassociation.DefaultEnvironmentID
-		cac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cac.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		v := couponassociation.DefaultStartDate()
-		cac.mutation.SetStartDate(v)
+		_c.mutation.SetStartDate(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cac *CouponAssociationCreate) check() error {
-	if _, ok := cac.mutation.TenantID(); !ok {
+func (_c *CouponAssociationCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "CouponAssociation.tenant_id"`)}
 	}
-	if v, ok := cac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := couponassociation.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "CouponAssociation.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "CouponAssociation.status"`)}
 	}
-	if _, ok := cac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CouponAssociation.created_at"`)}
 	}
-	if _, ok := cac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "CouponAssociation.updated_at"`)}
 	}
-	if _, ok := cac.mutation.CouponID(); !ok {
+	if _, ok := _c.mutation.CouponID(); !ok {
 		return &ValidationError{Name: "coupon_id", err: errors.New(`ent: missing required field "CouponAssociation.coupon_id"`)}
 	}
-	if v, ok := cac.mutation.CouponID(); ok {
+	if v, ok := _c.mutation.CouponID(); ok {
 		if err := couponassociation.CouponIDValidator(v); err != nil {
 			return &ValidationError{Name: "coupon_id", err: fmt.Errorf(`ent: validator failed for field "CouponAssociation.coupon_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "CouponAssociation.subscription_id"`)}
 	}
-	if v, ok := cac.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := couponassociation.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "CouponAssociation.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "CouponAssociation.start_date"`)}
 	}
-	if len(cac.mutation.CouponIDs()) == 0 {
+	if len(_c.mutation.CouponIDs()) == 0 {
 		return &ValidationError{Name: "coupon", err: errors.New(`ent: missing required edge "CouponAssociation.coupon"`)}
 	}
-	if len(cac.mutation.SubscriptionIDs()) == 0 {
+	if len(_c.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "CouponAssociation.subscription"`)}
 	}
 	return nil
 }
 
-func (cac *CouponAssociationCreate) sqlSave(ctx context.Context) (*CouponAssociation, error) {
-	if err := cac.check(); err != nil {
+func (_c *CouponAssociationCreate) sqlSave(ctx context.Context) (*CouponAssociation, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -346,65 +346,65 @@ func (cac *CouponAssociationCreate) sqlSave(ctx context.Context) (*CouponAssocia
 			return nil, fmt.Errorf("unexpected CouponAssociation.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cac.mutation.id = &_node.ID
-	cac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cac *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.CreateSpec) {
+func (_c *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.CreateSpec) {
 	var (
-		_node = &CouponAssociation{config: cac.config}
+		_node = &CouponAssociation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(couponassociation.Table, sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString))
 	)
-	if id, ok := cac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(couponassociation.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(couponassociation.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(couponassociation.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(couponassociation.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(couponassociation.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(couponassociation.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cac.mutation.SubscriptionPhaseID(); ok {
+	if value, ok := _c.mutation.SubscriptionPhaseID(); ok {
 		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
 		_node.SubscriptionPhaseID = &value
 	}
-	if value, ok := cac.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(couponassociation.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = value
 	}
-	if value, ok := cac.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := cac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if nodes := cac.mutation.CouponIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -421,7 +421,7 @@ func (cac *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.
 		_node.CouponID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -438,7 +438,7 @@ func (cac *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.
 		_node.SubscriptionID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionLineItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -455,7 +455,7 @@ func (cac *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.
 		_node.SubscriptionLineItemID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: false,
@@ -482,16 +482,16 @@ type CouponAssociationCreateBulk struct {
 }
 
 // Save creates the CouponAssociation entities in the database.
-func (cacb *CouponAssociationCreateBulk) Save(ctx context.Context) ([]*CouponAssociation, error) {
-	if cacb.err != nil {
-		return nil, cacb.err
+func (_c *CouponAssociationCreateBulk) Save(ctx context.Context) ([]*CouponAssociation, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(cacb.builders))
-	nodes := make([]*CouponAssociation, len(cacb.builders))
-	mutators := make([]Mutator, len(cacb.builders))
-	for i := range cacb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*CouponAssociation, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := cacb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CouponAssociationMutation)
@@ -505,11 +505,11 @@ func (cacb *CouponAssociationCreateBulk) Save(ctx context.Context) ([]*CouponAss
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, cacb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, cacb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -529,7 +529,7 @@ func (cacb *CouponAssociationCreateBulk) Save(ctx context.Context) ([]*CouponAss
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, cacb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -537,8 +537,8 @@ func (cacb *CouponAssociationCreateBulk) Save(ctx context.Context) ([]*CouponAss
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cacb *CouponAssociationCreateBulk) SaveX(ctx context.Context) []*CouponAssociation {
-	v, err := cacb.Save(ctx)
+func (_c *CouponAssociationCreateBulk) SaveX(ctx context.Context) []*CouponAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -546,14 +546,14 @@ func (cacb *CouponAssociationCreateBulk) SaveX(ctx context.Context) []*CouponAss
 }
 
 // Exec executes the query.
-func (cacb *CouponAssociationCreateBulk) Exec(ctx context.Context) error {
-	_, err := cacb.Save(ctx)
+func (_c *CouponAssociationCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cacb *CouponAssociationCreateBulk) ExecX(ctx context.Context) {
-	if err := cacb.Exec(ctx); err != nil {
+func (_c *CouponAssociationCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

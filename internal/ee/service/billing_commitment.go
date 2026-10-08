@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -195,6 +196,9 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 	}
 
 	overageFactor := lo.FromPtr(lineItem.CommitmentOverageFactor)
+	if overageFactor.IsZero() {
+		overageFactor = lo.FromPtr(types.DefaultOverageFactor())
+	}
 	charge, utilized, overage, trueUp := computeCommitmentMath(usageCost, commitmentAmount, overageFactor, lineItem.CommitmentTrueUpEnabled)
 
 	return charge, &types.CommitmentInfo{
@@ -216,10 +220,6 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 // commitment math — amount- and quantity-typed commitments only differ in how
 // the commitment money is derived before calling this.
 func computeCommitmentMath(usageCharge, commitmentCharge, overageFactor decimal.Decimal, trueUp bool) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
-	if commitmentCharge.IsZero() {
-		return usageCharge, decimal.Zero, decimal.Zero, decimal.Zero
-	}
-
 	if usageCharge.GreaterThanOrEqual(commitmentCharge) {
 		overage := usageCharge.Sub(commitmentCharge).Mul(overageFactor)
 		return commitmentCharge.Add(overage), commitmentCharge, overage, decimal.Zero
@@ -377,6 +377,9 @@ func (c *commitmentCalculator) chargeWindowAtLineItem(
 		return commitmentParts{}, err
 	}
 	of := lo.FromPtr(lineItem.CommitmentOverageFactor)
+	if of.IsZero() {
+		of = lo.FromPtr(types.DefaultOverageFactor())
+	}
 	charge, util, ov, tu := computeCommitmentMath(baseCharge, liCommit, of, lineItem.CommitmentTrueUpEnabled)
 	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
 }
@@ -560,4 +563,59 @@ func segmentsOverlap(a, b [][2]int) bool {
 		}
 	}
 	return false
+}
+
+// WindowCommitmentPart is one window's commitment outcome, dated by the window
+// it covers: what that window billed, split into the committed amount it used,
+// its overage, and its true-up.
+type WindowCommitmentPart struct {
+	WindowStart time.Time
+	Value       decimal.Decimal
+	Charge      decimal.Decimal
+	Utilized    decimal.Decimal
+	Overage     decimal.Decimal
+	TrueUp      decimal.Decimal
+}
+
+// WindowCommitmentBreakdown replays the per-window commitment math for one line
+// item — the same empty-window fill and the same per-bucket charge the billing
+// path runs — and returns the result window by window. Billing keeps only the
+// totals on CommitmentInfo; revenue_facts needs the split to date overage and
+// true-up on the day they happened.
+func WindowCommitmentBreakdown(
+	ctx context.Context,
+	params ServiceParams,
+	item *subscription.SubscriptionLineItem,
+	usageResult *events.AggregationResult,
+	periodStart, periodEnd time.Time,
+	bucketSize types.WindowSize,
+	billingAnchor *time.Time,
+	aggType types.AggregationType,
+	lineItemPrice *price.Price,
+) ([]WindowCommitmentPart, error) {
+	bs := &billingService{ServiceParams: params}
+	values, starts := bs.fillBucketedValuesForWindowedCommitment(
+		item, usageResult, periodStart, periodEnd, bucketSize, billingAnchor, aggType)
+	if len(values) == 0 || len(starts) != len(values) {
+		return nil, nil
+	}
+
+	calc := newCommitmentCalculator(params.Logger, NewPriceService(params))
+	_, perWindow, _, err := calc.applyWindowCommitmentPerBucket(ctx, item, values, starts, lineItemPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]WindowCommitmentPart, len(perWindow))
+	for i, p := range perWindow {
+		out[i] = WindowCommitmentPart{
+			WindowStart: starts[i],
+			Value:       values[i],
+			Charge:      p.charge,
+			Utilized:    p.utilized,
+			Overage:     p.overage,
+			TrueUp:      p.trueUp,
+		}
+	}
+	return out, nil
 }

@@ -37,44 +37,44 @@ type CouponAssociationQuery struct {
 }
 
 // Where adds a new predicate for the CouponAssociationQuery builder.
-func (caq *CouponAssociationQuery) Where(ps ...predicate.CouponAssociation) *CouponAssociationQuery {
-	caq.predicates = append(caq.predicates, ps...)
-	return caq
+func (_q *CouponAssociationQuery) Where(ps ...predicate.CouponAssociation) *CouponAssociationQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (caq *CouponAssociationQuery) Limit(limit int) *CouponAssociationQuery {
-	caq.ctx.Limit = &limit
-	return caq
+func (_q *CouponAssociationQuery) Limit(limit int) *CouponAssociationQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (caq *CouponAssociationQuery) Offset(offset int) *CouponAssociationQuery {
-	caq.ctx.Offset = &offset
-	return caq
+func (_q *CouponAssociationQuery) Offset(offset int) *CouponAssociationQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (caq *CouponAssociationQuery) Unique(unique bool) *CouponAssociationQuery {
-	caq.ctx.Unique = &unique
-	return caq
+func (_q *CouponAssociationQuery) Unique(unique bool) *CouponAssociationQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (caq *CouponAssociationQuery) Order(o ...couponassociation.OrderOption) *CouponAssociationQuery {
-	caq.order = append(caq.order, o...)
-	return caq
+func (_q *CouponAssociationQuery) Order(o ...couponassociation.OrderOption) *CouponAssociationQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryCoupon chains the current query on the "coupon" edge.
-func (caq *CouponAssociationQuery) QueryCoupon() *CouponQuery {
-	query := (&CouponClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) QueryCoupon() *CouponQuery {
+	query := (&CouponClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := caq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := caq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -83,20 +83,20 @@ func (caq *CouponAssociationQuery) QueryCoupon() *CouponQuery {
 			sqlgraph.To(coupon.Table, coupon.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.CouponTable, couponassociation.CouponColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(caq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QuerySubscription chains the current query on the "subscription" edge.
-func (caq *CouponAssociationQuery) QuerySubscription() *SubscriptionQuery {
-	query := (&SubscriptionClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := caq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := caq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -105,20 +105,20 @@ func (caq *CouponAssociationQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.SubscriptionTable, couponassociation.SubscriptionColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(caq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QuerySubscriptionLineItem chains the current query on the "subscription_line_item" edge.
-func (caq *CouponAssociationQuery) QuerySubscriptionLineItem() *SubscriptionLineItemQuery {
-	query := (&SubscriptionLineItemClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) QuerySubscriptionLineItem() *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := caq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := caq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -127,20 +127,20 @@ func (caq *CouponAssociationQuery) QuerySubscriptionLineItem() *SubscriptionLine
 			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, couponassociation.SubscriptionLineItemTable, couponassociation.SubscriptionLineItemColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(caq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCouponApplications chains the current query on the "coupon_applications" edge.
-func (caq *CouponAssociationQuery) QueryCouponApplications() *CouponApplicationQuery {
-	query := (&CouponApplicationClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) QueryCouponApplications() *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := caq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := caq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -149,7 +149,7 @@ func (caq *CouponAssociationQuery) QueryCouponApplications() *CouponApplicationQ
 			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, false, couponassociation.CouponApplicationsTable, couponassociation.CouponApplicationsPrimaryKey...),
 		)
-		fromU = sqlgraph.SetNeighbors(caq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -157,8 +157,8 @@ func (caq *CouponAssociationQuery) QueryCouponApplications() *CouponApplicationQ
 
 // First returns the first CouponAssociation entity from the query.
 // Returns a *NotFoundError when no CouponAssociation was found.
-func (caq *CouponAssociationQuery) First(ctx context.Context) (*CouponAssociation, error) {
-	nodes, err := caq.Limit(1).All(setContextOp(ctx, caq.ctx, ent.OpQueryFirst))
+func (_q *CouponAssociationQuery) First(ctx context.Context) (*CouponAssociation, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -169,8 +169,8 @@ func (caq *CouponAssociationQuery) First(ctx context.Context) (*CouponAssociatio
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (caq *CouponAssociationQuery) FirstX(ctx context.Context) *CouponAssociation {
-	node, err := caq.First(ctx)
+func (_q *CouponAssociationQuery) FirstX(ctx context.Context) *CouponAssociation {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -179,9 +179,9 @@ func (caq *CouponAssociationQuery) FirstX(ctx context.Context) *CouponAssociatio
 
 // FirstID returns the first CouponAssociation ID from the query.
 // Returns a *NotFoundError when no CouponAssociation ID was found.
-func (caq *CouponAssociationQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *CouponAssociationQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = caq.Limit(1).IDs(setContextOp(ctx, caq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -192,8 +192,8 @@ func (caq *CouponAssociationQuery) FirstID(ctx context.Context) (id string, err 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (caq *CouponAssociationQuery) FirstIDX(ctx context.Context) string {
-	id, err := caq.FirstID(ctx)
+func (_q *CouponAssociationQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -203,8 +203,8 @@ func (caq *CouponAssociationQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single CouponAssociation entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one CouponAssociation entity is found.
 // Returns a *NotFoundError when no CouponAssociation entities are found.
-func (caq *CouponAssociationQuery) Only(ctx context.Context) (*CouponAssociation, error) {
-	nodes, err := caq.Limit(2).All(setContextOp(ctx, caq.ctx, ent.OpQueryOnly))
+func (_q *CouponAssociationQuery) Only(ctx context.Context) (*CouponAssociation, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +219,8 @@ func (caq *CouponAssociationQuery) Only(ctx context.Context) (*CouponAssociation
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (caq *CouponAssociationQuery) OnlyX(ctx context.Context) *CouponAssociation {
-	node, err := caq.Only(ctx)
+func (_q *CouponAssociationQuery) OnlyX(ctx context.Context) *CouponAssociation {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -230,9 +230,9 @@ func (caq *CouponAssociationQuery) OnlyX(ctx context.Context) *CouponAssociation
 // OnlyID is like Only, but returns the only CouponAssociation ID in the query.
 // Returns a *NotSingularError when more than one CouponAssociation ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (caq *CouponAssociationQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *CouponAssociationQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = caq.Limit(2).IDs(setContextOp(ctx, caq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -247,8 +247,8 @@ func (caq *CouponAssociationQuery) OnlyID(ctx context.Context) (id string, err e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (caq *CouponAssociationQuery) OnlyIDX(ctx context.Context) string {
-	id, err := caq.OnlyID(ctx)
+func (_q *CouponAssociationQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -256,18 +256,18 @@ func (caq *CouponAssociationQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of CouponAssociations.
-func (caq *CouponAssociationQuery) All(ctx context.Context) ([]*CouponAssociation, error) {
-	ctx = setContextOp(ctx, caq.ctx, ent.OpQueryAll)
-	if err := caq.prepareQuery(ctx); err != nil {
+func (_q *CouponAssociationQuery) All(ctx context.Context) ([]*CouponAssociation, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*CouponAssociation, *CouponAssociationQuery]()
-	return withInterceptors[[]*CouponAssociation](ctx, caq, qr, caq.inters)
+	return withInterceptors[[]*CouponAssociation](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (caq *CouponAssociationQuery) AllX(ctx context.Context) []*CouponAssociation {
-	nodes, err := caq.All(ctx)
+func (_q *CouponAssociationQuery) AllX(ctx context.Context) []*CouponAssociation {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -275,20 +275,20 @@ func (caq *CouponAssociationQuery) AllX(ctx context.Context) []*CouponAssociatio
 }
 
 // IDs executes the query and returns a list of CouponAssociation IDs.
-func (caq *CouponAssociationQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if caq.ctx.Unique == nil && caq.path != nil {
-		caq.Unique(true)
+func (_q *CouponAssociationQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, caq.ctx, ent.OpQueryIDs)
-	if err = caq.Select(couponassociation.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(couponassociation.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (caq *CouponAssociationQuery) IDsX(ctx context.Context) []string {
-	ids, err := caq.IDs(ctx)
+func (_q *CouponAssociationQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -296,17 +296,17 @@ func (caq *CouponAssociationQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (caq *CouponAssociationQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, caq.ctx, ent.OpQueryCount)
-	if err := caq.prepareQuery(ctx); err != nil {
+func (_q *CouponAssociationQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, caq, querierCount[*CouponAssociationQuery](), caq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*CouponAssociationQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (caq *CouponAssociationQuery) CountX(ctx context.Context) int {
-	count, err := caq.Count(ctx)
+func (_q *CouponAssociationQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -314,9 +314,9 @@ func (caq *CouponAssociationQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (caq *CouponAssociationQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, caq.ctx, ent.OpQueryExist)
-	switch _, err := caq.FirstID(ctx); {
+func (_q *CouponAssociationQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -327,8 +327,8 @@ func (caq *CouponAssociationQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (caq *CouponAssociationQuery) ExistX(ctx context.Context) bool {
-	exist, err := caq.Exist(ctx)
+func (_q *CouponAssociationQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -337,68 +337,68 @@ func (caq *CouponAssociationQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the CouponAssociationQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (caq *CouponAssociationQuery) Clone() *CouponAssociationQuery {
-	if caq == nil {
+func (_q *CouponAssociationQuery) Clone() *CouponAssociationQuery {
+	if _q == nil {
 		return nil
 	}
 	return &CouponAssociationQuery{
-		config:                   caq.config,
-		ctx:                      caq.ctx.Clone(),
-		order:                    append([]couponassociation.OrderOption{}, caq.order...),
-		inters:                   append([]Interceptor{}, caq.inters...),
-		predicates:               append([]predicate.CouponAssociation{}, caq.predicates...),
-		withCoupon:               caq.withCoupon.Clone(),
-		withSubscription:         caq.withSubscription.Clone(),
-		withSubscriptionLineItem: caq.withSubscriptionLineItem.Clone(),
-		withCouponApplications:   caq.withCouponApplications.Clone(),
+		config:                   _q.config,
+		ctx:                      _q.ctx.Clone(),
+		order:                    append([]couponassociation.OrderOption{}, _q.order...),
+		inters:                   append([]Interceptor{}, _q.inters...),
+		predicates:               append([]predicate.CouponAssociation{}, _q.predicates...),
+		withCoupon:               _q.withCoupon.Clone(),
+		withSubscription:         _q.withSubscription.Clone(),
+		withSubscriptionLineItem: _q.withSubscriptionLineItem.Clone(),
+		withCouponApplications:   _q.withCouponApplications.Clone(),
 		// clone intermediate query.
-		sql:  caq.sql.Clone(),
-		path: caq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithCoupon tells the query-builder to eager-load the nodes that are connected to
 // the "coupon" edge. The optional arguments are used to configure the query builder of the edge.
-func (caq *CouponAssociationQuery) WithCoupon(opts ...func(*CouponQuery)) *CouponAssociationQuery {
-	query := (&CouponClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) WithCoupon(opts ...func(*CouponQuery)) *CouponAssociationQuery {
+	query := (&CouponClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	caq.withCoupon = query
-	return caq
+	_q.withCoupon = query
+	return _q
 }
 
 // WithSubscription tells the query-builder to eager-load the nodes that are connected to
 // the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
-func (caq *CouponAssociationQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *CouponAssociationQuery {
-	query := (&SubscriptionClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *CouponAssociationQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	caq.withSubscription = query
-	return caq
+	_q.withSubscription = query
+	return _q
 }
 
 // WithSubscriptionLineItem tells the query-builder to eager-load the nodes that are connected to
 // the "subscription_line_item" edge. The optional arguments are used to configure the query builder of the edge.
-func (caq *CouponAssociationQuery) WithSubscriptionLineItem(opts ...func(*SubscriptionLineItemQuery)) *CouponAssociationQuery {
-	query := (&SubscriptionLineItemClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) WithSubscriptionLineItem(opts ...func(*SubscriptionLineItemQuery)) *CouponAssociationQuery {
+	query := (&SubscriptionLineItemClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	caq.withSubscriptionLineItem = query
-	return caq
+	_q.withSubscriptionLineItem = query
+	return _q
 }
 
 // WithCouponApplications tells the query-builder to eager-load the nodes that are connected to
 // the "coupon_applications" edge. The optional arguments are used to configure the query builder of the edge.
-func (caq *CouponAssociationQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *CouponAssociationQuery {
-	query := (&CouponApplicationClient{config: caq.config}).Query()
+func (_q *CouponAssociationQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *CouponAssociationQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	caq.withCouponApplications = query
-	return caq
+	_q.withCouponApplications = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -415,10 +415,10 @@ func (caq *CouponAssociationQuery) WithCouponApplications(opts ...func(*CouponAp
 //		GroupBy(couponassociation.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (caq *CouponAssociationQuery) GroupBy(field string, fields ...string) *CouponAssociationGroupBy {
-	caq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &CouponAssociationGroupBy{build: caq}
-	grbuild.flds = &caq.ctx.Fields
+func (_q *CouponAssociationQuery) GroupBy(field string, fields ...string) *CouponAssociationGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &CouponAssociationGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = couponassociation.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -436,61 +436,61 @@ func (caq *CouponAssociationQuery) GroupBy(field string, fields ...string) *Coup
 //	client.CouponAssociation.Query().
 //		Select(couponassociation.FieldTenantID).
 //		Scan(ctx, &v)
-func (caq *CouponAssociationQuery) Select(fields ...string) *CouponAssociationSelect {
-	caq.ctx.Fields = append(caq.ctx.Fields, fields...)
-	sbuild := &CouponAssociationSelect{CouponAssociationQuery: caq}
+func (_q *CouponAssociationQuery) Select(fields ...string) *CouponAssociationSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &CouponAssociationSelect{CouponAssociationQuery: _q}
 	sbuild.label = couponassociation.Label
-	sbuild.flds, sbuild.scan = &caq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a CouponAssociationSelect configured with the given aggregations.
-func (caq *CouponAssociationQuery) Aggregate(fns ...AggregateFunc) *CouponAssociationSelect {
-	return caq.Select().Aggregate(fns...)
+func (_q *CouponAssociationQuery) Aggregate(fns ...AggregateFunc) *CouponAssociationSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (caq *CouponAssociationQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range caq.inters {
+func (_q *CouponAssociationQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, caq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range caq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !couponassociation.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if caq.path != nil {
-		prev, err := caq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		caq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (caq *CouponAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CouponAssociation, error) {
+func (_q *CouponAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CouponAssociation, error) {
 	var (
 		nodes       = []*CouponAssociation{}
-		_spec       = caq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [4]bool{
-			caq.withCoupon != nil,
-			caq.withSubscription != nil,
-			caq.withSubscriptionLineItem != nil,
-			caq.withCouponApplications != nil,
+			_q.withCoupon != nil,
+			_q.withSubscription != nil,
+			_q.withSubscriptionLineItem != nil,
+			_q.withCouponApplications != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*CouponAssociation).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &CouponAssociation{config: caq.config}
+		node := &CouponAssociation{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -498,32 +498,32 @@ func (caq *CouponAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, caq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := caq.withCoupon; query != nil {
-		if err := caq.loadCoupon(ctx, query, nodes, nil,
+	if query := _q.withCoupon; query != nil {
+		if err := _q.loadCoupon(ctx, query, nodes, nil,
 			func(n *CouponAssociation, e *Coupon) { n.Edges.Coupon = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := caq.withSubscription; query != nil {
-		if err := caq.loadSubscription(ctx, query, nodes, nil,
+	if query := _q.withSubscription; query != nil {
+		if err := _q.loadSubscription(ctx, query, nodes, nil,
 			func(n *CouponAssociation, e *Subscription) { n.Edges.Subscription = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := caq.withSubscriptionLineItem; query != nil {
-		if err := caq.loadSubscriptionLineItem(ctx, query, nodes, nil,
+	if query := _q.withSubscriptionLineItem; query != nil {
+		if err := _q.loadSubscriptionLineItem(ctx, query, nodes, nil,
 			func(n *CouponAssociation, e *SubscriptionLineItem) { n.Edges.SubscriptionLineItem = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := caq.withCouponApplications; query != nil {
-		if err := caq.loadCouponApplications(ctx, query, nodes,
+	if query := _q.withCouponApplications; query != nil {
+		if err := _q.loadCouponApplications(ctx, query, nodes,
 			func(n *CouponAssociation) { n.Edges.CouponApplications = []*CouponApplication{} },
 			func(n *CouponAssociation, e *CouponApplication) {
 				n.Edges.CouponApplications = append(n.Edges.CouponApplications, e)
@@ -534,7 +534,7 @@ func (caq *CouponAssociationQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	return nodes, nil
 }
 
-func (caq *CouponAssociationQuery) loadCoupon(ctx context.Context, query *CouponQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *Coupon)) error {
+func (_q *CouponAssociationQuery) loadCoupon(ctx context.Context, query *CouponQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *Coupon)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CouponAssociation)
 	for i := range nodes {
@@ -563,7 +563,7 @@ func (caq *CouponAssociationQuery) loadCoupon(ctx context.Context, query *Coupon
 	}
 	return nil
 }
-func (caq *CouponAssociationQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *Subscription)) error {
+func (_q *CouponAssociationQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *Subscription)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CouponAssociation)
 	for i := range nodes {
@@ -592,7 +592,7 @@ func (caq *CouponAssociationQuery) loadSubscription(ctx context.Context, query *
 	}
 	return nil
 }
-func (caq *CouponAssociationQuery) loadSubscriptionLineItem(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *SubscriptionLineItem)) error {
+func (_q *CouponAssociationQuery) loadSubscriptionLineItem(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *SubscriptionLineItem)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CouponAssociation)
 	for i := range nodes {
@@ -624,7 +624,7 @@ func (caq *CouponAssociationQuery) loadSubscriptionLineItem(ctx context.Context,
 	}
 	return nil
 }
-func (caq *CouponAssociationQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *CouponApplication)) error {
+func (_q *CouponAssociationQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*CouponAssociation, init func(*CouponAssociation), assign func(*CouponAssociation, *CouponApplication)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
 	byID := make(map[string]*CouponAssociation)
 	nids := make(map[string]map[*CouponAssociation]struct{})
@@ -686,24 +686,24 @@ func (caq *CouponAssociationQuery) loadCouponApplications(ctx context.Context, q
 	return nil
 }
 
-func (caq *CouponAssociationQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := caq.querySpec()
-	_spec.Node.Columns = caq.ctx.Fields
-	if len(caq.ctx.Fields) > 0 {
-		_spec.Unique = caq.ctx.Unique != nil && *caq.ctx.Unique
+func (_q *CouponAssociationQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, caq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (caq *CouponAssociationQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *CouponAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(couponassociation.Table, couponassociation.Columns, sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString))
-	_spec.From = caq.sql
-	if unique := caq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if caq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := caq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, couponassociation.FieldID)
 		for i := range fields {
@@ -711,30 +711,30 @@ func (caq *CouponAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if caq.withCoupon != nil {
+		if _q.withCoupon != nil {
 			_spec.Node.AddColumnOnce(couponassociation.FieldCouponID)
 		}
-		if caq.withSubscription != nil {
+		if _q.withSubscription != nil {
 			_spec.Node.AddColumnOnce(couponassociation.FieldSubscriptionID)
 		}
-		if caq.withSubscriptionLineItem != nil {
+		if _q.withSubscriptionLineItem != nil {
 			_spec.Node.AddColumnOnce(couponassociation.FieldSubscriptionLineItemID)
 		}
 	}
-	if ps := caq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := caq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := caq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := caq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -744,33 +744,33 @@ func (caq *CouponAssociationQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (caq *CouponAssociationQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(caq.driver.Dialect())
+func (_q *CouponAssociationQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(couponassociation.Table)
-	columns := caq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = couponassociation.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if caq.sql != nil {
-		selector = caq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if caq.ctx.Unique != nil && *caq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range caq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range caq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := caq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := caq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -783,41 +783,41 @@ type CouponAssociationGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (cagb *CouponAssociationGroupBy) Aggregate(fns ...AggregateFunc) *CouponAssociationGroupBy {
-	cagb.fns = append(cagb.fns, fns...)
-	return cagb
+func (_g *CouponAssociationGroupBy) Aggregate(fns ...AggregateFunc) *CouponAssociationGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cagb *CouponAssociationGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cagb.build.ctx, ent.OpQueryGroupBy)
-	if err := cagb.build.prepareQuery(ctx); err != nil {
+func (_g *CouponAssociationGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CouponAssociationQuery, *CouponAssociationGroupBy](ctx, cagb.build, cagb, cagb.build.inters, v)
+	return scanWithInterceptors[*CouponAssociationQuery, *CouponAssociationGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (cagb *CouponAssociationGroupBy) sqlScan(ctx context.Context, root *CouponAssociationQuery, v any) error {
+func (_g *CouponAssociationGroupBy) sqlScan(ctx context.Context, root *CouponAssociationQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(cagb.fns))
-	for _, fn := range cagb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*cagb.flds)+len(cagb.fns))
-		for _, f := range *cagb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*cagb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cagb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -831,27 +831,27 @@ type CouponAssociationSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (cas *CouponAssociationSelect) Aggregate(fns ...AggregateFunc) *CouponAssociationSelect {
-	cas.fns = append(cas.fns, fns...)
-	return cas
+func (_s *CouponAssociationSelect) Aggregate(fns ...AggregateFunc) *CouponAssociationSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cas *CouponAssociationSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cas.ctx, ent.OpQuerySelect)
-	if err := cas.prepareQuery(ctx); err != nil {
+func (_s *CouponAssociationSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CouponAssociationQuery, *CouponAssociationSelect](ctx, cas.CouponAssociationQuery, cas, cas.inters, v)
+	return scanWithInterceptors[*CouponAssociationQuery, *CouponAssociationSelect](ctx, _s.CouponAssociationQuery, _s, _s.inters, v)
 }
 
-func (cas *CouponAssociationSelect) sqlScan(ctx context.Context, root *CouponAssociationQuery, v any) error {
+func (_s *CouponAssociationSelect) sqlScan(ctx context.Context, root *CouponAssociationQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(cas.fns))
-	for _, fn := range cas.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*cas.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -859,7 +859,7 @@ func (cas *CouponAssociationSelect) sqlScan(ctx context.Context, root *CouponAss
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cas.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

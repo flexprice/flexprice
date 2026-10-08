@@ -23,73 +23,73 @@ type AuthUpdate struct {
 }
 
 // Where appends a list predicates to the AuthUpdate builder.
-func (au *AuthUpdate) Where(ps ...predicate.Auth) *AuthUpdate {
-	au.mutation.Where(ps...)
-	return au
+func (_u *AuthUpdate) Where(ps ...predicate.Auth) *AuthUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetProvider sets the "provider" field.
-func (au *AuthUpdate) SetProvider(s string) *AuthUpdate {
-	au.mutation.SetProvider(s)
-	return au
+func (_u *AuthUpdate) SetProvider(v string) *AuthUpdate {
+	_u.mutation.SetProvider(v)
+	return _u
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (au *AuthUpdate) SetNillableProvider(s *string) *AuthUpdate {
-	if s != nil {
-		au.SetProvider(*s)
+func (_u *AuthUpdate) SetNillableProvider(v *string) *AuthUpdate {
+	if v != nil {
+		_u.SetProvider(*v)
 	}
-	return au
+	return _u
 }
 
 // SetToken sets the "token" field.
-func (au *AuthUpdate) SetToken(s string) *AuthUpdate {
-	au.mutation.SetToken(s)
-	return au
+func (_u *AuthUpdate) SetToken(v string) *AuthUpdate {
+	_u.mutation.SetToken(v)
+	return _u
 }
 
 // SetNillableToken sets the "token" field if the given value is not nil.
-func (au *AuthUpdate) SetNillableToken(s *string) *AuthUpdate {
-	if s != nil {
-		au.SetToken(*s)
+func (_u *AuthUpdate) SetNillableToken(v *string) *AuthUpdate {
+	if v != nil {
+		_u.SetToken(*v)
 	}
-	return au
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (au *AuthUpdate) SetStatus(s string) *AuthUpdate {
-	au.mutation.SetStatus(s)
-	return au
+func (_u *AuthUpdate) SetStatus(v string) *AuthUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (au *AuthUpdate) SetNillableStatus(s *string) *AuthUpdate {
-	if s != nil {
-		au.SetStatus(*s)
+func (_u *AuthUpdate) SetNillableStatus(v *string) *AuthUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return au
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (au *AuthUpdate) SetUpdatedAt(t time.Time) *AuthUpdate {
-	au.mutation.SetUpdatedAt(t)
-	return au
+func (_u *AuthUpdate) SetUpdatedAt(v time.Time) *AuthUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the AuthMutation object of the builder.
-func (au *AuthUpdate) Mutation() *AuthMutation {
-	return au.mutation
+func (_u *AuthUpdate) Mutation() *AuthMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (au *AuthUpdate) Save(ctx context.Context) (int, error) {
-	au.defaults()
-	return withHooks(ctx, au.sqlSave, au.mutation, au.hooks)
+func (_u *AuthUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (au *AuthUpdate) SaveX(ctx context.Context) int {
-	affected, err := au.Save(ctx)
+func (_u *AuthUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -97,34 +97,34 @@ func (au *AuthUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (au *AuthUpdate) Exec(ctx context.Context) error {
-	_, err := au.Save(ctx)
+func (_u *AuthUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (au *AuthUpdate) ExecX(ctx context.Context) {
-	if err := au.Exec(ctx); err != nil {
+func (_u *AuthUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (au *AuthUpdate) defaults() {
-	if _, ok := au.mutation.UpdatedAt(); !ok {
+func (_u *AuthUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := auth.UpdateDefaultUpdatedAt()
-		au.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (au *AuthUpdate) check() error {
-	if v, ok := au.mutation.Provider(); ok {
+func (_u *AuthUpdate) check() error {
+	if v, ok := _u.mutation.Provider(); ok {
 		if err := auth.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Auth.provider": %w`, err)}
 		}
 	}
-	if v, ok := au.mutation.Token(); ok {
+	if v, ok := _u.mutation.Token(); ok {
 		if err := auth.TokenValidator(v); err != nil {
 			return &ValidationError{Name: "token", err: fmt.Errorf(`ent: validator failed for field "Auth.token": %w`, err)}
 		}
@@ -132,31 +132,31 @@ func (au *AuthUpdate) check() error {
 	return nil
 }
 
-func (au *AuthUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := au.check(); err != nil {
-		return n, err
+func (_u *AuthUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(auth.Table, auth.Columns, sqlgraph.NewFieldSpec(auth.FieldID, field.TypeInt))
-	if ps := au.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := au.mutation.Provider(); ok {
+	if value, ok := _u.mutation.Provider(); ok {
 		_spec.SetField(auth.FieldProvider, field.TypeString, value)
 	}
-	if value, ok := au.mutation.Token(); ok {
+	if value, ok := _u.mutation.Token(); ok {
 		_spec.SetField(auth.FieldToken, field.TypeString, value)
 	}
-	if value, ok := au.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(auth.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := au.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(auth.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, au.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{auth.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -164,8 +164,8 @@ func (au *AuthUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	au.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // AuthUpdateOne is the builder for updating a single Auth entity.
@@ -177,80 +177,80 @@ type AuthUpdateOne struct {
 }
 
 // SetProvider sets the "provider" field.
-func (auo *AuthUpdateOne) SetProvider(s string) *AuthUpdateOne {
-	auo.mutation.SetProvider(s)
-	return auo
+func (_u *AuthUpdateOne) SetProvider(v string) *AuthUpdateOne {
+	_u.mutation.SetProvider(v)
+	return _u
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (auo *AuthUpdateOne) SetNillableProvider(s *string) *AuthUpdateOne {
-	if s != nil {
-		auo.SetProvider(*s)
+func (_u *AuthUpdateOne) SetNillableProvider(v *string) *AuthUpdateOne {
+	if v != nil {
+		_u.SetProvider(*v)
 	}
-	return auo
+	return _u
 }
 
 // SetToken sets the "token" field.
-func (auo *AuthUpdateOne) SetToken(s string) *AuthUpdateOne {
-	auo.mutation.SetToken(s)
-	return auo
+func (_u *AuthUpdateOne) SetToken(v string) *AuthUpdateOne {
+	_u.mutation.SetToken(v)
+	return _u
 }
 
 // SetNillableToken sets the "token" field if the given value is not nil.
-func (auo *AuthUpdateOne) SetNillableToken(s *string) *AuthUpdateOne {
-	if s != nil {
-		auo.SetToken(*s)
+func (_u *AuthUpdateOne) SetNillableToken(v *string) *AuthUpdateOne {
+	if v != nil {
+		_u.SetToken(*v)
 	}
-	return auo
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (auo *AuthUpdateOne) SetStatus(s string) *AuthUpdateOne {
-	auo.mutation.SetStatus(s)
-	return auo
+func (_u *AuthUpdateOne) SetStatus(v string) *AuthUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (auo *AuthUpdateOne) SetNillableStatus(s *string) *AuthUpdateOne {
-	if s != nil {
-		auo.SetStatus(*s)
+func (_u *AuthUpdateOne) SetNillableStatus(v *string) *AuthUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return auo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (auo *AuthUpdateOne) SetUpdatedAt(t time.Time) *AuthUpdateOne {
-	auo.mutation.SetUpdatedAt(t)
-	return auo
+func (_u *AuthUpdateOne) SetUpdatedAt(v time.Time) *AuthUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the AuthMutation object of the builder.
-func (auo *AuthUpdateOne) Mutation() *AuthMutation {
-	return auo.mutation
+func (_u *AuthUpdateOne) Mutation() *AuthMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the AuthUpdate builder.
-func (auo *AuthUpdateOne) Where(ps ...predicate.Auth) *AuthUpdateOne {
-	auo.mutation.Where(ps...)
-	return auo
+func (_u *AuthUpdateOne) Where(ps ...predicate.Auth) *AuthUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (auo *AuthUpdateOne) Select(field string, fields ...string) *AuthUpdateOne {
-	auo.fields = append([]string{field}, fields...)
-	return auo
+func (_u *AuthUpdateOne) Select(field string, fields ...string) *AuthUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Auth entity.
-func (auo *AuthUpdateOne) Save(ctx context.Context) (*Auth, error) {
-	auo.defaults()
-	return withHooks(ctx, auo.sqlSave, auo.mutation, auo.hooks)
+func (_u *AuthUpdateOne) Save(ctx context.Context) (*Auth, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (auo *AuthUpdateOne) SaveX(ctx context.Context) *Auth {
-	node, err := auo.Save(ctx)
+func (_u *AuthUpdateOne) SaveX(ctx context.Context) *Auth {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -258,34 +258,34 @@ func (auo *AuthUpdateOne) SaveX(ctx context.Context) *Auth {
 }
 
 // Exec executes the query on the entity.
-func (auo *AuthUpdateOne) Exec(ctx context.Context) error {
-	_, err := auo.Save(ctx)
+func (_u *AuthUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (auo *AuthUpdateOne) ExecX(ctx context.Context) {
-	if err := auo.Exec(ctx); err != nil {
+func (_u *AuthUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (auo *AuthUpdateOne) defaults() {
-	if _, ok := auo.mutation.UpdatedAt(); !ok {
+func (_u *AuthUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := auth.UpdateDefaultUpdatedAt()
-		auo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (auo *AuthUpdateOne) check() error {
-	if v, ok := auo.mutation.Provider(); ok {
+func (_u *AuthUpdateOne) check() error {
+	if v, ok := _u.mutation.Provider(); ok {
 		if err := auth.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Auth.provider": %w`, err)}
 		}
 	}
-	if v, ok := auo.mutation.Token(); ok {
+	if v, ok := _u.mutation.Token(); ok {
 		if err := auth.TokenValidator(v); err != nil {
 			return &ValidationError{Name: "token", err: fmt.Errorf(`ent: validator failed for field "Auth.token": %w`, err)}
 		}
@@ -293,17 +293,17 @@ func (auo *AuthUpdateOne) check() error {
 	return nil
 }
 
-func (auo *AuthUpdateOne) sqlSave(ctx context.Context) (_node *Auth, err error) {
-	if err := auo.check(); err != nil {
+func (_u *AuthUpdateOne) sqlSave(ctx context.Context) (_node *Auth, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(auth.Table, auth.Columns, sqlgraph.NewFieldSpec(auth.FieldID, field.TypeInt))
-	id, ok := auo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Auth.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := auo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, auth.FieldID)
 		for _, f := range fields {
@@ -315,29 +315,29 @@ func (auo *AuthUpdateOne) sqlSave(ctx context.Context) (_node *Auth, err error) 
 			}
 		}
 	}
-	if ps := auo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := auo.mutation.Provider(); ok {
+	if value, ok := _u.mutation.Provider(); ok {
 		_spec.SetField(auth.FieldProvider, field.TypeString, value)
 	}
-	if value, ok := auo.mutation.Token(); ok {
+	if value, ok := _u.mutation.Token(); ok {
 		_spec.SetField(auth.FieldToken, field.TypeString, value)
 	}
-	if value, ok := auo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(auth.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := auo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(auth.FieldUpdatedAt, field.TypeTime, value)
 	}
-	_node = &Auth{config: auo.config}
+	_node = &Auth{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, auo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{auth.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -345,6 +345,6 @@ func (auo *AuthUpdateOne) sqlSave(ctx context.Context) (_node *Auth, err error) 
 		}
 		return nil, err
 	}
-	auo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

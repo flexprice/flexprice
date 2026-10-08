@@ -54,17 +54,17 @@ func toPortalCheckoutSession(resp *dto.CheckoutSessionResponse) *dto.PortalCheck
 
 	gateway, _ := resp.PaymentProvider.ToPaymentGateway()
 	return &dto.PortalCheckoutSessionResponse{
-		Terminal:          resp.Terminal,
-		ID:                resp.ID,
-		CheckoutStatus:    resp.CheckoutStatus,
-		PaymentProvider:   gateway,
-		PaymentAction:     resp.PaymentAction,
-		CheckoutInvoiceID: resp.CheckoutInvoiceID,
-		CheckoutPaymentID: resp.CheckoutPaymentID,
-		ExpiresAt:         resp.ExpiresAt,
-		CompletedAt:       resp.CompletedAt,
-		CancelledAt:       resp.CancelledAt,
-		FailureReason:     resp.FailureReason,
+		Terminal:             resp.Terminal,
+		ID:                   resp.ID,
+		CheckoutStatus:       resp.CheckoutStatus,
+		PaymentProvider:      gateway,
+		PaymentAction:        resp.PaymentAction,
+		CheckoutInvoiceID:    resp.CheckoutInvoiceID,
+		CheckoutPaymentID:    resp.CheckoutPaymentID,
+		ExpiresAt:            resp.ExpiresAt,
+		CompletedAt:          resp.CompletedAt,
+		CancelledAt:          resp.CancelledAt,
+		FailureReason:        resp.FailureReason,
 		EntityCreationResult: resp.EntityCreationResult,
 	}
 }

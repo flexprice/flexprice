@@ -31,7 +31,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToTabs(ctx context.Context, input mod
 	tabsIntegration, err := a.integrationFactory.GetTabsIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			return temporal.NewNonRetryableApplicationError("Tabs connection not configured", "ConnectionNotFound", err)
+			return temporal.NewNonRetryableApplicationError("Tabs connection not configured", ierr.ErrConnectionNotFound, err)
 		}
 		a.logger.Error(ctx, "SyncInvoiceToTabs activity failed to get Tabs integration",
 			"error", err,

@@ -27,8 +27,11 @@ type SubscriptionScheduleResponse struct {
 	// status is the current status of the schedule
 	Status types.ScheduleStatus `json:"status"`
 
-	// configuration contains type-specific configuration (e.g., target_plan_id for plan changes)
+	// configuration is the raw type-specific configuration. Deprecated: use configuration_details.
 	Configuration map[string]interface{} `json:"configuration,omitempty"`
+
+	// configuration_details is the typed counterpart of configuration
+	ConfigurationDetails *ConfigurationDetails `json:"configuration_details,omitempty"`
 
 	// executed_at is when the schedule was executed
 	ExecutedAt *time.Time `json:"executed_at,omitempty"`
@@ -36,8 +39,11 @@ type SubscriptionScheduleResponse struct {
 	// cancelled_at is when the schedule was cancelled
 	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 
-	// execution_result contains type-specific execution result
+	// execution_result is the raw type-specific execution result. Deprecated: use execution_details.
 	ExecutionResult map[string]interface{} `json:"execution_result,omitempty"`
+
+	// execution_details is the typed counterpart of execution_result
+	ExecutionDetails *ExecutionDetails `json:"execution_details,omitempty"`
 
 	// error_message contains the error if execution failed
 	ErrorMessage *string `json:"error_message,omitempty"`
@@ -56,6 +62,34 @@ type SubscriptionScheduleResponse struct {
 
 	// updated_at timestamp
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ConfigurationDetails holds one typed object per schedule type; only the one matching schedule_type is set.
+type ConfigurationDetails struct {
+	PlanChange *PlanChangeScheduleDetails `json:"plan_change,omitempty"`
+}
+
+// PlanChangeScheduleDetails is the typed view of a plan_change schedule.
+type PlanChangeScheduleDetails struct {
+	TargetPlanID           string                            `json:"target_plan_id"`
+	BillingPeriodBehaviour types.BillingPeriodBehaviour      `json:"billing_period_behaviour,omitempty"`
+	EntityPolicies         *SubscriptionChangeEntityPolicies `json:"entity_policies,omitempty"`
+}
+
+// ExecutionDetails holds one typed result per schedule type; set once the schedule has executed.
+type ExecutionDetails struct {
+	PlanChange *PlanChangeScheduleResult `json:"plan_change,omitempty"`
+}
+
+type PlanChangeScheduleResult struct {
+	SubscriptionID string `json:"subscription_id"`
+
+	// previous_subscription_id is set when the change replaced the subscription with a new one
+	PreviousSubscriptionID string    `json:"previous_subscription_id,omitempty"`
+	FromPlanID             string    `json:"from_plan_id,omitempty"`
+	ToPlanID               string    `json:"to_plan_id,omitempty"`
+	ChangeType             string    `json:"change_type"`
+	EffectiveDate          time.Time `json:"effective_date"`
 }
 
 // GetPendingSchedulesResponse represents a list of pending schedules
@@ -135,11 +169,23 @@ func SubscriptionScheduleResponseFromDomain(s *subscription.SubscriptionSchedule
 			if m, err := utils.ToMap(v2Config); err == nil {
 				response.Configuration = m
 			}
+			response.ConfigurationDetails = &ConfigurationDetails{PlanChange: &PlanChangeScheduleDetails{
+				TargetPlanID:           v2Config.TargetPlanID,
+				BillingPeriodBehaviour: v2Config.BillingPeriodBehaviour,
+				EntityPolicies:         entityPoliciesFromDomain(v2Config.EntityPolicies),
+			}}
 			if s.ExecutionResult != nil {
 				if result, err := s.GetPlanChangeV2Result(); err == nil {
 					if m, err := utils.ToMap(result); err == nil {
 						response.ExecutionResult = m
 					}
+					response.ExecutionDetails = &ExecutionDetails{PlanChange: &PlanChangeScheduleResult{
+						SubscriptionID: result.SubscriptionID,
+						FromPlanID:     result.FromPlanID,
+						ToPlanID:       result.ToPlanID,
+						ChangeType:     result.ChangeType,
+						EffectiveDate:  result.EffectiveDate,
+					}}
 				}
 			}
 		default:
@@ -147,18 +193,40 @@ func SubscriptionScheduleResponseFromDomain(s *subscription.SubscriptionSchedule
 				if m, err := utils.ToMap(config); err == nil {
 					response.Configuration = m
 				}
+				response.ConfigurationDetails = &ConfigurationDetails{PlanChange: &PlanChangeScheduleDetails{
+					TargetPlanID: config.TargetPlanID,
+				}}
 			}
 			if s.ExecutionResult != nil {
 				if result, err := s.GetPlanChangeResult(); err == nil {
 					if m, err := utils.ToMap(result); err == nil {
 						response.ExecutionResult = m
 					}
+					response.ExecutionDetails = &ExecutionDetails{PlanChange: &PlanChangeScheduleResult{
+						SubscriptionID:         result.NewSubscriptionID,
+						PreviousSubscriptionID: result.OldSubscriptionID,
+						ChangeType:             result.ChangeType,
+						EffectiveDate:          result.EffectiveDate,
+					}}
 				}
 			}
 		}
 	}
 
 	return response
+}
+
+func entityPoliciesFromDomain(p *subscription.EntityChangePoliciesConfig) *SubscriptionChangeEntityPolicies {
+	if p == nil || p.Addons == nil {
+		return nil
+	}
+
+	return &SubscriptionChangeEntityPolicies{
+		Addons: &EntityChangePolicy{
+			DefaultBehaviour: p.Addons.DefaultBehaviour,
+			Overrides:        p.Addons.Overrides,
+		},
+	}
 }
 
 // SubscriptionScheduleListResponseFromDomain converts a list of domain schedules to DTOs

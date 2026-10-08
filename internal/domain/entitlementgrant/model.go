@@ -20,14 +20,16 @@ type EntitlementGrant struct {
 	ScopeEntityType     types.EntitlementGrantScopeEntityType `json:"scope_entity_type"`
 	ScopeEntityID       string                                `json:"scope_entity_id"`
 	Measure             types.EntitlementGrantMeasure         `json:"measure"`
+	Unlimited           bool                                  `json:"unlimited"`
 	Quota               decimal.Decimal                       `json:"quota"`
 	Usage               decimal.Decimal                       `json:"usage"`
 	ValidFrom           time.Time                             `json:"valid_from"`
 	ValidTo             time.Time                             `json:"valid_to"`
 	GrantStatus         types.EntitlementGrantStatus          `json:"grant_status"`
 	LastComputedAt      *time.Time                            `json:"last_computed_at,omitempty"`
-	// QuotaCrossedAt is set once, when the evaluator first sees usage >= quota
-	// It holds the evaluation time, not the exact event-level crossing.
+	// QuotaCrossedAt is set once, when the evaluator first sees usage >= quota. It holds
+	// the evaluation time, not the exact event-level crossing — the interval billing lane
+	// forgives whatever was consumed between the two.
 	QuotaCrossedAt *time.Time     `json:"quota_crossed_at,omitempty"`
 	Metadata       types.Metadata `json:"metadata,omitempty"`
 	EnvironmentID  string         `json:"environment_id"`
@@ -57,24 +59,19 @@ func (g *EntitlementGrant) GetID() string {
 	return g.ID
 }
 
-// Window returns the half-open [valid_from, valid_to) grant window.
-func (g *EntitlementGrant) Window() (time.Time, time.Time) {
-	if g == nil {
-		return time.Time{}, time.Time{}
-	}
-	return g.ValidFrom, g.ValidTo
-}
-
-func (g *EntitlementGrant) IsExhausted() bool {
-	if g == nil {
+func (g *EntitlementGrant) IsExhausted(usage decimal.Decimal) bool {
+	if g == nil || g.Unlimited {
 		return false
 	}
-	return g.Usage.GreaterThanOrEqual(g.Quota)
+	if !g.Quota.IsPositive() {
+		return true
+	}
+	return usage.GreaterThanOrEqual(g.Quota)
 }
 
 // Overage is the non-negative excess of usage over quota.
 func (g *EntitlementGrant) Overage() decimal.Decimal {
-	if g == nil {
+	if g == nil || g.Unlimited {
 		return decimal.Zero
 	}
 	over := g.Usage.Sub(g.Quota)
@@ -84,17 +81,16 @@ func (g *EntitlementGrant) Overage() decimal.Decimal {
 	return over
 }
 
-// Remaining is the unspent balance, clamped at zero. The mirror of Overage: a window that
-// ran past its quota hands nothing forward, so debt never crosses into a successor.
-func (g *EntitlementGrant) Remaining() decimal.Decimal {
-	if g == nil {
-		return decimal.Zero
+func (g *EntitlementGrant) Remaining() (decimal.Decimal, bool) {
+	if g == nil || g.Unlimited {
+		return decimal.Zero, false
 	}
 	remaining := g.Quota.Sub(g.Usage)
 	if remaining.IsNegative() {
-		return decimal.Zero
+		// Exhausted, not unbounded: the ceiling exists, it has been passed.
+		return decimal.Zero, true
 	}
-	return remaining
+	return remaining, true
 }
 
 func (g *EntitlementGrant) Validate() error {
@@ -130,9 +126,8 @@ func (g *EntitlementGrant) Validate() error {
 			WithHint("Set measure to quantity or amount").
 			Mark(ierr.ErrValidation)
 	}
-	// Zero is legal: a successor whose predecessor was spent carries no balance and
-	// exists only to hold the slot on a live config. Negative never is.
-	if g.Quota.IsNegative() {
+
+	if !g.Unlimited && g.Quota.IsNegative() {
 		return ierr.NewError("quota cannot be negative").
 			WithReportableDetails(map[string]interface{}{"quota": g.Quota.String()}).
 			Mark(ierr.ErrValidation)
@@ -172,6 +167,7 @@ func FromEnt(e *ent.EntitlementGrant) *EntitlementGrant {
 		ScopeEntityID:       e.ScopeEntityID,
 		Measure:             e.Measure,
 		Quota:               e.Quota,
+		Unlimited:           e.Unlimited,
 		Usage:               e.Usage,
 		ValidFrom:           e.ValidFrom,
 		ValidTo:             e.ValidTo,

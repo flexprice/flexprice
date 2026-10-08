@@ -1,0 +1,64 @@
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled }}
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+# GCE global external Application Load Balancer.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "flexprice.gceIngressName" . }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+  annotations:
+    # The legacy class ANNOTATION, not spec.ingressClassName. GKE enables the
+    # httpLoadBalancing addon without necessarily creating a `gce` IngressClass
+    # object; with ingressClassName: gce and no such object, no controller claims
+    # the Ingress -- no events, no ADDRESS, nothing in the console. It looks like
+    # a stuck provision when provisioning was never attempted. kubectl warns the
+    # annotation is deprecated; that warning is expected here.
+    kubernetes.io/ingress.class: "gce"
+    {{- with $gce.globalStaticIpName }}
+    # Reserved global address, so the IP survives Ingress recreation and the DNS
+    # record stays valid. Without it the load balancer takes an ephemeral IP.
+    kubernetes.io/ingress.global-static-ip-name: {{ . | quote }}
+    {{- end }}
+    # With tls.mode=managed this must start as "true": Google validates a managed
+    # certificate over plain HTTP against the load balancer, so closing port 80
+    # before the load balancer is fully programmed prevents issuance. Provision
+    # with allowHttp: true, wait for the certificate to report Active, then set
+    # false in a second upgrade. tls.mode=certManager has no such constraint --
+    # DNS-01 never touches port 80, so false from the start is correct.
+    kubernetes.io/ingress.allow-http: {{ $gce.allowHttp | quote }}
+    networking.gke.io/v1beta1.FrontendConfig: {{ include "flexprice.gceIngressName" . }}
+    {{- if eq $gce.tls.mode "managed" }}
+    networking.gke.io/managed-certificates: {{ include "flexprice.gceIngressCertName" . }}
+    {{- end }}
+    {{- with $gce.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if eq $gce.tls.mode "certManager" }}
+  tls:
+    - hosts:
+        {{- range include "flexprice.gceIngressHosts" . | fromYamlArray }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ include "flexprice.gceIngressSecretName" . }}
+  {{- end }}
+  rules:
+    {{- range include "flexprice.gceIngressRules" . | fromYamlArray }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          # ImplementationSpecific + /* is the GCE-native form. pathType Prefix
+          # with path / also works, but /* matches what the GCE controller emits
+          # and keeps the rendered url-map identical to a hand-written one.
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ .service }}
+                port:
+                  number: {{ .port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

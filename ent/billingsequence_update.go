@@ -23,80 +23,80 @@ type BillingSequenceUpdate struct {
 }
 
 // Where appends a list predicates to the BillingSequenceUpdate builder.
-func (bsu *BillingSequenceUpdate) Where(ps ...predicate.BillingSequence) *BillingSequenceUpdate {
-	bsu.mutation.Where(ps...)
-	return bsu
+func (_u *BillingSequenceUpdate) Where(ps ...predicate.BillingSequence) *BillingSequenceUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (bsu *BillingSequenceUpdate) SetTenantID(s string) *BillingSequenceUpdate {
-	bsu.mutation.SetTenantID(s)
-	return bsu
+func (_u *BillingSequenceUpdate) SetTenantID(v string) *BillingSequenceUpdate {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (bsu *BillingSequenceUpdate) SetNillableTenantID(s *string) *BillingSequenceUpdate {
-	if s != nil {
-		bsu.SetTenantID(*s)
+func (_u *BillingSequenceUpdate) SetNillableTenantID(v *string) *BillingSequenceUpdate {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return bsu
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (bsu *BillingSequenceUpdate) SetSubscriptionID(s string) *BillingSequenceUpdate {
-	bsu.mutation.SetSubscriptionID(s)
-	return bsu
+func (_u *BillingSequenceUpdate) SetSubscriptionID(v string) *BillingSequenceUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (bsu *BillingSequenceUpdate) SetNillableSubscriptionID(s *string) *BillingSequenceUpdate {
-	if s != nil {
-		bsu.SetSubscriptionID(*s)
+func (_u *BillingSequenceUpdate) SetNillableSubscriptionID(v *string) *BillingSequenceUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return bsu
+	return _u
 }
 
 // SetLastSequence sets the "last_sequence" field.
-func (bsu *BillingSequenceUpdate) SetLastSequence(i int) *BillingSequenceUpdate {
-	bsu.mutation.ResetLastSequence()
-	bsu.mutation.SetLastSequence(i)
-	return bsu
+func (_u *BillingSequenceUpdate) SetLastSequence(v int) *BillingSequenceUpdate {
+	_u.mutation.ResetLastSequence()
+	_u.mutation.SetLastSequence(v)
+	return _u
 }
 
 // SetNillableLastSequence sets the "last_sequence" field if the given value is not nil.
-func (bsu *BillingSequenceUpdate) SetNillableLastSequence(i *int) *BillingSequenceUpdate {
-	if i != nil {
-		bsu.SetLastSequence(*i)
+func (_u *BillingSequenceUpdate) SetNillableLastSequence(v *int) *BillingSequenceUpdate {
+	if v != nil {
+		_u.SetLastSequence(*v)
 	}
-	return bsu
+	return _u
 }
 
-// AddLastSequence adds i to the "last_sequence" field.
-func (bsu *BillingSequenceUpdate) AddLastSequence(i int) *BillingSequenceUpdate {
-	bsu.mutation.AddLastSequence(i)
-	return bsu
+// AddLastSequence adds value to the "last_sequence" field.
+func (_u *BillingSequenceUpdate) AddLastSequence(v int) *BillingSequenceUpdate {
+	_u.mutation.AddLastSequence(v)
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (bsu *BillingSequenceUpdate) SetUpdatedAt(t time.Time) *BillingSequenceUpdate {
-	bsu.mutation.SetUpdatedAt(t)
-	return bsu
+func (_u *BillingSequenceUpdate) SetUpdatedAt(v time.Time) *BillingSequenceUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the BillingSequenceMutation object of the builder.
-func (bsu *BillingSequenceUpdate) Mutation() *BillingSequenceMutation {
-	return bsu.mutation
+func (_u *BillingSequenceUpdate) Mutation() *BillingSequenceMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (bsu *BillingSequenceUpdate) Save(ctx context.Context) (int, error) {
-	bsu.defaults()
-	return withHooks(ctx, bsu.sqlSave, bsu.mutation, bsu.hooks)
+func (_u *BillingSequenceUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (bsu *BillingSequenceUpdate) SaveX(ctx context.Context) int {
-	affected, err := bsu.Save(ctx)
+func (_u *BillingSequenceUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -104,34 +104,34 @@ func (bsu *BillingSequenceUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (bsu *BillingSequenceUpdate) Exec(ctx context.Context) error {
-	_, err := bsu.Save(ctx)
+func (_u *BillingSequenceUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (bsu *BillingSequenceUpdate) ExecX(ctx context.Context) {
-	if err := bsu.Exec(ctx); err != nil {
+func (_u *BillingSequenceUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (bsu *BillingSequenceUpdate) defaults() {
-	if _, ok := bsu.mutation.UpdatedAt(); !ok {
+func (_u *BillingSequenceUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := billingsequence.UpdateDefaultUpdatedAt()
-		bsu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (bsu *BillingSequenceUpdate) check() error {
-	if v, ok := bsu.mutation.TenantID(); ok {
+func (_u *BillingSequenceUpdate) check() error {
+	if v, ok := _u.mutation.TenantID(); ok {
 		if err := billingsequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.tenant_id": %w`, err)}
 		}
 	}
-	if v, ok := bsu.mutation.SubscriptionID(); ok {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := billingsequence.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.subscription_id": %w`, err)}
 		}
@@ -139,34 +139,34 @@ func (bsu *BillingSequenceUpdate) check() error {
 	return nil
 }
 
-func (bsu *BillingSequenceUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := bsu.check(); err != nil {
-		return n, err
+func (_u *BillingSequenceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(billingsequence.Table, billingsequence.Columns, sqlgraph.NewFieldSpec(billingsequence.FieldID, field.TypeInt))
-	if ps := bsu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := bsu.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(billingsequence.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := bsu.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(billingsequence.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := bsu.mutation.LastSequence(); ok {
+	if value, ok := _u.mutation.LastSequence(); ok {
 		_spec.SetField(billingsequence.FieldLastSequence, field.TypeInt, value)
 	}
-	if value, ok := bsu.mutation.AddedLastSequence(); ok {
+	if value, ok := _u.mutation.AddedLastSequence(); ok {
 		_spec.AddField(billingsequence.FieldLastSequence, field.TypeInt, value)
 	}
-	if value, ok := bsu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(billingsequence.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, bsu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{billingsequence.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -174,8 +174,8 @@ func (bsu *BillingSequenceUpdate) sqlSave(ctx context.Context) (n int, err error
 		}
 		return 0, err
 	}
-	bsu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // BillingSequenceUpdateOne is the builder for updating a single BillingSequence entity.
@@ -187,87 +187,87 @@ type BillingSequenceUpdateOne struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (bsuo *BillingSequenceUpdateOne) SetTenantID(s string) *BillingSequenceUpdateOne {
-	bsuo.mutation.SetTenantID(s)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) SetTenantID(v string) *BillingSequenceUpdateOne {
+	_u.mutation.SetTenantID(v)
+	return _u
 }
 
 // SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (bsuo *BillingSequenceUpdateOne) SetNillableTenantID(s *string) *BillingSequenceUpdateOne {
-	if s != nil {
-		bsuo.SetTenantID(*s)
+func (_u *BillingSequenceUpdateOne) SetNillableTenantID(v *string) *BillingSequenceUpdateOne {
+	if v != nil {
+		_u.SetTenantID(*v)
 	}
-	return bsuo
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (bsuo *BillingSequenceUpdateOne) SetSubscriptionID(s string) *BillingSequenceUpdateOne {
-	bsuo.mutation.SetSubscriptionID(s)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) SetSubscriptionID(v string) *BillingSequenceUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (bsuo *BillingSequenceUpdateOne) SetNillableSubscriptionID(s *string) *BillingSequenceUpdateOne {
-	if s != nil {
-		bsuo.SetSubscriptionID(*s)
+func (_u *BillingSequenceUpdateOne) SetNillableSubscriptionID(v *string) *BillingSequenceUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return bsuo
+	return _u
 }
 
 // SetLastSequence sets the "last_sequence" field.
-func (bsuo *BillingSequenceUpdateOne) SetLastSequence(i int) *BillingSequenceUpdateOne {
-	bsuo.mutation.ResetLastSequence()
-	bsuo.mutation.SetLastSequence(i)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) SetLastSequence(v int) *BillingSequenceUpdateOne {
+	_u.mutation.ResetLastSequence()
+	_u.mutation.SetLastSequence(v)
+	return _u
 }
 
 // SetNillableLastSequence sets the "last_sequence" field if the given value is not nil.
-func (bsuo *BillingSequenceUpdateOne) SetNillableLastSequence(i *int) *BillingSequenceUpdateOne {
-	if i != nil {
-		bsuo.SetLastSequence(*i)
+func (_u *BillingSequenceUpdateOne) SetNillableLastSequence(v *int) *BillingSequenceUpdateOne {
+	if v != nil {
+		_u.SetLastSequence(*v)
 	}
-	return bsuo
+	return _u
 }
 
-// AddLastSequence adds i to the "last_sequence" field.
-func (bsuo *BillingSequenceUpdateOne) AddLastSequence(i int) *BillingSequenceUpdateOne {
-	bsuo.mutation.AddLastSequence(i)
-	return bsuo
+// AddLastSequence adds value to the "last_sequence" field.
+func (_u *BillingSequenceUpdateOne) AddLastSequence(v int) *BillingSequenceUpdateOne {
+	_u.mutation.AddLastSequence(v)
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (bsuo *BillingSequenceUpdateOne) SetUpdatedAt(t time.Time) *BillingSequenceUpdateOne {
-	bsuo.mutation.SetUpdatedAt(t)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) SetUpdatedAt(v time.Time) *BillingSequenceUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the BillingSequenceMutation object of the builder.
-func (bsuo *BillingSequenceUpdateOne) Mutation() *BillingSequenceMutation {
-	return bsuo.mutation
+func (_u *BillingSequenceUpdateOne) Mutation() *BillingSequenceMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the BillingSequenceUpdate builder.
-func (bsuo *BillingSequenceUpdateOne) Where(ps ...predicate.BillingSequence) *BillingSequenceUpdateOne {
-	bsuo.mutation.Where(ps...)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) Where(ps ...predicate.BillingSequence) *BillingSequenceUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (bsuo *BillingSequenceUpdateOne) Select(field string, fields ...string) *BillingSequenceUpdateOne {
-	bsuo.fields = append([]string{field}, fields...)
-	return bsuo
+func (_u *BillingSequenceUpdateOne) Select(field string, fields ...string) *BillingSequenceUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated BillingSequence entity.
-func (bsuo *BillingSequenceUpdateOne) Save(ctx context.Context) (*BillingSequence, error) {
-	bsuo.defaults()
-	return withHooks(ctx, bsuo.sqlSave, bsuo.mutation, bsuo.hooks)
+func (_u *BillingSequenceUpdateOne) Save(ctx context.Context) (*BillingSequence, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (bsuo *BillingSequenceUpdateOne) SaveX(ctx context.Context) *BillingSequence {
-	node, err := bsuo.Save(ctx)
+func (_u *BillingSequenceUpdateOne) SaveX(ctx context.Context) *BillingSequence {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -275,34 +275,34 @@ func (bsuo *BillingSequenceUpdateOne) SaveX(ctx context.Context) *BillingSequenc
 }
 
 // Exec executes the query on the entity.
-func (bsuo *BillingSequenceUpdateOne) Exec(ctx context.Context) error {
-	_, err := bsuo.Save(ctx)
+func (_u *BillingSequenceUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (bsuo *BillingSequenceUpdateOne) ExecX(ctx context.Context) {
-	if err := bsuo.Exec(ctx); err != nil {
+func (_u *BillingSequenceUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (bsuo *BillingSequenceUpdateOne) defaults() {
-	if _, ok := bsuo.mutation.UpdatedAt(); !ok {
+func (_u *BillingSequenceUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := billingsequence.UpdateDefaultUpdatedAt()
-		bsuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (bsuo *BillingSequenceUpdateOne) check() error {
-	if v, ok := bsuo.mutation.TenantID(); ok {
+func (_u *BillingSequenceUpdateOne) check() error {
+	if v, ok := _u.mutation.TenantID(); ok {
 		if err := billingsequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.tenant_id": %w`, err)}
 		}
 	}
-	if v, ok := bsuo.mutation.SubscriptionID(); ok {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := billingsequence.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.subscription_id": %w`, err)}
 		}
@@ -310,17 +310,17 @@ func (bsuo *BillingSequenceUpdateOne) check() error {
 	return nil
 }
 
-func (bsuo *BillingSequenceUpdateOne) sqlSave(ctx context.Context) (_node *BillingSequence, err error) {
-	if err := bsuo.check(); err != nil {
+func (_u *BillingSequenceUpdateOne) sqlSave(ctx context.Context) (_node *BillingSequence, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(billingsequence.Table, billingsequence.Columns, sqlgraph.NewFieldSpec(billingsequence.FieldID, field.TypeInt))
-	id, ok := bsuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "BillingSequence.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := bsuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, billingsequence.FieldID)
 		for _, f := range fields {
@@ -332,32 +332,32 @@ func (bsuo *BillingSequenceUpdateOne) sqlSave(ctx context.Context) (_node *Billi
 			}
 		}
 	}
-	if ps := bsuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := bsuo.mutation.TenantID(); ok {
+	if value, ok := _u.mutation.TenantID(); ok {
 		_spec.SetField(billingsequence.FieldTenantID, field.TypeString, value)
 	}
-	if value, ok := bsuo.mutation.SubscriptionID(); ok {
+	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(billingsequence.FieldSubscriptionID, field.TypeString, value)
 	}
-	if value, ok := bsuo.mutation.LastSequence(); ok {
+	if value, ok := _u.mutation.LastSequence(); ok {
 		_spec.SetField(billingsequence.FieldLastSequence, field.TypeInt, value)
 	}
-	if value, ok := bsuo.mutation.AddedLastSequence(); ok {
+	if value, ok := _u.mutation.AddedLastSequence(); ok {
 		_spec.AddField(billingsequence.FieldLastSequence, field.TypeInt, value)
 	}
-	if value, ok := bsuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(billingsequence.FieldUpdatedAt, field.TypeTime, value)
 	}
-	_node = &BillingSequence{config: bsuo.config}
+	_node = &BillingSequence{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, bsuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{billingsequence.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -365,6 +365,6 @@ func (bsuo *BillingSequenceUpdateOne) sqlSave(ctx context.Context) (_node *Billi
 		}
 		return nil, err
 	}
-	bsuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

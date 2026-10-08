@@ -207,7 +207,7 @@ func (s *InvoiceSyncService) tryAutoCharge(
 		return false, nil
 	}
 
-	razorpayCustomerID, tokens, err := s.customerSvc.ListConfirmedCustomerTokens(ctx, inv.CustomerID)
+	razorpayCustomerID, tokens, err := s.customerSvc.ListCustomerTokens(ctx, inv.CustomerID)
 	if err != nil {
 		s.logger.Info(ctx, "failed to resolve Razorpay customer tokens, falling through to send invoice",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)

@@ -12,6 +12,11 @@ import (
 // validMeterUsageGroupByPattern matches safe property names (alphanumeric, underscores, dots).
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
+// maxMemoryUsageSetting mirrors the inline 90GB bound used by
+// GetEarliestUsageTimestamp/GetMeterUsageForExport/GetEventsByEventIDAndExternalCustomerID in
+// meter_usage.go (AGENTS.md: every ClickHouse query bounded by 90GB).
+const maxMemoryUsageSetting = "max_memory_usage = 96636764160"
+
 // BucketedGroupByDim describes one group_by dimension supported by the bucketed
 // query: "source" and "properties.X" only. Public so the repo's scan code can
 // read the alias / property name without re-parsing the input.
@@ -637,10 +642,8 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		args = append(args, result.ExternalCustomerID)
 	}
 	for propName, propValue := range result.Properties {
-		if propValue != "" {
-			where += " AND JSONExtractString(properties, ?) = ?"
-			args = append(args, propName, propValue)
-		}
+		where += " AND JSONExtractString(properties, ?) = ?"
+		args = append(args, propName, propValue)
 	}
 
 	selectCols := append([]string{fmt.Sprintf("%s AS window_start", windowExpr)}, aggColumns...)
@@ -654,6 +657,75 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		ORDER BY window_start ASC
 		%s
 	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, settings)
+
+	return query, args
+}
+
+// BuildUsageActivityQuery builds the distinct-customer probe the rollup scan
+// uses to find which customers received usage. It selects external_customer_id
+// because that is the column meter_usage has: there is no internal customer_id
+// on this table, and naming one compiles and fails only at runtime.
+//
+// It bounds `timestamp` as well as `ingested_at`: meter_usage is partitioned by
+// toYYYYMMDD(timestamp), so filtering on ingested_at alone reads every
+// partition the tenant has ever written.
+func (qb *MeterUsageQueryBuilder) BuildUsageActivityQuery(params *events.UsageActivityParams) (string, []interface{}) {
+	finalClause, finalSettings := qb.BuildFinalClause(params.UseFinal)
+	settings := "SETTINGS " + maxMemoryUsageSetting
+	if finalSettings != "" {
+		settings = finalSettings + ", " + maxMemoryUsageSetting
+	}
+
+	query := fmt.Sprintf(`
+		SELECT DISTINCT external_customer_id
+		FROM meter_usage %s
+		WHERE tenant_id = ? AND environment_id = ?
+			AND timestamp >= ?
+			AND ingested_at >= ?
+		%s
+	`, finalClause, settings)
+
+	return query, []interface{}{
+		params.TenantID, params.EnvironmentID, params.TimestampAfter, params.IngestedAfter,
+	}
+}
+
+// BuildDailyUsageQuery builds a per-day SUM(qty_total) query over
+// [StartTime, EndTime] for every meter in MeterIDs at once, tenant/env-scoped.
+// Reuses BuildDetailedWhereClause for RLS and BuildFinalClause for FINAL
+// handling so tenant/env injection and dedup semantics match the rest of the
+// engine. Grouping by meter is what lets one query serve a whole subscription.
+func (qb *MeterUsageQueryBuilder) BuildDailyUsageQuery(params *events.DailyUsageParams) (string, []interface{}) {
+	tz := normalizeCHTimezone(params.Timezone)
+	dayExpr := fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
+
+	detailedParams := &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            params.TenantID,
+		EnvironmentID:       params.EnvironmentID,
+		ExternalCustomerIDs: params.ExternalCustomerIDs,
+		MeterIDs:            params.MeterIDs,
+		StartTime:           params.StartTime,
+		EndTime:             params.EndTime,
+	}
+	where, args := qb.BuildDetailedWhereClause(detailedParams)
+	finalClause, finalSettings := qb.BuildFinalClause(params.UseFinal)
+
+	settings := "SETTINGS " + maxMemoryUsageSetting
+	if finalSettings != "" {
+		settings = finalSettings + ", " + maxMemoryUsageSetting
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			meter_id,
+			%s AS day,
+			SUM(qty_total) AS day_qty
+		FROM meter_usage %s
+		WHERE %s
+		GROUP BY meter_id, day
+		ORDER BY meter_id ASC, day ASC
+		%s
+	`, dayExpr, finalClause, where, settings)
 
 	return query, args
 }

@@ -67,6 +67,7 @@ type customerPortalService struct {
 	ServiceParams
 	customerService         CustomerService
 	revenueAnalyticsService RevenueAnalyticsService
+	paymentService          PaymentService
 }
 
 // NewCustomerPortalService creates a new customer portal service
@@ -79,6 +80,7 @@ func NewCustomerPortalService(
 		ServiceParams:           params,
 		customerService:         customerService,
 		revenueAnalyticsService: revenueAnalyticsService,
+		paymentService:          NewPaymentService(params),
 	}
 }
 

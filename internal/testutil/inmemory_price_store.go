@@ -84,6 +84,11 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	// UpdatedAfter matches edits, which the created_at range above cannot see.
+	if f.UpdatedAfter != nil && p.UpdatedAt.Before(*f.UpdatedAfter) {
+		return false
+	}
+
 	return true
 }
 
@@ -274,6 +279,25 @@ func (s *InMemoryPriceStore) GetByGroupIDs(ctx context.Context, groupIDs []strin
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get prices by group IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	return prices, nil
+}
+
+// ListByIDs returns the prices whose ids are in ids; missing ids are absent.
+func (s *InMemoryPriceStore) ListByIDs(ctx context.Context, ids []string) ([]*price.Price, error) {
+	prices, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, p *price.Price, _ interface{}) bool {
+		if p == nil {
+			return false
+		}
+		if !CheckTenantFilter(ctx, p.TenantID) || !CheckEnvironmentFilter(ctx, p.EnvironmentID) {
+			return false
+		}
+		return lo.Contains(ids, p.ID)
+	}, priceSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices by ids").
 			Mark(ierr.ErrDatabase)
 	}
 	return prices, nil

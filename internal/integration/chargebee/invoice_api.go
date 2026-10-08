@@ -63,7 +63,7 @@ func (c *Client) CreateAdHocInvoice(
 		req = req.SetIdempotencyKey(adHocReq.IdempotencyKey)
 	}
 
-	res, err := req.RequestWithEnv(env)
+	res, err := req.Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to create Chargebee ad-hoc invoice")
 	}
@@ -82,7 +82,7 @@ func (c *Client) RetrieveInvoicePDF(ctx context.Context, chargebeeInvoiceID stri
 
 	res, err := invoice.Pdf(chargebeeInvoiceID, &invoiceModel.PdfRequestParams{
 		DispositionType: enum.DispositionTypeAttachment,
-	}).RequestWithEnv(env)
+	}).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to retrieve Chargebee invoice PDF")
 	}
@@ -104,7 +104,7 @@ func (c *Client) VoidInvoice(ctx context.Context, chargebeeInvoiceID, comment st
 
 	_, err = invoice.VoidInvoice(chargebeeInvoiceID, &invoiceModel.VoidInvoiceRequestParams{
 		Comment: comment,
-	}).RequestWithEnv(env)
+	}).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return wrapAPIError(err, "Failed to void Chargebee invoice")
 	}

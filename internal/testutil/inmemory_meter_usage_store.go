@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -1050,14 +1051,13 @@ func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, st
 	return filtered[offset:end], nil
 }
 
-// GetByEventID returns the meter_usage record for a single event, or nil if not found.
-func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.
+func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, r := range s.records {
-		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ID == eventID {
-			// Return minimal copy with only the fields needed for debug response
+		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
 			return &events.MeterUsage{
 				Event: events.Event{
 					ID:                 eventID,
@@ -1072,6 +1072,113 @@ func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, envi
 		}
 	}
 	return nil, nil
+}
+
+// GetUsageActivitySince mirrors the ClickHouse activity query: distinct
+// customers with usage ingested after the given time.
+func (s *InMemoryMeterUsageStore) GetUsageActivitySince(_ context.Context, params *events.UsageActivityParams) (*events.UsageActivity, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := map[string]struct{}{}
+	activity := &events.UsageActivity{}
+	for _, r := range s.records {
+		if r.TenantID != params.TenantID || r.EnvironmentID != params.EnvironmentID {
+			continue
+		}
+		if r.IngestedAt.Before(params.IngestedAfter) {
+			continue
+		}
+		if !params.TimestampAfter.IsZero() && r.Timestamp.Before(params.TimestampAfter) {
+			continue
+		}
+		// external_customer_id, mirroring the ClickHouse column. MeterUsage
+		// embeds an Event with a CustomerID field that the table does not have,
+		// so keying on it here would pass in tests and fail in production.
+		if r.ExternalCustomerID == "" {
+			activity.Unattributed = true
+			continue
+		}
+		if _, ok := seen[r.ExternalCustomerID]; ok {
+			continue
+		}
+		seen[r.ExternalCustomerID] = struct{}{}
+		activity.ExternalCustomerIDs = append(activity.ExternalCustomerIDs, r.ExternalCustomerID)
+	}
+	sort.Strings(activity.ExternalCustomerIDs)
+	return activity, nil
+}
+
+// GetDailyUsageByMeter mirrors BuildDailyUsageQuery: per-day SUM(qty_total)
+// over [StartTime, EndTime) for every meter in MeterIDs, keyed by meter id.
+// Day bucketing honors params.Timezone (an IANA name), falling back to UTC
+// when empty or unresolvable, mirroring the ClickHouse path's
+// normalizeCHTimezone default.
+func (s *InMemoryMeterUsageStore) GetDailyUsageByMeter(_ context.Context, params *events.DailyUsageParams) (map[string][]events.DailyUsagePoint, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return map[string][]events.DailyUsagePoint{}, nil
+	}
+
+	loc := time.UTC
+	if params.Timezone != "" {
+		if l, err := time.LoadLocation(params.Timezone); err == nil {
+			loc = l
+		}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type meterDay struct {
+		meterID string
+		day     time.Time
+	}
+	dayTotals := make(map[meterDay]decimal.Decimal)
+	for _, r := range s.records {
+		if r.TenantID != params.TenantID || r.EnvironmentID != params.EnvironmentID {
+			continue
+		}
+		if !lo.Contains(params.MeterIDs, r.MeterID) {
+			continue
+		}
+		if len(params.ExternalCustomerIDs) > 0 && !lo.Contains(params.ExternalCustomerIDs, r.ExternalCustomerID) {
+			continue
+		}
+		if !params.StartTime.IsZero() && r.Timestamp.Before(params.StartTime) {
+			continue
+		}
+		if !params.EndTime.IsZero() && !r.Timestamp.Before(params.EndTime) {
+			continue
+		}
+		local := r.Timestamp.In(loc)
+		day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+		key := meterDay{meterID: r.MeterID, day: day}
+		dayTotals[key] = dayTotals[key].Add(r.QtyTotal)
+	}
+
+	keys := make([]meterDay, 0, len(dayTotals))
+	for k := range dayTotals {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].meterID != keys[j].meterID {
+			return keys[i].meterID < keys[j].meterID
+		}
+		return keys[i].day.Before(keys[j].day)
+	})
+
+	byMeter := make(map[string][]events.DailyUsagePoint, len(params.MeterIDs))
+	for _, k := range keys {
+		byMeter[k.meterID] = append(byMeter[k.meterID], events.DailyUsagePoint{Day: k.day, Qty: dayTotals[k]})
+	}
+	return byMeter, nil
 }
 
 // Ensure interface compliance

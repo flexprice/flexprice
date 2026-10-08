@@ -21,6 +21,9 @@ const (
 	// Payment
 	ScopePayment Scope = "payment"
 
+	// Refund
+	ScopeRefund Scope = "refund"
+
 	// Credit note
 	ScopeCreditNote Scope = "credit_note"
 

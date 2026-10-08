@@ -33,44 +33,44 @@ type SubscriptionLineItemQuery struct {
 }
 
 // Where adds a new predicate for the SubscriptionLineItemQuery builder.
-func (sliq *SubscriptionLineItemQuery) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemQuery {
-	sliq.predicates = append(sliq.predicates, ps...)
-	return sliq
+func (_q *SubscriptionLineItemQuery) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (sliq *SubscriptionLineItemQuery) Limit(limit int) *SubscriptionLineItemQuery {
-	sliq.ctx.Limit = &limit
-	return sliq
+func (_q *SubscriptionLineItemQuery) Limit(limit int) *SubscriptionLineItemQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (sliq *SubscriptionLineItemQuery) Offset(offset int) *SubscriptionLineItemQuery {
-	sliq.ctx.Offset = &offset
-	return sliq
+func (_q *SubscriptionLineItemQuery) Offset(offset int) *SubscriptionLineItemQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (sliq *SubscriptionLineItemQuery) Unique(unique bool) *SubscriptionLineItemQuery {
-	sliq.ctx.Unique = &unique
-	return sliq
+func (_q *SubscriptionLineItemQuery) Unique(unique bool) *SubscriptionLineItemQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (sliq *SubscriptionLineItemQuery) Order(o ...subscriptionlineitem.OrderOption) *SubscriptionLineItemQuery {
-	sliq.order = append(sliq.order, o...)
-	return sliq
+func (_q *SubscriptionLineItemQuery) Order(o ...subscriptionlineitem.OrderOption) *SubscriptionLineItemQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QuerySubscription chains the current query on the "subscription" edge.
-func (sliq *SubscriptionLineItemQuery) QuerySubscription() *SubscriptionQuery {
-	query := (&SubscriptionClient{config: sliq.config}).Query()
+func (_q *SubscriptionLineItemQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sliq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sliq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -79,20 +79,20 @@ func (sliq *SubscriptionLineItemQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionlineitem.SubscriptionTable, subscriptionlineitem.SubscriptionColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCouponAssociations chains the current query on the "coupon_associations" edge.
-func (sliq *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociationQuery {
-	query := (&CouponAssociationClient{config: sliq.config}).Query()
+func (_q *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sliq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sliq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (sliq *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociat
 			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionlineitem.CouponAssociationsTable, subscriptionlineitem.CouponAssociationsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -109,8 +109,8 @@ func (sliq *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociat
 
 // First returns the first SubscriptionLineItem entity from the query.
 // Returns a *NotFoundError when no SubscriptionLineItem was found.
-func (sliq *SubscriptionLineItemQuery) First(ctx context.Context) (*SubscriptionLineItem, error) {
-	nodes, err := sliq.Limit(1).All(setContextOp(ctx, sliq.ctx, ent.OpQueryFirst))
+func (_q *SubscriptionLineItemQuery) First(ctx context.Context) (*SubscriptionLineItem, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (sliq *SubscriptionLineItemQuery) First(ctx context.Context) (*Subscription
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) FirstX(ctx context.Context) *SubscriptionLineItem {
-	node, err := sliq.First(ctx)
+func (_q *SubscriptionLineItemQuery) FirstX(ctx context.Context) *SubscriptionLineItem {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -131,9 +131,9 @@ func (sliq *SubscriptionLineItemQuery) FirstX(ctx context.Context) *Subscription
 
 // FirstID returns the first SubscriptionLineItem ID from the query.
 // Returns a *NotFoundError when no SubscriptionLineItem ID was found.
-func (sliq *SubscriptionLineItemQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionLineItemQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = sliq.Limit(1).IDs(setContextOp(ctx, sliq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -144,8 +144,8 @@ func (sliq *SubscriptionLineItemQuery) FirstID(ctx context.Context) (id string, 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) FirstIDX(ctx context.Context) string {
-	id, err := sliq.FirstID(ctx)
+func (_q *SubscriptionLineItemQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -155,8 +155,8 @@ func (sliq *SubscriptionLineItemQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single SubscriptionLineItem entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one SubscriptionLineItem entity is found.
 // Returns a *NotFoundError when no SubscriptionLineItem entities are found.
-func (sliq *SubscriptionLineItemQuery) Only(ctx context.Context) (*SubscriptionLineItem, error) {
-	nodes, err := sliq.Limit(2).All(setContextOp(ctx, sliq.ctx, ent.OpQueryOnly))
+func (_q *SubscriptionLineItemQuery) Only(ctx context.Context) (*SubscriptionLineItem, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +171,8 @@ func (sliq *SubscriptionLineItemQuery) Only(ctx context.Context) (*SubscriptionL
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) OnlyX(ctx context.Context) *SubscriptionLineItem {
-	node, err := sliq.Only(ctx)
+func (_q *SubscriptionLineItemQuery) OnlyX(ctx context.Context) *SubscriptionLineItem {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -182,9 +182,9 @@ func (sliq *SubscriptionLineItemQuery) OnlyX(ctx context.Context) *SubscriptionL
 // OnlyID is like Only, but returns the only SubscriptionLineItem ID in the query.
 // Returns a *NotSingularError when more than one SubscriptionLineItem ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (sliq *SubscriptionLineItemQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionLineItemQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = sliq.Limit(2).IDs(setContextOp(ctx, sliq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -199,8 +199,8 @@ func (sliq *SubscriptionLineItemQuery) OnlyID(ctx context.Context) (id string, e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) OnlyIDX(ctx context.Context) string {
-	id, err := sliq.OnlyID(ctx)
+func (_q *SubscriptionLineItemQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -208,18 +208,18 @@ func (sliq *SubscriptionLineItemQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of SubscriptionLineItems.
-func (sliq *SubscriptionLineItemQuery) All(ctx context.Context) ([]*SubscriptionLineItem, error) {
-	ctx = setContextOp(ctx, sliq.ctx, ent.OpQueryAll)
-	if err := sliq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionLineItemQuery) All(ctx context.Context) ([]*SubscriptionLineItem, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*SubscriptionLineItem, *SubscriptionLineItemQuery]()
-	return withInterceptors[[]*SubscriptionLineItem](ctx, sliq, qr, sliq.inters)
+	return withInterceptors[[]*SubscriptionLineItem](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) AllX(ctx context.Context) []*SubscriptionLineItem {
-	nodes, err := sliq.All(ctx)
+func (_q *SubscriptionLineItemQuery) AllX(ctx context.Context) []*SubscriptionLineItem {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -227,20 +227,20 @@ func (sliq *SubscriptionLineItemQuery) AllX(ctx context.Context) []*Subscription
 }
 
 // IDs executes the query and returns a list of SubscriptionLineItem IDs.
-func (sliq *SubscriptionLineItemQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if sliq.ctx.Unique == nil && sliq.path != nil {
-		sliq.Unique(true)
+func (_q *SubscriptionLineItemQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, sliq.ctx, ent.OpQueryIDs)
-	if err = sliq.Select(subscriptionlineitem.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(subscriptionlineitem.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) IDsX(ctx context.Context) []string {
-	ids, err := sliq.IDs(ctx)
+func (_q *SubscriptionLineItemQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -248,17 +248,17 @@ func (sliq *SubscriptionLineItemQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (sliq *SubscriptionLineItemQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, sliq.ctx, ent.OpQueryCount)
-	if err := sliq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionLineItemQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, sliq, querierCount[*SubscriptionLineItemQuery](), sliq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*SubscriptionLineItemQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) CountX(ctx context.Context) int {
-	count, err := sliq.Count(ctx)
+func (_q *SubscriptionLineItemQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -266,9 +266,9 @@ func (sliq *SubscriptionLineItemQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (sliq *SubscriptionLineItemQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, sliq.ctx, ent.OpQueryExist)
-	switch _, err := sliq.FirstID(ctx); {
+func (_q *SubscriptionLineItemQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -279,8 +279,8 @@ func (sliq *SubscriptionLineItemQuery) Exist(ctx context.Context) (bool, error) 
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (sliq *SubscriptionLineItemQuery) ExistX(ctx context.Context) bool {
-	exist, err := sliq.Exist(ctx)
+func (_q *SubscriptionLineItemQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -289,44 +289,44 @@ func (sliq *SubscriptionLineItemQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the SubscriptionLineItemQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (sliq *SubscriptionLineItemQuery) Clone() *SubscriptionLineItemQuery {
-	if sliq == nil {
+func (_q *SubscriptionLineItemQuery) Clone() *SubscriptionLineItemQuery {
+	if _q == nil {
 		return nil
 	}
 	return &SubscriptionLineItemQuery{
-		config:                 sliq.config,
-		ctx:                    sliq.ctx.Clone(),
-		order:                  append([]subscriptionlineitem.OrderOption{}, sliq.order...),
-		inters:                 append([]Interceptor{}, sliq.inters...),
-		predicates:             append([]predicate.SubscriptionLineItem{}, sliq.predicates...),
-		withSubscription:       sliq.withSubscription.Clone(),
-		withCouponAssociations: sliq.withCouponAssociations.Clone(),
+		config:                 _q.config,
+		ctx:                    _q.ctx.Clone(),
+		order:                  append([]subscriptionlineitem.OrderOption{}, _q.order...),
+		inters:                 append([]Interceptor{}, _q.inters...),
+		predicates:             append([]predicate.SubscriptionLineItem{}, _q.predicates...),
+		withSubscription:       _q.withSubscription.Clone(),
+		withCouponAssociations: _q.withCouponAssociations.Clone(),
 		// clone intermediate query.
-		sql:  sliq.sql.Clone(),
-		path: sliq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithSubscription tells the query-builder to eager-load the nodes that are connected to
 // the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
-func (sliq *SubscriptionLineItemQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionLineItemQuery {
-	query := (&SubscriptionClient{config: sliq.config}).Query()
+func (_q *SubscriptionLineItemQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionLineItemQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sliq.withSubscription = query
-	return sliq
+	_q.withSubscription = query
+	return _q
 }
 
 // WithCouponAssociations tells the query-builder to eager-load the nodes that are connected to
 // the "coupon_associations" edge. The optional arguments are used to configure the query builder of the edge.
-func (sliq *SubscriptionLineItemQuery) WithCouponAssociations(opts ...func(*CouponAssociationQuery)) *SubscriptionLineItemQuery {
-	query := (&CouponAssociationClient{config: sliq.config}).Query()
+func (_q *SubscriptionLineItemQuery) WithCouponAssociations(opts ...func(*CouponAssociationQuery)) *SubscriptionLineItemQuery {
+	query := (&CouponAssociationClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sliq.withCouponAssociations = query
-	return sliq
+	_q.withCouponAssociations = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -343,10 +343,10 @@ func (sliq *SubscriptionLineItemQuery) WithCouponAssociations(opts ...func(*Coup
 //		GroupBy(subscriptionlineitem.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (sliq *SubscriptionLineItemQuery) GroupBy(field string, fields ...string) *SubscriptionLineItemGroupBy {
-	sliq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SubscriptionLineItemGroupBy{build: sliq}
-	grbuild.flds = &sliq.ctx.Fields
+func (_q *SubscriptionLineItemQuery) GroupBy(field string, fields ...string) *SubscriptionLineItemGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &SubscriptionLineItemGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = subscriptionlineitem.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -364,59 +364,59 @@ func (sliq *SubscriptionLineItemQuery) GroupBy(field string, fields ...string) *
 //	client.SubscriptionLineItem.Query().
 //		Select(subscriptionlineitem.FieldTenantID).
 //		Scan(ctx, &v)
-func (sliq *SubscriptionLineItemQuery) Select(fields ...string) *SubscriptionLineItemSelect {
-	sliq.ctx.Fields = append(sliq.ctx.Fields, fields...)
-	sbuild := &SubscriptionLineItemSelect{SubscriptionLineItemQuery: sliq}
+func (_q *SubscriptionLineItemQuery) Select(fields ...string) *SubscriptionLineItemSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &SubscriptionLineItemSelect{SubscriptionLineItemQuery: _q}
 	sbuild.label = subscriptionlineitem.Label
-	sbuild.flds, sbuild.scan = &sliq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a SubscriptionLineItemSelect configured with the given aggregations.
-func (sliq *SubscriptionLineItemQuery) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemSelect {
-	return sliq.Select().Aggregate(fns...)
+func (_q *SubscriptionLineItemQuery) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (sliq *SubscriptionLineItemQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range sliq.inters {
+func (_q *SubscriptionLineItemQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, sliq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range sliq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !subscriptionlineitem.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if sliq.path != nil {
-		prev, err := sliq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		sliq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionLineItem, error) {
+func (_q *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionLineItem, error) {
 	var (
 		nodes       = []*SubscriptionLineItem{}
-		_spec       = sliq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [2]bool{
-			sliq.withSubscription != nil,
-			sliq.withCouponAssociations != nil,
+			_q.withSubscription != nil,
+			_q.withCouponAssociations != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SubscriptionLineItem).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &SubscriptionLineItem{config: sliq.config}
+		node := &SubscriptionLineItem{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -424,20 +424,20 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, sliq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := sliq.withSubscription; query != nil {
-		if err := sliq.loadSubscription(ctx, query, nodes, nil,
+	if query := _q.withSubscription; query != nil {
+		if err := _q.loadSubscription(ctx, query, nodes, nil,
 			func(n *SubscriptionLineItem, e *Subscription) { n.Edges.Subscription = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sliq.withCouponAssociations; query != nil {
-		if err := sliq.loadCouponAssociations(ctx, query, nodes,
+	if query := _q.withCouponAssociations; query != nil {
+		if err := _q.loadCouponAssociations(ctx, query, nodes,
 			func(n *SubscriptionLineItem) { n.Edges.CouponAssociations = []*CouponAssociation{} },
 			func(n *SubscriptionLineItem, e *CouponAssociation) {
 				n.Edges.CouponAssociations = append(n.Edges.CouponAssociations, e)
@@ -448,7 +448,7 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 	return nodes, nil
 }
 
-func (sliq *SubscriptionLineItemQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *Subscription)) error {
+func (_q *SubscriptionLineItemQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *Subscription)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*SubscriptionLineItem)
 	for i := range nodes {
@@ -477,7 +477,7 @@ func (sliq *SubscriptionLineItemQuery) loadSubscription(ctx context.Context, que
 	}
 	return nil
 }
-func (sliq *SubscriptionLineItemQuery) loadCouponAssociations(ctx context.Context, query *CouponAssociationQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *CouponAssociation)) error {
+func (_q *SubscriptionLineItemQuery) loadCouponAssociations(ctx context.Context, query *CouponAssociationQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *CouponAssociation)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*SubscriptionLineItem)
 	for i := range nodes {
@@ -511,24 +511,24 @@ func (sliq *SubscriptionLineItemQuery) loadCouponAssociations(ctx context.Contex
 	return nil
 }
 
-func (sliq *SubscriptionLineItemQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := sliq.querySpec()
-	_spec.Node.Columns = sliq.ctx.Fields
-	if len(sliq.ctx.Fields) > 0 {
-		_spec.Unique = sliq.ctx.Unique != nil && *sliq.ctx.Unique
+func (_q *SubscriptionLineItemQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, sliq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (sliq *SubscriptionLineItemQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *SubscriptionLineItemQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(subscriptionlineitem.Table, subscriptionlineitem.Columns, sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString))
-	_spec.From = sliq.sql
-	if unique := sliq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if sliq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := sliq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionlineitem.FieldID)
 		for i := range fields {
@@ -536,24 +536,24 @@ func (sliq *SubscriptionLineItemQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if sliq.withSubscription != nil {
+		if _q.withSubscription != nil {
 			_spec.Node.AddColumnOnce(subscriptionlineitem.FieldSubscriptionID)
 		}
 	}
-	if ps := sliq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := sliq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := sliq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := sliq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -563,33 +563,33 @@ func (sliq *SubscriptionLineItemQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (sliq *SubscriptionLineItemQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(sliq.driver.Dialect())
+func (_q *SubscriptionLineItemQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(subscriptionlineitem.Table)
-	columns := sliq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = subscriptionlineitem.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if sliq.sql != nil {
-		selector = sliq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if sliq.ctx.Unique != nil && *sliq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range sliq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range sliq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := sliq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := sliq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -602,41 +602,41 @@ type SubscriptionLineItemGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (sligb *SubscriptionLineItemGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemGroupBy {
-	sligb.fns = append(sligb.fns, fns...)
-	return sligb
+func (_g *SubscriptionLineItemGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (sligb *SubscriptionLineItemGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, sligb.build.ctx, ent.OpQueryGroupBy)
-	if err := sligb.build.prepareQuery(ctx); err != nil {
+func (_g *SubscriptionLineItemGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionLineItemQuery, *SubscriptionLineItemGroupBy](ctx, sligb.build, sligb, sligb.build.inters, v)
+	return scanWithInterceptors[*SubscriptionLineItemQuery, *SubscriptionLineItemGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (sligb *SubscriptionLineItemGroupBy) sqlScan(ctx context.Context, root *SubscriptionLineItemQuery, v any) error {
+func (_g *SubscriptionLineItemGroupBy) sqlScan(ctx context.Context, root *SubscriptionLineItemQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(sligb.fns))
-	for _, fn := range sligb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*sligb.flds)+len(sligb.fns))
-		for _, f := range *sligb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*sligb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := sligb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -650,27 +650,27 @@ type SubscriptionLineItemSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (slis *SubscriptionLineItemSelect) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemSelect {
-	slis.fns = append(slis.fns, fns...)
-	return slis
+func (_s *SubscriptionLineItemSelect) Aggregate(fns ...AggregateFunc) *SubscriptionLineItemSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (slis *SubscriptionLineItemSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, slis.ctx, ent.OpQuerySelect)
-	if err := slis.prepareQuery(ctx); err != nil {
+func (_s *SubscriptionLineItemSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionLineItemQuery, *SubscriptionLineItemSelect](ctx, slis.SubscriptionLineItemQuery, slis, slis.inters, v)
+	return scanWithInterceptors[*SubscriptionLineItemQuery, *SubscriptionLineItemSelect](ctx, _s.SubscriptionLineItemQuery, _s, _s.inters, v)
 }
 
-func (slis *SubscriptionLineItemSelect) sqlScan(ctx context.Context, root *SubscriptionLineItemQuery, v any) error {
+func (_s *SubscriptionLineItemSelect) sqlScan(ctx context.Context, root *SubscriptionLineItemQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(slis.fns))
-	for _, fn := range slis.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*slis.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -678,7 +678,7 @@ func (slis *SubscriptionLineItemSelect) sqlScan(ctx context.Context, root *Subsc
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := slis.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

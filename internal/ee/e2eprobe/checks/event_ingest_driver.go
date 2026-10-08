@@ -26,7 +26,7 @@ func NewEventIngestDriver(c e2eprobe.Client, r e2eprobe.Registry, seed int64, ru
 	return &EventIngestDriver{client: c, reg: r, seed: seed, runID: runID}
 }
 
-func (d *EventIngestDriver) Name() string         { return "event-ingest-driver" }
+func (d *EventIngestDriver) Name() string        { return "event-ingest-driver" }
 func (d *EventIngestDriver) Kind() e2eprobe.Kind { return e2eprobe.KindDriver }
 
 func (d *EventIngestDriver) Run(ctx context.Context) error {

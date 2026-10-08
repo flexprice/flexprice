@@ -486,6 +486,11 @@ type PriceFilter struct {
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 
+	// UpdatedAfter matches prices edited since the given time. TimeRangeFilter
+	// above filters on created_at, so it cannot see an edit to an existing
+	// price.
+	UpdatedAfter *time.Time `json:"updated_after,omitempty" form:"updated_after"`
+
 	// DSL filters
 	Filters []*FilterCondition `json:"filters,omitempty" form:"filters"`
 }

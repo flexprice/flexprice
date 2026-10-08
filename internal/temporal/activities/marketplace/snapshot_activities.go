@@ -233,6 +233,7 @@ func (a *SnapshotActivities) snapshotSubscription(
 
 	_, totalAmount, err := a.billingService.CalculateMeterUsageCharges(
 		ctx, sub, usageResp, input.PeriodStart, input.PeriodEnd, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 	if err != nil {
 		a.logger.Error(ctx, "marketplace usage snapshot: failed to calculate charges",

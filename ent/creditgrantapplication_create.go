@@ -23,247 +23,247 @@ type CreditGrantApplicationCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cgac *CreditGrantApplicationCreate) SetTenantID(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetTenantID(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetTenantID(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cgac *CreditGrantApplicationCreate) SetStatus(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetStatus(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetStatus(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableStatus(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetStatus(*s)
+func (_c *CreditGrantApplicationCreate) SetNillableStatus(v *string) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cgac *CreditGrantApplicationCreate) SetCreatedAt(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetCreatedAt(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetCreatedAt(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableCreatedAt(t *time.Time) *CreditGrantApplicationCreate {
-	if t != nil {
-		cgac.SetCreatedAt(*t)
+func (_c *CreditGrantApplicationCreate) SetNillableCreatedAt(v *time.Time) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cgac *CreditGrantApplicationCreate) SetUpdatedAt(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetUpdatedAt(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetUpdatedAt(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableUpdatedAt(t *time.Time) *CreditGrantApplicationCreate {
-	if t != nil {
-		cgac.SetUpdatedAt(*t)
+func (_c *CreditGrantApplicationCreate) SetNillableUpdatedAt(v *time.Time) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cgac *CreditGrantApplicationCreate) SetCreatedBy(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetCreatedBy(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetCreatedBy(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableCreatedBy(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetCreatedBy(*s)
+func (_c *CreditGrantApplicationCreate) SetNillableCreatedBy(v *string) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cgac *CreditGrantApplicationCreate) SetUpdatedBy(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetUpdatedBy(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetUpdatedBy(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableUpdatedBy(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetUpdatedBy(*s)
+func (_c *CreditGrantApplicationCreate) SetNillableUpdatedBy(v *string) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cgac *CreditGrantApplicationCreate) SetEnvironmentID(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetEnvironmentID(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetEnvironmentID(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableEnvironmentID(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetEnvironmentID(*s)
+func (_c *CreditGrantApplicationCreate) SetNillableEnvironmentID(v *string) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetCreditGrantID sets the "credit_grant_id" field.
-func (cgac *CreditGrantApplicationCreate) SetCreditGrantID(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetCreditGrantID(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetCreditGrantID(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetCreditGrantID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cgac *CreditGrantApplicationCreate) SetSubscriptionID(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetSubscriptionID(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetSubscriptionID(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetScheduledFor sets the "scheduled_for" field.
-func (cgac *CreditGrantApplicationCreate) SetScheduledFor(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetScheduledFor(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetScheduledFor(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetScheduledFor(v)
+	return _c
 }
 
 // SetAppliedAt sets the "applied_at" field.
-func (cgac *CreditGrantApplicationCreate) SetAppliedAt(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetAppliedAt(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetAppliedAt(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetAppliedAt(v)
+	return _c
 }
 
 // SetNillableAppliedAt sets the "applied_at" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableAppliedAt(t *time.Time) *CreditGrantApplicationCreate {
-	if t != nil {
-		cgac.SetAppliedAt(*t)
+func (_c *CreditGrantApplicationCreate) SetNillableAppliedAt(v *time.Time) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetAppliedAt(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (cgac *CreditGrantApplicationCreate) SetPeriodStart(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetPeriodStart(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetPeriodStart(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (cgac *CreditGrantApplicationCreate) SetPeriodEnd(t time.Time) *CreditGrantApplicationCreate {
-	cgac.mutation.SetPeriodEnd(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetPeriodEnd(v time.Time) *CreditGrantApplicationCreate {
+	_c.mutation.SetPeriodEnd(v)
+	return _c
 }
 
 // SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillablePeriodEnd(t *time.Time) *CreditGrantApplicationCreate {
-	if t != nil {
-		cgac.SetPeriodEnd(*t)
+func (_c *CreditGrantApplicationCreate) SetNillablePeriodEnd(v *time.Time) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetPeriodEnd(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgac *CreditGrantApplicationCreate) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationCreate {
-	cgac.mutation.SetApplicationStatus(ts)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetApplicationStatus(v types.ApplicationStatus) *CreditGrantApplicationCreate {
+	_c.mutation.SetApplicationStatus(v)
+	return _c
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationCreate {
-	if ts != nil {
-		cgac.SetApplicationStatus(*ts)
+func (_c *CreditGrantApplicationCreate) SetNillableApplicationStatus(v *types.ApplicationStatus) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetApplicationStatus(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetCredits sets the "credits" field.
-func (cgac *CreditGrantApplicationCreate) SetCredits(d decimal.Decimal) *CreditGrantApplicationCreate {
-	cgac.mutation.SetCredits(d)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetCredits(v decimal.Decimal) *CreditGrantApplicationCreate {
+	_c.mutation.SetCredits(v)
+	return _c
 }
 
 // SetNillableCredits sets the "credits" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableCredits(d *decimal.Decimal) *CreditGrantApplicationCreate {
-	if d != nil {
-		cgac.SetCredits(*d)
+func (_c *CreditGrantApplicationCreate) SetNillableCredits(v *decimal.Decimal) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetCredits(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetApplicationReason sets the "application_reason" field.
-func (cgac *CreditGrantApplicationCreate) SetApplicationReason(tgar types.CreditGrantApplicationReason) *CreditGrantApplicationCreate {
-	cgac.mutation.SetApplicationReason(tgar)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetApplicationReason(v types.CreditGrantApplicationReason) *CreditGrantApplicationCreate {
+	_c.mutation.SetApplicationReason(v)
+	return _c
 }
 
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgac *CreditGrantApplicationCreate) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationCreate {
-	cgac.mutation.SetSubscriptionStatusAtApplication(ts)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetSubscriptionStatusAtApplication(v types.SubscriptionStatus) *CreditGrantApplicationCreate {
+	_c.mutation.SetSubscriptionStatusAtApplication(v)
+	return _c
 }
 
 // SetRetryCount sets the "retry_count" field.
-func (cgac *CreditGrantApplicationCreate) SetRetryCount(i int) *CreditGrantApplicationCreate {
-	cgac.mutation.SetRetryCount(i)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetRetryCount(v int) *CreditGrantApplicationCreate {
+	_c.mutation.SetRetryCount(v)
+	return _c
 }
 
 // SetNillableRetryCount sets the "retry_count" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableRetryCount(i *int) *CreditGrantApplicationCreate {
-	if i != nil {
-		cgac.SetRetryCount(*i)
+func (_c *CreditGrantApplicationCreate) SetNillableRetryCount(v *int) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetRetryCount(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (cgac *CreditGrantApplicationCreate) SetFailureReason(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetFailureReason(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetFailureReason(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetFailureReason(v)
+	return _c
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (cgac *CreditGrantApplicationCreate) SetNillableFailureReason(s *string) *CreditGrantApplicationCreate {
-	if s != nil {
-		cgac.SetFailureReason(*s)
+func (_c *CreditGrantApplicationCreate) SetNillableFailureReason(v *string) *CreditGrantApplicationCreate {
+	if v != nil {
+		_c.SetFailureReason(*v)
 	}
-	return cgac
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cgac *CreditGrantApplicationCreate) SetMetadata(t types.Metadata) *CreditGrantApplicationCreate {
-	cgac.mutation.SetMetadata(t)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetMetadata(v types.Metadata) *CreditGrantApplicationCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (cgac *CreditGrantApplicationCreate) SetIdempotencyKey(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetIdempotencyKey(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetIdempotencyKey(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cgac *CreditGrantApplicationCreate) SetID(s string) *CreditGrantApplicationCreate {
-	cgac.mutation.SetID(s)
-	return cgac
+func (_c *CreditGrantApplicationCreate) SetID(v string) *CreditGrantApplicationCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the CreditGrantApplicationMutation object of the builder.
-func (cgac *CreditGrantApplicationCreate) Mutation() *CreditGrantApplicationMutation {
-	return cgac.mutation
+func (_c *CreditGrantApplicationCreate) Mutation() *CreditGrantApplicationMutation {
+	return _c.mutation
 }
 
 // Save creates the CreditGrantApplication in the database.
-func (cgac *CreditGrantApplicationCreate) Save(ctx context.Context) (*CreditGrantApplication, error) {
-	cgac.defaults()
-	return withHooks(ctx, cgac.sqlSave, cgac.mutation, cgac.hooks)
+func (_c *CreditGrantApplicationCreate) Save(ctx context.Context) (*CreditGrantApplication, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cgac *CreditGrantApplicationCreate) SaveX(ctx context.Context) *CreditGrantApplication {
-	v, err := cgac.Save(ctx)
+func (_c *CreditGrantApplicationCreate) SaveX(ctx context.Context) *CreditGrantApplication {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -271,133 +271,133 @@ func (cgac *CreditGrantApplicationCreate) SaveX(ctx context.Context) *CreditGran
 }
 
 // Exec executes the query.
-func (cgac *CreditGrantApplicationCreate) Exec(ctx context.Context) error {
-	_, err := cgac.Save(ctx)
+func (_c *CreditGrantApplicationCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgac *CreditGrantApplicationCreate) ExecX(ctx context.Context) {
-	if err := cgac.Exec(ctx); err != nil {
+func (_c *CreditGrantApplicationCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cgac *CreditGrantApplicationCreate) defaults() {
-	if _, ok := cgac.mutation.Status(); !ok {
+func (_c *CreditGrantApplicationCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := creditgrantapplication.DefaultStatus
-		cgac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cgac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := creditgrantapplication.DefaultCreatedAt()
-		cgac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cgac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := creditgrantapplication.DefaultUpdatedAt()
-		cgac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cgac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := creditgrantapplication.DefaultEnvironmentID
-		cgac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cgac.mutation.ApplicationStatus(); !ok {
+	if _, ok := _c.mutation.ApplicationStatus(); !ok {
 		v := creditgrantapplication.DefaultApplicationStatus
-		cgac.mutation.SetApplicationStatus(v)
+		_c.mutation.SetApplicationStatus(v)
 	}
-	if _, ok := cgac.mutation.Credits(); !ok {
+	if _, ok := _c.mutation.Credits(); !ok {
 		v := creditgrantapplication.DefaultCredits
-		cgac.mutation.SetCredits(v)
+		_c.mutation.SetCredits(v)
 	}
-	if _, ok := cgac.mutation.RetryCount(); !ok {
+	if _, ok := _c.mutation.RetryCount(); !ok {
 		v := creditgrantapplication.DefaultRetryCount
-		cgac.mutation.SetRetryCount(v)
+		_c.mutation.SetRetryCount(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cgac *CreditGrantApplicationCreate) check() error {
-	if _, ok := cgac.mutation.TenantID(); !ok {
+func (_c *CreditGrantApplicationCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "CreditGrantApplication.tenant_id"`)}
 	}
-	if v, ok := cgac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := creditgrantapplication.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "CreditGrantApplication.status"`)}
 	}
-	if _, ok := cgac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CreditGrantApplication.created_at"`)}
 	}
-	if _, ok := cgac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "CreditGrantApplication.updated_at"`)}
 	}
-	if _, ok := cgac.mutation.CreditGrantID(); !ok {
+	if _, ok := _c.mutation.CreditGrantID(); !ok {
 		return &ValidationError{Name: "credit_grant_id", err: errors.New(`ent: missing required field "CreditGrantApplication.credit_grant_id"`)}
 	}
-	if v, ok := cgac.mutation.CreditGrantID(); ok {
+	if v, ok := _c.mutation.CreditGrantID(); ok {
 		if err := creditgrantapplication.CreditGrantIDValidator(v); err != nil {
 			return &ValidationError{Name: "credit_grant_id", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.credit_grant_id": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "CreditGrantApplication.subscription_id"`)}
 	}
-	if v, ok := cgac.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := creditgrantapplication.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.ScheduledFor(); !ok {
+	if _, ok := _c.mutation.ScheduledFor(); !ok {
 		return &ValidationError{Name: "scheduled_for", err: errors.New(`ent: missing required field "CreditGrantApplication.scheduled_for"`)}
 	}
-	if _, ok := cgac.mutation.PeriodStart(); !ok {
+	if _, ok := _c.mutation.PeriodStart(); !ok {
 		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "CreditGrantApplication.period_start"`)}
 	}
-	if _, ok := cgac.mutation.ApplicationStatus(); !ok {
+	if _, ok := _c.mutation.ApplicationStatus(); !ok {
 		return &ValidationError{Name: "application_status", err: errors.New(`ent: missing required field "CreditGrantApplication.application_status"`)}
 	}
-	if v, ok := cgac.mutation.ApplicationStatus(); ok {
+	if v, ok := _c.mutation.ApplicationStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "application_status", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.application_status": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.Credits(); !ok {
+	if _, ok := _c.mutation.Credits(); !ok {
 		return &ValidationError{Name: "credits", err: errors.New(`ent: missing required field "CreditGrantApplication.credits"`)}
 	}
-	if _, ok := cgac.mutation.ApplicationReason(); !ok {
+	if _, ok := _c.mutation.ApplicationReason(); !ok {
 		return &ValidationError{Name: "application_reason", err: errors.New(`ent: missing required field "CreditGrantApplication.application_reason"`)}
 	}
-	if v, ok := cgac.mutation.ApplicationReason(); ok {
+	if v, ok := _c.mutation.ApplicationReason(); ok {
 		if err := creditgrantapplication.ApplicationReasonValidator(string(v)); err != nil {
 			return &ValidationError{Name: "application_reason", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.application_reason": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.SubscriptionStatusAtApplication(); !ok {
+	if _, ok := _c.mutation.SubscriptionStatusAtApplication(); !ok {
 		return &ValidationError{Name: "subscription_status_at_application", err: errors.New(`ent: missing required field "CreditGrantApplication.subscription_status_at_application"`)}
 	}
-	if v, ok := cgac.mutation.SubscriptionStatusAtApplication(); ok {
+	if v, ok := _c.mutation.SubscriptionStatusAtApplication(); ok {
 		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
 			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
 		}
 	}
-	if _, ok := cgac.mutation.RetryCount(); !ok {
+	if _, ok := _c.mutation.RetryCount(); !ok {
 		return &ValidationError{Name: "retry_count", err: errors.New(`ent: missing required field "CreditGrantApplication.retry_count"`)}
 	}
-	if _, ok := cgac.mutation.IdempotencyKey(); !ok {
+	if _, ok := _c.mutation.IdempotencyKey(); !ok {
 		return &ValidationError{Name: "idempotency_key", err: errors.New(`ent: missing required field "CreditGrantApplication.idempotency_key"`)}
 	}
 	return nil
 }
 
-func (cgac *CreditGrantApplicationCreate) sqlSave(ctx context.Context) (*CreditGrantApplication, error) {
-	if err := cgac.check(); err != nil {
+func (_c *CreditGrantApplicationCreate) sqlSave(ctx context.Context) (*CreditGrantApplication, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cgac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cgac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -410,101 +410,101 @@ func (cgac *CreditGrantApplicationCreate) sqlSave(ctx context.Context) (*CreditG
 			return nil, fmt.Errorf("unexpected CreditGrantApplication.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cgac.mutation.id = &_node.ID
-	cgac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cgac *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication, *sqlgraph.CreateSpec) {
+func (_c *CreditGrantApplicationCreate) createSpec() (*CreditGrantApplication, *sqlgraph.CreateSpec) {
 	var (
-		_node = &CreditGrantApplication{config: cgac.config}
+		_node = &CreditGrantApplication{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(creditgrantapplication.Table, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
 	)
-	if id, ok := cgac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cgac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(creditgrantapplication.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cgac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(creditgrantapplication.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cgac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cgac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cgac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cgac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cgac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(creditgrantapplication.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cgac.mutation.CreditGrantID(); ok {
+	if value, ok := _c.mutation.CreditGrantID(); ok {
 		_spec.SetField(creditgrantapplication.FieldCreditGrantID, field.TypeString, value)
 		_node.CreditGrantID = value
 	}
-	if value, ok := cgac.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = value
 	}
-	if value, ok := cgac.mutation.ScheduledFor(); ok {
+	if value, ok := _c.mutation.ScheduledFor(); ok {
 		_spec.SetField(creditgrantapplication.FieldScheduledFor, field.TypeTime, value)
 		_node.ScheduledFor = value
 	}
-	if value, ok := cgac.mutation.AppliedAt(); ok {
+	if value, ok := _c.mutation.AppliedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldAppliedAt, field.TypeTime, value)
 		_node.AppliedAt = &value
 	}
-	if value, ok := cgac.mutation.PeriodStart(); ok {
+	if value, ok := _c.mutation.PeriodStart(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodStart, field.TypeTime, value)
 		_node.PeriodStart = value
 	}
-	if value, ok := cgac.mutation.PeriodEnd(); ok {
+	if value, ok := _c.mutation.PeriodEnd(); ok {
 		_spec.SetField(creditgrantapplication.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = &value
 	}
-	if value, ok := cgac.mutation.ApplicationStatus(); ok {
+	if value, ok := _c.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 		_node.ApplicationStatus = value
 	}
-	if value, ok := cgac.mutation.Credits(); ok {
+	if value, ok := _c.mutation.Credits(); ok {
 		_spec.SetField(creditgrantapplication.FieldCredits, field.TypeOther, value)
 		_node.Credits = value
 	}
-	if value, ok := cgac.mutation.ApplicationReason(); ok {
+	if value, ok := _c.mutation.ApplicationReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationReason, field.TypeString, value)
 		_node.ApplicationReason = value
 	}
-	if value, ok := cgac.mutation.SubscriptionStatusAtApplication(); ok {
+	if value, ok := _c.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 		_node.SubscriptionStatusAtApplication = value
 	}
-	if value, ok := cgac.mutation.RetryCount(); ok {
+	if value, ok := _c.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
 		_node.RetryCount = value
 	}
-	if value, ok := cgac.mutation.FailureReason(); ok {
+	if value, ok := _c.mutation.FailureReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldFailureReason, field.TypeString, value)
 		_node.FailureReason = &value
 	}
-	if value, ok := cgac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)
 		_node.Metadata = value
 	}
-	if value, ok := cgac.mutation.IdempotencyKey(); ok {
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(creditgrantapplication.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = value
 	}
@@ -519,16 +519,16 @@ type CreditGrantApplicationCreateBulk struct {
 }
 
 // Save creates the CreditGrantApplication entities in the database.
-func (cgacb *CreditGrantApplicationCreateBulk) Save(ctx context.Context) ([]*CreditGrantApplication, error) {
-	if cgacb.err != nil {
-		return nil, cgacb.err
+func (_c *CreditGrantApplicationCreateBulk) Save(ctx context.Context) ([]*CreditGrantApplication, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(cgacb.builders))
-	nodes := make([]*CreditGrantApplication, len(cgacb.builders))
-	mutators := make([]Mutator, len(cgacb.builders))
-	for i := range cgacb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*CreditGrantApplication, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := cgacb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CreditGrantApplicationMutation)
@@ -542,11 +542,11 @@ func (cgacb *CreditGrantApplicationCreateBulk) Save(ctx context.Context) ([]*Cre
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, cgacb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, cgacb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -566,7 +566,7 @@ func (cgacb *CreditGrantApplicationCreateBulk) Save(ctx context.Context) ([]*Cre
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, cgacb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -574,8 +574,8 @@ func (cgacb *CreditGrantApplicationCreateBulk) Save(ctx context.Context) ([]*Cre
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cgacb *CreditGrantApplicationCreateBulk) SaveX(ctx context.Context) []*CreditGrantApplication {
-	v, err := cgacb.Save(ctx)
+func (_c *CreditGrantApplicationCreateBulk) SaveX(ctx context.Context) []*CreditGrantApplication {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -583,14 +583,14 @@ func (cgacb *CreditGrantApplicationCreateBulk) SaveX(ctx context.Context) []*Cre
 }
 
 // Exec executes the query.
-func (cgacb *CreditGrantApplicationCreateBulk) Exec(ctx context.Context) error {
-	_, err := cgacb.Save(ctx)
+func (_c *CreditGrantApplicationCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgacb *CreditGrantApplicationCreateBulk) ExecX(ctx context.Context) {
-	if err := cgacb.Exec(ctx); err != nil {
+func (_c *CreditGrantApplicationCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

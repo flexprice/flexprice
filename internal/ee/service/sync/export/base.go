@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -45,6 +46,7 @@ type ExportService struct {
 	logger                   *logger.Logger
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
+	revenueFactRepo          revenuefact.Repository
 }
 
 // NewExportService creates a new export service
@@ -89,6 +91,7 @@ func NewExportServiceWithWallet(
 	usageAnalyticsGetter UsageAnalyticsGetter,
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
+	revenueFactRepo revenuefact.Repository,
 ) *ExportService {
 	return &ExportService{
 		meterUsageRepo:           meterUsageRepo,
@@ -105,6 +108,7 @@ func NewExportServiceWithWallet(
 		usageAnalyticsGetter:     usageAnalyticsGetter,
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
+		revenueFactRepo:          revenueFactRepo,
 	}
 }
 
@@ -251,6 +255,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewCreditUsageExporter(s.walletRepo, s.customerRepo, s.walletBalanceGetter, s.integrationFactory, s.logger)
+	case types.ScheduledTaskEntityTypeRevenueFacts:
+		if s.revenueFactRepo == nil {
+			s.logger.Info(context.Background(), "revenue fact repository not configured for revenue facts export")
+			return nil
+		}
+		return NewRevenueFactsExporter(s.revenueFactRepo, s.logger)
 	case types.ScheduledTaskEntityTypeUsageAnalytics:
 		if s.customerRepo == nil || s.subscriptionLineItemRepo == nil {
 			s.logger.Info(context.Background(), "customer or subscription line item repository not configured for usage analytics export",

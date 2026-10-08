@@ -81,6 +81,7 @@ func (s *CreditExpiryInvoiceRaceSuite) SetupTest() {
 		UserRepo:                     stores.UserRepo,
 		AuthRepo:                     stores.AuthRepo,
 		PaymentRepo:                  stores.PaymentRepo,
+		RefundRepo:                   stores.RefundRepo,
 		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
 		CreditNoteRepo:               stores.CreditNoteRepo,
 		CreditNoteLineItemRepo:       stores.CreditNoteLineItemRepo,
@@ -253,9 +254,9 @@ func (s *CreditExpiryInvoiceRaceSuite) TestApplyCreditsToInvoice_ConsumesTheBill
 		s.creditsAvailable(nextGrant.ID))
 }
 
-// Eligible credits stay ordered by expiry: the period's grant drains first and only the
-// overflow reaches the next period's grant.
-func (s *CreditExpiryInvoiceRaceSuite) TestApplyCreditsToInvoice_DrainsPeriodGrantBeforeSpillingOver() {
+// Only credits added for the billed period pay its invoice: once the period's grant is drained
+// the rest stays unpaid, and the next period's grant is untouched.
+func (s *CreditExpiryInvoiceRaceSuite) TestApplyCreditsToInvoice_DoesNotSpillIntoNextPeriodsGrant() {
 	now := time.Now().UTC()
 	periodStart := now.Add(-30 * 24 * time.Hour)
 	periodEnd := now.Add(-3 * time.Hour)
@@ -268,13 +269,13 @@ func (s *CreditExpiryInvoiceRaceSuite) TestApplyCreditsToInvoice_DrainsPeriodGra
 
 	result, err := s.creditAdjustment.ApplyCreditsToInvoice(s.GetContext(), inv)
 	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(40).Equal(result.TotalPrepaidCreditsApplied),
-		"expected 40 applied, got %s", result.TotalPrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(30).Equal(result.TotalPrepaidCreditsApplied),
+		"expected 30 applied, got %s", result.TotalPrepaidCreditsApplied)
 
 	s.True(s.creditsAvailable(periodGrant.ID).IsZero(),
-		"the period's grant must be drained first, got %s remaining", s.creditsAvailable(periodGrant.ID))
-	s.True(decimal.NewFromInt(20).Equal(s.creditsAvailable(nextGrant.ID)),
-		"only the overflow may reach the next grant, got %s remaining", s.creditsAvailable(nextGrant.ID))
+		"the period's grant must be drained, got %s remaining", s.creditsAvailable(periodGrant.ID))
+	s.True(decimal.NewFromInt(30).Equal(s.creditsAvailable(nextGrant.ID)),
+		"the next period's grant must be untouched, got %s remaining", s.creditsAvailable(nextGrant.ID))
 }
 
 // Using period_end as the reference must not reach back and revive grants that had
@@ -437,6 +438,22 @@ func (s *CreditExpiryInvoiceRaceSuite) TestExpireCredits_IgnoresDraftInAnotherCu
 	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
 	s.Require().NoError(err)
 	s.True(result.Expired, "a eur invoice must not hold a usd grant")
+}
+
+// A custom-currency invoice is stored in fiat but paid in its denomination, so it holds a grant in
+// that denomination.
+func (s *CreditExpiryInvoiceRaceSuite) TestExpireCredits_HeldByCustomCurrencyDraft() {
+	tx, periodStart, periodEnd := s.closedPeriodGrant()
+
+	inv := s.subscriptionInvoice("inv_custom_currency", decimal.NewFromInt(12), periodStart, periodEnd)
+	inv.Currency = "eur"
+	inv.CustomCurrency = &types.CustomCurrency{Code: tx.Currency, Rate: decimal.NewFromInt(1)}
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+
+	result, err := s.walletService.ExpireCredits(s.GetContext(), tx.ID)
+	s.Require().NoError(err)
+	s.False(result.Expired, "a draft denominated in the grant's currency must hold it")
+	s.Equal(types.CreditExpirySkipReasonActiveInvoice, result.SkipReason)
 }
 
 // ---------------------------------------------------------------------------

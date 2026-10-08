@@ -130,7 +130,7 @@ erDiagram
         string  price_id
         string  meter_id             "'' for non-usage rows"
         string  aggregation_type     "drives decomposability"
-        enum    revenue_source       "usage|fixed|commitment_trueup|credit_breakage|manual_adjustment"
+        enum    revenue_source       "usage|fixed|commitment_trueup|overage (Phase 4: credit_breakage|manual_adjustment)"
         date    period_start
         date    period_end
         date    day                  "grain"
@@ -139,7 +139,7 @@ erDiagram
         string  recognition_method   "recognition-ready ('' in v1)"
         decimal usage_at_list_rate   "usage rows"
         decimal tier_delta           "graduated only"
-        decimal entitlement_credit   "allowance giveaway"
+        decimal entitlement_amount   "allowance giveaway"
         decimal line_discount
         decimal invoice_discount
         decimal net_amount           "billed revenue, excl tax & prepaid"
@@ -147,7 +147,7 @@ erDiagram
         decimal entitlement_qty
         enum    decomposition_mode   "marginal|period_only"
         string  currency
-        enum    status               "PROVISIONAL|FINAL|REVERTED"
+        enum    status               "PROVISIONAL|FINAL (contra rows: FINAL + is_revert)"
         uint8   is_revert
         string  invoice_id           "draft id, stable through finalize"
         string  invoice_line_item_id
@@ -256,7 +256,7 @@ CREATE TABLE revenue_facts (
     price_id             TEXT,                        -- versioned; amendments create new ids
     meter_id             TEXT,                        -- NULL for fixed / non-usage rows
     aggregation_type     TEXT,                        -- drives decomposability (§6.5); NULL for non-usage
-    revenue_source       TEXT        NOT NULL,        -- usage|fixed|commitment_trueup|credit_breakage|manual_adjustment
+    revenue_source       TEXT        NOT NULL,        -- usage|fixed|commitment_trueup|overage; Phase 4 adds credit_breakage|manual_adjustment
     -- NOTE: no price_type column — revenue_source subsumes usage/fixed; join price_id to `price` for its nature.
 
     -- time
@@ -269,8 +269,8 @@ CREATE TABLE revenue_facts (
 
     -- decomposition (usage rows), GROSS basis, EXCLUDES tax & prepaid
     usage_at_list_rate   NUMERIC(38,9) NOT NULL DEFAULT 0,  -- (billable_qty + entitlement_qty) x list/effective rate
-    tier_delta           NUMERIC(38,9) NOT NULL DEFAULT 0,  -- graduated only: engine Amount - gross_qty x tier1_rate
-    entitlement_credit   NUMERIC(38,9) NOT NULL DEFAULT 0,  -- entitlement_qty x list rate (subtracted)
+    tier_delta           NUMERIC(38,9) NOT NULL DEFAULT 0,  -- graduated only: engine Amount - billable_qty x tier1_rate (usage_at_list_rate stays gross_qty x list_rate)
+    entitlement_amount   NUMERIC(38,9) NOT NULL DEFAULT 0,  -- entitlement_qty x list rate (subtracted)
     line_discount        NUMERIC(38,9) NOT NULL DEFAULT 0,
     invoice_discount     NUMERIC(38,9) NOT NULL DEFAULT 0,
     net_amount           NUMERIC(38,9) NOT NULL,            -- billed revenue for this row (excl tax, excl prepaid)
@@ -281,7 +281,7 @@ CREATE TABLE revenue_facts (
 
     -- lifecycle / audit
     currency             TEXT        NOT NULL,
-    status               TEXT        NOT NULL,        -- 'PROVISIONAL' | 'FINAL' | 'REVERTED'  (§8)
+    status               TEXT        NOT NULL,        -- 'PROVISIONAL' | 'FINAL'; contra rows are FINAL with is_revert=true (§8)
     is_revert            BOOLEAN     NOT NULL DEFAULT false,
     invoice_id           TEXT,                        -- draft id once a draft exists; stable through finalize
     invoice_line_item_id TEXT,                        -- the specific line item, for exact reconciliation
@@ -294,9 +294,9 @@ CREATE TABLE revenue_facts (
 
 -- Exactly one LIVE provisional row per grain -> ON CONFLICT upsert during open-period churn (§8).
 CREATE UNIQUE INDEX revenue_facts_provisional_grain ON revenue_facts
-    (tenant_id, environment_id, subscription_id, price_id, day, revenue_source)
+    (tenant_id, environment_id, subscription_id, price_id, sub_line_item_id, day, revenue_source)
     WHERE status = 'PROVISIONAL';
--- FINAL / REVERTED rows are append-only (no unique constraint) so corrections can be added.
+-- FINAL rows (contra rows included) are append-only (no unique constraint) so corrections can be added.
 
 CREATE INDEX revenue_facts_read    ON revenue_facts (tenant_id, environment_id, day, revenue_source);
 CREATE INDEX revenue_facts_invoice ON revenue_facts (tenant_id, environment_id, invoice_id);
@@ -306,19 +306,19 @@ CREATE INDEX revenue_facts_invoice ON revenue_facts (tenant_id, environment_id, 
 
 **Decomposition-field rationale (reviewed):**
 - `usage_at_list_rate` + `tier_delta` — kept as two fields because the `list` policy (efficiency comparison) needs list rate and graduated pricing needs the delta. Collapsing them would lose list-vs-effective visibility that finance uses.
-- `entitlement_credit` — contra-revenue (value given away as allowance); finance wants it visible.
+- `entitlement_amount` — contra-revenue (value given away as allowance); finance wants it visible.
 - `line_discount` vs `invoice_discount` — kept separate: different origins, allocated differently (invoice-level is spread across lines). Merging loses "where the discount came from."
 - `fixed_charge` / `commitment_trueup` — **not columns.** They are separate `revenue_source` rows carrying `net_amount`, so a usage row never carries always-zero fixed/trueup columns and non-line-item revenue (breakage) fits the same shape.
 - `tax` — **removed** (invoice-level only in the system; §6.6).
 - `net_amount` — the row's billed revenue, tax- and prepaid-excluded.
 
 **Reconciliation (sanity check, not derivation):**
-- usage rows: `net_amount ≈ usage_at_list_rate + tier_delta − entitlement_credit − line_discount − invoice_discount`.
+- usage rows: `net_amount ≈ usage_at_list_rate + tier_delta − entitlement_amount − line_discount − invoice_discount`.
 - `fixed` / `commitment_trueup` rows: `net_amount` = the engine's amount for that charge.
 - Per line item/period: `Σ net_amount == that invoice_line_item's billed amount (excl tax)`.
 - Per invoice: `Σ net_amount == invoice.Subtotal − invoice.TotalDiscount` (pre-tax, pre-prepaid revenue). Tax is verified **separately** against `invoice.TotalTax` at invoice grain. Any gap → alert, never plugged.
 
-**Tiers:** graduated → `usage_at_list_rate = gross_qty × tier1_rate`, `tier_delta = engine Amount − gross_qty × tier1_rate` (one delta, no engine refactor). Volume/package/flat → single resolved rate on all units, `tier_delta = 0`.
+**Tiers:** graduated → `usage_at_list_rate = gross_qty × tier1_rate` (unchanged), `tier_delta = engine Amount − billable_qty × tier1_rate` (one delta, no engine refactor). Using `billable_qty` here — not `gross_qty` — is what makes `net_amount = usage_at_list_rate + tier_delta − entitlement_amount` hold exactly once an allowance is present. Volume/package/flat → single resolved rate on all units, `tier_delta = 0`.
 
 ### 6.4 Linking `invoice_id`
 
@@ -331,7 +331,7 @@ CREATE INDEX revenue_facts_invoice ON revenue_facts (tenant_id, environment_id, 
 **A row is the revenue *earned on that day*, not "revenue up to that day."** This is the single most important thing to understand about the table. The billing engine gives us a *cumulative* number (the charge for everything through day D), but what we **store** is the **marginal difference** — day D's slice alone:
 
 > for a `usage` row, `component(day D) = charge(cumulative usage through D) − charge(cumulative usage through D−1)`,
-> applied to `usage_at_list_rate`, `tier_delta`, and `entitlement_credit` (allowance consumed earliest-first).
+> applied to `usage_at_list_rate`, `tier_delta`, and `entitlement_amount` (allowance consumed earliest-first).
 
 So `SUM(net_amount)` over days 1..D gives the cumulative-through-D; a single row is one day's incremental revenue. You reconstruct any "as of day X" snapshot by summing rows up to X — you never store cumulative values.
 
@@ -355,8 +355,8 @@ So a usage row's `net_amount(D)` is assembled from the day's marginal usage comp
 
 **Step 1 — usage rows (marginal, daily).** The allowance (20,000) is consumed earliest-first, i.e. over days 1–10 (2,000/day). The engine's cumulative *billable* charge is $0 through day 10, then rises $20/day.
 - Day 11's row = `charge(through 11) − charge(through 10)` = $20 − $0 = **$20**. Every later day is the same.
-- Days 1–10: gross `usage_at_list_rate` = $20, `entitlement_credit` = $20, `net_amount` = **$0** (fully inside the allowance — visible as a giveaway, not hidden).
-- Days 11–30: `usage_at_list_rate` = $20, `entitlement_credit` = $0, `net_amount` = **$20**. That's 20 days × $20 = **$400** of usage revenue.
+- Days 1–10: gross `usage_at_list_rate` = $20, `entitlement_amount` = $20, `net_amount` = **$0** (fully inside the allowance — visible as a giveaway, not hidden).
+- Days 11–30: `usage_at_list_rate` = $20, `entitlement_amount` = $0, `net_amount` = **$20**. That's 20 days × $20 = **$400** of usage revenue.
 
 **Step 2 — fixed row (period_only).** One row on **day 1** (advance cadence): `revenue_source=fixed`, `net_amount=$30`, `decomposition_mode=period_only`. (Not $1/day — that straight-line spread is the *recognized* view, Phase 4.)
 
@@ -364,7 +364,7 @@ So a usage row's `net_amount(D)` is assembled from the day's marginal usage comp
 
 **Resulting rows (representative):**
 
-| day | revenue_source | usage_at_list_rate | entitlement_credit | net_amount | mode |
+| day | revenue_source | usage_at_list_rate | entitlement_amount | net_amount | mode |
 |---|---|---:|---:|---:|---|
 | 1 | fixed | – | – | 30.00 | period_only |
 | 1 | usage | 20.00 | 20.00 | 0.00 | marginal |
@@ -434,7 +434,7 @@ sequenceDiagram
         alt period still open
             RJ->>RF: INSERT ... ON CONFLICT (provisional grain) DO UPDATE, version++
         else finalized / accounting-locked
-            RJ->>RF: INSERT REVERTED row(s) + fresh FINAL rows
+            RJ->>RF: INSERT contra row(s) (FINAL, is_revert=true) + fresh FINAL rows
         end
     end
 ```
@@ -457,8 +457,7 @@ stateDiagram-v2
     [*] --> PROVISIONAL: period opens
     PROVISIONAL --> PROVISIONAL: rebuild (upsert in place, version++)
     PROVISIONAL --> FINAL: invoice finalized + reconcile assert
-    FINAL --> REVERTED: correction — append REVERTED (negatives)
-    REVERTED --> FINAL: fresh FINAL rows (new version)
+    FINAL --> FINAL: correction — append contra rows<br/>(FINAL, is_revert=true, negated)<br/>then fresh FINAL rows (new version)
     note right of PROVISIONAL
         Lock 1: invoice finalization
         (per subscription-period)
@@ -476,9 +475,28 @@ stateDiagram-v2
 
 **Storage by lock state** (Postgres):
 - **Open / provisional** → **upsert in place.** The partial unique index on the grain (`WHERE status='PROVISIONAL'`, §6.3) makes each rebuild an `INSERT … ON CONFLICT … DO UPDATE` that bumps `version` — one live provisional row per grain, high churn, nobody depends on it yet.
-- **Finalized or accounting-locked** → **append-only, corrected via reverts.** These rows carry no unique constraint, so there is **no `AMENDED` state**: a correction `INSERT`s **`REVERTED`** rows (the exact negatives of what's being corrected, `is_revert=true`) plus fresh `FINAL` rows with a new `version`. Summing all rows is self-correcting (original + its `REVERTED` twin = 0). Closed accounting periods are never mutated in place.
+- **Finalized or accounting-locked** → **append-only, corrected via reverts.** These rows carry no unique constraint, so there is **no `AMENDED` state**: a correction `INSERT`s **contra rows** — the exact negatives of what's being corrected, kept at `status=FINAL` and identified by `is_revert=true` — plus fresh `FINAL` rows with a new `version`. Summing all rows is self-correcting (original + its contra twin = 0). Closed accounting periods are never mutated in place.
 
 **`lock_adjusted_day`** is the day a row is *recognized* given lock posture: it equals `day` when the period is open, and shifts to the **first day of the next open period** when the real period is closed — a "catch-up" so a closed month is never rewritten. Reports key on `lock_adjusted_day`; analytics/attribution key on `day`.
+
+### 8.1 Lifecycle hooks & operating guardrails (Phase 2)
+
+The invoice lifecycle drives the fact lifecycle through two async, non-blocking hooks (shadow write-path: an error is logged, the billing result is never affected):
+
+| Invoice event | Fact effect |
+|---|---|
+| **Finalized** | `FinalizeSubscriptionPeriod`: flip `PROVISIONAL → FINAL`, stamp `invoice_id`/`invoice_line_item_id`, re-assert reconciliation. If **zero** rows flip (invoice re-drafted after a void, or a window the schedule never covered), decompose the finalized invoice's own line items into `period_only` provisional rows just-in-time and flip again (`jitRollupFromInvoice`); a persistent gap logs `revenue_facts_flip_gap`. |
+| **Voided** | `RevertInvoiceFacts`: post one contra row per FINAL fact stamped with the invoice — negated amounts, `is_revert=true`, same grain and invoice stamps. Idempotent and transactional. The replacement draft, once finalized, gets fresh facts via the normal flip (or the JIT path above). |
+
+**Backdated changes** (late events, backdated price edits) into a period whose invoice is already FINAL do **not** rewrite FINAL rows. In Phase 2 the recompute-vs-booked divergence surfaces only as a reconciliation log; the drift-detection pass shipped with Phase 2b (`SweepDrift`: compare booked FINAL facts against the invoice, flag `revenue_facts_drift` per invoice, repair behind `auto_correct`); once accounting-period locks exist (deferred, see Q6), corrections post on `lock_adjusted_day`. Auto-correction stays behind an explicit flag — the default posture is flag, don't fix.
+
+**Guidelines for consumers of `revenue_facts`:**
+
+- `FINAL` rows are booked/reportable revenue; `PROVISIONAL` rows are the in-progress preview. Never mix the two in one metric without labeling.
+- **Always sum with reverts included** — never filter `is_revert = false` when computing recognized revenue; the contra rows are what make voided invoices net to zero.
+- Join back to billing through `invoice_id`. A FINAL fact whose invoice is VOIDED is stale only until its revert row lands (async, seconds).
+- Rows change only through the rollup / flip / revert lifecycle — no out-of-band mutation, ever.
+- The rollup only runs for tenants opted in via the `revenue_analytics_config` setting (per tenant+environment), so absence of rows for a tenant means "not enabled", not "zero revenue".
 
 ---
 
@@ -550,10 +568,48 @@ The metric decides which **source table** the view reads — all of them served 
 | Metric kind | Source table (in CH B) | Adjustments |
 |---|---|---|
 | **Usage** (`usage_quantity`, `event_count`, `billable_usage`, `overage_units`) | `meter_usage` | "Adjusted" usage (`billable_usage`, `overage_units`) is computed **at runtime** by applying the *current* entitlement/price config to the raw usage — never stored, so it can't go stale. |
-| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_credit`, …) | `revenue_facts` (authored in Postgres, synced to CH B) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue joins `meter_usage` for the usage share — a single-store join in CH (B). |
+| **Revenue** (`revenue`, `usage_at_list_rate`, `entitlement_amount`, …) | `revenue_facts` (authored in Postgres, synced to CH B) | Money is **not** derived from `meter_usage` at read time — tiers/allowances/commitments make `usage × rate` wrong. It is read from `revenue_facts`, which the engine already priced. Custom-dimension revenue joins `meter_usage` for the usage share — a single-store join in CH (B). |
 | **Ledger** (credit top-ups, balance, price-change history) | `wallet_transactions`, … (synced to CH B) | Simple filters/sums; no pricing. |
 
 So every view — usage, revenue, or ledger — executes against CH (B). The money still originates from `revenue_facts` (authored in Postgres, never recomputed as `usage × rate`); serving just reads the synced copy. A view that mixes a usage metric and a revenue metric is a single-store join in CH (B), not a cross-store hop.
+
+### 9.3 Custom metrics — caller-specified aggregation (fast-follow after Phase 2 slice 1)
+
+The built-in usage metrics (`usage_quantity`, `event_count`) aggregate a meter's **pre-materialized** quantity (`qty_total`), i.e. the aggregation is fixed by the meter's config. A **custom metric** lets a view choose the **aggregation and field at query time** — e.g. `AVG(properties.latency)` — independent of any meter's configured aggregation.
+
+- **Model.** A new `custom` value in the metric enum plus a `customMetrics` list of `{name, aggregation, field}`. A view may **mix** built-in and custom metrics; only the `customMetrics` entries are powered by the ad-hoc path. Existing views are unchanged.
+- **Powered over `meter_usage`, billing-decoupled.** The serving layer runs the already-billing-free admin path (no subscription/commitment/entitlement/cost logic) and emits `AGG(JSONExtract…(properties,'field'))` — the same expression pattern the raw-`events` usage engine already uses — instead of the meter's baked `qty_total`. `meter_usage` retains raw `properties`, so this needs no new stored column.
+- **Supported aggregations:** `SUM`, `COUNT`, `MAX`, `AVG`, `LATEST`, `MIN`. **`count_unique` is excluded** — its dedup hash is materialized at ingestion only for a registered `count_unique` meter, so ad-hoc distinct-count isn't possible without pre-materialization. `weighted_sum` / `sum_with_multiplier` / bucketed carry multi-field or bucket-size semantics and are not single-field ad-hoc.
+- **Bounded to registered-meter usage.** `meter_usage` only stores events that matched a registered meter, so a custom metric aggregates *a meter's rows by a caller-chosen field*, not arbitrary meter-free events. Truly meter-free ad-hoc aggregation over arbitrary events is the raw-`events` engine (`GetUsage`), a separate surface not folded in here.
+- **Phasing.** A Phase-1 serving refinement — additive to the translator + `meter_usage` query builder (the detailed-analytics params already carry an aggregation-type hook). Scheduled as a **fast-follow after** the `revenue_facts` write-path (Phase 2, slice 1), not entangled with it.
+
+### 9.4 Revenue views — `metric: revenue` (Phase 3a plan)
+
+`GetRevenueAnalytics` already answers the revenue question (grouping, day/period/total granularity, `billed`/`amortized` allocation, adjustment breakout) **from Postgres**. Phase 3a is therefore a *translator* change, not an infrastructure one: a saved view gains `revenue` as a metric and the serving layer delegates instead of querying `meter_usage`.
+
+**Routing.** `ExecuteView` inspects the resolved metrics. Usage metrics keep the `meter_usage` path; `revenue` builds a `RevenueAnalyticsRequest` and calls the revenue service. A view mixing `revenue` with usage metrics is **rejected** in 3a — the two come from different stores at different grains, and silently joining them would invent precision that is not there.
+
+**Mapping.**
+
+| View field | Revenue request |
+|---|---|
+| `time.range` | `start_time` / `end_time` (whole UTC days) |
+| `shape: breakdown` | `granularity: total` |
+| `shape: timeseries` + `grain: day` | `granularity: day` |
+| `shape: timeseries` + `grain: week`/`month` | `granularity: week`/`month` (calendar, UTC) |
+| `dimensions` | `group_by` |
+| `filters` (`customer_id`, `subscription_id`, `price_id`, `meter_id`, `currency`, `source`) | the matching filter list |
+| `allocation_policy` | `allocation_policy` (default `billed`) |
+| `include_adjustments` | `include_adjustments` |
+| `status` | `status` (default `effective`, below) |
+
+**Dimension validation becomes metric-aware.** Today `ValidateDimensions` enforces the `meter_usage` allowlist (`meter_id`, `source`, `external_customer_id`, `customer_id`, `properties.<field>`). Revenue's allowlist is `revenue_source`, `source`, `customer_id`, `subscription_id`, `price_id`, `meter_id`, `currency` — no `properties.<field>` (facts carry no event properties), and `source` costs a per-subscription usage read, so it keeps its customer/subscription-filter requirement.
+
+**Decisions for 3a**
+
+1. **Calendar grains, never billing periods.** A view's `grain` maps to a calendar bucket — `day → day`, `week → week`, `month → month` (UTC) — which means adding `week` and `month` to `RevenueGranularity` beside the existing `day`/`period`/`total`. Aliasing `month → period` was rejected: subscriptions are not all monthly, so a "month" view over quarterly or annual subscriptions would silently return quarter- or year-long buckets, and a result mixing subscriptions of different billing periods would carry buckets of different lengths in one series — not plottable and not comparable. Calendar bucketing is exact for marginal rows (each is one day's delta) and composes with the allocation policy for whole-period charges: `billed` lands them in the month containing their booked day, `amortized` spreads them across the period's days, which then roll into calendar months proportionally. `period` granularity stays available on the revenue API for billing-aligned questions, but is not exposed as a view grain.
+2. **`revenue` = `net_amount`.** The decomposition (`usage_at_list_rate`, `tier_delta`, `entitlement_amount`, `line_discount`, `invoice_discount`, `billable_qty`, `entitlement_qty`) is available as additional named metrics rather than eight columns by default.
+3. **Status is optional, and part of a row's identity.** Defaulting to either one alone is a trap: `FINAL` hides the period currently accruing, and `PROVISIONAL` hides *all history* (past periods flip to FINAL), so a "last 90 days" view would silently show only the open period. Left empty, the response carries both and each row states its `status`, so the two are never summed into one number by accident — the caller decides whether to add them. Naming a status narrows to it. This replaces the earlier "effective union with read-time dedupe" sketch: keeping status in the key makes the dedupe question moot, since a booked and an in-progress row for the same bucket simply stay separate.
 
 ---
 
@@ -608,23 +664,68 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 5. No query executes without tenant + environment predicates injected by the serving layer.
 6. No cache entry is keyed without tenant + environment.
 7. Analytics tables are never read by the invoicing path.
-8. Finalized / accounting-locked rows are never mutated in place — corrections are append + `REVERTED`.
+8. Finalized / accounting-locked rows are never mutated in place — corrections append contra rows (`FINAL` + `is_revert=true`).
 9. The rollup reads pre-aggregated `meter_usage`, never raw events.
 10. Multi-period commitments use the standard preview path + our cumulative prior-base, never the internal-preview path.
 11. Revenue-facts join to invoices on the **line item's** subscription, never the invoice's (grouped invoicing).
 
 ---
 
-## 14. Phasing
+## 14. Phasing (recalibrated after slice 1)
+
+Order of operations changed from the original plan: **make `revenue_facts`
+correct and complete first, share it with tenants through exports, and only
+then build views/query serving** — PeerDB → ClickHouse (B) is a parallel
+workstream, and the recognition engine builds on ClickHouse once sync is live.
 
 | Phase | Ships | Proves | Prerequisites |
 |---|---|---|---|
-| **1** | Saved-view model + serving translator + `/analytics/query` over `meter_usage` (usage only). `timeseries` + `breakdown`. | The view model expresses today's hand-built usage views. | none |
-| **2** | `revenue_facts` (daily, columnar, multi-source) + preview rollup + engine day-checkpoints + cumulative commitment prior-base + append/`REVERTED` + two-lock lifecycle + `usage`/`fixed`/`commitment_trueup` sources + **structural** revenue breakdowns + reconciliation asserts. Run silently one full cycle. | Billed money in-surface, reconciling, at daily grain. | engine cumulative-checkpoint entry point; decomposition-mode classifier |
-| **3** | **Custom-dimension** revenue allocation + `billed`/`amortized` presets + non-usage ledger views. | Flexible revenue slicing that reconciles. | Phase 2 green |
-| **4** | Warehouse export; evidence-driven acceleration; **ASC 606 recognition engine** (recognized/deferred/unbilled, straight-line fixed, usage recognition, `credit_breakage`, period locks). | Tenant BI; recognized revenue. | query-log evidence; recognition spec |
+| **1** *(done)* | Saved-view model + serving translator + `/analytics/query` over `meter_usage` (usage only). | The view model expresses today's hand-built usage views. | none |
+| **2a — coverage** *(done)* | Close the deliberate skips so real tenants produce rows: **discount decomposition** (line/invoice discounts into `line_discount`/`invoice_discount`), **commitment-aware usage split** (single-period overage), **grant-aware daily split** (today grant-billed meters stay period_only), **multi-period commitment prior-base** (Q3). | Skip-rate ≈ 0 on real tenants; reconciliation green a full cycle. | slice 1 (shipped) |
+| **2b — trust** *(done, minus the lock)* | **Drift sweeper** (re-derive vs stamped FINAL, flag `revenue_facts_drift`; auto-correct behind a flag), **accounting-period lock** + `lock_adjusted_day` catch-up posting, promote flip/revert hooks to **Temporal** (guaranteed delivery). | Booked data stays correct under backdated changes and crashes. | Q6 (lock ownership) for the lock piece only |
+| **2c — export (first tenant surface)** *(done)* | Scheduled `revenue_facts` **export** per opted-in tenant: full snapshot then incremental (watermark on `computed_at`/`version`), CSV/Parquet to object storage + signed URL or pull API, with a column dictionary and the §8.1 consumer guardrails in the delivered README. | Tenants get correct, understandable revenue data without waiting for serving. | 2a reconciliation green (2b parallel) |
+| **3a — revenue views on Postgres** *(next)* | `revenue` metric in the view translator, delegating to `GetRevenueAnalytics` (§9.4). Saved revenue views, `billed`/`amortized` presets, adjustment breakout. | Flexible revenue slicing that reconciles, through the same saved-view surface as usage. | 2a green (**not** PeerDB — the read API already serves from Postgres) |
+| **3b — serving on CH (B)** | PeerDB sync live (parallel workstream) → the same view translator reads facts from ClickHouse instead of Postgres; custom-dimension breakdowns, ledger views. | Near-realtime revenue slicing at warehouse scale. | PeerDB sync; 3a |
+| **4 — recognition** | **ASC 606 recognition engine on ClickHouse** (recognized/deferred/unbilled, straight-line fixed, usage recognition, `credit_breakage`), populating `service_start`/`service_end`/`recognition_method`; warehouse-grade export GA. | Recognized revenue for finance. | 2b locks; Phase 3 infra; recognition spec |
 
-**Phase 2 gate:** do not expose revenue breakdowns until reconciliation (invariants 1–2) has been green for a full cycle.
+**Gate unchanged:** no tenant-facing revenue surface (export included) until reconciliation (invariants 1–2) has been green for a full cycle.
+
+### 14.1 Status (updated after Phase 2c + dev verification)
+
+**Shipped — write path complete, shadow-only (PR #2872):**
+
+- `revenue_facts` table (Postgres): provisional-grain partial unique index incl. `sub_line_item_id`; Ent entity + dbmate migration.
+- Rollup under `ReferencePointRevenueFacts`: cumulative daily curve (answers Q2 — one customer-scoped `meter_usage` read + pure `CalculateCost` re-pricing), sources `usage`/`fixed`/`commitment_trueup`/`overage`, marginal vs period_only classifier, inputs (prices, meters, entitlements, grants, customer scope) hydrated once per pass.
+- **Discounts decompose** (Phase 2a): coupon amounts dry-run over the preview — nothing persisted, no redemption counted — each line's own discount plus an exact-sum allocated share of invoice-level discounts lands in `line_discount`/`invoice_discount`, spread across marginal days in proportion to each day's charge. Row identity: `net == list + tier − entitlement − line_discount − invoice_discount`.
+- **Overage decomposes** (Phase 2a): commitment-exceeded subscriptions write period_only usage rows plus an `overage`-source row; nothing is skipped.
+- **Grant/value-based entitlements** (Phase 2a→2b): grant-billed usage splits per day (`marginal`) from the grants' quota-crossed windows, falling back to `period_only` only when the shape is unknowable; `entitlement_qty`/`entitlement_amount` carry the daily entitled-vs-billed breakdown.
+- Lifecycle: finalize → FINAL flip (+ JIT fallback from the invoice), void → contra rows (`FINAL` + `is_revert=true`), hooks on every status-transition path incl. payment-processor auto-finalize.
+- Scheduling: hourly Temporal schedule, config kill switch in the activity, per-tenant opt-in setting, per-environment indexed scan, `Since` backfill input.
+- Reconciliation asserts at row (marginal) / line-item / invoice / FINAL grain — logged, never blocking. Only remaining policy skip: multi-period commitments (Q3).
+
+**Shipped — Phase 2b (trust) and 2c (export):**
+
+- **Drift sweeper** (`ReconcileBookedInvoices`, second activity of the daily rollup workflow): re-checks every invoice finalized or voided in the lookback window (windowed on the lifecycle timestamps `finalized_at`/`voided_at`, so late transitions on old invoices are still caught) against its booked facts; drift kinds `missing_flip` / `amount_mismatch` / `missing_revert` are logged, and repair (revert → re-derive from the invoice → flip) runs only under `analytics.revenue_rollup.auto_correct` (default off — flag, don't fix). An invoice already corrected once flags for manual intervention rather than risk double-booking. The sweep makes the goroutine lifecycle hooks eventually consistent, which is why they deliberately stay goroutines instead of Temporal workflows.
+- **Grant-billed usage splits per day** (best effort): usage inside the grants' merged quota-crossed windows is billed, the rest entitled — marginal rows show "out of X entitled, Y used today" even when nothing is billed. The money shape scales to the engine's charge exactly (snapshot drift lands in `tier_delta`), and lines the engine's own grant guard rejects use the normal curve; an unknowable shape falls back to period_only.
+- **Tenant export** (`docs/export/revenue-facts.md`): **scheduled S3 export** — `revenue_facts` is a `ScheduledTaskEntityType`; a tenant-configured scheduled task delivers a daily CSV of rows recomputed in its window to the tenant's own S3, through the same export pipeline as events/invoices. Schedule it a few hours after the daily rollup (03:00 UTC) so the day's facts are settled; windows pair as (start, end] so boundary rows never gap or duplicate, and re-exported rows dedupe by (id, version). Gated on the tenant's opt-in setting. (A pull-API CSV route existed briefly and was removed — the scheduled export is the one delivery path.) PeerDB → CH (B) lands in parallel (staging sync already near-realtime).
+- **Lifecycle covered by unit tests end to end** (`revenue_e2e_test.go`): repeated ingestion incl. backdated events → rollups at different times (versions bump in place) → finalize/flip → void/revert → re-finalize via the invoice fallback → sweep detects and repairs a missing flip → clean second sweep → export snapshot, incremental and denial.
+- Cadence: the rollup + sweep schedule runs daily (03:00 UTC by default; interval configurable).
+
+**Shipped — commitment overage splits per day + the revenue analytics read surface:**
+
+- **Overage is marginal**: the engine pairs each usage line with its overage sibling (same `sub_line_item_id`, within-commitment amount N and overage amount O on the invoice). Each pair's daily curve splits at the commitment boundary — days until N bill as usage, the excess accrues as `overage`-source rows scaled to O — per line item, exact for non-bucketed meters too. Quantities split at the tier-curve boundary (a binary-search charge inverse), so graduated pricing books the right units on each half, not money divided by the first-tier rate. **Line-level commitments** (which the engine folds into the usage line's own amount, breakdown on `CommitmentInfo`) split back out the same way: within-commitment usage per day, a `commitment_trueup` row (the whole line when the meter fired no events), and per-day `overage` rows — all on the line's real price, so one flip covers them. Windowed (per-bucket) commitments on week or month windows keep whole-period usage; on day-grain windows they settle per day (next bullet). Whole-period is now a genuine last resort (volume tiers, non-additive aggregations — LATEST/AVG/WEIGHTED_SUM and plain MAX, since the cumulative curve reads a SUM of quantities — and grant+overage overlap). **Bucketed pricing splits per day** through a second curve that prices each window the way the engine charges it and groups windows into days: a $1-per-10 package on daily buckets bills $1 every day, which re-pricing a running total would report as $1 once. Windows are cut in UTC (the convention the engine's bucketed reads use) while revenue days follow the subscription's timezone, so a window is attributed to the day holding its start — the period total is unaffected because the curve scales to the engine's amount. Week and month windows span days and stay whole-period.
+- **Bucketed commitments settle per day too**: a windowed (per-bucket) commitment charges each window against its own committed minimum, so a line can run over on one day and fall short on the next. `WindowCommitmentBreakdown` replays the engine's own per-window math — the same empty-window fill, the same per-bucket charge — and committed usage, overage and true-up each land on the day their window covers instead of collapsing onto one period_only row apiece. An empty window still bills its commitment as that day's true-up, matching the engine. (`getDetailedAnalytics` was evaluated and rejected as a source: it handles commitments but cannot supply the entitlement/list-rate decomposition the row identity needs.)
+- **`POST /v1/analytics/revenue` (GetRevenueAnalytics)**: aggregates facts at day/period/total granularity, capped at a 90-day range and a 250k-row scan budget. `revenue_source` is **always a dimension** (every row says what kind of revenue it is — mirroring usage analytics' default grouping); `source`/customer/subscription/price/meter/currency group on top. The S3 export likewise carries `revenue_source` on every row (rows are per-source by grain); the event `source` is not an export column — it is derived at read time, not stored on facts. The day-vs-period "option" is a read-time **allocation policy** over unchanged rows — `billed` keeps whole-period charges on their booked day, `amortized` spreads them evenly across their period (Q5 answered: policy per request, even-spread v1, usage-weighted later); `contains_allocated` flags day views carrying period-shaped amounts. **Adjustments fold by default** (true-up/overage into usage, reverts into their source) so visible rows read as plain usage/fixed; `include_adjustments` breaks them out as separate rows labeled per kind in `adjustment_type` (`commitment_trueup` | `overage` | `revert`), with identical totals. **Event-source dimension**: `group_by: source` allocates usage/overage fact metrics across the event sources recorded in `meter_usage` (the same source the usage-analytics export groups by) — marginal rows follow their day's source mix, whole-period rows the request window's, quantity-weighted with exact remainders; fixed/true-up amounts have no events behind them and land unattributed. It reads per-subscription usage, so it requires a customer or subscription filter and caps the fan-out at 50 distinct subscriptions. Gated on the tenant opt-in; the later view-translator `metric: revenue` delegates here.
+
+**Shipped — packaging and dev verification (PR #2884 merged, follow-up #2894):**
+
+- **Own package**: the implementation lives in `internal/ee/service/revenue` (see its `AGENTS.md`); the service layer reaches it only through `interfaces.RevenueService` on `ServiceParams.RevenueFacts`, injected in main, so there is no import cycle and the same pattern extends to future sub-services.
+- **Verified against dev data end to end**: rollup → analytics → export, plus the saved-view surface (`/analytics/query`, `/analytics/views`, `/analytics/views/{id}/query`) over the same seeded tenant. Schema confirmed in sync (all 33 `revenue_facts` columns, provisional-grain unique index incl. `sub_line_item_id`) — **no migrations outstanding**.
+- **Windows are day-grained** (#2894): facts are keyed by day, so the fact filter and the event-source share query both span whole UTC days. A request bounded mid-day used to drop that day's events and silently return `source: ""`. `end_time` is now optional (defaults to now), the response echoes the resolved query, and the daily curve stops after today instead of writing a zero row per future day of an open period.
+
+**Known gaps found while testing on dev (not revenue-specific):** a `FIXED`/`ADVANCE` price makes subscription creation fail with `getting invoice failed` (advance-invoice path, `GetForUpdate`); and subscription line items inherit the **price's** `start_date`, so backdating a subscription without backdating its prices silently clips all historical usage to zero.
+
+**Deferred (picked up later):** multi-period commitment prior-base (Q3 — decided: out of scope for revenue_facts until a rollup-maintained prior base is designed; such subscriptions are skipped); accounting-period lock + `lock_adjusted_day` posting (Q6 — will be a tenant setting, docs only for now);  cleanup of stale PROVISIONAL rows on subscriptions that cancel before their period ever invoices (the sweep is invoice-anchored and never sees them — harmless to sums once consumers filter on status, but worth a janitor); invoices finalized more than the sweep lookback after creation need a manual `Since` backfill; Phase 3 serving; Phase 4 recognition.
 
 ---
 
@@ -636,17 +737,17 @@ Concretely, this is the billed-vs-recognized split the fixed-charge example make
 
 **Q3 — Multi-period commitment prior-base.** For an annual commitment billed monthly, month N needs cumulative consumption from months 1..N-1; the engine reads it only from *finalized* invoices and degrades silently otherwise. *Why it matters:* the rollup produces provisional numbers before finalization, exactly when the engine's source is incomplete. *Resolved by:* fixing the fields of a rollup-maintained cumulative prior-base (sum of usage-line base; overage lines ÷ overage factor; true-up excluded), where it's stored, and the rule gating true-up to the final period.
 
-**Q4 — PeerDB sync coverage/latency into CH (B), and the CH (A) migration path.** All serving reads hit CH (B), fed by PeerDB from Postgres (`revenue_facts`, invoices, entities, wallet) plus `meter_usage` from CH (A). *Why it matters:* provisional revenue freshness and reconciliation timing depend on sync lag; and we've asserted the `revenue_facts` primary can later move Postgres → CH (A) without changing serving. *Resolved by:* confirming which tables PeerDB replicates into CH (B) and the observed lag; and sketching the CH (A) primary-migration (dual-write or cutover) so the "movable primary" claim is real, not aspirational.
+**Q4 — PeerDB sync coverage/latency into CH (B), and the CH (A) migration path.** All serving reads hit CH (B), fed by PeerDB from Postgres (`revenue_facts`, invoices, entities, wallet) plus `meter_usage` from CH (A). *Why it matters:* provisional revenue freshness and reconciliation timing depend on sync lag; and we've asserted the `revenue_facts` primary can later move Postgres → CH (A) without changing serving. *Status:* staging PeerDB sync is running and near-realtime; remaining work is confirming table coverage for serving and the CH (A) primary-migration sketch.
 
 **Q5 — Allocation basis for `period_only` daily shape.** Rendering a daily shape for a non-decomposable item allocates the period total proportionally, proposed as that day's usage share. *Why it matters:* for volume tiers and `LATEST`/`AVG` meters this is defensible but not unique; even-spread may read better for some. *Resolved by:* picking a default and checking it against real volume-tier and `LATEST` examples; decide if it's per-aggregation-type.
 
-**Q6 — Ownership and rules of the accounting-period lock.** `lock_adjusted_day` and catch-up assume someone closes periods. *Why it matters:* it determines whether this is a tenant-facing finance control, the catch-up posting rule for backdated activity, and its interaction with invoice finalization. *Resolved by:* a product decision on period-close ownership and a short spec of catch-up rules.
+**Q6 — Ownership and rules of the accounting-period lock.** `lock_adjusted_day` and catch-up assume someone closes periods. *Why it matters:* it determines whether this is a tenant-facing finance control, the catch-up posting rule for backdated activity, and its interaction with invoice finalization. *Decided:* the lock is a tenant-level setting (like the invoice-finalization delay): the tenant configures the close frequency/dates (e.g. monthly or quarterly on day N), and the system locks revenue_facts for closed periods automatically; backdated corrections then post on `lock_adjusted_day`. Ships with Phase 2b.
 
-**Q7 — Retention at daily grain.** Daily `revenue_facts` grows with `subscriptions × prices × days`. *Why it matters:* replica storage vs. how far back tenants query at daily resolution. *Resolved by:* a retention policy (e.g. daily for N months, then monthly), informed by expected volume.
+**Q7 — Retention at daily grain.** Daily `revenue_facts` grows with `subscriptions × prices × days`. *Why it matters:* replica storage vs. how far back tenants query at daily resolution. *Decided:* retention is forever — daily `revenue_facts` rows are never rolled up or expired; storage is revisited only if volume ever forces it.
 
 **Q8 — Export mechanism.** Destinations, full-snapshot vs. incremental watermark, dedupe semantics. *Why it matters:* it's the interface tenants' BI depends on; wrong choices create duplicate/stale rows. *Resolved by:* a Phase-4 export design following "first full snapshot, then daily incremental."
 
-**Q9 — Breakage timing and reconciliation.** Expired credits (`CREDIT_EXPIRED` debits) become `credit_breakage` revenue, but this is recognition-era and does not tie to an invoice. *Why it matters:* it's revenue with no invoice anchor, so it needs its own correctness story (when recognized, at what amount/cost-basis). *Resolved by:* the Phase-4 recognition spec.
+**Q9 — Breakage timing and reconciliation.** Expired credits (`CREDIT_EXPIRED` debits) become `credit_breakage` revenue, but this is recognition-era and does not tie to an invoice. *Why it matters:* it's revenue with no invoice anchor, so it needs its own correctness story (when recognized, at what amount/cost-basis). *Resolved by:* the Phase-4 recognition spec (breakage is recognition-era revenue with no invoice anchor; it enters `revenue_facts` as its own source with its own reconciliation once the recognition engine exists).
 
 ---
 

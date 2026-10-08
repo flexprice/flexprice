@@ -73,7 +73,7 @@ func (*SystemEvent) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the SystemEvent fields.
-func (se *SystemEvent) assignValues(columns []string, values []any) error {
+func (_m *SystemEvent) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -83,87 +83,87 @@ func (se *SystemEvent) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				se.ID = value.String
+				_m.ID = value.String
 			}
 		case systemevent.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				se.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case systemevent.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				se.Status = value.String
+				_m.Status = value.String
 			}
 		case systemevent.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				se.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case systemevent.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				se.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case systemevent.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				se.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case systemevent.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				se.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case systemevent.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				se.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case systemevent.FieldEventName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field event_name", values[i])
 			} else if value.Valid {
-				se.EventName = value.String
+				_m.EventName = value.String
 			}
 		case systemevent.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				se.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case systemevent.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				se.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case systemevent.FieldWebhookMessageID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field webhook_message_id", values[i])
 			} else if value.Valid {
-				se.WebhookMessageID = new(string)
-				*se.WebhookMessageID = value.String
+				_m.WebhookMessageID = new(string)
+				*_m.WebhookMessageID = value.String
 			}
 		case systemevent.FieldPublishedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field published_at", values[i])
 			} else if value.Valid {
-				se.PublishedAt = new(time.Time)
-				*se.PublishedAt = value.Time
+				_m.PublishedAt = new(time.Time)
+				*_m.PublishedAt = value.Time
 			}
 		case systemevent.FieldPayload:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field payload", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &se.Payload); err != nil {
+				if err := json.Unmarshal(*value, &_m.Payload); err != nil {
 					return fmt.Errorf("unmarshal field payload: %w", err)
 				}
 			}
@@ -171,17 +171,17 @@ func (se *SystemEvent) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_count", values[i])
 			} else if value.Valid {
-				se.FailureCount = int(value.Int64)
+				_m.FailureCount = int(value.Int64)
 			}
 		case systemevent.FieldFailureReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
 			} else if value.Valid {
-				se.FailureReason = new(string)
-				*se.FailureReason = value.String
+				_m.FailureReason = new(string)
+				*_m.FailureReason = value.String
 			}
 		default:
-			se.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -189,80 +189,80 @@ func (se *SystemEvent) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the SystemEvent.
 // This includes values selected through modifiers, order, etc.
-func (se *SystemEvent) Value(name string) (ent.Value, error) {
-	return se.selectValues.Get(name)
+func (_m *SystemEvent) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this SystemEvent.
 // Note that you need to call SystemEvent.Unwrap() before calling this method if this SystemEvent
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (se *SystemEvent) Update() *SystemEventUpdateOne {
-	return NewSystemEventClient(se.config).UpdateOne(se)
+func (_m *SystemEvent) Update() *SystemEventUpdateOne {
+	return NewSystemEventClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the SystemEvent entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (se *SystemEvent) Unwrap() *SystemEvent {
-	_tx, ok := se.config.driver.(*txDriver)
+func (_m *SystemEvent) Unwrap() *SystemEvent {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: SystemEvent is not a transactional entity")
 	}
-	se.config.driver = _tx.drv
-	return se
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (se *SystemEvent) String() string {
+func (_m *SystemEvent) String() string {
 	var builder strings.Builder
 	builder.WriteString("SystemEvent(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", se.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(se.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(se.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(se.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(se.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(se.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(se.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(se.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("event_name=")
-	builder.WriteString(se.EventName)
+	builder.WriteString(_m.EventName)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(se.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(se.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
-	if v := se.WebhookMessageID; v != nil {
+	if v := _m.WebhookMessageID; v != nil {
 		builder.WriteString("webhook_message_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := se.PublishedAt; v != nil {
+	if v := _m.PublishedAt; v != nil {
 		builder.WriteString("published_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
-	builder.WriteString(fmt.Sprintf("%v", se.Payload))
+	builder.WriteString(fmt.Sprintf("%v", _m.Payload))
 	builder.WriteString(", ")
 	builder.WriteString("failure_count=")
-	builder.WriteString(fmt.Sprintf("%v", se.FailureCount))
+	builder.WriteString(fmt.Sprintf("%v", _m.FailureCount))
 	builder.WriteString(", ")
-	if v := se.FailureReason; v != nil {
+	if v := _m.FailureReason; v != nil {
 		builder.WriteString("failure_reason=")
 		builder.WriteString(*v)
 	}

@@ -114,7 +114,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		return
 	}
 
-	delay := usageAlertConfig.ScheduleDelay
+	delay, staleAfter := s.effectiveUsageAlertTiming(ctx)
 
 	var throttleLock cache.Lock
 	if s.Locker != nil {
@@ -162,7 +162,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		EnvironmentID:            envID,
 		CustomerID:               cust.ID,
 		ScheduledFor:             time.Now().UTC().Add(delay),
-		StaleAfter:               usageAlertConfig.StaleAfter,
+		StaleAfter:               staleAfter,
 		WalletAlertsEnabled:      walletEnabled,
 		SpendAlertsEnabled:       spendEnabled,
 		EntitlementAlertsEnabled: entitlementEnabled,
@@ -388,6 +388,28 @@ func executeCustomerOnboardingForEvent(ctx context.Context, params ServiceParams
 	)
 
 	return createdCustomer, nil
+}
+
+// effectiveUsageAlertTiming applies the tenant's usage_alert_config over the deployment defaults.
+func (s *meterUsageTrackingService) effectiveUsageAlertTiming(ctx context.Context) (delay, staleAfter time.Duration) {
+	delay, staleAfter = s.Config.UsageAlerts.ScheduleDelay, s.Config.UsageAlerts.StaleAfter
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+
+	tenantCfg, err := GetSetting[types.UsageAlertConfig](settingsSvc, ctx, types.SettingKeyUsageAlertConfig)
+	if err != nil {
+		s.Logger.Error(ctx, "usage alerts: failed to read usage alert setting, using deployment defaults",
+			"error", err,
+			"setting_key", types.SettingKeyUsageAlertConfig,
+		)
+		return delay, staleAfter
+	}
+	if tenantCfg.ScheduleDelaySeconds > 0 {
+		delay = time.Duration(tenantCfg.ScheduleDelaySeconds) * time.Second
+	}
+	if tenantCfg.StaleAfterSeconds > 0 {
+		staleAfter = time.Duration(tenantCfg.StaleAfterSeconds) * time.Second
+	}
+	return delay, staleAfter
 }
 
 // effectiveUsageAlertFlags AND-combines the deployment-level config flags with the per-tenant setting toggles.

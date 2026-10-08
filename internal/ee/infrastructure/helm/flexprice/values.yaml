@@ -195,10 +195,13 @@ api:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  # Give in-flight HTTP requests time to drain. Must be ≥ server read/write
-  # timeouts. preStop sleep gives the ingress/Service endpoints controller
-  # time to remove this pod from the load-balancer pool before the process exits.
-  terminationGracePeriodSeconds: 30
+  # Total budget for pod termination. The preStop sleep runs inside this window,
+  # not in addition to it, so the budget must cover preStop + the server's
+  # server.shutdown_timeout drain + dependency cleanup, or kubelet SIGKILLs
+  # mid-shutdown. 45 = 5 preStop + 25 drain + 15 slack.
+  # preStop gives the endpoints controller time to pull this pod from the
+  # load-balancer pool before the process stops accepting.
+  terminationGracePeriodSeconds: 45
   preStop:
     enabled: true
     sleepSeconds: 5
@@ -476,19 +479,40 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
-  # provider selects the ingress controller flavor. "nginx" (default) changes
-  # nothing from prior chart versions. "gce" additionally renders the
-  # templates/ingress-gcp/* CRDs (ManagedCertificate, BackendConfig,
-  # FrontendConfig — GKE's Ingress-for-Anthos / GCE-native ingress objects)
-  # and adds NEG + BackendConfig annotations to the api Service. Only takes
-  # effect when ingress.enabled is also true.
-  provider: nginx   # nginx | gce
+  # Selects the ingress flavor.
+  type: ""          # nginx | gce
+  # GCE options, read when type is gce.
   gce:
-    managedCertificate:
-      # Domains covered by the GCP-managed TLS certificate. Defaults to the
-      # hosts already listed under ingress.hosts above; override only if the
-      # certificate needs to cover additional domains.
-      domains: []
+    enabled: false
+    # Object name is <fullname>-api-<nameSuffix>.
+    nameSuffix: gce
+    # Pins the object name exactly. Must match an
+    # adopted object, which also needs Helm ownership
+    # metadata or the upgrade fails. A mismatch creates
+    # a second load balancer.
+    nameOverride: ""
+    # Defaults to ingress.hosts.
+    hosts: []
+    # Empty takes an ephemeral IP; recreation changes it.
+    globalStaticIpName: ""
+    # With tls.mode managed this must start true.
+    allowHttp: false
+    annotations: {}
+    # false annotates the shared api Service instead.
+    ownService: true
+    service:
+      annotations: {}
+    tls:
+      # certManager issues before the LB serves.
+      # managed validates over HTTP after DNS moves.
+      mode: certManager
+      # Set to render the Certificate.
+      clusterIssuer: ""
+      issuerKind: ClusterIssuer
+      # Defaults to <objectName>-tls.
+      secretName: ""
+      # Defaults to the shared object name.
+      certificateName: ""
     backendConfig:
       healthCheck:
         path: /health
@@ -497,17 +521,18 @@ ingress:
         timeoutSec: 5
         healthyThreshold: 2
         unhealthyThreshold: 3
-      timeoutSec: 30
-      # Optional Cloud Armor security policy. Leave securityPolicyName empty
-      # to omit the securityPolicy block entirely.
+      timeoutSec: 60
       cloudArmor:
         securityPolicyName: ""
+      # null keeps the LB default; false asserts off.
+      logging:
+        enable: null
+        sampleRate: 0.1
     frontendConfig:
-      # Redirect HTTP -> HTTPS at the GCE load balancer.
       redirectToHttps:
-        enabled: true
+        enabled: false
         responseCodeName: MOVED_PERMANENTLY_DEFAULT
-
+      sslPolicy: ""
 
 # Frontend deployment configuration
 frontend:
@@ -749,8 +774,6 @@ temporalIngress:
   annotations: {}
   host: "temporal.example.com"
   tls: []
-
-# Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
   secret: "" # Required — set via secret (existingSecret or auth.secret)

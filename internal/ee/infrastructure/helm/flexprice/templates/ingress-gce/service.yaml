@@ -1,0 +1,26 @@
+{{- $gce := fromYaml (include "flexprice.gce" .) }}
+{{- if and (include "flexprice.gceParallelEnabled" .) .Values.api.enabled $gce.ownService }}
+# Own Service carrying the GCE-native annotations.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.gceIngressName" . }}
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "{{ include "flexprice.gceIngressName" . }}"}'
+    {{- with $gce.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+{{- end }}

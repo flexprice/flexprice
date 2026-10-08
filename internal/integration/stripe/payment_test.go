@@ -347,3 +347,50 @@ func TestHandleFlexPriceCheckoutPayment_DiscountAppliedAfterSuccessfulClaim(t *t
 	require.NotNil(t, paymentSvc.updatePaymentReq.Amount)
 	require.True(t, decimal.NewFromInt(80).Equal(*paymentSvc.updatePaymentReq.Amount))
 }
+
+type externalTestPaymentService struct {
+	interfaces.PaymentService
+	createReq *dto.CreatePaymentRequest
+	updateReq dto.UpdatePaymentRequest
+}
+
+func (f *externalTestPaymentService) CreatePayment(_ context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
+	f.createReq = req
+	return &dto.PaymentResponse{ID: "pay_1"}, nil
+}
+
+func (f *externalTestPaymentService) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
+	f.updateReq = req
+	return &dto.PaymentResponse{ID: "pay_1"}, nil
+}
+
+func TestCreateExternalPaymentRecord(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          types.PaymentStatus
+		lastError       *stripe.Error
+		wantIdempotency string
+		wantErrorMsg    string
+	}{
+		{name: "succeeded", status: types.PaymentStatusSucceeded},
+		{name: "failed with decline", status: types.PaymentStatusFailed, lastError: &stripe.Error{Msg: "card declined"}, wantIdempotency: "stripe_failed_evt_1", wantErrorMsg: "card declined"},
+		{name: "failed without error", status: types.PaymentStatusFailed, wantIdempotency: "stripe_failed_evt_1", wantErrorMsg: "Payment failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &PaymentService{logger: logger.NewNoopLogger()}
+			paymentSvc := &externalTestPaymentService{}
+			pi := &stripe.PaymentIntent{ID: "pi_1", Amount: 1000, Currency: "usd", LastPaymentError: tt.lastError, LatestCharge: &stripe.Charge{ID: "ch_1"}}
+
+			require.NoError(t, s.CreateExternalPaymentRecord(context.Background(), pi, "inv_1", tt.status, "evt_1", paymentSvc))
+
+			require.Equal(t, tt.wantIdempotency, paymentSvc.createReq.IdempotencyKey)
+			require.Equal(t, "ch_1", paymentSvc.createReq.Metadata["stripe_charge_id"])
+			require.Equal(t, string(tt.status), lo.FromPtr(paymentSvc.updateReq.PaymentStatus))
+			require.Equal(t, "pi_1", lo.FromPtr(paymentSvc.updateReq.GatewayPaymentID))
+			require.Equal(t, tt.wantErrorMsg, lo.FromPtr(paymentSvc.updateReq.ErrorMessage))
+			require.Equal(t, tt.status == types.PaymentStatusFailed, paymentSvc.updateReq.FailedAt != nil)
+			require.Equal(t, tt.status == types.PaymentStatusSucceeded, paymentSvc.updateReq.SucceededAt != nil)
+		})
+	}
+}

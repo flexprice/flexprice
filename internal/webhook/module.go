@@ -66,6 +66,7 @@ func providePayloadBuilderFactory(
 	checkoutSessionService interfaces.CheckoutSessionService,
 	groupService service.GroupService,
 	entitlementGrantService service.EntitlementGrantService,
+	entityIntegrationMappingService service.EntityIntegrationMappingService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -84,6 +85,7 @@ func providePayloadBuilderFactory(
 		checkoutSessionService,
 		groupService,
 		entitlementGrantService,
+		entityIntegrationMappingService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

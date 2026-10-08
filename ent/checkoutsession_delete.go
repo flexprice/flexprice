@@ -20,56 +20,56 @@ type CheckoutSessionDelete struct {
 }
 
 // Where appends a list predicates to the CheckoutSessionDelete builder.
-func (csd *CheckoutSessionDelete) Where(ps ...predicate.CheckoutSession) *CheckoutSessionDelete {
-	csd.mutation.Where(ps...)
-	return csd
+func (_d *CheckoutSessionDelete) Where(ps ...predicate.CheckoutSession) *CheckoutSessionDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (csd *CheckoutSessionDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, csd.sqlExec, csd.mutation, csd.hooks)
+func (_d *CheckoutSessionDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (csd *CheckoutSessionDelete) ExecX(ctx context.Context) int {
-	n, err := csd.Exec(ctx)
+func (_d *CheckoutSessionDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (csd *CheckoutSessionDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CheckoutSessionDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(checkoutsession.Table, sqlgraph.NewFieldSpec(checkoutsession.FieldID, field.TypeString))
-	if ps := csd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, csd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	csd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CheckoutSessionDeleteOne is the builder for deleting a single CheckoutSession entity.
 type CheckoutSessionDeleteOne struct {
-	csd *CheckoutSessionDelete
+	_d *CheckoutSessionDelete
 }
 
 // Where appends a list predicates to the CheckoutSessionDelete builder.
-func (csdo *CheckoutSessionDeleteOne) Where(ps ...predicate.CheckoutSession) *CheckoutSessionDeleteOne {
-	csdo.csd.mutation.Where(ps...)
-	return csdo
+func (_d *CheckoutSessionDeleteOne) Where(ps ...predicate.CheckoutSession) *CheckoutSessionDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (csdo *CheckoutSessionDeleteOne) Exec(ctx context.Context) error {
-	n, err := csdo.csd.Exec(ctx)
+func (_d *CheckoutSessionDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (csdo *CheckoutSessionDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (csdo *CheckoutSessionDeleteOne) ExecX(ctx context.Context) {
-	if err := csdo.Exec(ctx); err != nil {
+func (_d *CheckoutSessionDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

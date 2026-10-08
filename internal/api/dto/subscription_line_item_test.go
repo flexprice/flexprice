@@ -379,6 +379,7 @@ func TestCreateSubscriptionLineItemRequest_DefaultsCommitmentOverageFactor(t *te
 			PriceID:          "price_test",
 			CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
 		}
+		req.ApplyDefaults()
 		if err := req.Validate(nil, nil); err != nil {
 			t.Fatalf("expected no error, got: %v", err)
 		}
@@ -418,6 +419,27 @@ func TestCreateSubscriptionLineItemRequest_DefaultsCommitmentOverageFactor(t *te
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("defaults to 1.0 when only time buckets are set", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:            "price_test",
+			CommitmentWindowed: true,
+			CommitmentTimeBuckets: []CommitmentBucketRequest{{
+				ID:              "bkt_existing",
+				Start:           types.Bucket{Hour: 8},
+				End:             types.Bucket{Hour: 20},
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(10),
+			}},
+		}
+		req.ApplyDefaults()
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if req.CommitmentOverageFactor == nil || !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default of 1, got: %v", req.CommitmentOverageFactor)
+		}
+	})
 }
 
 func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *testing.T) {
@@ -431,4 +453,30 @@ func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *test
 	if b.OverageFactor == nil || !b.OverageFactor.Equal(decimal.NewFromInt(1)) {
 		t.Fatalf("expected overage factor to default to 1, got: %v", b.OverageFactor)
 	}
+}
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_KeepsLinks(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{
+		ID:                  "subs_line_old",
+		AddonAssociationID:  lo.ToPtr("addon_assoc_1"),
+		SubscriptionPhaseID: lo.ToPtr("phase_1"),
+		PriceUnitID:         lo.ToPtr("pu_1"),
+		PriceUnit:           lo.ToPtr("crd"),
+	}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(10))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Equal(t, existing.AddonAssociationID, successor.AddonAssociationID)
+	assert.Equal(t, existing.SubscriptionPhaseID, successor.SubscriptionPhaseID)
+	assert.Equal(t, existing.PriceUnitID, successor.PriceUnitID)
+	assert.Equal(t, existing.PriceUnit, successor.PriceUnit)
+}
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_CommitmentTypeSwitch(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{CommitmentType: types.COMMITMENT_TYPE_AMOUNT, CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100))}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(12))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Nil(t, successor.CommitmentAmount)
+	assert.True(t, successor.CommitmentQuantity.Equal(decimal.NewFromInt(12)))
 }

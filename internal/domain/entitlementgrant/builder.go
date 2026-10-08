@@ -94,6 +94,14 @@ func (b *entitlementGrantBuilder) WithQuota(q decimal.Decimal) *entitlementGrant
 	return b
 }
 
+func (b *entitlementGrantBuilder) WithUnlimited(u bool) *entitlementGrantBuilder {
+	if b == nil || b.grant == nil {
+		return b
+	}
+	b.grant.Unlimited = u
+	return b
+}
+
 func (b *entitlementGrantBuilder) WithUsage(u decimal.Decimal) *entitlementGrantBuilder {
 	if b == nil || b.grant == nil {
 		return b

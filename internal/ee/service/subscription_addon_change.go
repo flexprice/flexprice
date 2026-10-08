@@ -230,7 +230,6 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 	originalLineItems := sub.LineItems
 	for _, add := range req.Adds {
 		addReq := resolveAttachChangeAt(add.Request, now, sub.CurrentPeriodEnd)
-		addReq.SkipEntityValidation = true
 
 		params, err := s.sub.createAddonAttachParams(ctx, sub, &addReq, add.Existing)
 		if err != nil {
@@ -264,6 +263,10 @@ func resolveAttachChangeAt(
 	if resolved.ChangeAt != nil {
 		resolved.StartDate = lo.ToPtr(changeAtDate(*resolved.ChangeAt, now, periodEnd))
 		resolved.ChangeAt = nil
+	}
+
+	if resolved.StartDate == nil {
+		resolved.StartDate = lo.ToPtr(now)
 	}
 
 	return resolved
@@ -307,6 +310,7 @@ func (s *addonChangeService) grantChangeRequest(config *addonChangeConfig) Grant
 		req.Incoming = append(req.Incoming, GrantSource{
 			ChangeType:    grantChangeTypeFor(sub, attach.getEffectiveDate()),
 			EffectiveDate: attach.getEffectiveDate(),
+			RequestedDate: attach.getRequestedStart(),
 			EndDate:       attach.getAssociation().EndDate,
 			Behavior:      attach.getRequest().ProrationBehavior,
 			Origin:        grantProrationSourceAddonAttach,
@@ -666,18 +670,8 @@ func (s *addonChangeService) ExecutePayFirst(
 		}
 
 		// Taken under the row lock, so two concurrent payment-gated changes cannot both pass.
-		existing, err := anyPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID)
-		if err != nil {
+		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID); err != nil {
 			return err
-		}
-		if len(existing) > 0 {
-			return ierr.NewError("a pending checkout session already exists for this subscription").
-				WithHint("Complete or cancel the existing checkout before starting another payment-gated change").
-				WithReportableDetails(map[string]any{
-					"subscription_id":     locked.ID,
-					"checkout_session_id": existing[0].ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
 		}
 
 		resolved, err := s.Resolve(txCtx, req)

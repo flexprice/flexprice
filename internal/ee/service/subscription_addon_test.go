@@ -305,14 +305,22 @@ func (s *SubscriptionServiceSuite) TestValidateEntitlementCompatibility_SeesPend
 	s.seedMeteredAddon(pendingAddonID, featureID, types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
 	s.seedMeteredAddon(incomingAddonID, featureID, types.ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL)
 
+	addOf := func(addonID string) error {
+		return newSubscriptionGrantService(subService.ServiceParams).
+			validateEntitlementCompatibility(ctx, GrantChangeRequest{
+				Sub:      sub,
+				Incoming: []GrantSource{{AddonID: addonID}},
+			})
+	}
+
 	// Without the pending association the conflicting add is accepted: the pending addon's
 	// entitlements are invisible to GetSubscriptionEntitlements by design.
-	s.NoError(subService.validateEntitlementCompatibility(ctx, sub.ID, incomingAddonID),
+	s.NoError(addOf(incomingAddonID),
 		"baseline: nothing to conflict with before the pending association exists")
 
 	s.seedPendingAddonAssociation("assoc_pending_entitlement", pendingAddonID, sub.ID, nil)
 
-	err := subService.validateEntitlementCompatibility(ctx, sub.ID, incomingAddonID)
+	err := addOf(incomingAddonID)
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
 	s.Contains(err.Error(), "reset period")
@@ -321,7 +329,7 @@ func (s *SubscriptionServiceSuite) TestValidateEntitlementCompatibility_SeesPend
 	// every feature a pending addon happens to touch.
 	matchingAddonID := "addon_incoming_monthly"
 	s.seedMeteredAddon(matchingAddonID, featureID, types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
-	s.NoError(subService.validateEntitlementCompatibility(ctx, sub.ID, matchingAddonID))
+	s.NoError(addOf(matchingAddonID))
 }
 
 // Baseline for everything the checkout path must not disturb. Attaching at the period start
@@ -699,7 +707,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutConcurrentGuard() {
 			cfg.ModifySubscriptionParams = &types.ModifySubscriptionParams{
 				SubscriptionID: subscriptionID,
 				LineItemModifications: []types.ModifySubscriptionLineItem{
-					{LineItemID: "subs_li_outstanding", Quantity: decimal.NewFromInt(2)},
+					{LineItemID: "subs_li_outstanding", Quantity: lo.ToPtr(decimal.NewFromInt(2))},
 				},
 			}
 		}
@@ -1192,7 +1200,6 @@ func (s *SubscriptionServiceSuite) monthlyPeriodSubscription() *subscription.Sub
 // refactor is a write the new orchestrator dropped.
 func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootprint() {
 	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 
 	addonID := "addon_char_attach"
@@ -1205,7 +1212,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootpr
 	existing := s.seedCycleGrant(planEC.ID, featureID, 500)
 
 	attachAt := sub.CurrentPeriodStart.Add(24 * time.Hour)
-	result, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	result, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(attachAt),
@@ -1288,15 +1295,13 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootpr
 // With proration off the attach still writes every entity, but moves no money and grants
 // the full quota. This is the shape create-subscription's Addons[] loop uses.
 func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_ProrationNone_WritesEntitiesWithoutMoney() {
-	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 
 	addonID := "addon_char_attach_none"
 	featureID := s.seedGrantFeature("feat_char_attach_none")
 	s.seedFullFeaturedAddon(addonID, "ent_char_attach_none", featureID, 30, 400)
 
-	result, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	result, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(sub.CurrentPeriodStart.Add(24 * time.Hour)),
@@ -1323,14 +1328,13 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_ProrationNone_Wr
 // removal seam must reproduce for plan change's dropped addons.
 func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootprint() {
 	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 
 	addonID := "addon_char_detach"
 	featureID := s.seedGrantFeature("feat_char_detach")
 	s.seedFullFeaturedAddon(addonID, "ent_char_detach", featureID, 30, 400)
 
-	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	attached, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
@@ -1352,7 +1356,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 	// object the settlement quote reads, and Compute then skips it as a non-refundable
 	// onetime item. Against a real DB the params carry their own snapshot and the credit
 	// is issued, so the quote — not the executed top-up — is what this suite can pin.
-	quoted, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+	quoted, err := s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: attached.Association.ID,
 		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 		EffectiveDate:      lo.ToPtr(detachAt),
@@ -1360,7 +1364,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 	}, sub.ID)
 	s.Require().NoError(err)
 
-	result, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+	result, err := s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: attached.Association.ID,
 		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 		EffectiveDate:      lo.ToPtr(detachAt),
@@ -1432,14 +1436,13 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 // removal seam has to keep these two halves independently switchable.
 func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_ProrationNone_RemovesWithoutCredit() {
 	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 
 	addonID := "addon_char_detach_none"
 	featureID := s.seedGrantFeature("feat_char_detach_none")
 	s.seedFullFeaturedAddon(addonID, "ent_char_detach_none", featureID, 30, 400)
 
-	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	attached, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
@@ -1448,7 +1451,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_ProrationNone_Re
 	s.Require().NoError(err)
 
 	detachAt := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
-	_, err = subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+	_, err = s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: attached.Association.ID,
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		EffectiveDate:      lo.ToPtr(detachAt),
@@ -1495,7 +1498,6 @@ func (s *SubscriptionServiceSuite) recordBilledForLineItem(lineItemID string, am
 // itself is the transaction's job and is not observable here: testutil runs WithTx without one.
 func (s *SubscriptionServiceSuite) TestAddonChange_SettlementFailure_FailsTheAttach() {
 	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 
 	addonID := "addon_settle_failure"
@@ -1507,7 +1509,7 @@ func (s *SubscriptionServiceSuite) TestAddonChange_SettlementFailure_FailsTheAtt
 	sub.InvoicingCustomerID = lo.ToPtr("cust_missing_settle_failure")
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
-	_, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	_, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(sub.CurrentPeriodStart.Add(24 * time.Hour)),
@@ -1523,8 +1525,6 @@ func (s *SubscriptionServiceSuite) TestAddonChange_SettlementFailure_FailsTheAtt
 // The attach preview is a second implementation of settlement (previewAddonSettlement),
 // separate from Apply. It must quote what execute then bills, and write nothing.
 func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_AttachPreviewTwinMatchesExecute() {
-	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 	addonID := "addon_characterise_preview"
 
@@ -1542,7 +1542,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_AttachPreviewTwinM
 
 	previewReq := req()
 	previewReq.PreviewOnly = true
-	preview, err := subSvc.attachAddon(ctx, sub, previewReq, nil)
+	preview, err := s.attachOne(sub, previewReq, nil)
 	s.Require().NoError(err)
 	s.Require().Len(preview.ChangedInvoices, 1, "the preview twin quotes one document")
 	s.Equal(dto.ChangedInvoiceStatusPreview, preview.ChangedInvoices[0].Status)
@@ -1552,7 +1552,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_AttachPreviewTwinM
 	s.Empty(s.addonLineItemsFor(sub.ID, addonID))
 	s.Empty(s.oneOffInvoicesFor(sub.ID))
 
-	executed, err := subSvc.attachAddon(ctx, sub, req(), nil)
+	executed, err := s.attachOne(sub, req(), nil)
 	s.Require().NoError(err)
 	s.Require().Len(executed.ChangedInvoices, 1)
 	charged := executed.ChangedInvoices[0].Invoice.AmountDue
@@ -1565,13 +1565,12 @@ func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_AttachPreviewTwinM
 // document — a second shape the twin has to keep in step with Apply's real top-up.
 func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_DetachPreviewTwinQuotesWalletCredit() {
 	ctx := s.GetContext()
-	subSvc := s.service.(*subscriptionService)
 	sub := s.monthlyPeriodSubscription()
 	addonID := "addon_characterise_detach_preview"
 
 	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 
-	attached, err := subSvc.attachAddon(ctx, sub, &dto.AddAddonToSubscriptionRequest{
+	attached, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
 		StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
@@ -1579,7 +1578,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_DetachPreviewTwinQ
 	}, nil)
 	s.Require().NoError(err)
 
-	preview, err := subSvc.detachAddon(ctx, &dto.RemoveAddonRequest{
+	preview, err := s.detachOne(&dto.RemoveAddonRequest{
 		AddonAssociationID: attached.Association.ID,
 		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
 		EffectiveDate:      lo.ToPtr(sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)),
@@ -1653,4 +1652,267 @@ func (s *SubscriptionServiceSuite) TestCharacteriseSettlement_PayFirstDraft_Shar
 	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
 	s.Equal(types.InvoiceSourceTypeCheckout, draft.SourceType)
 	s.True(summary.TotalChargeAmount.Equal(draft.AmountDue))
+}
+
+// -----------------------------------------------------------------------------
+// deprecated route shims
+// -----------------------------------------------------------------------------
+//
+// POST/DELETE /subscriptions/addon are served by the batch path now. Their response shape is
+// rebuilt from what the batch reports, so it has to survive the round trip unchanged.
+
+func (s *SubscriptionServiceSuite) TestLegacyAddAddon_ReturnsThePersistedAssociation() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	s.seedFixedPriceAddon("addon_shim_add", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+
+	resp, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           "addon_shim_add",
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         lo.ToPtr(sub.CurrentPeriodStart),
+			ProrationBehavior: types.ProrationBehaviorNone,
+		},
+	})
+	s.Require().NoError(err)
+
+	s.Require().NotNil(resp.AddonAssociation, "the route has always returned the association")
+	s.Equal("addon_shim_add", resp.AddonAssociation.AddonID)
+	s.Equal(sub.ID, resp.AddonAssociation.EntityID)
+	s.Equal(types.AddonStatusActive, resp.AddonAssociation.AddonStatus)
+	s.Nil(resp.CheckoutSession, "pay-later carries no session")
+	s.Nil(resp.Invoice, "pay-later has never reported an invoice on this route")
+
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, resp.AddonAssociation.ID)
+	s.Require().NoError(err)
+	s.Equal(resp.AddonAssociation.ID, stored.ID)
+	s.Len(s.addonLineItemsFor(sub.ID, "addon_shim_add"), 1)
+}
+
+func (s *SubscriptionServiceSuite) TestLegacyRemoveAddon_ResolvesSubscriptionFromAssociation() {
+	ctx := s.GetContext()
+	s.seedFixedPriceAddon("addon_shim_remove", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_shim_remove", 30)
+
+	// The route body carries no subscription id — only the association.
+	s.Require().NoError(s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+		AddonAssociationID: outgoing,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	}))
+
+	stored, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, outgoing)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusCancelled, stored.AddonStatus)
+}
+
+func (s *SubscriptionServiceSuite) TestLegacyRemoveAddon_UnknownAssociationIsNotFound() {
+	err := s.service.RemoveAddonFromSubscription(s.GetContext(), &dto.RemoveAddonRequest{
+		AddonAssociationID: "assoc_does_not_exist",
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsNotFound(err), "the route's 404 must survive the shim")
+}
+
+// -----------------------------------------------------------------------------
+// one-entry helpers
+// -----------------------------------------------------------------------------
+//
+// attachAddon/detachAddon were adapters that wrapped one entry for the batch spine. Production
+// no longer needs them — every caller sends a batch — but the single-addon characterisations
+// below are the regression net for that spine, so the wrapping moved here.
+
+type addonChangeOutcome struct {
+	Association      *addonassociation.AddonAssociation
+	CreatedLineItems []*subscription.SubscriptionLineItem
+	EndedLineItems   []*subscription.SubscriptionLineItem
+	ChangedInvoices  []dto.ChangedInvoice
+	EffectiveDate    time.Time
+	CheckoutSession  *dto.CheckoutSessionResponse
+	Invoice          *dto.InvoiceResponse
+}
+
+func attachOutcome(config *addonChangeConfig, settled *SettleProrationResult) *addonChangeOutcome {
+	attach := config.getAttaches()[0]
+	return &addonChangeOutcome{
+		Association:      attach.getAssociation(),
+		CreatedLineItems: attach.getLineItems(),
+		ChangedInvoices:  settled.GetChanged(),
+		EffectiveDate:    attach.getEffectiveDate(),
+	}
+}
+
+func (s *SubscriptionServiceSuite) attachOne(
+	sub *subscription.Subscription,
+	req *dto.AddAddonToSubscriptionRequest,
+	checkout *dto.CheckoutParams,
+) (*addonChangeOutcome, error) {
+	ctx := s.GetContext()
+	changeSvc := NewAddonChangeService(s.service.(*subscriptionService).ServiceParams)
+	changeReq := AddonChangeRequest{Subscription: sub, Adds: []AddonAdd{{Request: req}}}
+
+	if req.PreviewOnly {
+		config, settled, err := changeSvc.Preview(ctx, changeReq)
+		if err != nil {
+			return nil, err
+		}
+		return attachOutcome(config, settled), nil
+	}
+
+	if checkout != nil {
+		gated, err := changeSvc.ExecutePayFirst(ctx, changeReq, checkout)
+		if err != nil {
+			return nil, err
+		}
+		if gated != nil {
+			return &addonChangeOutcome{
+				Association:     gated.getConfig().getAttaches()[0].getAssociation(),
+				CheckoutSession: gated.getSession(),
+				Invoice:         gated.getSettled().GetDraft(),
+			}, nil
+		}
+		// Zero or negative net → nothing to collect, so attach immediately.
+	}
+
+	config, settled, err := changeSvc.Execute(ctx, changeReq)
+	if err != nil {
+		return nil, err
+	}
+	return attachOutcome(config, settled), nil
+}
+
+func (s *SubscriptionServiceSuite) detachOne(
+	req *dto.RemoveAddonRequest,
+	subscriptionID string,
+) (*addonChangeOutcome, error) {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+
+	// The deprecated DELETE route carries only the association, so the subscription is read
+	// back off it.
+	if subscriptionID == "" {
+		association, err := subSvc.AddonAssociationRepo.GetByID(ctx, req.AddonAssociationID)
+		if err != nil {
+			return nil, err
+		}
+		subscriptionID = association.EntityID
+	}
+
+	sub, err := subSvc.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	changeSvc := NewAddonChangeService(subSvc.ServiceParams)
+	changeReq := AddonChangeRequest{Subscription: sub, Removes: []*dto.RemoveAddonRequest{req}}
+
+	var (
+		config  *addonChangeConfig
+		settled *SettleProrationResult
+	)
+	if req.PreviewOnly {
+		config, settled, err = changeSvc.Preview(ctx, changeReq)
+	} else {
+		config, settled, err = changeSvc.Execute(ctx, changeReq)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	detach := config.getDetaches()[0]
+	association := detach.getAssociation()
+	if req.PreviewOnly {
+		// The cancelled association Persist would have written, built but not saved.
+		association = addonassociation.NewAddonAssociationBuilder(association).
+			WithCancellation(detach.getEffectiveDate(), detach.getReason()).
+			Build()
+	}
+
+	return &addonChangeOutcome{
+		Association:     association,
+		EndedLineItems:  detach.getLineItems(),
+		ChangedInvoices: settled.GetChanged(),
+		EffectiveDate:   detach.getEffectiveDate(),
+	}, nil
+}
+
+// -----------------------------------------------------------------------------
+// creation attaches its addons as one change
+// -----------------------------------------------------------------------------
+
+// Several addons at creation land as one change, and none of them settles: the opening invoice
+// already bills the whole period, so a proration on top would charge twice.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_ManyAddons_AttachWithoutSettling() {
+	ctx := s.GetContext()
+
+	ids := []string{"addon_create_a", "addon_create_b", "addon_create_c"}
+	for _, id := range ids {
+		s.seedFixedPriceAddon(id, decimal.NewFromInt(20), types.InvoiceCadenceAdvance)
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			Addons: lo.Map(ids, func(id string, _ int) dto.AddAddonToSubscriptionRequest {
+				return dto.AddAddonToSubscriptionRequest{AddonID: id}
+			}),
+		},
+	})
+	s.Require().NoError(err)
+
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{resp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
+	s.Require().NoError(err)
+	s.Len(associations, len(ids), "every addon gets its association")
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{resp.ID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.Require().NoError(err)
+	s.Len(items, len(ids), "and its line item")
+
+	s.Empty(s.oneOffInvoicesFor(resp.ID), "creation raises no proration document")
+	s.Empty(s.prorationCredits(), "and moves no money through the wallet")
+}
+
+// Everything after the addons in createSubscription reads a sub whose line items exclude them,
+// so the attach must leave the caller's slice as it found it.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_Addons_LeaveCallerLineItemsAlone() {
+	sub := s.monthlyPeriodSubscription()
+	s.seedFixedPriceAddon("addon_create_untouched", decimal.NewFromInt(20), types.InvoiceCadenceAdvance)
+
+	before := len(sub.LineItems)
+	s.Require().NoError(s.service.(*subscriptionService).handleSubscriptionAddons(
+		s.GetContext(), sub, []dto.AddAddonToSubscriptionRequest{{AddonID: "addon_create_untouched"}}))
+
+	s.Len(sub.LineItems, before, "the attach must not extend the caller's line items")
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_TooManyAddons_IsRejected() {
+	const overBatchLimit = 21
+	addons := make([]dto.AddAddonToSubscriptionRequest, 0, overBatchLimit)
+	for i := 0; i < overBatchLimit; i++ {
+		addons = append(addons, dto.AddAddonToSubscriptionRequest{AddonID: "addon_overflow"})
+	}
+
+	_, err := s.service.CreateSubscription(s.GetContext(), dto.CreateSubscriptionRequest{
+		CustomerID:                 s.testData.customer.ID,
+		PlanID:                     s.testData.plan.ID,
+		Currency:                   "usd",
+		BillingPeriod:              types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:         1,
+		BillingCycle:               types.BillingCycleAnniversary,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{Addons: addons},
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err))
 }

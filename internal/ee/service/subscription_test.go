@@ -7629,6 +7629,8 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideValidation() {
 					Price: &price.Price{
 						ID:            "price-custom-tiers-valid",
 						PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+						BillingModel:  types.BILLING_MODEL_TIERED,
+						TierMode:      types.BILLING_TIER_SLAB,
 					},
 				},
 			},
@@ -10592,4 +10594,336 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	_, err = s.service.CreateSubscription(ctx, req)
 	s.Error(err, "expected duplicate price_id in a child's override_line_items to be rejected")
 	s.Contains(err.Error(), "duplicate price_id in override line items")
+}
+
+func (s *SubscriptionServiceSuite) TestMarkSubscriptionIncomplete() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	past, future := now.Add(-time.Hour), now.Add(24*time.Hour)
+
+	tests := []struct {
+		name             string
+		status           types.SubscriptionStatus
+		behavior         types.PaymentBehavior
+		collectionMethod types.CollectionMethod
+		billingReason    types.InvoiceBillingReason
+		amountRemaining  decimal.Decimal
+		dueDate          time.Time
+		want             types.SubscriptionStatus
+	}{
+		{"charge_automatically failure before due", types.SubscriptionStatusActive, types.PaymentBehaviorAllowIncomplete, types.CollectionMethodChargeAutomatically, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), future, types.SubscriptionStatusIncomplete},
+		{"send_invoice past due", types.SubscriptionStatusActive, types.PaymentBehaviorDefaultIncomplete, types.CollectionMethodSendInvoice, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), past, types.SubscriptionStatusIncomplete},
+		{"send_invoice not yet due", types.SubscriptionStatusActive, types.PaymentBehaviorDefaultIncomplete, types.CollectionMethodSendInvoice, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), future, types.SubscriptionStatusActive},
+		{"default_active is never gated", types.SubscriptionStatusActive, types.PaymentBehaviorDefaultActive, types.CollectionMethodChargeAutomatically, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), past, types.SubscriptionStatusActive},
+		{"paid invoice", types.SubscriptionStatusActive, types.PaymentBehaviorAllowIncomplete, types.CollectionMethodChargeAutomatically, types.InvoiceBillingReasonSubscriptionCycle, decimal.Zero, past, types.SubscriptionStatusActive},
+		{"non-renewal invoice", types.SubscriptionStatusActive, types.PaymentBehaviorAllowIncomplete, types.CollectionMethodChargeAutomatically, types.InvoiceBillingReasonSubscriptionCreate, decimal.NewFromInt(10), past, types.SubscriptionStatusActive},
+		{"cancelled subscription", types.SubscriptionStatusCancelled, types.PaymentBehaviorAllowIncomplete, types.CollectionMethodChargeAutomatically, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), past, types.SubscriptionStatusCancelled},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			sub := &subscription.Subscription{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				SubscriptionStatus: tt.status,
+				Currency:           "usd",
+				BillingAnchor:      now,
+				BillingCycle:       types.BillingCycleAnniversary,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				StartDate:          now,
+				CurrentPeriodStart: now,
+				CurrentPeriodEnd:   now.AddDate(0, 1, 0),
+				CollectionMethod:   string(tt.collectionMethod),
+				PaymentBehavior:    string(tt.behavior),
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+
+			inv := &invoice.Invoice{
+				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+				CustomerID:      s.testData.customer.ID,
+				SubscriptionID:  &sub.ID,
+				InvoiceType:     types.InvoiceTypeSubscription,
+				InvoiceStatus:   types.InvoiceStatusFinalized,
+				PaymentStatus:   types.PaymentStatusPending,
+				Currency:        "usd",
+				AmountDue:       tt.amountRemaining,
+				AmountRemaining: tt.amountRemaining,
+				DueDate:         lo.ToPtr(tt.dueDate),
+				BillingReason:   string(tt.billingReason),
+				BaseModel:       types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+			s.Require().NoError(s.service.MarkSubscriptionIncomplete(ctx, inv.ID))
+
+			updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.want, updated.SubscriptionStatus)
+		})
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestProcessOverdueSubscriptionInvoices() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	gated, ungated := types.PaymentBehaviorDefaultIncomplete, types.PaymentBehaviorDefaultActive
+
+	tests := []struct {
+		name            string
+		behavior        types.PaymentBehavior
+		status          types.SubscriptionStatus
+		invoiceStatus   types.InvoiceStatus
+		billingReason   types.InvoiceBillingReason
+		amountRemaining decimal.Decimal
+		dueDate         time.Time
+		want            types.SubscriptionStatus
+	}{
+		{"within grace", gated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.Add(-24 * time.Hour), types.SubscriptionStatusIncomplete},
+		{"not yet due", gated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.Add(24 * time.Hour), types.SubscriptionStatusActive},
+		{"past grace", gated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.AddDate(0, 0, -10), types.SubscriptionStatusActive},
+		{"not payment-gated", ungated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.Add(-24 * time.Hour), types.SubscriptionStatusActive},
+		{"invoice paid", gated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.Zero, now.Add(-24 * time.Hour), types.SubscriptionStatusActive},
+		{"draft invoice", gated, types.SubscriptionStatusActive, types.InvoiceStatusDraft, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.Add(-24 * time.Hour), types.SubscriptionStatusActive},
+		{"non-renewal invoice", gated, types.SubscriptionStatusActive, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCreate, decimal.NewFromInt(10), now.Add(-24 * time.Hour), types.SubscriptionStatusActive},
+		{"cancelled subscription", gated, types.SubscriptionStatusCancelled, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.Add(-24 * time.Hour), types.SubscriptionStatusCancelled},
+	}
+
+	subIDs := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		sub := s.createOverdueTestSubscription(ctx, tt.behavior, tt.status)
+		subIDs[tt.name] = sub.ID
+		s.createOverdueTestInvoice(ctx, sub.ID, tt.invoiceStatus, tt.billingReason, tt.amountRemaining, tt.dueDate)
+	}
+
+	s.Require().NoError(s.service.ProcessOverdueSubscriptionInvoices(ctx))
+
+	for _, tt := range tests {
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, subIDs[tt.name])
+		s.Require().NoError(err)
+		s.Equal(tt.want, updated.SubscriptionStatus, tt.name)
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestProcessOverdueSubscriptionInvoicesUsesEnvironmentGracePeriod() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeySubscriptionConfig,
+		Value:         map[string]interface{}{"grace_period_days": 1, "auto_cancellation_enabled": false},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	// Two days overdue is inside the default 3-day grace but past this environment's 1 day.
+	sub := s.createOverdueTestSubscription(ctx, types.PaymentBehaviorAllowIncomplete, types.SubscriptionStatusActive)
+	s.createOverdueTestInvoice(ctx, sub.ID, types.InvoiceStatusFinalized, types.InvoiceBillingReasonSubscriptionCycle, decimal.NewFromInt(10), now.AddDate(0, 0, -2))
+
+	s.Require().NoError(s.service.ProcessOverdueSubscriptionInvoices(ctx))
+
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
+}
+
+func (s *SubscriptionServiceSuite) createOverdueTestSubscription(ctx context.Context, behavior types.PaymentBehavior, status types.SubscriptionStatus) *subscription.Subscription {
+	now := time.Now().UTC()
+	sub := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: status,
+		Currency:           "usd",
+		BillingAnchor:      now,
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		StartDate:          now,
+		CurrentPeriodStart: now,
+		CurrentPeriodEnd:   now.AddDate(0, 1, 0),
+		CollectionMethod:   string(types.CollectionMethodSendInvoice),
+		PaymentBehavior:    string(behavior),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	return sub
+}
+
+func (s *SubscriptionServiceSuite) createOverdueTestInvoice(ctx context.Context, subscriptionID string, status types.InvoiceStatus, reason types.InvoiceBillingReason, amountRemaining decimal.Decimal, dueDate time.Time) {
+	s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &subscriptionID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   status,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       amountRemaining,
+		AmountRemaining: amountRemaining,
+		DueDate:         lo.ToPtr(dueDate),
+		BillingReason:   string(reason),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}))
+}
+
+func (s *SubscriptionServiceSuite) TestProcessAutoCancellationSubscriptions() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeySubscriptionConfig,
+		Value:         map[string]interface{}{"grace_period_days": 3, "auto_cancellation_enabled": true},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	tests := []struct {
+		name          string
+		status        types.SubscriptionStatus
+		billingReason types.InvoiceBillingReason
+		dueDate       time.Time
+		wantStatus    types.SubscriptionStatus
+		wantReason    string
+		wantInvoice   types.InvoiceStatus
+		metadata      types.Metadata
+	}{
+		{"renewal past grace", types.SubscriptionStatusActive, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -10),
+			types.SubscriptionStatusCancelled, types.CancellationReasonPaymentOverdue, types.InvoiceStatusVoided, nil},
+		{"incomplete create past grace", types.SubscriptionStatusIncomplete, types.InvoiceBillingReasonSubscriptionCreate, now.AddDate(0, 0, -10),
+			types.SubscriptionStatusCancelled, types.CancellationReasonPaymentOverdue, types.InvoiceStatusVoided, nil},
+		{"renewal within grace", types.SubscriptionStatusIncomplete, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -1),
+			types.SubscriptionStatusIncomplete, "", types.InvoiceStatusFinalized, nil},
+		{"auto-cancelled with void pending", types.SubscriptionStatusCancelled, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -10),
+			types.SubscriptionStatusCancelled, types.CancellationReasonPaymentOverdue, types.InvoiceStatusVoided,
+			types.Metadata{"cancellation_reason": types.CancellationReasonPaymentOverdue}},
+		{"cancelled by tenant", types.SubscriptionStatusCancelled, types.InvoiceBillingReasonSubscriptionCycle, now.AddDate(0, 0, -10),
+			types.SubscriptionStatusCancelled, "customer churned", types.InvoiceStatusFinalized,
+			types.Metadata{"cancellation_reason": "customer churned"}},
+	}
+
+	subIDs := make(map[string]string, len(tests))
+	invIDs := make(map[string]string, len(tests))
+	for _, tt := range tests {
+		sub := &subscription.Subscription{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: tt.status,
+			Currency:           "usd",
+			BillingAnchor:      now,
+			BillingCycle:       types.BillingCycleAnniversary,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			StartDate:          now.AddDate(0, -1, 0),
+			CurrentPeriodStart: now.AddDate(0, 0, -5),
+			CurrentPeriodEnd:   now.AddDate(0, 0, 25),
+			CollectionMethod:   string(types.CollectionMethodChargeAutomatically),
+			PaymentBehavior:    string(types.PaymentBehaviorAllowIncomplete),
+			Metadata:           tt.metadata,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+		subIDs[tt.name] = sub.ID
+
+		inv := &invoice.Invoice{
+			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+			CustomerID:      s.testData.customer.ID,
+			SubscriptionID:  &sub.ID,
+			InvoiceType:     types.InvoiceTypeSubscription,
+			InvoiceStatus:   types.InvoiceStatusFinalized,
+			PaymentStatus:   types.PaymentStatusPending,
+			Currency:        "usd",
+			AmountDue:       decimal.NewFromInt(10),
+			AmountRemaining: decimal.NewFromInt(10),
+			DueDate:         lo.ToPtr(tt.dueDate),
+			BillingReason:   string(tt.billingReason),
+			BaseModel:       types.GetDefaultBaseModel(ctx),
+		}
+		s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+		invIDs[tt.name] = inv.ID
+	}
+
+	s.Require().NoError(s.service.ProcessAutoCancellationSubscriptions(ctx))
+
+	for _, tt := range tests {
+		sub, err := s.GetStores().SubscriptionRepo.Get(ctx, subIDs[tt.name])
+		s.Require().NoError(err)
+		s.Equal(tt.wantStatus, sub.SubscriptionStatus, tt.name)
+		s.Equal(tt.wantReason, sub.Metadata["cancellation_reason"], tt.name)
+
+		inv, err := s.GetStores().InvoiceRepo.Get(ctx, invIDs[tt.name])
+		s.Require().NoError(err)
+		s.Equal(tt.wantInvoice, inv.InvoiceStatus, tt.name)
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_ZeroOpeningInvoice_AppliesFirstGrant() {
+	ctx := s.GetContext()
+
+	freePlan := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Free Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, freePlan))
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           freePlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	cust := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_zero_opening",
+		Name:       "Zero Opening",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         cust.ID,
+		PlanID:             freePlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodChargeAutomatically),
+		PaymentBehavior:    lo.ToPtr(types.PaymentBehaviorAllowIncomplete),
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			CreditGrants: []dto.CreateCreditGrantRequest{{
+				Name:           "Monthly Credits",
+				Scope:          types.CreditGrantScopeSubscription,
+				Credits:        decimal.NewFromInt(100),
+				Cadence:        types.CreditGrantCadenceRecurring,
+				Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+				PeriodCount:    lo.ToPtr(1),
+				ExpirationType: types.CreditGrantExpiryTypeNever,
+			}},
+		},
+	})
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus)
+
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, cust.ID)
+	s.Require().NoError(err)
+	s.Require().Len(wallets, 1)
+	s.True(decimal.NewFromInt(100).Equal(wallets[0].Balance), "expected first grant applied at creation, got %s", wallets[0].Balance)
 }

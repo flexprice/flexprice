@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -41,6 +42,7 @@ type PaymentService interface {
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
+	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
 }
 
 // InvoiceService defines the interface for invoice operations
@@ -81,6 +83,35 @@ type EntityIntegrationMappingService interface {
 	DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.SuccessResponse, error)
 }
 
+// RevenueService writes and maintains revenue_facts rows and serves their
+// analytics reads. Implemented by internal/ee/service/revenue; declared here
+// so the service layer can invoke the invoice-side hooks without importing
+// the implementation package.
+type RevenueService interface {
+	// RollupSubscription splits the subscription's current billing period
+	// into PROVISIONAL revenue_facts rows.
+	RollupSubscription(ctx context.Context, subscriptionID string) error
+
+	// RollupDirty rolls every opted-in subscription with activity since the
+	// given time. Over-rolling is harmless: the upsert is idempotent.
+	RollupDirty(ctx context.Context, req types.RollupDirtyRequest) (types.RollupDirtyResult, error)
+
+	// FinalizeSubscriptionPeriod flips the invoice's PROVISIONAL rows to
+	// FINAL and stamps them with the invoice.
+	FinalizeSubscriptionPeriod(ctx context.Context, invoiceID string) error
+
+	// RevertInvoiceFacts writes a negating twin for every FINAL row of a
+	// voided invoice. Idempotent.
+	RevertInvoiceFacts(ctx context.Context, invoiceID string) error
+
+	// ReconcileBookedInvoices re-checks every invoice finalized or voided
+	// since the given time against its booked rows.
+	ReconcileBookedInvoices(ctx context.Context, since time.Time) (checked, drifted, corrected int, err error)
+
+	// GetRevenueAnalytics aggregates facts into grouped, time-bucketed rows.
+	GetRevenueAnalytics(ctx context.Context, req *dto.RevenueAnalyticsRequest) (*dto.RevenueAnalyticsResponse, error)
+}
+
 // RevenueAnalyticsService defines the interface for revenue analytics operations
 type RevenueAnalyticsService interface {
 	// GetDetailedCostAnalytics retrieves detailed cost analytics with derived metrics
@@ -99,8 +130,9 @@ type SubscriptionService interface {
 	GetSubscriptionV2(ctx context.Context, id string, expand types.Expand) (*dto.SubscriptionResponseV2, error)
 	UpdateSubscription(ctx context.Context, subscriptionID string, req dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error)
 	CancelSubscription(ctx context.Context, subscriptionID string, req *dto.CancelSubscriptionRequest) (*dto.CancelSubscriptionResponse, error)
-	ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error
 	HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error
+	// MarkSubscriptionIncomplete moves an active payment-gated subscription to incomplete when its renewal invoice is unpaid.
+	MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error)
 
@@ -135,6 +167,8 @@ type SubscriptionService interface {
 
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
+	// ProcessOverdueSubscriptionInvoices marks subscriptions incomplete for renewal invoices within due date + grace.
+	ProcessOverdueSubscriptionInvoices(ctx context.Context) error
 	// Renewal due alert methods
 	ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error
 
@@ -233,11 +267,17 @@ type PriceUnitService interface {
 type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
+
+	// ApplyExpiringCreditToInvoice debits credits from an expiring credit onto a draft subscription
+	// invoice and returns the amount applied; repeats, non-drafts and other currencies apply nothing.
+	ApplyExpiringCreditToInvoice(ctx context.Context, invoiceID string, w *wallet.Wallet, creditTx *wallet.Transaction, credits decimal.Decimal) (decimal.Decimal, error)
 }
 
 type CheckoutSessionService interface {
 	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	// GetByPaymentID returns the session owning a checkout payment, or (nil, nil) if none.
+	GetByPaymentID(ctx context.Context, paymentID string) (*dto.CheckoutSessionResponse, error)
 	// GetAndReconcile is Get plus reconciliation against the payment provider. It
 	// contacts the gateway and can complete the session, so only callers acting for
 	// the customer should use it; internal readers use Get.

@@ -52,7 +52,7 @@ func (*InvoiceSequence) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the InvoiceSequence fields.
-func (is *InvoiceSequence) assignValues(columns []string, values []any) error {
+func (_m *InvoiceSequence) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -63,45 +63,45 @@ func (is *InvoiceSequence) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			is.ID = int(value.Int64)
+			_m.ID = int(value.Int64)
 		case invoicesequence.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				is.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case invoicesequence.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				is.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case invoicesequence.FieldYearMonth:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field year_month", values[i])
 			} else if value.Valid {
-				is.YearMonth = value.String
+				_m.YearMonth = value.String
 			}
 		case invoicesequence.FieldLastValue:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field last_value", values[i])
 			} else if value.Valid {
-				is.LastValue = value.Int64
+				_m.LastValue = value.Int64
 			}
 		case invoicesequence.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				is.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case invoicesequence.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				is.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		default:
-			is.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -109,50 +109,50 @@ func (is *InvoiceSequence) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the InvoiceSequence.
 // This includes values selected through modifiers, order, etc.
-func (is *InvoiceSequence) Value(name string) (ent.Value, error) {
-	return is.selectValues.Get(name)
+func (_m *InvoiceSequence) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this InvoiceSequence.
 // Note that you need to call InvoiceSequence.Unwrap() before calling this method if this InvoiceSequence
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (is *InvoiceSequence) Update() *InvoiceSequenceUpdateOne {
-	return NewInvoiceSequenceClient(is.config).UpdateOne(is)
+func (_m *InvoiceSequence) Update() *InvoiceSequenceUpdateOne {
+	return NewInvoiceSequenceClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the InvoiceSequence entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (is *InvoiceSequence) Unwrap() *InvoiceSequence {
-	_tx, ok := is.config.driver.(*txDriver)
+func (_m *InvoiceSequence) Unwrap() *InvoiceSequence {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: InvoiceSequence is not a transactional entity")
 	}
-	is.config.driver = _tx.drv
-	return is
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (is *InvoiceSequence) String() string {
+func (_m *InvoiceSequence) String() string {
 	var builder strings.Builder
 	builder.WriteString("InvoiceSequence(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", is.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(is.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(is.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("year_month=")
-	builder.WriteString(is.YearMonth)
+	builder.WriteString(_m.YearMonth)
 	builder.WriteString(", ")
 	builder.WriteString("last_value=")
-	builder.WriteString(fmt.Sprintf("%v", is.LastValue))
+	builder.WriteString(fmt.Sprintf("%v", _m.LastValue))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(is.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(is.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

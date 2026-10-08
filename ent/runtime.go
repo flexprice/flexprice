@@ -28,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -41,6 +42,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -957,16 +959,20 @@ func init() {
 	entitlementgrantDescMeasure := entitlementgrantFields[6].Descriptor()
 	// entitlementgrant.MeasureValidator is a validator for the "measure" field. It is called by the builders before save.
 	entitlementgrant.MeasureValidator = entitlementgrantDescMeasure.Validators[0].(func(string) error)
+	// entitlementgrantDescUnlimited is the schema descriptor for unlimited field.
+	entitlementgrantDescUnlimited := entitlementgrantFields[8].Descriptor()
+	// entitlementgrant.DefaultUnlimited holds the default value on creation for the unlimited field.
+	entitlementgrant.DefaultUnlimited = entitlementgrantDescUnlimited.Default.(bool)
 	// entitlementgrantDescUsage is the schema descriptor for usage field.
-	entitlementgrantDescUsage := entitlementgrantFields[8].Descriptor()
+	entitlementgrantDescUsage := entitlementgrantFields[9].Descriptor()
 	// entitlementgrant.DefaultUsage holds the default value on creation for the usage field.
 	entitlementgrant.DefaultUsage = entitlementgrantDescUsage.Default.(decimal.Decimal)
 	// entitlementgrantDescGrantStatus is the schema descriptor for grant_status field.
-	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
+	entitlementgrantDescGrantStatus := entitlementgrantFields[12].Descriptor()
 	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
 	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
 	// entitlementgrantDescMetadata is the schema descriptor for metadata field.
-	entitlementgrantDescMetadata := entitlementgrantFields[14].Descriptor()
+	entitlementgrantDescMetadata := entitlementgrantFields[15].Descriptor()
 	// entitlementgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	entitlementgrant.DefaultMetadata = entitlementgrantDescMetadata.Default.(types.Metadata)
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()
@@ -1045,6 +1051,57 @@ func init() {
 	environmentDescType := environmentFields[2].Descriptor()
 	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
+	fxrateMixin := schema.FXRate{}.Mixin()
+	fxrateMixinFields0 := fxrateMixin[0].Fields()
+	_ = fxrateMixinFields0
+	fxrateMixinFields1 := fxrateMixin[1].Fields()
+	_ = fxrateMixinFields1
+	fxrateFields := schema.FXRate{}.Fields()
+	_ = fxrateFields
+	// fxrateDescTenantID is the schema descriptor for tenant_id field.
+	fxrateDescTenantID := fxrateMixinFields0[0].Descriptor()
+	// fxrate.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	fxrate.TenantIDValidator = fxrateDescTenantID.Validators[0].(func(string) error)
+	// fxrateDescStatus is the schema descriptor for status field.
+	fxrateDescStatus := fxrateMixinFields0[1].Descriptor()
+	// fxrate.DefaultStatus holds the default value on creation for the status field.
+	fxrate.DefaultStatus = fxrateDescStatus.Default.(string)
+	// fxrateDescCreatedAt is the schema descriptor for created_at field.
+	fxrateDescCreatedAt := fxrateMixinFields0[2].Descriptor()
+	// fxrate.DefaultCreatedAt holds the default value on creation for the created_at field.
+	fxrate.DefaultCreatedAt = fxrateDescCreatedAt.Default.(func() time.Time)
+	// fxrateDescUpdatedAt is the schema descriptor for updated_at field.
+	fxrateDescUpdatedAt := fxrateMixinFields0[3].Descriptor()
+	// fxrate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	fxrate.DefaultUpdatedAt = fxrateDescUpdatedAt.Default.(func() time.Time)
+	// fxrate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	fxrate.UpdateDefaultUpdatedAt = fxrateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// fxrateDescEnvironmentID is the schema descriptor for environment_id field.
+	fxrateDescEnvironmentID := fxrateMixinFields1[0].Descriptor()
+	// fxrate.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	fxrate.DefaultEnvironmentID = fxrateDescEnvironmentID.Default.(string)
+	// fxrateDescScope is the schema descriptor for scope field.
+	fxrateDescScope := fxrateFields[1].Descriptor()
+	// fxrate.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
+	fxrate.ScopeValidator = fxrateDescScope.Validators[0].(func(string) error)
+	// fxrateDescScopeID is the schema descriptor for scope_id field.
+	fxrateDescScopeID := fxrateFields[2].Descriptor()
+	// fxrate.ScopeIDValidator is a validator for the "scope_id" field. It is called by the builders before save.
+	fxrate.ScopeIDValidator = fxrateDescScopeID.Validators[0].(func(string) error)
+	// fxrateDescFromCurrency is the schema descriptor for from_currency field.
+	fxrateDescFromCurrency := fxrateFields[3].Descriptor()
+	// fxrate.FromCurrencyValidator is a validator for the "from_currency" field. It is called by the builders before save.
+	fxrate.FromCurrencyValidator = fxrateDescFromCurrency.Validators[0].(func(string) error)
+	// fxrateDescToCurrency is the schema descriptor for to_currency field.
+	fxrateDescToCurrency := fxrateFields[4].Descriptor()
+	// fxrate.ToCurrencyValidator is a validator for the "to_currency" field. It is called by the builders before save.
+	fxrate.ToCurrencyValidator = fxrateDescToCurrency.Validators[0].(func(string) error)
+	// fxrateDescSource is the schema descriptor for source field.
+	fxrateDescSource := fxrateFields[6].Descriptor()
+	// fxrate.DefaultSource holds the default value on creation for the source field.
+	fxrate.DefaultSource = types.FXRateSource(fxrateDescSource.Default.(string))
+	// fxrate.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	fxrate.SourceValidator = fxrateDescSource.Validators[0].(func(string) error)
 	featureMixin := schema.Feature{}.Mixin()
 	featureMixinFields0 := featureMixin[0].Fields()
 	_ = featureMixinFields0
@@ -1792,6 +1849,48 @@ func init() {
 	refundDescIdempotencyKey := refundFields[15].Descriptor()
 	// refund.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	refund.IdempotencyKeyValidator = refundDescIdempotencyKey.Validators[0].(func(string) error)
+	revenuefactFields := schema.RevenueFact{}.Fields()
+	_ = revenuefactFields
+	// revenuefactDescUsageAtListRate is the schema descriptor for usage_at_list_rate field.
+	revenuefactDescUsageAtListRate := revenuefactFields[16].Descriptor()
+	// revenuefact.DefaultUsageAtListRate holds the default value on creation for the usage_at_list_rate field.
+	revenuefact.DefaultUsageAtListRate = revenuefactDescUsageAtListRate.Default.(decimal.Decimal)
+	// revenuefactDescTierDelta is the schema descriptor for tier_delta field.
+	revenuefactDescTierDelta := revenuefactFields[17].Descriptor()
+	// revenuefact.DefaultTierDelta holds the default value on creation for the tier_delta field.
+	revenuefact.DefaultTierDelta = revenuefactDescTierDelta.Default.(decimal.Decimal)
+	// revenuefactDescEntitlementAmount is the schema descriptor for entitlement_amount field.
+	revenuefactDescEntitlementAmount := revenuefactFields[18].Descriptor()
+	// revenuefact.DefaultEntitlementAmount holds the default value on creation for the entitlement_amount field.
+	revenuefact.DefaultEntitlementAmount = revenuefactDescEntitlementAmount.Default.(decimal.Decimal)
+	// revenuefactDescLineDiscount is the schema descriptor for line_discount field.
+	revenuefactDescLineDiscount := revenuefactFields[19].Descriptor()
+	// revenuefact.DefaultLineDiscount holds the default value on creation for the line_discount field.
+	revenuefact.DefaultLineDiscount = revenuefactDescLineDiscount.Default.(decimal.Decimal)
+	// revenuefactDescInvoiceDiscount is the schema descriptor for invoice_discount field.
+	revenuefactDescInvoiceDiscount := revenuefactFields[20].Descriptor()
+	// revenuefact.DefaultInvoiceDiscount holds the default value on creation for the invoice_discount field.
+	revenuefact.DefaultInvoiceDiscount = revenuefactDescInvoiceDiscount.Default.(decimal.Decimal)
+	// revenuefactDescBillableQty is the schema descriptor for billable_qty field.
+	revenuefactDescBillableQty := revenuefactFields[22].Descriptor()
+	// revenuefact.DefaultBillableQty holds the default value on creation for the billable_qty field.
+	revenuefact.DefaultBillableQty = revenuefactDescBillableQty.Default.(decimal.Decimal)
+	// revenuefactDescEntitlementQty is the schema descriptor for entitlement_qty field.
+	revenuefactDescEntitlementQty := revenuefactFields[23].Descriptor()
+	// revenuefact.DefaultEntitlementQty holds the default value on creation for the entitlement_qty field.
+	revenuefact.DefaultEntitlementQty = revenuefactDescEntitlementQty.Default.(decimal.Decimal)
+	// revenuefactDescIsRevert is the schema descriptor for is_revert field.
+	revenuefactDescIsRevert := revenuefactFields[27].Descriptor()
+	// revenuefact.DefaultIsRevert holds the default value on creation for the is_revert field.
+	revenuefact.DefaultIsRevert = revenuefactDescIsRevert.Default.(bool)
+	// revenuefactDescComputedAt is the schema descriptor for computed_at field.
+	revenuefactDescComputedAt := revenuefactFields[31].Descriptor()
+	// revenuefact.DefaultComputedAt holds the default value on creation for the computed_at field.
+	revenuefact.DefaultComputedAt = revenuefactDescComputedAt.Default.(func() time.Time)
+	// revenuefactDescVersion is the schema descriptor for version field.
+	revenuefactDescVersion := revenuefactFields[32].Descriptor()
+	// revenuefact.DefaultVersion holds the default value on creation for the version field.
+	revenuefact.DefaultVersion = revenuefactDescVersion.Default.(int64)
 	scheduledtaskMixin := schema.ScheduledTask{}.Mixin()
 	scheduledtaskMixinFields0 := scheduledtaskMixin[0].Fields()
 	_ = scheduledtaskMixinFields0

@@ -116,18 +116,27 @@ func (p *CreateSubscriptionParams) Validate() error {
 	return nil
 }
 
+type ModifySubscriptionType string
+
+const (
+	ModifySubscriptionTypeQuantityChange ModifySubscriptionType = "quantity_change"
+	ModifySubscriptionTypeLineItemChange ModifySubscriptionType = "line_item_change"
+)
+
 // ModifySubscriptionParams is persisted on checkout sessions for payment-gated
 // subscription modifications (e.g. quantity_change). Applied on payment success.
 type ModifySubscriptionParams struct {
 	SubscriptionID        string                       `json:"subscription_id"`
+	ModifyType            ModifySubscriptionType       `json:"modify_type,omitempty"`
 	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
 }
 
 // ModifySubscriptionLineItem is one close-and-replace intent for a line item.
 type ModifySubscriptionLineItem struct {
-	LineItemID    string          `json:"line_item_id"`
-	Quantity      decimal.Decimal `json:"quantity" swaggertype:"string"`
-	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+	LineItemID    string           `json:"line_item_id"`
+	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
 }
 
 func (p *ModifySubscriptionParams) Validate() error {
@@ -152,9 +161,15 @@ func (p *ModifySubscriptionParams) Validate() error {
 				WithReportableDetails(map[string]any{"index": i}).
 				Mark(ierr.ErrValidation)
 		}
-		if mod.Quantity.IsNegative() {
+		if mod.Quantity != nil && mod.Quantity.IsNegative() {
 			return ierr.NewError("quantity must be non-negative").
 				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+		if mod.Amount != nil && mod.Amount.IsNegative() {
+			return ierr.NewError("amount must be non-negative").
+				WithHint("Amount cannot be negative").
 				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
 				Mark(ierr.ErrValidation)
 		}

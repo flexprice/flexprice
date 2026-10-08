@@ -163,7 +163,7 @@ func (s *PortalWalletSuite) TestTopUpHonoursNamedProvider() {
 
 // Stripe is connected but has no checkout adapter, so it must not be resolved to.
 func (s *PortalWalletSuite) TestTopUpIgnoresProvidersWithoutCheckout() {
-	s.connect(types.SecretProviderStripe)
+	s.connect(types.SecretProviderNomod)
 
 	_, err := s.svc.(*customerPortalService).
 		resolveCheckoutProvider(s.ctx, "cust_portal", nil)
@@ -225,11 +225,11 @@ func (s *PortalWalletSuite) TestTopUpUseSavedMethodValidation() {
 		errCheck       func(error) bool
 	}{
 		{
-			name:           "saved method with razorpay fails with not implemented as provider lacks capability",
+			name:           "saved method with razorpay fails validation as mandates cannot be charged instantly",
 			provider:       types.PaymentGatewayTypeRazorpay,
 			useSavedMethod: true,
 			wantErr:        true,
-			errCheck:       ierr.IsNotImplemented,
+			errCheck:       ierr.IsValidation,
 		},
 		{
 			name:           "saved method with chargebee fails validation when customer has no saved card",
@@ -292,9 +292,10 @@ func (s *PortalWalletSuite) TestValidateSavedMethodForTopUp_ActiveSavedCard_Succ
 	pmProvider := &stubPaymentMethodProvider{
 		methods: []interfaces.ProviderPaymentMethod{
 			{
-				GatewayMethodID: "pm_chargebee_valid",
-				Method:          types.PaymentMethodTypeCard,
-				Active:          true,
+				GatewayMethodID:     "pm_chargebee_valid",
+				Method:              types.PaymentMethodTypeCard,
+				Active:              true,
+				InstantlyChargeable: true,
 			},
 		},
 	}
@@ -303,6 +304,24 @@ func (s *PortalWalletSuite) TestValidateSavedMethodForTopUp_ActiveSavedCard_Succ
 	portal := s.svc.(*customerPortalService)
 	err := portal.validateSavedMethodForTopUp(s.ctx, "cust_portal", types.PaymentGatewayTypeChargebee)
 	s.NoError(err, "validateSavedMethodForTopUp should pass when an active saved method exists")
+}
+
+func (s *PortalWalletSuite) TestValidateSavedMethodForTopUp_MandateNotInstant() {
+	s.connect(types.SecretProviderRazorpay)
+
+	s.GetIntegrationFactory().SetPaymentMethodProvider(&stubPaymentMethodProvider{
+		methods: []interfaces.ProviderPaymentMethod{{
+			GatewayMethodID: "token_live",
+			Method:          types.PaymentMethodTypeUPI,
+			Active:          true,
+			Recurring:       &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive},
+		}},
+	})
+
+	portal := s.svc.(*customerPortalService)
+	err := portal.validateSavedMethodForTopUp(s.ctx, "cust_portal", types.PaymentGatewayTypeRazorpay)
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
 }
 
 func (s *PortalWalletSuite) seedPendingSession(id string) {

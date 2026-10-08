@@ -98,7 +98,7 @@ func (*SubscriptionSchedule) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the SubscriptionSchedule fields.
-func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) error {
+func (_m *SubscriptionSchedule) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -108,55 +108,55 @@ func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) err
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				ss.ID = value.String
+				_m.ID = value.String
 			}
 		case subscriptionschedule.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				ss.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case subscriptionschedule.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ss.Status = value.String
+				_m.Status = value.String
 			}
 		case subscriptionschedule.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ss.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case subscriptionschedule.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				ss.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case subscriptionschedule.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				ss.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case subscriptionschedule.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				ss.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case subscriptionschedule.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				ss.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case subscriptionschedule.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ss.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -164,25 +164,25 @@ func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) err
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				ss.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case subscriptionschedule.FieldScheduleType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field schedule_type", values[i])
 			} else if value.Valid {
-				ss.ScheduleType = types.SubscriptionScheduleChangeType(value.String)
+				_m.ScheduleType = types.SubscriptionScheduleChangeType(value.String)
 			}
 		case subscriptionschedule.FieldScheduledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field scheduled_at", values[i])
 			} else if value.Valid {
-				ss.ScheduledAt = value.Time
+				_m.ScheduledAt = value.Time
 			}
 		case subscriptionschedule.FieldConfiguration:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field configuration", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ss.Configuration); err != nil {
+				if err := json.Unmarshal(*value, &_m.Configuration); err != nil {
 					return fmt.Errorf("unmarshal field configuration: %w", err)
 				}
 			}
@@ -190,21 +190,21 @@ func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) err
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field executed_at", values[i])
 			} else if value.Valid {
-				ss.ExecutedAt = new(time.Time)
-				*ss.ExecutedAt = value.Time
+				_m.ExecutedAt = new(time.Time)
+				*_m.ExecutedAt = value.Time
 			}
 		case subscriptionschedule.FieldCancelledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cancelled_at", values[i])
 			} else if value.Valid {
-				ss.CancelledAt = new(time.Time)
-				*ss.CancelledAt = value.Time
+				_m.CancelledAt = new(time.Time)
+				*_m.CancelledAt = value.Time
 			}
 		case subscriptionschedule.FieldExecutionResult:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field execution_result", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ss.ExecutionResult); err != nil {
+				if err := json.Unmarshal(*value, &_m.ExecutionResult); err != nil {
 					return fmt.Errorf("unmarshal field execution_result: %w", err)
 				}
 			}
@@ -212,11 +212,11 @@ func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) err
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_message", values[i])
 			} else if value.Valid {
-				ss.ErrorMessage = new(string)
-				*ss.ErrorMessage = value.String
+				_m.ErrorMessage = new(string)
+				*_m.ErrorMessage = value.String
 			}
 		default:
-			ss.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -224,88 +224,88 @@ func (ss *SubscriptionSchedule) assignValues(columns []string, values []any) err
 
 // Value returns the ent.Value that was dynamically selected and assigned to the SubscriptionSchedule.
 // This includes values selected through modifiers, order, etc.
-func (ss *SubscriptionSchedule) Value(name string) (ent.Value, error) {
-	return ss.selectValues.Get(name)
+func (_m *SubscriptionSchedule) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QuerySubscription queries the "subscription" edge of the SubscriptionSchedule entity.
-func (ss *SubscriptionSchedule) QuerySubscription() *SubscriptionQuery {
-	return NewSubscriptionScheduleClient(ss.config).QuerySubscription(ss)
+func (_m *SubscriptionSchedule) QuerySubscription() *SubscriptionQuery {
+	return NewSubscriptionScheduleClient(_m.config).QuerySubscription(_m)
 }
 
 // Update returns a builder for updating this SubscriptionSchedule.
 // Note that you need to call SubscriptionSchedule.Unwrap() before calling this method if this SubscriptionSchedule
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (ss *SubscriptionSchedule) Update() *SubscriptionScheduleUpdateOne {
-	return NewSubscriptionScheduleClient(ss.config).UpdateOne(ss)
+func (_m *SubscriptionSchedule) Update() *SubscriptionScheduleUpdateOne {
+	return NewSubscriptionScheduleClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the SubscriptionSchedule entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (ss *SubscriptionSchedule) Unwrap() *SubscriptionSchedule {
-	_tx, ok := ss.config.driver.(*txDriver)
+func (_m *SubscriptionSchedule) Unwrap() *SubscriptionSchedule {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: SubscriptionSchedule is not a transactional entity")
 	}
-	ss.config.driver = _tx.drv
-	return ss
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (ss *SubscriptionSchedule) String() string {
+func (_m *SubscriptionSchedule) String() string {
 	var builder strings.Builder
 	builder.WriteString("SubscriptionSchedule(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", ss.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(ss.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(ss.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(ss.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(ss.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(ss.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(ss.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(ss.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", ss.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(ss.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("schedule_type=")
-	builder.WriteString(fmt.Sprintf("%v", ss.ScheduleType))
+	builder.WriteString(fmt.Sprintf("%v", _m.ScheduleType))
 	builder.WriteString(", ")
 	builder.WriteString("scheduled_at=")
-	builder.WriteString(ss.ScheduledAt.Format(time.ANSIC))
+	builder.WriteString(_m.ScheduledAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("configuration=")
-	builder.WriteString(fmt.Sprintf("%v", ss.Configuration))
+	builder.WriteString(fmt.Sprintf("%v", _m.Configuration))
 	builder.WriteString(", ")
-	if v := ss.ExecutedAt; v != nil {
+	if v := _m.ExecutedAt; v != nil {
 		builder.WriteString("executed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := ss.CancelledAt; v != nil {
+	if v := _m.CancelledAt; v != nil {
 		builder.WriteString("cancelled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("execution_result=")
-	builder.WriteString(fmt.Sprintf("%v", ss.ExecutionResult))
+	builder.WriteString(fmt.Sprintf("%v", _m.ExecutionResult))
 	builder.WriteString(", ")
-	if v := ss.ErrorMessage; v != nil {
+	if v := _m.ErrorMessage; v != nil {
 		builder.WriteString("error_message=")
 		builder.WriteString(*v)
 	}

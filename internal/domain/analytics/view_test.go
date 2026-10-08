@@ -78,7 +78,6 @@ func TestNewViewDefinition_SetsAllFields(t *testing.T) {
 	timeSpec := TimeSpecRaw{Range: "{{date_range}}", Grain: types.GrainDay}
 
 	def := NewViewDefinition(
-		"my_view",
 		types.ShapeBreakdown,
 		[]types.Metric{types.MetricUsageQuantity},
 		[]string{"customer_id"},
@@ -89,7 +88,6 @@ func TestNewViewDefinition_SetsAllFields(t *testing.T) {
 		variables,
 	)
 
-	assert.Equal(t, "my_view", def.Name)
 	assert.Equal(t, types.ShapeBreakdown, def.Shape)
 	assert.Equal(t, []types.Metric{types.MetricUsageQuantity}, def.Metrics)
 	assert.Equal(t, []string{"customer_id"}, def.Dimensions)

@@ -26,6 +26,8 @@ const (
 	grantProrationSourceAddonAttach  grantProrationSource = "addon_attach"
 	grantProrationSourceAddonDetach  grantProrationSource = "addon_detach"
 	grantProrationSourceAddonsModify grantProrationSource = "addons_modify"
+	// Not an addon change: an entitlement was deleted outright.
+	grantProrationSourceEntitlementGone grantProrationSource = "entitlement_deleted"
 )
 
 func (s grantProrationSource) String() string { return string(s) }
@@ -96,6 +98,13 @@ func (s *subscriptionGrantService) resolveGrantProration(
 				"feature_id", featureID,
 				"effective_date", effectiveDate,
 				"error", err.Error())
+			continue
+		}
+
+		if lo.SomeBy(featureECs, func(ec *entitlement.Entitlement) bool { return ec.IsUnlimitedGrant() }) {
+			s.Logger.Info(ctx, "skipping entitlement grant proration; allowance is unlimited",
+				"subscription_id", sub.ID,
+				"feature_id", featureID)
 			continue
 		}
 
@@ -175,7 +184,7 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 	}
 
 	at := cfg.entitlementChangeAt
-	liveByFeature, err := s.liveGrantsByFeature(ctx, cfg.sub, at)
+	liveByFeature, err := NewEntitlementGrantService(s.ServiceParams).LiveGrantsByFeature(ctx, cfg.sub, at)
 	if err != nil {
 		return err
 	}
@@ -248,7 +257,7 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 				WithQuota(decimal.Zero).
 				WithWindow(closed.ValidTo, pooled.ValidTo).
 				WithMetadata(types.Metadata{
-					"proration_source":   grantProrationSourceAddonsModify.String(),
+					"proration_source":   cfg.origin().String(),
 					"carry_forward_from": pooled.ID,
 				}).
 				Build(),
@@ -261,6 +270,13 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 
 	_, err = grantSvc.OpenFeatureBasedEntitlementGrants(ctx, reqs)
 	return err
+}
+
+func (c *GrantChangeConfig) origin() grantProrationSource {
+	if c == nil || c.entitlementChangeOrigin == "" {
+		return grantProrationSourceAddonsModify
+	}
+	return c.entitlementChangeOrigin
 }
 
 // removalClosures decides what the leaving configs settle, writing nothing: the windows to end,
@@ -354,32 +370,4 @@ func (s *subscriptionGrantService) GetSubscriptionGrantECsByFeature(
 	return lo.GroupBy(grantECs, func(ec *entitlement.Entitlement) string {
 		return ec.FeatureID
 	}), nil
-}
-
-// liveGrantsByFeature returns the subscription's feature-scoped grant rows whose window
-// contains `at`, grouped by feature. Windows already closed before `at` are excluded by the
-// query, so each slot yields the one segment that is actually live.
-func (s *subscriptionGrantService) liveGrantsByFeature(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	at time.Time,
-) (map[string][]*entitlementgrant.EntitlementGrant, error) {
-	filter := types.NewNoLimitEntitlementGrantFilter().
-		WithCustomerIDs(sub.CustomerID).
-		WithSubscriptionIDs(sub.ID).
-		WithLiveOnly(at)
-
-	rows, err := s.EntitlementGrantRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	byFeature := make(map[string][]*entitlementgrant.EntitlementGrant)
-	for _, g := range rows {
-		if g == nil || !g.IsFeatureScoped() {
-			continue
-		}
-		byFeature[g.FeatureID()] = append(byFeature[g.FeatureID()], g)
-	}
-	return byFeature, nil
 }

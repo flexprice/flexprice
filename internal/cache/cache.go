@@ -51,6 +51,12 @@ type RedisCache interface {
 	IsRedisCache() bool
 
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
+
+	// GetBulk retrieves many keys in one round trip, returning the values
+	// found (keyed by the original key) and the keys not found — callers
+	// fetch those from the DB and Set them back. A disabled cache reports
+	// every key missing.
+	GetBulk(ctx context.Context, keys []string) (found map[string]interface{}, missing []string)
 }
 
 // Predefined cache key prefixes for different entity types
@@ -100,11 +106,14 @@ const (
 	PrefixPriceSyncLock              = "price_sync:plan:"
 	PrefixRazorpayWebhookRefundLock  = "razorpay:webhook-refund:"
 	PrefixChargebeeWebhookRefundLock = "chargebee:webhook-refund:"
+	PrefixStripeWebhookRefundLock    = "stripe:webhook-refund:"
 	PrefixTabsInvoiceSyncLock        = "tabs:invoice_sync:"
 	// PrefixStripeCustomerSyncLock guards first-time Stripe customer creation for a
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
+	// PrefixCreditGrantApplyLock serializes credit grant application per customer.
+	PrefixCreditGrantApplyLock = "credit_grant:apply:"
 	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
 	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
 	PrefixCheckoutPollLock     = "checkout:poll:"

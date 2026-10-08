@@ -12,9 +12,9 @@ import (
 
 func TestSelectAutoChargeToken(t *testing.T) {
 	now := time.Now().UTC()
-	upiToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_upi", Method: types.PaymentMethodTypeUPI, Active: true, CreatedAt: now}
-	cardToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_card", Method: types.PaymentMethodTypeCard, Active: true, CreatedAt: now}
-	inactiveToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_inactive", Method: types.PaymentMethodTypeCard, Active: false, CreatedAt: now}
+	upiToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_upi", Method: types.PaymentMethodTypeUPI, Active: true, CreatedAt: now, Recurring: &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive}}
+	cardToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_card", Method: types.PaymentMethodTypeCard, Active: true, CreatedAt: now, Recurring: &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive}}
+	inactiveToken := &interfaces.ProviderPaymentMethod{GatewayMethodID: "tok_inactive", Method: types.PaymentMethodTypeCard, Active: false, CreatedAt: now, Recurring: &interfaces.ProviderRecurringPaymentDetails{Status: types.RecurringPaymentStatusActive}}
 
 	tests := []struct {
 		name      string

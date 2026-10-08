@@ -54,7 +54,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

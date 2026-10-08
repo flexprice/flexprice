@@ -14,6 +14,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -282,7 +283,7 @@ func (s *SubscriptionModificationServiceSuite) seedPendingModifyCheckout(
 			ModifySubscriptionParams: &types.ModifySubscriptionParams{
 				SubscriptionID: subscriptionID,
 				LineItemModifications: []types.ModifySubscriptionLineItem{
-					{LineItemID: "subs_line_placeholder", Quantity: decimal.NewFromInt(1)},
+					{LineItemID: "subs_line_placeholder", Quantity: lo.ToPtr(decimal.NewFromInt(1))},
 				},
 			},
 		}),

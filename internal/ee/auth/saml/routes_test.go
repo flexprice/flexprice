@@ -524,3 +524,16 @@ func TestDashboardRedirectCarriesRelayState(t *testing.T) {
 		t.Error("an empty RelayState should be omitted rather than sent as an empty value")
 	}
 }
+
+func (f *fakeRedis) GetBulk(ctx context.Context, keys []string) (map[string]interface{}, []string) {
+	found := make(map[string]interface{}, len(keys))
+	missing := make([]string, 0)
+	for _, k := range keys {
+		if v, ok := f.Get(ctx, k); ok {
+			found[k] = v
+			continue
+		}
+		missing = append(missing, k)
+	}
+	return found, missing
+}

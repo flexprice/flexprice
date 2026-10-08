@@ -145,6 +145,9 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 // @Produce json
 // @Param pending_only query boolean false "Filter to pending schedules only"
 // @Param subscription_id query string false "Filter by subscription ID"
+// @Param subscription_ids query []string false "Filter by subscription IDs" collectionFormat(multi)
+// @Param schedule_type query []string false "Filter by schedule type" Enums(plan_change, cancellation) collectionFormat(multi)
+// @Param schedule_status query []string false "Filter by schedule status" Enums(pending, executing, executed, cancelled, failed) collectionFormat(multi)
 // @Param limit query int false "Limit results"
 // @Param offset query int false "Offset for pagination"
 // @Success 200 {object} dto.GetPendingSchedulesResponse

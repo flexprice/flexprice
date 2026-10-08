@@ -24,93 +24,93 @@ type AlertSettingsUpdate struct {
 }
 
 // Where appends a list predicates to the AlertSettingsUpdate builder.
-func (asu *AlertSettingsUpdate) Where(ps ...predicate.AlertSettings) *AlertSettingsUpdate {
-	asu.mutation.Where(ps...)
-	return asu
+func (_u *AlertSettingsUpdate) Where(ps ...predicate.AlertSettings) *AlertSettingsUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (asu *AlertSettingsUpdate) SetStatus(s string) *AlertSettingsUpdate {
-	asu.mutation.SetStatus(s)
-	return asu
+func (_u *AlertSettingsUpdate) SetStatus(v string) *AlertSettingsUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (asu *AlertSettingsUpdate) SetNillableStatus(s *string) *AlertSettingsUpdate {
-	if s != nil {
-		asu.SetStatus(*s)
+func (_u *AlertSettingsUpdate) SetNillableStatus(v *string) *AlertSettingsUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return asu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (asu *AlertSettingsUpdate) SetUpdatedAt(t time.Time) *AlertSettingsUpdate {
-	asu.mutation.SetUpdatedAt(t)
-	return asu
+func (_u *AlertSettingsUpdate) SetUpdatedAt(v time.Time) *AlertSettingsUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (asu *AlertSettingsUpdate) SetUpdatedBy(s string) *AlertSettingsUpdate {
-	asu.mutation.SetUpdatedBy(s)
-	return asu
+func (_u *AlertSettingsUpdate) SetUpdatedBy(v string) *AlertSettingsUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (asu *AlertSettingsUpdate) SetNillableUpdatedBy(s *string) *AlertSettingsUpdate {
-	if s != nil {
-		asu.SetUpdatedBy(*s)
+func (_u *AlertSettingsUpdate) SetNillableUpdatedBy(v *string) *AlertSettingsUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return asu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (asu *AlertSettingsUpdate) ClearUpdatedBy() *AlertSettingsUpdate {
-	asu.mutation.ClearUpdatedBy()
-	return asu
+func (_u *AlertSettingsUpdate) ClearUpdatedBy() *AlertSettingsUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEnabled sets the "enabled" field.
-func (asu *AlertSettingsUpdate) SetEnabled(b bool) *AlertSettingsUpdate {
-	asu.mutation.SetEnabled(b)
-	return asu
+func (_u *AlertSettingsUpdate) SetEnabled(v bool) *AlertSettingsUpdate {
+	_u.mutation.SetEnabled(v)
+	return _u
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (asu *AlertSettingsUpdate) SetNillableEnabled(b *bool) *AlertSettingsUpdate {
-	if b != nil {
-		asu.SetEnabled(*b)
+func (_u *AlertSettingsUpdate) SetNillableEnabled(v *bool) *AlertSettingsUpdate {
+	if v != nil {
+		_u.SetEnabled(*v)
 	}
-	return asu
+	return _u
 }
 
 // SetConfig sets the "config" field.
-func (asu *AlertSettingsUpdate) SetConfig(ts types.AlertSettings) *AlertSettingsUpdate {
-	asu.mutation.SetConfig(ts)
-	return asu
+func (_u *AlertSettingsUpdate) SetConfig(v types.AlertSettings) *AlertSettingsUpdate {
+	_u.mutation.SetConfig(v)
+	return _u
 }
 
 // SetNillableConfig sets the "config" field if the given value is not nil.
-func (asu *AlertSettingsUpdate) SetNillableConfig(ts *types.AlertSettings) *AlertSettingsUpdate {
-	if ts != nil {
-		asu.SetConfig(*ts)
+func (_u *AlertSettingsUpdate) SetNillableConfig(v *types.AlertSettings) *AlertSettingsUpdate {
+	if v != nil {
+		_u.SetConfig(*v)
 	}
-	return asu
+	return _u
 }
 
 // Mutation returns the AlertSettingsMutation object of the builder.
-func (asu *AlertSettingsUpdate) Mutation() *AlertSettingsMutation {
-	return asu.mutation
+func (_u *AlertSettingsUpdate) Mutation() *AlertSettingsMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (asu *AlertSettingsUpdate) Save(ctx context.Context) (int, error) {
-	asu.defaults()
-	return withHooks(ctx, asu.sqlSave, asu.mutation, asu.hooks)
+func (_u *AlertSettingsUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (asu *AlertSettingsUpdate) SaveX(ctx context.Context) int {
-	affected, err := asu.Save(ctx)
+func (_u *AlertSettingsUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -118,66 +118,66 @@ func (asu *AlertSettingsUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (asu *AlertSettingsUpdate) Exec(ctx context.Context) error {
-	_, err := asu.Save(ctx)
+func (_u *AlertSettingsUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (asu *AlertSettingsUpdate) ExecX(ctx context.Context) {
-	if err := asu.Exec(ctx); err != nil {
+func (_u *AlertSettingsUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (asu *AlertSettingsUpdate) defaults() {
-	if _, ok := asu.mutation.UpdatedAt(); !ok {
+func (_u *AlertSettingsUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := alertsettings.UpdateDefaultUpdatedAt()
-		asu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (asu *AlertSettingsUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *AlertSettingsUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(alertsettings.Table, alertsettings.Columns, sqlgraph.NewFieldSpec(alertsettings.FieldID, field.TypeString))
-	if ps := asu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := asu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(alertsettings.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := asu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if asu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(alertsettings.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := asu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedBy, field.TypeString, value)
 	}
-	if asu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(alertsettings.FieldUpdatedBy, field.TypeString)
 	}
-	if asu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alertsettings.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := asu.mutation.Enabled(); ok {
+	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(alertsettings.FieldEnabled, field.TypeBool, value)
 	}
-	if asu.mutation.ParentEntityTypeCleared() {
+	if _u.mutation.ParentEntityTypeCleared() {
 		_spec.ClearField(alertsettings.FieldParentEntityType, field.TypeEnum)
 	}
-	if asu.mutation.ParentEntityIDCleared() {
+	if _u.mutation.ParentEntityIDCleared() {
 		_spec.ClearField(alertsettings.FieldParentEntityID, field.TypeString)
 	}
-	if value, ok := asu.mutation.Config(); ok {
+	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(alertsettings.FieldConfig, field.TypeJSON, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, asu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{alertsettings.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -185,8 +185,8 @@ func (asu *AlertSettingsUpdate) sqlSave(ctx context.Context) (n int, err error) 
 		}
 		return 0, err
 	}
-	asu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // AlertSettingsUpdateOne is the builder for updating a single AlertSettings entity.
@@ -198,100 +198,100 @@ type AlertSettingsUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (asuo *AlertSettingsUpdateOne) SetStatus(s string) *AlertSettingsUpdateOne {
-	asuo.mutation.SetStatus(s)
-	return asuo
+func (_u *AlertSettingsUpdateOne) SetStatus(v string) *AlertSettingsUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (asuo *AlertSettingsUpdateOne) SetNillableStatus(s *string) *AlertSettingsUpdateOne {
-	if s != nil {
-		asuo.SetStatus(*s)
+func (_u *AlertSettingsUpdateOne) SetNillableStatus(v *string) *AlertSettingsUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return asuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (asuo *AlertSettingsUpdateOne) SetUpdatedAt(t time.Time) *AlertSettingsUpdateOne {
-	asuo.mutation.SetUpdatedAt(t)
-	return asuo
+func (_u *AlertSettingsUpdateOne) SetUpdatedAt(v time.Time) *AlertSettingsUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (asuo *AlertSettingsUpdateOne) SetUpdatedBy(s string) *AlertSettingsUpdateOne {
-	asuo.mutation.SetUpdatedBy(s)
-	return asuo
+func (_u *AlertSettingsUpdateOne) SetUpdatedBy(v string) *AlertSettingsUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (asuo *AlertSettingsUpdateOne) SetNillableUpdatedBy(s *string) *AlertSettingsUpdateOne {
-	if s != nil {
-		asuo.SetUpdatedBy(*s)
+func (_u *AlertSettingsUpdateOne) SetNillableUpdatedBy(v *string) *AlertSettingsUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return asuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (asuo *AlertSettingsUpdateOne) ClearUpdatedBy() *AlertSettingsUpdateOne {
-	asuo.mutation.ClearUpdatedBy()
-	return asuo
+func (_u *AlertSettingsUpdateOne) ClearUpdatedBy() *AlertSettingsUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEnabled sets the "enabled" field.
-func (asuo *AlertSettingsUpdateOne) SetEnabled(b bool) *AlertSettingsUpdateOne {
-	asuo.mutation.SetEnabled(b)
-	return asuo
+func (_u *AlertSettingsUpdateOne) SetEnabled(v bool) *AlertSettingsUpdateOne {
+	_u.mutation.SetEnabled(v)
+	return _u
 }
 
 // SetNillableEnabled sets the "enabled" field if the given value is not nil.
-func (asuo *AlertSettingsUpdateOne) SetNillableEnabled(b *bool) *AlertSettingsUpdateOne {
-	if b != nil {
-		asuo.SetEnabled(*b)
+func (_u *AlertSettingsUpdateOne) SetNillableEnabled(v *bool) *AlertSettingsUpdateOne {
+	if v != nil {
+		_u.SetEnabled(*v)
 	}
-	return asuo
+	return _u
 }
 
 // SetConfig sets the "config" field.
-func (asuo *AlertSettingsUpdateOne) SetConfig(ts types.AlertSettings) *AlertSettingsUpdateOne {
-	asuo.mutation.SetConfig(ts)
-	return asuo
+func (_u *AlertSettingsUpdateOne) SetConfig(v types.AlertSettings) *AlertSettingsUpdateOne {
+	_u.mutation.SetConfig(v)
+	return _u
 }
 
 // SetNillableConfig sets the "config" field if the given value is not nil.
-func (asuo *AlertSettingsUpdateOne) SetNillableConfig(ts *types.AlertSettings) *AlertSettingsUpdateOne {
-	if ts != nil {
-		asuo.SetConfig(*ts)
+func (_u *AlertSettingsUpdateOne) SetNillableConfig(v *types.AlertSettings) *AlertSettingsUpdateOne {
+	if v != nil {
+		_u.SetConfig(*v)
 	}
-	return asuo
+	return _u
 }
 
 // Mutation returns the AlertSettingsMutation object of the builder.
-func (asuo *AlertSettingsUpdateOne) Mutation() *AlertSettingsMutation {
-	return asuo.mutation
+func (_u *AlertSettingsUpdateOne) Mutation() *AlertSettingsMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the AlertSettingsUpdate builder.
-func (asuo *AlertSettingsUpdateOne) Where(ps ...predicate.AlertSettings) *AlertSettingsUpdateOne {
-	asuo.mutation.Where(ps...)
-	return asuo
+func (_u *AlertSettingsUpdateOne) Where(ps ...predicate.AlertSettings) *AlertSettingsUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (asuo *AlertSettingsUpdateOne) Select(field string, fields ...string) *AlertSettingsUpdateOne {
-	asuo.fields = append([]string{field}, fields...)
-	return asuo
+func (_u *AlertSettingsUpdateOne) Select(field string, fields ...string) *AlertSettingsUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated AlertSettings entity.
-func (asuo *AlertSettingsUpdateOne) Save(ctx context.Context) (*AlertSettings, error) {
-	asuo.defaults()
-	return withHooks(ctx, asuo.sqlSave, asuo.mutation, asuo.hooks)
+func (_u *AlertSettingsUpdateOne) Save(ctx context.Context) (*AlertSettings, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (asuo *AlertSettingsUpdateOne) SaveX(ctx context.Context) *AlertSettings {
-	node, err := asuo.Save(ctx)
+func (_u *AlertSettingsUpdateOne) SaveX(ctx context.Context) *AlertSettings {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -299,34 +299,34 @@ func (asuo *AlertSettingsUpdateOne) SaveX(ctx context.Context) *AlertSettings {
 }
 
 // Exec executes the query on the entity.
-func (asuo *AlertSettingsUpdateOne) Exec(ctx context.Context) error {
-	_, err := asuo.Save(ctx)
+func (_u *AlertSettingsUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (asuo *AlertSettingsUpdateOne) ExecX(ctx context.Context) {
-	if err := asuo.Exec(ctx); err != nil {
+func (_u *AlertSettingsUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (asuo *AlertSettingsUpdateOne) defaults() {
-	if _, ok := asuo.mutation.UpdatedAt(); !ok {
+func (_u *AlertSettingsUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := alertsettings.UpdateDefaultUpdatedAt()
-		asuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (asuo *AlertSettingsUpdateOne) sqlSave(ctx context.Context) (_node *AlertSettings, err error) {
+func (_u *AlertSettingsUpdateOne) sqlSave(ctx context.Context) (_node *AlertSettings, err error) {
 	_spec := sqlgraph.NewUpdateSpec(alertsettings.Table, alertsettings.Columns, sqlgraph.NewFieldSpec(alertsettings.FieldID, field.TypeString))
-	id, ok := asuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "AlertSettings.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := asuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, alertsettings.FieldID)
 		for _, f := range fields {
@@ -338,47 +338,47 @@ func (asuo *AlertSettingsUpdateOne) sqlSave(ctx context.Context) (_node *AlertSe
 			}
 		}
 	}
-	if ps := asuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := asuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(alertsettings.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := asuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if asuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(alertsettings.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := asuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertsettings.FieldUpdatedBy, field.TypeString, value)
 	}
-	if asuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(alertsettings.FieldUpdatedBy, field.TypeString)
 	}
-	if asuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alertsettings.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := asuo.mutation.Enabled(); ok {
+	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(alertsettings.FieldEnabled, field.TypeBool, value)
 	}
-	if asuo.mutation.ParentEntityTypeCleared() {
+	if _u.mutation.ParentEntityTypeCleared() {
 		_spec.ClearField(alertsettings.FieldParentEntityType, field.TypeEnum)
 	}
-	if asuo.mutation.ParentEntityIDCleared() {
+	if _u.mutation.ParentEntityIDCleared() {
 		_spec.ClearField(alertsettings.FieldParentEntityID, field.TypeString)
 	}
-	if value, ok := asuo.mutation.Config(); ok {
+	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(alertsettings.FieldConfig, field.TypeJSON, value)
 	}
-	_node = &AlertSettings{config: asuo.config}
+	_node = &AlertSettings{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, asuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{alertsettings.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -386,6 +386,6 @@ func (asuo *AlertSettingsUpdateOne) sqlSave(ctx context.Context) (_node *AlertSe
 		}
 		return nil, err
 	}
-	asuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

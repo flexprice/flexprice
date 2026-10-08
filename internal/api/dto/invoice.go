@@ -1675,6 +1675,10 @@ type GetUnpaidInvoicesToBePaidRequest struct {
 
 	// currency is the three-letter ISO currency code for this request
 	Currency string `json:"currency" validate:"required"`
+
+	// CurrentPeriodStarts maps subscription ID to the period start whose usage the caller counts
+	// live; that period's draft is skipped and its applied credits reported instead.
+	CurrentPeriodStarts map[string]time.Time `json:"-"`
 }
 
 func (r *GetUnpaidInvoicesToBePaidRequest) Validate() error {
@@ -1699,6 +1703,10 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 
 	// total paid invoice amount
 	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
+
+	// CurrentPeriodCreditsApplied maps subscription ID to credits already applied to its
+	// current-period draft (credits settled at expiry), in the wallet's currency.
+	CurrentPeriodCreditsApplied map[string]decimal.Decimal `json:"-"`
 }
 
 type ApplyExternalInvoiceDiscountRequest struct {

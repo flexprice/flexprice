@@ -3,6 +3,7 @@ package chargebee
 import (
 	"context"
 	"crypto/subtle"
+	"sync"
 
 	"github.com/chargebee/chargebee-go/v3"
 	customerAction "github.com/chargebee/chargebee-go/v3/actions/customer"
@@ -34,7 +35,6 @@ type ChargebeeClient interface {
 	GetChargebeeConfig(ctx context.Context) (*ChargebeeConfig, error)
 	HasChargebeeConnection(ctx context.Context) bool
 	GetConnection(ctx context.Context) (*connection.Connection, error)
-	InitializeChargebeeSDK(ctx context.Context) error
 	VerifyWebhookBasicAuth(ctx context.Context, username, password string) error
 
 	// Item Family API wrappers
@@ -74,7 +74,18 @@ type Client struct {
 	connectionRepo    connection.Repository
 	encryptionService security.EncryptionService
 	logger            *logger.Logger
-	isInitialized     bool
+}
+
+// sdkHTTPClientOnce guards the SDK's process-wide HTTP client, which every request
+// shares. Credentials are never global: each call passes its tenant's Environment.
+var sdkHTTPClientOnce sync.Once
+
+func installSDKHTTPClient(log *logger.Logger) {
+	sdkHTTPClientOnce.Do(func() {
+		cbHTTPClient := chargebee.NewDefaultHTTPClient()
+		cbHTTPClient.Transport = httpclient.ProviderTransport(cbHTTPClient.Transport, log, string(types.SecretProviderChargebee))
+		chargebee.WithHTTPClient(cbHTTPClient)
+	})
 }
 
 // ChargebeeConfig holds decrypted Chargebee configuration
@@ -95,11 +106,11 @@ func NewClient(
 	encryptionService security.EncryptionService,
 	logger *logger.Logger,
 ) ChargebeeClient {
+	installSDKHTTPClient(logger)
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
 		logger:            logger,
-		isInitialized:     false,
 	}
 }
 
@@ -293,35 +304,6 @@ func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, err
 	return conn, nil
 }
 
-// InitializeChargebeeSDK configures the global Chargebee SDK instance
-// This should be called before making any Chargebee SDK API calls
-func (c *Client) InitializeChargebeeSDK(ctx context.Context) error {
-	if c.isInitialized {
-		return nil
-	}
-
-	config, err := c.GetChargebeeConfig(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Configure Chargebee SDK globally
-	chargebee.Configure(config.APIKey, config.Site)
-
-	// Instrument the global Chargebee HTTP client so outbound calls surface in
-	// SigNoz External API Monitoring. Wrap the SDK's default client transport to
-	// preserve its configured timeout.
-	cbHTTPClient := chargebee.NewDefaultHTTPClient()
-	cbHTTPClient.Transport = httpclient.OtelTransport(cbHTTPClient.Transport)
-	chargebee.WithHTTPClient(cbHTTPClient)
-
-	c.isInitialized = true
-	c.logger.Info(ctx, "initialized Chargebee SDK",
-		"site", config.Site)
-
-	return nil
-}
-
 // VerifyWebhookBasicAuth verifies Basic Authentication credentials for Chargebee webhooks
 // Chargebee v2 uses Basic Auth (username/password) as the primary webhook security mechanism
 func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password string) error {
@@ -369,11 +351,12 @@ func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password 
 // Item Family API Wrappers
 // CreateItemFamily creates an item family in Chargebee
 func (c *Client) CreateItemFamily(ctx context.Context, params *itemfamily.CreateRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemFamilyAction.Create(params).Request()
+	result, err := itemFamilyAction.Create(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create item family in Chargebee API",
 			"family_id", params.Id,
@@ -388,11 +371,12 @@ func (c *Client) CreateItemFamily(ctx context.Context, params *itemfamily.Create
 
 // ListItemFamilies lists item families from Chargebee
 func (c *Client) ListItemFamilies(ctx context.Context, params *itemfamily.ListRequestParams) (*chargebee.ResultList, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemFamilyAction.List(params).ListRequest()
+	result, err := itemFamilyAction.List(params).Contexts(ctx).ListRequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to list item families from Chargebee API", "error", err)
 		return nil, ierr.WithError(err).
@@ -406,11 +390,12 @@ func (c *Client) ListItemFamilies(ctx context.Context, params *itemfamily.ListRe
 // Item API Wrappers
 // CreateItem creates an item in Chargebee
 func (c *Client) CreateItem(ctx context.Context, params *item.CreateRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemAction.Create(params).Request()
+	result, err := itemAction.Create(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create item in Chargebee API",
 			"item_id", params.Id,
@@ -425,11 +410,12 @@ func (c *Client) CreateItem(ctx context.Context, params *item.CreateRequestParam
 
 // RetrieveItem retrieves an item from Chargebee
 func (c *Client) RetrieveItem(ctx context.Context, itemID string) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemAction.Retrieve(itemID).Request()
+	result, err := itemAction.Retrieve(itemID).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to retrieve item from Chargebee API",
 			"item_id", itemID,
@@ -445,11 +431,12 @@ func (c *Client) RetrieveItem(ctx context.Context, itemID string) (*chargebee.Re
 // Item Price API Wrappers
 // CreateItemPrice creates an item price in Chargebee
 func (c *Client) CreateItemPrice(ctx context.Context, params *itemprice.CreateRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemPriceAction.Create(params).Request()
+	result, err := itemPriceAction.Create(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create item price in Chargebee API",
 			"item_price_id", params.Id,
@@ -464,11 +451,12 @@ func (c *Client) CreateItemPrice(ctx context.Context, params *itemprice.CreateRe
 
 // RetrieveItemPrice retrieves an item price from Chargebee
 func (c *Client) RetrieveItemPrice(ctx context.Context, itemPriceID string) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := itemPriceAction.Retrieve(itemPriceID).Request()
+	result, err := itemPriceAction.Retrieve(itemPriceID).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to retrieve item price from Chargebee API",
 			"item_price_id", itemPriceID,
@@ -484,11 +472,12 @@ func (c *Client) RetrieveItemPrice(ctx context.Context, itemPriceID string) (*ch
 // Customer API Wrappers
 // CreateCustomer creates a customer in Chargebee
 func (c *Client) CreateCustomer(ctx context.Context, params *customer.CreateRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := customerAction.Create(params).Request()
+	result, err := customerAction.Create(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create customer in Chargebee API",
 			"customer_id", params.Id,
@@ -504,11 +493,12 @@ func (c *Client) CreateCustomer(ctx context.Context, params *customer.CreateRequ
 // Invoice API Wrappers
 // CreateInvoice creates an invoice in Chargebee
 func (c *Client) CreateInvoice(ctx context.Context, params *chargebeeInvoice.CreateForChargeItemsAndChargesRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := invoiceAction.CreateForChargeItemsAndCharges(params).Request()
+	result, err := invoiceAction.CreateForChargeItemsAndCharges(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create invoice in Chargebee API",
 			"customer_id", params.CustomerId,
@@ -523,11 +513,12 @@ func (c *Client) CreateInvoice(ctx context.Context, params *chargebeeInvoice.Cre
 
 // RetrieveInvoice retrieves an invoice from Chargebee
 func (c *Client) RetrieveInvoice(ctx context.Context, invoiceID string, params *chargebeeInvoice.RetrieveRequestParams) (*chargebee.Result, error) {
-	if err := c.InitializeChargebeeSDK(ctx); err != nil {
+	env, err := c.env(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result, err := invoiceAction.Retrieve(invoiceID, params).Request()
+	result, err := invoiceAction.Retrieve(invoiceID, params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		c.logger.Error(ctx, "failed to retrieve invoice from Chargebee API",
 			"invoice_id", invoiceID,

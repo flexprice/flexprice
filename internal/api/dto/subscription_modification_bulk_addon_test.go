@@ -180,7 +180,6 @@ func TestSubModifyBulkAddonParams_Validate(t *testing.T) {
 func TestSubModifyBulkAddonParams_ServerOnlyFieldsAreNotClientSettable(t *testing.T) {
 	add := validBulkAddonAdd()
 	assert.False(t, add.PreviewOnly)
-	assert.False(t, add.SkipEntityValidation)
 	assert.False(t, validBulkAddonRemove().PreviewOnly)
 }
 

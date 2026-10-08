@@ -119,7 +119,11 @@ func (l *redisLock) AcquiredSuccessfully() bool {
 	return l.success
 }
 
+// Release detaches from ctx cancellation so a deferred release still runs after the caller's deadline.
 func (l *redisLock) Release(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+
 	_, err := releaseScript.Run(
 		ctx,
 		l.client,

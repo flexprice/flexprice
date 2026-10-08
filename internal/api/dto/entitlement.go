@@ -37,11 +37,24 @@ type CreateEntitlementRequest struct {
 	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	GrantUnlimited          bool                                     `json:"grant_unlimited,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	hasGrantConfig := r.GrantQuota != nil || r.GrantDurationValue != nil || r.GrantMeasure != "" || r.GrantDurationUnit != ""
+	if hasGrantConfig && r.GrantQuota == nil && !r.GrantUnlimited {
+		return ierr.NewError("grant_quota is required unless the allowance is unlimited").
+			WithHint("Set grant_quota, or send grant_unlimited: true for an allowance with no ceiling").
+			Mark(ierr.ErrValidation)
+	}
+	if r.GrantUnlimited && r.GrantQuota != nil {
+		return ierr.NewError("grant_quota cannot be set on an unlimited allowance").
+			WithHint("Remove grant_quota, or drop grant_unlimited").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.FeatureID == "" {
@@ -144,15 +157,17 @@ type UpdateEntitlementRequest struct {
 	StaticValue      string                            `json:"static_value"`
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
 
-	// Grant config — nil fields leave the current value alone.
-	// ClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement).
-	ClearGrantConfig        *bool                                     `json:"clear_grant_config,omitempty"`
+	// Deprecated: use grant_unlimited to remove a ceiling. This flag only remains
+	// for the "back to a legacy usage_limit" case, which metered entitlements are
+	// moving off entirely.
+	ClearGrantConfig        *bool                                     `json:"clear_grant_config,omitempty" swaggerignore:"true"`
 	GrantMeasure            *types.EntitlementGrantMeasure            `json:"grant_measure,omitempty"`
 	GrantDurationValue      *int                                      `json:"grant_duration_value,omitempty"`
 	GrantDurationUnit       *types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
 	GrantAllocationBehavior *types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	GrantQuota              *decimal.Decimal                          `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         *types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	GrantUnlimited          *bool                                     `json:"grant_unlimited,omitempty"`
 }
 
 // Validate validates the update entitlement request
@@ -271,4 +286,13 @@ func EntitlementsToResponse(entitlements []*entitlement.Entitlement) []*Entitlem
 		}
 	}
 	return responses
+}
+
+type ReissueEntitlementGrantsRequest struct {
+	SubscriptionID string
+	FeatureID      string
+	Delta          decimal.Decimal
+	Unlimited      bool
+	At             time.Time
+	Source         string
 }

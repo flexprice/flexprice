@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -18,10 +19,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -648,6 +651,101 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 			}
 		})
 	}
+}
+
+// failingRevenueFacts stubs interfaces.RevenueService with an erroring flip,
+// signaling Called so tests can wait for the detached hook goroutine to
+// actually run instead of guessing with a sleep.
+type failingRevenueFacts struct {
+	Called chan struct{}
+}
+
+func (f *failingRevenueFacts) FinalizeSubscriptionPeriod(ctx context.Context, invoiceID string) error {
+	select {
+	case f.Called <- struct{}{}:
+	default:
+	}
+	return ierr.NewError("forced flip failure").Mark(ierr.ErrDatabase)
+}
+
+func (f *failingRevenueFacts) RollupSubscription(ctx context.Context, subscriptionID string) error {
+	return nil
+}
+
+func (f *failingRevenueFacts) RollupDirty(ctx context.Context, req types.RollupDirtyRequest) (types.RollupDirtyResult, error) {
+	return types.RollupDirtyResult{}, nil
+}
+
+func (f *failingRevenueFacts) RevertInvoiceFacts(ctx context.Context, invoiceID string) error {
+	return nil
+}
+
+func (f *failingRevenueFacts) ReconcileBookedInvoices(ctx context.Context, since time.Time) (int, int, int, error) {
+	return 0, 0, 0, nil
+}
+
+func (f *failingRevenueFacts) GetRevenueAnalytics(ctx context.Context, req *dto.RevenueAnalyticsRequest) (*dto.RevenueAnalyticsResponse, error) {
+	return nil, nil
+}
+
+// TestFinalizeInvoice_AsyncRevenueFactFlipErrorDoesNotBlockFinalization is the
+// safety-guard test for the async, non-blocking FINAL flip hooked into
+// performFinalizeInvoiceActions: even when the injected revenue service's
+// flip errors, finalization must still return success.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_AsyncRevenueFactFlipErrorDoesNotBlockFinalization() {
+	ctx := s.GetContext()
+
+	called := make(chan struct{}, 4)
+	s.service.(*invoiceService).RevenueFacts = &failingRevenueFacts{Called: called}
+
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(10),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(10),
+		Description:     "Async flip guard test invoice",
+		BillingPeriod:   lo.ToPtr(string(s.testData.subscription.BillingPeriod)),
+		PeriodStart:     &s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:       &s.testData.subscription.CurrentPeriodEnd,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+				CustomerID:     s.testData.customer.ID,
+				SubscriptionID: &s.testData.subscription.ID,
+				PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
+				MeterID:        &s.testData.meters.apiCalls.ID,
+				Amount:         decimal.NewFromFloat(10),
+				Quantity:       decimal.NewFromFloat(100),
+				Currency:       "usd",
+				PeriodStart:    &s.testData.subscription.CurrentPeriodStart,
+				PeriodEnd:      &s.testData.subscription.CurrentPeriodEnd,
+				BaseModel:      types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID, dto.FinalizeInvoiceRequest{})
+	s.NoError(err, "finalization must succeed even though the async revenue facts flip errors")
+
+	select {
+	case <-called:
+		// The async flip ran and errored — confirms the error path was
+		// actually exercised (not vacuously passing because nothing ran).
+	case <-time.After(2 * time.Second):
+		s.Fail("expected the async revenue facts flip to run and be observed within 2s")
+	}
+
+	inv, err := s.invoiceRepo.Get(ctx, draftInvoice.ID)
+	s.NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
 }
 
 func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEventWhenCreated() {
@@ -3214,4 +3312,75 @@ func (s *InvoiceServiceSuite) TestListInvoicesTaxSummaryIsPerInvoice() {
 		s.True(decimal.NewFromInt(int64(i+1)).Equal(inv.TaxSummary.TotalExclusiveTax),
 			"invoice %s: want exclusive %d, got %s", id, i+1, inv.TaxSummary.TotalExclusiveTax)
 	}
+}
+
+func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook() {
+	tests := []struct {
+		name        string
+		invoiceID   string
+		withMapping bool
+		syncErr     string
+		wantEvent   types.WebhookEventName
+		wantError   string
+	}{
+		{name: "success with mapping", invoiceID: "inv_sync_ok", withMapping: true, wantEvent: types.WebhookEventInvoiceSyncSuccess},
+		{name: "success without mapping is a skip", invoiceID: "inv_sync_skip"},
+		{name: "failure without mapping", invoiceID: "inv_sync_fail", syncErr: "stripe down", wantEvent: types.WebhookEventInvoiceSyncFailed, wantError: "stripe down"},
+		{name: "failure after mapping was created", invoiceID: "inv_sync_fail_mapped", withMapping: true, syncErr: "finalize failed", wantEvent: types.WebhookEventInvoiceSyncFailed, wantError: "finalize failed"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			if tt.withMapping {
+				s.NoError(s.GetStores().EntityIntegrationMappingRepo.Create(ctx, &entityintegrationmapping.EntityIntegrationMapping{
+					ID:               "eim_" + tt.invoiceID,
+					EntityID:         tt.invoiceID,
+					EntityType:       types.IntegrationEntityTypeInvoice,
+					ProviderType:     string(types.SecretProviderStripe),
+					ProviderEntityID: "in_" + tt.invoiceID,
+					EnvironmentID:    types.GetEnvironmentID(ctx),
+					BaseModel:        types.GetDefaultBaseModel(ctx),
+				}))
+			}
+
+			s.service.PublishInvoiceSyncWebhook(ctx, tt.invoiceID, types.SecretProviderStripe, tt.syncErr)
+
+			events := lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
+				return e.EntityID == tt.invoiceID
+			})
+			if tt.wantEvent == "" {
+				s.Empty(events)
+				return
+			}
+			s.Require().Len(events, 1)
+			s.Equal(tt.wantEvent, events[0].EventName)
+			s.Equal(types.SystemEntityTypeInvoice, events[0].EntityType)
+
+			var internal webhookDto.InternalInvoiceSyncEvent
+			s.Require().NoError(json.Unmarshal(events[0].Payload, &internal))
+			s.Equal(tt.invoiceID, internal.InvoiceID)
+			s.Equal(types.SecretProviderStripe, internal.Provider)
+			s.Equal(tt.wantError, internal.Error)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestPublishInvoiceSyncWebhook_IgnoresOtherProviderMapping() {
+	ctx := s.GetContext()
+	s.NoError(s.GetStores().EntityIntegrationMappingRepo.Create(ctx, &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               "eim_razorpay_only",
+		EntityID:         "inv_razorpay_only",
+		EntityType:       types.IntegrationEntityTypeInvoice,
+		ProviderType:     string(types.SecretProviderRazorpay),
+		ProviderEntityID: "rzp_inv",
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}))
+
+	s.service.PublishInvoiceSyncWebhook(ctx, "inv_razorpay_only", types.SecretProviderStripe, "")
+
+	s.Empty(lo.Filter(s.GetPublishedWebhooks(), func(e *types.WebhookEvent, _ int) bool {
+		return e.EntityID == "inv_razorpay_only"
+	}))
 }

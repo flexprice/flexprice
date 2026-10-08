@@ -23,7 +23,7 @@ func NewEntitlementAndUsageProbe(c e2eprobe.Client, r e2eprobe.Registry, runID s
 	return &EntitlementAndUsageProbe{client: c, reg: r, runID: runID}
 }
 
-func (p *EntitlementAndUsageProbe) Name() string         { return "entitlement-and-usage-probe" }
+func (p *EntitlementAndUsageProbe) Name() string        { return "entitlement-and-usage-probe" }
 func (p *EntitlementAndUsageProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
 func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {

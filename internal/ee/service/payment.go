@@ -488,6 +488,9 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
+	if observedStatus != types.PaymentStatusFailed && p.PaymentStatus == types.PaymentStatusFailed {
+		s.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, p.ID)
+	}
 
 	return dto.NewPaymentResponse(p), nil
 }
@@ -933,4 +936,150 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 
 	// Webhook event intentionally omitted — the gateway webhook will drive payment lifecycle updates.
 	return dto.NewPaymentResponse(p), nil
+}
+
+func (s *paymentService) ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error) {
+	if customerID == "" {
+		return nil, ierr.NewError("customer_id is required").
+			WithHint("Specify the customer whose payment methods to list").
+			Mark(ierr.ErrValidation)
+	}
+	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return nil, err
+	}
+
+	var requested []types.PaymentGatewayType
+	if req != nil {
+		requested = req.Providers
+	}
+	gateways, err := s.methodManagementProviders(ctx, customerID, requested)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &dto.SavedPaymentMethodsResponse{
+		Providers: make([]*dto.ProviderSavedPaymentMethods, 0, len(gateways)),
+	}
+	for _, gw := range gateways {
+		resp.Providers = append(resp.Providers, s.readSavedMethods(ctx, customerID, gw))
+	}
+	return resp, nil
+}
+
+func (s *paymentService) methodManagementProviders(
+	ctx context.Context,
+	customerID string,
+	requested []types.PaymentGatewayType,
+) ([]types.PaymentGatewayType, error) {
+	resolver := NewPaymentProviderResolver(s.ServiceParams)
+
+	if len(requested) > 0 {
+		out := make([]types.PaymentGatewayType, 0, len(requested))
+		for _, gw := range lo.Uniq(requested) {
+			resolved, err := resolver.ResolveProvider(ctx, customerID, types.IntegrationCapabilityListPaymentMethods, gw)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, resolved)
+		}
+		return out, nil
+	}
+
+	providers, err := resolver.ListProviders(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	capable := lo.Filter(providers, func(p ProviderCapabilities, _ int) bool {
+		return lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
+			return c.Type == types.IntegrationCapabilityListPaymentMethods
+		})
+	})
+	return lo.Map(capable, func(p ProviderCapabilities, _ int) types.PaymentGatewayType {
+		return p.Gateway
+	}), nil
+}
+
+func (s *paymentService) readSavedMethods(
+	ctx context.Context,
+	customerID string,
+	gw types.PaymentGatewayType,
+) *dto.ProviderSavedPaymentMethods {
+	group := &dto.ProviderSavedPaymentMethods{
+		Provider: gw,
+		Items:    []*dto.SavedPaymentMethod{},
+	}
+
+	provider, err := s.IntegrationFactory.GetPaymentMethodProvider(ctx, gw, NewCustomerService(s.ServiceParams))
+	if err != nil {
+		s.Logger.Error(ctx, "payment method provider unavailable",
+			"error", err, "customer_id", customerID, "provider", gw)
+		group.Error = &dto.ProviderError{Message: "This payment provider is currently unavailable"}
+		return group
+	}
+
+	methods, err := provider.ListSavedMethods(ctx, customerID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list saved payment methods",
+			"error", err, "customer_id", customerID, "provider", gw)
+		group.Error = &dto.ProviderError{Message: "Could not read saved payment methods from this provider"}
+		return group
+	}
+
+	autoCharge := lo.Contains(gatewayCapabilities[gw], types.IntegrationCapabilityAutoCharge)
+	for _, m := range methods {
+		group.Items = append(group.Items, toSavedPaymentMethod(m, gw, autoCharge))
+	}
+	return group
+}
+
+func toSavedPaymentMethod(
+	m interfaces.ProviderPaymentMethod,
+	gw types.PaymentGatewayType,
+	providerAutoCharges bool,
+) *dto.SavedPaymentMethod {
+	status := types.PaymentMethodStatusInactive
+	if m.Active {
+		status = types.PaymentMethodStatusActive
+	}
+
+	out := &dto.SavedPaymentMethod{
+		ID:                  m.GatewayMethodID,
+		Provider:            gw,
+		Type:                m.Method,
+		Status:              status,
+		IsDefault:           m.IsDefault,
+		CanAutoCharge:       m.Active && providerAutoCharges && hasLiveMandate(m, gw),
+		InstantlyChargeable: m.Active && m.InstantlyChargeable,
+	}
+
+	if m.Card != nil {
+		out.Card = &dto.SavedCardDetails{
+			Brand:    m.Card.Brand,
+			Last4:    m.Card.Last4,
+			ExpMonth: m.Card.ExpMonth,
+			ExpYear:  m.Card.ExpYear,
+		}
+	}
+
+	if m.UPI != nil {
+		out.UPI = &dto.SavedUPIDetails{VPA: m.UPI.VPA}
+	}
+
+	if m.Recurring != nil {
+		out.Recurring = &dto.SavedRecurringPaymentDetails{
+			Status:             m.Recurring.Status,
+			AutoChargeableTill: m.Recurring.AutoChargeableTill,
+			MaxAmount:          m.Recurring.MaxAmount,
+		}
+	}
+	return out
+}
+
+// hasLiveMandate reports whether the method's recurring mandate permits an
+// off-session charge. Razorpay can only auto-charge through a mandate.
+func hasLiveMandate(m interfaces.ProviderPaymentMethod, gw types.PaymentGatewayType) bool {
+	if m.Recurring == nil {
+		return gw != types.PaymentGatewayTypeRazorpay
+	}
+	return m.Recurring.Status == types.RecurringPaymentStatusActive
 }

@@ -34,44 +34,44 @@ type CreditGrantQuery struct {
 }
 
 // Where adds a new predicate for the CreditGrantQuery builder.
-func (cgq *CreditGrantQuery) Where(ps ...predicate.CreditGrant) *CreditGrantQuery {
-	cgq.predicates = append(cgq.predicates, ps...)
-	return cgq
+func (_q *CreditGrantQuery) Where(ps ...predicate.CreditGrant) *CreditGrantQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (cgq *CreditGrantQuery) Limit(limit int) *CreditGrantQuery {
-	cgq.ctx.Limit = &limit
-	return cgq
+func (_q *CreditGrantQuery) Limit(limit int) *CreditGrantQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (cgq *CreditGrantQuery) Offset(offset int) *CreditGrantQuery {
-	cgq.ctx.Offset = &offset
-	return cgq
+func (_q *CreditGrantQuery) Offset(offset int) *CreditGrantQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (cgq *CreditGrantQuery) Unique(unique bool) *CreditGrantQuery {
-	cgq.ctx.Unique = &unique
-	return cgq
+func (_q *CreditGrantQuery) Unique(unique bool) *CreditGrantQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (cgq *CreditGrantQuery) Order(o ...creditgrant.OrderOption) *CreditGrantQuery {
-	cgq.order = append(cgq.order, o...)
-	return cgq
+func (_q *CreditGrantQuery) Order(o ...creditgrant.OrderOption) *CreditGrantQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryPlan chains the current query on the "plan" edge.
-func (cgq *CreditGrantQuery) QueryPlan() *PlanQuery {
-	query := (&PlanClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) QueryPlan() *PlanQuery {
+	query := (&PlanClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cgq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := cgq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -80,20 +80,20 @@ func (cgq *CreditGrantQuery) QueryPlan() *PlanQuery {
 			sqlgraph.To(plan.Table, plan.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.PlanTable, creditgrant.PlanColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(cgq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QuerySubscription chains the current query on the "subscription" edge.
-func (cgq *CreditGrantQuery) QuerySubscription() *SubscriptionQuery {
-	query := (&SubscriptionClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cgq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := cgq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -102,20 +102,20 @@ func (cgq *CreditGrantQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.SubscriptionTable, creditgrant.SubscriptionColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(cgq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryAddon chains the current query on the "addon" edge.
-func (cgq *CreditGrantQuery) QueryAddon() *AddonQuery {
-	query := (&AddonClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) QueryAddon() *AddonQuery {
+	query := (&AddonClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cgq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := cgq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -124,7 +124,7 @@ func (cgq *CreditGrantQuery) QueryAddon() *AddonQuery {
 			sqlgraph.To(addon.Table, addon.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.AddonTable, creditgrant.AddonColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(cgq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -132,8 +132,8 @@ func (cgq *CreditGrantQuery) QueryAddon() *AddonQuery {
 
 // First returns the first CreditGrant entity from the query.
 // Returns a *NotFoundError when no CreditGrant was found.
-func (cgq *CreditGrantQuery) First(ctx context.Context) (*CreditGrant, error) {
-	nodes, err := cgq.Limit(1).All(setContextOp(ctx, cgq.ctx, ent.OpQueryFirst))
+func (_q *CreditGrantQuery) First(ctx context.Context) (*CreditGrant, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +144,8 @@ func (cgq *CreditGrantQuery) First(ctx context.Context) (*CreditGrant, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (cgq *CreditGrantQuery) FirstX(ctx context.Context) *CreditGrant {
-	node, err := cgq.First(ctx)
+func (_q *CreditGrantQuery) FirstX(ctx context.Context) *CreditGrant {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -154,9 +154,9 @@ func (cgq *CreditGrantQuery) FirstX(ctx context.Context) *CreditGrant {
 
 // FirstID returns the first CreditGrant ID from the query.
 // Returns a *NotFoundError when no CreditGrant ID was found.
-func (cgq *CreditGrantQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *CreditGrantQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cgq.Limit(1).IDs(setContextOp(ctx, cgq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -167,8 +167,8 @@ func (cgq *CreditGrantQuery) FirstID(ctx context.Context) (id string, err error)
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (cgq *CreditGrantQuery) FirstIDX(ctx context.Context) string {
-	id, err := cgq.FirstID(ctx)
+func (_q *CreditGrantQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -178,8 +178,8 @@ func (cgq *CreditGrantQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single CreditGrant entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one CreditGrant entity is found.
 // Returns a *NotFoundError when no CreditGrant entities are found.
-func (cgq *CreditGrantQuery) Only(ctx context.Context) (*CreditGrant, error) {
-	nodes, err := cgq.Limit(2).All(setContextOp(ctx, cgq.ctx, ent.OpQueryOnly))
+func (_q *CreditGrantQuery) Only(ctx context.Context) (*CreditGrant, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +194,8 @@ func (cgq *CreditGrantQuery) Only(ctx context.Context) (*CreditGrant, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (cgq *CreditGrantQuery) OnlyX(ctx context.Context) *CreditGrant {
-	node, err := cgq.Only(ctx)
+func (_q *CreditGrantQuery) OnlyX(ctx context.Context) *CreditGrant {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -205,9 +205,9 @@ func (cgq *CreditGrantQuery) OnlyX(ctx context.Context) *CreditGrant {
 // OnlyID is like Only, but returns the only CreditGrant ID in the query.
 // Returns a *NotSingularError when more than one CreditGrant ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (cgq *CreditGrantQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *CreditGrantQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = cgq.Limit(2).IDs(setContextOp(ctx, cgq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -222,8 +222,8 @@ func (cgq *CreditGrantQuery) OnlyID(ctx context.Context) (id string, err error) 
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (cgq *CreditGrantQuery) OnlyIDX(ctx context.Context) string {
-	id, err := cgq.OnlyID(ctx)
+func (_q *CreditGrantQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -231,18 +231,18 @@ func (cgq *CreditGrantQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of CreditGrants.
-func (cgq *CreditGrantQuery) All(ctx context.Context) ([]*CreditGrant, error) {
-	ctx = setContextOp(ctx, cgq.ctx, ent.OpQueryAll)
-	if err := cgq.prepareQuery(ctx); err != nil {
+func (_q *CreditGrantQuery) All(ctx context.Context) ([]*CreditGrant, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*CreditGrant, *CreditGrantQuery]()
-	return withInterceptors[[]*CreditGrant](ctx, cgq, qr, cgq.inters)
+	return withInterceptors[[]*CreditGrant](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (cgq *CreditGrantQuery) AllX(ctx context.Context) []*CreditGrant {
-	nodes, err := cgq.All(ctx)
+func (_q *CreditGrantQuery) AllX(ctx context.Context) []*CreditGrant {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -250,20 +250,20 @@ func (cgq *CreditGrantQuery) AllX(ctx context.Context) []*CreditGrant {
 }
 
 // IDs executes the query and returns a list of CreditGrant IDs.
-func (cgq *CreditGrantQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if cgq.ctx.Unique == nil && cgq.path != nil {
-		cgq.Unique(true)
+func (_q *CreditGrantQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, cgq.ctx, ent.OpQueryIDs)
-	if err = cgq.Select(creditgrant.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(creditgrant.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (cgq *CreditGrantQuery) IDsX(ctx context.Context) []string {
-	ids, err := cgq.IDs(ctx)
+func (_q *CreditGrantQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -271,17 +271,17 @@ func (cgq *CreditGrantQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (cgq *CreditGrantQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, cgq.ctx, ent.OpQueryCount)
-	if err := cgq.prepareQuery(ctx); err != nil {
+func (_q *CreditGrantQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, cgq, querierCount[*CreditGrantQuery](), cgq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*CreditGrantQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (cgq *CreditGrantQuery) CountX(ctx context.Context) int {
-	count, err := cgq.Count(ctx)
+func (_q *CreditGrantQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -289,9 +289,9 @@ func (cgq *CreditGrantQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (cgq *CreditGrantQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, cgq.ctx, ent.OpQueryExist)
-	switch _, err := cgq.FirstID(ctx); {
+func (_q *CreditGrantQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -302,8 +302,8 @@ func (cgq *CreditGrantQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (cgq *CreditGrantQuery) ExistX(ctx context.Context) bool {
-	exist, err := cgq.Exist(ctx)
+func (_q *CreditGrantQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -312,56 +312,56 @@ func (cgq *CreditGrantQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the CreditGrantQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (cgq *CreditGrantQuery) Clone() *CreditGrantQuery {
-	if cgq == nil {
+func (_q *CreditGrantQuery) Clone() *CreditGrantQuery {
+	if _q == nil {
 		return nil
 	}
 	return &CreditGrantQuery{
-		config:           cgq.config,
-		ctx:              cgq.ctx.Clone(),
-		order:            append([]creditgrant.OrderOption{}, cgq.order...),
-		inters:           append([]Interceptor{}, cgq.inters...),
-		predicates:       append([]predicate.CreditGrant{}, cgq.predicates...),
-		withPlan:         cgq.withPlan.Clone(),
-		withSubscription: cgq.withSubscription.Clone(),
-		withAddon:        cgq.withAddon.Clone(),
+		config:           _q.config,
+		ctx:              _q.ctx.Clone(),
+		order:            append([]creditgrant.OrderOption{}, _q.order...),
+		inters:           append([]Interceptor{}, _q.inters...),
+		predicates:       append([]predicate.CreditGrant{}, _q.predicates...),
+		withPlan:         _q.withPlan.Clone(),
+		withSubscription: _q.withSubscription.Clone(),
+		withAddon:        _q.withAddon.Clone(),
 		// clone intermediate query.
-		sql:  cgq.sql.Clone(),
-		path: cgq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithPlan tells the query-builder to eager-load the nodes that are connected to
 // the "plan" edge. The optional arguments are used to configure the query builder of the edge.
-func (cgq *CreditGrantQuery) WithPlan(opts ...func(*PlanQuery)) *CreditGrantQuery {
-	query := (&PlanClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) WithPlan(opts ...func(*PlanQuery)) *CreditGrantQuery {
+	query := (&PlanClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	cgq.withPlan = query
-	return cgq
+	_q.withPlan = query
+	return _q
 }
 
 // WithSubscription tells the query-builder to eager-load the nodes that are connected to
 // the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
-func (cgq *CreditGrantQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *CreditGrantQuery {
-	query := (&SubscriptionClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *CreditGrantQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	cgq.withSubscription = query
-	return cgq
+	_q.withSubscription = query
+	return _q
 }
 
 // WithAddon tells the query-builder to eager-load the nodes that are connected to
 // the "addon" edge. The optional arguments are used to configure the query builder of the edge.
-func (cgq *CreditGrantQuery) WithAddon(opts ...func(*AddonQuery)) *CreditGrantQuery {
-	query := (&AddonClient{config: cgq.config}).Query()
+func (_q *CreditGrantQuery) WithAddon(opts ...func(*AddonQuery)) *CreditGrantQuery {
+	query := (&AddonClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	cgq.withAddon = query
-	return cgq
+	_q.withAddon = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -378,10 +378,10 @@ func (cgq *CreditGrantQuery) WithAddon(opts ...func(*AddonQuery)) *CreditGrantQu
 //		GroupBy(creditgrant.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (cgq *CreditGrantQuery) GroupBy(field string, fields ...string) *CreditGrantGroupBy {
-	cgq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &CreditGrantGroupBy{build: cgq}
-	grbuild.flds = &cgq.ctx.Fields
+func (_q *CreditGrantQuery) GroupBy(field string, fields ...string) *CreditGrantGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &CreditGrantGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = creditgrant.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -399,60 +399,60 @@ func (cgq *CreditGrantQuery) GroupBy(field string, fields ...string) *CreditGran
 //	client.CreditGrant.Query().
 //		Select(creditgrant.FieldTenantID).
 //		Scan(ctx, &v)
-func (cgq *CreditGrantQuery) Select(fields ...string) *CreditGrantSelect {
-	cgq.ctx.Fields = append(cgq.ctx.Fields, fields...)
-	sbuild := &CreditGrantSelect{CreditGrantQuery: cgq}
+func (_q *CreditGrantQuery) Select(fields ...string) *CreditGrantSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &CreditGrantSelect{CreditGrantQuery: _q}
 	sbuild.label = creditgrant.Label
-	sbuild.flds, sbuild.scan = &cgq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a CreditGrantSelect configured with the given aggregations.
-func (cgq *CreditGrantQuery) Aggregate(fns ...AggregateFunc) *CreditGrantSelect {
-	return cgq.Select().Aggregate(fns...)
+func (_q *CreditGrantQuery) Aggregate(fns ...AggregateFunc) *CreditGrantSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (cgq *CreditGrantQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range cgq.inters {
+func (_q *CreditGrantQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, cgq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range cgq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !creditgrant.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if cgq.path != nil {
-		prev, err := cgq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		cgq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (cgq *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CreditGrant, error) {
+func (_q *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CreditGrant, error) {
 	var (
 		nodes       = []*CreditGrant{}
-		_spec       = cgq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [3]bool{
-			cgq.withPlan != nil,
-			cgq.withSubscription != nil,
-			cgq.withAddon != nil,
+			_q.withPlan != nil,
+			_q.withSubscription != nil,
+			_q.withAddon != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*CreditGrant).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &CreditGrant{config: cgq.config}
+		node := &CreditGrant{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -460,26 +460,26 @@ func (cgq *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, cgq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := cgq.withPlan; query != nil {
-		if err := cgq.loadPlan(ctx, query, nodes, nil,
+	if query := _q.withPlan; query != nil {
+		if err := _q.loadPlan(ctx, query, nodes, nil,
 			func(n *CreditGrant, e *Plan) { n.Edges.Plan = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := cgq.withSubscription; query != nil {
-		if err := cgq.loadSubscription(ctx, query, nodes, nil,
+	if query := _q.withSubscription; query != nil {
+		if err := _q.loadSubscription(ctx, query, nodes, nil,
 			func(n *CreditGrant, e *Subscription) { n.Edges.Subscription = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := cgq.withAddon; query != nil {
-		if err := cgq.loadAddon(ctx, query, nodes, nil,
+	if query := _q.withAddon; query != nil {
+		if err := _q.loadAddon(ctx, query, nodes, nil,
 			func(n *CreditGrant, e *Addon) { n.Edges.Addon = e }); err != nil {
 			return nil, err
 		}
@@ -487,7 +487,7 @@ func (cgq *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	return nodes, nil
 }
 
-func (cgq *CreditGrantQuery) loadPlan(ctx context.Context, query *PlanQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Plan)) error {
+func (_q *CreditGrantQuery) loadPlan(ctx context.Context, query *PlanQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Plan)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CreditGrant)
 	for i := range nodes {
@@ -519,7 +519,7 @@ func (cgq *CreditGrantQuery) loadPlan(ctx context.Context, query *PlanQuery, nod
 	}
 	return nil
 }
-func (cgq *CreditGrantQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Subscription)) error {
+func (_q *CreditGrantQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Subscription)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CreditGrant)
 	for i := range nodes {
@@ -551,7 +551,7 @@ func (cgq *CreditGrantQuery) loadSubscription(ctx context.Context, query *Subscr
 	}
 	return nil
 }
-func (cgq *CreditGrantQuery) loadAddon(ctx context.Context, query *AddonQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Addon)) error {
+func (_q *CreditGrantQuery) loadAddon(ctx context.Context, query *AddonQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Addon)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*CreditGrant)
 	for i := range nodes {
@@ -584,24 +584,24 @@ func (cgq *CreditGrantQuery) loadAddon(ctx context.Context, query *AddonQuery, n
 	return nil
 }
 
-func (cgq *CreditGrantQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := cgq.querySpec()
-	_spec.Node.Columns = cgq.ctx.Fields
-	if len(cgq.ctx.Fields) > 0 {
-		_spec.Unique = cgq.ctx.Unique != nil && *cgq.ctx.Unique
+func (_q *CreditGrantQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, cgq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (cgq *CreditGrantQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *CreditGrantQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(creditgrant.Table, creditgrant.Columns, sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString))
-	_spec.From = cgq.sql
-	if unique := cgq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if cgq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := cgq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditgrant.FieldID)
 		for i := range fields {
@@ -609,30 +609,30 @@ func (cgq *CreditGrantQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if cgq.withPlan != nil {
+		if _q.withPlan != nil {
 			_spec.Node.AddColumnOnce(creditgrant.FieldPlanID)
 		}
-		if cgq.withSubscription != nil {
+		if _q.withSubscription != nil {
 			_spec.Node.AddColumnOnce(creditgrant.FieldSubscriptionID)
 		}
-		if cgq.withAddon != nil {
+		if _q.withAddon != nil {
 			_spec.Node.AddColumnOnce(creditgrant.FieldAddonID)
 		}
 	}
-	if ps := cgq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := cgq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := cgq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := cgq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -642,33 +642,33 @@ func (cgq *CreditGrantQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (cgq *CreditGrantQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(cgq.driver.Dialect())
+func (_q *CreditGrantQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(creditgrant.Table)
-	columns := cgq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = creditgrant.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if cgq.sql != nil {
-		selector = cgq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if cgq.ctx.Unique != nil && *cgq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range cgq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range cgq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := cgq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := cgq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -681,41 +681,41 @@ type CreditGrantGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (cggb *CreditGrantGroupBy) Aggregate(fns ...AggregateFunc) *CreditGrantGroupBy {
-	cggb.fns = append(cggb.fns, fns...)
-	return cggb
+func (_g *CreditGrantGroupBy) Aggregate(fns ...AggregateFunc) *CreditGrantGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cggb *CreditGrantGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cggb.build.ctx, ent.OpQueryGroupBy)
-	if err := cggb.build.prepareQuery(ctx); err != nil {
+func (_g *CreditGrantGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CreditGrantQuery, *CreditGrantGroupBy](ctx, cggb.build, cggb, cggb.build.inters, v)
+	return scanWithInterceptors[*CreditGrantQuery, *CreditGrantGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (cggb *CreditGrantGroupBy) sqlScan(ctx context.Context, root *CreditGrantQuery, v any) error {
+func (_g *CreditGrantGroupBy) sqlScan(ctx context.Context, root *CreditGrantQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(cggb.fns))
-	for _, fn := range cggb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*cggb.flds)+len(cggb.fns))
-		for _, f := range *cggb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*cggb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cggb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -729,27 +729,27 @@ type CreditGrantSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (cgs *CreditGrantSelect) Aggregate(fns ...AggregateFunc) *CreditGrantSelect {
-	cgs.fns = append(cgs.fns, fns...)
-	return cgs
+func (_s *CreditGrantSelect) Aggregate(fns ...AggregateFunc) *CreditGrantSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (cgs *CreditGrantSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, cgs.ctx, ent.OpQuerySelect)
-	if err := cgs.prepareQuery(ctx); err != nil {
+func (_s *CreditGrantSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CreditGrantQuery, *CreditGrantSelect](ctx, cgs.CreditGrantQuery, cgs, cgs.inters, v)
+	return scanWithInterceptors[*CreditGrantQuery, *CreditGrantSelect](ctx, _s.CreditGrantQuery, _s, _s.inters, v)
 }
 
-func (cgs *CreditGrantSelect) sqlScan(ctx context.Context, root *CreditGrantQuery, v any) error {
+func (_s *CreditGrantSelect) sqlScan(ctx context.Context, root *CreditGrantQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(cgs.fns))
-	for _, fn := range cgs.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*cgs.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -757,7 +757,7 @@ func (cgs *CreditGrantSelect) sqlScan(ctx context.Context, root *CreditGrantQuer
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := cgs.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

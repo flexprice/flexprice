@@ -169,6 +169,12 @@ const (
 	WebhookEventInvoicePaymentOverdue  WebhookEventName = "invoice.payment.overdue"
 )
 
+// invoice sync event names
+const (
+	WebhookEventInvoiceSyncSuccess WebhookEventName = "invoice.sync.success"
+	WebhookEventInvoiceSyncFailed  WebhookEventName = "invoice.sync.failed"
+)
+
 // alert event names
 const (
 	WebhookEventWalletCreditBalanceDropped   WebhookEventName = "wallet.credit_balance.dropped"

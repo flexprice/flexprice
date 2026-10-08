@@ -65,6 +65,9 @@ func (c *dryRunClient) TaxRates() TaxRateOps {
 func (c *dryRunClient) TaxAssociations() TaxAssociationOps {
 	return &dryRunTaxAssociations{inner: c.inner.TaxAssociations(), lg: c.lg}
 }
+func (c *dryRunClient) Payments() PaymentOps {
+	return &dryRunPayments{inner: c.inner.Payments(), lg: c.lg}
+}
 
 // dryLog logs a skipped mutation at Info level.
 func dryLog(ctx context.Context, lg *logger.Logger, op string, kv ...any) {
@@ -397,4 +400,83 @@ func (d *dryRunTaxAssociations) List(ctx context.Context, entityType, entityID, 
 func (d *dryRunTaxAssociations) Delete(ctx context.Context, id string) (*dtos.DeleteTaxAssociationResponse, error) {
 	dryLog(ctx, d.lg, "TaxAssociations.Delete", "id", id)
 	return &dtos.DeleteTaxAssociationResponse{}, nil
+}
+
+// ── Payments ──────────────────────────────────────────────────────────
+
+type dryRunPayments struct {
+	inner PaymentOps
+	lg    *logger.Logger
+}
+
+func (d *dryRunPayments) CreateCheckoutSession(ctx context.Context, req types.CreateCheckoutSessionRequest) (*dtos.CreateCheckoutSessionResponse, error) {
+	dryLog(ctx, d.lg, "Payments.CreateCheckoutSession", "action", string(req.Action), "provider", string(req.PaymentProvider))
+	return &dtos.CreateCheckoutSessionResponse{}, nil
+}
+func (d *dryRunPayments) GetCheckoutSession(ctx context.Context, id string) (*dtos.GetCheckoutSessionResponse, error) {
+	return d.inner.GetCheckoutSession(ctx, id)
+}
+func (d *dryRunPayments) CancelCheckoutSession(ctx context.Context, id string) (*dtos.CancelCheckoutSessionResponse, error) {
+	dryLog(ctx, d.lg, "Payments.CancelCheckoutSession", "id", id)
+	return &dtos.CancelCheckoutSessionResponse{}, nil
+}
+func (d *dryRunPayments) CreateCheckoutInvoice(ctx context.Context, req types.CreateInvoiceRequest) (*dtos.CreateInvoiceResponse, error) {
+	dryLog(ctx, d.lg, "Payments.CreateCheckoutInvoice", "customer_id", req.CustomerID)
+	return &dtos.CreateInvoiceResponse{}, nil
+}
+func (d *dryRunPayments) ListPayments(ctx context.Context, req dtos.ListPaymentsRequest) (*dtos.ListPaymentsResponse, error) {
+	return d.inner.ListPayments(ctx, req)
+}
+func (d *dryRunPayments) ListSavedMethods(ctx context.Context, customerID, provider string) ([]SavedPaymentMethod, error) {
+	return d.inner.ListSavedMethods(ctx, customerID, provider)
+}
+func (d *dryRunPayments) CreateSetupLink(ctx context.Context, customerID, provider, returnURL string) (string, error) {
+	dryLog(ctx, d.lg, "Payments.CreateSetupLink", "customer_id", customerID, "provider", provider)
+	return "", nil
+}
+func (d *dryRunPayments) GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error) {
+	return d.inner.GetGatewayCustomerID(ctx, customerID, provider)
+}
+func (d *dryRunPayments) CreatePortalSession(ctx context.Context, externalCustomerID string) (string, error) {
+	return d.inner.CreatePortalSession(ctx, externalCustomerID)
+}
+func (d *dryRunPayments) PortalListSavedMethods(ctx context.Context, token, provider string) ([]SavedPaymentMethod, error) {
+	return d.inner.PortalListSavedMethods(ctx, token, provider)
+}
+func (d *dryRunPayments) PortalAddMethod(ctx context.Context, token, provider, returnURL string) (string, error) {
+	dryLog(ctx, d.lg, "Payments.PortalAddMethod", "provider", provider)
+	return "", nil
+}
+func (d *dryRunPayments) PortalSetDefaultMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error) {
+	dryLog(ctx, d.lg, "Payments.PortalSetDefaultMethod", "provider", provider, "payment_method_id", methodID)
+	return nil, nil
+}
+func (d *dryRunPayments) ExecuteSubscriptionModify(ctx context.Context, subscriptionID string, req types.ExecuteSubscriptionModifyRequest) (*dtos.ExecuteSubscriptionModifyResponse, error) {
+	dryLog(ctx, d.lg, "Payments.ExecuteSubscriptionModify", "subscription_id", subscriptionID, "type", string(req.Type))
+	return &dtos.ExecuteSubscriptionModifyResponse{}, nil
+}
+func (d *dryRunPayments) AddSubscriptionAddon(ctx context.Context, req types.AddAddonRequest) (*dtos.AddSubscriptionAddonResponse, error) {
+	dryLog(ctx, d.lg, "Payments.AddSubscriptionAddon", "subscription_id", req.SubscriptionID, "addon_id", req.AddonID)
+	return &dtos.AddSubscriptionAddonResponse{}, nil
+}
+func (d *dryRunPayments) GetSubscriptionAddonAssociations(ctx context.Context, subscriptionID string) (*dtos.GetSubscriptionAddonAssociationsResponse, error) {
+	return d.inner.GetSubscriptionAddonAssociations(ctx, subscriptionID)
+}
+func (d *dryRunPayments) GetAddonByLookupKey(ctx context.Context, lookupKey string) (*dtos.GetAddonByLookupKeyResponse, error) {
+	return d.inner.GetAddonByLookupKey(ctx, lookupKey)
+}
+func (d *dryRunPayments) CreateAddon(ctx context.Context, req types.CreateAddonRequest) (*dtos.CreateAddonResponse, error) {
+	dryLog(ctx, d.lg, "Payments.CreateAddon", "lookup_key", req.LookupKey)
+	return &dtos.CreateAddonResponse{}, nil
+}
+func (d *dryRunPayments) CreateCreditNote(ctx context.Context, req types.CreateCreditNoteRequest) (*dtos.CreateCreditNoteResponse, error) {
+	dryLog(ctx, d.lg, "Payments.CreateCreditNote", "invoice_id", req.InvoiceID)
+	return &dtos.CreateCreditNoteResponse{}, nil
+}
+func (d *dryRunPayments) ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error) {
+	return d.inner.ListRefunds(ctx, req)
+}
+func (d *dryRunPayments) PortalDeleteMethod(ctx context.Context, token, provider, methodID string) ([]SavedPaymentMethod, error) {
+	dryLog(ctx, d.lg, "Payments.PortalDeleteMethod", "provider", provider, "payment_method_id", methodID)
+	return nil, nil
 }

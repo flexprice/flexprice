@@ -34,6 +34,9 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 	}
 }
 
+// insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
+const insertTimeout = 30 * time.Second
+
 // BulkInsertMeterUsage inserts meter usage records in batches of 100
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
 	span := StartRepositorySpan(ctx, "meter_usage", "bulk_insert", map[string]interface{}{
@@ -49,7 +52,10 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 	batches := lo.Chunk(records, 100)
 
 	for _, batch := range batches {
-		stmt, err := r.store.GetConn().PrepareBatch(ctx, `
+		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)
+		defer cancel()
+
+		stmt, err := r.store.GetConn().PrepareBatch(batchCtx, `
 			INSERT INTO meter_usage (
 				id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
 				timestamp, qty_total, unique_hash, source, properties, ingested_at
@@ -812,9 +818,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
 					start := len("JSONExtractString(properties, '")
 					end := strings.Index(col[start:], "'")
-					if end > 0 && value != "" {
-						// Skip missing-key dims so the response doesn't carry
-						// stray empty entries — matches feature-side parity.
+					if end > 0 {
 						propName := col[start : start+end]
 						result.Properties[propName] = value
 					}
@@ -822,7 +826,6 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 			}
 		}
 
-		// Fetch time-series points if window_size is specified
 		if params.WindowSize != "" {
 			points, err := r.getDetailedAnalyticsPoints(ctx, params, result, groupByResult)
 			if err != nil {
@@ -1082,12 +1085,118 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 	return results, nil
 }
 
-// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
-func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
-	span := StartRepositorySpan(ctx, "meter_usage", "get_by_event_id", map[string]interface{}{
-		"tenant_id":      tenantID,
-		"environment_id": environmentID,
-		"event_id":       eventID,
+// GetDailyUsageByMeter returns per-day SUM(qty_total) over
+// [StartTime, EndTime) for every meter in MeterIDs, keyed by meter id. The
+// running total is deliberately left to the caller: accumulating here would
+// pin the result to one window start, which is what forced a query per line
+// item.
+func (r *MeterUsageRepository) GetDailyUsageByMeter(ctx context.Context, params *events.DailyUsageParams) (map[string][]events.DailyUsagePoint, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return map[string][]events.DailyUsagePoint{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_daily_usage_by_meter", map[string]interface{}{
+		"meter_count": len(params.MeterIDs),
+	})
+	defer FinishSpan(span)
+
+	query, args := r.qb.BuildDailyUsageQuery(params)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query daily usage").
+			WithReportableDetails(map[string]interface{}{"meter_count": len(params.MeterIDs)}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	byMeter := make(map[string][]events.DailyUsagePoint, len(params.MeterIDs))
+	for rows.Next() {
+		var meterID string
+		var d time.Time
+		var dayQty decimal.Decimal
+		if err := rows.Scan(&meterID, &d, &dayQty); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan daily usage row").
+				Mark(ierr.ErrDatabase)
+		}
+		byMeter[meterID] = append(byMeter[meterID], events.DailyUsagePoint{Day: d, Qty: dayQty})
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating daily usage rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return byMeter, nil
+}
+
+// GetUsageActivitySince returns the distinct customers with usage ingested
+// after params.IngestedAfter. Filtering on ingested_at rather than timestamp is
+// what makes backdated events count as activity for the run that receives them.
+func (r *MeterUsageRepository) GetUsageActivitySince(ctx context.Context, params *events.UsageActivityParams) (*events.UsageActivity, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_activity_since", map[string]interface{}{
+		"tenant_id":      params.TenantID,
+		"environment_id": params.EnvironmentID,
+	})
+	defer FinishSpan(span)
+
+	query, args := r.qb.BuildUsageActivityQuery(params)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query usage activity").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	activity := &events.UsageActivity{}
+	for rows.Next() {
+		var externalCustomerID string
+		if err := rows.Scan(&externalCustomerID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan usage activity row").
+				Mark(ierr.ErrDatabase)
+		}
+		if externalCustomerID == "" {
+			activity.Unattributed = true
+			continue
+		}
+		activity.ExternalCustomerIDs = append(activity.ExternalCustomerIDs, externalCustomerID)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating usage activity rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return activity, nil
+}
+
+// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not yet processed.
+func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+	span := StartRepositorySpan(ctx, "meter_usage", "get_events_by_event_id_and_external_customer_id", map[string]interface{}{
+		"tenant_id":            tenantID,
+		"environment_id":       environmentID,
+		"external_customer_id": externalCustomerID,
+		"event_id":             eventID,
 	})
 	defer FinishSpan(span)
 
@@ -1108,6 +1217,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 		FROM meter_usage
 		WHERE tenant_id = ?
 		  AND environment_id = ?
+		  AND external_customer_id = ?
 		  AND id = ?
 		LIMIT 1
 		SETTINGS max_memory_usage = 96636764160
@@ -1116,7 +1226,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 	var usage events.MeterUsage
 	var propertiesJSON string
 
-	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, eventID).Scan(
+	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, externalCustomerID, eventID).Scan(
 		&usage.ID,
 		&usage.TenantID,
 		&usage.EnvironmentID,

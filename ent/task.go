@@ -91,7 +91,7 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Task fields.
-func (t *Task) assignValues(columns []string, values []any) error {
+func (_m *Task) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -101,137 +101,137 @@ func (t *Task) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				t.ID = value.String
+				_m.ID = value.String
 			}
 		case task.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				t.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case task.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				t.Status = value.String
+				_m.Status = value.String
 			}
 		case task.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				t.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case task.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				t.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case task.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				t.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case task.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				t.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case task.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				t.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case task.FieldTaskType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field task_type", values[i])
 			} else if value.Valid {
-				t.TaskType = value.String
+				_m.TaskType = value.String
 			}
 		case task.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				t.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case task.FieldScheduledTaskID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field scheduled_task_id", values[i])
 			} else if value.Valid {
-				t.ScheduledTaskID = value.String
+				_m.ScheduledTaskID = value.String
 			}
 		case task.FieldWorkflowID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field workflow_id", values[i])
 			} else if value.Valid {
-				t.WorkflowID = new(string)
-				*t.WorkflowID = value.String
+				_m.WorkflowID = new(string)
+				*_m.WorkflowID = value.String
 			}
 		case task.FieldFileURL:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field file_url", values[i])
 			} else if value.Valid {
-				t.FileURL = value.String
+				_m.FileURL = value.String
 			}
 		case task.FieldFileName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field file_name", values[i])
 			} else if value.Valid {
-				t.FileName = new(string)
-				*t.FileName = value.String
+				_m.FileName = new(string)
+				*_m.FileName = value.String
 			}
 		case task.FieldFileType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field file_type", values[i])
 			} else if value.Valid {
-				t.FileType = value.String
+				_m.FileType = value.String
 			}
 		case task.FieldTaskStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field task_status", values[i])
 			} else if value.Valid {
-				t.TaskStatus = value.String
+				_m.TaskStatus = value.String
 			}
 		case task.FieldTotalRecords:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field total_records", values[i])
 			} else if value.Valid {
-				t.TotalRecords = new(int)
-				*t.TotalRecords = int(value.Int64)
+				_m.TotalRecords = new(int)
+				*_m.TotalRecords = int(value.Int64)
 			}
 		case task.FieldProcessedRecords:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field processed_records", values[i])
 			} else if value.Valid {
-				t.ProcessedRecords = int(value.Int64)
+				_m.ProcessedRecords = int(value.Int64)
 			}
 		case task.FieldSuccessfulRecords:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field successful_records", values[i])
 			} else if value.Valid {
-				t.SuccessfulRecords = int(value.Int64)
+				_m.SuccessfulRecords = int(value.Int64)
 			}
 		case task.FieldFailedRecords:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field failed_records", values[i])
 			} else if value.Valid {
-				t.FailedRecords = int(value.Int64)
+				_m.FailedRecords = int(value.Int64)
 			}
 		case task.FieldErrorSummary:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_summary", values[i])
 			} else if value.Valid {
-				t.ErrorSummary = new(string)
-				*t.ErrorSummary = value.String
+				_m.ErrorSummary = new(string)
+				*_m.ErrorSummary = value.String
 			}
 		case task.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &t.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -239,25 +239,25 @@ func (t *Task) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field started_at", values[i])
 			} else if value.Valid {
-				t.StartedAt = new(time.Time)
-				*t.StartedAt = value.Time
+				_m.StartedAt = new(time.Time)
+				*_m.StartedAt = value.Time
 			}
 		case task.FieldCompletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field completed_at", values[i])
 			} else if value.Valid {
-				t.CompletedAt = new(time.Time)
-				*t.CompletedAt = value.Time
+				_m.CompletedAt = new(time.Time)
+				*_m.CompletedAt = value.Time
 			}
 		case task.FieldFailedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field failed_at", values[i])
 			} else if value.Valid {
-				t.FailedAt = new(time.Time)
-				*t.FailedAt = value.Time
+				_m.FailedAt = new(time.Time)
+				*_m.FailedAt = value.Time
 			}
 		default:
-			t.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -265,115 +265,115 @@ func (t *Task) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Task.
 // This includes values selected through modifiers, order, etc.
-func (t *Task) Value(name string) (ent.Value, error) {
-	return t.selectValues.Get(name)
+func (_m *Task) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Task.
 // Note that you need to call Task.Unwrap() before calling this method if this Task
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (t *Task) Update() *TaskUpdateOne {
-	return NewTaskClient(t.config).UpdateOne(t)
+func (_m *Task) Update() *TaskUpdateOne {
+	return NewTaskClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Task entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (t *Task) Unwrap() *Task {
-	_tx, ok := t.config.driver.(*txDriver)
+func (_m *Task) Unwrap() *Task {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Task is not a transactional entity")
 	}
-	t.config.driver = _tx.drv
-	return t
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (t *Task) String() string {
+func (_m *Task) String() string {
 	var builder strings.Builder
 	builder.WriteString("Task(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", t.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(t.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(t.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(t.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(t.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(t.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(t.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(t.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("task_type=")
-	builder.WriteString(t.TaskType)
+	builder.WriteString(_m.TaskType)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(t.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("scheduled_task_id=")
-	builder.WriteString(t.ScheduledTaskID)
+	builder.WriteString(_m.ScheduledTaskID)
 	builder.WriteString(", ")
-	if v := t.WorkflowID; v != nil {
+	if v := _m.WorkflowID; v != nil {
 		builder.WriteString("workflow_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("file_url=")
-	builder.WriteString(t.FileURL)
+	builder.WriteString(_m.FileURL)
 	builder.WriteString(", ")
-	if v := t.FileName; v != nil {
+	if v := _m.FileName; v != nil {
 		builder.WriteString("file_name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("file_type=")
-	builder.WriteString(t.FileType)
+	builder.WriteString(_m.FileType)
 	builder.WriteString(", ")
 	builder.WriteString("task_status=")
-	builder.WriteString(t.TaskStatus)
+	builder.WriteString(_m.TaskStatus)
 	builder.WriteString(", ")
-	if v := t.TotalRecords; v != nil {
+	if v := _m.TotalRecords; v != nil {
 		builder.WriteString("total_records=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("processed_records=")
-	builder.WriteString(fmt.Sprintf("%v", t.ProcessedRecords))
+	builder.WriteString(fmt.Sprintf("%v", _m.ProcessedRecords))
 	builder.WriteString(", ")
 	builder.WriteString("successful_records=")
-	builder.WriteString(fmt.Sprintf("%v", t.SuccessfulRecords))
+	builder.WriteString(fmt.Sprintf("%v", _m.SuccessfulRecords))
 	builder.WriteString(", ")
 	builder.WriteString("failed_records=")
-	builder.WriteString(fmt.Sprintf("%v", t.FailedRecords))
+	builder.WriteString(fmt.Sprintf("%v", _m.FailedRecords))
 	builder.WriteString(", ")
-	if v := t.ErrorSummary; v != nil {
+	if v := _m.ErrorSummary; v != nil {
 		builder.WriteString("error_summary=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", t.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := t.StartedAt; v != nil {
+	if v := _m.StartedAt; v != nil {
 		builder.WriteString("started_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := t.CompletedAt; v != nil {
+	if v := _m.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := t.FailedAt; v != nil {
+	if v := _m.FailedAt; v != nil {
 		builder.WriteString("failed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}

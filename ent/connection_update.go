@@ -24,129 +24,129 @@ type ConnectionUpdate struct {
 }
 
 // Where appends a list predicates to the ConnectionUpdate builder.
-func (cu *ConnectionUpdate) Where(ps ...predicate.Connection) *ConnectionUpdate {
-	cu.mutation.Where(ps...)
-	return cu
+func (_u *ConnectionUpdate) Where(ps ...predicate.Connection) *ConnectionUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cu *ConnectionUpdate) SetStatus(s string) *ConnectionUpdate {
-	cu.mutation.SetStatus(s)
-	return cu
+func (_u *ConnectionUpdate) SetStatus(v string) *ConnectionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cu *ConnectionUpdate) SetNillableStatus(s *string) *ConnectionUpdate {
-	if s != nil {
-		cu.SetStatus(*s)
+func (_u *ConnectionUpdate) SetNillableStatus(v *string) *ConnectionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cu *ConnectionUpdate) SetUpdatedAt(t time.Time) *ConnectionUpdate {
-	cu.mutation.SetUpdatedAt(t)
-	return cu
+func (_u *ConnectionUpdate) SetUpdatedAt(v time.Time) *ConnectionUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cu *ConnectionUpdate) SetUpdatedBy(s string) *ConnectionUpdate {
-	cu.mutation.SetUpdatedBy(s)
-	return cu
+func (_u *ConnectionUpdate) SetUpdatedBy(v string) *ConnectionUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cu *ConnectionUpdate) SetNillableUpdatedBy(s *string) *ConnectionUpdate {
-	if s != nil {
-		cu.SetUpdatedBy(*s)
+func (_u *ConnectionUpdate) SetNillableUpdatedBy(v *string) *ConnectionUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cu *ConnectionUpdate) ClearUpdatedBy() *ConnectionUpdate {
-	cu.mutation.ClearUpdatedBy()
-	return cu
+func (_u *ConnectionUpdate) ClearUpdatedBy() *ConnectionUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cu *ConnectionUpdate) SetName(s string) *ConnectionUpdate {
-	cu.mutation.SetName(s)
-	return cu
+func (_u *ConnectionUpdate) SetName(v string) *ConnectionUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cu *ConnectionUpdate) SetNillableName(s *string) *ConnectionUpdate {
-	if s != nil {
-		cu.SetName(*s)
+func (_u *ConnectionUpdate) SetNillableName(v *string) *ConnectionUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetProviderType sets the "provider_type" field.
-func (cu *ConnectionUpdate) SetProviderType(s string) *ConnectionUpdate {
-	cu.mutation.SetProviderType(s)
-	return cu
+func (_u *ConnectionUpdate) SetProviderType(v string) *ConnectionUpdate {
+	_u.mutation.SetProviderType(v)
+	return _u
 }
 
 // SetNillableProviderType sets the "provider_type" field if the given value is not nil.
-func (cu *ConnectionUpdate) SetNillableProviderType(s *string) *ConnectionUpdate {
-	if s != nil {
-		cu.SetProviderType(*s)
+func (_u *ConnectionUpdate) SetNillableProviderType(v *string) *ConnectionUpdate {
+	if v != nil {
+		_u.SetProviderType(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetEncryptedSecretData sets the "encrypted_secret_data" field.
-func (cu *ConnectionUpdate) SetEncryptedSecretData(m map[string]interface{}) *ConnectionUpdate {
-	cu.mutation.SetEncryptedSecretData(m)
-	return cu
+func (_u *ConnectionUpdate) SetEncryptedSecretData(v map[string]interface{}) *ConnectionUpdate {
+	_u.mutation.SetEncryptedSecretData(v)
+	return _u
 }
 
 // ClearEncryptedSecretData clears the value of the "encrypted_secret_data" field.
-func (cu *ConnectionUpdate) ClearEncryptedSecretData() *ConnectionUpdate {
-	cu.mutation.ClearEncryptedSecretData()
-	return cu
+func (_u *ConnectionUpdate) ClearEncryptedSecretData() *ConnectionUpdate {
+	_u.mutation.ClearEncryptedSecretData()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cu *ConnectionUpdate) SetMetadata(m map[string]interface{}) *ConnectionUpdate {
-	cu.mutation.SetMetadata(m)
-	return cu
+func (_u *ConnectionUpdate) SetMetadata(v map[string]interface{}) *ConnectionUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cu *ConnectionUpdate) ClearMetadata() *ConnectionUpdate {
-	cu.mutation.ClearMetadata()
-	return cu
+func (_u *ConnectionUpdate) ClearMetadata() *ConnectionUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSyncConfig sets the "sync_config" field.
-func (cu *ConnectionUpdate) SetSyncConfig(tc *types.SyncConfig) *ConnectionUpdate {
-	cu.mutation.SetSyncConfig(tc)
-	return cu
+func (_u *ConnectionUpdate) SetSyncConfig(v *types.SyncConfig) *ConnectionUpdate {
+	_u.mutation.SetSyncConfig(v)
+	return _u
 }
 
 // ClearSyncConfig clears the value of the "sync_config" field.
-func (cu *ConnectionUpdate) ClearSyncConfig() *ConnectionUpdate {
-	cu.mutation.ClearSyncConfig()
-	return cu
+func (_u *ConnectionUpdate) ClearSyncConfig() *ConnectionUpdate {
+	_u.mutation.ClearSyncConfig()
+	return _u
 }
 
 // Mutation returns the ConnectionMutation object of the builder.
-func (cu *ConnectionUpdate) Mutation() *ConnectionMutation {
-	return cu.mutation
+func (_u *ConnectionUpdate) Mutation() *ConnectionMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cu *ConnectionUpdate) Save(ctx context.Context) (int, error) {
-	cu.defaults()
-	return withHooks(ctx, cu.sqlSave, cu.mutation, cu.hooks)
+func (_u *ConnectionUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cu *ConnectionUpdate) SaveX(ctx context.Context) int {
-	affected, err := cu.Save(ctx)
+func (_u *ConnectionUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -154,39 +154,39 @@ func (cu *ConnectionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cu *ConnectionUpdate) Exec(ctx context.Context) error {
-	_, err := cu.Save(ctx)
+func (_u *ConnectionUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cu *ConnectionUpdate) ExecX(ctx context.Context) {
-	if err := cu.Exec(ctx); err != nil {
+func (_u *ConnectionUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cu *ConnectionUpdate) defaults() {
-	if _, ok := cu.mutation.UpdatedAt(); !ok {
+func (_u *ConnectionUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := connection.UpdateDefaultUpdatedAt()
-		cu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cu *ConnectionUpdate) check() error {
-	if v, ok := cu.mutation.Name(); ok {
+func (_u *ConnectionUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := connection.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Connection.name": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.ProviderType(); ok {
+	if v, ok := _u.mutation.ProviderType(); ok {
 		if err := connection.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "Connection.provider_type": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.SyncConfig(); ok {
+	if v, ok := _u.mutation.SyncConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "sync_config", err: fmt.Errorf(`ent: validator failed for field "Connection.sync_config": %w`, err)}
 		}
@@ -194,61 +194,61 @@ func (cu *ConnectionUpdate) check() error {
 	return nil
 }
 
-func (cu *ConnectionUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cu.check(); err != nil {
-		return n, err
+func (_u *ConnectionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(connection.Table, connection.Columns, sqlgraph.NewFieldSpec(connection.FieldID, field.TypeString))
-	if ps := cu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(connection.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(connection.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(connection.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(connection.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(connection.FieldUpdatedBy, field.TypeString)
 	}
-	if cu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(connection.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(connection.FieldName, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.ProviderType(); ok {
+	if value, ok := _u.mutation.ProviderType(); ok {
 		_spec.SetField(connection.FieldProviderType, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.EncryptedSecretData(); ok {
+	if value, ok := _u.mutation.EncryptedSecretData(); ok {
 		_spec.SetField(connection.FieldEncryptedSecretData, field.TypeJSON, value)
 	}
-	if cu.mutation.EncryptedSecretDataCleared() {
+	if _u.mutation.EncryptedSecretDataCleared() {
 		_spec.ClearField(connection.FieldEncryptedSecretData, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
 	}
-	if cu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.SyncConfig(); ok {
+	if value, ok := _u.mutation.SyncConfig(); ok {
 		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
 	}
-	if cu.mutation.SyncConfigCleared() {
+	if _u.mutation.SyncConfigCleared() {
 		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{connection.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -256,8 +256,8 @@ func (cu *ConnectionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	cu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // ConnectionUpdateOne is the builder for updating a single Connection entity.
@@ -269,136 +269,136 @@ type ConnectionUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cuo *ConnectionUpdateOne) SetStatus(s string) *ConnectionUpdateOne {
-	cuo.mutation.SetStatus(s)
-	return cuo
+func (_u *ConnectionUpdateOne) SetStatus(v string) *ConnectionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cuo *ConnectionUpdateOne) SetNillableStatus(s *string) *ConnectionUpdateOne {
-	if s != nil {
-		cuo.SetStatus(*s)
+func (_u *ConnectionUpdateOne) SetNillableStatus(v *string) *ConnectionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cuo *ConnectionUpdateOne) SetUpdatedAt(t time.Time) *ConnectionUpdateOne {
-	cuo.mutation.SetUpdatedAt(t)
-	return cuo
+func (_u *ConnectionUpdateOne) SetUpdatedAt(v time.Time) *ConnectionUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cuo *ConnectionUpdateOne) SetUpdatedBy(s string) *ConnectionUpdateOne {
-	cuo.mutation.SetUpdatedBy(s)
-	return cuo
+func (_u *ConnectionUpdateOne) SetUpdatedBy(v string) *ConnectionUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cuo *ConnectionUpdateOne) SetNillableUpdatedBy(s *string) *ConnectionUpdateOne {
-	if s != nil {
-		cuo.SetUpdatedBy(*s)
+func (_u *ConnectionUpdateOne) SetNillableUpdatedBy(v *string) *ConnectionUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cuo *ConnectionUpdateOne) ClearUpdatedBy() *ConnectionUpdateOne {
-	cuo.mutation.ClearUpdatedBy()
-	return cuo
+func (_u *ConnectionUpdateOne) ClearUpdatedBy() *ConnectionUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cuo *ConnectionUpdateOne) SetName(s string) *ConnectionUpdateOne {
-	cuo.mutation.SetName(s)
-	return cuo
+func (_u *ConnectionUpdateOne) SetName(v string) *ConnectionUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cuo *ConnectionUpdateOne) SetNillableName(s *string) *ConnectionUpdateOne {
-	if s != nil {
-		cuo.SetName(*s)
+func (_u *ConnectionUpdateOne) SetNillableName(v *string) *ConnectionUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetProviderType sets the "provider_type" field.
-func (cuo *ConnectionUpdateOne) SetProviderType(s string) *ConnectionUpdateOne {
-	cuo.mutation.SetProviderType(s)
-	return cuo
+func (_u *ConnectionUpdateOne) SetProviderType(v string) *ConnectionUpdateOne {
+	_u.mutation.SetProviderType(v)
+	return _u
 }
 
 // SetNillableProviderType sets the "provider_type" field if the given value is not nil.
-func (cuo *ConnectionUpdateOne) SetNillableProviderType(s *string) *ConnectionUpdateOne {
-	if s != nil {
-		cuo.SetProviderType(*s)
+func (_u *ConnectionUpdateOne) SetNillableProviderType(v *string) *ConnectionUpdateOne {
+	if v != nil {
+		_u.SetProviderType(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetEncryptedSecretData sets the "encrypted_secret_data" field.
-func (cuo *ConnectionUpdateOne) SetEncryptedSecretData(m map[string]interface{}) *ConnectionUpdateOne {
-	cuo.mutation.SetEncryptedSecretData(m)
-	return cuo
+func (_u *ConnectionUpdateOne) SetEncryptedSecretData(v map[string]interface{}) *ConnectionUpdateOne {
+	_u.mutation.SetEncryptedSecretData(v)
+	return _u
 }
 
 // ClearEncryptedSecretData clears the value of the "encrypted_secret_data" field.
-func (cuo *ConnectionUpdateOne) ClearEncryptedSecretData() *ConnectionUpdateOne {
-	cuo.mutation.ClearEncryptedSecretData()
-	return cuo
+func (_u *ConnectionUpdateOne) ClearEncryptedSecretData() *ConnectionUpdateOne {
+	_u.mutation.ClearEncryptedSecretData()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cuo *ConnectionUpdateOne) SetMetadata(m map[string]interface{}) *ConnectionUpdateOne {
-	cuo.mutation.SetMetadata(m)
-	return cuo
+func (_u *ConnectionUpdateOne) SetMetadata(v map[string]interface{}) *ConnectionUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cuo *ConnectionUpdateOne) ClearMetadata() *ConnectionUpdateOne {
-	cuo.mutation.ClearMetadata()
-	return cuo
+func (_u *ConnectionUpdateOne) ClearMetadata() *ConnectionUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSyncConfig sets the "sync_config" field.
-func (cuo *ConnectionUpdateOne) SetSyncConfig(tc *types.SyncConfig) *ConnectionUpdateOne {
-	cuo.mutation.SetSyncConfig(tc)
-	return cuo
+func (_u *ConnectionUpdateOne) SetSyncConfig(v *types.SyncConfig) *ConnectionUpdateOne {
+	_u.mutation.SetSyncConfig(v)
+	return _u
 }
 
 // ClearSyncConfig clears the value of the "sync_config" field.
-func (cuo *ConnectionUpdateOne) ClearSyncConfig() *ConnectionUpdateOne {
-	cuo.mutation.ClearSyncConfig()
-	return cuo
+func (_u *ConnectionUpdateOne) ClearSyncConfig() *ConnectionUpdateOne {
+	_u.mutation.ClearSyncConfig()
+	return _u
 }
 
 // Mutation returns the ConnectionMutation object of the builder.
-func (cuo *ConnectionUpdateOne) Mutation() *ConnectionMutation {
-	return cuo.mutation
+func (_u *ConnectionUpdateOne) Mutation() *ConnectionMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the ConnectionUpdate builder.
-func (cuo *ConnectionUpdateOne) Where(ps ...predicate.Connection) *ConnectionUpdateOne {
-	cuo.mutation.Where(ps...)
-	return cuo
+func (_u *ConnectionUpdateOne) Where(ps ...predicate.Connection) *ConnectionUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cuo *ConnectionUpdateOne) Select(field string, fields ...string) *ConnectionUpdateOne {
-	cuo.fields = append([]string{field}, fields...)
-	return cuo
+func (_u *ConnectionUpdateOne) Select(field string, fields ...string) *ConnectionUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Connection entity.
-func (cuo *ConnectionUpdateOne) Save(ctx context.Context) (*Connection, error) {
-	cuo.defaults()
-	return withHooks(ctx, cuo.sqlSave, cuo.mutation, cuo.hooks)
+func (_u *ConnectionUpdateOne) Save(ctx context.Context) (*Connection, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cuo *ConnectionUpdateOne) SaveX(ctx context.Context) *Connection {
-	node, err := cuo.Save(ctx)
+func (_u *ConnectionUpdateOne) SaveX(ctx context.Context) *Connection {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -406,39 +406,39 @@ func (cuo *ConnectionUpdateOne) SaveX(ctx context.Context) *Connection {
 }
 
 // Exec executes the query on the entity.
-func (cuo *ConnectionUpdateOne) Exec(ctx context.Context) error {
-	_, err := cuo.Save(ctx)
+func (_u *ConnectionUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cuo *ConnectionUpdateOne) ExecX(ctx context.Context) {
-	if err := cuo.Exec(ctx); err != nil {
+func (_u *ConnectionUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cuo *ConnectionUpdateOne) defaults() {
-	if _, ok := cuo.mutation.UpdatedAt(); !ok {
+func (_u *ConnectionUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := connection.UpdateDefaultUpdatedAt()
-		cuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cuo *ConnectionUpdateOne) check() error {
-	if v, ok := cuo.mutation.Name(); ok {
+func (_u *ConnectionUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := connection.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Connection.name": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.ProviderType(); ok {
+	if v, ok := _u.mutation.ProviderType(); ok {
 		if err := connection.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "Connection.provider_type": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.SyncConfig(); ok {
+	if v, ok := _u.mutation.SyncConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "sync_config", err: fmt.Errorf(`ent: validator failed for field "Connection.sync_config": %w`, err)}
 		}
@@ -446,17 +446,17 @@ func (cuo *ConnectionUpdateOne) check() error {
 	return nil
 }
 
-func (cuo *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection, err error) {
-	if err := cuo.check(); err != nil {
+func (_u *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(connection.Table, connection.Columns, sqlgraph.NewFieldSpec(connection.FieldID, field.TypeString))
-	id, ok := cuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Connection.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, connection.FieldID)
 		for _, f := range fields {
@@ -468,59 +468,59 @@ func (cuo *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection,
 			}
 		}
 	}
-	if ps := cuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(connection.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(connection.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(connection.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(connection.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(connection.FieldUpdatedBy, field.TypeString)
 	}
-	if cuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(connection.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(connection.FieldName, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.ProviderType(); ok {
+	if value, ok := _u.mutation.ProviderType(); ok {
 		_spec.SetField(connection.FieldProviderType, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.EncryptedSecretData(); ok {
+	if value, ok := _u.mutation.EncryptedSecretData(); ok {
 		_spec.SetField(connection.FieldEncryptedSecretData, field.TypeJSON, value)
 	}
-	if cuo.mutation.EncryptedSecretDataCleared() {
+	if _u.mutation.EncryptedSecretDataCleared() {
 		_spec.ClearField(connection.FieldEncryptedSecretData, field.TypeJSON)
 	}
-	if value, ok := cuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
 	}
-	if cuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cuo.mutation.SyncConfig(); ok {
+	if value, ok := _u.mutation.SyncConfig(); ok {
 		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
 	}
-	if cuo.mutation.SyncConfigCleared() {
+	if _u.mutation.SyncConfigCleared() {
 		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
 	}
-	_node = &Connection{config: cuo.config}
+	_node = &Connection{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{connection.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -528,6 +528,6 @@ func (cuo *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection,
 		}
 		return nil, err
 	}
-	cuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

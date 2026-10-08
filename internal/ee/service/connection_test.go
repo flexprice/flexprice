@@ -598,3 +598,66 @@ func TestUpdateConnection_NilIntegrationFactory_StillSucceeds(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "updated-bucket", stored.SyncConfig.Storage.Bucket)
 }
+
+func TestUpdateConnection_StripeSecrets_MergesProvidedKeys(t *testing.T) {
+	svc, repo := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+
+	created, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+		Name:         "Stripe",
+		ProviderType: types.SecretProviderStripe,
+		EncryptedSecretData: types.ConnectionMetadata{
+			Stripe: &types.StripeConnectionMetadata{
+				PublishableKey: "pk_test_1",
+				SecretKey:      "sk_test_1",
+				WebhookSecret:  "whsec_1",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateConnection(ctx, created.ID, dto.UpdateConnectionRequest{
+		EncryptedSecretData: &types.ConnectionMetadata{
+			Stripe: &types.StripeConnectionMetadata{WebhookSecret: "whsec_2", AccountID: "acct_2"},
+		},
+	})
+	require.NoError(t, err)
+
+	encSvc, err := security.NewEncryptionService(&config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	stored, err := repo.Get(ctx, created.ID)
+	require.NoError(t, err)
+	decrypt := func(v string) string {
+		plain, err := encSvc.Decrypt(v)
+		require.NoError(t, err)
+		return plain
+	}
+	require.Equal(t, "whsec_2", decrypt(stored.EncryptedSecretData.Stripe.WebhookSecret))
+	require.Equal(t, "sk_test_1", decrypt(stored.EncryptedSecretData.Stripe.SecretKey))
+	require.Equal(t, "pk_test_1", decrypt(stored.EncryptedSecretData.Stripe.PublishableKey))
+	require.Equal(t, "acct_2", stored.EncryptedSecretData.Stripe.AccountID)
+}
+
+func TestUpdateConnection_StripeSecrets_RejectedForOtherProviders(t *testing.T) {
+	svc, _ := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+
+	created, err := svc.CreateConnection(ctx, dto.CreateConnectionRequest{
+		Name:         "Chargebee",
+		ProviderType: types.SecretProviderChargebee,
+		EncryptedSecretData: types.ConnectionMetadata{
+			Chargebee: &types.ChargebeeConnectionMetadata{Site: "acme", APIKey: "key", WebhookUsername: "u", WebhookPassword: "p"},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateConnection(ctx, created.ID, dto.UpdateConnectionRequest{
+		EncryptedSecretData: &types.ConnectionMetadata{
+			Stripe: &types.StripeConnectionMetadata{WebhookSecret: "whsec_2"},
+		},
+	})
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}

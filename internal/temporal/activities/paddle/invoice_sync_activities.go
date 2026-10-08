@@ -61,7 +61,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 				"customer_id", input.CustomerID)
 			return temporal.NewNonRetryableApplicationError(
 				"Paddle connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}
@@ -123,7 +123,7 @@ func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
 				"invoice_id", input.InvoiceID)
 			return temporal.NewNonRetryableApplicationError(
 				"Paddle connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

@@ -93,6 +93,23 @@ func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
 	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
 }
 
+func (c *LineItemCommitmentConfig) ApplyDefaults() {
+	if c == nil {
+		return
+	}
+	hasAmountCommitment := c.CommitmentAmount != nil && c.CommitmentAmount.GreaterThan(decimal.Zero)
+	hasQuantityCommitment := c.CommitmentQuantity != nil && c.CommitmentQuantity.GreaterThan(decimal.Zero)
+	if c.OverageFactor == nil && (hasAmountCommitment || hasQuantityCommitment || len(c.CommitmentTimeBuckets) > 0) {
+		c.OverageFactor = types.DefaultOverageFactor()
+	}
+}
+
+func applyLineItemCommitmentDefaults(commitments map[string]*LineItemCommitmentConfig) {
+	for _, c := range commitments {
+		c.ApplyDefaults()
+	}
+}
+
 func validateLineItemCommitments(commitments map[string]*LineItemCommitmentConfig) error {
 	if len(commitments) == 0 {
 		return nil
@@ -151,6 +168,14 @@ func (c *LineItemCommitmentConfig) Validate() error {
 	hasCommitment := hasAmountCommitment || hasQuantityCommitment
 
 	if !hasCommitment {
+		if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+			return ierr.NewError("overage_factor must be at least 1.0").
+				WithHint("Overage factor determines the multiplier for usage beyond commitment").
+				WithReportableDetails(map[string]interface{}{
+					"overage_factor": c.OverageFactor,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 		return nil
 	}
 
@@ -201,13 +226,7 @@ func (c *LineItemCommitmentConfig) Validate() error {
 		}
 	}
 
-	// overage_factor is optional; omitting it defaults to 1.0, meaning usage beyond
-	// the commitment bills at the base rate.
-	if c.OverageFactor == nil {
-		c.OverageFactor = types.DefaultOverageFactor()
-	}
-
-	if c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+	if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
 		return ierr.NewError("overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
@@ -439,7 +458,26 @@ type SubscriptionCreationConfig struct {
 	Phases    []SubscriptionPhaseCreateRequest    `json:"phases,omitempty" validate:"omitempty,dive"`
 }
 
+func (c *SubscriptionCreationConfig) ApplyDefaults() {
+	if c == nil {
+		return
+	}
+	applyLineItemCommitmentDefaults(c.LineItemCommitments)
+	for i := range c.Addons {
+		c.Addons[i].ApplyDefaults()
+	}
+	for i := range c.LineItems {
+		c.LineItems[i].ApplyDefaults()
+	}
+}
+
 func (c *SubscriptionCreationConfig) Validate() error {
+	if len(c.Addons) > 0 {
+		if err := ValidateAddonBatch(lo.ToSlicePtr(c.Addons), nil); err != nil {
+			return err
+		}
+	}
+
 	if c.CommitmentAmount != nil && c.CommitmentAmount.LessThan(decimal.Zero) {
 		return ierr.NewError("commitment_amount must be non-negative").
 			WithHint("Commitment amount must be greater than or equal to 0").
@@ -1564,6 +1602,18 @@ type OverrideEntitlementRequest struct {
 
 	// ConfigValue is the config value for config features
 	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
+
+	GrantConfigPatch
+}
+
+type GrantConfigPatch struct {
+	GrantMeasure            *types.EntitlementGrantMeasure            `json:"grant_measure,omitempty"`
+	GrantDurationValue      *int                                      `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit       *types.EntitlementGrantDurationUnit       `json:"grant_duration_unit,omitempty"`
+	GrantAllocationBehavior *types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
+	GrantQuota              *decimal.Decimal                          `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode         *types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	GrantUnlimited          *bool                                     `json:"grant_unlimited,omitempty"`
 }
 
 // Validate validates the entitlement override request
@@ -1571,6 +1621,13 @@ func (r *OverrideEntitlementRequest) Validate() error {
 	if r.EntitlementID == "" {
 		return ierr.NewError("entitlement_id is required").
 			WithHint("Please provide the entitlement ID to override").
+			Mark(ierr.ErrValidation)
+	}
+
+	if lo.FromPtr(r.GrantUnlimited) && r.GrantQuota != nil {
+		return ierr.NewError("grant_quota cannot be set on an unlimited allowance").
+			WithHint("Remove grant_quota, or drop grant_unlimited").
+			WithReportableDetails(map[string]interface{}{"entitlement_id": r.EntitlementID}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1890,7 +1947,8 @@ func (r *OverrideLineItemRequest) Validate(
 		}
 	}
 
-	return nil
+	return validateBillingModelChange(originalPrice.Price, r.BillingModel, r.TierMode,
+		r.Amount != nil || r.PriceUnitAmount != nil, len(r.Tiers) > 0 || len(r.PriceUnitTiers) > 0)
 }
 
 // ToSubscriptionLineItem converts a request to a domain subscription line item

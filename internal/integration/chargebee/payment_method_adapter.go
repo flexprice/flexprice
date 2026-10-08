@@ -153,12 +153,13 @@ func toProviderPaymentMethod(src *paymentSourceModel.PaymentSource, primaryID st
 	}
 
 	out := interfaces.ProviderPaymentMethod{
-		GatewayMethodID:  src.Id,
-		Method:           method,
-		CreatedAt:        time.Unix(src.CreatedAt, 0).UTC(),
-		IsDefault:        src.Id == primaryID && primaryID != "",
-		Active:           src.Status == paymentSourceEnum.StatusValid || src.Status == paymentSourceEnum.StatusExpiring,
-		GatewayAccountID: src.GatewayAccountId,
+		GatewayMethodID:     src.Id,
+		Method:              method,
+		CreatedAt:           time.Unix(src.CreatedAt, 0).UTC(),
+		IsDefault:           src.Id == primaryID && primaryID != "",
+		InstantlyChargeable: true,
+		Active:              src.Status == paymentSourceEnum.StatusValid || src.Status == paymentSourceEnum.StatusExpiring,
+		GatewayAccountID:    src.GatewayAccountId,
 		ProviderMetadata: map[string]string{
 			"chargebee_payment_source_status": string(src.Status),
 			"chargebee_gateway":               string(src.Gateway),

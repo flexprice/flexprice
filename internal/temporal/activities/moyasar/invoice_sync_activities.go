@@ -64,7 +64,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 				"customer_id", input.CustomerID)
 			return temporal.NewNonRetryableApplicationError(
 				"Moyasar connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

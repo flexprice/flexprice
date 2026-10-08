@@ -2386,8 +2386,7 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_CoarseRequestWindow_Bucket
 //	B: 12,13,14 empty → true-up $3×3 = $9
 //	out-of-bucket: 18:00 → 10×$1=$10 base; other empty windows $0
 //
-// Total = $64; true-up $19, overage $30, utilized $5 (in-bucket only).
-// Out-of-bucket $10 is billed at base rate and is not commitment utilization.
+// Total = $64; true-up $19, overage $40 ($30 in-bucket + $10 out-of-bucket), utilized $5.
 func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBuckets_WithTrueUp() {
 	ctx := s.GetContext()
 
@@ -2495,10 +2494,10 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBuckets_WithTrueUp
 	s.Require().NotNil(item.CommitmentInfo, "windowed fill path must record commitment info")
 	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.NewFromInt(19)),
 		"expected true-up $19 (A: $10, B: $9); got %s", item.CommitmentInfo.ComputedTrueUpAmount)
-	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(decimal.NewFromInt(30)),
-		"expected overage $30; got %s", item.CommitmentInfo.ComputedOverageAmount)
+	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(decimal.NewFromInt(40)),
+		"expected overage $40 ($30 in-bucket + $10 out-of-bucket); got %s", item.CommitmentInfo.ComputedOverageAmount)
 	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(decimal.NewFromInt(5)),
-		"expected utilized $5 (in-bucket only; out-of-bucket has no line-item commitment); got %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+		"expected utilized $5 (in-bucket only); got %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
 }
 
 // TestWindowCommitment_ZeroQuantity_DoesNotReportUtilization pins the bug where
@@ -2542,21 +2541,22 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_ZeroQuantity_DoesNotReport
 	zeroQty := decimal.Zero
 	overage := decimal.NewFromInt(2)
 	li := &subscription.SubscriptionLineItem{
-		ID:                 "li_zero_qty",
-		SubscriptionID:     s.sub.ID,
-		CustomerID:         s.customer.ID,
-		PriceID:            linePrice.ID,
-		PriceType:          types.PRICE_TYPE_USAGE,
-		MeterID:            bucketedMeter.ID,
-		Currency:           "usd",
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
-		StartDate:          s.periodStart,
-		EndDate:            s.periodEnd,
-		Quantity:           decimal.NewFromInt(1),
-		CommitmentType:     types.COMMITMENT_TYPE_QUANTITY,
-		CommitmentQuantity: &zeroQty,
-		CommitmentWindowed: true,
+		ID:                      "li_zero_qty",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 linePrice.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 bucketedMeter.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentType:          types.COMMITMENT_TYPE_QUANTITY,
+		CommitmentQuantity:      &zeroQty,
+		CommitmentOverageFactor: types.DefaultOverageFactor(),
+		CommitmentWindowed:      true,
 		CommitmentTimeBuckets: types.TimeOfDayBuckets{
 			{
 				ID: "bkt_morning", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12},
@@ -2598,8 +2598,8 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_ZeroQuantity_DoesNotReport
 	s.Require().NotNil(item.CommitmentInfo)
 	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.IsZero(),
 		"zero quantity commitment must not report utilization; got %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
-	s.True(item.CommitmentInfo.ComputedOverageAmount.IsZero(),
-		"zero quantity commitment must not report overage; got %s", item.CommitmentInfo.ComputedOverageAmount)
+	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(decimal.NewFromInt(10)),
+		"zero quantity commitment must report all usage as overage; got %s", item.CommitmentInfo.ComputedOverageAmount)
 	s.True(item.CommitmentInfo.ComputedTrueUpAmount.IsZero(),
 		"zero quantity commitment must not report true-up; got %s", item.CommitmentInfo.ComputedTrueUpAmount)
 
@@ -2616,6 +2616,8 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_ZeroQuantity_DoesNotReport
 		"out-of-bucket point cost should be $10, got %s", outPoint.Cost)
 	s.True(outPoint.ComputedCommitmentUtilizedAmount.IsZero(),
 		"out-of-bucket point must not report utilization; got %s", outPoint.ComputedCommitmentUtilizedAmount)
+	s.True(outPoint.ComputedOverageAmount.Equal(decimal.NewFromInt(10)),
+		"out-of-bucket point must report all usage as overage; got %s", outPoint.ComputedOverageAmount)
 }
 
 // TestWindowCommitment_ZeroUsage_BucketTrueUp reproduces the production report

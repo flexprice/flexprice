@@ -33,7 +33,7 @@ func (c *Client) CreateManagePaymentSourcesPage(
 		params.Card = &hostedPageModel.ManagePaymentSourcesCardParams{GatewayAccountId: gatewayAccountID}
 	}
 
-	res, err := hostedpage.ManagePaymentSources(params).RequestWithEnv(env)
+	res, err := hostedpage.ManagePaymentSources(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to create Chargebee add-payment-method page")
 	}
@@ -55,7 +55,7 @@ func (c *Client) AssignPaymentRole(ctx context.Context, chargebeeCustomerID, pay
 	_, err = customer.AssignPaymentRole(chargebeeCustomerID, &customerModel.AssignPaymentRoleRequestParams{
 		PaymentSourceId: paymentSourceID,
 		Role:            role,
-	}).RequestWithEnv(env)
+	}).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return wrapAPIError(err, "Failed to assign Chargebee payment role")
 	}
@@ -70,7 +70,7 @@ func (c *Client) DeletePaymentSource(ctx context.Context, paymentSourceID string
 		return err
 	}
 
-	if _, err := paymentsource.Delete(paymentSourceID).RequestWithEnv(env); err != nil {
+	if _, err := paymentsource.Delete(paymentSourceID).Contexts(ctx).RequestWithEnv(env); err != nil {
 		return wrapAPIError(err, "Failed to delete Chargebee payment source")
 	}
 	return nil

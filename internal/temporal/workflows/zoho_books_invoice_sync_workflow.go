@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -16,12 +17,16 @@ const (
 )
 
 // ZohoBooksInvoiceSyncWorkflow syncs finalized invoices to Zoho Books.
-func ZohoBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.ZohoBooksInvoiceSyncWorkflowInput) error {
+func ZohoBooksInvoiceSyncWorkflow(ctx workflow.Context, input models.ZohoBooksInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 	if err := input.Validate(); err != nil {
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderZohoBooks, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	opts := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,

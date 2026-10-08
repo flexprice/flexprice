@@ -27,218 +27,218 @@ type CreditGrantUpdate struct {
 }
 
 // Where appends a list predicates to the CreditGrantUpdate builder.
-func (cgu *CreditGrantUpdate) Where(ps ...predicate.CreditGrant) *CreditGrantUpdate {
-	cgu.mutation.Where(ps...)
-	return cgu
+func (_u *CreditGrantUpdate) Where(ps ...predicate.CreditGrant) *CreditGrantUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cgu *CreditGrantUpdate) SetStatus(s string) *CreditGrantUpdate {
-	cgu.mutation.SetStatus(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetStatus(v string) *CreditGrantUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableStatus(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetStatus(*s)
+func (_u *CreditGrantUpdate) SetNillableStatus(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cgu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cgu *CreditGrantUpdate) SetUpdatedAt(t time.Time) *CreditGrantUpdate {
-	cgu.mutation.SetUpdatedAt(t)
-	return cgu
+func (_u *CreditGrantUpdate) SetUpdatedAt(v time.Time) *CreditGrantUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cgu *CreditGrantUpdate) SetUpdatedBy(s string) *CreditGrantUpdate {
-	cgu.mutation.SetUpdatedBy(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetUpdatedBy(v string) *CreditGrantUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableUpdatedBy(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetUpdatedBy(*s)
+func (_u *CreditGrantUpdate) SetNillableUpdatedBy(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cgu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cgu *CreditGrantUpdate) ClearUpdatedBy() *CreditGrantUpdate {
-	cgu.mutation.ClearUpdatedBy()
-	return cgu
+func (_u *CreditGrantUpdate) ClearUpdatedBy() *CreditGrantUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cgu *CreditGrantUpdate) SetName(s string) *CreditGrantUpdate {
-	cgu.mutation.SetName(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetName(v string) *CreditGrantUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableName(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetName(*s)
+func (_u *CreditGrantUpdate) SetNillableName(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cgu
+	return _u
 }
 
 // SetScope sets the "scope" field.
-func (cgu *CreditGrantUpdate) SetScope(tgs types.CreditGrantScope) *CreditGrantUpdate {
-	cgu.mutation.SetScope(tgs)
-	return cgu
+func (_u *CreditGrantUpdate) SetScope(v types.CreditGrantScope) *CreditGrantUpdate {
+	_u.mutation.SetScope(v)
+	return _u
 }
 
 // SetNillableScope sets the "scope" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableScope(tgs *types.CreditGrantScope) *CreditGrantUpdate {
-	if tgs != nil {
-		cgu.SetScope(*tgs)
+func (_u *CreditGrantUpdate) SetNillableScope(v *types.CreditGrantScope) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetScope(*v)
 	}
-	return cgu
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (cgu *CreditGrantUpdate) SetPlanID(s string) *CreditGrantUpdate {
-	cgu.mutation.SetPlanID(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetPlanID(v string) *CreditGrantUpdate {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillablePlanID(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetPlanID(*s)
+func (_u *CreditGrantUpdate) SetNillablePlanID(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return cgu
+	return _u
 }
 
 // ClearPlanID clears the value of the "plan_id" field.
-func (cgu *CreditGrantUpdate) ClearPlanID() *CreditGrantUpdate {
-	cgu.mutation.ClearPlanID()
-	return cgu
+func (_u *CreditGrantUpdate) ClearPlanID() *CreditGrantUpdate {
+	_u.mutation.ClearPlanID()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cgu *CreditGrantUpdate) SetSubscriptionID(s string) *CreditGrantUpdate {
-	cgu.mutation.SetSubscriptionID(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetSubscriptionID(v string) *CreditGrantUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableSubscriptionID(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetSubscriptionID(*s)
+func (_u *CreditGrantUpdate) SetNillableSubscriptionID(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return cgu
+	return _u
 }
 
 // ClearSubscriptionID clears the value of the "subscription_id" field.
-func (cgu *CreditGrantUpdate) ClearSubscriptionID() *CreditGrantUpdate {
-	cgu.mutation.ClearSubscriptionID()
-	return cgu
+func (_u *CreditGrantUpdate) ClearSubscriptionID() *CreditGrantUpdate {
+	_u.mutation.ClearSubscriptionID()
+	return _u
 }
 
 // SetAddonID sets the "addon_id" field.
-func (cgu *CreditGrantUpdate) SetAddonID(s string) *CreditGrantUpdate {
-	cgu.mutation.SetAddonID(s)
-	return cgu
+func (_u *CreditGrantUpdate) SetAddonID(v string) *CreditGrantUpdate {
+	_u.mutation.SetAddonID(v)
+	return _u
 }
 
 // SetNillableAddonID sets the "addon_id" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableAddonID(s *string) *CreditGrantUpdate {
-	if s != nil {
-		cgu.SetAddonID(*s)
+func (_u *CreditGrantUpdate) SetNillableAddonID(v *string) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetAddonID(*v)
 	}
-	return cgu
+	return _u
 }
 
 // ClearAddonID clears the value of the "addon_id" field.
-func (cgu *CreditGrantUpdate) ClearAddonID() *CreditGrantUpdate {
-	cgu.mutation.ClearAddonID()
-	return cgu
+func (_u *CreditGrantUpdate) ClearAddonID() *CreditGrantUpdate {
+	_u.mutation.ClearAddonID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cgu *CreditGrantUpdate) SetMetadata(m map[string]string) *CreditGrantUpdate {
-	cgu.mutation.SetMetadata(m)
-	return cgu
+func (_u *CreditGrantUpdate) SetMetadata(v map[string]string) *CreditGrantUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cgu *CreditGrantUpdate) ClearMetadata() *CreditGrantUpdate {
-	cgu.mutation.ClearMetadata()
-	return cgu
+func (_u *CreditGrantUpdate) ClearMetadata() *CreditGrantUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (cgu *CreditGrantUpdate) SetEndDate(t time.Time) *CreditGrantUpdate {
-	cgu.mutation.SetEndDate(t)
-	return cgu
+func (_u *CreditGrantUpdate) SetEndDate(v time.Time) *CreditGrantUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cgu *CreditGrantUpdate) SetNillableEndDate(t *time.Time) *CreditGrantUpdate {
-	if t != nil {
-		cgu.SetEndDate(*t)
+func (_u *CreditGrantUpdate) SetNillableEndDate(v *time.Time) *CreditGrantUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return cgu
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (cgu *CreditGrantUpdate) ClearEndDate() *CreditGrantUpdate {
-	cgu.mutation.ClearEndDate()
-	return cgu
+func (_u *CreditGrantUpdate) ClearEndDate() *CreditGrantUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetPlan sets the "plan" edge to the Plan entity.
-func (cgu *CreditGrantUpdate) SetPlan(p *Plan) *CreditGrantUpdate {
-	return cgu.SetPlanID(p.ID)
+func (_u *CreditGrantUpdate) SetPlan(v *Plan) *CreditGrantUpdate {
+	return _u.SetPlanID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (cgu *CreditGrantUpdate) SetSubscription(s *Subscription) *CreditGrantUpdate {
-	return cgu.SetSubscriptionID(s.ID)
+func (_u *CreditGrantUpdate) SetSubscription(v *Subscription) *CreditGrantUpdate {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // SetAddon sets the "addon" edge to the Addon entity.
-func (cgu *CreditGrantUpdate) SetAddon(a *Addon) *CreditGrantUpdate {
-	return cgu.SetAddonID(a.ID)
+func (_u *CreditGrantUpdate) SetAddon(v *Addon) *CreditGrantUpdate {
+	return _u.SetAddonID(v.ID)
 }
 
 // Mutation returns the CreditGrantMutation object of the builder.
-func (cgu *CreditGrantUpdate) Mutation() *CreditGrantMutation {
-	return cgu.mutation
+func (_u *CreditGrantUpdate) Mutation() *CreditGrantMutation {
+	return _u.mutation
 }
 
 // ClearPlan clears the "plan" edge to the Plan entity.
-func (cgu *CreditGrantUpdate) ClearPlan() *CreditGrantUpdate {
-	cgu.mutation.ClearPlan()
-	return cgu
+func (_u *CreditGrantUpdate) ClearPlan() *CreditGrantUpdate {
+	_u.mutation.ClearPlan()
+	return _u
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (cgu *CreditGrantUpdate) ClearSubscription() *CreditGrantUpdate {
-	cgu.mutation.ClearSubscription()
-	return cgu
+func (_u *CreditGrantUpdate) ClearSubscription() *CreditGrantUpdate {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // ClearAddon clears the "addon" edge to the Addon entity.
-func (cgu *CreditGrantUpdate) ClearAddon() *CreditGrantUpdate {
-	cgu.mutation.ClearAddon()
-	return cgu
+func (_u *CreditGrantUpdate) ClearAddon() *CreditGrantUpdate {
+	_u.mutation.ClearAddon()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cgu *CreditGrantUpdate) Save(ctx context.Context) (int, error) {
-	cgu.defaults()
-	return withHooks(ctx, cgu.sqlSave, cgu.mutation, cgu.hooks)
+func (_u *CreditGrantUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cgu *CreditGrantUpdate) SaveX(ctx context.Context) int {
-	affected, err := cgu.Save(ctx)
+func (_u *CreditGrantUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -246,34 +246,34 @@ func (cgu *CreditGrantUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cgu *CreditGrantUpdate) Exec(ctx context.Context) error {
-	_, err := cgu.Save(ctx)
+func (_u *CreditGrantUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgu *CreditGrantUpdate) ExecX(ctx context.Context) {
-	if err := cgu.Exec(ctx); err != nil {
+func (_u *CreditGrantUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cgu *CreditGrantUpdate) defaults() {
-	if _, ok := cgu.mutation.UpdatedAt(); !ok {
+func (_u *CreditGrantUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditgrant.UpdateDefaultUpdatedAt()
-		cgu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cgu *CreditGrantUpdate) check() error {
-	if v, ok := cgu.mutation.Name(); ok {
+func (_u *CreditGrantUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := creditgrant.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.name": %w`, err)}
 		}
 	}
-	if v, ok := cgu.mutation.Scope(); ok {
+	if v, ok := _u.mutation.Scope(); ok {
 		if err := creditgrant.ScopeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.scope": %w`, err)}
 		}
@@ -281,82 +281,82 @@ func (cgu *CreditGrantUpdate) check() error {
 	return nil
 }
 
-func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cgu.check(); err != nil {
-		return n, err
+func (_u *CreditGrantUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrant.Table, creditgrant.Columns, sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString))
-	if ps := cgu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cgu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditgrant.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cgu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cgu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditgrant.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cgu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cgu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditgrant.FieldUpdatedBy, field.TypeString)
 	}
-	if cgu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditgrant.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cgu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(creditgrant.FieldName, field.TypeString, value)
 	}
-	if value, ok := cgu.mutation.Scope(); ok {
+	if value, ok := _u.mutation.Scope(); ok {
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
 	}
-	if cgu.mutation.ConversionRateCleared() {
+	if _u.mutation.ConversionRateCleared() {
 		_spec.ClearField(creditgrant.FieldConversionRate, field.TypeOther)
 	}
-	if cgu.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(creditgrant.FieldTopupConversionRate, field.TypeOther)
 	}
-	if cgu.mutation.PeriodCleared() {
+	if _u.mutation.PeriodCleared() {
 		_spec.ClearField(creditgrant.FieldPeriod, field.TypeString)
 	}
-	if cgu.mutation.PeriodCountCleared() {
+	if _u.mutation.PeriodCountCleared() {
 		_spec.ClearField(creditgrant.FieldPeriodCount, field.TypeInt)
 	}
-	if cgu.mutation.ExpirationDurationCleared() {
+	if _u.mutation.ExpirationDurationCleared() {
 		_spec.ClearField(creditgrant.FieldExpirationDuration, field.TypeInt)
 	}
-	if cgu.mutation.ExpirationDurationUnitCleared() {
+	if _u.mutation.ExpirationDurationUnitCleared() {
 		_spec.ClearField(creditgrant.FieldExpirationDurationUnit, field.TypeString)
 	}
-	if cgu.mutation.PriorityCleared() {
+	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(creditgrant.FieldPriority, field.TypeInt)
 	}
-	if value, ok := cgu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditgrant.FieldMetadata, field.TypeJSON, value)
 	}
-	if cgu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrant.FieldMetadata, field.TypeJSON)
 	}
-	if cgu.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(creditgrant.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := cgu.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(creditgrant.FieldEndDate, field.TypeTime, value)
 	}
-	if cgu.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(creditgrant.FieldEndDate, field.TypeTime)
 	}
-	if cgu.mutation.CreditGrantAnchorCleared() {
+	if _u.mutation.CreditGrantAnchorCleared() {
 		_spec.ClearField(creditgrant.FieldCreditGrantAnchor, field.TypeTime)
 	}
-	if cgu.mutation.PlanCleared() {
+	if _u.mutation.PlanCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -369,7 +369,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cgu.mutation.PlanIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PlanIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -385,7 +385,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cgu.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -398,7 +398,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cgu.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -414,7 +414,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cgu.mutation.AddonCleared() {
+	if _u.mutation.AddonCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -427,7 +427,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cgu.mutation.AddonIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.AddonIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -443,7 +443,7 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cgu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditgrant.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -451,8 +451,8 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	cgu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CreditGrantUpdateOne is the builder for updating a single CreditGrant entity.
@@ -464,225 +464,225 @@ type CreditGrantUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cguo *CreditGrantUpdateOne) SetStatus(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetStatus(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetStatus(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableStatus(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetStatus(*s)
+func (_u *CreditGrantUpdateOne) SetNillableStatus(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cguo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cguo *CreditGrantUpdateOne) SetUpdatedAt(t time.Time) *CreditGrantUpdateOne {
-	cguo.mutation.SetUpdatedAt(t)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetUpdatedAt(v time.Time) *CreditGrantUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cguo *CreditGrantUpdateOne) SetUpdatedBy(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetUpdatedBy(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetUpdatedBy(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableUpdatedBy(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetUpdatedBy(*s)
+func (_u *CreditGrantUpdateOne) SetNillableUpdatedBy(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cguo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cguo *CreditGrantUpdateOne) ClearUpdatedBy() *CreditGrantUpdateOne {
-	cguo.mutation.ClearUpdatedBy()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearUpdatedBy() *CreditGrantUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cguo *CreditGrantUpdateOne) SetName(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetName(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetName(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableName(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetName(*s)
+func (_u *CreditGrantUpdateOne) SetNillableName(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cguo
+	return _u
 }
 
 // SetScope sets the "scope" field.
-func (cguo *CreditGrantUpdateOne) SetScope(tgs types.CreditGrantScope) *CreditGrantUpdateOne {
-	cguo.mutation.SetScope(tgs)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetScope(v types.CreditGrantScope) *CreditGrantUpdateOne {
+	_u.mutation.SetScope(v)
+	return _u
 }
 
 // SetNillableScope sets the "scope" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableScope(tgs *types.CreditGrantScope) *CreditGrantUpdateOne {
-	if tgs != nil {
-		cguo.SetScope(*tgs)
+func (_u *CreditGrantUpdateOne) SetNillableScope(v *types.CreditGrantScope) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetScope(*v)
 	}
-	return cguo
+	return _u
 }
 
 // SetPlanID sets the "plan_id" field.
-func (cguo *CreditGrantUpdateOne) SetPlanID(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetPlanID(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetPlanID(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetPlanID(v)
+	return _u
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillablePlanID(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetPlanID(*s)
+func (_u *CreditGrantUpdateOne) SetNillablePlanID(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetPlanID(*v)
 	}
-	return cguo
+	return _u
 }
 
 // ClearPlanID clears the value of the "plan_id" field.
-func (cguo *CreditGrantUpdateOne) ClearPlanID() *CreditGrantUpdateOne {
-	cguo.mutation.ClearPlanID()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearPlanID() *CreditGrantUpdateOne {
+	_u.mutation.ClearPlanID()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cguo *CreditGrantUpdateOne) SetSubscriptionID(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetSubscriptionID(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetSubscriptionID(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableSubscriptionID(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetSubscriptionID(*s)
+func (_u *CreditGrantUpdateOne) SetNillableSubscriptionID(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return cguo
+	return _u
 }
 
 // ClearSubscriptionID clears the value of the "subscription_id" field.
-func (cguo *CreditGrantUpdateOne) ClearSubscriptionID() *CreditGrantUpdateOne {
-	cguo.mutation.ClearSubscriptionID()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearSubscriptionID() *CreditGrantUpdateOne {
+	_u.mutation.ClearSubscriptionID()
+	return _u
 }
 
 // SetAddonID sets the "addon_id" field.
-func (cguo *CreditGrantUpdateOne) SetAddonID(s string) *CreditGrantUpdateOne {
-	cguo.mutation.SetAddonID(s)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetAddonID(v string) *CreditGrantUpdateOne {
+	_u.mutation.SetAddonID(v)
+	return _u
 }
 
 // SetNillableAddonID sets the "addon_id" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableAddonID(s *string) *CreditGrantUpdateOne {
-	if s != nil {
-		cguo.SetAddonID(*s)
+func (_u *CreditGrantUpdateOne) SetNillableAddonID(v *string) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetAddonID(*v)
 	}
-	return cguo
+	return _u
 }
 
 // ClearAddonID clears the value of the "addon_id" field.
-func (cguo *CreditGrantUpdateOne) ClearAddonID() *CreditGrantUpdateOne {
-	cguo.mutation.ClearAddonID()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearAddonID() *CreditGrantUpdateOne {
+	_u.mutation.ClearAddonID()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cguo *CreditGrantUpdateOne) SetMetadata(m map[string]string) *CreditGrantUpdateOne {
-	cguo.mutation.SetMetadata(m)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetMetadata(v map[string]string) *CreditGrantUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cguo *CreditGrantUpdateOne) ClearMetadata() *CreditGrantUpdateOne {
-	cguo.mutation.ClearMetadata()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearMetadata() *CreditGrantUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (cguo *CreditGrantUpdateOne) SetEndDate(t time.Time) *CreditGrantUpdateOne {
-	cguo.mutation.SetEndDate(t)
-	return cguo
+func (_u *CreditGrantUpdateOne) SetEndDate(v time.Time) *CreditGrantUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cguo *CreditGrantUpdateOne) SetNillableEndDate(t *time.Time) *CreditGrantUpdateOne {
-	if t != nil {
-		cguo.SetEndDate(*t)
+func (_u *CreditGrantUpdateOne) SetNillableEndDate(v *time.Time) *CreditGrantUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return cguo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (cguo *CreditGrantUpdateOne) ClearEndDate() *CreditGrantUpdateOne {
-	cguo.mutation.ClearEndDate()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearEndDate() *CreditGrantUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetPlan sets the "plan" edge to the Plan entity.
-func (cguo *CreditGrantUpdateOne) SetPlan(p *Plan) *CreditGrantUpdateOne {
-	return cguo.SetPlanID(p.ID)
+func (_u *CreditGrantUpdateOne) SetPlan(v *Plan) *CreditGrantUpdateOne {
+	return _u.SetPlanID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (cguo *CreditGrantUpdateOne) SetSubscription(s *Subscription) *CreditGrantUpdateOne {
-	return cguo.SetSubscriptionID(s.ID)
+func (_u *CreditGrantUpdateOne) SetSubscription(v *Subscription) *CreditGrantUpdateOne {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // SetAddon sets the "addon" edge to the Addon entity.
-func (cguo *CreditGrantUpdateOne) SetAddon(a *Addon) *CreditGrantUpdateOne {
-	return cguo.SetAddonID(a.ID)
+func (_u *CreditGrantUpdateOne) SetAddon(v *Addon) *CreditGrantUpdateOne {
+	return _u.SetAddonID(v.ID)
 }
 
 // Mutation returns the CreditGrantMutation object of the builder.
-func (cguo *CreditGrantUpdateOne) Mutation() *CreditGrantMutation {
-	return cguo.mutation
+func (_u *CreditGrantUpdateOne) Mutation() *CreditGrantMutation {
+	return _u.mutation
 }
 
 // ClearPlan clears the "plan" edge to the Plan entity.
-func (cguo *CreditGrantUpdateOne) ClearPlan() *CreditGrantUpdateOne {
-	cguo.mutation.ClearPlan()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearPlan() *CreditGrantUpdateOne {
+	_u.mutation.ClearPlan()
+	return _u
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (cguo *CreditGrantUpdateOne) ClearSubscription() *CreditGrantUpdateOne {
-	cguo.mutation.ClearSubscription()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearSubscription() *CreditGrantUpdateOne {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // ClearAddon clears the "addon" edge to the Addon entity.
-func (cguo *CreditGrantUpdateOne) ClearAddon() *CreditGrantUpdateOne {
-	cguo.mutation.ClearAddon()
-	return cguo
+func (_u *CreditGrantUpdateOne) ClearAddon() *CreditGrantUpdateOne {
+	_u.mutation.ClearAddon()
+	return _u
 }
 
 // Where appends a list predicates to the CreditGrantUpdate builder.
-func (cguo *CreditGrantUpdateOne) Where(ps ...predicate.CreditGrant) *CreditGrantUpdateOne {
-	cguo.mutation.Where(ps...)
-	return cguo
+func (_u *CreditGrantUpdateOne) Where(ps ...predicate.CreditGrant) *CreditGrantUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cguo *CreditGrantUpdateOne) Select(field string, fields ...string) *CreditGrantUpdateOne {
-	cguo.fields = append([]string{field}, fields...)
-	return cguo
+func (_u *CreditGrantUpdateOne) Select(field string, fields ...string) *CreditGrantUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CreditGrant entity.
-func (cguo *CreditGrantUpdateOne) Save(ctx context.Context) (*CreditGrant, error) {
-	cguo.defaults()
-	return withHooks(ctx, cguo.sqlSave, cguo.mutation, cguo.hooks)
+func (_u *CreditGrantUpdateOne) Save(ctx context.Context) (*CreditGrant, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cguo *CreditGrantUpdateOne) SaveX(ctx context.Context) *CreditGrant {
-	node, err := cguo.Save(ctx)
+func (_u *CreditGrantUpdateOne) SaveX(ctx context.Context) *CreditGrant {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -690,34 +690,34 @@ func (cguo *CreditGrantUpdateOne) SaveX(ctx context.Context) *CreditGrant {
 }
 
 // Exec executes the query on the entity.
-func (cguo *CreditGrantUpdateOne) Exec(ctx context.Context) error {
-	_, err := cguo.Save(ctx)
+func (_u *CreditGrantUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cguo *CreditGrantUpdateOne) ExecX(ctx context.Context) {
-	if err := cguo.Exec(ctx); err != nil {
+func (_u *CreditGrantUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cguo *CreditGrantUpdateOne) defaults() {
-	if _, ok := cguo.mutation.UpdatedAt(); !ok {
+func (_u *CreditGrantUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditgrant.UpdateDefaultUpdatedAt()
-		cguo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cguo *CreditGrantUpdateOne) check() error {
-	if v, ok := cguo.mutation.Name(); ok {
+func (_u *CreditGrantUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := creditgrant.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.name": %w`, err)}
 		}
 	}
-	if v, ok := cguo.mutation.Scope(); ok {
+	if v, ok := _u.mutation.Scope(); ok {
 		if err := creditgrant.ScopeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.scope": %w`, err)}
 		}
@@ -725,17 +725,17 @@ func (cguo *CreditGrantUpdateOne) check() error {
 	return nil
 }
 
-func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGrant, err error) {
-	if err := cguo.check(); err != nil {
+func (_u *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGrant, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrant.Table, creditgrant.Columns, sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString))
-	id, ok := cguo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CreditGrant.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cguo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditgrant.FieldID)
 		for _, f := range fields {
@@ -747,77 +747,77 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 			}
 		}
 	}
-	if ps := cguo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cguo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditgrant.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cguo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cguo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditgrant.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cguo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cguo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditgrant.FieldUpdatedBy, field.TypeString)
 	}
-	if cguo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditgrant.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cguo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(creditgrant.FieldName, field.TypeString, value)
 	}
-	if value, ok := cguo.mutation.Scope(); ok {
+	if value, ok := _u.mutation.Scope(); ok {
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
 	}
-	if cguo.mutation.ConversionRateCleared() {
+	if _u.mutation.ConversionRateCleared() {
 		_spec.ClearField(creditgrant.FieldConversionRate, field.TypeOther)
 	}
-	if cguo.mutation.TopupConversionRateCleared() {
+	if _u.mutation.TopupConversionRateCleared() {
 		_spec.ClearField(creditgrant.FieldTopupConversionRate, field.TypeOther)
 	}
-	if cguo.mutation.PeriodCleared() {
+	if _u.mutation.PeriodCleared() {
 		_spec.ClearField(creditgrant.FieldPeriod, field.TypeString)
 	}
-	if cguo.mutation.PeriodCountCleared() {
+	if _u.mutation.PeriodCountCleared() {
 		_spec.ClearField(creditgrant.FieldPeriodCount, field.TypeInt)
 	}
-	if cguo.mutation.ExpirationDurationCleared() {
+	if _u.mutation.ExpirationDurationCleared() {
 		_spec.ClearField(creditgrant.FieldExpirationDuration, field.TypeInt)
 	}
-	if cguo.mutation.ExpirationDurationUnitCleared() {
+	if _u.mutation.ExpirationDurationUnitCleared() {
 		_spec.ClearField(creditgrant.FieldExpirationDurationUnit, field.TypeString)
 	}
-	if cguo.mutation.PriorityCleared() {
+	if _u.mutation.PriorityCleared() {
 		_spec.ClearField(creditgrant.FieldPriority, field.TypeInt)
 	}
-	if value, ok := cguo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditgrant.FieldMetadata, field.TypeJSON, value)
 	}
-	if cguo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrant.FieldMetadata, field.TypeJSON)
 	}
-	if cguo.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(creditgrant.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := cguo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(creditgrant.FieldEndDate, field.TypeTime, value)
 	}
-	if cguo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(creditgrant.FieldEndDate, field.TypeTime)
 	}
-	if cguo.mutation.CreditGrantAnchorCleared() {
+	if _u.mutation.CreditGrantAnchorCleared() {
 		_spec.ClearField(creditgrant.FieldCreditGrantAnchor, field.TypeTime)
 	}
-	if cguo.mutation.PlanCleared() {
+	if _u.mutation.PlanCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -830,7 +830,7 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cguo.mutation.PlanIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.PlanIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -846,7 +846,7 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cguo.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -859,7 +859,7 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cguo.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -875,7 +875,7 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cguo.mutation.AddonCleared() {
+	if _u.mutation.AddonCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -888,7 +888,7 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cguo.mutation.AddonIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.AddonIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -904,10 +904,10 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &CreditGrant{config: cguo.config}
+	_node = &CreditGrant{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cguo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditgrant.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -915,6 +915,6 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 		}
 		return nil, err
 	}
-	cguo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

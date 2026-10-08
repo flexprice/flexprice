@@ -89,8 +89,21 @@ type AdminConfig struct {
 
 // AnalyticsConfig gates the fire-and-forget analytics meter_usage feed.
 type AnalyticsConfig struct {
-	Enabled             bool   `mapstructure:"enabled" default:"false"`
-	MeterUsageSinkTopic string `mapstructure:"meter_usage_sink_topic"`
+	Enabled             bool                `mapstructure:"enabled" default:"false"`
+	MeterUsageSinkTopic string              `mapstructure:"meter_usage_sink_topic"`
+	RevenueRollup       RevenueRollupConfig `mapstructure:"revenue_rollup" validate:"omitempty"`
+}
+
+// RevenueRollupConfig gates the daily Temporal revenue_facts rollup + drift
+// sweep (RevenueRollupWorkflow). Off by default; AutoCorrect keeps the sweeper
+// flag-only (detect, never repair) unless explicitly enabled.
+type RevenueRollupConfig struct {
+	Enabled     bool `mapstructure:"enabled" default:"false"`
+	AutoCorrect bool `mapstructure:"auto_correct" default:"false"`
+	// FullRebuildWeekday forces a full pass on that weekday (0=Sunday), so
+	// anything the scan's triggers miss is repaired within a week rather than
+	// persisting. This is the net under the scan, not a switch for it.
+	FullRebuildWeekday int `mapstructure:"full_rebuild_weekday" default:"0"`
 }
 
 type ChatSupportConfig struct {
@@ -330,8 +343,30 @@ type DeploymentConfig struct {
 	Mode types.RunMode `mapstructure:"mode" validate:"required"`
 }
 
+const (
+	DefaultServerShutdownTimeout = 25 * time.Second
+	// Ceiling for the drain, leaving the rest of StopTimeout to other stop hooks.
+	MaxServerShutdownTimeout = 45 * time.Second
+	// Budget fx allows for all stop hooks combined.
+	ServerStopTimeout = 1 * time.Minute
+)
+
 type ServerConfig struct {
 	Address string `mapstructure:"address" validate:"required"`
+	// Grace period for in-flight requests to finish after SIGTERM.
+	// Must stay below the ECS task stopTimeout.
+	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+}
+
+// GetShutdownTimeout clamps the configured drain so it cannot outlive the fx stop budget.
+func (c ServerConfig) GetShutdownTimeout() time.Duration {
+	if c.ShutdownTimeout <= 0 {
+		return DefaultServerShutdownTimeout
+	}
+	if c.ShutdownTimeout > MaxServerShutdownTimeout {
+		return MaxServerShutdownTimeout
+	}
+	return c.ShutdownTimeout
 }
 
 type AuthConfig struct {
@@ -593,6 +628,9 @@ type LoggingConfig struct {
 	OtelAuthHeader string `mapstructure:"otel_auth_header" validate:"omitempty"` // header name
 	OtelAuthValue  string `mapstructure:"otel_auth_value" validate:"omitempty"`  // header value / token
 	OtelDebug      bool   `mapstructure:"otel_debug" default:"false"`            // use synchronous SimpleProcessor and verbose stderr output
+
+	// ProviderCallsEnabled is the kill switch for provider call log lines.
+	ProviderCallsEnabled bool `mapstructure:"provider_calls_enabled" default:"true"`
 }
 
 type PostgresConfig struct {
@@ -875,6 +913,7 @@ type UsageAlertsConfig struct {
 	Enabled bool `mapstructure:"enabled" default:"false"`
 	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
 	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	// ScheduleDelay and StaleAfter are deployment defaults; the usage_alert_config setting overrides them per environment.
 	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
 	// StaleAfter bounds staleness on both queues: a workflow run firing more
 	// than this past its intended time yields once (ContinueAsNew) to the back
@@ -1092,6 +1131,7 @@ func NewConfig() (*Configuration, error) {
 	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
+	v.SetDefault("logging.provider_calls_enabled", true)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

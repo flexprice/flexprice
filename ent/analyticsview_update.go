@@ -24,114 +24,114 @@ type AnalyticsViewUpdate struct {
 }
 
 // Where appends a list predicates to the AnalyticsViewUpdate builder.
-func (avu *AnalyticsViewUpdate) Where(ps ...predicate.AnalyticsView) *AnalyticsViewUpdate {
-	avu.mutation.Where(ps...)
-	return avu
+func (_u *AnalyticsViewUpdate) Where(ps ...predicate.AnalyticsView) *AnalyticsViewUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (avu *AnalyticsViewUpdate) SetStatus(s string) *AnalyticsViewUpdate {
-	avu.mutation.SetStatus(s)
-	return avu
+func (_u *AnalyticsViewUpdate) SetStatus(v string) *AnalyticsViewUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (avu *AnalyticsViewUpdate) SetNillableStatus(s *string) *AnalyticsViewUpdate {
-	if s != nil {
-		avu.SetStatus(*s)
+func (_u *AnalyticsViewUpdate) SetNillableStatus(v *string) *AnalyticsViewUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return avu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (avu *AnalyticsViewUpdate) SetUpdatedAt(t time.Time) *AnalyticsViewUpdate {
-	avu.mutation.SetUpdatedAt(t)
-	return avu
+func (_u *AnalyticsViewUpdate) SetUpdatedAt(v time.Time) *AnalyticsViewUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (avu *AnalyticsViewUpdate) SetUpdatedBy(s string) *AnalyticsViewUpdate {
-	avu.mutation.SetUpdatedBy(s)
-	return avu
+func (_u *AnalyticsViewUpdate) SetUpdatedBy(v string) *AnalyticsViewUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (avu *AnalyticsViewUpdate) SetNillableUpdatedBy(s *string) *AnalyticsViewUpdate {
-	if s != nil {
-		avu.SetUpdatedBy(*s)
+func (_u *AnalyticsViewUpdate) SetNillableUpdatedBy(v *string) *AnalyticsViewUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return avu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (avu *AnalyticsViewUpdate) ClearUpdatedBy() *AnalyticsViewUpdate {
-	avu.mutation.ClearUpdatedBy()
-	return avu
+func (_u *AnalyticsViewUpdate) ClearUpdatedBy() *AnalyticsViewUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (avu *AnalyticsViewUpdate) SetName(s string) *AnalyticsViewUpdate {
-	avu.mutation.SetName(s)
-	return avu
+func (_u *AnalyticsViewUpdate) SetName(v string) *AnalyticsViewUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (avu *AnalyticsViewUpdate) SetNillableName(s *string) *AnalyticsViewUpdate {
-	if s != nil {
-		avu.SetName(*s)
+func (_u *AnalyticsViewUpdate) SetNillableName(v *string) *AnalyticsViewUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return avu
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (avu *AnalyticsViewUpdate) SetVersion(i int) *AnalyticsViewUpdate {
-	avu.mutation.ResetVersion()
-	avu.mutation.SetVersion(i)
-	return avu
+func (_u *AnalyticsViewUpdate) SetVersion(v int) *AnalyticsViewUpdate {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (avu *AnalyticsViewUpdate) SetNillableVersion(i *int) *AnalyticsViewUpdate {
-	if i != nil {
-		avu.SetVersion(*i)
+func (_u *AnalyticsViewUpdate) SetNillableVersion(v *int) *AnalyticsViewUpdate {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return avu
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (avu *AnalyticsViewUpdate) AddVersion(i int) *AnalyticsViewUpdate {
-	avu.mutation.AddVersion(i)
-	return avu
+// AddVersion adds value to the "version" field.
+func (_u *AnalyticsViewUpdate) AddVersion(v int) *AnalyticsViewUpdate {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // SetDefinition sets the "definition" field.
-func (avu *AnalyticsViewUpdate) SetDefinition(ad analytics.ViewDefinition) *AnalyticsViewUpdate {
-	avu.mutation.SetDefinition(ad)
-	return avu
+func (_u *AnalyticsViewUpdate) SetDefinition(v analytics.ViewDefinition) *AnalyticsViewUpdate {
+	_u.mutation.SetDefinition(v)
+	return _u
 }
 
 // SetNillableDefinition sets the "definition" field if the given value is not nil.
-func (avu *AnalyticsViewUpdate) SetNillableDefinition(ad *analytics.ViewDefinition) *AnalyticsViewUpdate {
-	if ad != nil {
-		avu.SetDefinition(*ad)
+func (_u *AnalyticsViewUpdate) SetNillableDefinition(v *analytics.ViewDefinition) *AnalyticsViewUpdate {
+	if v != nil {
+		_u.SetDefinition(*v)
 	}
-	return avu
+	return _u
 }
 
 // Mutation returns the AnalyticsViewMutation object of the builder.
-func (avu *AnalyticsViewUpdate) Mutation() *AnalyticsViewMutation {
-	return avu.mutation
+func (_u *AnalyticsViewUpdate) Mutation() *AnalyticsViewMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (avu *AnalyticsViewUpdate) Save(ctx context.Context) (int, error) {
-	avu.defaults()
-	return withHooks(ctx, avu.sqlSave, avu.mutation, avu.hooks)
+func (_u *AnalyticsViewUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (avu *AnalyticsViewUpdate) SaveX(ctx context.Context) int {
-	affected, err := avu.Save(ctx)
+func (_u *AnalyticsViewUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -139,34 +139,34 @@ func (avu *AnalyticsViewUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (avu *AnalyticsViewUpdate) Exec(ctx context.Context) error {
-	_, err := avu.Save(ctx)
+func (_u *AnalyticsViewUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avu *AnalyticsViewUpdate) ExecX(ctx context.Context) {
-	if err := avu.Exec(ctx); err != nil {
+func (_u *AnalyticsViewUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (avu *AnalyticsViewUpdate) defaults() {
-	if _, ok := avu.mutation.UpdatedAt(); !ok {
+func (_u *AnalyticsViewUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := analyticsview.UpdateDefaultUpdatedAt()
-		avu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (avu *AnalyticsViewUpdate) check() error {
-	if v, ok := avu.mutation.Name(); ok {
+func (_u *AnalyticsViewUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := analyticsview.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.name": %w`, err)}
 		}
 	}
-	if v, ok := avu.mutation.Definition(); ok {
+	if v, ok := _u.mutation.Definition(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "definition", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.definition": %w`, err)}
 		}
@@ -174,46 +174,46 @@ func (avu *AnalyticsViewUpdate) check() error {
 	return nil
 }
 
-func (avu *AnalyticsViewUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := avu.check(); err != nil {
-		return n, err
+func (_u *AnalyticsViewUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(analyticsview.Table, analyticsview.Columns, sqlgraph.NewFieldSpec(analyticsview.FieldID, field.TypeString))
-	if ps := avu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := avu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(analyticsview.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := avu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if avu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(analyticsview.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := avu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedBy, field.TypeString, value)
 	}
-	if avu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(analyticsview.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := avu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(analyticsview.FieldName, field.TypeString, value)
 	}
-	if value, ok := avu.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(analyticsview.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := avu.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(analyticsview.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := avu.mutation.Definition(); ok {
+	if value, ok := _u.mutation.Definition(); ok {
 		_spec.SetField(analyticsview.FieldDefinition, field.TypeJSON, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, avu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{analyticsview.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -221,8 +221,8 @@ func (avu *AnalyticsViewUpdate) sqlSave(ctx context.Context) (n int, err error) 
 		}
 		return 0, err
 	}
-	avu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // AnalyticsViewUpdateOne is the builder for updating a single AnalyticsView entity.
@@ -234,121 +234,121 @@ type AnalyticsViewUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (avuo *AnalyticsViewUpdateOne) SetStatus(s string) *AnalyticsViewUpdateOne {
-	avuo.mutation.SetStatus(s)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetStatus(v string) *AnalyticsViewUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (avuo *AnalyticsViewUpdateOne) SetNillableStatus(s *string) *AnalyticsViewUpdateOne {
-	if s != nil {
-		avuo.SetStatus(*s)
+func (_u *AnalyticsViewUpdateOne) SetNillableStatus(v *string) *AnalyticsViewUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return avuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (avuo *AnalyticsViewUpdateOne) SetUpdatedAt(t time.Time) *AnalyticsViewUpdateOne {
-	avuo.mutation.SetUpdatedAt(t)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetUpdatedAt(v time.Time) *AnalyticsViewUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (avuo *AnalyticsViewUpdateOne) SetUpdatedBy(s string) *AnalyticsViewUpdateOne {
-	avuo.mutation.SetUpdatedBy(s)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetUpdatedBy(v string) *AnalyticsViewUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (avuo *AnalyticsViewUpdateOne) SetNillableUpdatedBy(s *string) *AnalyticsViewUpdateOne {
-	if s != nil {
-		avuo.SetUpdatedBy(*s)
+func (_u *AnalyticsViewUpdateOne) SetNillableUpdatedBy(v *string) *AnalyticsViewUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return avuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (avuo *AnalyticsViewUpdateOne) ClearUpdatedBy() *AnalyticsViewUpdateOne {
-	avuo.mutation.ClearUpdatedBy()
-	return avuo
+func (_u *AnalyticsViewUpdateOne) ClearUpdatedBy() *AnalyticsViewUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (avuo *AnalyticsViewUpdateOne) SetName(s string) *AnalyticsViewUpdateOne {
-	avuo.mutation.SetName(s)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetName(v string) *AnalyticsViewUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (avuo *AnalyticsViewUpdateOne) SetNillableName(s *string) *AnalyticsViewUpdateOne {
-	if s != nil {
-		avuo.SetName(*s)
+func (_u *AnalyticsViewUpdateOne) SetNillableName(v *string) *AnalyticsViewUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return avuo
+	return _u
 }
 
 // SetVersion sets the "version" field.
-func (avuo *AnalyticsViewUpdateOne) SetVersion(i int) *AnalyticsViewUpdateOne {
-	avuo.mutation.ResetVersion()
-	avuo.mutation.SetVersion(i)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetVersion(v int) *AnalyticsViewUpdateOne {
+	_u.mutation.ResetVersion()
+	_u.mutation.SetVersion(v)
+	return _u
 }
 
 // SetNillableVersion sets the "version" field if the given value is not nil.
-func (avuo *AnalyticsViewUpdateOne) SetNillableVersion(i *int) *AnalyticsViewUpdateOne {
-	if i != nil {
-		avuo.SetVersion(*i)
+func (_u *AnalyticsViewUpdateOne) SetNillableVersion(v *int) *AnalyticsViewUpdateOne {
+	if v != nil {
+		_u.SetVersion(*v)
 	}
-	return avuo
+	return _u
 }
 
-// AddVersion adds i to the "version" field.
-func (avuo *AnalyticsViewUpdateOne) AddVersion(i int) *AnalyticsViewUpdateOne {
-	avuo.mutation.AddVersion(i)
-	return avuo
+// AddVersion adds value to the "version" field.
+func (_u *AnalyticsViewUpdateOne) AddVersion(v int) *AnalyticsViewUpdateOne {
+	_u.mutation.AddVersion(v)
+	return _u
 }
 
 // SetDefinition sets the "definition" field.
-func (avuo *AnalyticsViewUpdateOne) SetDefinition(ad analytics.ViewDefinition) *AnalyticsViewUpdateOne {
-	avuo.mutation.SetDefinition(ad)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) SetDefinition(v analytics.ViewDefinition) *AnalyticsViewUpdateOne {
+	_u.mutation.SetDefinition(v)
+	return _u
 }
 
 // SetNillableDefinition sets the "definition" field if the given value is not nil.
-func (avuo *AnalyticsViewUpdateOne) SetNillableDefinition(ad *analytics.ViewDefinition) *AnalyticsViewUpdateOne {
-	if ad != nil {
-		avuo.SetDefinition(*ad)
+func (_u *AnalyticsViewUpdateOne) SetNillableDefinition(v *analytics.ViewDefinition) *AnalyticsViewUpdateOne {
+	if v != nil {
+		_u.SetDefinition(*v)
 	}
-	return avuo
+	return _u
 }
 
 // Mutation returns the AnalyticsViewMutation object of the builder.
-func (avuo *AnalyticsViewUpdateOne) Mutation() *AnalyticsViewMutation {
-	return avuo.mutation
+func (_u *AnalyticsViewUpdateOne) Mutation() *AnalyticsViewMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the AnalyticsViewUpdate builder.
-func (avuo *AnalyticsViewUpdateOne) Where(ps ...predicate.AnalyticsView) *AnalyticsViewUpdateOne {
-	avuo.mutation.Where(ps...)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) Where(ps ...predicate.AnalyticsView) *AnalyticsViewUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (avuo *AnalyticsViewUpdateOne) Select(field string, fields ...string) *AnalyticsViewUpdateOne {
-	avuo.fields = append([]string{field}, fields...)
-	return avuo
+func (_u *AnalyticsViewUpdateOne) Select(field string, fields ...string) *AnalyticsViewUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated AnalyticsView entity.
-func (avuo *AnalyticsViewUpdateOne) Save(ctx context.Context) (*AnalyticsView, error) {
-	avuo.defaults()
-	return withHooks(ctx, avuo.sqlSave, avuo.mutation, avuo.hooks)
+func (_u *AnalyticsViewUpdateOne) Save(ctx context.Context) (*AnalyticsView, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (avuo *AnalyticsViewUpdateOne) SaveX(ctx context.Context) *AnalyticsView {
-	node, err := avuo.Save(ctx)
+func (_u *AnalyticsViewUpdateOne) SaveX(ctx context.Context) *AnalyticsView {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -356,34 +356,34 @@ func (avuo *AnalyticsViewUpdateOne) SaveX(ctx context.Context) *AnalyticsView {
 }
 
 // Exec executes the query on the entity.
-func (avuo *AnalyticsViewUpdateOne) Exec(ctx context.Context) error {
-	_, err := avuo.Save(ctx)
+func (_u *AnalyticsViewUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (avuo *AnalyticsViewUpdateOne) ExecX(ctx context.Context) {
-	if err := avuo.Exec(ctx); err != nil {
+func (_u *AnalyticsViewUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (avuo *AnalyticsViewUpdateOne) defaults() {
-	if _, ok := avuo.mutation.UpdatedAt(); !ok {
+func (_u *AnalyticsViewUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := analyticsview.UpdateDefaultUpdatedAt()
-		avuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (avuo *AnalyticsViewUpdateOne) check() error {
-	if v, ok := avuo.mutation.Name(); ok {
+func (_u *AnalyticsViewUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := analyticsview.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.name": %w`, err)}
 		}
 	}
-	if v, ok := avuo.mutation.Definition(); ok {
+	if v, ok := _u.mutation.Definition(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "definition", err: fmt.Errorf(`ent: validator failed for field "AnalyticsView.definition": %w`, err)}
 		}
@@ -391,17 +391,17 @@ func (avuo *AnalyticsViewUpdateOne) check() error {
 	return nil
 }
 
-func (avuo *AnalyticsViewUpdateOne) sqlSave(ctx context.Context) (_node *AnalyticsView, err error) {
-	if err := avuo.check(); err != nil {
+func (_u *AnalyticsViewUpdateOne) sqlSave(ctx context.Context) (_node *AnalyticsView, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(analyticsview.Table, analyticsview.Columns, sqlgraph.NewFieldSpec(analyticsview.FieldID, field.TypeString))
-	id, ok := avuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "AnalyticsView.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := avuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, analyticsview.FieldID)
 		for _, f := range fields {
@@ -413,44 +413,44 @@ func (avuo *AnalyticsViewUpdateOne) sqlSave(ctx context.Context) (_node *Analyti
 			}
 		}
 	}
-	if ps := avuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := avuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(analyticsview.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := avuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if avuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(analyticsview.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := avuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(analyticsview.FieldUpdatedBy, field.TypeString, value)
 	}
-	if avuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(analyticsview.FieldUpdatedBy, field.TypeString)
 	}
-	if value, ok := avuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(analyticsview.FieldName, field.TypeString, value)
 	}
-	if value, ok := avuo.mutation.Version(); ok {
+	if value, ok := _u.mutation.Version(); ok {
 		_spec.SetField(analyticsview.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := avuo.mutation.AddedVersion(); ok {
+	if value, ok := _u.mutation.AddedVersion(); ok {
 		_spec.AddField(analyticsview.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := avuo.mutation.Definition(); ok {
+	if value, ok := _u.mutation.Definition(); ok {
 		_spec.SetField(analyticsview.FieldDefinition, field.TypeJSON, value)
 	}
-	_node = &AnalyticsView{config: avuo.config}
+	_node = &AnalyticsView{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, avuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{analyticsview.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -458,6 +458,6 @@ func (avuo *AnalyticsViewUpdateOne) sqlSave(ctx context.Context) (_node *Analyti
 		}
 		return nil, err
 	}
-	avuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

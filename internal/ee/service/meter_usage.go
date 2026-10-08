@@ -66,11 +66,7 @@ type MeterUsageService interface {
 
 	// DebugEvent powers GET /events/:id — reports processing status and
 	// per-lookup diagnostics for a single event under the meter-usage pipeline.
-	DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error)
-
-	// GetHuggingFaceBillingData resolves per-event cost (nano-USD) for the
-	// requested event IDs. Powers POST /events/huggingface-billing.
-	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
+	DebugEvent(ctx context.Context, externalCustomerID, eventID string, window events.TimeRange) (*dto.GetEventByIDResponse, error)
 }
 
 type meterUsageService struct {

@@ -123,6 +123,9 @@ func apiImmutableSettingFields(key types.SettingKey) []string {
 		// A tenant that could set it would be approving itself.
 		return []string{"active"}
 	}
+	if key == types.SettingKeyUsageAlertConfig {
+		return []string{types.UsageAlertConfigFieldScheduleDelaySeconds, types.UsageAlertConfigFieldStaleAfterSeconds}
+	}
 	return nil
 }
 
@@ -363,6 +366,10 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
+	case types.SettingKeyCreditExpirySettlement:
+		return getSettingByKey[types.CreditExpirySettlementConfig](s, ctx, key)
+	case types.SettingKeyUsageAlertConfig:
+		return getSettingByKey[types.UsageAlertConfig](s, ctx, key)
 	case types.SettingKeySAMLConfig:
 		return getSettingByKey[types.SAMLConfig](s, ctx, key)
 	case types.SettingKeyWalletTopupConfig:
@@ -425,6 +432,10 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
+	case types.SettingKeyCreditExpirySettlement:
+		return updateSettingByKey[types.CreditExpirySettlementConfig](s, ctx, key, req)
+	case types.SettingKeyUsageAlertConfig:
+		return updateSettingByKey[types.UsageAlertConfig](s, ctx, key, req)
 	case types.SettingKeySAMLConfig:
 		return updateSettingByKey[types.SAMLConfig](s, ctx, key, req)
 	case types.SettingKeyWalletTopupConfig:

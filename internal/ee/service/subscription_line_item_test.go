@@ -2424,3 +2424,69 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Commitmen
 	s.Require().NotNil(resp.Meter, "usage line item response must embed its meter")
 	s.Equal(m.ID, resp.Meter.ID)
 }
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketsOnlyDefaultsOverageFactor() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Default Meter",
+		EventName: "bucket_default_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(2),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           s.testData.subscription.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            m.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePrice.ID,
+		SkipEntitlementCheck: true,
+		CommitmentWindowed:   true,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{{
+			Start: types.Bucket{Hour: 8},
+			End:   types.Bucket{Hour: 20},
+			Price: &dto.CreatePriceRequest{
+				Amount:               lo.ToPtr(decimal.NewFromInt(2)),
+				Currency:             "usd",
+				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+				EntityID:             s.testData.subscription.ID,
+				Type:                 types.PRICE_TYPE_USAGE,
+				PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+				BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount:   1,
+				BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:       types.InvoiceCadenceArrear,
+				MeterID:              m.ID,
+				SkipEntityValidation: true,
+			},
+			CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+			CommitmentValue: decimal.NewFromInt(10),
+		}},
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CommitmentOverageFactor)
+	s.True(decimal.NewFromInt(1).Equal(*resp.CommitmentOverageFactor),
+		"expected default overage factor 1 for buckets-only create, got %s", resp.CommitmentOverageFactor)
+}

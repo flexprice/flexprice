@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/types"
@@ -35,6 +36,28 @@ type EntityIntegrationMappingResponse struct {
 	UpdatedAt        string                      `json:"updated_at"`
 	CreatedBy        string                      `json:"created_by"`
 	UpdatedBy        string                      `json:"updated_by"`
+}
+
+func NewEntityIntegrationMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *EntityIntegrationMappingResponse {
+	if m == nil {
+		return nil
+	}
+
+	return &EntityIntegrationMappingResponse{
+		ID:               m.ID,
+		EntityID:         m.EntityID,
+		EntityType:       m.EntityType,
+		ProviderType:     m.ProviderType,
+		ProviderEntityID: m.ProviderEntityID,
+		EnvironmentID:    m.EnvironmentID,
+		TenantID:         m.TenantID,
+		Status:           m.Status,
+		Metadata:         m.Metadata,
+		CreatedAt:        m.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        m.UpdatedAt.Format(time.RFC3339),
+		CreatedBy:        m.CreatedBy,
+		UpdatedBy:        m.UpdatedBy,
+	}
 }
 
 // ListEntityIntegrationMappingsResponse represents the response for listing entity integration mappings

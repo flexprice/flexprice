@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -214,6 +215,13 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		}, nil
 	}
 
+	// Credits applied to this draft at expiry, already debited. They lead the pool so they are
+	// placed on usage lines first, and are not debited again.
+	appliedBeforeFinalization := decimal.Zero
+	if inv.InvoiceType == types.InvoiceTypeSubscription {
+		appliedBeforeFinalization = inv.TotalPrepaidCreditsApplied
+	}
+
 	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
 
 	// Get all the prepaid wallets we can use for this customer
@@ -224,11 +232,18 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if err != nil {
 		return nil, err
 	}
+	wallets, err = s.capToEligibleCredits(ctx, inv, wallets)
+	if err != nil {
+		return nil, err
+	}
 
-	if len(wallets) == 0 {
-		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result",
-			"invoice_id", inv.ID,
-			"denomination_currency", denominationCurrency)
+	pool := wallets
+	if appliedBeforeFinalization.IsPositive() {
+		pool = append([]*wallet.Wallet{{ID: appliedBeforeFinalizationSourceID, Balance: appliedBeforeFinalization}}, wallets...)
+	}
+
+	if len(pool) == 0 {
+		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   denominationCurrency,
@@ -242,9 +257,18 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// - Determines how much credit to apply from each wallet
 	// - Directly modifies lineItem.PrepaidCreditsApplied in memory (NOT persisted yet)
 	// - Returns a map of wallet debits (walletID -> total amount to debit)
-	amountsToDebitFromWallets, err := s.CalculateCreditAdjustments(inv, wallets)
+	amountsToDebitFromWallets, err := s.CalculateCreditAdjustments(inv, pool)
 	if err != nil {
 		return nil, err
+	}
+	if placed := amountsToDebitFromWallets[appliedBeforeFinalizationSourceID]; placed.LessThan(appliedBeforeFinalization) {
+		// Only possible if usage dropped below what was paid at expiry (e.g. a retroactive price cut).
+		s.Logger.Error(ctx, "credits applied before finalization exceed the invoice's usage lines",
+			"error", "unplaced credits settled at expiry",
+			"invoice_id", inv.ID,
+			"applied_before_finalization", appliedBeforeFinalization,
+			"placed_on_lines", placed,
+		)
 	}
 
 	// If no amounts were calculated to apply, return zero result
@@ -338,4 +362,125 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	}
 
 	return result, nil
+}
+
+// appliedBeforeFinalizationSourceID is the credit pool entry for credits already applied to the
+// draft before finalization. It matches no wallet, so the debit loop never debits it.
+const appliedBeforeFinalizationSourceID = "applied_before_finalization"
+
+// capToEligibleCredits limits each wallet to credits not expired as of the invoice's period end.
+// The wallet balance still includes expired credits the expiry job hasn't removed yet.
+func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv *invoice.Invoice, wallets []*wallet.Wallet) ([]*wallet.Wallet, error) {
+	reference := time.Now().UTC()
+	if inv.PeriodEnd != nil {
+		reference = *inv.PeriodEnd
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+	capped := make([]*wallet.Wallet, 0, len(wallets))
+	for _, w := range wallets {
+		eligible, err := walletService.EligibleCreditsAmount(ctx, w, reference)
+		if err != nil {
+			return nil, err
+		}
+		available := decimal.Min(w.Balance, eligible)
+		if !available.IsPositive() {
+			continue
+		}
+		wc := *w
+		wc.Balance = available
+		capped = append(capped, &wc)
+	}
+	return capped, nil
+}
+
+// ApplyExpiringCreditToInvoice debits credits from an expiring credit onto a draft subscription
+// invoice's total and returns the amount applied. Finalization places it on the lines.
+func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
+	ctx context.Context,
+	invoiceID string,
+	w *wallet.Wallet,
+	creditTx *wallet.Transaction,
+	credits decimal.Decimal,
+) (decimal.Decimal, error) {
+	if !credits.IsPositive() {
+		return decimal.Zero, nil
+	}
+
+	applied := decimal.Zero
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		inv, err := s.InvoiceRepo.GetForUpdate(ctx, invoiceID)
+		if err != nil {
+			return err
+		}
+		// Finalized in the meantime (or not a subscription draft): nothing to pre-apply.
+		if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.InvoiceType != types.InvoiceTypeSubscription {
+			return nil
+		}
+		// Credits apply in the invoice's denomination; a wallet in another currency can't pay it.
+		if !types.IsMatchingCurrency(w.Currency, inv.DenominationCurrency()) {
+			return nil
+		}
+
+		idempotencyKey := idempotency.NewGenerator().GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
+			"invoice_id":   inv.ID,
+			"source_tx_id": creditTx.ID,
+		})
+		existing, err := s.WalletRepo.GetTransactionByIdempotencyKey(ctx, idempotencyKey)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		if existing != nil {
+			return nil
+		}
+
+		walletService := NewWalletService(s.ServiceParams)
+		// Rounded to drop division noise from the credits conversion (e.g. 66.66 / 7 * 7).
+		amount := types.RoundToCurrencyPrecision(walletService.GetCurrencyAmountFromCredits(credits, w.ConversionRate), inv.DenominationCurrency())
+
+		if err := walletService.DebitWallet(ctx, &wallet.WalletOperation{
+			WalletID:          creditTx.WalletID,
+			ParentCreditTxID:  creditTx.ID,
+			Type:              types.TransactionTypeDebit,
+			CreditAmount:      credits,
+			ReferenceType:     types.WalletTxReferenceTypeInvoice,
+			ReferenceID:       inv.ID,
+			Description:       fmt.Sprintf("Credit %s applied to invoice %s for usage before its expiry", creditTx.ID, inv.ID),
+			TransactionReason: types.TransactionReasonCreditAdjustment,
+			IdempotencyKey:    idempotencyKey,
+			Metadata: types.Metadata{
+				"invoice_id":      inv.ID,
+				"source_tx_id":    creditTx.ID,
+				"adjustment_type": "expiry_settlement",
+			},
+		}); err != nil {
+			return err
+		}
+
+		// For custom-currency invoices, do the math in the denomination and project to fiat once,
+		// as finalization does. Both calls are no-ops otherwise.
+		inv.RestoreFromDenomination()
+		inv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied.Add(amount)
+		inv.Total = decimal.Max(decimal.Zero, inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied))
+		inv.AmountDue = inv.Total
+		inv.CaptureCustomCurrencyDenomination()
+		inv.ProjectCustomCurrency()
+		inv.AmountRemaining = decimal.Max(decimal.Zero, inv.AmountDue.Sub(inv.AmountPaid))
+		if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+			return err
+		}
+
+		applied = amount
+		s.Logger.Info(ctx, "applied expiring credit to draft invoice",
+			"invoice_id", inv.ID,
+			"credit_transaction_id", creditTx.ID,
+			"amount", amount,
+			"total_prepaid_credits_applied", inv.TotalPrepaidCreditsApplied,
+		)
+		return nil
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return applied, nil
 }

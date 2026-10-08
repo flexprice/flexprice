@@ -152,21 +152,20 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
+	handled, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services)
+	if err != nil {
+		return err
+	}
+	if handled {
+		return nil
+	}
+
 	// Check if payment is already processed
 	if paymentRecord.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already processed",
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID,
 			"status", paymentRecord.PaymentStatus)
-		return nil
-	}
-
-	// Mandate checkouts only send payment.captured — handle like payment_link.paid below.
-	handled, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services)
-	if err != nil {
-		return err
-	}
-	if handled {
 		return nil
 	}
 

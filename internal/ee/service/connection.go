@@ -1026,6 +1026,40 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
 	}
 
+	// Stripe: merge only the keys provided.
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Stripe != nil {
+		if conn.ProviderType != types.SecretProviderStripe {
+			return nil, ierr.NewError("stripe secret update is only valid for stripe connections").
+				Mark(ierr.ErrValidation)
+		}
+		if conn.EncryptedSecretData.Stripe == nil {
+			conn.EncryptedSecretData.Stripe = &types.StripeConnectionMetadata{}
+		}
+		stored := conn.EncryptedSecretData.Stripe
+		incoming := req.EncryptedSecretData.Stripe
+		for _, field := range []struct {
+			value  string
+			target *string
+		}{
+			{incoming.SecretKey, &stored.SecretKey},
+			{incoming.PublishableKey, &stored.PublishableKey},
+			{incoming.WebhookSecret, &stored.WebhookSecret},
+		} {
+			if field.value == "" {
+				continue
+			}
+			encrypted, encErr := s.encryptionService.Encrypt(field.value)
+			if encErr != nil {
+				s.Logger.Error(ctx, "failed to encrypt Stripe secret", "error", encErr, "connection_id", id)
+				return nil, encErr
+			}
+			*field.target = encrypted
+		}
+		if incoming.AccountID != "" {
+			stored.AccountID = incoming.AccountID
+		}
+	}
+
 	// Chargebee: merge webhook_username and webhook_password so legacy
 	// connections predating the mandatory-creds-at-create check can migrate
 	// without delete-and-recreate. Both fields must be provided together — a

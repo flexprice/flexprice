@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -48,13 +48,6 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		return nil, err
 	}
 
-	// Create filter to find expired credits (expired at least 6 hours ago - grace period after expiry).
-	filter := types.NewNoLimitWalletTransactionFilter()
-	filter.Type = lo.ToPtr(types.TransactionTypeCredit)
-	filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
-	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC().Add(-6 * time.Hour))
-	filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
-
 	result := &cronModels.WalletCreditExpiryWorkflowResult{}
 
 	for _, tenant := range tenants {
@@ -69,6 +62,21 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 
 		for _, environment := range environments.Environments {
 			envCtx := context.WithValue(tenantCtx, types.CtxEnvironmentID, environment.ID)
+
+			// The grace after expiry depends on the environment's credit expiry settlement setting.
+			cutoff, err := a.walletService.CreditExpiryCutoff(envCtx)
+			if err != nil {
+				a.logger.Error(ctx, "failed to resolve credit expiry cutoff, skipping environment", "error", err,
+					"tenant_id", tenant.ID, "environment_id", environment.ID)
+				continue
+			}
+			filter := types.NewNoLimitWalletTransactionFilter()
+			filter.Type = lo.ToPtr(types.TransactionTypeCredit)
+			filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
+			filter.ExpiryDateBefore = lo.ToPtr(cutoff)
+			filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
+			// Earliest expiry first, so a later credit can't take usage an earlier one could pay.
+			filter.Sort = []*types.SortCondition{{Field: "expiry_date", Direction: types.SortDirectionAsc}}
 
 			transactions, err := a.walletService.ListWalletTransactionsByFilter(envCtx, filter)
 			if err != nil {
@@ -91,10 +99,11 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 					result.Failed++
 					continue
 				}
-				if expireResult.Expired {
+				if expireResult.Expired || expireResult.Applied.IsPositive() {
 					result.Succeeded++
 					a.logger.Info(ctx, "expired credits successfully",
-						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
+						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable,
+						"applied_to_invoices", expireResult.Applied)
 					continue
 				}
 				switch expireResult.SkipReason {

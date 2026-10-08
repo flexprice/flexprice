@@ -11,6 +11,9 @@ const (
 	IntegrationCapabilityPaymentLink             IntegrationCapabilityType = "payment_link"
 	IntegrationCapabilityPaymentMethodManagement IntegrationCapabilityType = "payment_method_management"
 	IntegrationCapabilityInvoiceSync             IntegrationCapabilityType = "invoice_sync"
+	IntegrationCapabilityListPaymentMethods      IntegrationCapabilityType = "list_payment_methods"
+	IntegrationCapabilityAddPaymentMethod        IntegrationCapabilityType = "add_payment_method"
+	IntegrationCapabilityDeletePaymentMethod     IntegrationCapabilityType = "delete_payment_method"
 )
 
 func (t IntegrationCapabilityType) String() string { return string(t) }

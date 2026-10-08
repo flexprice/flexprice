@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -17,7 +18,7 @@ const (
 
 // WhopInvoiceSyncWorkflow syncs a Flexprice invoice to Whop.
 // Sleeps 5s first to let the invoice commit, then calls SyncInvoiceToWhop activity.
-func WhopInvoiceSyncWorkflow(ctx workflow.Context, input models.WhopInvoiceSyncWorkflowInput) error {
+func WhopInvoiceSyncWorkflow(ctx workflow.Context, input models.WhopInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting Whop invoice sync workflow",
 		"invoice_id", input.InvoiceID,
@@ -27,6 +28,10 @@ func WhopInvoiceSyncWorkflow(ctx workflow.Context, input models.WhopInvoiceSyncW
 	if err := input.Validate(); err != nil {
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderWhop, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,

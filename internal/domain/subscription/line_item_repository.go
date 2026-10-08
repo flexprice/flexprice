@@ -43,4 +43,12 @@ type LineItemRepository interface {
 	// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
 	// line items where commitment_true_up_enabled is true.
 	GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error)
+
+	// SubscriptionIDsWithWindowedCommitment returns the subscriptions holding a
+	// published windowed-commitment line item. Only a WINDOWED commitment
+	// accrues without usage — its true-up fills empty windows as the bucketed
+	// curve's clamp advances — so this is deliberately narrower than the
+	// true-up probe above, and its predicate is a plain boolean so the scan
+	// does not evaluate jsonb per row.
+	SubscriptionIDsWithWindowedCommitment(ctx context.Context) ([]string, error)
 }

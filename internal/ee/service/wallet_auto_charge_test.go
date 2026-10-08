@@ -178,4 +178,3 @@ func (s *WalletAutoChargeSuite) TestFetchGatewayWithAutoChargeSupport_Success() 
 	s.NotNil(provider.lastReq.Amount)
 	s.Equal(amount, *provider.lastReq.Amount)
 }
-

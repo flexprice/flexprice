@@ -20,56 +20,56 @@ type CouponAssociationDelete struct {
 }
 
 // Where appends a list predicates to the CouponAssociationDelete builder.
-func (cad *CouponAssociationDelete) Where(ps ...predicate.CouponAssociation) *CouponAssociationDelete {
-	cad.mutation.Where(ps...)
-	return cad
+func (_d *CouponAssociationDelete) Where(ps ...predicate.CouponAssociation) *CouponAssociationDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cad *CouponAssociationDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cad.sqlExec, cad.mutation, cad.hooks)
+func (_d *CouponAssociationDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cad *CouponAssociationDelete) ExecX(ctx context.Context) int {
-	n, err := cad.Exec(ctx)
+func (_d *CouponAssociationDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cad *CouponAssociationDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CouponAssociationDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(couponassociation.Table, sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString))
-	if ps := cad.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cad.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cad.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CouponAssociationDeleteOne is the builder for deleting a single CouponAssociation entity.
 type CouponAssociationDeleteOne struct {
-	cad *CouponAssociationDelete
+	_d *CouponAssociationDelete
 }
 
 // Where appends a list predicates to the CouponAssociationDelete builder.
-func (cado *CouponAssociationDeleteOne) Where(ps ...predicate.CouponAssociation) *CouponAssociationDeleteOne {
-	cado.cad.mutation.Where(ps...)
-	return cado
+func (_d *CouponAssociationDeleteOne) Where(ps ...predicate.CouponAssociation) *CouponAssociationDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cado *CouponAssociationDeleteOne) Exec(ctx context.Context) error {
-	n, err := cado.cad.Exec(ctx)
+func (_d *CouponAssociationDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cado *CouponAssociationDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cado *CouponAssociationDeleteOne) ExecX(ctx context.Context) {
-	if err := cado.Exec(ctx); err != nil {
+func (_d *CouponAssociationDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

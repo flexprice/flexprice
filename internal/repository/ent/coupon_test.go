@@ -30,9 +30,9 @@ import (
 // a _test.go file in this package would create an import cycle.
 type noopRedisCache struct{}
 
-func (noopRedisCache) IsEnabled() bool                                      { return false }
-func (noopRedisCache) IsRedisCache() bool                                   { return true }
-func (noopRedisCache) Get(_ context.Context, _ string) (interface{}, bool)  { return nil, false }
+func (noopRedisCache) IsEnabled() bool                                     { return false }
+func (noopRedisCache) IsRedisCache() bool                                  { return true }
+func (noopRedisCache) Get(_ context.Context, _ string) (interface{}, bool) { return nil, false }
 func (noopRedisCache) Set(_ context.Context, _ string, _ interface{}, _ time.Duration) {
 }
 func (noopRedisCache) Delete(_ context.Context, _ string)         {}
@@ -221,4 +221,8 @@ func TestIncrementRedemptions_UnlimitedCouponAlwaysSucceeds(t *testing.T) {
 	got, err := repo.Get(ctx, c.ID)
 	require.NoError(t, err)
 	require.Equal(t, 3, got.TotalRedemptions)
+}
+
+func (noopRedisCache) GetBulk(_ context.Context, keys []string) (map[string]interface{}, []string) {
+	return nil, keys
 }

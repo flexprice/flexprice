@@ -78,7 +78,7 @@ func (c *Client) CreateHostedCheckoutPage(
 	if req.GatewayAccountID != "" {
 		params.Card = &hostedPageModel.CheckoutOneTimeForItemsCardParams{GatewayAccountId: req.GatewayAccountID}
 	}
-	res, err := hostedpage.CheckoutOneTimeForItems(params).RequestWithEnv(env)
+	res, err := hostedpage.CheckoutOneTimeForItems(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to create Chargebee hosted checkout page")
 	}

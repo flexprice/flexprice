@@ -305,6 +305,35 @@ func (s *InMemorySubscriptionLineItemStore) List(ctx context.Context, filter *ty
 	return items, nil
 }
 
+// SubscriptionIDsWithWindowedCommitment mirrors the ent repository: published
+// line items carrying a windowed commitment, by subscription.
+func (s *InMemorySubscriptionLineItemStore) SubscriptionIDsWithWindowedCommitment(ctx context.Context) ([]string, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.ActiveFilter = false
+	if filter.QueryFilter != nil {
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	}
+
+	items, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]struct{}{}
+	var ids []string
+	for _, li := range items {
+		if !li.CommitmentWindowed {
+			continue
+		}
+		if _, ok := seen[li.SubscriptionID]; ok {
+			continue
+		}
+		seen[li.SubscriptionID] = struct{}{}
+		ids = append(ids, li.SubscriptionID)
+	}
+	return ids, nil
+}
+
 // GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
 // line items where commitment_true_up_enabled is true.
 func (s *InMemorySubscriptionLineItemStore) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {

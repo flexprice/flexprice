@@ -34,7 +34,8 @@ func (s *subscriptionModificationService) executeBulkAddonModification(
 				ctx,
 				subscriptionID,
 				bulkAddonChangedLineItems(gated.getConfig(), false),
-				nil,
+				bulkAddonChangedAssociations(gated.getConfig(), false),
+				draftChangedInvoices(gated.getSettled()),
 				gated.getSession(),
 			)
 		}
@@ -53,6 +54,7 @@ func (s *subscriptionModificationService) executeBulkAddonModification(
 		ctx,
 		subscriptionID,
 		bulkAddonChangedLineItems(config, false),
+		bulkAddonChangedAssociations(config, false),
 		settled.GetChanged(),
 		nil,
 	)
@@ -75,7 +77,8 @@ func (s *subscriptionModificationService) previewBulkAddonModification(
 	}
 
 	return s.addonModifyResponse(ctx, subscriptionID,
-		bulkAddonChangedLineItems(config, true), settled.GetChanged(), nil)
+		bulkAddonChangedLineItems(config, true), bulkAddonChangedAssociations(config, true),
+		settled.GetChanged(), nil)
 }
 
 // Each ended item carries its own detach date: entries in a batch do not share one.
@@ -98,4 +101,39 @@ func bulkAddonChangedLineItems(config *addonChangeConfig, isPreview bool) []dto.
 		return nil
 	}
 	return items
+}
+
+// Each attach reports the association it created, each detach the one it ended.
+func bulkAddonChangedAssociations(config *addonChangeConfig, isPreview bool) []dto.ChangedAddonAssociation {
+	items := []dto.ChangedAddonAssociation{}
+
+	for _, attach := range config.getAttaches() {
+		items = append(items, changedCreatedAssociation(attach.getAssociation(), isPreview))
+	}
+
+	for _, detach := range config.getDetaches() {
+		items = append(items,
+			changedEndedAssociation(detach.getAssociation(), detach.getEffectiveDate()))
+	}
+
+	if len(items) == 0 {
+		return nil
+	}
+	return items
+}
+
+// draftChangedInvoices reports the draft a pay-first change locked its net on. Without it the
+// caller sees only a checkout session and cannot tell what it is about to be charged.
+func draftChangedInvoices(settled *SettleProrationResult) []dto.ChangedInvoice {
+	draft := settled.GetDraft()
+	if draft == nil {
+		return nil
+	}
+
+	return []dto.ChangedInvoice{{
+		ID:      draft.ID,
+		Action:  dto.ChangedInvoiceActionCreated,
+		Status:  dto.ChangedInvoiceStatusFromPaymentStatus(draft.PaymentStatus),
+		Invoice: draft,
+	}}
 }

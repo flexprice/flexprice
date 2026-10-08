@@ -20,56 +20,56 @@ type CouponDelete struct {
 }
 
 // Where appends a list predicates to the CouponDelete builder.
-func (cd *CouponDelete) Where(ps ...predicate.Coupon) *CouponDelete {
-	cd.mutation.Where(ps...)
-	return cd
+func (_d *CouponDelete) Where(ps ...predicate.Coupon) *CouponDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cd *CouponDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cd.sqlExec, cd.mutation, cd.hooks)
+func (_d *CouponDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cd *CouponDelete) ExecX(ctx context.Context) int {
-	n, err := cd.Exec(ctx)
+func (_d *CouponDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cd *CouponDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CouponDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(coupon.Table, sqlgraph.NewFieldSpec(coupon.FieldID, field.TypeString))
-	if ps := cd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CouponDeleteOne is the builder for deleting a single Coupon entity.
 type CouponDeleteOne struct {
-	cd *CouponDelete
+	_d *CouponDelete
 }
 
 // Where appends a list predicates to the CouponDelete builder.
-func (cdo *CouponDeleteOne) Where(ps ...predicate.Coupon) *CouponDeleteOne {
-	cdo.cd.mutation.Where(ps...)
-	return cdo
+func (_d *CouponDeleteOne) Where(ps ...predicate.Coupon) *CouponDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cdo *CouponDeleteOne) Exec(ctx context.Context) error {
-	n, err := cdo.cd.Exec(ctx)
+func (_d *CouponDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cdo *CouponDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cdo *CouponDeleteOne) ExecX(ctx context.Context) {
-	if err := cdo.Exec(ctx); err != nil {
+func (_d *CouponDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -444,6 +444,7 @@ func (a *FlushActivities) finalUsageRecord(ctx context.Context, subscriptionID s
 
 	_, totalAmount, err := a.billingService.CalculateMeterUsageCharges(
 		ctx, sub, usageResp, windowStart, cancelAt, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 	if err != nil {
 		a.logger.Error(ctx, "marketplace subscription flush: failed to calculate charges",

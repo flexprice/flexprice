@@ -101,7 +101,7 @@ func (*SubscriptionPause) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the SubscriptionPause fields.
-func (sp *SubscriptionPause) assignValues(columns []string, values []any) error {
+func (_m *SubscriptionPause) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -111,122 +111,122 @@ func (sp *SubscriptionPause) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				sp.ID = value.String
+				_m.ID = value.String
 			}
 		case subscriptionpause.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				sp.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case subscriptionpause.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				sp.Status = value.String
+				_m.Status = value.String
 			}
 		case subscriptionpause.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				sp.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case subscriptionpause.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				sp.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case subscriptionpause.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				sp.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case subscriptionpause.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				sp.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case subscriptionpause.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				sp.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case subscriptionpause.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				sp.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case subscriptionpause.FieldPauseStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field pause_status", values[i])
 			} else if value.Valid {
-				sp.PauseStatus = value.String
+				_m.PauseStatus = value.String
 			}
 		case subscriptionpause.FieldPauseMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field pause_mode", values[i])
 			} else if value.Valid {
-				sp.PauseMode = value.String
+				_m.PauseMode = value.String
 			}
 		case subscriptionpause.FieldResumeMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field resume_mode", values[i])
 			} else if value.Valid {
-				sp.ResumeMode = value.String
+				_m.ResumeMode = value.String
 			}
 		case subscriptionpause.FieldPauseStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field pause_start", values[i])
 			} else if value.Valid {
-				sp.PauseStart = value.Time
+				_m.PauseStart = value.Time
 			}
 		case subscriptionpause.FieldPauseEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field pause_end", values[i])
 			} else if value.Valid {
-				sp.PauseEnd = new(time.Time)
-				*sp.PauseEnd = value.Time
+				_m.PauseEnd = new(time.Time)
+				*_m.PauseEnd = value.Time
 			}
 		case subscriptionpause.FieldResumedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field resumed_at", values[i])
 			} else if value.Valid {
-				sp.ResumedAt = new(time.Time)
-				*sp.ResumedAt = value.Time
+				_m.ResumedAt = new(time.Time)
+				*_m.ResumedAt = value.Time
 			}
 		case subscriptionpause.FieldOriginalPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field original_period_start", values[i])
 			} else if value.Valid {
-				sp.OriginalPeriodStart = value.Time
+				_m.OriginalPeriodStart = value.Time
 			}
 		case subscriptionpause.FieldOriginalPeriodEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field original_period_end", values[i])
 			} else if value.Valid {
-				sp.OriginalPeriodEnd = value.Time
+				_m.OriginalPeriodEnd = value.Time
 			}
 		case subscriptionpause.FieldReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reason", values[i])
 			} else if value.Valid {
-				sp.Reason = value.String
+				_m.Reason = value.String
 			}
 		case subscriptionpause.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sp.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			sp.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -234,95 +234,95 @@ func (sp *SubscriptionPause) assignValues(columns []string, values []any) error 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the SubscriptionPause.
 // This includes values selected through modifiers, order, etc.
-func (sp *SubscriptionPause) Value(name string) (ent.Value, error) {
-	return sp.selectValues.Get(name)
+func (_m *SubscriptionPause) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QuerySubscription queries the "subscription" edge of the SubscriptionPause entity.
-func (sp *SubscriptionPause) QuerySubscription() *SubscriptionQuery {
-	return NewSubscriptionPauseClient(sp.config).QuerySubscription(sp)
+func (_m *SubscriptionPause) QuerySubscription() *SubscriptionQuery {
+	return NewSubscriptionPauseClient(_m.config).QuerySubscription(_m)
 }
 
 // Update returns a builder for updating this SubscriptionPause.
 // Note that you need to call SubscriptionPause.Unwrap() before calling this method if this SubscriptionPause
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (sp *SubscriptionPause) Update() *SubscriptionPauseUpdateOne {
-	return NewSubscriptionPauseClient(sp.config).UpdateOne(sp)
+func (_m *SubscriptionPause) Update() *SubscriptionPauseUpdateOne {
+	return NewSubscriptionPauseClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the SubscriptionPause entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (sp *SubscriptionPause) Unwrap() *SubscriptionPause {
-	_tx, ok := sp.config.driver.(*txDriver)
+func (_m *SubscriptionPause) Unwrap() *SubscriptionPause {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: SubscriptionPause is not a transactional entity")
 	}
-	sp.config.driver = _tx.drv
-	return sp
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (sp *SubscriptionPause) String() string {
+func (_m *SubscriptionPause) String() string {
 	var builder strings.Builder
 	builder.WriteString("SubscriptionPause(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", sp.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(sp.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(sp.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(sp.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(sp.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(sp.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(sp.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(sp.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(sp.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("pause_status=")
-	builder.WriteString(sp.PauseStatus)
+	builder.WriteString(_m.PauseStatus)
 	builder.WriteString(", ")
 	builder.WriteString("pause_mode=")
-	builder.WriteString(sp.PauseMode)
+	builder.WriteString(_m.PauseMode)
 	builder.WriteString(", ")
 	builder.WriteString("resume_mode=")
-	builder.WriteString(sp.ResumeMode)
+	builder.WriteString(_m.ResumeMode)
 	builder.WriteString(", ")
 	builder.WriteString("pause_start=")
-	builder.WriteString(sp.PauseStart.Format(time.ANSIC))
+	builder.WriteString(_m.PauseStart.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := sp.PauseEnd; v != nil {
+	if v := _m.PauseEnd; v != nil {
 		builder.WriteString("pause_end=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := sp.ResumedAt; v != nil {
+	if v := _m.ResumedAt; v != nil {
 		builder.WriteString("resumed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("original_period_start=")
-	builder.WriteString(sp.OriginalPeriodStart.Format(time.ANSIC))
+	builder.WriteString(_m.OriginalPeriodStart.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("original_period_end=")
-	builder.WriteString(sp.OriginalPeriodEnd.Format(time.ANSIC))
+	builder.WriteString(_m.OriginalPeriodEnd.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("reason=")
-	builder.WriteString(sp.Reason)
+	builder.WriteString(_m.Reason)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", sp.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }
