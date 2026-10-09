@@ -249,12 +249,9 @@ func TestLoadConfig_Payments(t *testing.T) {
 			},
 		},
 		{
-			name: "providers with defaults and credentials",
+			name: "providers with defaults and overrides",
 			env: map[string]string{
 				"E2EPROBE_PAYMENTS_PROVIDERS":          " Stripe ,razorpay,chargebee",
-				"E2EPROBE_STRIPE_TEST_SECRET_KEY":      "sk_test_abc",
-				"E2EPROBE_CHARGEBEE_TEST_SITE":         "acme-test",
-				"E2EPROBE_CHARGEBEE_TEST_API_KEY":      "test_abc",
 				"E2EPROBE_PAYMENTS_CHARGEBEE_CURRENCY": "eur",
 				"E2EPROBE_PAYMENTS_SETTLE_TIMEOUT":     "2m",
 			},
@@ -262,13 +259,13 @@ func TestLoadConfig_Payments(t *testing.T) {
 				if len(p.Providers) != 3 {
 					t.Fatalf("providers = %+v, want 3", p.Providers)
 				}
-				if p.Providers[0].Provider != "stripe" || p.Providers[0].Currency != "USD" || p.Providers[0].StripeSecretKey != "sk_test_abc" {
+				if p.Providers[0].Provider != "stripe" || p.Providers[0].Currency != "USD" {
 					t.Errorf("stripe = %+v", p.Providers[0])
 				}
 				if p.Providers[1].Provider != "razorpay" || p.Providers[1].Currency != "INR" {
 					t.Errorf("razorpay = %+v", p.Providers[1])
 				}
-				if p.Providers[2].Currency != "EUR" || p.Providers[2].ChargebeeSite != "acme-test" {
+				if p.Providers[2].Provider != "chargebee" || p.Providers[2].Currency != "EUR" {
 					t.Errorf("chargebee = %+v", p.Providers[2])
 				}
 				if p.SettleTimeout != 2*time.Minute {
@@ -279,32 +276,6 @@ func TestLoadConfig_Payments(t *testing.T) {
 		{
 			name:    "unknown provider",
 			env:     map[string]string{"E2EPROBE_PAYMENTS_PROVIDERS": "paypal"},
-			wantErr: true,
-		},
-		{
-			name: "live stripe key refused",
-			env: map[string]string{
-				"E2EPROBE_PAYMENTS_PROVIDERS":     "stripe",
-				"E2EPROBE_STRIPE_TEST_SECRET_KEY": "sk_live_abc",
-			},
-			wantErr: true,
-		},
-		{
-			name: "chargebee live site refused",
-			env: map[string]string{
-				"E2EPROBE_PAYMENTS_PROVIDERS":     "chargebee",
-				"E2EPROBE_CHARGEBEE_TEST_SITE":    "acme",
-				"E2EPROBE_CHARGEBEE_TEST_API_KEY": "test_abc",
-			},
-			wantErr: true,
-		},
-		{
-			name: "chargebee live key refused",
-			env: map[string]string{
-				"E2EPROBE_PAYMENTS_PROVIDERS":     "chargebee",
-				"E2EPROBE_CHARGEBEE_TEST_SITE":    "acme-test",
-				"E2EPROBE_CHARGEBEE_TEST_API_KEY": "live_abc",
-			},
 			wantErr: true,
 		},
 	}

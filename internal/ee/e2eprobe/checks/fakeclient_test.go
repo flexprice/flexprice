@@ -1170,9 +1170,6 @@ func (f *fakePayments) ListSavedMethods(_ context.Context, _, _ string) ([]e2epr
 func (f *fakePayments) CreateSetupLink(_ context.Context, _, _, _ string) (string, error) {
 	return f.setupURL, nil
 }
-func (f *fakePayments) GetGatewayCustomerID(_ context.Context, _, _ string) (string, error) {
-	return f.gatewayCustomerID, nil
-}
 func (f *fakePayments) CreatePortalSession(_ context.Context, _ string) (string, error) {
 	return "portal_token", nil
 }

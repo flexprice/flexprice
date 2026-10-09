@@ -278,10 +278,6 @@ func (f *fakePaymentOps) CreateSetupLink(_ context.Context, _, _, _ string) (str
 	f.mutateCalled++
 	return "", nil
 }
-func (f *fakePaymentOps) GetGatewayCustomerID(_ context.Context, _, _ string) (string, error) {
-	f.readCalled++
-	return "", nil
-}
 func (f *fakePaymentOps) CreatePortalSession(_ context.Context, _ string) (string, error) {
 	f.readCalled++
 	return "tok", nil

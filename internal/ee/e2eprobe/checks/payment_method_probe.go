@@ -11,8 +11,6 @@ import (
 // through both the API and the customer portal:
 //   - listing returns the gateway's block without a provider error;
 //   - add-method (and, for Stripe, setup intent) issues a hosted page;
-//   - with gateway test credentials, a vaulted card is listed as auto-chargeable,
-//     can be made default, and deleting it removes it;
 //   - operations the gateway does not support are refused with a 4xx.
 type PaymentMethodProbe struct {
 	client e2eprobe.Client
@@ -79,60 +77,6 @@ func (p *PaymentMethodProbe) Run(ctx context.Context) error {
 	}
 	if link == "" {
 		return f.fail("add_method_link", nil, "portal add method returned no redirect URL")
-	}
-
-	if p.opts.Driver == nil {
-		return nil
-	}
-	return p.vaultedCardLifecycle(ctx, f, token)
-}
-
-// vaultedCardLifecycle vaults a card on the gateway and walks it through
-// listing, set-default and delete.
-func (p *PaymentMethodProbe) vaultedCardLifecycle(ctx context.Context, f *paymentFlow, token string) error {
-	provider := f.provider()
-	pay := p.client.Payments()
-
-	gatewayCustomerID, err := f.resolveGatewayCustomer(ctx)
-	if err != nil {
-		return err
-	}
-	methodID, err := p.opts.Driver.AttachCard(ctx, gatewayCustomerID, TestCardSuccess)
-	if err != nil {
-		return f.fail("vault_card", map[string]string{"gateway_customer_id": gatewayCustomerID}, "vault test card: %w", err)
-	}
-	ids := map[string]string{"gateway_customer_id": gatewayCustomerID, "payment_method_id": methodID}
-
-	m, err := f.waitMethodListed(ctx, methodID)
-	if err != nil {
-		return err
-	}
-	if !m.CanAutoCharge {
-		return f.fail("assert_auto_chargeable", ids, "vaulted card listed with can_auto_charge=false")
-	}
-
-	if p.opts.supports(capSetDefault) {
-		methods, err := pay.PortalSetDefaultMethod(ctx, token, provider, methodID)
-		if err != nil {
-			return f.fail("set_default", ids, "portal set default: %w", err)
-		}
-		if got, ok := findSavedMethod(methods, methodID); !ok || !got.IsDefault {
-			return f.fail("assert_default", ids, "method not marked default after set-default")
-		}
-	}
-
-	if !p.opts.supports(capDeleteMethod) {
-		return nil
-	}
-	if _, err := pay.PortalDeleteMethod(ctx, token, provider, methodID); err != nil {
-		return f.fail("delete_method", ids, "portal delete method: %w", err)
-	}
-	methods, err := pay.ListSavedMethods(ctx, f.customerID, provider)
-	if err != nil {
-		return f.fail("list_methods_after_delete", ids, "list saved methods: %w", err)
-	}
-	if got, ok := findSavedMethod(methods, methodID); ok && got.Status == "active" {
-		return f.fail("assert_deleted", ids, "method still listed as active after delete")
 	}
 	return nil
 }

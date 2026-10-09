@@ -217,8 +217,6 @@ type PaymentOps interface {
 	ListSavedMethods(ctx context.Context, customerID, provider string) ([]SavedPaymentMethod, error)
 	// CreateSetupLink returns the hosted page URL for adding a card (Stripe setup intent).
 	CreateSetupLink(ctx context.Context, customerID, provider, returnURL string) (string, error)
-	// GetGatewayCustomerID returns the customer's id at the gateway, "" when not yet synced.
-	GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error)
 	CreatePortalSession(ctx context.Context, externalCustomerID string) (token string, err error)
 
 	PortalListSavedMethods(ctx context.Context, token, provider string) ([]SavedPaymentMethod, error)
@@ -758,24 +756,6 @@ func (o paymentOps) CreateSetupLink(ctx context.Context, customerID, provider, r
 		return "", err
 	}
 	return out.CheckoutURL, nil
-}
-
-func (o paymentOps) GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error) {
-	var out struct {
-		Items []struct {
-			ProviderType     string `json:"provider_type"`
-			ProviderEntityID string `json:"provider_entity_id"`
-		} `json:"items"`
-	}
-	if err := o.parent.doRaw(ctx, http.MethodGet, "/integrations/mappings?entity_type=customer&entity_id="+url.QueryEscape(customerID), "", nil, &out); err != nil {
-		return "", err
-	}
-	for _, m := range out.Items {
-		if m.ProviderType == provider && m.ProviderEntityID != "" {
-			return m.ProviderEntityID, nil
-		}
-	}
-	return "", nil
 }
 
 func (o paymentOps) CreatePortalSession(ctx context.Context, externalCustomerID string) (string, error) {

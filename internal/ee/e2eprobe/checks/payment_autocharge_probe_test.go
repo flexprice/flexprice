@@ -16,16 +16,19 @@ import (
 // quantity change adds a quantity-2 line item, a paid addon turns active and a
 // refund settles (to the card on refunding gateways, else to the wallet). A
 // top-up while the declining card is default is refused with 402.
-func autoChargeFixture(t *testing.T, provider string) (*paymentFixture, *fakeGatewayDriver) {
+func autoChargeFixture(t *testing.T, provider string) *paymentFixture {
 	t.Helper()
-	fx := newPaymentFixture(t, provider, nil)
-	driver := &fakeGatewayDriver{payments: &fx.fc.payments}
-	fx.opts.Driver = driver
+	fx := newPaymentFixture(t, provider)
+	fx.opts.Provider.FixedCustomerExternalID = "e2eprobe-cust-pay-" + provider + "-cards"
+	fx.opts.Provider.DeclineCardLast4 = "0341"
+	fx.fc.payments.savedMethods = []e2eprobe.SavedPaymentMethod{
+		savedCard("pm_good_a", "4242", true), savedCard("pm_good_b", "4444", false), savedCard("pm_decline_c", "0341", false),
+	}
 
 	fx.fc.payments.start = func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
 		if action == "topup" && collectionOf(cfg) == types.CollectionMethodChargeAutomatically {
 			defaults := fx.fc.payments.defaults
-			if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], string(TestCardDecline)) {
+			if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], "decline") {
 				return nil, apiError(402)
 			}
 			fx.addCredits(25)
@@ -81,37 +84,37 @@ func autoChargeFixture(t *testing.T, provider string) (*paymentFixture, *fakeGat
 		}
 		fx.fc.payments.refunds = []types.RefundResponse{refund}
 	}
-	return fx, driver
+	return fx
 }
 
 func TestPaymentAutoChargeProbe(t *testing.T) {
 	tests := []struct {
 		name     string
-		setup    func(fx *paymentFixture, d *fakeGatewayDriver)
+		setup    func(fx *paymentFixture)
 		wantStep string
 	}{
 		{name: "happy path charges top-up, invoice and subscription, refuses decline"},
 		{
 			name:  "no declining card configured skips the decline leg",
-			setup: func(_ *paymentFixture, d *fakeGatewayDriver) { d.declineUnsupported = true },
+			setup: func(fx *paymentFixture) { fx.opts.Provider.DeclineCardLast4 = "" },
 		},
 		{
 			name: "webhook never settles the payment",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.paymentStatus = types.PaymentStatusPending
 			},
 			wantStep: "topup_autocharge_webhook",
 		},
 		{
 			name: "payment settles as failed",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.paymentStatus = types.PaymentStatusFailed
 			},
 			wantStep: "topup_autocharge_webhook",
 		},
 		{
 			name: "session never completes",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.sessionOnGet = func(s *types.CheckoutSessionResponse) *types.CheckoutSessionResponse {
 					out := *s
 					out.CheckoutStatus = types.CheckoutStatusFailed.ToPointer()
@@ -123,7 +126,7 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 		},
 		{
 			name: "top-up credits twice",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				inner := fx.fc.payments.start
 				fx.fc.payments.start = func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
 					if action == "topup" {
@@ -136,59 +139,59 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 		},
 		{
 			name: "invoice left unpaid",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.invoices.getByID["inv_2"] = types.InvoiceResponse{ID: strPtr("inv_2"), PaymentStatus: types.PaymentStatusPending.ToPointer()}
 			},
 			wantStep: "invoice_autocharge_assert_paid",
 		},
 		{
 			name: "invoice partially paid",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.invoices.getByID["inv_2"] = types.InvoiceResponse{ID: strPtr("inv_2"), PaymentStatus: types.PaymentStatusSucceeded.ToPointer(), AmountPaid: strPtr("5.00")}
 			},
 			wantStep: "invoice_autocharge_assert_amount",
 		},
 		{
 			name: "subscription not active",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.subs.subs["sub_1"] = types.SubscriptionResponse{ID: strPtr("sub_1"), SubscriptionStatus: types.SubscriptionStatusIncomplete.ToPointer()}
 			},
 			wantStep: "subscription_autocharge_assert_active",
 		},
 		{
 			name: "quantity change applied without checkout",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.ungated = map[string]bool{"modify": true}
 			},
 			wantStep: "modify_autocharge_assert_gated",
 		},
 		{
 			name:     "paid quantity change not applied",
-			setup:    func(fx *paymentFixture, _ *fakeGatewayDriver) { fx.fc.payments.onModify = nil },
+			setup:    func(fx *paymentFixture) { fx.fc.payments.onModify = nil },
 			wantStep: "modify_autocharge_assert_quantity",
 		},
 		{
 			name: "addon attached without checkout",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.ungated = map[string]bool{"addon": true}
 			},
 			wantStep: "addon_autocharge_assert_gated",
 		},
 		{
 			name:     "paid addon never activates",
-			setup:    func(fx *paymentFixture, _ *fakeGatewayDriver) { fx.fc.payments.addonAssociations = nil },
+			setup:    func(fx *paymentFixture) { fx.fc.payments.addonAssociations = nil },
 			wantStep: "addon_autocharge_assert_active",
 		},
 		{
 			name: "refund leaves invoice unrefunded",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				fx.fc.payments.onCreditNote = func(types.CreateCreditNoteRequest) {}
 			},
 			wantStep: "refund_assert_invoice_refunded",
 		},
 		{
 			name: "refund stuck processing",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				inner := fx.fc.payments.onCreditNote
 				fx.fc.payments.onCreditNote = func(req types.CreateCreditNoteRequest) {
 					inner(req)
@@ -199,7 +202,7 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 		},
 		{
 			name: "wallet refund credits nothing",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				inner := fx.fc.payments.onCreditNote
 				fx.fc.payments.onCreditNote = func(req types.CreateCreditNoteRequest) {
 					inner(req)
@@ -210,11 +213,11 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 		},
 		{
 			name: "declining card still completes",
-			setup: func(fx *paymentFixture, _ *fakeGatewayDriver) {
+			setup: func(fx *paymentFixture) {
 				inner := fx.fc.payments.start
 				fx.fc.payments.start = func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
 					defaults := fx.fc.payments.defaults
-					if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], string(TestCardDecline)) {
+					if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], "decline") {
 						return fakePendingSession(), nil
 					}
 					return inner(action, cfg)
@@ -225,9 +228,9 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fx, driver := autoChargeFixture(t, "stripe")
+			fx := autoChargeFixture(t, "stripe")
 			if tt.setup != nil {
-				tt.setup(fx, driver)
+				tt.setup(fx)
 			}
 			err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background())
 			if tt.wantStep != "" {
@@ -250,7 +253,7 @@ func TestPaymentAutoChargeProbe(t *testing.T) {
 }
 
 func TestPaymentAutoChargeProbe_ChargebeeRefundsToCard(t *testing.T) {
-	fx, _ := autoChargeFixture(t, "chargebee")
+	fx := autoChargeFixture(t, "chargebee")
 	fx.opts.AssertKnownIssues = true
 	if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -260,7 +263,7 @@ func TestPaymentAutoChargeProbe_ChargebeeRefundsToCard(t *testing.T) {
 	}
 
 	// A refund that falls back to the wallet on a gateway that refunds is a failure.
-	fx, _ = autoChargeFixture(t, "chargebee")
+	fx = autoChargeFixture(t, "chargebee")
 	fx.opts.AssertKnownIssues = true
 	inner := fx.fc.payments.onCreditNote
 	fx.fc.payments.onCreditNote = func(req types.CreateCreditNoteRequest) {
@@ -274,7 +277,7 @@ func TestPaymentAutoChargeProbe_ChargebeeRefundsToCard(t *testing.T) {
 }
 
 func TestPaymentAutoChargeProbe_SkipsKnownIssueLegs(t *testing.T) {
-	fx, _ := autoChargeFixture(t, "chargebee")
+	fx := autoChargeFixture(t, "chargebee")
 	inner := fx.fc.payments.onCreditNote
 	fx.fc.payments.onCreditNote = func(req types.CreateCreditNoteRequest) {
 		inner(req)
@@ -289,7 +292,7 @@ func TestPaymentAutoChargeProbe_SkipsKnownIssueLegs(t *testing.T) {
 }
 
 func TestPaymentAutoChargeProbe_TopUpSupersedesPendingSession(t *testing.T) {
-	fx, _ := autoChargeFixture(t, "stripe")
+	fx := autoChargeFixture(t, "stripe")
 	inner := fx.fc.payments.start
 	var policy *types.OnExistingEntityPolicy
 	fx.fc.payments.start = func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
@@ -307,7 +310,7 @@ func TestPaymentAutoChargeProbe_TopUpSupersedesPendingSession(t *testing.T) {
 }
 
 func TestPaymentAutoChargeProbe_EnsuresInAdvancePlan(t *testing.T) {
-	fx, _ := autoChargeFixture(t, "stripe")
+	fx := autoChargeFixture(t, "stripe")
 	if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -341,23 +344,23 @@ func TestPaymentAutoChargeProbe_EnsuresInAdvancePlan(t *testing.T) {
 	}
 }
 
-func TestPaymentAutoChargeProbe_SkipsWithoutDriver(t *testing.T) {
-	fx := newPaymentFixture(t, "razorpay", nil)
+func TestPaymentAutoChargeProbe_SkipsWithoutFixedCustomer(t *testing.T) {
+	fx := newPaymentFixture(t, "razorpay")
 	if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(fx.fc.customers.created) != 0 {
-		t.Errorf("created %d customers without a driver, want 0", len(fx.fc.customers.created))
+		t.Errorf("created %d customers without a fixed customer, want 0", len(fx.fc.customers.created))
 	}
 }
 
 func TestPaymentAutoChargeProbe_LegsRunIndependently(t *testing.T) {
-	fx, _ := autoChargeFixture(t, "stripe")
+	fx := autoChargeFixture(t, "stripe")
 	fx.fc.subs.subs["sub_1"] = types.SubscriptionResponse{ID: strPtr("sub_1"), SubscriptionStatus: types.SubscriptionStatusIncomplete.ToPointer()}
 	inner := fx.fc.payments.start
 	fx.fc.payments.start = func(action string, cfg *types.CheckoutParams) (*types.CheckoutSessionResponse, error) {
 		defaults := fx.fc.payments.defaults
-		if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], string(TestCardDecline)) {
+		if len(defaults) > 0 && strings.Contains(defaults[len(defaults)-1], "decline") {
 			return fakePendingSession(), nil
 		}
 		return inner(action, cfg)
@@ -381,8 +384,7 @@ func TestPaymentAutoChargeProbe_LegsRunIndependently(t *testing.T) {
 
 func TestPaymentAutoChargeProbe_FixedMandateCustomer(t *testing.T) {
 	setup := func(t *testing.T) *paymentFixture {
-		fx, _ := autoChargeFixture(t, "razorpay")
-		fx.opts.Driver = nil
+		fx := autoChargeFixture(t, "razorpay")
 		fx.opts.Provider.FixedCustomerExternalID = "e2eprobe-cust-pay-razorpay-mandate"
 		return fx
 	}
@@ -434,6 +436,7 @@ func TestPaymentAutoChargeProbe_FixedMandateCustomer(t *testing.T) {
 
 	t.Run("missing mandate fails clearly", func(t *testing.T) {
 		fx := setup(t)
+		fx.fc.payments.savedMethods = nil
 		err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background())
 		if got := stepOf(err); got != "fixed_customer_mandate" {
 			t.Fatalf("step = %q, want fixed_customer_mandate (err: %v)", got, err)
@@ -452,8 +455,7 @@ func savedCard(id, last4 string, isDefault bool) e2eprobe.SavedPaymentMethod {
 
 func TestPaymentAutoChargeProbe_FixedSavedCards(t *testing.T) {
 	setup := func(t *testing.T, cards ...e2eprobe.SavedPaymentMethod) *paymentFixture {
-		fx, _ := autoChargeFixture(t, "stripe")
-		fx.opts.Driver = nil
+		fx := autoChargeFixture(t, "stripe")
 		fx.opts.Provider.FixedCustomerExternalID = "e2eprobe-cust-pay-stripe-cards"
 		fx.opts.Provider.DeclineCardLast4 = "0341"
 		fx.fc.payments.savedMethods = cards

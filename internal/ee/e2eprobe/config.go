@@ -93,15 +93,8 @@ type PaymentProviderConfig struct {
 	// SettleTimeout overrides PaymentsConfig.SettleTimeout for this gateway.
 	SettleTimeout time.Duration // E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT
 
-	StripeSecretKey string // E2EPROBE_STRIPE_TEST_SECRET_KEY, sk_test_/rk_test_ only
-
-	ChargebeeSite        string // E2EPROBE_CHARGEBEE_TEST_SITE, must end in -test
-	ChargebeeAPIKey      string // E2EPROBE_CHARGEBEE_TEST_API_KEY, test_ only
-	ChargebeeDeclineCard string // E2EPROBE_CHARGEBEE_DECLINE_CARD, optional
-
 	// FixedCustomerExternalID names a persistent customer whose cards or mandates
-	// were saved by hand. It stands in for card vaulting when the probe holds no
-	// gateway key, so auto-charge flows can still run.
+	// were saved by hand; auto-charge flows run on it.
 	FixedCustomerExternalID string // E2EPROBE_PAYMENTS_<PROVIDER>_FIXED_CUSTOMER (Razorpay: also E2EPROBE_RAZORPAY_MANDATE_CUSTOMER)
 	// DeclineCardLast4 picks out the fixed customer's declining card; every other
 	// auto-chargeable method is treated as a good card.
@@ -263,28 +256,8 @@ func loadPaymentsConfig(warnings *[]string) (PaymentsConfig, error) {
 		p.FixedCustomerExternalID = os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_FIXED_CUSTOMER")
 		p.DeclineCardLast4 = os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_DECLINE_CARD_LAST4")
 		p.SettleTimeout = getDuration(warnings, "E2EPROBE_PAYMENTS_"+strings.ToUpper(name)+"_SETTLE_TIMEOUT", paymentDefaultSettleTimeout[name])
-		switch name {
-		case "stripe":
-			p.StripeSecretKey = os.Getenv("E2EPROBE_STRIPE_TEST_SECRET_KEY")
-			if p.StripeSecretKey != "" && !strings.HasPrefix(p.StripeSecretKey, "sk_test_") && !strings.HasPrefix(p.StripeSecretKey, "rk_test_") {
-				return out, errors.New("E2EPROBE_STRIPE_TEST_SECRET_KEY must be a test-mode key (sk_test_ or rk_test_)")
-			}
-		case "razorpay":
-			if p.FixedCustomerExternalID == "" {
-				p.FixedCustomerExternalID = os.Getenv("E2EPROBE_RAZORPAY_MANDATE_CUSTOMER")
-			}
-		case "chargebee":
-			p.ChargebeeSite = os.Getenv("E2EPROBE_CHARGEBEE_TEST_SITE")
-			p.ChargebeeAPIKey = os.Getenv("E2EPROBE_CHARGEBEE_TEST_API_KEY")
-			p.ChargebeeDeclineCard = os.Getenv("E2EPROBE_CHARGEBEE_DECLINE_CARD")
-			if p.ChargebeeAPIKey != "" {
-				if !strings.HasPrefix(p.ChargebeeAPIKey, "test_") {
-					return out, errors.New("E2EPROBE_CHARGEBEE_TEST_API_KEY must be a test-site key (test_)")
-				}
-				if !strings.HasSuffix(p.ChargebeeSite, "-test") {
-					return out, fmt.Errorf("E2EPROBE_CHARGEBEE_TEST_SITE must be a test site ending in -test, got %q", p.ChargebeeSite)
-				}
-			}
+		if name == "razorpay" && p.FixedCustomerExternalID == "" {
+			p.FixedCustomerExternalID = os.Getenv("E2EPROBE_RAZORPAY_MANDATE_CUSTOMER")
 		}
 		out.Providers = append(out.Providers, p)
 	}

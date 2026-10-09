@@ -327,7 +327,6 @@ func main() {
 	for _, provider := range cfg.Payments.Providers {
 		opts := checks_pkg.PaymentProbeOpts{
 			Provider:          provider,
-			Driver:            checks_pkg.NewGatewayDriver(provider),
 			SettleTimeout:     cfg.Payments.SettleTimeout,
 			AssertKnownIssues: cfg.Payments.AssertKnownIssues,
 		}
@@ -342,7 +341,7 @@ func main() {
 			pmp := checks_pkg.NewPaymentMethodProbe(client, reg, runID, lg, opts)
 			runner.Add(pmp, e2eprobe.NewTickerScheduler(pmp, cfg.Checks["PAYMENT_METHOD_PROBE"].Interval))
 		}
-		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && (opts.Driver != nil || provider.FixedCustomerExternalID != "") {
+		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && provider.FixedCustomerExternalID != "" {
 			pap := checks_pkg.NewPaymentAutoChargeProbe(client, reg, runID, lg, opts)
 			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval))
 		}

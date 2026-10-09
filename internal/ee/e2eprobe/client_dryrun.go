@@ -434,9 +434,6 @@ func (d *dryRunPayments) CreateSetupLink(ctx context.Context, customerID, provid
 	dryLog(ctx, d.lg, "Payments.CreateSetupLink", "customer_id", customerID, "provider", provider)
 	return "", nil
 }
-func (d *dryRunPayments) GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error) {
-	return d.inner.GetGatewayCustomerID(ctx, customerID, provider)
-}
 func (d *dryRunPayments) CreatePortalSession(ctx context.Context, externalCustomerID string) (string, error) {
 	return d.inner.CreatePortalSession(ctx, externalCustomerID)
 }
