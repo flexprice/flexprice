@@ -2398,6 +2398,15 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		}
 	}
 
+	// Revenue facts record zero-revenue periods, so they always keep zero value lines.
+	if !invoiceConfig.IncludeZeroValueLineItems && params.ReferencePoint != types.ReferencePointRevenueFacts {
+		filtered := *result
+		filtered.UsageCharges = lo.Filter(result.UsageCharges, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
+			return !(item.Quantity.IsZero() && item.Amount.IsZero())
+		})
+		result = &filtered
+	}
+
 	// Must run before coupon selection below, which keys off the set of price IDs
 	// on the invoice — a set the merge preserves.
 	result = applyLineItemGrouping(sub, result)

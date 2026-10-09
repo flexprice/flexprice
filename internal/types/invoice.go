@@ -427,6 +427,7 @@ type InvoiceConfig struct {
 	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
+	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
 }
 
 // Validate implements SettingConfig interface

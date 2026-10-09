@@ -612,6 +612,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		DueDateDays:                            lo.ToPtr(1),
 		AutoCompletePurchasedCreditTransaction: false,
 		FinalizationDelaySeconds:               7200, // 2 hours
+		IncludeZeroValueLineItems:              false,
 	}
 
 	defaultSubscriptionConfig := SubscriptionConfig{
