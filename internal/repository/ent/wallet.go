@@ -326,7 +326,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
-	consumed := make([]types.WalletTxConsumption, 0, len(credits))
+	consumedCreditTransactions := make([]types.WalletTxConsumption, 0, len(credits))
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -346,7 +346,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 			Save(ctx)
 
 		if err != nil {
-			return consumed, ierr.WithError(err).
+			return consumedCreditTransactions, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -356,10 +356,10 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumed = append(consumed, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
+		consumedCreditTransactions = append(consumedCreditTransactions, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
-	return consumed, nil
+	return consumedCreditTransactions, nil
 }
 
 // CreateTransaction creates a new wallet transaction record
@@ -385,7 +385,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		parentTransactionID = &tx.ParentTransactionID
 	}
 
-	create := client.WalletTransaction.Create().
+	createQuery := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
 		SetWalletID(tx.WalletID).
@@ -419,10 +419,10 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID))
 	// Left unset when empty so the column is SQL NULL; ent would otherwise store JSON null.
 	if len(tx.ConsumptionBreakdown) > 0 {
-		create.SetConsumptionBreakdown(tx.ConsumptionBreakdown)
+		createQuery.SetConsumptionBreakdown(tx.ConsumptionBreakdown)
 	}
 
-	transaction, err := create.Save(ctx)
+	transaction, err := createQuery.Save(ctx)
 
 	if err != nil {
 		if ent.IsConstraintError(err) {

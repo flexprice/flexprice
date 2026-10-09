@@ -323,7 +323,7 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 
 // ConsumeCredits consumes credits from a wallet
 func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
-	consumed := make([]types.WalletTxConsumption, 0, len(credits))
+	consumedCredits := make([]types.WalletTxConsumption, 0, len(credits))
 	remainingAmount := amount
 
 	for _, credit := range credits {
@@ -340,7 +340,7 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 
 		// Update credit's available amount
 		if err := s.transactions.Update(ctx, credit.ID, credit); err != nil {
-			return consumed, ierr.WithError(err).
+			return consumedCredits, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -350,10 +350,10 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumed = append(consumed, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
+		consumedCredits = append(consumedCredits, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
-	return consumed, nil
+	return consumedCredits, nil
 }
 
 // CreateTransaction creates a new wallet transaction record
