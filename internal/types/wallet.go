@@ -1,6 +1,8 @@
 package types
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -113,6 +115,31 @@ const (
 type WalletTxConsumption struct {
 	CreditTransactionID string          `json:"credit_transaction_id"`
 	Credits             decimal.Decimal `json:"credits" swaggertype:"string"`
+}
+
+// WalletTxConsumptions is a debit's breakdown across credit batches. Empty is stored as SQL NULL,
+// so credit rows carry no breakdown at all rather than a JSON null.
+type WalletTxConsumptions []WalletTxConsumption
+
+func (c WalletTxConsumptions) Value() (driver.Value, error) {
+	if len(c) == 0 {
+		return nil, nil
+	}
+	return json.Marshal([]WalletTxConsumption(c))
+}
+
+func (c *WalletTxConsumptions) Scan(value interface{}) error {
+	if value == nil {
+		*c = nil
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return ierr.NewError("failed to unmarshal consumption breakdown").
+			WithHint("Expected a JSONB value").
+			Mark(ierr.ErrValidation)
+	}
+	return json.Unmarshal(bytes, (*[]WalletTxConsumption)(c))
 }
 
 type WalletTxReferenceType string

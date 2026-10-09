@@ -506,7 +506,7 @@ func (_u *WalletTransactionUpdate) sqlSave(ctx context.Context) (_node int, err 
 		_spec.ClearField(wallettransaction.FieldSourceID, field.TypeString)
 	}
 	if _u.mutation.ConsumptionBreakdownCleared() {
-		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON)
+		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeOther)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1034,7 +1034,7 @@ func (_u *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Walle
 		_spec.ClearField(wallettransaction.FieldSourceID, field.TypeString)
 	}
 	if _u.mutation.ConsumptionBreakdownCleared() {
-		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON)
+		_spec.ClearField(wallettransaction.FieldConsumptionBreakdown, field.TypeOther)
 	}
 	_node = &WalletTransaction{config: _u.config}
 	_spec.Assign = _node.assignValues

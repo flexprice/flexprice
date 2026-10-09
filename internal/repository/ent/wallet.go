@@ -385,7 +385,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		parentTransactionID = &tx.ParentTransactionID
 	}
 
-	createQuery := client.WalletTransaction.Create().
+	transaction, err := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
 		SetWalletID(tx.WalletID).
@@ -416,13 +416,9 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetNillablePriority(tx.Priority).
 		SetNillableParentTransactionID(parentTransactionID).
 		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
-		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID))
-	// Left unset when empty so the column is SQL NULL; ent would otherwise store JSON null.
-	if len(tx.ConsumptionBreakdown) > 0 {
-		createQuery.SetConsumptionBreakdown(tx.ConsumptionBreakdown)
-	}
-
-	transaction, err := createQuery.Save(ctx)
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID)).
+		SetConsumptionBreakdown(tx.ConsumptionBreakdown).
+		Save(ctx)
 
 	if err != nil {
 		if ent.IsConstraintError(err) {

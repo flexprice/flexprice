@@ -308,3 +308,8 @@ func BySourceType(opts ...sql.OrderTermOption) OrderOption {
 func BySourceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSourceID, opts...).ToFunc()
 }
+
+// ByConsumptionBreakdown orders the results by the consumption_breakdown field.
+func ByConsumptionBreakdown(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConsumptionBreakdown, opts...).ToFunc()
+}

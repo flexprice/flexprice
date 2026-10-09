@@ -81,7 +81,7 @@ type WalletTransaction struct {
 	// SourceID holds the value of the "source_id" field.
 	SourceID *string `json:"source_id,omitempty"`
 	// ConsumptionBreakdown holds the value of the "consumption_breakdown" field.
-	ConsumptionBreakdown []types.WalletTxConsumption `json:"consumption_breakdown,omitempty"`
+	ConsumptionBreakdown types.WalletTxConsumptions `json:"consumption_breakdown,omitempty"`
 	selectValues         sql.SelectValues
 }
 
@@ -92,7 +92,7 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case wallettransaction.FieldConversionRate, wallettransaction.FieldTopupConversionRate:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case wallettransaction.FieldMetadata, wallettransaction.FieldConsumptionBreakdown:
+		case wallettransaction.FieldMetadata:
 			values[i] = new([]byte)
 		case wallettransaction.FieldAmount, wallettransaction.FieldCreditAmount, wallettransaction.FieldCreditBalanceBefore, wallettransaction.FieldCreditBalanceAfter, wallettransaction.FieldCreditsAvailable:
 			values[i] = new(decimal.Decimal)
@@ -102,6 +102,8 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt, wallettransaction.FieldExpiryDate:
 			values[i] = new(sql.NullTime)
+		case wallettransaction.FieldConsumptionBreakdown:
+			values[i] = new(types.WalletTxConsumptions)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -313,12 +315,10 @@ func (_m *WalletTransaction) assignValues(columns []string, values []any) error 
 				*_m.SourceID = value.String
 			}
 		case wallettransaction.FieldConsumptionBreakdown:
-			if value, ok := values[i].(*[]byte); !ok {
+			if value, ok := values[i].(*types.WalletTxConsumptions); !ok {
 				return fmt.Errorf("unexpected type %T for field consumption_breakdown", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.ConsumptionBreakdown); err != nil {
-					return fmt.Errorf("unmarshal field consumption_breakdown: %w", err)
-				}
+			} else if value != nil {
+				_m.ConsumptionBreakdown = *value
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
