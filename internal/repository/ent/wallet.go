@@ -1176,11 +1176,16 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			wt.credit_balance_after,
 			wt.reference_id,
 			wt.transaction_reason,
+			wt.credit_amount,
+			wt.currency,
+			CASE WHEN wt.source_type = 'INVOICE' THEN wt.source_id END,
+			` + paidAmountSQL("wt", "i") + `,
 			wt.created_at
 		FROM
 			wallet_transactions wt
 			INNER JOIN wallets w ON w.id = wt.wallet_id
 			INNER JOIN customers c ON c.id = w.customer_id
+			LEFT JOIN invoices i ON i.id = wt.source_id AND wt.source_type = 'INVOICE'
 		WHERE
 			wt.tenant_id = $1
 			AND wt.environment_id = $2
@@ -1221,6 +1226,7 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 	result := make([]*walletdomain.CreditTopupsExportData, 0)
 	for rows.Next() {
 		exportData := &walletdomain.CreditTopupsExportData{}
+		var invoiceID *string
 		err := rows.Scan(
 			&exportData.TopupID,
 			&exportData.ExternalID,
@@ -1231,12 +1237,17 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.CreditBalanceAfter,
 			&exportData.ReferenceID,
 			&exportData.TransactionReason,
+			&exportData.Credits,
+			&exportData.Currency,
+			&invoiceID,
+			&exportData.PaidAmount,
 			&exportData.CreatedAt,
 		)
 		if err != nil {
 			r.logger.Error(ctx, "failed to scan credit topup export data", "error", err)
 			continue
 		}
+		exportData.InvoiceID = lo.FromPtr(invoiceID)
 
 		result = append(result, exportData)
 	}
@@ -1245,6 +1256,134 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to iterate credit topup rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return result, nil
+}
+
+// paidAmountSQL is what a credit batch was bought for: the invoice after discount and before tax
+// for an invoiced purchase, zero for free and bonus grants, and NULL for any other credit.
+func paidAmountSQL(tx, inv string) string {
+	return fmt.Sprintf(`CASE
+				WHEN %[1]s.transaction_reason = '%[3]s' THEN %[2]s.total - %[2]s.total_tax
+				WHEN %[1]s.transaction_reason IN ('%[4]s', '%[5]s') THEN 0
+			END`, tx, inv,
+		types.TransactionReasonPurchasedCreditInvoiced,
+		types.TransactionReasonFreeCredit,
+		types.TransactionReasonPurchasedCreditBonus)
+}
+
+func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*walletdomain.CreditDebitsExportData, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_credit_debits_for_export", map[string]interface{}{
+		"tenant_id": tenantID,
+		"env_id":    envID,
+		"start":     startTime,
+		"end":       endTime,
+		"limit":     limit,
+		"offset":    offset,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+
+	// One row per credit batch in the debit's consumption_breakdown. A debit without one
+	// (written before breakdowns were recorded) keeps a single row with no batch.
+	query := `
+		SELECT
+			d.id,
+			c.external_id,
+			c.name,
+			d.wallet_id,
+			d.currency,
+			d.transaction_reason,
+			CASE WHEN d.source_type = 'INVOICE' THEN d.source_id END,
+			b.credit_transaction_id,
+			COALESCE(b.credits, d.credit_amount),
+			ct.credit_amount,
+			` + paidAmountSQL("ct", "i") + `,
+			d.created_at
+		FROM
+			wallet_transactions d
+			INNER JOIN wallets w ON w.id = d.wallet_id
+			INNER JOIN customers c ON c.id = w.customer_id
+			LEFT JOIN LATERAL ROWS FROM (
+				jsonb_to_recordset(CASE WHEN jsonb_typeof(d.consumption_breakdown) = 'array' THEN d.consumption_breakdown END)
+					AS (credit_transaction_id text, credits numeric)
+			) WITH ORDINALITY AS b(credit_transaction_id, credits, ord) ON true
+			LEFT JOIN wallet_transactions ct ON ct.id = b.credit_transaction_id
+			LEFT JOIN invoices i ON i.id = ct.source_id AND ct.source_type = 'INVOICE'
+		WHERE
+			d.tenant_id = $1
+			AND d.environment_id = $2
+			AND d.type = $3
+			AND d.transaction_status = $4
+			AND d.status = $5
+			AND d.created_at >= $6
+			AND d.created_at < $7
+		ORDER BY d.created_at ASC, d.id ASC, b.ord ASC
+		LIMIT $8 OFFSET $9
+	`
+
+	rows, err := client.QueryContext(ctx, query,
+		tenantID,
+		envID,
+		string(types.TransactionTypeDebit),
+		string(types.TransactionStatusCompleted),
+		string(types.StatusPublished),
+		startTime,
+		endTime,
+		limit,
+		offset,
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch credit debits for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+				"env_id":    envID,
+				"limit":     limit,
+				"offset":    offset,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	result := make([]*walletdomain.CreditDebitsExportData, 0)
+	for rows.Next() {
+		exportData := &walletdomain.CreditDebitsExportData{}
+		var invoiceID, creditTransactionID *string
+		err := rows.Scan(
+			&exportData.DebitID,
+			&exportData.ExternalID,
+			&exportData.CustomerName,
+			&exportData.WalletID,
+			&exportData.Currency,
+			&exportData.TransactionReason,
+			&invoiceID,
+			&creditTransactionID,
+			&exportData.Credits,
+			&exportData.BatchCredits,
+			&exportData.BatchPaidAmount,
+			&exportData.CreatedAt,
+		)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read credit debit row").
+				Mark(ierr.ErrDatabase)
+		}
+		exportData.InvoiceID = lo.FromPtr(invoiceID)
+		exportData.CreditTransactionID = lo.FromPtr(creditTransactionID)
+
+		result = append(result, exportData)
+	}
+
+	if err = rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate credit debit rows").
 			Mark(ierr.ErrDatabase)
 	}
 

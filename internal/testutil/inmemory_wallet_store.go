@@ -809,6 +809,54 @@ func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tena
 	return results[start:end], nil
 }
 
+// GetCreditDebitsForExport mirrors the Postgres export: one row per consumed batch, no paid amounts.
+func (s *InMemoryWalletStore) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*wallet.CreditDebitsExportData, error) {
+	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transactions for export").
+			Mark(ierr.ErrDatabase)
+	}
+
+	var results []*wallet.CreditDebitsExportData
+	for _, tx := range allTransactions {
+		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.Type != types.TransactionTypeDebit {
+			continue
+		}
+		if tx.CreatedAt.Before(startTime) || !tx.CreatedAt.Before(endTime) {
+			continue
+		}
+		row := wallet.CreditDebitsExportData{
+			DebitID:           tx.ID,
+			WalletID:          tx.WalletID,
+			Currency:          tx.Currency,
+			TransactionReason: tx.TransactionReason,
+			InvoiceID:         tx.SourceID,
+			Credits:           tx.CreditAmount,
+			CreatedAt:         tx.CreatedAt,
+		}
+		if len(tx.ConsumptionBreakdown) == 0 {
+			results = append(results, &row)
+			continue
+		}
+		for _, c := range tx.ConsumptionBreakdown {
+			batch := row
+			batch.CreditTransactionID = c.CreditTransactionID
+			batch.Credits = c.Credits
+			results = append(results, &batch)
+		}
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].CreatedAt.Before(results[j].CreatedAt)
+	})
+
+	if offset >= len(results) {
+		return []*wallet.CreditDebitsExportData{}, nil
+	}
+	return results[offset:min(offset+limit, len(results))], nil
+}
+
 // GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type
 func (s *InMemoryWalletStore) GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error) {
 	// Get all completed credit transactions for this wallet

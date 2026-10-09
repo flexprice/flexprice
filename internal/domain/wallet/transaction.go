@@ -195,7 +195,31 @@ type CreditTopupsExportData struct {
 	CreditBalanceAfter  decimal.Decimal
 	ReferenceID         string
 	TransactionReason   types.TransactionReason
-	CreatedAt           time.Time
+	Credits             decimal.Decimal
+	Currency            string
+	InvoiceID           string
+	// PaidAmount is what the credits were bought for: the invoice after discount, before tax, for
+	// an invoiced purchase, and zero for free and bonus grants. Not set for other credits.
+	PaidAmount decimal.NullDecimal
+	CreatedAt  time.Time
+}
+
+// CreditDebitsExportData is one credit batch a debit drew from. A debit with no recorded
+// breakdown is a single row with no batch.
+type CreditDebitsExportData struct {
+	DebitID             string
+	ExternalID          string
+	CustomerName        string
+	WalletID            string
+	Currency            string
+	TransactionReason   types.TransactionReason
+	InvoiceID           string
+	CreditTransactionID string
+	Credits             decimal.Decimal
+	// The batch's size and paid amount, for spreading the paid amount over the credits drawn.
+	BatchCredits    decimal.NullDecimal
+	BatchPaidAmount decimal.NullDecimal
+	CreatedAt       time.Time
 }
 
 // CreditUsageCSVHeaders represents the column header strings for the credit usage CSV export
