@@ -25240,7 +25240,6 @@ const docTemplate = `{
                     ]
                 },
                 "coupons": {
-                    "description": "coupons discount this top-up's invoice, applied in order before tax. Credits granted\nare unchanged. Only for PURCHASED_CREDIT_INVOICED, and not with checkout.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/TopUpCoupon"

@@ -362,8 +362,6 @@ type TopUpWalletRequest struct {
 	// Omit for today's pay-later / auto-complete behavior.
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
-	// coupons discount this top-up's invoice, applied in order before tax. Credits granted
-	// are unchanged. Only for PURCHASED_CREDIT_INVOICED, and not with checkout.
 	Coupons []TopUpCoupon `json:"coupons,omitempty"`
 
 	// TriggeringActor records who drove this top-up. An end customer never gets
