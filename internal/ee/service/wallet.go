@@ -1305,15 +1305,6 @@ func (s *walletService) resolveTopUpCoupons(ctx context.Context, walletID string
 		if err != nil {
 			return nil, err
 		}
-		// Codes match case-insensitively, so "TOPUP10" and "topup10" are the same coupon.
-		if lo.Contains(couponIDs, c.ID) {
-			return nil, ierr.NewError("duplicate coupon").
-				WithHintf("Coupon '%s' is listed more than once", input.CouponCode).
-				WithReportableDetails(map[string]interface{}{
-					"coupon_code": input.CouponCode,
-				}).
-				Mark(ierr.ErrValidation)
-		}
 		// Cadence only applies to subscriptions, so validate without one.
 		if err := validationService.ValidateCoupon(ctx, *c, nil); err != nil {
 			return nil, ierr.WithError(err).
