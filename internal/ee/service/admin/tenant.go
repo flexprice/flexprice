@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -43,10 +44,10 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 		return nil, err
 	}
 
-	t := req.ToTenant()
-	ctx = types.SetTenantID(ctx, t.ID)
+	tenantID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT)
+	ctx = types.SetTenantID(ctx, tenantID)
 
-	userID, err := s.createLogin(ctx, req.Email, req.Password, t.ID)
+	userID, err := s.createLogin(ctx, req.Email, req.Password, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -55,10 +56,14 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 	owner := newOwner(ctx, userID, req.Email)
 	envs := newEnvironments(ctx, req.CreateProduction)
 
+	var created *dto.TenantResponse
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		if err := s.TenantRepo.Create(ctx, t); err != nil {
+		// Same path as self-serve signup, so the tenant also becomes a billing customer.
+		t, err := service.NewTenantService(s.ServiceParams).CreateTenant(ctx, dto.CreateTenantRequest{ID: tenantID, Name: req.TenantName})
+		if err != nil {
 			return err
 		}
+		created = t
 		if err := s.UserRepo.Create(ctx, owner); err != nil {
 			return err
 		}
@@ -74,8 +79,8 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 		return nil, err
 	}
 
-	s.Logger.Info(ctx, "created tenant", "tenant_id", t.ID, "user_id", userID, "production", req.CreateProduction)
-	return admindto.NewCreateTenantResponse(t, owner, envs), nil
+	s.Logger.Info(ctx, "created tenant", "tenant_id", tenantID, "user_id", userID, "production", req.CreateProduction)
+	return admindto.NewCreateTenantResponse(created, owner, envs), nil
 }
 
 // requireUnusedEmail refuses an email that already belongs to a user in any tenant.

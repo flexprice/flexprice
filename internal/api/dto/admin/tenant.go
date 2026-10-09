@@ -2,11 +2,10 @@ package admin
 
 import (
 	"strings"
-	"time"
 	"unicode/utf8"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
-	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -64,22 +63,7 @@ func (r *CreateTenantRequest) Validate() error {
 	return nil
 }
 
-func (r *CreateTenantRequest) ToTenant() *tenant.Tenant {
-	if r == nil {
-		return nil
-	}
-	now := time.Now().UTC()
-	return &tenant.Tenant{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TENANT),
-		Name:           r.TenantName,
-		Status:         types.StatusPublished,
-		InternalStatus: types.TenantInternalStatusTrialing,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
-}
-
-func NewCreateTenantResponse(t *tenant.Tenant, u *user.User, envs []*environment.Environment) *CreateTenantResponse {
+func NewCreateTenantResponse(t *dto.TenantResponse, u *user.User, envs []*environment.Environment) *CreateTenantResponse {
 	if t == nil || u == nil {
 		return nil
 	}
