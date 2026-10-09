@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -651,7 +652,12 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 
 // applyInvoiceQuery treats invoices as newest-first (server default created_at desc).
 func applyInvoiceQuery(invoices []types.InvoiceResponse, filter types.InvoiceFilter) []types.InvoiceResponse {
-	items := append([]types.InvoiceResponse(nil), invoices...)
+	var items []types.InvoiceResponse
+	for _, inv := range invoices {
+		if inv.InvoiceStatus == nil || len(filter.InvoiceStatus) == 0 || slices.Contains(filter.InvoiceStatus, *inv.InvoiceStatus) {
+			items = append(items, inv)
+		}
+	}
 	if filter.Order != nil && *filter.Order == types.InvoiceFilterOrderAsc {
 		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
 			items[i], items[j] = items[j], items[i]
