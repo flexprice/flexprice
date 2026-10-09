@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -88,17 +89,30 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	// Try to parse request body
 	var req dto.CancelScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// If no body provided, use schedule_id from path
 		if scheduleID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Either schedule_id in path or request body with subscription_id and schedule_type must be provided"})
+			c.Error(ierr.NewError("missing schedule identifier").
+				WithHint("Provide schedule_id in the path, or a body with subscription_id and schedule_type").
+				Mark(ierr.ErrValidation))
 			return
 		}
 		req.ScheduleID = &scheduleID
 	}
 
-	// Validate the request
+	// Path schedule_id is authoritative when present.
+	if scheduleID != "" {
+		if req.ScheduleID != nil && *req.ScheduleID != scheduleID {
+			c.Error(ierr.NewError("schedule_id mismatch").
+				WithHint("schedule_id in the path does not match the request body").
+				Mark(ierr.ErrValidation))
+			return
+		}
+		req.ScheduleID = &scheduleID
+	}
+
 	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid cancel-schedule request").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -117,14 +131,16 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	}
 
 	if err != nil {
-		// Check if it's a not found error
-		if err.Error() == "subscription schedule not found" ||
-			err.Error() == "failed to get schedule" ||
-			err.Error() == "failed to get pending schedule" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Schedule not found"})
-			return
+		switch err.Error() {
+		case "subscription schedule not found",
+			"failed to get schedule",
+			"failed to get pending schedule":
+			c.Error(ierr.NewError("schedule not found").
+				WithHint("Schedule not found").
+				Mark(ierr.ErrNotFound))
+		default:
+			c.Error(err)
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
