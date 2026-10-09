@@ -2085,6 +2085,11 @@ definitions:
           100 characters
         maxLength: 100
         type: string
+      billing_currency:
+        description: billing_currency is the fiat currency invoices are issued in;
+          empty means the charge currency is used as-is
+        maxLength: 10
+        type: string
       contact:
         description: contact is an optional contact number for the customer (e.g.
           phone)
@@ -2908,6 +2913,13 @@ definitions:
         type: string
       external_customer_id:
         type: string
+      fx_rates:
+        description: |-
+          FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per
+          non-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.
+        items:
+          $ref: '#/definitions/InlineFXRate'
+        type: array
       gateway_payment_method_id:
         type: string
       include_price_ids:
@@ -3565,6 +3577,10 @@ definitions:
         type: string
       address_state:
         description: AddressState is the state of the customer's address
+        type: string
+      billing_currency:
+        description: BillingCurrency is the fiat currency invoices are issued in;
+          nil means charge currency is used as-is.
         type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
@@ -4767,6 +4783,15 @@ definitions:
     x-enum-varnames:
     - InheritanceActionAdd
     - InheritanceActionRemove
+  InlineFXRate:
+    properties:
+      end_date:
+        type: string
+      rate:
+        type: string
+      start_date:
+        type: string
+    type: object
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -4864,6 +4889,12 @@ definitions:
         type: string
       environment_id:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: |-
+          fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency
+          and source only; the rate lives on the invoice). Nil for lines that were never converted.
       id:
         type: string
       invoice_id:
@@ -5083,6 +5114,11 @@ definitions:
         description: finalized_at is the timestamp when this invoice was finalized
           and made ready for payment
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: fx_conversion is the frozen fiat→fiat conversion applied at finalize;
+          nil when the invoice was never converted.
       id:
         description: id is the unique identifier for this invoice
         type: string
@@ -8276,6 +8312,11 @@ definitions:
           with maximum 100 characters
         maxLength: 100
         type: string
+      billing_currency:
+        description: billing_currency updates the invoicing currency; send "" to clear
+          it back to the charge currency
+        maxLength: 10
+        type: string
       contact:
         description: contact is the updated contact number for the customer (e.g.
           phone)
@@ -9417,6 +9458,10 @@ definitions:
       address_state:
         description: AddressState is the state of the customer's address
         type: string
+      billing_currency:
+        description: BillingCurrency is the fiat currency invoices are issued in;
+          nil means charge currency is used as-is.
+        type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
           phone)
@@ -9638,6 +9683,12 @@ definitions:
         type: string
       environment_id:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: |-
+          fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency
+          and source only; the rate lives on the invoice). Nil for lines that were never converted.
       id:
         type: string
       invoice_id:
@@ -11437,6 +11488,45 @@ definitions:
     - NOT_IN
     - BEFORE
     - AFTER
+  types.FxConversion:
+    properties:
+      billing_currency:
+        description: BillingCurrency is the currency the invoice was issued in.
+        type: string
+      charge_currency:
+        description: ChargeCurrency is the invoice's original (draft) currency.
+        type: string
+      converted_at:
+        description: ConvertedAt is when the conversion ran.
+        type: string
+      rate:
+        description: 'Rate is the frozen rate: billing per 1 charge unit.'
+        type: string
+      rate_id:
+        description: RateID is the fx_rates row used, for reference only; never read
+          again.
+        type: string
+      scope:
+        allOf:
+        - $ref: '#/definitions/types.FXRateScope'
+        description: 'Scope is where the rate was resolved: subscription, customer
+          or tenant.'
+      source:
+        allOf:
+        - $ref: '#/definitions/types.FxConversionSource'
+        description: Source holds the original charge-currency amounts, before tax.
+    type: object
+  types.FxConversionSource:
+    properties:
+      net:
+        type: string
+      subtotal:
+        type: string
+      total_discount:
+        type: string
+      total_prepaid_credits_applied:
+        type: string
+    type: object
   types.GlobalCustomField:
     properties:
       field:
@@ -13807,6 +13897,11 @@ definitions:
         type: string
       finalized_at:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: fx_conversion is the frozen fiat→fiat conversion snapshot; nil
+          when the invoice was never converted.
       id:
         type: string
       idempotency_key:
@@ -13874,6 +13969,11 @@ definitions:
         type: string
       entity_type:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: fx_conversion holds the line's pre-conversion charge amounts;
+          nil on non-converted invoices.
       id:
         type: string
       invoice_level_discount:

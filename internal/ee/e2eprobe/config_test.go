@@ -68,6 +68,22 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if c.JanitorMaxAge != 1*time.Hour {
 		t.Errorf("JanitorMaxAge=%v, want 1h", c.JanitorMaxAge)
 	}
+	if c.BillingMatrix.Enabled {
+		t.Error("billing matrix should be off unless E2EPROBE_BILLING_MATRIX_ENABLED is set")
+	}
+}
+
+func TestLoadConfig_BillingMatrixGate(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+	t.Setenv("E2EPROBE_API_KEY", "k")
+	t.Setenv("E2EPROBE_BILLING_MATRIX_ENABLED", "true")
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !c.BillingMatrix.Enabled || c.BillingMatrix.ScenariosPerRun != 3 {
+		t.Errorf("billing matrix config = %+v, want enabled with 3 scenarios per run", c.BillingMatrix)
+	}
 }
 
 func TestLoadConfig_Overrides(t *testing.T) {

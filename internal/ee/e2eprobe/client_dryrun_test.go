@@ -330,7 +330,15 @@ func (f *fakePaymentOps) ListRefunds(_ context.Context, _ dtos.ListRefundsReques
 
 // ── fake Client assembling the ops above ─────────────────────────────
 
+type fakeRawOps struct{ calls int32 }
+
+func (f *fakeRawOps) Do(_ context.Context, _, _ string, _, _ any) error {
+	atomic.AddInt32(&f.calls, 1)
+	return nil
+}
+
 type fakeInnerClient struct {
+	raw                *fakeRawOps
 	customers          *fakeCustomerOps
 	plans              *fakePlanOps
 	prices             *fakePriceOps
@@ -365,6 +373,7 @@ func newFakeInnerClient() *fakeInnerClient {
 		taxAssociations:    &fakeTaxAssociationOps{},
 		payments:           &fakePaymentOps{},
 		async:              &fakeAsyncOps{},
+		raw:                &fakeRawOps{},
 	}
 }
 
@@ -383,8 +392,30 @@ func (c *fakeInnerClient) TaxRates() TaxRateOps                     { return c.t
 func (c *fakeInnerClient) TaxAssociations() TaxAssociationOps       { return c.taxAssociations }
 func (c *fakeInnerClient) NewAsyncEventClient() AsyncEventClient    { return c.async }
 func (c *fakeInnerClient) Payments() PaymentOps                     { return c.payments }
+func (c *fakeInnerClient) Raw() RawOps                              { return c.raw }
 
 // ── Tests ─────────────────────────────────────────────────────────────
+
+func TestDryRunClient_RawPassesReadsOnly(t *testing.T) {
+	inner := newFakeInnerClient()
+	dry := NewDryRunClient(inner, nil).Raw()
+	ctx := context.Background()
+
+	for _, c := range []struct{ method, path string }{
+		{"GET", "/subscriptions/sub_1"},
+		{"POST", "/invoices/search"},
+		{"POST", "/subscriptions/sub_1/modify/preview"},
+		{"POST", "/subscriptions"},
+		{"POST", "/subscriptions/sub_1/cancel"},
+	} {
+		if err := dry.Do(ctx, c.method, c.path, nil, nil); err != nil {
+			t.Fatalf("%s %s: %v", c.method, c.path, err)
+		}
+	}
+	if got := atomic.LoadInt32(&inner.raw.calls); got != 3 {
+		t.Fatalf("reads passed through = %d, want 3", got)
+	}
+}
 
 func TestDryRunClient_PaymentMutationsAreNoOps(t *testing.T) {
 	inner := newFakeInnerClient()

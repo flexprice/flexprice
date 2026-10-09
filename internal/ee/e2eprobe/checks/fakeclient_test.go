@@ -32,6 +32,7 @@ type fakeClient struct {
 	taxRates           fakeTaxRates
 	taxAssociations    fakeTaxAssociations
 	payments           fakePayments
+	raw                fakeRaw
 	async              *fakeAsyncEvents
 }
 
@@ -59,6 +60,21 @@ func (c *fakeClient) CouponAssociations() e2eprobe.CouponAssociationOps { return
 func (c *fakeClient) TaxRates() e2eprobe.TaxRateOps                     { return &c.taxRates }
 func (c *fakeClient) TaxAssociations() e2eprobe.TaxAssociationOps       { return &c.taxAssociations }
 func (c *fakeClient) Payments() e2eprobe.PaymentOps                     { return &c.payments }
+func (c *fakeClient) Raw() e2eprobe.RawOps                              { return &c.raw }
+
+// --- Raw ---
+
+type fakeRaw struct {
+	mu    sync.Mutex
+	calls []string // "METHOD path"
+}
+
+func (f *fakeRaw) Do(_ context.Context, method, path string, _, _ any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, method+" "+path)
+	return nil
+}
 
 // --- Customers ---
 

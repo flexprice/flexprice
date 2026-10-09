@@ -238,6 +238,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	if err := ccCfg.EnforceCurrency(w.Currency); err != nil {
 		return nil, err
 	}
+	if err := s.validateWalletConvertible(ctx, ccCfg, req.CustomerID, w.Currency); err != nil {
+		return nil, err
+	}
 
 	for _, existing := range existingWallets {
 		if existing.WalletStatus == types.WalletStatusActive && existing.Currency == w.Currency && existing.WalletType == w.WalletType {
@@ -302,6 +305,39 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 
 	return response, nil
+}
+
+// validateWalletConvertible rejects a wallet whose currency has no rate (or custom factor) to the
+// customer's billing currency, since its top-up invoices could never be converted.
+func (s *walletService) validateWalletConvertible(ctx context.Context, ccCfg types.CustomCurrencyConfig, customerID, currency string) error {
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if cust.BillingCurrency == nil || *cust.BillingCurrency == "" || types.IsMatchingCurrency(currency, *cust.BillingCurrency) {
+		return nil
+	}
+
+	billing := strings.ToLower(*cust.BillingCurrency)
+	ok, err := conversionAvailable(ctx, s.ServiceParams, ccCfg, currency, billing)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ierr.NewErrorf("no exchange rate from %s to %s", currency, billing).
+			WithHintf("%s before creating a %s wallet for this customer.", missingConversionHint(ccCfg, currency, billing), strings.ToUpper(currency)).
+			WithReportableDetails(map[string]any{
+				"customer_id":      customerID,
+				"wallet_currency":  currency,
+				"billing_currency": billing,
+				"missing_pairs":    []string{fxPairKey(currency, billing)},
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *walletService) EnsurePrepaidWallet(ctx context.Context, customerID, currency string) (*dto.WalletResponse, error) {
@@ -1215,7 +1251,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create invoice for purchased credits").
-					Mark(ierr.ErrInternal)
+					Error()
 			}
 		}
 

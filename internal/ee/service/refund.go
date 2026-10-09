@@ -286,25 +286,22 @@ func (s *refundService) Dispatch(ctx context.Context, refundID string) error {
 }
 
 func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) error {
-	inv, err := s.InvoiceRepo.Get(ctx, row.InvoiceID)
-	if err != nil {
-		return err
-	}
-
 	walletService := NewWalletService(s.ServiceParams)
 
 	return s.DB.WithTx(ctx, func(tx context.Context) error {
+		// Refunds on one invoice settle one at a time, so a converted invoice's running total stays
+		// consistent. The invoice is locked before the refund row, the same order void takes.
+		inv, err := s.InvoiceRepo.GetForUpdate(tx, row.InvoiceID)
+		if err != nil {
+			return err
+		}
+
 		locked, err := s.RefundRepo.GetForUpdate(tx, row.ID)
 		if err != nil {
 			return err
 		}
 		if locked.RefundStatus.IsTerminal() {
 			return nil
-		}
-
-		w, err := walletService.EnsurePrepaidWallet(tx, inv.CustomerID, row.Currency)
-		if err != nil {
-			return err
 		}
 
 		reason := types.TransactionReasonInvoiceVoidRefund
@@ -314,10 +311,36 @@ func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) 
 			metadata["credit_note_id"] = *row.CreditNoteID
 		}
 
+		walletCurrency, credit := row.Currency, row.Amount
+		// A converted invoice's refund credits the charge-currency wallet, at the frozen rate.
+		if fx := inv.FxConversion; fx != nil && types.IsMatchingCurrency(row.Currency, fx.BillingCurrency) {
+			walletCurrency = fx.ChargeCurrency
+			credit, err = s.chargeCurrencyCreditFor(tx, inv, row)
+			if err != nil {
+				return err
+			}
+			metadata["fx_rate"] = fx.Rate.String()
+			metadata["fx_charge_currency"] = fx.ChargeCurrency
+			metadata["fx_billing_currency"] = fx.BillingCurrency
+			metadata["fx_billing_amount"] = row.Amount.String()
+		}
+
+		// Worth less than the charge currency's smallest unit: nothing to credit.
+		if !credit.IsPositive() {
+			s.Logger.Info(tx, "refund settled without a wallet credit: converted amount rounds to zero",
+				"refund_id", row.ID, "invoice_id", row.InvoiceID, "amount", row.Amount.String())
+			return s.Settle(tx, &dto.SettleRefundRequest{RefundID: row.ID, SettledAmount: row.Amount})
+		}
+
+		w, err := walletService.EnsurePrepaidWallet(tx, inv.CustomerID, walletCurrency)
+		if err != nil {
+			return err
+		}
+
 		// Keyed on the refund row, not the credit note: one credit note can fan out
 		// into several rows and they must each top up.
 		topUp, err := walletService.TopUpWallet(tx, w.ID, &dto.TopUpWalletRequest{
-			Amount:            row.Amount,
+			Amount:            credit,
 			TransactionReason: reason,
 			Metadata:          metadata,
 			IdempotencyKey:    lo.ToPtr(row.ID),
@@ -338,6 +361,21 @@ func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) 
 			DestinationID: walletTxnID,
 		})
 	})
+}
+
+// chargeCurrencyCreditFor converts a converted invoice's wallet refund at the frozen rate, as a step in
+// a running total, so everything the invoice returns to the wallet adds up to one rounding.
+func (s *refundService) chargeCurrencyCreditFor(ctx context.Context, inv *invoice.Invoice, row *refund.Refund) (decimal.Decimal, error) {
+	fx := inv.FxConversion
+	prior, err := s.RefundRepo.SumSettledToWalletByInvoice(ctx, inv.ID, fx.BillingCurrency)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	toCharge := func(billing decimal.Decimal) decimal.Decimal {
+		return types.RoundToCurrencyPrecision(billing.Div(fx.Rate), fx.ChargeCurrency)
+	}
+	return toCharge(prior.Add(row.Amount)).Sub(toCharge(prior)), nil
 }
 
 func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refund) error {

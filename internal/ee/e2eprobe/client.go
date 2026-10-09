@@ -65,6 +65,13 @@ type Client interface {
 	TaxRates() TaxRateOps
 	TaxAssociations() TaxAssociationOps
 	Payments() PaymentOps
+	Raw() RawOps
+}
+
+// RawOps sends exact JSON to any API path, for probes whose request fields the SDK does not cover.
+type RawOps interface {
+	// Do sends body as JSON to path (relative to the API host, e.g. "/subscriptions") and decodes a 2xx body into out.
+	Do(ctx context.Context, method, path string, body, out any) error
 }
 
 type CustomerOps interface {
@@ -290,6 +297,14 @@ func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
 func (c *sdkClient) TaxAssociations() TaxAssociationOps {
 	return taxAssociationOps{c.sdk.TaxAssociations}
 }
+func (c *sdkClient) Raw() RawOps { return rawOps{parent: c} }
+
+type rawOps struct{ parent *sdkClient }
+
+func (o rawOps) Do(ctx context.Context, method, path string, body, out any) error {
+	return o.parent.doRaw(ctx, method, path, "", body, out)
+}
+
 func (c *sdkClient) Payments() PaymentOps {
 	return paymentOps{
 		checkout:      c.sdk.Checkout,

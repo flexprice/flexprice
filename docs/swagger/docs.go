@@ -17028,6 +17028,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "billing_currency": {
+                    "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is",
+                    "type": "string",
+                    "maxLength": 10
+                },
                 "contact": {
                     "description": "contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string",
@@ -18104,6 +18109,13 @@ const docTemplate = `{
                 "external_customer_id": {
                     "type": "string"
                 },
+                "fx_rates": {
+                    "description": "FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per\nnon-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InlineFXRate"
+                    }
+                },
                 "gateway_payment_method_id": {
                     "type": "string"
                 },
@@ -18968,6 +18980,10 @@ const docTemplate = `{
                 },
                 "address_state": {
                     "description": "AddressState is the state of the customer's address",
+                    "type": "string"
+                },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
                     "type": "string"
                 },
                 "contact": {
@@ -20618,6 +20634,20 @@ const docTemplate = `{
                 "InheritanceActionRemove"
             ]
         },
+        "InlineFXRate": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
         "IntegrationConfigEntry": {
             "type": "object",
             "properties": {
@@ -20756,6 +20786,14 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
@@ -21037,6 +21075,14 @@ const docTemplate = `{
                 "finalized_at": {
                     "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "description": "id is the unique identifier for this invoice",
@@ -25459,6 +25505,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "billing_currency": {
+                    "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency",
+                    "type": "string",
+                    "maxLength": 10
+                },
                 "contact": {
                     "description": "contact is the updated contact number for the customer (e.g. phone)",
                     "type": "string",
@@ -27066,6 +27117,10 @@ const docTemplate = `{
                     "description": "AddressState is the state of the customer's address",
                     "type": "string"
                 },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
                 "contact": {
                     "description": "Contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string"
@@ -27386,6 +27441,14 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
@@ -29804,6 +29867,64 @@ const docTemplate = `{
                 "BEFORE",
                 "AFTER"
             ]
+        },
+        "types.FxConversion": {
+            "type": "object",
+            "properties": {
+                "billing_currency": {
+                    "description": "BillingCurrency is the currency the invoice was issued in.",
+                    "type": "string"
+                },
+                "charge_currency": {
+                    "description": "ChargeCurrency is the invoice's original (draft) currency.",
+                    "type": "string"
+                },
+                "converted_at": {
+                    "description": "ConvertedAt is when the conversion ran.",
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "Rate is the frozen rate: billing per 1 charge unit.",
+                    "type": "string"
+                },
+                "rate_id": {
+                    "description": "RateID is the fx_rates row used, for reference only; never read again.",
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "Scope is where the rate was resolved: subscription, customer or tenant.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FXRateScope"
+                        }
+                    ]
+                },
+                "source": {
+                    "description": "Source holds the original charge-currency amounts, before tax.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversionSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "types.FxConversionSource": {
+            "type": "object",
+            "properties": {
+                "net": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_prepaid_credits_applied": {
+                    "type": "string"
+                }
+            }
         },
         "types.GlobalCustomField": {
             "type": "object",
@@ -32962,6 +33083,14 @@ const docTemplate = `{
                 "finalized_at": {
                     "type": "string"
                 },
+                "fx_conversion": {
+                    "description": "fx_conversion is the frozen fiat→fiat conversion snapshot; nil when the invoice was never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
+                },
                 "id": {
                     "type": "string"
                 },
@@ -33062,6 +33191,14 @@ const docTemplate = `{
                 },
                 "entity_type": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds the line's pre-conversion charge amounts; nil on non-converted invoices.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"

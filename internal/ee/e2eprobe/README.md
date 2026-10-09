@@ -132,6 +132,9 @@ Adding a new probe: write `internal/ee/e2eprobe/checks/<name>.go` implementing `
 | `E2EPROBE_PAYMENTS_SETTLE_TIMEOUT` | How long a payment or checkout session may take to settle | `90s` |
 | `E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT` | Per-gateway override of the settle timeout | `10m` for razorpay (test-mode mandate debits capture up to minutes later), else the global value |
 | `E2EPROBE_PAYMENTS_ASSERT_KNOWN_ISSUES` | Run legs that fail on known, unfixed product bugs (listed in `knownIssueLegs`, e.g. Chargebee refund and decline). Off reports them under `skipped_legs` instead of failing | `false` |
+| `E2EPROBE_BILLING_MATRIX_ENABLED` | Turns on all five billing-matrix checks and their janitor sweep | `false` |
+| `E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN` | Scenarios each billing-matrix check runs per tick; the family is covered in rotation | `3` |
+| `E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES` | Run billing-matrix scenarios that hit known, unfixed product bugs. Off logs them as skipped instead of failing | `false` |
 
 Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchanged.
 
@@ -162,7 +165,41 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | payment-link-probe-`<gateway>` | 20m | Ephemeral customer, no saved method → pay_invoice / wallet_topup / auto-charge-fallback each issue a pending session with a payment URL; cancel expires it with no payment or credit; unattended auto-charge is refused with a 4xx. Natural expiry: each run leaves one top-up link untouched on `e2eprobe-cust-pay-<gateway>-expiry`; a later run (past expiry + one 30m cleanup cycle) asserts the cleanup job failed the top-up, removed its draft invoice/payment, credited nothing and expired the session |
 | scenario | payment-method-probe-`<gateway>` | 30m | Saved-method listing (API + portal), setup / add-method links. Unsupported operations must 4xx |
 | scenario | payment-autocharge-probe-`<gateway>` | 30m | Runs on the gateway's fixed customer, the same in every region and hardcoded in `config.go`: `e2eprobe-cust-pay-<gateway>-cards` (Stripe, Chargebee) or `e2eprobe-cust-pay-razorpay-mandate`. Its cards or mandates are saved by hand: two good cards plus the declining test card (last4 `0341` Stripe, `0004` Chargebee). Legs run independently and one report lists every failing leg (`failed_legs`, `leg.<name>.step`). With two good cards, `set_default` alternates the default between them each run. Auto-charged top-up settles via webhook before any reconciling read, completes, credits exactly once; pay_invoice ends SUCCEEDED with full amount; create_subscription ends active; a paid quantity change (modify_subscription) and a prorated in-advance addon (add_addon) are gated on checkout and applied on payment; a full back-to-source refund of the paid invoice marks it REFUNDED and settles to the card (Chargebee, Razorpay) or the wallet (Stripe, which has no gateway refunds); the saved declining card neither completes nor credits. Self-provisions `e2eprobe_payments_addon_<currency>` |
+| scenario | billing-matrix-opening | 10m | Creates subs across cadence × calendar/anniversary × anchor (none, near, month-end, before start) × proration × timezone × billing model, each with same, shorter, longer, `count>1`, arrear, usage, one-time and addon items; checks anchor, first period, stored `billing_period_count` and every opening-invoice line against the proration oracle |
+| scenario | billing-matrix-renewal | 15m | Same matrix plus short last periods; previews the periods where items renew or close (long items on their own grid, arrear `MONTHLY×6`) and checks each amount |
+| scenario | billing-matrix-change | 10m | Mid-period addon add/remove (same, shorter, longer, one-time), `line_item_change` (qty, price, arrear), line item API add/delete and immediate cancel, with and without proration; checks every charge and credit |
+| scenario | billing-matrix-grants | 15m | Credit grants at creation (sub cadence, annual on monthly, one-time) and addon credit/entitlement grants attached mid-period: prorated amounts and next application on the billing date |
+| scenario | billing-matrix-validation | 30m | Requests the spec rejects (anchor past one period, anchor with calendar, incompatible cadences on create/addon/line item API, backdated `create_prorations`, change dates outside the period) and boundary cases it must accept |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers (Phase 2) and orphan tax associations (Phase 3) and deletes them |
+
+## Billing matrix
+
+`internal/ee/e2eprobe/billingmatrix` checks billing against an independent oracle of the proration
+spec (`docs/design/2026-10-03-proration-unification-erd.md`): billing dates are `anchor + k × period`
+clamped to month end, and every charge, credit and grant is `time used ÷ full period`. The oracle
+re-derives this without importing `internal/types`, and its unit tests pin the design doc's worked
+examples. Renewals are observed through `POST /invoices/preview` with explicit periods, so no clock
+needs to pass.
+
+The five billing-matrix checks are off by default because they write billing data every tick;
+enable them per deployment with `E2EPROBE_BILLING_MATRIX_ENABLED=true`.
+
+Each scenario creates its own plan, prices, `e2eprobe-cust-eph-bm-*` customer and subscription,
+and removes them when it finishes: addons detached, subscription cancelled, wallets terminated
+(they block customer deletion), then customer, plan and prices deleted. Anything a crash leaves
+behind is removed by the janitor's billing-matrix sweep (plans named `e2eprobe-bm *`, customers
+prefixed `e2eprobe-cust-eph-bm-`, older than `E2EPROBE_JANITOR_MAX_AGE`). Addons and the usage and
+entitlement-grant features are shared fixtures with stable `e2eprobe_bm_fx_*` lookup keys, reused
+across runs, because the API refuses to delete an addon that has ever been on a subscription. Scenarios that hit known product bugs are tagged and skipped unless
+`E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES=true`.
+
+Run every scenario once against any server:
+
+```bash
+E2EPROBE_API_HOST=http://localhost:8080/v1 E2EPROBE_API_KEY=sk_... \
+BM_FAMILIES=opening,renewal,change,grants,validation BM_FILTER=QUARTERLY \
+go test -tags e2eprobe_integration ./internal/ee/e2eprobe/billingmatrix -run TestLiveMatrix -v -timeout 2h
+```
 
 ## Webhook pipeline verification (low-balance-alert-probe + low-wallet-alert-listener)
 

@@ -53,6 +53,8 @@ type Config struct {
 	OTEL     OTELConfig
 	Payments PaymentsConfig
 
+	BillingMatrix BillingMatrixConfig
+
 	Checks map[string]CheckConfig
 
 	// Warnings collected during LoadConfig (e.g. malformed env vars that fell
@@ -124,6 +126,15 @@ var paymentDefaultCurrency = map[string]string{
 	"stripe":    "USD",
 	"chargebee": "USD",
 	"razorpay":  "INR",
+}
+
+// BillingMatrixConfig gates and tunes the billing-matrix checks.
+type BillingMatrixConfig struct {
+	// Enabled turns on every billing-matrix check (E2EPROBE_BILLING_MATRIX_ENABLED, default false).
+	// Off by default: the checks create plans, subscriptions and invoices every tick.
+	Enabled           bool
+	ScenariosPerRun   int  // E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN, default 3
+	AssertKnownIssues bool // E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES: run scenarios that hit known product bugs
 }
 
 type CheckConfig struct {
@@ -216,6 +227,11 @@ func LoadConfig() (*Config, error) {
 		},
 		OTEL: OTELConfig{
 			Enabled: getBool("E2EPROBE_OTEL_ENABLED", false),
+		},
+		BillingMatrix: BillingMatrixConfig{
+			Enabled:           getBool("E2EPROBE_BILLING_MATRIX_ENABLED", false),
+			ScenariosPerRun:   getInt(&warnings, "E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN", 3),
+			AssertKnownIssues: getBool("E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES", false),
 		},
 		Checks: make(map[string]CheckConfig, len(CheckNames)),
 	}

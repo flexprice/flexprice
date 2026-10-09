@@ -46,6 +46,9 @@ type Invoice struct {
 	TotalDiscount              decimal.Decimal `json:"total_discount" swaggertype:"string"`
 	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied" swaggertype:"string"`
 
+	// fx_conversion is the frozen fiat→fiat conversion snapshot; nil when the invoice was never converted.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
+
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	PeriodStart *time.Time `json:"period_start,omitempty"`
@@ -90,6 +93,9 @@ type InvoiceLineItem struct {
 	AdjustedEntitlementQuantity *decimal.Decimal      `json:"adjusted_entitlement_quantity,omitempty" swaggertype:"string"`
 	CommitmentInfo              *types.CommitmentInfo `json:"commitment_info,omitempty"`
 	Metadata                    types.Metadata        `json:"metadata,omitempty"`
+
+	// fx_conversion holds the line's pre-conversion charge amounts; nil on non-converted invoices.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 }
 
 type Plan struct {
@@ -222,6 +228,7 @@ func newInvoiceLineItem(item *dto.InvoiceLineItemResponse) *InvoiceLineItem {
 		AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 		CommitmentInfo:              item.CommitmentInfo,
 		Metadata:                    item.Metadata,
+		FxConversion:                item.FxConversion,
 	}
 }
 
@@ -509,6 +516,7 @@ func NewInvoice(resp *dto.InvoiceResponse) *Invoice {
 		TotalTax:                   resp.TotalTax,
 		TotalDiscount:              resp.TotalDiscount,
 		TotalPrepaidCreditsApplied: resp.TotalPrepaidCreditsApplied,
+		FxConversion:               resp.FxConversion,
 		CreatedAt:                  resp.CreatedAt,
 		UpdatedAt:                  resp.UpdatedAt,
 		PeriodStart:                resp.PeriodStart,
