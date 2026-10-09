@@ -809,6 +809,67 @@ func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tena
 	return results[start:end], nil
 }
 
+// GetCreditDebitsForExport mirrors the Postgres export: one row per consumed batch, no paid amounts.
+func (s *InMemoryWalletStore) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, after wallet.CreditDebitsExportCursor, endTime time.Time, limit int) ([]*wallet.CreditDebitsExportData, error) {
+	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transactions for export").
+			Mark(ierr.ErrDatabase)
+	}
+
+	var results []*wallet.CreditDebitsExportData
+	for _, tx := range allTransactions {
+		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.Type != types.TransactionTypeDebit {
+			continue
+		}
+		if !tx.CreatedAt.Before(endTime) {
+			continue
+		}
+		if tx.CreatedAt.Before(after.CreatedAt) || (tx.CreatedAt.Equal(after.CreatedAt) && tx.ID <= after.DebitID) {
+			continue
+		}
+		row := wallet.CreditDebitsExportData{
+			DebitID:           tx.ID,
+			WalletID:          tx.WalletID,
+			Currency:          tx.Currency,
+			TransactionReason: tx.TransactionReason,
+			InvoiceID:         tx.SourceID,
+			Credits:           tx.CreditAmount,
+			CreatedAt:         tx.CreatedAt,
+		}
+		if len(tx.ConsumptionBreakdown) == 0 {
+			results = append(results, &row)
+			continue
+		}
+		for _, c := range tx.ConsumptionBreakdown {
+			batch := row
+			batch.CreditTransactionID = c.CreditTransactionID
+			batch.Credits = c.Credits
+			results = append(results, &batch)
+		}
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		if !results[i].CreatedAt.Equal(results[j].CreatedAt) {
+			return results[i].CreatedAt.Before(results[j].CreatedAt)
+		}
+		return results[i].DebitID < results[j].DebitID
+	})
+
+	// limit counts debits, not batch rows.
+	debits := 0
+	for i, r := range results {
+		if i == 0 || r.DebitID != results[i-1].DebitID {
+			debits++
+			if debits > limit {
+				return results[:i], nil
+			}
+		}
+	}
+	return results, nil
+}
+
 // GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type
 func (s *InMemoryWalletStore) GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error) {
 	// Get all completed credit transactions for this wallet
