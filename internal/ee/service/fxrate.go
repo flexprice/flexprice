@@ -211,6 +211,14 @@ func (s *fxRateService) ListFXRates(ctx context.Context, filter *types.FXRateFil
 	if filter == nil {
 		filter = types.NewFXRateFilter()
 	}
+	// A body without pagination fields leaves QueryFilter nil, which IsUnlimited treats as
+	// "no limit"; default it so the list stays paginated.
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
 	rates, err := s.FXRateRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
