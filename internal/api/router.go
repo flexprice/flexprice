@@ -277,27 +277,27 @@ func NewRouter(
 			customer.POST("/search", handlers.Customer.QueryCustomers)
 
 			customer.POST("", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.CreateCustomer)
-			customer.GET("", handlers.Customer.ListCustomers)
+			customer.GET("", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListCustomers)
 			customer.PUT("", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.UpdateCustomer)
-			customer.GET("/:id", handlers.Customer.GetCustomer)
+			customer.GET("/:id", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomer)
 			customer.PUT("/:id", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.UpdateCustomer)
 			customer.DELETE("/:id", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.DeleteCustomer)
-			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)
-			customer.GET("/external/:external_id", handlers.Customer.GetCustomerByLookupKey)
+			customer.GET("/lookup/:lookup_key", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerByLookupKey)
+			customer.GET("/external/:external_id", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerByLookupKey)
 
 			// New endpoints for entitlements and usage
-			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
-			customer.GET("/external/:external_id/entitlements", handlers.Customer.GetCustomerEntitlementsByExternalID)
-			customer.GET("/external/:external_id/subscriptions", handlers.Subscription.GetSubscriptionsForCustomer)
-			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)
-			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
-			customer.GET("/:id/grants/upcoming", handlers.Customer.GetUpcomingCreditGrantApplications)
+			customer.GET("/:id/entitlements", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerEntitlements)
+			customer.GET("/external/:external_id/entitlements", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerEntitlementsByExternalID)
+			customer.GET("/external/:external_id/subscriptions", read(types.EntityCustomer, types.ActionRead), handlers.Subscription.GetSubscriptionsForCustomer)
+			customer.GET("/usage", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerUsageSummary)
+			customer.GET("/:id/usage", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetCustomerUsageSummary)
+			customer.GET("/:id/grants/upcoming", read(types.EntityCustomer, types.ActionRead), handlers.Customer.GetUpcomingCreditGrantApplications)
 
 			// other routes for customer
-			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
-			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
+			customer.GET("/:id/wallets", read(types.EntityCustomer, types.ActionRead), handlers.Wallet.GetWalletsByCustomerID)
+			customer.GET("/:id/invoices/summary", read(types.EntityCustomer, types.ActionRead), handlers.Invoice.GetCustomerInvoiceSummary)
 			customer.GET("/:id/payment-methods", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentMethods)
-			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
+			customer.GET("/wallets", read(types.EntityCustomer, types.ActionRead), handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation. Minting a session token is an
 			// impersonation-style action: the token places its bearer inside the
@@ -352,32 +352,32 @@ func NewRouter(
 		{
 			subscription.POST("/search", handlers.Subscription.QuerySubscriptions)
 			subscription.POST("", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.CreateSubscription)
-			subscription.GET("", handlers.Subscription.ListSubscriptions)
+			subscription.GET("", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.ListSubscriptions)
 			subscription.POST("/lineitems/search", handlers.Subscription.QuerySubscriptionLineItems)
-			subscription.GET("/:id", handlers.Subscription.GetSubscription)
+			subscription.GET("/:id", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscription)
 			subscription.PUT("/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.UpdateSubscription)
-			subscription.GET("/:id/v2", handlers.Subscription.GetSubscriptionV2)
+			subscription.GET("/:id/v2", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscriptionV2)
 			subscription.POST("/:id/activate", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.ActivateDraftSubscription)
 			subscription.POST("/:id/cancel", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.CancelSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 
-			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
-			subscription.GET("/:id/grants/upcoming", handlers.Subscription.GetUpcomingCreditGrantApplications)
+			subscription.GET("/:id/entitlements", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscriptionEntitlements)
+			subscription.GET("/:id/grants/upcoming", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetUpcomingCreditGrantApplications)
 
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.AddAddonToSubscription)
 			subscription.DELETE("/addon", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.RemoveAddonToSubscription)
-			subscription.GET("/:id/addons/associations", handlers.Subscription.GetActiveAddonAssociations)
+			subscription.GET("/:id/addons/associations", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetActiveAddonAssociations)
 
 			// Subscription plan changes (upgrade/downgrade)
-			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
+			subscription.POST("/:id/change/preview", read(types.EntitySubscription, types.ActionRead), handlers.SubscriptionChange.PreviewSubscriptionChange)
 			subscription.POST("/:id/change/execute", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionChange.ExecuteSubscriptionChange)
 
 			// Plan change v2 (swap in place). v1 remains for interval/cadence/currency changes.
-			subscription.POST("/:id/change/v2/preview", handlers.Subscription.PreviewSubscriptionPlanChangeV2)
+			subscription.POST("/:id/change/v2/preview", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.PreviewSubscriptionPlanChangeV2)
 			subscription.POST("/:id/change/v2/execute", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.ExecuteSubscriptionPlanChangeV2)
 			subscription.POST(":id/modify/execute", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionModification.Execute)
-			subscription.POST(":id/modify/preview", handlers.SubscriptionModification.Preview)
+			subscription.POST(":id/modify/preview", read(types.EntitySubscription, types.ActionRead), handlers.SubscriptionModification.Preview)
 
 			// Subscription line item management (POST /lineitems/search registered above)
 			subscription.POST("/:id/lineitems", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.AddSubscriptionLineItem)
@@ -392,12 +392,12 @@ func NewRouter(
 			subscription.POST("/temporal/:subscription_id/draft-and-compute", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.TriggerSubscriptionDraftAndComputeWorkflow)
 
 			// Subscription schedules - nested group
-			subscription.GET("/:id/schedules", handlers.SubscriptionSchedule.ListSchedulesForSubscription)
+			subscription.GET("/:id/schedules", read(types.EntitySubscription, types.ActionRead), handlers.SubscriptionSchedule.ListSchedulesForSubscription)
 
 			schedules := subscription.Group("/schedules")
 			{
-				schedules.GET("", handlers.SubscriptionSchedule.ListSchedules)
-				schedules.GET("/:schedule_id", handlers.SubscriptionSchedule.GetSchedule)
+				schedules.GET("", read(types.EntitySubscription, types.ActionRead), handlers.SubscriptionSchedule.ListSchedules)
+				schedules.GET("/:schedule_id", read(types.EntitySubscription, types.ActionRead), handlers.SubscriptionSchedule.GetSchedule)
 				schedules.POST("/:schedule_id/cancel", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionSchedule.CancelSchedule)
 				schedules.POST("/cancel", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionSchedule.CancelSchedule)
 			}
@@ -406,14 +406,14 @@ func NewRouter(
 		wallet := v1Private.Group("/wallets")
 		{
 			wallet.POST("", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.CreateWallet)
-			wallet.GET("", handlers.Wallet.ListWallets)
-			wallet.GET("/:id", handlers.Wallet.GetWalletByID)
-			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
+			wallet.GET("", read(types.EntityWallet, types.ActionRead), handlers.Wallet.ListWallets)
+			wallet.GET("/:id", read(types.EntityWallet, types.ActionRead), handlers.Wallet.GetWalletByID)
+			wallet.GET("/:id/transactions", read(types.EntityWallet, types.ActionRead), handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.TerminateWallet)
 			wallet.POST("/:id/modify", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.ModifyWallet)
-			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
-			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
+			wallet.GET("/:id/balance/real-time", read(types.EntityWallet, types.ActionRead), handlers.Wallet.GetWalletBalance)
+			wallet.GET("/:id/balance/real-time-cached", read(types.EntityWallet, types.ActionRead), handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.UpdateWallet)
 			wallet.POST("/:id/debit", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.ManualBalanceDebit)
 			wallet.POST("/transactions/search", handlers.Wallet.QueryWalletTransactions)
@@ -433,18 +433,18 @@ func NewRouter(
 			invoices.POST("/temporal/:invoice_id/finalize", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerFinalizeDraftInvoiceWorkflow)
 			invoices.POST("/search", handlers.Invoice.QueryInvoices)
 			invoices.POST("", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.CreateOneOffInvoice)
-			invoices.GET("", handlers.Invoice.ListInvoices)
-			invoices.GET("/:id", handlers.Invoice.GetInvoice)
+			invoices.GET("", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.ListInvoices)
+			invoices.GET("/:id", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.GetInvoice)
 			invoices.PUT("/:id", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.UpdateInvoice)
 			invoices.POST("/:id/modify/execute", write(types.EntityInvoice, types.ActionWrite), handlers.InvoiceModification.Execute)
 			invoices.POST("/:id/finalize", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.FinalizeInvoice)
 			invoices.POST("/:id/compute", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.ComputeInvoice)
 			invoices.POST("/:id/void", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.VoidInvoice)
-			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
-			invoices.POST("/internal/preview", handlers.Invoice.GetInternalPreviewInvoice)
+			invoices.POST("/preview", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.GetPreviewInvoice)
+			invoices.POST("/internal/preview", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.GetInternalPreviewInvoice)
 			invoices.PUT("/:id/payment", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.UpdatePaymentStatus)
 			invoices.POST("/:id/payment/attempt", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.AttemptPayment)
-			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
+			invoices.GET("/:id/pdf", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.GetInvoicePDF)
 			invoices.POST("/:id/recalculate", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoice)
 			invoices.POST("/:id/recalculate-v2", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoiceV2)
 			invoices.POST("/:id/comms/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerCommunication)
@@ -484,8 +484,8 @@ func NewRouter(
 		creditGrant := v1Private.Group("/creditgrants")
 		{
 			creditGrant.POST("", write(types.EntityCreditGrant, types.ActionWrite), handlers.CreditGrant.CreateCreditGrant)
-			creditGrant.GET("", handlers.CreditGrant.ListCreditGrants)
-			creditGrant.GET("/:id", handlers.CreditGrant.GetCreditGrant)
+			creditGrant.GET("", read(types.EntityCreditGrant, types.ActionRead), handlers.CreditGrant.ListCreditGrants)
+			creditGrant.GET("/:id", read(types.EntityCreditGrant, types.ActionRead), handlers.CreditGrant.GetCreditGrant)
 			creditGrant.PUT("/:id", write(types.EntityCreditGrant, types.ActionWrite), handlers.CreditGrant.UpdateCreditGrant)
 			creditGrant.DELETE("/:id", write(types.EntityCreditGrant, types.ActionWrite), handlers.CreditGrant.DeleteCreditGrant)
 		}
@@ -493,8 +493,8 @@ func NewRouter(
 		payments := v1Private.Group("/payments")
 		{
 			payments.POST("", write(types.EntityPayment, types.ActionWrite), handlers.Payment.CreatePayment)
-			payments.GET("", handlers.Payment.ListPayments)
-			payments.GET("/:id", handlers.Payment.GetPayment)
+			payments.GET("", read(types.EntityPayment, types.ActionRead), handlers.Payment.ListPayments)
+			payments.GET("/:id", read(types.EntityPayment, types.ActionRead), handlers.Payment.GetPayment)
 			payments.PUT("/:id", write(types.EntityPayment, types.ActionWrite), handlers.Payment.UpdatePayment)
 			payments.DELETE("/:id", write(types.EntityPayment, types.ActionWrite), handlers.Payment.DeletePayment)
 			payments.POST("/:id/process", write(types.EntityPayment, types.ActionWrite), handlers.Payment.ProcessPayment)
@@ -509,10 +509,10 @@ func NewRouter(
 		tasks := v1Private.Group("/tasks")
 		{
 			tasks.POST("", write(types.EntityTask, types.ActionWrite), handlers.Task.CreateTask)
-			tasks.GET("", handlers.Task.ListTasks)
-			tasks.GET("/:id", handlers.Task.GetTask)
+			tasks.GET("", read(types.EntityTask, types.ActionRead), handlers.Task.ListTasks)
+			tasks.GET("/:id", read(types.EntityTask, types.ActionRead), handlers.Task.GetTask)
 			tasks.PUT("/:id/status", write(types.EntityTask, types.ActionWrite), handlers.Task.UpdateTaskStatus)
-			tasks.GET("/:id/download", handlers.Task.DownloadTaskFile)
+			tasks.GET("/:id/download", read(types.EntityTask, types.ActionRead), handlers.Task.DownloadTaskFile)
 
 			// Scheduled tasks routes under /tasks/scheduled
 			scheduledTasks := tasks.Group("/scheduled")
