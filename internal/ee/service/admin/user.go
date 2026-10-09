@@ -10,7 +10,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/nedpals/supabase-go"
 	"github.com/samber/lo"
 )
 
@@ -41,13 +40,13 @@ func (s *userService) AddUser(ctx context.Context, req admindto.AddUserRequest) 
 	if _, err := s.TenantRepo.GetByID(ctx, req.TenantID); err != nil {
 		return nil, err
 	}
-	if err := s.requireUnusedEmail(ctx, req.Email); err != nil {
+	if err := requireUnusedEmail(ctx, s.UserRepo, req.Email); err != nil {
 		return nil, err
 	}
 
 	ctx = types.SetTenantID(ctx, req.TenantID)
 
-	userID, err := s.createLogin(ctx, req.Email, req.Password, req.TenantID)
+	userID, err := createLogin(ctx, s.Config, req.Email, req.Password, req.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,51 +64,12 @@ func (s *userService) AddUser(ctx context.Context, req admindto.AddUserRequest) 
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
 	if err := s.UserRepo.Create(ctx, u); err != nil {
-		s.removeLogin(ctx, userID)
+		removeLogin(ctx, s.Config, s.Logger, userID)
 		return nil, err
 	}
 
 	s.Logger.Info(ctx, "added user to tenant", "tenant_id", req.TenantID, "user_id", userID)
 	return admindto.NewUserResponse(u), nil
-}
-
-// requireUnusedEmail refuses an email that already belongs to a user in any tenant.
-func (s *userService) requireUnusedEmail(ctx context.Context, email string) error {
-	existing, err := s.UserRepo.GetByEmail(ctx, email)
-	if ierr.IsNotFound(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return ierr.NewError("email already in use").
-		WithHint("A user with this email already exists").
-		WithReportableDetails(map[string]interface{}{"email": email, "tenant_id": existing.TenantID}).
-		Mark(ierr.ErrAlreadyExists)
-}
-
-// createLogin creates a confirmed Supabase user with the given password, tagged with the tenant.
-func (s *userService) createLogin(ctx context.Context, email, password, tenantID string) (string, error) {
-	client := supabase.CreateClient(s.Config.Auth.Supabase.BaseURL, s.Config.Auth.Supabase.ServiceKey)
-	created, err := client.Admin.CreateUser(ctx, supabase.AdminUserParams{
-		Email:        email,
-		Password:     &password,
-		EmailConfirm: true,
-		AppMetadata: map[string]interface{}{
-			"tenant_id": tenantID,
-		},
-	})
-	if err != nil {
-		return "", supabaseError(err, email)
-	}
-	return created.ID, nil
-}
-
-// removeLogin deletes a Supabase user whose row was not saved, so the email can be retried.
-func (s *userService) removeLogin(ctx context.Context, userID string) {
-	if err := auth.NewSupabaseAuth(s.Config).RemoveUser(context.WithoutCancel(ctx), userID); err != nil {
-		s.Logger.Error(ctx, "failed to remove supabase user after adding the user failed", "error", err, "user_id", userID)
-	}
 }
 
 // RemoveUser removes a person from their tenant: it archives their row, then deletes their
