@@ -294,6 +294,25 @@ func TestRemoveUser(t *testing.T) {
 		assert.True(t, hasLogin)
 	})
 
+	t.Run("refuses a service account", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		bot := &user.User{
+			ID:        "user_bot",
+			Email:     "bot@acme.com",
+			Type:      types.UserTypeServiceAccount,
+			BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished},
+		}
+		require.NoError(t, d.users.Create(ctx, bot))
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, admindto.RemoveUserRequest{TenantID: tenantID, Email: "bot@acme.com"})
+		require.Error(t, err)
+		assert.True(t, ierr.IsValidation(err))
+
+		stored, err := d.users.GetByEmail(ctx, "bot@acme.com")
+		require.NoError(t, err)
+		assert.Equal(t, types.StatusPublished, stored.Status, "a service account must not be archived here")
+	})
+
 	t.Run("refuses to remove the tenant's last user", func(t *testing.T) {
 		d := withMembers(t, "teammate@acme.com")
 

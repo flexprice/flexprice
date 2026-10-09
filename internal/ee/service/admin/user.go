@@ -134,6 +134,11 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 			WithReportableDetails(map[string]interface{}{"email": req.Email, "tenant_id": req.TenantID}).
 			Mark(ierr.ErrNotFound)
 	}
+	if target.Type != types.UserTypeUser {
+		return nil, ierr.NewError("only human users can be removed").
+			WithHint("Use the service account delete API to remove a service account").
+			Mark(ierr.ErrValidation)
+	}
 
 	ctx = types.SetTenantID(ctx, req.TenantID)
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
