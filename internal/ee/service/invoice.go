@@ -3388,6 +3388,14 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		}
 	}
 
+	// Fall back to the customer's po_number when the invoice carries none; some
+	// tenants record the PO on the customer record rather than per invoice.
+	if data.PONumber == "" && customer != nil && customer.Metadata != nil {
+		if po, ok := customer.Metadata["po_number"]; ok {
+			data.PONumber = po
+		}
+	}
+
 	// Prepare line items
 	var lineItems []pdf.LineItemData
 
