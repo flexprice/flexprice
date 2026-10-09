@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The in-memory store mirrors these writes; only Postgres proves the jsonb round-trip and the
-// set-once source update. Run with:
+// The in-memory store mirrors these writes; only Postgres proves the jsonb round-trip and that
+// an update without a source leaves the stored one in place. Run with:
 //
 //	go test -tags pgintegration ./internal/repository/ent -run TestWalletLedgerFacts
 func TestWalletLedgerFacts(t *testing.T) {
@@ -65,7 +65,7 @@ func TestWalletLedgerFacts(t *testing.T) {
 		}
 	}
 
-	t.Run("source is written once at completion", func(t *testing.T) {
+	t.Run("source is written at completion and kept by later updates", func(t *testing.T) {
 		purchase := newTx("wtx_purchase_"+runID, types.TransactionTypeCredit, types.TransactionStatusPending, 100)
 		require.NoError(t, repo.CreateTransaction(ctx, purchase))
 		require.Empty(t, purchase.SourceType)
@@ -76,14 +76,15 @@ func TestWalletLedgerFacts(t *testing.T) {
 		purchase.UpdatedAt = time.Now().UTC()
 		require.NoError(t, repo.UpdateTransaction(ctx, purchase))
 
-		purchase.SourceID = "inv_second_" + runID
+		purchase.SourceType = ""
+		purchase.SourceID = ""
 		require.NoError(t, repo.UpdateTransaction(ctx, purchase))
 
 		got, err := repo.GetTransactionByID(ctx, purchase.ID)
 		require.NoError(t, err)
 		require.Equal(t, types.TransactionStatusCompleted, got.TxStatus)
 		require.Equal(t, types.WalletTxSourceTypeInvoice, got.SourceType)
-		require.Equal(t, "inv_first_"+runID, got.SourceID, "a set source is never overwritten")
+		require.Equal(t, "inv_first_"+runID, got.SourceID, "an update without a source leaves it in place")
 	})
 
 	t.Run("consumption breakdown round-trips through jsonb", func(t *testing.T) {

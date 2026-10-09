@@ -632,8 +632,10 @@ func (s *InMemoryWalletStore) UpdateTransaction(ctx context.Context, tx *wallet.
 	existing.CreditBalanceBefore = tx.CreditBalanceBefore
 	existing.CreditBalanceAfter = tx.CreditBalanceAfter
 	existing.CreditsAvailable = tx.CreditsAvailable
-	if existing.SourceType == "" {
+	if tx.SourceType != "" {
 		existing.SourceType = tx.SourceType
+	}
+	if tx.SourceID != "" {
 		existing.SourceID = tx.SourceID
 	}
 	existing.UpdatedAt = time.Now().UTC()

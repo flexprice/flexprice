@@ -857,6 +857,8 @@ func (r *walletRepository) UpdateTransaction(ctx context.Context, tx *walletdoma
 		SetCreditBalanceBefore(tx.CreditBalanceBefore).
 		SetCreditBalanceAfter(tx.CreditBalanceAfter).
 		SetCreditsAvailable(tx.CreditsAvailable).
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(tx.UpdatedAt).
 		Save(ctx)
@@ -877,30 +879,6 @@ func (r *walletRepository) UpdateTransaction(ctx context.Context, tx *walletdoma
 				"transaction_id": tx.ID,
 			}).
 			Mark(ierr.ErrNotFound)
-	}
-
-	if tx.SourceType == "" {
-		return nil
-	}
-
-	// The source is set once: a row that already has one keeps it.
-	_, err = client.WalletTransaction.Update().
-		Where(
-			wallettransaction.ID(tx.ID),
-			wallettransaction.TenantID(types.GetTenantID(ctx)),
-			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
-			wallettransaction.SourceTypeIsNil(),
-		).
-		SetSourceType(tx.SourceType).
-		SetSourceID(tx.SourceID).
-		Save(ctx)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to set transaction source").
-			WithReportableDetails(map[string]interface{}{
-				"transaction_id": tx.ID,
-			}).
-			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
