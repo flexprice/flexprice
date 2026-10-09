@@ -148,7 +148,7 @@ func TestCreateTenant(t *testing.T) {
 	t.Run("creates the tenant with a super_admin owner and a sandbox", func(t *testing.T) {
 		d := newTenantTestDeps(t)
 
-		resp, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.NoError(t, err)
 
 		stored, err := d.tenants.GetByID(ctx, resp.TenantID)
@@ -180,7 +180,7 @@ func TestCreateTenant(t *testing.T) {
 	t.Run("creates a confirmed supabase user with the given password", func(t *testing.T) {
 		d := newTenantTestDeps(t)
 
-		resp, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.NoError(t, err)
 
 		login, ok := d.supabase.user(resp.UserID)
@@ -197,7 +197,7 @@ func TestCreateTenant(t *testing.T) {
 
 		req := acme
 		req.CreateProduction = true
-		resp, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, req)
 		require.NoError(t, err)
 
 		byType := map[types.EnvironmentType]*environment.Environment{}
@@ -218,7 +218,7 @@ func TestCreateTenant(t *testing.T) {
 
 		req := acme
 		req.Password = "12345678"
-		_, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, req)
 		require.NoError(t, err)
 	})
 
@@ -227,7 +227,7 @@ func TestCreateTenant(t *testing.T) {
 
 		req := acme
 		req.Email = "  Owner@ACME.com "
-		resp, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, req)
 		require.NoError(t, err)
 
 		assert.Equal(t, "owner@acme.com", resp.Email)
@@ -244,7 +244,7 @@ func TestCreateTenant(t *testing.T) {
 
 		req := acme
 		req.Email = "OWNER@acme.com"
-		_, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, req)
 		require.Error(t, err)
 		assert.True(t, ierr.IsAlreadyExists(err))
 
@@ -256,7 +256,7 @@ func TestCreateTenant(t *testing.T) {
 		d := newTenantTestDeps(t)
 		require.NoError(t, d.users.Create(ctx, user.NewUser("owner@acme.com", "tenant_existing")))
 
-		resp, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
 		assert.True(t, ierr.IsAlreadyExists(err))
 		assert.Nil(t, resp)
@@ -271,7 +271,7 @@ func TestCreateTenant(t *testing.T) {
 		d.supabase.createCode = http.StatusUnprocessableEntity
 		d.supabase.createMsg = "A user with this email address has already been registered"
 
-		_, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
 		assert.True(t, ierr.IsAlreadyExists(err))
 
@@ -286,7 +286,7 @@ func TestCreateTenant(t *testing.T) {
 		d.supabase.createCode = http.StatusUnprocessableEntity
 		d.supabase.createMsg = "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789"
 
-		_, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
 		assert.True(t, ierr.IsValidation(err))
 		assert.False(t, ierr.IsAlreadyExists(err))
@@ -299,7 +299,7 @@ func TestCreateTenant(t *testing.T) {
 		d := newTenantTestDeps(t)
 		d.params.EnvironmentRepo = failingEnvironmentStore{d.environments}
 
-		_, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
 
 		created, remaining := d.supabase.counts()
@@ -311,7 +311,7 @@ func TestCreateTenant(t *testing.T) {
 		d := newTenantTestDeps(t)
 		d.params.Config.Auth.Provider = types.AuthProviderFlexprice
 
-		_, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
 		assert.True(t, ierr.IsInvalidOperation(err))
 
@@ -338,7 +338,7 @@ func TestCreateTenantValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := newTenantTestDeps(t)
 
-			resp, err := NewTenantService(d.params).CreateTenant(context.Background(), tt.req)
+			resp, err := newTestTenantService(d.params).CreateTenant(context.Background(), tt.req)
 			require.Error(t, err)
 			assert.True(t, ierr.IsValidation(err))
 			assert.Nil(t, resp)
@@ -347,4 +347,9 @@ func TestCreateTenantValidation(t *testing.T) {
 			assert.Zero(t, created)
 		})
 	}
+}
+
+// newTestTenantService wires the admin tenant service to the real shared tenant service, as fx does.
+func newTestTenantService(params service.ServiceParams) TenantService {
+	return NewTenantService(params, service.NewTenantService(params))
 }

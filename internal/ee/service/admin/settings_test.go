@@ -134,7 +134,7 @@ func TestUpdateTenantConfig(t *testing.T) {
 				d.storeTenantConfig(t, *tt.stored)
 			}
 
-			resp, err := NewSettingsService(d.params).UpdateTenantConfig(ctx, admindto.UpdateTenantConfigRequest{TenantID: settingsTenantID, Value: tt.value})
+			resp, err := newTestSettingsService(d.params).UpdateTenantConfig(ctx, admindto.UpdateTenantConfigRequest{TenantID: settingsTenantID, Value: tt.value})
 			require.NoError(t, err)
 			assert.Equal(t, &tt.wantResp, resp)
 
@@ -147,7 +147,7 @@ func TestUpdateTenantConfig(t *testing.T) {
 	t.Run("refuses a tenant that does not exist", func(t *testing.T) {
 		d := newSettingsTestDeps(t)
 
-		_, err := NewSettingsService(d.params).UpdateTenantConfig(ctx, admindto.UpdateTenantConfigRequest{
+		_, err := newTestSettingsService(d.params).UpdateTenantConfig(ctx, admindto.UpdateTenantConfigRequest{
 			TenantID: "tenant_missing",
 			Value:    admindto.TenantConfigValue{Development: lo.ToPtr(5)},
 		})
@@ -174,7 +174,7 @@ func TestUpdateTenantConfigValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := newSettingsTestDeps(t)
 
-			resp, err := NewSettingsService(d.params).UpdateTenantConfig(context.Background(), tt.req)
+			resp, err := newTestSettingsService(d.params).UpdateTenantConfig(context.Background(), tt.req)
 			require.Error(t, err)
 			assert.True(t, ierr.IsValidation(err))
 			assert.Nil(t, resp)
@@ -183,4 +183,9 @@ func TestUpdateTenantConfigValidation(t *testing.T) {
 			assert.True(t, ierr.IsNotFound(err), "nothing may be saved for a rejected request")
 		})
 	}
+}
+
+// newTestSettingsService wires the admin settings service to the real shared settings service, as fx does.
+func newTestSettingsService(params service.ServiceParams) SettingsService {
+	return NewSettingsService(params, service.NewSettingsService(params))
 }

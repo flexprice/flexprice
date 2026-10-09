@@ -20,10 +20,11 @@ type TenantService interface {
 
 type tenantService struct {
 	service.ServiceParams
+	tenants service.TenantService
 }
 
-func NewTenantService(params service.ServiceParams) TenantService {
-	return &tenantService{ServiceParams: params}
+func NewTenantService(params service.ServiceParams, tenants service.TenantService) TenantService {
+	return &tenantService{ServiceParams: params, tenants: tenants}
 }
 
 func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTenantRequest) (*admindto.CreateTenantResponse, error) {
@@ -54,7 +55,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 	var created *dto.TenantResponse
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Same path as self-serve signup, so the tenant also becomes a billing customer.
-		t, err := service.NewTenantService(s.ServiceParams).CreateTenant(ctx, dto.CreateTenantRequest{ID: tenantID, Name: req.TenantName})
+		t, err := s.tenants.CreateTenant(ctx, dto.CreateTenantRequest{ID: tenantID, Name: req.TenantName})
 		if err != nil {
 			return err
 		}

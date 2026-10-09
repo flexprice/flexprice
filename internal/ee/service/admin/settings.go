@@ -18,10 +18,11 @@ type SettingsService interface {
 
 type settingsService struct {
 	service.ServiceParams
+	settings service.SettingsService
 }
 
-func NewSettingsService(params service.ServiceParams) SettingsService {
-	return &settingsService{ServiceParams: params}
+func NewSettingsService(params service.ServiceParams, settings service.SettingsService) SettingsService {
+	return &settingsService{ServiceParams: params, settings: settings}
 }
 
 func (s *settingsService) UpdateTenantConfig(ctx context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error) {
@@ -35,7 +36,7 @@ func (s *settingsService) UpdateTenantConfig(ctx context.Context, req admindto.U
 	ctx = types.SetTenantID(ctx, req.TenantID)
 
 	// Same write as PUT /v1/settings/tenant_config: merged with what is stored, so limits not sent stay as they are.
-	setting, err := service.NewSettingsService(s.ServiceParams).UpdateSettingByKey(ctx, types.SettingKeyTenantConfig, &dto.UpdateSettingRequest{
+	setting, err := s.settings.UpdateSettingByKey(ctx, types.SettingKeyTenantConfig, &dto.UpdateSettingRequest{
 		Value: req.ToSettingValue(),
 	})
 	if err != nil {
