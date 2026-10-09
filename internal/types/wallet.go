@@ -102,6 +102,19 @@ func (t TransactionReason) Validate() error {
 	return nil
 }
 
+// WalletTxSourceType is the kind of entity a wallet transaction's source_id points to.
+type WalletTxSourceType string
+
+const (
+	WalletTxSourceTypeInvoice WalletTxSourceType = "INVOICE"
+)
+
+// WalletTxConsumption is the credits a debit drew from one credit batch.
+type WalletTxConsumption struct {
+	CreditTransactionID string          `json:"credit_transaction_id"`
+	Credits             decimal.Decimal `json:"credits" swaggertype:"string"`
+}
+
 type WalletTxReferenceType string
 
 const (

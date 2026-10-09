@@ -152,6 +152,25 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			Optional().
 			Immutable(),
+		field.String("source_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.WalletTxSourceType("")),
+		field.String("source_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.JSON("consumption_breakdown", []types.WalletTxConsumption{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional().
+			Immutable(),
 	}
 }
 

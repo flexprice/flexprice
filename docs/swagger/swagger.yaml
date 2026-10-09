@@ -8112,6 +8112,13 @@ definitions:
       updated_at:
         type: string
     type: object
+  TopUpCoupon:
+    properties:
+      coupon_code:
+        type: string
+    required:
+    - coupon_code
+    type: object
   TopUpWalletRequest:
     properties:
       amount:
@@ -8143,6 +8150,10 @@ definitions:
           checkout opts into pay-first hosted checkout for PURCHASED_CREDIT_INVOICED top-ups.
           When set, credits are applied only after checkout payment succeeds.
           Omit for today's pay-later / auto-complete behavior.
+      coupons:
+        items:
+          $ref: '#/definitions/TopUpCoupon'
+        type: array
       credits_to_add:
         description: credits_to_add is the number of credits to add to the wallet
         type: string
@@ -9221,6 +9232,12 @@ definitions:
     properties:
       amount:
         type: string
+      consumption_breakdown:
+        description: 'ConsumptionBreakdown is set on debits: the credits drawn from
+          each credit batch.'
+        items:
+          $ref: '#/definitions/types.WalletTxConsumption'
+        type: array
       conversion_rate:
         description: conversion_rate is the conversion rate for the transaction to
           the currency
@@ -9268,6 +9285,14 @@ definitions:
         type: string
       reference_type:
         $ref: '#/definitions/types.WalletTxReferenceType'
+      source_id:
+        type: string
+      source_type:
+        allOf:
+        - $ref: '#/definitions/types.WalletTxSourceType'
+        description: |-
+          SourceType/SourceID identify the entity this transaction's value comes from or goes to
+          (e.g. an invoice). Empty when there is none.
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -13397,6 +13422,13 @@ definitions:
       type:
         $ref: '#/definitions/types.TransactionType'
     type: object
+  types.WalletTxConsumption:
+    properties:
+      credit_transaction_id:
+        type: string
+      credits:
+        type: string
+    type: object
   types.WalletTxReferenceType:
     enum:
     - PAYMENT
@@ -13409,6 +13441,12 @@ definitions:
     - WalletTxReferenceTypeExternal
     - WalletTxReferenceTypeRequest
     - WalletTxReferenceTypeInvoice
+  types.WalletTxSourceType:
+    enum:
+    - INVOICE
+    type: string
+    x-enum-varnames:
+    - WalletTxSourceTypeInvoice
   types.WalletType:
     enum:
     - PRE_PAID
@@ -14450,6 +14488,10 @@ definitions:
     properties:
       amount:
         type: string
+      consumption_breakdown:
+        items:
+          $ref: '#/definitions/types.WalletTxConsumption'
+        type: array
       credit_amount:
         type: string
       credit_balance_after:
@@ -14472,6 +14514,10 @@ definitions:
         type: string
       reference_type:
         $ref: '#/definitions/types.WalletTxReferenceType'
+      source_id:
+        type: string
+      source_type:
+        $ref: '#/definitions/types.WalletTxSourceType'
       transaction_reason:
         $ref: '#/definitions/types.TransactionReason'
       transaction_status:

@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -316,7 +317,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 }
 
 // ConsumeCredits processes debit operation across multiple credits
-func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]*walletdomain.Transaction, error) {
+func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "consume_credits", map[string]interface{}{
 		"credits_count": len(credits),
@@ -325,7 +326,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
-	consumedCreditTransactions := make([]*walletdomain.Transaction, 0)
+	consumedCreditTransactions := make([]types.WalletTxConsumption, 0, len(credits))
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -355,7 +356,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCreditTransactions = append(consumedCreditTransactions, credit)
+		consumedCreditTransactions = append(consumedCreditTransactions, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
 	return consumedCreditTransactions, nil
@@ -384,7 +385,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		parentTransactionID = &tx.ParentTransactionID
 	}
 
-	transaction, err := client.WalletTransaction.Create().
+	create := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
 		SetWalletID(tx.WalletID).
@@ -414,7 +415,14 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetIdempotencyKey(tx.IdempotencyKey).
 		SetNillablePriority(tx.Priority).
 		SetNillableParentTransactionID(parentTransactionID).
-		Save(ctx)
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID))
+	// Left unset when empty so the column is SQL NULL; ent would otherwise store JSON null.
+	if len(tx.ConsumptionBreakdown) > 0 {
+		create.SetConsumptionBreakdown(tx.ConsumptionBreakdown)
+	}
+
+	transaction, err := create.Save(ctx)
 
 	if err != nil {
 		if ent.IsConstraintError(err) {
@@ -849,6 +857,8 @@ func (r *walletRepository) UpdateTransaction(ctx context.Context, tx *walletdoma
 		SetCreditBalanceBefore(tx.CreditBalanceBefore).
 		SetCreditBalanceAfter(tx.CreditBalanceAfter).
 		SetCreditsAvailable(tx.CreditsAvailable).
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(tx.UpdatedAt).
 		Save(ctx)

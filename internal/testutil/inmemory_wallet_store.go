@@ -252,7 +252,8 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 		if t.WalletID != walletID ||
 			t.Type != types.TransactionTypeCredit ||
 			t.CreditsAvailable.LessThanOrEqual(decimal.Zero) ||
-			t.Status != types.StatusPublished {
+			t.Status != types.StatusPublished ||
+			t.TxStatus != types.TransactionStatusCompleted {
 			return false
 		}
 
@@ -321,8 +322,8 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 }
 
 // ConsumeCredits consumes credits from a wallet
-func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]*wallet.Transaction, error) {
-	consumedCredits := make([]*wallet.Transaction, 0)
+func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
+	consumedCredits := make([]types.WalletTxConsumption, 0, len(credits))
 	remainingAmount := amount
 
 	for _, credit := range credits {
@@ -349,7 +350,7 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCredits = append(consumedCredits, credit)
+		consumedCredits = append(consumedCredits, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
 	}
 
 	return consumedCredits, nil
@@ -631,6 +632,12 @@ func (s *InMemoryWalletStore) UpdateTransaction(ctx context.Context, tx *wallet.
 	existing.CreditBalanceBefore = tx.CreditBalanceBefore
 	existing.CreditBalanceAfter = tx.CreditBalanceAfter
 	existing.CreditsAvailable = tx.CreditsAvailable
+	if tx.SourceType != "" {
+		existing.SourceType = tx.SourceType
+	}
+	if tx.SourceID != "" {
+		existing.SourceID = tx.SourceID
+	}
 	existing.UpdatedAt = time.Now().UTC()
 	existing.UpdatedBy = types.GetUserID(ctx)
 

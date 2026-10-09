@@ -83852,42 +83852,46 @@ func (m *WalletMutation) ResetEdge(name string) error {
 // WalletTransactionMutation represents an operation that mutates the WalletTransaction nodes in the graph.
 type WalletTransactionMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *string
-	tenant_id             *string
-	status                *string
-	created_at            *time.Time
-	updated_at            *time.Time
-	created_by            *string
-	updated_by            *string
-	environment_id        *string
-	wallet_id             *string
-	customer_id           *string
-	_type                 *types.TransactionType
-	amount                *decimal.Decimal
-	credit_amount         *decimal.Decimal
-	credit_balance_before *decimal.Decimal
-	credit_balance_after  *decimal.Decimal
-	reference_type        *types.WalletTxReferenceType
-	reference_id          *string
-	description           *string
-	metadata              *map[string]string
-	transaction_status    *types.TransactionStatus
-	expiry_date           *time.Time
-	credits_available     *decimal.Decimal
-	currency              *string
-	conversion_rate       *decimal.Decimal
-	topup_conversion_rate *decimal.Decimal
-	idempotency_key       *string
-	transaction_reason    *types.TransactionReason
-	priority              *int
-	addpriority           *int
-	parent_transaction_id *string
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*WalletTransaction, error)
-	predicates            []predicate.WalletTransaction
+	op                          Op
+	typ                         string
+	id                          *string
+	tenant_id                   *string
+	status                      *string
+	created_at                  *time.Time
+	updated_at                  *time.Time
+	created_by                  *string
+	updated_by                  *string
+	environment_id              *string
+	wallet_id                   *string
+	customer_id                 *string
+	_type                       *types.TransactionType
+	amount                      *decimal.Decimal
+	credit_amount               *decimal.Decimal
+	credit_balance_before       *decimal.Decimal
+	credit_balance_after        *decimal.Decimal
+	reference_type              *types.WalletTxReferenceType
+	reference_id                *string
+	description                 *string
+	metadata                    *map[string]string
+	transaction_status          *types.TransactionStatus
+	expiry_date                 *time.Time
+	credits_available           *decimal.Decimal
+	currency                    *string
+	conversion_rate             *decimal.Decimal
+	topup_conversion_rate       *decimal.Decimal
+	idempotency_key             *string
+	transaction_reason          *types.TransactionReason
+	priority                    *int
+	addpriority                 *int
+	parent_transaction_id       *string
+	source_type                 *types.WalletTxSourceType
+	source_id                   *string
+	consumption_breakdown       *[]types.WalletTxConsumption
+	appendconsumption_breakdown []types.WalletTxConsumption
+	clearedFields               map[string]struct{}
+	done                        bool
+	oldValue                    func(context.Context) (*WalletTransaction, error)
+	predicates                  []predicate.WalletTransaction
 }
 
 var _ ent.Mutation = (*WalletTransactionMutation)(nil)
@@ -85205,6 +85209,169 @@ func (m *WalletTransactionMutation) ResetParentTransactionID() {
 	delete(m.clearedFields, wallettransaction.FieldParentTransactionID)
 }
 
+// SetSourceType sets the "source_type" field.
+func (m *WalletTransactionMutation) SetSourceType(ttst types.WalletTxSourceType) {
+	m.source_type = &ttst
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *WalletTransactionMutation) SourceType() (r types.WalletTxSourceType, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldSourceType(ctx context.Context) (v *types.WalletTxSourceType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ClearSourceType clears the value of the "source_type" field.
+func (m *WalletTransactionMutation) ClearSourceType() {
+	m.source_type = nil
+	m.clearedFields[wallettransaction.FieldSourceType] = struct{}{}
+}
+
+// SourceTypeCleared returns if the "source_type" field was cleared in this mutation.
+func (m *WalletTransactionMutation) SourceTypeCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldSourceType]
+	return ok
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *WalletTransactionMutation) ResetSourceType() {
+	m.source_type = nil
+	delete(m.clearedFields, wallettransaction.FieldSourceType)
+}
+
+// SetSourceID sets the "source_id" field.
+func (m *WalletTransactionMutation) SetSourceID(s string) {
+	m.source_id = &s
+}
+
+// SourceID returns the value of the "source_id" field in the mutation.
+func (m *WalletTransactionMutation) SourceID() (r string, exists bool) {
+	v := m.source_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceID returns the old "source_id" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldSourceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceID: %w", err)
+	}
+	return oldValue.SourceID, nil
+}
+
+// ClearSourceID clears the value of the "source_id" field.
+func (m *WalletTransactionMutation) ClearSourceID() {
+	m.source_id = nil
+	m.clearedFields[wallettransaction.FieldSourceID] = struct{}{}
+}
+
+// SourceIDCleared returns if the "source_id" field was cleared in this mutation.
+func (m *WalletTransactionMutation) SourceIDCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldSourceID]
+	return ok
+}
+
+// ResetSourceID resets all changes to the "source_id" field.
+func (m *WalletTransactionMutation) ResetSourceID() {
+	m.source_id = nil
+	delete(m.clearedFields, wallettransaction.FieldSourceID)
+}
+
+// SetConsumptionBreakdown sets the "consumption_breakdown" field.
+func (m *WalletTransactionMutation) SetConsumptionBreakdown(ttc []types.WalletTxConsumption) {
+	m.consumption_breakdown = &ttc
+	m.appendconsumption_breakdown = nil
+}
+
+// ConsumptionBreakdown returns the value of the "consumption_breakdown" field in the mutation.
+func (m *WalletTransactionMutation) ConsumptionBreakdown() (r []types.WalletTxConsumption, exists bool) {
+	v := m.consumption_breakdown
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConsumptionBreakdown returns the old "consumption_breakdown" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldConsumptionBreakdown(ctx context.Context) (v []types.WalletTxConsumption, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConsumptionBreakdown is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConsumptionBreakdown requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConsumptionBreakdown: %w", err)
+	}
+	return oldValue.ConsumptionBreakdown, nil
+}
+
+// AppendConsumptionBreakdown adds ttc to the "consumption_breakdown" field.
+func (m *WalletTransactionMutation) AppendConsumptionBreakdown(ttc []types.WalletTxConsumption) {
+	m.appendconsumption_breakdown = append(m.appendconsumption_breakdown, ttc...)
+}
+
+// AppendedConsumptionBreakdown returns the list of values that were appended to the "consumption_breakdown" field in this mutation.
+func (m *WalletTransactionMutation) AppendedConsumptionBreakdown() ([]types.WalletTxConsumption, bool) {
+	if len(m.appendconsumption_breakdown) == 0 {
+		return nil, false
+	}
+	return m.appendconsumption_breakdown, true
+}
+
+// ClearConsumptionBreakdown clears the value of the "consumption_breakdown" field.
+func (m *WalletTransactionMutation) ClearConsumptionBreakdown() {
+	m.consumption_breakdown = nil
+	m.appendconsumption_breakdown = nil
+	m.clearedFields[wallettransaction.FieldConsumptionBreakdown] = struct{}{}
+}
+
+// ConsumptionBreakdownCleared returns if the "consumption_breakdown" field was cleared in this mutation.
+func (m *WalletTransactionMutation) ConsumptionBreakdownCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldConsumptionBreakdown]
+	return ok
+}
+
+// ResetConsumptionBreakdown resets all changes to the "consumption_breakdown" field.
+func (m *WalletTransactionMutation) ResetConsumptionBreakdown() {
+	m.consumption_breakdown = nil
+	m.appendconsumption_breakdown = nil
+	delete(m.clearedFields, wallettransaction.FieldConsumptionBreakdown)
+}
+
 // Where appends a list predicates to the WalletTransactionMutation builder.
 func (m *WalletTransactionMutation) Where(ps ...predicate.WalletTransaction) {
 	m.predicates = append(m.predicates, ps...)
@@ -85239,7 +85406,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 31)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -85324,6 +85491,15 @@ func (m *WalletTransactionMutation) Fields() []string {
 	if m.parent_transaction_id != nil {
 		fields = append(fields, wallettransaction.FieldParentTransactionID)
 	}
+	if m.source_type != nil {
+		fields = append(fields, wallettransaction.FieldSourceType)
+	}
+	if m.source_id != nil {
+		fields = append(fields, wallettransaction.FieldSourceID)
+	}
+	if m.consumption_breakdown != nil {
+		fields = append(fields, wallettransaction.FieldConsumptionBreakdown)
+	}
 	return fields
 }
 
@@ -85388,6 +85564,12 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.Priority()
 	case wallettransaction.FieldParentTransactionID:
 		return m.ParentTransactionID()
+	case wallettransaction.FieldSourceType:
+		return m.SourceType()
+	case wallettransaction.FieldSourceID:
+		return m.SourceID()
+	case wallettransaction.FieldConsumptionBreakdown:
+		return m.ConsumptionBreakdown()
 	}
 	return nil, false
 }
@@ -85453,6 +85635,12 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldPriority(ctx)
 	case wallettransaction.FieldParentTransactionID:
 		return m.OldParentTransactionID(ctx)
+	case wallettransaction.FieldSourceType:
+		return m.OldSourceType(ctx)
+	case wallettransaction.FieldSourceID:
+		return m.OldSourceID(ctx)
+	case wallettransaction.FieldConsumptionBreakdown:
+		return m.OldConsumptionBreakdown(ctx)
 	}
 	return nil, fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -85658,6 +85846,27 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetParentTransactionID(v)
 		return nil
+	case wallettransaction.FieldSourceType:
+		v, ok := value.(types.WalletTxSourceType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
+		return nil
+	case wallettransaction.FieldSourceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceID(v)
+		return nil
+	case wallettransaction.FieldConsumptionBreakdown:
+		v, ok := value.([]types.WalletTxConsumption)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConsumptionBreakdown(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -85745,6 +85954,15 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldParentTransactionID) {
 		fields = append(fields, wallettransaction.FieldParentTransactionID)
 	}
+	if m.FieldCleared(wallettransaction.FieldSourceType) {
+		fields = append(fields, wallettransaction.FieldSourceType)
+	}
+	if m.FieldCleared(wallettransaction.FieldSourceID) {
+		fields = append(fields, wallettransaction.FieldSourceID)
+	}
+	if m.FieldCleared(wallettransaction.FieldConsumptionBreakdown) {
+		fields = append(fields, wallettransaction.FieldConsumptionBreakdown)
+	}
 	return fields
 }
 
@@ -85800,6 +86018,15 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 		return nil
 	case wallettransaction.FieldParentTransactionID:
 		m.ClearParentTransactionID()
+		return nil
+	case wallettransaction.FieldSourceType:
+		m.ClearSourceType()
+		return nil
+	case wallettransaction.FieldSourceID:
+		m.ClearSourceID()
+		return nil
+	case wallettransaction.FieldConsumptionBreakdown:
+		m.ClearConsumptionBreakdown()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction nullable field %s", name)
@@ -85892,6 +86119,15 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldParentTransactionID:
 		m.ResetParentTransactionID()
+		return nil
+	case wallettransaction.FieldSourceType:
+		m.ResetSourceType()
+		return nil
+	case wallettransaction.FieldSourceID:
+		m.ResetSourceID()
+		return nil
+	case wallettransaction.FieldConsumptionBreakdown:
+		m.ResetConsumptionBreakdown()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)

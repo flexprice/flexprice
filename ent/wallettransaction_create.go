@@ -350,6 +350,40 @@ func (_c *WalletTransactionCreate) SetNillableParentTransactionID(v *string) *Wa
 	return _c
 }
 
+// SetSourceType sets the "source_type" field.
+func (_c *WalletTransactionCreate) SetSourceType(v types.WalletTxSourceType) *WalletTransactionCreate {
+	_c.mutation.SetSourceType(v)
+	return _c
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_c *WalletTransactionCreate) SetNillableSourceType(v *types.WalletTxSourceType) *WalletTransactionCreate {
+	if v != nil {
+		_c.SetSourceType(*v)
+	}
+	return _c
+}
+
+// SetSourceID sets the "source_id" field.
+func (_c *WalletTransactionCreate) SetSourceID(v string) *WalletTransactionCreate {
+	_c.mutation.SetSourceID(v)
+	return _c
+}
+
+// SetNillableSourceID sets the "source_id" field if the given value is not nil.
+func (_c *WalletTransactionCreate) SetNillableSourceID(v *string) *WalletTransactionCreate {
+	if v != nil {
+		_c.SetSourceID(*v)
+	}
+	return _c
+}
+
+// SetConsumptionBreakdown sets the "consumption_breakdown" field.
+func (_c *WalletTransactionCreate) SetConsumptionBreakdown(v []types.WalletTxConsumption) *WalletTransactionCreate {
+	_c.mutation.SetConsumptionBreakdown(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *WalletTransactionCreate) SetID(v string) *WalletTransactionCreate {
 	_c.mutation.SetID(v)
@@ -650,6 +684,18 @@ func (_c *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.C
 	if value, ok := _c.mutation.ParentTransactionID(); ok {
 		_spec.SetField(wallettransaction.FieldParentTransactionID, field.TypeString, value)
 		_node.ParentTransactionID = value
+	}
+	if value, ok := _c.mutation.SourceType(); ok {
+		_spec.SetField(wallettransaction.FieldSourceType, field.TypeString, value)
+		_node.SourceType = &value
+	}
+	if value, ok := _c.mutation.SourceID(); ok {
+		_spec.SetField(wallettransaction.FieldSourceID, field.TypeString, value)
+		_node.SourceID = &value
+	}
+	if value, ok := _c.mutation.ConsumptionBreakdown(); ok {
+		_spec.SetField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON, value)
+		_node.ConsumptionBreakdown = value
 	}
 	return _node, _spec
 }
