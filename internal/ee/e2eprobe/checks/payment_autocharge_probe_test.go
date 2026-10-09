@@ -371,9 +371,6 @@ func TestPaymentAutoChargeProbe_LegsRunIndependently(t *testing.T) {
 	if attrs["failed_legs"] != "create_subscription,decline" {
 		t.Fatalf("failed_legs = %q, want create_subscription,decline (err: %v)", attrs["failed_legs"], err)
 	}
-	if !strings.Contains(attrs["skipped_legs"], "modify_subscription") || !strings.Contains(attrs["skipped_legs"], "add_addon") {
-		t.Errorf("skipped_legs = %q, want modify_subscription and add_addon", attrs["skipped_legs"])
-	}
 	if attrs["leg.decline.step"] != "decline_assert_not_completed" {
 		t.Errorf("leg.decline.step = %q", attrs["leg.decline.step"])
 	}

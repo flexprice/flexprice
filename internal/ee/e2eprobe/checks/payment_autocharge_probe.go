@@ -54,7 +54,7 @@ func (p *PaymentAutoChargeProbe) Run(ctx context.Context) error {
 	}
 
 	legs := &legResults{}
-	legs.runIf(len(saved.good) >= 2 && p.opts.supports(capSetDefault), "set_default", "two good saved cards", func() error {
+	legs.runIf(len(saved.good) >= 2 && p.opts.supports(capSetDefault), "set_default", func() error {
 		return p.switchDefaultCard(ctx, f, saved)
 	})
 	legs.run("wallet_topup", func() error { return p.walletAutoCharge(ctx, f) })
@@ -70,21 +70,21 @@ func (p *PaymentAutoChargeProbe) Run(ctx context.Context) error {
 		subID, err = p.subscriptionAutoCharge(ctx, f)
 		return err
 	})
-	legs.runIf(subID != "", "modify_subscription", "create_subscription", func() error {
+	legs.runIf(subID != "", "modify_subscription", func() error {
 		return p.modifySubscriptionAutoCharge(ctx, f, subID)
 	})
-	legs.runIf(subID != "", "add_addon", "create_subscription", func() error {
+	legs.runIf(subID != "", "add_addon", func() error {
 		return p.addonAutoCharge(ctx, f, subID)
 	})
-	legs.runKnown(p.opts.knownIssue("refund"), invoiceID != "", "refund", "pay_invoice", func() error {
+	legs.runKnown(p.opts.knownIssue("refund"), invoiceID != "", "refund", func() error {
 		return p.refundPaidInvoice(ctx, f, invoiceID)
 	})
-	legs.runKnown(p.opts.knownIssue("decline"), saved.declineID != "", "decline", "a saved declining card", func() error {
+	legs.runKnown(p.opts.knownIssue("decline"), saved.declineID != "", "decline", func() error {
 		return p.chargeDecliningCard(ctx, f, saved.portalToken, saved.declineID, saved.defaultID)
 	})
 	// The fixed mandate customer is never deleted by the janitor, so its
 	// subscriptions would otherwise pile up and renew against the mandate.
-	legs.runIf(subID != "", "cancel_subscription", "create_subscription", func() error {
+	legs.runIf(subID != "", "cancel_subscription", func() error {
 		return p.cancelSubscription(ctx, f, subID)
 	})
 	return legs.err(f)

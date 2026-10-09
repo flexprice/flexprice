@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 )
@@ -86,6 +87,22 @@ func enrichWithSDKError(err error, attrs map[string]string) {
 		setIfAbsent(attrs, "error_body", eer.Error())
 		return
 	}
+}
+
+// Brief renders err for an alert: a Flexprice API error becomes "<status> <message>".
+func Brief(err error) string {
+	var eer *sdkerrors.ErrorResponse
+	if errors.As(err, &eer) && eer != nil && eer.Message != nil {
+		if eer.HTTPStatusCode != nil {
+			return fmt.Sprintf("%d %s", *eer.HTTPStatusCode, *eer.Message)
+		}
+		return *eer.Message
+	}
+	var api *sdkerrors.APIError
+	if errors.As(err, &api) && api != nil {
+		return fmt.Sprintf("%d %s", api.StatusCode, strings.TrimSpace(api.Body))
+	}
+	return err.Error()
 }
 
 func setIfAbsent(m map[string]string, k, v string) {

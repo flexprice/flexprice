@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,21 +93,41 @@ func (s *slackReporter) logErr(ctx context.Context, step string, err error, chec
 	s.lg.Error(ctx, "slack reporter delivery failed", "error", err.Error(), "step", step, "check", check)
 }
 
+// slackHiddenAttrs stay in logs and OTEL but are noise in an alert.
+var slackHiddenAttrs = map[string]bool{
+	"run_id": true, "tenant_id": true, "environment_id": true, "step": true, "provider": true,
+	"status_code": true, "error_body": true, "failed_legs": true,
+}
+
 func formatSlack(r FailureReport) string {
 	var b strings.Builder
-	b.WriteString(":rotating_light: *e2eprobe.check.failed*\n")
-	b.WriteString(fmt.Sprintf("check: `%s` (%s)\n", r.CheckName, r.CheckKind))
-	if r.Step != "" {
-		b.WriteString(fmt.Sprintf("step: `%s`\n", r.Step))
+	b.WriteString(fmt.Sprintf(":rotating_light: *%s* failed", r.CheckName))
+	if tenant := r.Attributes["tenant_id"]; tenant != "" {
+		b.WriteString(" · " + tenant)
 	}
-	if r.RunID != "" {
-		b.WriteString(fmt.Sprintf("run_id: `%s`\n", r.RunID))
+	var parts []string
+	step := r.Attributes["step"]
+	if step == "" {
+		step = r.Step
 	}
-	for k, v := range r.Attributes {
-		b.WriteString(fmt.Sprintf("%s: `%s`\n", k, v))
+	if step != "" && step != "run" {
+		parts = append(parts, fmt.Sprintf("step `%s`", step))
+	}
+	keys := make([]string, 0, len(r.Attributes))
+	for k := range r.Attributes {
+		if !slackHiddenAttrs[k] && !strings.HasPrefix(k, "leg.") {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s `%s`", k, r.Attributes[k]))
+	}
+	if len(parts) > 0 {
+		b.WriteString("\n" + strings.Join(parts, " · "))
 	}
 	if r.Err != nil {
-		b.WriteString(fmt.Sprintf("error: ```%s```", r.Err.Error()))
+		b.WriteString("\n```" + Brief(r.Err) + "```")
 	}
 	return b.String()
 }
