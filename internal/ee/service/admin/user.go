@@ -112,8 +112,8 @@ func (s *userService) removeLogin(ctx context.Context, userID string) {
 	}
 }
 
-// RemoveUser removes a person from their tenant as the dashboard's remove does: it deletes their
-// Supabase login and archives their row. API keys they created keep working.
+// RemoveUser removes a person from their tenant: it archives their row, then deletes their
+// Supabase login. API keys they created keep working.
 func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -162,10 +162,11 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 				Mark(ierr.ErrValidation)
 		}
 
-		if err := auth.NewSupabaseAuth(s.Config).RemoveUser(ctx, target.ID); err != nil {
+		if err := s.UserRepo.Delete(ctx, target.ID); err != nil {
 			return err
 		}
-		return s.UserRepo.Delete(ctx, target.ID)
+		// Supabase last: a deleted login cannot be undone, but if this call fails the archive rolls back.
+		return auth.NewSupabaseAuth(s.Config).RemoveUser(ctx, target.ID)
 	})
 	if err != nil {
 		return nil, err

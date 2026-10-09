@@ -29,6 +29,15 @@ func (failingUserStore) Create(context.Context, *user.User) error {
 	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
 }
 
+// failingArchiveStore fails every archive, like a database error while removing the user.
+type failingArchiveStore struct {
+	*testutil.InMemoryUserStore
+}
+
+func (failingArchiveStore) Delete(context.Context, string) error {
+	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
 func TestAddUser(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "tenant_acme"
@@ -325,16 +334,25 @@ func TestRemoveUser(t *testing.T) {
 		assert.True(t, hasLogin)
 	})
 
-	t.Run("keeps the user when supabase cannot delete the login", func(t *testing.T) {
+	t.Run("keeps the supabase login when archiving fails", func(t *testing.T) {
 		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
-		d.params.Config.Auth.Supabase.BaseURL = failingDeleteSupabase(t)
+		d.params.UserRepo = failingArchiveStore{d.users}
 
 		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
 		require.Error(t, err)
 
-		u, err := d.users.GetByEmail(ctx, "teammate@acme.com")
-		require.NoError(t, err)
-		assert.Equal(t, types.StatusPublished, u.Status, "the row must stay while the login still exists")
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin, "a login deleted before the archive cannot be restored")
+	})
+
+	t.Run("fails the removal when supabase cannot delete the login", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		d.params.Config.Auth.Supabase.BaseURL = failingDeleteSupabase(t)
+
+		// The error makes the real transaction roll back the archive; the test database does not roll back.
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
 	})
 
 	t.Run("refuses to run without supabase auth", func(t *testing.T) {
