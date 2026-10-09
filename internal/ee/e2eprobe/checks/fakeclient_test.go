@@ -1040,6 +1040,8 @@ type fakePayments struct {
 	portalDeleteErr   error
 	defaults          []string
 	deleted           []string
+	// ignoreSetDefault records set-default calls without changing the default.
+	ignoreSetDefault bool
 
 	// onModify and onCreditNote let a test apply what the server would on
 	// completion (new line item, refunded invoice, wallet credit).
@@ -1184,6 +1186,9 @@ func (f *fakePayments) PortalSetDefaultMethod(_ context.Context, _, _, methodID 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.defaults = append(f.defaults, methodID)
+	if f.ignoreSetDefault {
+		return append([]e2eprobe.SavedPaymentMethod(nil), f.savedMethods...), nil
+	}
 	for i := range f.savedMethods {
 		f.savedMethods[i].IsDefault = f.savedMethods[i].ID == methodID
 	}

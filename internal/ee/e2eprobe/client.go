@@ -186,6 +186,17 @@ type SavedPaymentMethod struct {
 	Status        string `json:"status"`
 	IsDefault     bool   `json:"is_default"`
 	CanAutoCharge bool   `json:"can_auto_charge"`
+	Card          *struct {
+		Last4 string `json:"last4"`
+	} `json:"card,omitempty"`
+}
+
+// Last4 returns the card's last four digits, "" for a non-card method.
+func (m SavedPaymentMethod) Last4() string {
+	if m.Card == nil {
+		return ""
+	}
+	return m.Card.Last4
 }
 
 // PaymentOps covers checkout sessions and saved payment methods. Methods named

@@ -133,7 +133,9 @@ Adding a new probe: write `internal/ee/e2eprobe/checks/<name>.go` implementing `
 | `E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT` | Per-gateway override of the settle timeout | `10m` for razorpay (test-mode mandate debits capture up to minutes later), else the global value |
 | `E2EPROBE_STRIPE_TEST_SECRET_KEY` | Stripe **test-mode** key (`sk_test_`/`rk_test_`) of the account the environment's Stripe connection uses. Enables card vaulting and payment-autocharge-probe. Live keys are refused at startup | empty |
 | `E2EPROBE_CHARGEBEE_TEST_SITE` / `E2EPROBE_CHARGEBEE_TEST_API_KEY` | Chargebee **test** site (must end in `-test`) and its `test_` API key. Enables card vaulting and payment-autocharge-probe | empty |
-| `E2EPROBE_RAZORPAY_MANDATE_CUSTOMER` | External id of a persistent customer whose Razorpay mandate was authorized by hand; enables payment-autocharge-probe-razorpay on that customer (no decline leg) | empty |
+| `E2EPROBE_RAZORPAY_MANDATE_CUSTOMER` | Older name for `E2EPROBE_PAYMENTS_RAZORPAY_FIXED_CUSTOMER`, kept for existing deployments | empty |
+| `E2EPROBE_PAYMENTS_<PROVIDER>_FIXED_CUSTOMER` | External id of a persistent customer whose cards or mandates were saved by hand. Used by payment-autocharge-probe when the probe holds no gateway key for that provider. Razorpay also accepts `E2EPROBE_RAZORPAY_MANDATE_CUSTOMER` | empty |
+| `E2EPROBE_PAYMENTS_<PROVIDER>_DECLINE_CARD_LAST4` | Last four digits of the fixed customer's declining card. With it, the decline leg charges that card; with two other good cards, the `set_default` leg alternates the default between them each run | empty |
 | `E2EPROBE_PAYMENTS_ASSERT_KNOWN_ISSUES` | Run legs that fail on known, unfixed product bugs (listed in `knownIssueLegs`, e.g. Chargebee refund and decline). Off reports them under `skipped_legs` instead of failing | `false` |
 | `E2EPROBE_CHARGEBEE_DECLINE_CARD` | Card number the Chargebee test gateway vaults but declines; the decline leg is skipped when empty | empty |
 

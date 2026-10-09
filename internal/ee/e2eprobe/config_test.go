@@ -346,3 +346,62 @@ func TestLoadConfig_PaymentsSettleTimeoutPerProvider(t *testing.T) {
 		t.Errorf("stripe SettleTimeout = %s, want 2m override", got)
 	}
 }
+
+func TestLoadConfig_PaymentsFixedCustomer(t *testing.T) {
+	tests := []struct {
+		name          string
+		env           map[string]string
+		wantCustomers map[string]string
+		wantLast4     map[string]string
+	}{
+		{
+			name: "per-gateway fixed customer and declining card",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":                    "stripe,chargebee",
+				"E2EPROBE_PAYMENTS_STRIPE_FIXED_CUSTOMER":        "cust-stripe",
+				"E2EPROBE_PAYMENTS_CHARGEBEE_FIXED_CUSTOMER":     "cust-cb",
+				"E2EPROBE_PAYMENTS_CHARGEBEE_DECLINE_CARD_LAST4": "0004",
+			},
+			wantCustomers: map[string]string{"stripe": "cust-stripe", "chargebee": "cust-cb"},
+			wantLast4:     map[string]string{"stripe": "", "chargebee": "0004"},
+		},
+		{
+			name: "legacy razorpay mandate variable still works",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":        "razorpay",
+				"E2EPROBE_RAZORPAY_MANDATE_CUSTOMER": "cust-rzp",
+			},
+			wantCustomers: map[string]string{"razorpay": "cust-rzp"},
+		},
+		{
+			name: "generic variable wins over the legacy one",
+			env: map[string]string{
+				"E2EPROBE_PAYMENTS_PROVIDERS":               "razorpay",
+				"E2EPROBE_RAZORPAY_MANDATE_CUSTOMER":        "cust-old",
+				"E2EPROBE_PAYMENTS_RAZORPAY_FIXED_CUSTOMER": "cust-new",
+			},
+			wantCustomers: map[string]string{"razorpay": "cust-new"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+			t.Setenv("E2EPROBE_API_KEY", "k")
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			c, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			for _, p := range c.Payments.Providers {
+				if got := p.FixedCustomerExternalID; got != tt.wantCustomers[p.Provider] {
+					t.Errorf("%s fixed customer = %q, want %q", p.Provider, got, tt.wantCustomers[p.Provider])
+				}
+				if got := p.DeclineCardLast4; got != tt.wantLast4[p.Provider] {
+					t.Errorf("%s decline last4 = %q, want %q", p.Provider, got, tt.wantLast4[p.Provider])
+				}
+			}
+		})
+	}
+}

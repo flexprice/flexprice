@@ -440,3 +440,92 @@ func TestPaymentAutoChargeProbe_FixedMandateCustomer(t *testing.T) {
 		}
 	})
 }
+
+// savedCard is a hand-saved card on the fixed customer's listing.
+func savedCard(id, last4 string, isDefault bool) e2eprobe.SavedPaymentMethod {
+	m := e2eprobe.SavedPaymentMethod{ID: id, Status: "active", CanAutoCharge: true, IsDefault: isDefault}
+	m.Card = &struct {
+		Last4 string `json:"last4"`
+	}{Last4: last4}
+	return m
+}
+
+func TestPaymentAutoChargeProbe_FixedSavedCards(t *testing.T) {
+	setup := func(t *testing.T, cards ...e2eprobe.SavedPaymentMethod) *paymentFixture {
+		fx, _ := autoChargeFixture(t, "stripe")
+		fx.opts.Driver = nil
+		fx.opts.Provider.FixedCustomerExternalID = "e2eprobe-cust-pay-stripe-cards"
+		fx.opts.Provider.DeclineCardLast4 = "0341"
+		fx.fc.payments.savedMethods = cards
+		return fx
+	}
+
+	t.Run("switches default between good cards and charges the declining card", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", true), savedCard("pm_good_b", "4444", false), savedCard("pm_decline_c", "0341", false))
+		if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		want := []string{"pm_good_b", "pm_decline_c", "pm_good_b"}
+		if got := fx.fc.payments.defaults; strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("default changes = %v, want %v (switch, decline, restore)", got, want)
+		}
+	})
+
+	t.Run("next run switches back", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", false), savedCard("pm_good_b", "4444", true), savedCard("pm_decline_c", "0341", false))
+		if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if got := fx.fc.payments.defaults; len(got) == 0 || got[0] != "pm_good_a" {
+			t.Errorf("default changes = %v, want the first switch to pm_good_a", got)
+		}
+	})
+
+	t.Run("declining card left as default is replaced before charging", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", false), savedCard("pm_good_b", "4444", false), savedCard("pm_decline_c", "0341", true))
+		if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if got := fx.fc.payments.defaults; len(got) == 0 || got[0] != "pm_good_a" {
+			t.Errorf("default changes = %v, want a good card restored first", got)
+		}
+	})
+
+	t.Run("one good card skips set_default", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", true), savedCard("pm_decline_c", "0341", false))
+		if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if got := fx.fc.payments.defaults; strings.Join(got, ",") != "pm_decline_c,pm_good_a" {
+			t.Errorf("default changes = %v, want only the decline leg's switch and restore", got)
+		}
+	})
+
+	t.Run("no declining card configured skips the decline leg", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", true), savedCard("pm_good_b", "4444", false))
+		fx.opts.Provider.DeclineCardLast4 = ""
+		if err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if got := fx.fc.payments.defaults; strings.Join(got, ",") != "pm_good_b" {
+			t.Errorf("default changes = %v, want only the set_default switch", got)
+		}
+	})
+
+	t.Run("only the declining card saved", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_decline_c", "0341", true))
+		err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background())
+		if got := stepOf(err); got != "fixed_customer_mandate" {
+			t.Fatalf("step = %q, want fixed_customer_mandate (err: %v)", got, err)
+		}
+	})
+
+	t.Run("set-default not reflected in the listing", func(t *testing.T) {
+		fx := setup(t, savedCard("pm_good_a", "4242", true), savedCard("pm_good_b", "4444", false), savedCard("pm_decline_c", "0341", false))
+		fx.fc.payments.ignoreSetDefault = true
+		err := NewPaymentAutoChargeProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background())
+		if got := e2eprobe.AttributesFrom(err)["leg.set_default.step"]; got != "set_default_assert_response" {
+			t.Fatalf("set_default step = %q, want set_default_assert_response (err: %v)", got, err)
+		}
+	})
+}
