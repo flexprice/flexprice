@@ -49,17 +49,14 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 	}
 	ctx = types.SetUserID(ctx, userID)
 
+	newTenant := (&dto.CreateTenantRequest{ID: tenantID, Name: req.TenantName}).ToTenant(ctx)
 	owner := newOwner(ctx, userID, req.Email)
 	envs := newEnvironments(ctx, req.CreateProduction)
 
-	var created *dto.TenantResponse
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Same path as self-serve signup, so the tenant also becomes a billing customer.
-		t, err := s.tenants.CreateTenant(ctx, dto.CreateTenantRequest{ID: tenantID, Name: req.TenantName})
-		if err != nil {
+		if err := s.TenantRepo.Create(ctx, newTenant); err != nil {
 			return err
 		}
-		created = t
 		if err := s.UserRepo.Create(ctx, owner); err != nil {
 			return err
 		}
@@ -75,8 +72,13 @@ func (s *tenantService) CreateTenant(ctx context.Context, req admindto.CreateTen
 		return nil, err
 	}
 
+	// Only after the commit: the billing customer's events are sent at once, and a rollback could not recall them.
+	if err := s.tenants.CreateTenantAsBillingCustomer(ctx, newTenant); err != nil {
+		s.Logger.Error(ctx, "failed to create billing customer for tenant", "error", err, "tenant_id", tenantID)
+	}
+
 	s.Logger.Info(ctx, "created tenant", "tenant_id", tenantID, "user_id", userID, "production", req.CreateProduction)
-	return admindto.NewCreateTenantResponse(created, owner, envs), nil
+	return admindto.NewCreateTenantResponse(dto.NewTenantResponse(newTenant), owner, envs), nil
 }
 
 // newOwner builds the tenant's first user as super_admin so it can invite the rest of the team.

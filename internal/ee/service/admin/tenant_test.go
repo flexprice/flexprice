@@ -13,6 +13,7 @@ import (
 	cerrors "github.com/cockroachdb/errors"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -151,9 +152,55 @@ func (d *tenantTestDeps) storedTenantCount(t *testing.T) int {
 	return len(tenants)
 }
 
+const (
+	billingTenantID      = "tenant_billing"
+	billingEnvironmentID = "env_billing"
+)
+
+// tenantBilling holds the billing tenant's stores, where every new tenant becomes a customer.
+type tenantBilling struct {
+	customers *testutil.InMemoryCustomerStore
+	webhooks  *testutil.InMemoryWebhookPublisher
+}
+
+// withBilling configures a billing tenant, as the hosted cloud does, so new tenants become billing customers.
+func (d *tenantTestDeps) withBilling() *tenantBilling {
+	b := &tenantBilling{
+		customers: testutil.NewInMemoryCustomerStore(),
+		webhooks:  testutil.NewInMemoryWebhookPublisher(),
+	}
+	d.params.Config.Billing.TenantID = billingTenantID
+	d.params.Config.Billing.EnvironmentID = billingEnvironmentID
+	d.params.CustomerRepo = b.customers
+	d.params.WebhookPublisher = b.webhooks
+	d.params.TaxAssociationRepo = testutil.NewInMemoryTaxAssociationStore()
+	d.params.SettingsRepo = testutil.NewInMemorySettingsStore()
+	d.params.PlanRepo = testutil.NewInMemoryPlanStore()
+	return b
+}
+
+// failingCustomerStore fails every create, like a database error while making the billing customer.
+type failingCustomerStore struct {
+	*testutil.InMemoryCustomerStore
+}
+
+func (failingCustomerStore) Create(context.Context, *customer.Customer) error {
+	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
 func TestCreateTenant(t *testing.T) {
 	ctx := context.Background()
 	acme := admindto.CreateTenantRequest{TenantName: "Acme", Email: "owner@acme.com", Password: "chosen-by-operator"}
+
+	// saveFailures each break one of the saves made inside the create transaction.
+	saveFailures := []struct {
+		name string
+		fail func(d *tenantTestDeps)
+	}{
+		{name: "tenant", fail: func(d *tenantTestDeps) { d.params.TenantRepo = failingTenantStore{d.tenants} }},
+		{name: "owner", fail: func(d *tenantTestDeps) { d.params.UserRepo = failingUserStore{d.users} }},
+		{name: "environment", fail: func(d *tenantTestDeps) { d.params.EnvironmentRepo = failingEnvironmentStore{d.environments} }},
+	}
 
 	t.Run("creates the tenant with a super_admin owner and a sandbox", func(t *testing.T) {
 		d := newTenantTestDeps(t)
@@ -306,16 +353,7 @@ func TestCreateTenant(t *testing.T) {
 	})
 
 	t.Run("removes the supabase user when saving fails", func(t *testing.T) {
-		failures := []struct {
-			name string
-			fail func(d *tenantTestDeps)
-		}{
-			{name: "tenant", fail: func(d *tenantTestDeps) { d.params.TenantRepo = failingTenantStore{d.tenants} }},
-			{name: "owner", fail: func(d *tenantTestDeps) { d.params.UserRepo = failingUserStore{d.users} }},
-			{name: "environment", fail: func(d *tenantTestDeps) { d.params.EnvironmentRepo = failingEnvironmentStore{d.environments} }},
-		}
-
-		for _, f := range failures {
+		for _, f := range saveFailures {
 			t.Run(f.name, func(t *testing.T) {
 				d := newTenantTestDeps(t)
 				f.fail(d)
@@ -329,6 +367,52 @@ func TestCreateTenant(t *testing.T) {
 				assert.Zero(t, remaining, "a supabase user without a tenant would block retrying this email")
 			})
 		}
+	})
+
+	t.Run("sends no billing events when saving fails", func(t *testing.T) {
+		for _, f := range saveFailures {
+			t.Run(f.name, func(t *testing.T) {
+				d := newTenantTestDeps(t)
+				billing := d.withBilling()
+				f.fail(d)
+
+				_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
+				require.Error(t, err)
+				assert.Empty(t, billing.webhooks.Events(), "an event sent before a rollback names a customer that was never saved")
+			})
+		}
+	})
+
+	t.Run("makes the tenant a billing customer", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		billing := d.withBilling()
+
+		resp, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
+		require.NoError(t, err)
+
+		billingCtx := types.SetEnvironmentID(types.SetTenantID(ctx, billingTenantID), billingEnvironmentID)
+		cust, err := billing.customers.GetByLookupKey(billingCtx, resp.TenantID)
+		require.NoError(t, err)
+		assert.Equal(t, "Acme", cust.Name)
+
+		events := billing.webhooks.Events()
+		require.Len(t, events, 1)
+		assert.Equal(t, types.WebhookEventCustomerCreated, events[0].EventName)
+		assert.Equal(t, cust.ID, events[0].EntityID)
+	})
+
+	t.Run("keeps the tenant when the billing customer cannot be made", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		billing := d.withBilling()
+		d.params.CustomerRepo = failingCustomerStore{billing.customers}
+
+		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
+		require.NoError(t, err, "the tenant is already saved, so a billing failure must not fail the request")
+
+		assert.Equal(t, 1, d.storedTenantCount(t))
+		_, remaining := d.supabase.counts()
+		assert.Equal(t, 1, remaining, "the login of a saved tenant must stay")
+		assert.Empty(t, billing.webhooks.Events())
 	})
 
 	t.Run("returns the save error when the cleanup also fails", func(t *testing.T) {
