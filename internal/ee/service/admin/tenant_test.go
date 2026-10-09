@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	cerrors "github.com/cockroachdb/errors"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -248,6 +249,20 @@ func TestCreateTenant(t *testing.T) {
 		_, err = d.users.GetByEmail(ctx, "owner@acme.com")
 		assert.True(t, ierr.IsNotFound(err))
 		assert.Empty(t, d.storedEnvironments(t))
+	})
+
+	t.Run("reports a password supabase rejects as bad input, not a duplicate", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		d.supabase.createCode = http.StatusUnprocessableEntity
+		d.supabase.createMsg = "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789"
+
+		_, err := NewTenantService(d.params).CreateTenant(ctx, acme)
+		require.Error(t, err)
+		assert.True(t, ierr.IsValidation(err))
+		assert.False(t, ierr.IsAlreadyExists(err))
+		assert.Contains(t, cerrors.FlattenHints(err), "Password should contain", "the operator must see why Supabase refused")
+
+		assert.Zero(t, d.storedTenantCount(t))
 	})
 
 	t.Run("removes the supabase user when saving fails", func(t *testing.T) {

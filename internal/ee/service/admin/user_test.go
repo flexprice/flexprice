@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	cerrors "github.com/cockroachdb/errors"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -120,6 +121,21 @@ func TestAddUser(t *testing.T) {
 		_, err := NewUserService(d.params).AddUser(ctx, teammate)
 		require.Error(t, err)
 		assert.True(t, ierr.IsAlreadyExists(err))
+
+		_, err = d.users.GetByEmail(ctx, "teammate@acme.com")
+		assert.True(t, ierr.IsNotFound(err))
+	})
+
+	t.Run("reports a password supabase rejects as bad input, not a duplicate", func(t *testing.T) {
+		d := withTenant(t)
+		d.supabase.createCode = http.StatusUnprocessableEntity
+		d.supabase.createMsg = "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789"
+
+		_, err := NewUserService(d.params).AddUser(ctx, teammate)
+		require.Error(t, err)
+		assert.True(t, ierr.IsValidation(err))
+		assert.False(t, ierr.IsAlreadyExists(err))
+		assert.Contains(t, cerrors.FlattenHints(err), "Password should contain", "the operator must see why Supabase refused")
 
 		_, err = d.users.GetByEmail(ctx, "teammate@acme.com")
 		assert.True(t, ierr.IsNotFound(err))

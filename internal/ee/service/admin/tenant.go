@@ -117,7 +117,7 @@ func (s *tenantService) removeLogin(ctx context.Context, userID string) {
 	}
 }
 
-// supabaseError maps a Supabase failure to an API error; an email Supabase already has is a conflict.
+// supabaseError maps a Supabase failure to an API error: an email it already has is a conflict, other refused input is bad input.
 func supabaseError(err error, email string) error {
 	var supaErr *supabase.ErrorResponse
 	if !errors.As(err, &supaErr) {
@@ -133,12 +133,18 @@ func supabaseError(err error, email string) error {
 		"supabase_error": supaErr.Message,
 	}
 	if supaErr.Code == http.StatusConflict ||
-		supaErr.Code == http.StatusUnprocessableEntity ||
 		strings.Contains(strings.ToLower(supaErr.Message), "already") {
 		return ierr.WithError(supaErr).
 			WithHint("A user with this email already exists in Supabase").
 			WithReportableDetails(details).
 			Mark(ierr.ErrAlreadyExists)
+	}
+	// Supabase also uses 422 for input it refuses, such as a password weaker than its policy allows.
+	if supaErr.Code == http.StatusBadRequest || supaErr.Code == http.StatusUnprocessableEntity {
+		return ierr.WithError(supaErr).
+			WithHintf("Supabase rejected the user: %s", supaErr.Message).
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
 	}
 	return ierr.WithError(supaErr).
 		WithHintf("Supabase rejected the user (code %d)", supaErr.Code).
