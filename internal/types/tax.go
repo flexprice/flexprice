@@ -161,9 +161,13 @@ func JoinTaxProviders(providers []TaxProvider) string {
 // Enabled is separate from Provider so an engine can be switched off without losing which one
 // was configured. It gates the external engine only: native tax is what a disabled config falls
 // back to, never an absence of tax.
+//
+// Neither field carries omitempty: a disabled config has to persist as enabled:false rather
+// than vanishing from the stored document, which would make it indistinguishable from one that
+// was never configured.
 type TaxConfig struct {
-	Enabled  bool        `json:"enabled,omitempty"`
-	Provider TaxProvider `json:"provider,omitempty"`
+	Enabled  bool        `json:"enabled"`
+	Provider TaxProvider `json:"provider"`
 }
 
 // UsesExternalTaxEngine reports whether an engine outside Flexprice calculates this tenant's tax.
