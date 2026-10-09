@@ -274,7 +274,7 @@ func NewRouter(
 		customer := v1Private.Group("/customers")
 		{
 			// list customers by filter
-			customer.POST("/search", handlers.Customer.QueryCustomers)
+			customer.POST("/search", read(types.EntityCustomer, types.ActionRead), handlers.Customer.QueryCustomers)
 
 			customer.POST("", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.CreateCustomer)
 			customer.GET("", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListCustomers)
@@ -350,16 +350,16 @@ func NewRouter(
 
 		subscription := v1Private.Group("/subscriptions")
 		{
-			subscription.POST("/search", handlers.Subscription.QuerySubscriptions)
+			subscription.POST("/search", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.QuerySubscriptions)
 			subscription.POST("", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.CreateSubscription)
 			subscription.GET("", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.ListSubscriptions)
-			subscription.POST("/lineitems/search", handlers.Subscription.QuerySubscriptionLineItems)
+			subscription.POST("/lineitems/search", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.QuerySubscriptionLineItems)
 			subscription.GET("/:id", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscription)
 			subscription.PUT("/:id", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.UpdateSubscription)
 			subscription.GET("/:id/v2", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscriptionV2)
 			subscription.POST("/:id/activate", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.ActivateDraftSubscription)
 			subscription.POST("/:id/cancel", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.CancelSubscription)
-			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
+			subscription.POST("/usage", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetUsageBySubscription)
 
 			subscription.GET("/:id/entitlements", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetSubscriptionEntitlements)
 			subscription.GET("/:id/grants/upcoming", read(types.EntitySubscription, types.ActionRead), handlers.Subscription.GetUpcomingCreditGrantApplications)
@@ -416,8 +416,8 @@ func NewRouter(
 			wallet.GET("/:id/balance/real-time-cached", read(types.EntityWallet, types.ActionRead), handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.UpdateWallet)
 			wallet.POST("/:id/debit", write(types.EntityWallet, types.ActionWrite), handlers.Wallet.ManualBalanceDebit)
-			wallet.POST("/transactions/search", handlers.Wallet.QueryWalletTransactions)
-			wallet.POST("/search", handlers.Wallet.QueryWallets)
+			wallet.POST("/transactions/search", read(types.EntityWallet, types.ActionRead), handlers.Wallet.QueryWalletTransactions)
+			wallet.POST("/search", read(types.EntityWallet, types.ActionRead), handlers.Wallet.QueryWallets)
 		}
 
 		// Tenant routes
@@ -431,7 +431,7 @@ func NewRouter(
 		invoices := v1Private.Group("/invoices")
 		{
 			invoices.POST("/temporal/:invoice_id/finalize", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerFinalizeDraftInvoiceWorkflow)
-			invoices.POST("/search", handlers.Invoice.QueryInvoices)
+			invoices.POST("/search", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.QueryInvoices)
 			invoices.POST("", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.CreateOneOffInvoice)
 			invoices.GET("", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.ListInvoices)
 			invoices.GET("/:id", read(types.EntityInvoice, types.ActionRead), handlers.Invoice.GetInvoice)
