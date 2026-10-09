@@ -144,6 +144,19 @@ func TestUpdateTenantConfig(t *testing.T) {
 		})
 	}
 
+	t.Run("returns the error when the setting cannot be saved", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.params.SettingsRepo = failingSettingsStore{d.settings}
+
+		resp, err := newTestSettingsService(d.params).UpdateTenantConfig(ctx, admindto.UpdateTenantConfigRequest{
+			TenantID: settingsTenantID,
+			Value:    admindto.TenantConfigValue{Development: lo.ToPtr(5)},
+		})
+		require.Error(t, err)
+		assert.True(t, ierr.IsDatabase(err))
+		assert.Nil(t, resp)
+	})
+
 	t.Run("refuses a tenant that does not exist", func(t *testing.T) {
 		d := newSettingsTestDeps(t)
 
@@ -188,4 +201,13 @@ func TestUpdateTenantConfigValidation(t *testing.T) {
 // newTestSettingsService wires the admin settings service to the real shared settings service, as fx does.
 func newTestSettingsService(params service.ServiceParams) SettingsService {
 	return NewSettingsService(params, service.NewSettingsService(params))
+}
+
+// failingSettingsStore fails every create, like a database error while saving the setting.
+type failingSettingsStore struct {
+	*testutil.InMemorySettingsStore
+}
+
+func (failingSettingsStore) Create(context.Context, *settings.Setting) error {
+	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
 }

@@ -14,6 +14,7 @@ import (
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -79,6 +80,15 @@ func (f *fakeSupabase) counts() (created, remaining int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.created, len(f.users)
+}
+
+// failingTenantStore fails every create, like a database error while saving the tenant.
+type failingTenantStore struct {
+	*testutil.InMemoryTenantStore
+}
+
+func (failingTenantStore) Create(context.Context, *tenant.Tenant) error {
+	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
 }
 
 // failingEnvironmentStore fails every create, like a database error partway through the transaction.
@@ -296,15 +306,39 @@ func TestCreateTenant(t *testing.T) {
 	})
 
 	t.Run("removes the supabase user when saving fails", func(t *testing.T) {
+		failures := []struct {
+			name string
+			fail func(d *tenantTestDeps)
+		}{
+			{name: "tenant", fail: func(d *tenantTestDeps) { d.params.TenantRepo = failingTenantStore{d.tenants} }},
+			{name: "owner", fail: func(d *tenantTestDeps) { d.params.UserRepo = failingUserStore{d.users} }},
+			{name: "environment", fail: func(d *tenantTestDeps) { d.params.EnvironmentRepo = failingEnvironmentStore{d.environments} }},
+		}
+
+		for _, f := range failures {
+			t.Run(f.name, func(t *testing.T) {
+				d := newTenantTestDeps(t)
+				f.fail(d)
+
+				_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
+				require.Error(t, err)
+				assert.True(t, ierr.IsDatabase(err))
+
+				created, remaining := d.supabase.counts()
+				assert.Equal(t, 1, created)
+				assert.Zero(t, remaining, "a supabase user without a tenant would block retrying this email")
+			})
+		}
+	})
+
+	t.Run("returns the save error when the cleanup also fails", func(t *testing.T) {
 		d := newTenantTestDeps(t)
 		d.params.EnvironmentRepo = failingEnvironmentStore{d.environments}
+		d.params.Config.Auth.Supabase.BaseURL = cleanupFailingSupabase(t)
 
 		_, err := newTestTenantService(d.params).CreateTenant(ctx, acme)
 		require.Error(t, err)
-
-		created, remaining := d.supabase.counts()
-		assert.Equal(t, 1, created)
-		assert.Zero(t, remaining, "a supabase user without a tenant would block retrying this email")
+		assert.True(t, ierr.IsDatabase(err), "a failed cleanup must not replace the original error")
 	})
 
 	t.Run("refuses to run without supabase auth", func(t *testing.T) {
@@ -352,4 +386,20 @@ func TestCreateTenantValidation(t *testing.T) {
 // newTestTenantService wires the admin tenant service to the real shared tenant service, as fx does.
 func newTestTenantService(params service.ServiceParams) TenantService {
 	return NewTenantService(params, service.NewTenantService(params))
+}
+
+// cleanupFailingSupabase creates users but cannot delete them, like an outage right after the login is made.
+func cleanupFailingSupabase(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": http.StatusInternalServerError, "msg": "boom"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": "supabase_user_1"})
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
 }

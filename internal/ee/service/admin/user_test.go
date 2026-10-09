@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/nedpals/supabase-go"
@@ -396,6 +397,31 @@ func TestRemoveUser(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("keeps the user when counting members fails", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		d.params.UserRepo = failingCountStore{d.users}
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin)
+	})
+
+	t.Run("keeps the user when the tenant lock cannot be taken", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+		d.params.DB = lockFailingDB{d.params.DB}
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
+		require.Error(t, err)
+		assert.True(t, ierr.IsInternal(err))
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusPublished, status)
+		assert.True(t, hasLogin)
+	})
+
 	t.Run("refuses to run without supabase auth", func(t *testing.T) {
 		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
 		d.params.Config.Auth.Provider = types.AuthProviderFlexprice
@@ -430,4 +456,22 @@ func TestRemoveUserValidation(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 	}
+}
+
+// failingCountStore fails every listing, like a database error while counting a tenant's users.
+type failingCountStore struct {
+	*testutil.InMemoryUserStore
+}
+
+func (failingCountStore) ListByFilter(context.Context, *types.UserFilter) ([]*user.User, int64, error) {
+	return nil, 0, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+// lockFailingDB fails every lock, like a timeout while another removal holds the tenant's lock.
+type lockFailingDB struct {
+	postgres.IClient
+}
+
+func (lockFailingDB) LockWithWait(context.Context, postgres.LockRequest) error {
+	return cerrors.New("failed to acquire lock within 5s")
 }
