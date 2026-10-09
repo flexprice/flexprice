@@ -94,6 +94,8 @@ type PaymentProviderConfig struct {
 
 	// SettleTimeout overrides PaymentsConfig.SettleTimeout for this gateway.
 	SettleTimeout time.Duration // E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT
+	// AutoChargeInterval floors the auto-charge probe interval for this gateway.
+	AutoChargeInterval time.Duration
 
 	// FixedCustomerExternalID names a persistent customer whose cards or mandates
 	// were saved by hand; auto-charge flows run on it.
@@ -120,6 +122,14 @@ var paymentFixedCustomer = map[string]string{
 var paymentDeclineCardLast4 = map[string]string{
 	"stripe":    "0341",
 	"chargebee": "0004",
+}
+
+// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards and mandates:
+// Razorpay test card mandates refuse the 22nd debit of a day.
+var paymentAutoChargeInterval = map[string]time.Duration{
+	"stripe":    6 * time.Hour,
+	"chargebee": 6 * time.Hour,
+	"razorpay":  12 * time.Hour,
 }
 
 var paymentDefaultCurrency = map[string]string{
@@ -280,6 +290,7 @@ func loadPaymentsConfig(warnings *[]string) (PaymentsConfig, error) {
 			Currency:                strings.ToUpper(os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_CURRENCY")),
 			FixedCustomerExternalID: paymentFixedCustomer[name],
 			DeclineCardLast4:        paymentDeclineCardLast4[name],
+			AutoChargeInterval:      paymentAutoChargeInterval[name],
 		}
 		if p.Currency == "" {
 			p.Currency = def

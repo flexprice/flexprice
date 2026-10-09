@@ -351,5 +351,8 @@ func TestLoadConfig_PaymentsFixedCustomer(t *testing.T) {
 		if got := [2]string{p.FixedCustomerExternalID, p.DeclineCardLast4}; got != want[p.Provider] {
 			t.Errorf("%s = %v, want %v", p.Provider, got, want[p.Provider])
 		}
+		if wantInterval := map[string]time.Duration{"stripe": 6 * time.Hour, "chargebee": 6 * time.Hour, "razorpay": 12 * time.Hour}[p.Provider]; p.AutoChargeInterval != wantInterval {
+			t.Errorf("%s auto-charge interval = %v, want %v", p.Provider, p.AutoChargeInterval, wantInterval)
+		}
 	}
 }

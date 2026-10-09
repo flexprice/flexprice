@@ -353,7 +353,7 @@ func main() {
 		}
 		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && provider.FixedCustomerExternalID != "" {
 			pap := checks_pkg.NewPaymentAutoChargeProbe(client, reg, runID, lg, opts)
-			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval))
+			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, max(cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval, provider.AutoChargeInterval)))
 		}
 	}
 
