@@ -82,10 +82,11 @@ func (f *fakeSyncMappingRepo) Create(_ context.Context, m *entityintegrationmapp
 
 type fakeSyncCustomerRepo struct {
 	customer.Repository
+	metadata map[string]string
 }
 
 func (f *fakeSyncCustomerRepo) Get(_ context.Context, id string) (*customer.Customer, error) {
-	return &customer.Customer{ID: id, Name: "Gobblecube"}, nil
+	return &customer.Customer{ID: id, Name: "Gobblecube", Metadata: f.metadata}, nil
 }
 
 func (f *fakeSyncCustomerRepo) List(_ context.Context, _ *types.CustomerFilter) ([]*customer.Customer, error) {
@@ -375,11 +376,8 @@ func TestSyncInvoiceToZoho_ReceivableAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, client.createInvoiceReq.AccountID, "unset leaves Zoho's default")
 
-	svc, client = newSyncTestService(buildTestInvoice("INR", "0", "", "", line), &types.SyncConfig{
-		InvoiceSyncSettings: &types.InvoiceSyncSettings{
-			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{ReceivableAccountID: " 460000000000462 "},
-		},
-	})
+	svc, client = newSyncTestService(buildTestInvoice("INR", "0", "", "", line), nil)
+	svc.customerRepo = &fakeSyncCustomerRepo{metadata: map[string]string{zohoReceivableAccountKey: " 460000000000462 "}}
 	_, err = svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
 	require.NoError(t, err)
 	assert.Equal(t, "460000000000462", client.createInvoiceReq.AccountID)

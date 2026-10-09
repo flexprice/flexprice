@@ -183,27 +183,3 @@ func TestSyncConfigValidateRejectsBadMetadataCustomFields(t *testing.T) {
 	}
 	assert.Error(t, cfg.Validate())
 }
-
-func TestValidateZohoPaymentSettingsAccountIDs(t *testing.T) {
-	tests := []struct {
-		name     string
-		settings ZohoInvoiceSyncSettings
-		wantErr  bool
-	}{
-		{name: "empty ids", settings: ZohoInvoiceSyncSettings{}},
-		{name: "numeric receivable id", settings: ZohoInvoiceSyncSettings{ReceivableAccountID: "4040440000000000462"}},
-		{name: "receivable account name", settings: ZohoInvoiceSyncSettings{ReceivableAccountID: "Accounts Receivable"}, wantErr: true},
-		{name: "deposit account name", settings: ZohoInvoiceSyncSettings{DepositToAccountID: "Bank"}, wantErr: true},
-		{name: "receivable id too long", settings: ZohoInvoiceSyncSettings{ReceivableAccountID: strings.Repeat("1", maxZohoAccountIDLen+1)}, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := (&InvoiceSyncSettings{ZohoInvoiceSyncSettings: tt.settings}).ValidateZohoPaymentSettings()
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
-		})
-	}
-}

@@ -11734,11 +11734,6 @@ definitions:
           Zoho payment modes are merchant-editable free strings with no id, so this is passed
           through verbatim. Empty means DefaultZohoPaymentMode.
         type: string
-      receivable_account_id:
-        description: |-
-          Zoho chart-of-accounts id for Accounts Receivable, set on synced invoices.
-          Empty leaves Zoho's org default.
-        type: string
       service_period_custom_fields:
         allOf:
         - $ref: '#/definitions/types.ServicePeriodCustomFields'
