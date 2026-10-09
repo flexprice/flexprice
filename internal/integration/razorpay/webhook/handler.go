@@ -82,7 +82,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 		return h.handlePaymentFailed(ctx, event, services)
 	case EventPaymentLinkPaid:
 		return h.handlePaymentLinkPaid(ctx, event, services)
-	case EventPaymentLinkCancelled, EventPaymentLinkExpired:
+	case EventPaymentLinkCancelled:
 		return h.handlePaymentLinkFailed(ctx, event, services)
 	case EventRefundProcessed:
 		return h.handleRefundProcessed(ctx, event, services)
@@ -411,7 +411,7 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 	return err
 }
 
-// handlePaymentLinkFailed processes payment_link.cancelled and payment_link.expired webhook events.
+// handlePaymentLinkFailed processes payment_link.cancelled webhook events.
 // If a pending checkout session is associated with the payment link, it is cleaned up as failed.
 func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
