@@ -165,7 +165,7 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
-		field.Other("consumption_breakdown", types.WalletTxConsumptions{}).
+		field.JSON("consumption_breakdown", []types.WalletTxConsumption{}).
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}).

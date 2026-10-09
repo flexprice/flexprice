@@ -216,11 +216,6 @@ func SourceID(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldSourceID, v))
 }
 
-// ConsumptionBreakdown applies equality check predicate on the "consumption_breakdown" field. It's identical to ConsumptionBreakdownEQ.
-func ConsumptionBreakdown(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldEQ(FieldConsumptionBreakdown, v))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldTenantID, v))
@@ -2084,46 +2079,6 @@ func SourceIDEqualFold(v string) predicate.WalletTransaction {
 // SourceIDContainsFold applies the ContainsFold predicate on the "source_id" field.
 func SourceIDContainsFold(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldContainsFold(FieldSourceID, v))
-}
-
-// ConsumptionBreakdownEQ applies the EQ predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownEQ(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldEQ(FieldConsumptionBreakdown, v))
-}
-
-// ConsumptionBreakdownNEQ applies the NEQ predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownNEQ(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldNEQ(FieldConsumptionBreakdown, v))
-}
-
-// ConsumptionBreakdownIn applies the In predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownIn(vs ...types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldIn(FieldConsumptionBreakdown, vs...))
-}
-
-// ConsumptionBreakdownNotIn applies the NotIn predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownNotIn(vs ...types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldNotIn(FieldConsumptionBreakdown, vs...))
-}
-
-// ConsumptionBreakdownGT applies the GT predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownGT(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldGT(FieldConsumptionBreakdown, v))
-}
-
-// ConsumptionBreakdownGTE applies the GTE predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownGTE(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldGTE(FieldConsumptionBreakdown, v))
-}
-
-// ConsumptionBreakdownLT applies the LT predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownLT(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldLT(FieldConsumptionBreakdown, v))
-}
-
-// ConsumptionBreakdownLTE applies the LTE predicate on the "consumption_breakdown" field.
-func ConsumptionBreakdownLTE(v types.WalletTxConsumptions) predicate.WalletTransaction {
-	return predicate.WalletTransaction(sql.FieldLTE(FieldConsumptionBreakdown, v))
 }
 
 // ConsumptionBreakdownIsNil applies the IsNil predicate on the "consumption_breakdown" field.

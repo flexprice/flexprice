@@ -379,7 +379,7 @@ func (_c *WalletTransactionCreate) SetNillableSourceID(v *string) *WalletTransac
 }
 
 // SetConsumptionBreakdown sets the "consumption_breakdown" field.
-func (_c *WalletTransactionCreate) SetConsumptionBreakdown(v types.WalletTxConsumptions) *WalletTransactionCreate {
+func (_c *WalletTransactionCreate) SetConsumptionBreakdown(v []types.WalletTxConsumption) *WalletTransactionCreate {
 	_c.mutation.SetConsumptionBreakdown(v)
 	return _c
 }
@@ -694,7 +694,7 @@ func (_c *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.C
 		_node.SourceID = &value
 	}
 	if value, ok := _c.mutation.ConsumptionBreakdown(); ok {
-		_spec.SetField(wallettransaction.FieldConsumptionBreakdown, field.TypeOther, value)
+		_spec.SetField(wallettransaction.FieldConsumptionBreakdown, field.TypeJSON, value)
 		_node.ConsumptionBreakdown = value
 	}
 	return _node, _spec
