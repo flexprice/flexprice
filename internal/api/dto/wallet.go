@@ -485,7 +485,9 @@ func (r *TopUpWalletRequest) validateCoupons() error {
 				WithHint("Provide a coupon_code for each coupon").
 				Mark(ierr.ErrValidation)
 		}
-		if seen[c.CouponCode] {
+		// Coupon lookup ignores case and surrounding spaces, so "TOPUP10" and "topup10" are one coupon.
+		key := strings.ToLower(strings.TrimSpace(c.CouponCode))
+		if seen[key] {
 			return ierr.NewError("duplicate coupon_code").
 				WithHintf("Coupon '%s' is listed more than once", c.CouponCode).
 				WithReportableDetails(map[string]interface{}{
@@ -493,7 +495,7 @@ func (r *TopUpWalletRequest) validateCoupons() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		seen[c.CouponCode] = true
+		seen[key] = true
 	}
 	return nil
 }

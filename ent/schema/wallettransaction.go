@@ -197,7 +197,5 @@ func (WalletTransaction) Indexes() []ent.Index {
 			StorageKey("idx_tenant_environment_idempotency_key"),
 		index.Fields("tenant_id", "environment_id", "parent_transaction_id", "transaction_status").
 			StorageKey("idx_tenant_environment_parent_transaction_status"),
-		index.Fields("tenant_id", "environment_id", "source_type", "source_id").
-			StorageKey("idx_wallet_transactions_tenant_env_source"),
 	}
 }

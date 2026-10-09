@@ -2882,11 +2882,6 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[28], WalletTransactionsColumns[19]},
 			},
-			{
-				Name:    "idx_wallet_transactions_tenant_env_source",
-				Unique:  false,
-				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[29], WalletTransactionsColumns[30]},
-			},
 		},
 	}
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.

@@ -2412,12 +2412,12 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	// Process debit across credits
-	consumed, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
+	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
 	if err != nil {
 		return nil, err
 	}
 
-	return consumed, nil
+	return consumedCredits, nil
 }
 
 // processWalletOperation handles both credit and debit operations
@@ -2457,18 +2457,18 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		}
 
 		// Step 4: Process operation-specific logic
-		var consumed []types.WalletTxConsumption
+		var consumedCredits []types.WalletTxConsumption
 		if req.Type == types.TransactionTypeDebit {
 			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
 			// Process debit operation (credit selection and consumption)
-			consumed, err = s.processDebitOperation(ctx, req)
+			consumedCredits, err = s.processDebitOperation(ctx, req)
 			if err != nil {
 				return err
 			}
 
-			if len(consumed) > 0 {
-				consumedCreditsIDs := make([]string, 0, len(consumed))
-				for _, c := range consumed {
+			if len(consumedCredits) > 0 {
+				consumedCreditsIDs := make([]string, 0)
+				for _, c := range consumedCredits {
 					consumedCreditsIDs = append(consumedCreditsIDs, c.CreditTransactionID)
 				}
 				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
@@ -2503,7 +2503,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			IdempotencyKey:       req.IdempotencyKey,
 			SourceType:           req.SourceType,
 			SourceID:             req.SourceID,
-			ConsumptionBreakdown: consumed,
+			ConsumptionBreakdown: consumedCredits,
 			BaseModel:            types.GetDefaultBaseModel(ctx),
 		}
 
