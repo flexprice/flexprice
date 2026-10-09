@@ -255,6 +255,9 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 	return nil
 }
 
+// Lets late-arriving events and pipeline lag settle.
+const processInvoiceStartDelay = 1 * time.Hour
+
 // TriggerInvoiceWorkflowActivity triggers invoice workflows for each invoice (fire-and-forget)
 // If triggering fails for any invoice, it logs the error and continues with the rest
 func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
@@ -279,7 +282,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 	}
 
 	for _, invoiceID := range input.InvoiceIDs {
-		_, err := temporalSvc.ExecuteWorkflow(
+		_, err := temporalSvc.ExecuteWorkflowWithDelay(
 			ctx,
 			types.TemporalProcessInvoiceWorkflow,
 			invoiceModels.ProcessInvoiceWorkflowInput{
@@ -288,6 +291,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
+			int(processInvoiceStartDelay/time.Second),
 		)
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",
