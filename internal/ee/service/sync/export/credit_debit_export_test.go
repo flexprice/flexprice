@@ -6,12 +6,15 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/gocarina/gocsv"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreditDebitCSVRecognizedAmount(t *testing.T) {
-	paid := func(v string) decimal.NullDecimal { return decimal.NewNullDecimal(decimal.RequireFromString(v)) }
+	paid := func(v string) *decimal.Decimal { return lo.ToPtr(decimal.RequireFromString(v)) }
 
 	tests := []struct {
 		name     string
@@ -51,10 +54,9 @@ func TestCreditDebitCSVRecognizedAmount(t *testing.T) {
 			tt.row.TransactionReason = types.TransactionReasonInvoicePayment
 			tt.row.CreatedAt = time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
 
-			record := toCreditDebitCSV(&tt.row)
-			assert.Equal(t, tt.expected, record.RecognizedAmount)
-			assert.Equal(t, tt.row.Credits.String(), record.Credits)
-			assert.Equal(t, "2026-10-09T00:00:00Z", record.CreatedAt)
+			out, err := gocsv.MarshalString([]*CreditDebitCSV{toCreditDebitCSV(&tt.row)})
+			require.NoError(t, err)
+			assert.Contains(t, out, ","+tt.row.Credits.String()+","+tt.expected+",2026-10-09T00:00:00Z")
 		})
 	}
 }

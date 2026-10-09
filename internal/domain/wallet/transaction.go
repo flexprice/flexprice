@@ -200,7 +200,7 @@ type CreditTopupsExportData struct {
 	InvoiceID           string
 	// PaidAmount is what the credits were bought for: the invoice after discount, before tax, for
 	// an invoiced purchase, and zero for free and bonus grants. Not set for other credits.
-	PaidAmount decimal.NullDecimal
+	PaidAmount *decimal.Decimal
 	CreatedAt  time.Time
 }
 
@@ -217,9 +217,16 @@ type CreditDebitsExportData struct {
 	CreditTransactionID string
 	Credits             decimal.Decimal
 	// The batch's size and paid amount, for spreading the paid amount over the credits drawn.
-	BatchCredits    decimal.NullDecimal
-	BatchPaidAmount decimal.NullDecimal
+	BatchCredits    *decimal.Decimal
+	BatchPaidAmount *decimal.Decimal
 	CreatedAt       time.Time
+}
+
+// CreditDebitsExportCursor is the last debit of the previous page. The first page starts from
+// the export window's start time with an empty DebitID.
+type CreditDebitsExportCursor struct {
+	CreatedAt time.Time
+	DebitID   string
 }
 
 // CreditUsageCSVHeaders represents the column header strings for the credit usage CSV export

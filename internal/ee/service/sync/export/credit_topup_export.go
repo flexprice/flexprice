@@ -24,20 +24,20 @@ type CreditTopupExporter struct {
 
 // CreditTopupCSV represents the CSV structure for credit topup export
 type CreditTopupCSV struct {
-	TopupID             string `csv:"topup_id"`
-	ExternalID          string `csv:"external_id"`
-	CustomerName        string `csv:"name"`
-	WalletID            string `csv:"wallet_id"`
-	Amount              string `csv:"amount"`                // Decimal as string
-	CreditBalanceBefore string `csv:"credit_balance_before"` // Decimal as string
-	CreditBalanceAfter  string `csv:"credit_balance_after"`  // Decimal as string
-	ReferenceID         string `csv:"reference_id"`
-	TransactionReason   string `csv:"transaction_reason"`
-	Credits             string `csv:"credits"`
-	Currency            string `csv:"currency"`
-	InvoiceID           string `csv:"invoice_id"`
-	PaidAmount          string `csv:"paid_amount"` // Empty when the credits were not bought or given free
-	CreatedAt           string `csv:"created_at"`  // RFC3339 format
+	TopupID             string           `csv:"topup_id"`
+	ExternalID          string           `csv:"external_id"`
+	CustomerName        string           `csv:"name"`
+	WalletID            string           `csv:"wallet_id"`
+	Amount              string           `csv:"amount"`                // Decimal as string
+	CreditBalanceBefore string           `csv:"credit_balance_before"` // Decimal as string
+	CreditBalanceAfter  string           `csv:"credit_balance_after"`  // Decimal as string
+	ReferenceID         string           `csv:"reference_id"`
+	TransactionReason   string           `csv:"transaction_reason"`
+	Credits             string           `csv:"credits"`
+	Currency            string           `csv:"currency"`
+	InvoiceID           string           `csv:"invoice_id"`
+	PaidAmount          *decimal.Decimal `csv:"paid_amount"` // Empty when the credits were not bought or given free
+	CreatedAt           string           `csv:"created_at"`  // RFC3339 format
 }
 
 // NewCreditTopupExporter creates a new credit topup exporter
@@ -159,7 +159,7 @@ func (e *CreditTopupExporter) convertToCSVRecords(topupData []*wallet.CreditTopu
 			Credits:             topup.Credits.String(),
 			Currency:            topup.Currency,
 			InvoiceID:           topup.InvoiceID,
-			PaidAmount:          nullDecimalString(topup.PaidAmount),
+			PaidAmount:          topup.PaidAmount,
 			CreatedAt:           topup.CreatedAt.Format(time.RFC3339),
 		}
 
@@ -167,13 +167,6 @@ func (e *CreditTopupExporter) convertToCSVRecords(topupData []*wallet.CreditTopu
 	}
 
 	return records
-}
-
-func nullDecimalString(d decimal.NullDecimal) string {
-	if !d.Valid {
-		return ""
-	}
-	return d.Decimal.String()
 }
 
 // GetFilenamePrefix returns the prefix for the exported file

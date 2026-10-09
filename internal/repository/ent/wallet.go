@@ -1274,22 +1274,39 @@ func paidAmountSQL(tx, inv string) string {
 		types.TransactionReasonPurchasedCreditBonus)
 }
 
-func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*walletdomain.CreditDebitsExportData, error) {
+func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, after walletdomain.CreditDebitsExportCursor, endTime time.Time, limit int) ([]*walletdomain.CreditDebitsExportData, error) {
 	span := StartRepositorySpan(ctx, "wallet", "get_credit_debits_for_export", map[string]interface{}{
-		"tenant_id": tenantID,
-		"env_id":    envID,
-		"start":     startTime,
-		"end":       endTime,
-		"limit":     limit,
-		"offset":    offset,
+		"tenant_id":        tenantID,
+		"env_id":           envID,
+		"after_created_at": after.CreatedAt,
+		"after_debit_id":   after.DebitID,
+		"end":              endTime,
+		"limit":            limit,
 	})
 	defer FinishSpan(span)
 
 	client := r.client.Reader(ctx)
 
-	// One row per credit batch in the debit's consumption_breakdown. A debit without one
-	// (written before breakdowns were recorded) keeps a single row with no batch.
+	// Pages are keyed on the last debit seen rather than an offset, so each page is an index range
+	// read from where the previous one stopped, and a debit's batch rows never straddle two pages.
+	// Each debit expands to one row per credit batch in its consumption_breakdown; a debit without
+	// one (written before breakdowns were recorded) keeps a single row with no batch.
 	query := `
+		WITH page AS (
+			SELECT d.*
+			FROM wallet_transactions d
+			WHERE
+				d.tenant_id = $1
+				AND d.environment_id = $2
+				AND d.type = $3
+				AND d.transaction_status = $4
+				AND d.status = $5
+				AND d.created_at >= $6
+				AND (d.created_at, d.id) > ($6, $7)
+				AND d.created_at < $8
+			ORDER BY d.created_at ASC, d.id ASC
+			LIMIT $9
+		)
 		SELECT
 			d.id,
 			c.external_id,
@@ -1304,7 +1321,7 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 			` + paidAmountSQL("ct", "i") + `,
 			d.created_at
 		FROM
-			wallet_transactions d
+			page d
 			INNER JOIN wallets w ON w.id = d.wallet_id
 			INNER JOIN customers c ON c.id = w.customer_id
 			LEFT JOIN LATERAL ROWS FROM (
@@ -1313,16 +1330,7 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 			) WITH ORDINALITY AS b(credit_transaction_id, credits, ord) ON true
 			LEFT JOIN wallet_transactions ct ON ct.id = b.credit_transaction_id
 			LEFT JOIN invoices i ON i.id = ct.source_id AND ct.source_type = 'INVOICE'
-		WHERE
-			d.tenant_id = $1
-			AND d.environment_id = $2
-			AND d.type = $3
-			AND d.transaction_status = $4
-			AND d.status = $5
-			AND d.created_at >= $6
-			AND d.created_at < $7
 		ORDER BY d.created_at ASC, d.id ASC, b.ord ASC
-		LIMIT $8 OFFSET $9
 	`
 
 	rows, err := client.QueryContext(ctx, query,
@@ -1331,20 +1339,20 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 		string(types.TransactionTypeDebit),
 		string(types.TransactionStatusCompleted),
 		string(types.StatusPublished),
-		startTime,
+		after.CreatedAt,
+		after.DebitID,
 		endTime,
 		limit,
-		offset,
 	)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch credit debits for export").
 			WithReportableDetails(map[string]interface{}{
-				"tenant_id": tenantID,
-				"env_id":    envID,
-				"limit":     limit,
-				"offset":    offset,
+				"tenant_id":      tenantID,
+				"env_id":         envID,
+				"after_debit_id": after.DebitID,
+				"limit":          limit,
 			}).
 			Mark(ierr.ErrDatabase)
 	}

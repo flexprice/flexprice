@@ -118,6 +118,8 @@ func TestWalletCreditReports(t *testing.T) {
 	}
 	require.NoError(t, repo.CreateTransaction(ctx, debit))
 	legacyDebit := newTx("wtx_l_"+runID, types.TransactionTypeDebit, types.TransactionReasonInvoicePayment, 5)
+	// Same timestamp as the debit above, so paging has to break the tie on id.
+	legacyDebit.CreatedAt = debit.CreatedAt
 	require.NoError(t, repo.CreateTransaction(ctx, legacyDebit))
 
 	end := time.Now().UTC().Add(time.Minute)
@@ -131,20 +133,20 @@ func TestWalletCreditReports(t *testing.T) {
 		}
 
 		require.Equal(t, inv.ID, byID[purchase.ID].InvoiceID)
-		require.True(t, byID[purchase.ID].PaidAmount.Valid)
-		require.True(t, decimal.NewFromInt(450).Equal(byID[purchase.ID].PaidAmount.Decimal), "after discount, before tax")
+		require.NotNil(t, byID[purchase.ID].PaidAmount)
+		require.True(t, decimal.NewFromInt(450).Equal(*byID[purchase.ID].PaidAmount), "after discount, before tax")
 		require.True(t, decimal.NewFromInt(500).Equal(byID[purchase.ID].Credits))
 
 		require.Equal(t, inv.ID, byID[bonus.ID].InvoiceID)
-		require.True(t, byID[bonus.ID].PaidAmount.Decimal.IsZero(), "the bonus does not count the invoice again")
-		require.True(t, byID[bonus.ID].PaidAmount.Valid)
+		require.NotNil(t, byID[bonus.ID].PaidAmount)
+		require.True(t, byID[bonus.ID].PaidAmount.IsZero(), "the bonus does not count the invoice again")
 
 		require.Empty(t, byID[adjustment.ID].InvoiceID)
-		require.False(t, byID[adjustment.ID].PaidAmount.Valid)
+		require.Nil(t, byID[adjustment.ID].PaidAmount)
 	})
 
 	t.Run("debits split by the batches they drew from", func(t *testing.T) {
-		rows, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, start, end, 100, 0)
+		rows, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, walletdomain.CreditDebitsExportCursor{CreatedAt: start}, end, 100)
 		require.NoError(t, err)
 		require.Len(t, rows, 4)
 
@@ -155,33 +157,41 @@ func TestWalletCreditReports(t *testing.T) {
 		}
 		require.Equal(t, purchase.ID, rows[0].CreditTransactionID)
 		require.True(t, decimal.NewFromInt(200).Equal(rows[0].Credits))
-		require.True(t, decimal.NewFromInt(500).Equal(rows[0].BatchCredits.Decimal))
-		require.True(t, decimal.NewFromInt(450).Equal(rows[0].BatchPaidAmount.Decimal))
+		require.True(t, decimal.NewFromInt(500).Equal(*rows[0].BatchCredits))
+		require.True(t, decimal.NewFromInt(450).Equal(*rows[0].BatchPaidAmount))
 
 		require.Equal(t, bonus.ID, rows[1].CreditTransactionID)
-		require.True(t, rows[1].BatchPaidAmount.Valid)
-		require.True(t, rows[1].BatchPaidAmount.Decimal.IsZero())
+		require.NotNil(t, rows[1].BatchPaidAmount)
+		require.True(t, rows[1].BatchPaidAmount.IsZero())
 
 		require.Equal(t, adjustment.ID, rows[2].CreditTransactionID)
-		require.False(t, rows[2].BatchPaidAmount.Valid)
+		require.Nil(t, rows[2].BatchPaidAmount)
 
 		require.Equal(t, legacyDebit.ID, rows[3].DebitID)
 		require.Empty(t, rows[3].CreditTransactionID)
 		require.True(t, decimal.NewFromInt(5).Equal(rows[3].Credits))
 	})
 
-	t.Run("pages do not repeat or skip batch rows", func(t *testing.T) {
+	t.Run("a page holds whole debits and the next starts after the last", func(t *testing.T) {
 		var ids []string
-		for offset := 0; ; offset += 2 {
-			page, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, start, end, 2, offset)
+		var pages [][]string
+		cursor := walletdomain.CreditDebitsExportCursor{CreatedAt: start}
+		for {
+			page, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, cursor, end, 1)
 			require.NoError(t, err)
-			for _, r := range page {
-				ids = append(ids, r.DebitID+"/"+r.CreditTransactionID)
-			}
-			if len(page) < 2 {
+			if len(page) == 0 {
 				break
 			}
+			var pageIDs []string
+			for _, r := range page {
+				pageIDs = append(pageIDs, r.DebitID)
+				ids = append(ids, r.DebitID+"/"+r.CreditTransactionID)
+			}
+			pages = append(pages, pageIDs)
+			last := page[len(page)-1]
+			cursor = walletdomain.CreditDebitsExportCursor{CreatedAt: last.CreatedAt, DebitID: last.DebitID}
 		}
+		require.Equal(t, [][]string{{debit.ID, debit.ID, debit.ID}, {legacyDebit.ID}}, pages)
 		require.Equal(t, []string{
 			debit.ID + "/" + purchase.ID,
 			debit.ID + "/" + bonus.ID,
