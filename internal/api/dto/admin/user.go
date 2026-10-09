@@ -34,7 +34,8 @@ func (r *AddUserRequest) Validate() error {
 	}
 
 	r.TenantID = strings.TrimSpace(r.TenantID)
-	r.Email = strings.TrimSpace(r.Email)
+	// Lowercased as Supabase and SAML store emails, so lookups and duplicate checks match.
+	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
 
 	if r.TenantID == "" {
 		return ierr.NewError("tenant_id is required").
@@ -91,7 +92,8 @@ func (r *RemoveUserRequest) Validate() error {
 	}
 
 	r.TenantID = strings.TrimSpace(r.TenantID)
-	r.Email = strings.TrimSpace(r.Email)
+	// Lowercased as Supabase and SAML store emails, so lookups and duplicate checks match.
+	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
 
 	if r.TenantID == "" {
 		return ierr.NewError("tenant_id is required").

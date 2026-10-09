@@ -222,6 +222,36 @@ func TestCreateTenant(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("stores the email in lowercase", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+
+		req := acme
+		req.Email = "  Owner@ACME.com "
+		resp, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		require.NoError(t, err)
+
+		assert.Equal(t, "owner@acme.com", resp.Email)
+		_, err = d.users.GetByEmail(ctx, "owner@acme.com")
+		require.NoError(t, err)
+		login, ok := d.supabase.user(resp.UserID)
+		require.True(t, ok)
+		assert.Equal(t, "owner@acme.com", login.Email)
+	})
+
+	t.Run("catches an existing email typed in another casing", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		require.NoError(t, d.users.Create(ctx, user.NewUser("owner@acme.com", "tenant_existing")))
+
+		req := acme
+		req.Email = "OWNER@acme.com"
+		_, err := NewTenantService(d.params).CreateTenant(ctx, req)
+		require.Error(t, err)
+		assert.True(t, ierr.IsAlreadyExists(err))
+
+		created, _ := d.supabase.counts()
+		assert.Zero(t, created, "the duplicate must be caught before Supabase is called")
+	})
+
 	t.Run("refuses an email that already has a user", func(t *testing.T) {
 		d := newTenantTestDeps(t)
 		require.NoError(t, d.users.Create(ctx, user.NewUser("owner@acme.com", "tenant_existing")))

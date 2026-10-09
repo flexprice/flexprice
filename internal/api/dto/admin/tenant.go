@@ -38,7 +38,8 @@ func (r *CreateTenantRequest) Validate() error {
 	}
 
 	r.TenantName = strings.TrimSpace(r.TenantName)
-	r.Email = strings.TrimSpace(r.Email)
+	// Lowercased as Supabase and SAML store emails, so lookups and duplicate checks match.
+	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
 
 	if r.TenantName == "" {
 		return ierr.NewError("tenant_name is required").

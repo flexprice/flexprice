@@ -149,9 +149,14 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 				Mark(ierr.ErrInternal)
 		}
 
+		// Limit 1 still returns the full count, since the total is counted before the limit applies.
 		_, humans, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{
-			QueryFilter: types.NewNoLimitQueryFilter(),
-			Type:        lo.ToPtr(types.UserTypeUser),
+			QueryFilter: &types.QueryFilter{
+				Limit:  lo.ToPtr(1),
+				Offset: lo.ToPtr(0),
+				Status: lo.ToPtr(types.StatusPublished),
+			},
+			Type: lo.ToPtr(types.UserTypeUser),
 		})
 		if err != nil {
 			return err

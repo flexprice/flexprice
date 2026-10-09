@@ -110,6 +110,36 @@ func TestAddUser(t *testing.T) {
 		assert.True(t, ierr.IsNotFound(err))
 	})
 
+	t.Run("stores the email in lowercase", func(t *testing.T) {
+		d := withTenant(t)
+
+		req := teammate
+		req.Email = "  Teammate@ACME.com "
+		resp, err := NewUserService(d.params).AddUser(ctx, req)
+		require.NoError(t, err)
+
+		assert.Equal(t, "teammate@acme.com", resp.Email)
+		_, err = d.users.GetByEmail(ctx, "teammate@acme.com")
+		require.NoError(t, err)
+		login, ok := d.supabase.user(resp.UserID)
+		require.True(t, ok)
+		assert.Equal(t, "teammate@acme.com", login.Email)
+	})
+
+	t.Run("catches an existing email typed in another casing", func(t *testing.T) {
+		d := withTenant(t)
+		require.NoError(t, d.users.Create(ctx, user.NewUser("teammate@acme.com", "tenant_other")))
+
+		req := teammate
+		req.Email = "TEAMMATE@acme.com"
+		_, err := NewUserService(d.params).AddUser(ctx, req)
+		require.Error(t, err)
+		assert.True(t, ierr.IsAlreadyExists(err))
+
+		created, _ := d.supabase.counts()
+		assert.Zero(t, created, "the duplicate must be caught before Supabase is called")
+	})
+
 	t.Run("refuses an email that already has a user", func(t *testing.T) {
 		d := withTenant(t)
 		require.NoError(t, d.users.Create(ctx, user.NewUser("teammate@acme.com", "tenant_other")))
@@ -274,6 +304,17 @@ func TestRemoveUser(t *testing.T) {
 		status, hasLogin = state(t, d, "owner@acme.com")
 		assert.Equal(t, types.StatusPublished, status, "other users must stay")
 		assert.True(t, hasLogin)
+	})
+
+	t.Run("finds the user whatever casing the email is typed in", func(t *testing.T) {
+		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
+
+		_, err := NewUserService(d.params).RemoveUser(ctx, admindto.RemoveUserRequest{TenantID: tenantID, Email: " TeamMate@ACME.com "})
+		require.NoError(t, err)
+
+		status, hasLogin := state(t, d, "teammate@acme.com")
+		assert.Equal(t, types.StatusArchived, status)
+		assert.False(t, hasLogin)
 	})
 
 	t.Run("refuses an email with no user", func(t *testing.T) {
