@@ -28,6 +28,7 @@ type AutoChargeRequest struct {
 	FlexPricePaymentID string          // FlexPrice payment.ID — embedded in Razorpay notes for webhook reconciliation
 	Contact            string          // Customer contact number — required by Razorpay for recurring/token-based charges
 	Email              string          // Customer email — sent alongside contact for Razorpay-side validation
+	FallbackTokenID    string
 }
 
 // AutoChargeResult is the output of PaymentService.AutoCharge.
@@ -852,6 +853,11 @@ func (s *PaymentService) ChargeSavedToken(
 		return nil, false, nil
 	}
 
+	var fallbackTokenID string
+	if fallback, ok := selectAutoChargeToken(lo.Without(tokens, token), req.PreferredMethod, req.Amount); ok {
+		fallbackTokenID = fallback.GatewayMethodID
+	}
+
 	var contact string
 	if req.Customer.Contact != nil {
 		contact = *req.Customer.Contact
@@ -866,6 +872,7 @@ func (s *PaymentService) ChargeSavedToken(
 		FlexPricePaymentID: req.FlexPricePaymentID,
 		Contact:            contact,
 		Email:              req.Customer.Email,
+		FallbackTokenID:    fallbackTokenID,
 	})
 	if err != nil {
 		return nil, false, err
@@ -1007,6 +1014,10 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 				"invoice_id", req.InvoiceID,
 				"order_id", orderID)
 			return &AutoChargeResult{AlreadySubmitted: true}, nil
+		}
+		if req.FallbackTokenID != "" && ierr.IsInvalidOperation(err) {
+			req.TokenID, req.FallbackTokenID = req.FallbackTokenID, ""
+			return s.submitRecurringPayment(ctx, req, orderID)
 		}
 		return nil, err
 	}

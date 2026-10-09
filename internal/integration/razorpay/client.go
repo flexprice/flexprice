@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	razorpay "github.com/razorpay/razorpay-go"
+	rzperrors "github.com/razorpay/razorpay-go/errors"
 	"github.com/samber/lo"
 )
 
@@ -514,6 +516,13 @@ func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[str
 	result, err := rc.Payment.CreateRecurringPayment(paymentData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
+		var refused *rzperrors.BadRequestError
+		if errors.As(err, &refused) {
+			return nil, ierr.NewError("Razorpay refused the recurring payment").
+				WithHint(refused.Message).
+				WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+				Mark(ierr.ErrInvalidOperation)
+		}
 		return nil, ierr.NewError("failed to create Razorpay recurring payment").
 			WithHint("Unable to charge the stored token in Razorpay").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
