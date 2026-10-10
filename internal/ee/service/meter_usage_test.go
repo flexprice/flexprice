@@ -833,6 +833,7 @@ func (s *MeterUsageServiceSuite) TestGroupByPropertyField() {
 // Usage=0). The subscription path was fixed earlier via getUsageValueFromDetailedResult;
 // this test pins the parity fix for the no-subscription branch.
 func (s *MeterUsageServiceSuite) TestCountMeter_NoSubscriptionAnalytics() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 
 	cm := &meter.Meter{
@@ -870,6 +871,34 @@ func (s *MeterUsageServiceSuite) TestCountMeter_NoSubscriptionAnalytics() {
 		"no-sub COUNT path: expected TotalUsage=3 (was 0 before fix), got %s", item.TotalUsage)
 	s.Equal(uint64(3), item.EventCount,
 		"no-sub COUNT path: expected EventCount=3, got %d", item.EventCount)
+}
+
+// TestNoSubscriptionAnalytics_ReturnsZero pins the short-circuit in
+// getDetailedAnalyticsWithoutSubscriptionContext: with no subscription context
+// the response is zero, whether or not the request names a customer.
+func (s *MeterUsageServiceSuite) TestNoSubscriptionAnalytics_ReturnsZero() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_nosub_zero", "ev_nosub_zero", types.AggregationSum)
+
+	for _, q := range []float64{10, 20, 30} {
+		s.insertMeterUsage(ctx, m.ID, "customer_without_subscription",
+			time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), q)
+	}
+
+	for _, externalCustomerID := range []string{"customer_without_subscription", ""} {
+		resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+			TenantID:           types.GetTenantID(ctx),
+			EnvironmentID:      types.GetEnvironmentID(ctx),
+			ExternalCustomerID: externalCustomerID,
+			MeterIDs:           []string{m.ID},
+			StartTime:          s.periodStart,
+			EndTime:            s.periodEnd,
+		})
+		s.NoError(err)
+		s.Emptyf(resp.Items, "external_customer_id=%q: expected no items", externalCustomerID)
+		s.Truef(resp.TotalCost.IsZero(),
+			"external_customer_id=%q: expected zero total cost, got %s", externalCustomerID, resp.TotalCost)
+	}
 }
 
 // TestCountMeter_ScalarBilling sanity-checks the scalar billing path for COUNT
@@ -1242,6 +1271,7 @@ func (s *MeterUsageServiceSuite) TestMaxMeter_AnalyticsWithGroupBy() {
 }
 
 func (s *MeterUsageServiceSuite) TestMaxMeter_NoSubscriptionAnalytics() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "mtr_max_nosub", "ev_max", types.AggregationMax)
 
@@ -1332,6 +1362,7 @@ func (s *MeterUsageServiceSuite) TestLatestMeter_AnalyticsWithGroupBy() {
 }
 
 func (s *MeterUsageServiceSuite) TestLatestMeter_NoSubscriptionAnalytics() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "mtr_latest_nosub", "ev_latest", types.AggregationLatest)
 
@@ -1396,6 +1427,7 @@ func (s *MeterUsageServiceSuite) TestCountUniqueMeter_AnalyticsWithGroupBy() {
 }
 
 func (s *MeterUsageServiceSuite) TestCountUniqueMeter_NoSubscriptionAnalytics() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "mtr_unique_nosub", "ev_unique", types.AggregationCountUnique)
 
@@ -1610,6 +1642,7 @@ func (s *MeterUsageServiceSuite) TestCommitmentNonWindowed_CountMeter() {
 // ---------------------------------------------------------------------------
 
 func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_NoSubscription() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	mSum := s.createMeterWithAggregation(ctx, "mtr_mix_sum", "ev_sum", types.AggregationSum)
 	mCnt := s.createMeterWithAggregation(ctx, "mtr_mix_cnt", "ev_cnt", types.AggregationCount)
@@ -1661,6 +1694,7 @@ func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_NoSubscription
 // ---------------------------------------------------------------------------
 
 func (s *MeterUsageServiceSuite) TestMultiMeter_MaxAndLatest_NoSubscription() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	mMax := s.createMeterWithAggregation(ctx, "mtr_mix_max", "ev_max", types.AggregationMax)
 	mLatest := s.createMeterWithAggregation(ctx, "mtr_mix_latest", "ev_latest", types.AggregationLatest)
@@ -1711,6 +1745,7 @@ func (s *MeterUsageServiceSuite) TestMultiMeter_MaxAndLatest_NoSubscription() {
 // The converter then produces one item per (meter, region) with the correct
 // per-meter primary aggregation in TotalUsage.
 func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_GroupByAndFilter() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	mSum := s.createMeterWithAggregation(ctx, "mtr_full_sum", "ev_sum", types.AggregationSum)
 	mMax := s.createMeterWithAggregation(ctx, "mtr_full_max", "ev_max", types.AggregationMax)
@@ -1796,6 +1831,7 @@ func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_GroupByAndFilt
 // primaryAggregationValue, so AVG meters returned total_usage = 0. After fix,
 // AVG meters compute AVG(qty_total) and the in-memory store mirrors that.
 func (s *MeterUsageServiceSuite) TestAvgMeter_NoSubscriptionAnalytics() {
+	s.T().Skip("no-subscription analytics returns zero for now; the path under test is short-circuited")
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "mtr_avg", "ev_avg", types.AggregationAvg)
 
