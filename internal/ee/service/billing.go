@@ -17,9 +17,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -28,6 +28,7 @@ import (
 // FindMatchingLineItemPeriodInput is the input for FindMatchingLineItemPeriodForInvoice.
 type FindMatchingLineItemPeriodInput struct {
 	Item           *subscription.SubscriptionLineItem
+	Anchor         time.Time
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	InvoiceCadence types.InvoiceCadence
@@ -204,12 +205,14 @@ func (s *billingService) CalculateFixedCharges(
 			}
 			fixedCostLineItems = append(fixedCostLineItems, line)
 			fixedCost = fixedCost.Add(roundedAmount)
-		} else if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+		} else if types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
 			// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
 			// Advance: include when line-item period start falls in [periodStart, periodEnd).
 			// Arrear: include when line-item period end falls in [periodStart, periodEnd).
+			anchor := longerItemAnchor(sub, item)
 			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           item,
+				Anchor:         anchor,
 				PeriodStart:    periodStart,
 				PeriodEnd:      periodEnd,
 				InvoiceCadence: item.InvoiceCadence,
@@ -228,9 +231,26 @@ func (s *billingService) CalculateFixedCharges(
 					"period_end", periodEnd)
 				continue
 			}
-			// Full amount for the matched period
-			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+
+			// A first or last item period shorter than a full one is prorated against the item's own period.
+			// e.g. annual item from Mar 20 on a Jan 1 grid: [Mar 20, Jan 1) bills 287/365, then $365 per year.
 			linePeriodStart, linePeriodEnd = res.LineItemPeriodStart, res.LineItemPeriodEnd
+			serviceablePeriod := types.Period{Start: linePeriodStart, End: linePeriodEnd}
+			subPeriodStart, err := subPeriodStartAt(sub, linePeriodStart)
+			if err != nil {
+				return nil, err
+			}
+
+			var skip bool
+			amount, skip, err = prorateFixedCharge(sub, item, anchor,
+				priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, subPeriodStart)
+			if err != nil {
+				return nil, err
+			}
+			if skip {
+				continue
+			}
+
 			line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, amount, linePeriodStart, linePeriodEnd)
 			if !include {
 				continue
@@ -251,7 +271,6 @@ func (s *billingService) CalculateFixedCharges(
 			}
 
 			for _, w := range windows {
-				wAmount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
 				effectiveStart, effectiveEnd := item.GetPeriod(w.Start, w.End)
 				if !effectiveEnd.After(effectiveStart) {
 					s.Logger.Debug(ctx, "skipping line item window: not active in invoice sub-period",
@@ -263,45 +282,18 @@ func (s *billingService) CalculateFixedCharges(
 					continue
 				}
 
-				windowDuration := w.End.Sub(w.Start)
-				effectiveDuration := effectiveEnd.Sub(effectiveStart)
-				fullPeriod := fullPeriodDuration(ctx, s.Logger, item, w.Start, sub.Timezone, windowDuration)
-				// A line item on a cadence other than the subscription's is priced against its own
-				// period, so a window cut short by a calendar stub bills only the days it covers.
-				// applyProrationToLineItem cannot do this: it works in subscription periods.
-				shortWindowForItem := !sameCadenceAsSubscription(item, sub) &&
-					sub.ProrationBehavior != types.ProrationBehaviorNone &&
-					windowDuration < fullPeriod
-
-				var wLinePeriodStart, wLinePeriodEnd time.Time
-				if effectiveDuration < windowDuration || shortWindowForItem {
-					// Partial-period line item (versioned mid-cycle) inside this sub-window: scale by time ratio.
-					// The divisor is one full period of THIS line item, not the window, so a short window
-					// (e.g. a calendar stub) cannot inflate the fraction charged for a longer-cadence price.
-					ratio := decimal.NewFromFloat(effectiveDuration.Seconds()).
-						Div(decimal.NewFromFloat(fullPeriod.Seconds()))
-					wAmount = wAmount.Mul(ratio)
-					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
-				} else {
-					// Full sub-window: apply existing proration logic (first-period, cancellation, etc.) scoped to this window.
-					wStart, wEnd := w.Start, w.End
-					proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, wAmount, &wStart, &wEnd)
-					if err != nil {
-						s.Logger.Info(ctx, "failed to apply proration to line item window, using original amount",
-							"error", err,
-							"subscription_id", sub.ID,
-							"line_item_id", item.ID,
-							"price_id", item.PriceID,
-							"window_start", w.Start,
-							"window_end", w.End)
-						proratedAmount = wAmount
-					}
-					wAmount = proratedAmount
-					wLinePeriodStart, wLinePeriodEnd = effectiveStart, effectiveEnd
+				serviceablePeriod := types.Period{Start: effectiveStart, End: effectiveEnd}
+				wAmount, skip, err := prorateFixedCharge(sub, item, sub.BillingAnchor,
+					priceService.CalculateCost(ctx, price.Price, item.Quantity), serviceablePeriod, w.Start)
+				if err != nil {
+					return nil, err
+				}
+				if skip {
+					continue
 				}
 
 				// Shared: price unit + rounding. Emit one invoice line item per window.
-				line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, wAmount, wLinePeriodStart, wLinePeriodEnd)
+				line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, wAmount, effectiveStart, effectiveEnd)
 				if !include {
 					continue
 				}
@@ -553,6 +545,90 @@ func endDateBoundaryForMatching(periodEnd time.Time, billingPeriod types.Billing
 	}
 }
 
+// longerItemAnchor is the anchor of a longer-cadence item's billing grid: the calendar boundary of its
+// cadence on calendar subs when that boundary is a sub billing date, the sub's anchor otherwise.
+// e.g. annual item on a calendar monthly sub → Jan 1; 6-month item on a calendar quarterly sub from
+// Apr 30 → May 1 is not a quarter start, so the sub anchor (Jul 1) is used.
+func longerItemAnchor(sub *subscription.Subscription, item *subscription.SubscriptionLineItem) time.Time {
+	if sub.BillingCycle != types.BillingCycleCalendar {
+		return sub.BillingAnchor
+	}
+
+	anchor := types.CalculateCalendarBillingAnchor(item.StartDate, item.BillingPeriod, sub.Timezone)
+	// Off the sub's grid, item periods would start between invoices and never be billed.
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, sub.BillingPeriod, max(sub.BillingPeriodCount, 1), sub.Timezone)
+	if err != nil || !types.FullBillingPeriod(anchor, grid).Start.Equal(anchor) {
+		return sub.BillingAnchor
+	}
+
+	return anchor
+}
+
+// longerItemPeriod is the period of a longer-cadence item's own grid that contains t, starting no
+// earlier than the item itself.
+// e.g. annual item from Mar 20 on a Jan 1 grid, t = Jun 10 → [Mar 20, Jan 1).
+func longerItemPeriod(sub *subscription.Subscription, item *subscription.SubscriptionLineItem, t time.Time) (types.Period, error) {
+	grid, err := types.NewBillingPeriodGrid(longerItemAnchor(sub, item), item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
+	if err != nil {
+		return types.Period{}, err
+	}
+
+	full := types.FullBillingPeriod(t, grid)
+	return types.Period{Start: types.LatestOf(full.Start, item.StartDate), End: full.End}, nil
+}
+
+// prorateFixedCharge prices a fixed charge for its serviceable period, measured on the item's grid
+// from anchor. Under none, an item starting after periodStart is free until its next period (skip).
+// e.g. $31 monthly, serviceable [Jan 20, Feb 1) on a Feb 1 grid: $12 (12/31); under none skipped if
+// periodStart is Jan 1, $31 if periodStart is Jan 20.
+func prorateFixedCharge(
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	anchor time.Time,
+	amount decimal.Decimal,
+	serviceablePeriod types.Period,
+	periodStart time.Time,
+) (decimal.Decimal, bool, error) {
+	gridSub := *sub
+	gridSub.BillingAnchor = anchor
+	fraction, _, err := proration.CalculateProrationCoefficient(&gridSub, item.BillingPeriod, item.BillingPeriodCount,
+		serviceablePeriod, types.StrategySecondBased)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+
+	if !fraction.LessThan(decimal.NewFromInt(1)) {
+		return amount, false, nil
+	}
+
+	if sub.ProrationBehavior == types.ProrationBehaviorNone {
+		return amount, serviceablePeriod.Start.Sub(periodStart).Round(time.Second) > 0, nil
+	}
+
+	return amount.Mul(fraction), false, nil
+}
+
+// subPeriodStartAt is the start of the sub's billing period containing t, never before the sub start.
+// e.g. calendar monthly sub from Jan 15: t = Jan 20 → Jan 15; t = Mar 20 → Mar 1.
+func subPeriodStartAt(sub *subscription.Subscription, t time.Time) (time.Time, error) {
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, sub.BillingPeriod, max(sub.BillingPeriodCount, 1), sub.Timezone)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return types.LatestOf(types.FullBillingPeriod(t, grid).Start, sub.StartDate), nil
+}
+
+// usageWindows is where a usage item is metered: its own cadence windows, or the whole invoice period
+// when its cadence is longer than the sub's, so its usage is billed on every sub invoice.
+// e.g. annual usage price on a monthly sub → one window per monthly invoice.
+func usageWindows(periodStart, periodEnd time.Time, item *subscription.SubscriptionLineItem, sub *subscription.Subscription) ([]periodWindow, error) {
+	if types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+		return []periodWindow{{Start: periodStart, End: periodEnd}}, nil
+	}
+	return splitInvoicePeriodByLineItemCadence(periodStart, periodEnd, item, sub)
+}
+
 // sameCadenceAsSubscription reports whether the line item bills on exactly the subscription's
 // cadence, treating an unset count as 1.
 func sameCadenceAsSubscription(item *subscription.SubscriptionLineItem, sub *subscription.Subscription) bool {
@@ -674,45 +750,8 @@ func splitInvoicePeriodByLineItemCadence(
 	return windows, nil
 }
 
-// fullPeriodDuration returns the length of one complete billing period of this line item
-// starting at windowStart. Falls back to fallback when the date math fails, and never returns
-// less than fallback so a malformed cadence cannot push a proration ratio above 1.
-func fullPeriodDuration(
-	ctx context.Context,
-	log *logger.Logger,
-	item *subscription.SubscriptionLineItem,
-	windowStart time.Time,
-	timezone string,
-	fallback time.Duration,
-) time.Duration {
-	count := item.BillingPeriodCount
-	if count <= 0 {
-		count = 1
-	}
-
-	next, err := types.NextBillingDate(&types.NextBillingDateParams{
-		CurrentPeriodStart: windowStart,
-		BillingAnchor:      windowStart,
-		Unit:               count,
-		Period:             item.BillingPeriod,
-		Timezone:           timezone,
-	})
-	if err != nil {
-		log.Info(ctx, "failed to derive line item period length, using invoice window",
-			"error", err,
-			"line_item_id", item.ID,
-			"billing_period", item.BillingPeriod)
-		return fallback
-	}
-
-	if d := next.Sub(windowStart); d > fallback {
-		return d
-	}
-	return fallback
-}
-
 // Used when the line item has a longer cadence than the subscription (e.g. quarterly on monthly).
-// Anchor and initial period start are the line item's StartDate.
+// Periods start at the item's StartDate and renew on the grid of in.Anchor.
 // Window bounds are symmetric: advance uses inclusive start / exclusive end, arrear the reverse.
 // - Advance: include when period start is in [periodStart, periodEnd) — start inclusive, end exclusive.
 // - Arrear: include when period end is in (periodStart, periodEnd] — start exclusive, end inclusive.
@@ -733,16 +772,21 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
 		endDate = item.EndDate
 	}
-	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
-		InitialPeriodStart: item.StartDate,
-		EndDate:            &endDate,
-		Anchor:             item.StartDate,
-		PeriodCount:        periodCount,
-		BillingPeriod:      item.BillingPeriod,
-		Timezone:           in.Timezone,
-	})
+	grid, err := types.NewBillingPeriodGrid(in.Anchor, item.BillingPeriod, periodCount, in.Timezone)
 	if err != nil {
 		return FindMatchingLineItemPeriodResult{}, err
+	}
+
+	// Exact grid periods, the same ones attach-time proration (longerItemPeriod) measures.
+	// e.g. annual item from Jan 15 09:00 on a Jan 15 17:00 grid → [Jan 15 09:00, Jan 15 17:00), then yearly.
+	var periods []types.Period
+	for start := item.StartDate; start.Before(endDate); {
+		end := types.FullBillingPeriod(start, grid).End
+		if !item.EndDate.IsZero() && item.EndDate.Before(end) {
+			end = item.EndDate
+		}
+		periods = append(periods, types.Period{Start: start, End: end})
+		start = end
 	}
 	for _, p := range periods {
 		if invoiceCadence == types.InvoiceCadenceAdvance {
@@ -2038,8 +2082,9 @@ func (s *billingService) ClassifyLineItems(
 					result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
 				}
 			} else {
-				// Arrear: billing date in (currentPeriodStart, currentPeriodEnd]
-				if billingDate.After(currentPeriodStart) && !billingDate.After(currentPeriodEnd) {
+				// Arrear: billing date in (currentPeriodStart, currentPeriodEnd]; the first period also owns the sub start
+				firstPeriodStart := currentPeriodStart.Equal(sub.StartDate) && billingDate.Equal(sub.StartDate)
+				if (billingDate.After(currentPeriodStart) || firstPeriodStart) && !billingDate.After(currentPeriodEnd) {
 					result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
 				}
 			}
@@ -2052,9 +2097,11 @@ func (s *billingService) ClassifyLineItems(
 			Match current → add to CurrentPeriodAdvance or CurrentPeriodArrear by cadence; if advance and matches next → also add to NextPeriodAdvance.
 			No match for current → skip for current; no match for next → add only to NextPeriodAdvance.
 		*/
-		if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+		if types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+			anchor := longerItemAnchor(sub, item)
 			resCurrent, errCurrent := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           item,
+				Anchor:         anchor,
 				PeriodStart:    currentPeriodStart,
 				PeriodEnd:      currentPeriodEnd,
 				InvoiceCadence: item.InvoiceCadence,
@@ -2065,6 +2112,7 @@ func (s *billingService) ClassifyLineItems(
 			if item.InvoiceCadence == types.InvoiceCadenceAdvance {
 				resNext, errNext := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 					Item:           item,
+					Anchor:         anchor,
 					PeriodStart:    nextPeriodStart,
 					PeriodEnd:      nextPeriodEnd,
 					InvoiceCadence: types.InvoiceCadenceAdvance,
@@ -2313,7 +2361,7 @@ func (s *billingService) calculateMeterUsageCharges(
 		}
 
 		for _, groupItems := range groups {
-			windows, err := splitInvoicePeriodByLineItemCadence(periodStart, periodEnd, groupItems[0], sub)
+			windows, err := usageWindows(periodStart, periodEnd, groupItems[0], sub)
 			if err != nil {
 				return nil, err
 			}
@@ -2514,65 +2562,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 
 	return req, nil
-}
-
-// applyProrationToLineItem applies proration calculation to a line item amount if proration is enabled
-func (s *billingService) applyProrationToLineItem(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	item *subscription.SubscriptionLineItem,
-	priceData *price.Price,
-	originalAmount decimal.Decimal,
-	periodStart *time.Time,
-	periodEnd *time.Time,
-) (decimal.Decimal, error) {
-
-	prorationService := NewProrationService(s.ServiceParams)
-	// Check if proration should be applied
-	if sub.ProrationBehavior == types.ProrationBehaviorNone {
-		return originalAmount, nil
-	}
-
-	// Proration is expressed against the subscription's own period, so it only applies to
-	// items that share that cadence. Others are already priced per window by the fan-out;
-	// one such item must not switch proration off for the rest of the subscription.
-	if !sameCadenceAsSubscription(item, sub) {
-		return originalAmount, nil
-	}
-
-	// Check if period dates match subscription's current period
-	if periodStart != nil && periodEnd != nil {
-		if !periodStart.Equal(sub.CurrentPeriodStart) || !periodEnd.Equal(sub.CurrentPeriodEnd) {
-			// Period doesn't match subscription's current period, don't apply proration
-			return originalAmount, nil
-		}
-	}
-
-	// If it's a usage charge, don't apply proration (usage is typically calculated for actual usage in the period)
-	if item.PriceType == types.PRICE_TYPE_USAGE {
-		return originalAmount, nil
-	}
-
-	action := types.ProrationActionAddItem
-	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
-		action = types.ProrationActionCancellation
-	}
-	prorationParams, err := prorationService.CreateProrationParamsForLineItem(
-		sub,
-		item,
-		priceData,
-		action,
-		sub.ProrationBehavior,
-	)
-	if err != nil {
-		return originalAmount, err
-	}
-
-	prorationResult, err := prorationService.CalculateProration(ctx, prorationParams)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	return prorationResult.NetAmount, nil
 }
 
 // aggregateMeteredEntitlementsForBilling merges the entitlements that target the

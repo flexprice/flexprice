@@ -85,14 +85,25 @@ type creditGrantService struct {
 	ServiceParams
 }
 
-const creditGrantCreditsScale = 8
-
 func NewCreditGrantService(
 	serviceParams ServiceParams,
 ) CreditGrantService {
 	return &creditGrantService{
 		ServiceParams: serviceParams,
 	}
+}
+
+// creditGrantFollowsBilling reports whether a grant recurs on the subscription's billing period,
+// the only case its first period is prorated: a onetime grant is a fixed lump, and a monthly grant
+// on an annual subscription keeps recurring monthly.
+// e.g. monthly 1000-credit grant on a calendar monthly sub from Jan 15: 548.39 now, 1000 every Feb 1 onward.
+func creditGrantFollowsBilling(req dto.CreateCreditGrantRequest, sub *subscription.Subscription) bool {
+	if req.Cadence != types.CreditGrantCadenceRecurring || req.Period == nil {
+		return false
+	}
+
+	period, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(req.Period))
+	return err == nil && period == sub.BillingPeriod && lo.FromPtrOr(req.PeriodCount, 1) == max(sub.BillingPeriodCount, 1)
 }
 
 func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.CreateCreditGrantRequest) (*dto.CreditGrantResponse, error) {
@@ -249,6 +260,17 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 			}
 		}
 
+		// Only a grant on the subscription's billing period has a first period to prorate or align.
+		if !creditGrantFollowsBilling(req, sub) {
+			req.FirstPeriodProration = nil
+		} else if req.FirstPeriodProration == nil && req.ProrationBehavior != "" {
+			req.FirstPeriodProration = newSubscriptionGrantService(s.ServiceParams).creditGrantProration(
+				ctx, sub, lo.FromPtr(req.StartDate), req.ProrationBehavior, grantProrationSourceCreditGrantCreate)
+		}
+		if req.FirstPeriodProration != nil {
+			req.CreditGrantAnchor = lo.ToPtr(req.FirstPeriodProration.PeriodEnd)
+		}
+
 		// Set credit grant anchor to start date if not provided
 		if req.CreditGrantAnchor == nil && req.StartDate != nil {
 			req.CreditGrantAnchor = req.StartDate
@@ -348,22 +370,28 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(
 
 	credits := cg.Credits
 	var prorationMetadata types.Metadata
-	if prorationCfg != nil {
-		coefficient, err := proration.Coefficient(
-			prorationCfg.PeriodStart, prorationCfg.PeriodEnd, prorationCfg.ProrationDate, prorationCfg.Strategy)
+	if prorationCfg != nil && prorationCfg.Prorate {
+		serviceablePeriod := types.Period{Start: prorationCfg.ProrationDate, End: prorationCfg.PeriodEnd}
+		coefficient, full, err := proration.CalculateProrationCoefficient(
+			subscription,
+			subscription.BillingPeriod,
+			subscription.BillingPeriodCount,
+			serviceablePeriod,
+			types.StrategySecondBased,
+		)
 		if err != nil {
 			return nil, err
 		}
-		credits = cg.Credits.Mul(coefficient).Round(creditGrantCreditsScale)
+		credits = cg.Credits.Mul(coefficient).Round(types.GetCurrencyPrecision(subscription.Currency))
 		prorationMetadata = proration.AuditMetadata(proration.AuditParams{
 			Source:        prorationCfg.Source,
 			Coefficient:   coefficient,
 			OriginalKey:   "proration_original_credits",
 			OriginalValue: cg.Credits,
-			PeriodStart:   prorationCfg.PeriodStart,
-			PeriodEnd:     prorationCfg.PeriodEnd,
+			PeriodStart:   full.Start,
+			PeriodEnd:     full.End,
 			ProrationDate: prorationCfg.ProrationDate,
-			Strategy:      prorationCfg.Strategy,
+			Strategy:      types.StrategySecondBased,
 		})
 
 		s.Logger.Info(ctx, "prorating first credit grant application",
@@ -1495,32 +1523,9 @@ func (s *creditGrantService) CreateSubscriptionCreditGrants(ctx context.Context,
 		// Use subscription start date as the anchor for the credit grant chain
 		grantReq.CreditGrantAnchor = lo.ToPtr(startDate)
 
-		// Prorating a mid-cycle grant only makes sense for a recurring allowance that
-		// shares the subscription's billing rhythm; a onetime grant is a fixed lump,
-		// and a monthly grant on an annual subscription should keep recurring monthly
-		// rather than stretch to the billing period.
-		grantPeriod := types.BillingPeriod("")
-		if grantReq.Period != nil {
-			period, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grantReq.Period))
-			if err != nil {
-				s.Logger.Error(ctx, "failed to get billing period from credit grant period",
-					"subscription_id", subscription.ID,
-					"credit_grant_period", grantReq.Period,
-					"error", err)
-			}
-			grantPeriod = period
-		}
-
-		if prorationCfg != nil &&
-			grantReq.Cadence == types.CreditGrantCadenceRecurring &&
-			grantPeriod == subscription.BillingPeriod {
-			// Anchor on the subscription's period boundary rather than the attach date, so
-			// every period after the short first one lands on an invoicing boundary instead
-			// of drifting. Chaining stays correct because createNextPeriodApplication feeds
-			// each period end back in as the next period start, matching this anchor.
-			grantReq.CreditGrantAnchor = lo.ToPtr(prorationCfg.PeriodEnd)
-			grantReq.FirstPeriodProration = prorationCfg
-		}
+		// CreateCreditGrant keeps it only for grants that recur on the subscription's billing
+		// period, and then anchors them on the billing boundary.
+		grantReq.FirstPeriodProration = prorationCfg
 
 		// Create credit grant: this now triggers initializeCreditGrantWorkflow
 		// which handles creation, anchor calculation, and eager application

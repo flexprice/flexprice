@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -381,22 +382,28 @@ func (s *SubscriptionChangeServiceTestSuite) createMultiMeterUsagePlan(name stri
 	return planResponse.Plan, createdMeters
 }
 
-// backdateSub pins CurrentPeriodStart/CurrentPeriodEnd on the subscription so that
-// daysUsed days have already elapsed out of a totalDays-long billing period.
-// This gives deterministic proration amounts regardless of when the test runs.
+// backdateSub moves the subscription into a monthly period that started daysUsed days ago.
 // Returns the refreshed subscription.
 func (s *SubscriptionChangeServiceTestSuite) backdateSub(
 	sub *subscription.Subscription,
-	daysUsed, totalDays int,
+	daysUsed int,
 ) *subscription.Subscription {
 	ctx := s.GetContext()
-	now := time.Now().UTC()
-	sub.CurrentPeriodStart = now.AddDate(0, 0, -daysUsed)
-	sub.CurrentPeriodEnd = now.AddDate(0, 0, totalDays-daysUsed)
+	sub.CurrentPeriodStart = time.Now().UTC().AddDate(0, 0, -daysUsed)
+	sub.CurrentPeriodEnd = sub.CurrentPeriodStart.AddDate(0, 1, 0)
+	sub.BillingAnchor = sub.CurrentPeriodStart
 	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, sub))
 	refreshed, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
 	require.NoError(s.T(), err)
 	return refreshed
+}
+
+// unusedCredit is amount scaled by the part of the current period still ahead.
+func (s *SubscriptionChangeServiceTestSuite) unusedCredit(sub *subscription.Subscription, amount float64) decimal.Decimal {
+	coefficient, _, err := proration.CalculateProrationCoefficient(sub, sub.BillingPeriod, sub.BillingPeriodCount,
+		types.Period{Start: time.Now().UTC(), End: sub.CurrentPeriodEnd}, types.StrategySecondBased)
+	require.NoError(s.T(), err)
+	return decimal.NewFromFloat(amount).Mul(coefficient)
 }
 
 // getInvoicesForSub lists all invoices (any status) for the given subscription ID.
@@ -1566,18 +1573,18 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeNoneProration() {
 
 // TestCancelWithCreateProrations verifies that when a customer cancels mid-period
 // with ProrationBehaviorCreateProrations (the normal cancel path, NOT a plan change):
-//   - The response TotalCreditAmount is ~$300 (15/30 days of $600/mo)
+//   - The response TotalCreditAmount is the unused part of the $600/mo period
 //   - A wallet is created for the customer
-//   - The wallet balance matches the credit (~$300)
+//   - The wallet balance matches the credit
 //   - The subscription ends up in the "cancelled" state
 func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
 	ctx := s.GetContext()
 
-	// Setup: customer, $600/month plan, subscription backdated 15/30 days
+	// Setup: customer, $600/month plan, subscription 15 days into its period
 	cust := s.createTestCustomer()
 	plan600 := s.createTestPlan("Plan600", decimal.NewFromFloat(600))
 	sub := s.createTestSubscription(plan600.ID, cust.ID)
-	sub = s.backdateSub(sub, 15, 30)
+	sub = s.backdateSub(sub, 15)
 
 	// Call CancelSubscription with create_prorations — no SkipProrationWalletCredit
 	cancelResp, err := s.subscriptionService.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
@@ -1586,9 +1593,10 @@ func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
 	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), cancelResp)
+	credit := s.unusedCredit(sub, 600)
 
 	s.Run("cancel/response_total_credit_amount", func() {
-		s.assertAmountNear(decimal.NewFromFloat(300), cancelResp.TotalCreditAmount, 1.0, "response TotalCreditAmount")
+		s.assertAmountNear(credit, cancelResp.TotalCreditAmount, 1.0, "response TotalCreditAmount")
 	})
 
 	w := s.getWalletForCustomer(cust.ID)
@@ -1599,7 +1607,7 @@ func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
 
 	s.Run("cancel/wallet_balance_matches_credit", func() {
 		require.NotNil(s.T(), w, "wallet must exist to check balance")
-		s.assertAmountNear(decimal.NewFromFloat(300), w.Balance, 1.0, "wallet balance")
+		s.assertAmountNear(credit, w.Balance, 1.0, "wallet balance")
 	})
 
 	s.Run("cancel/subscription_is_cancelled", func() {
@@ -1612,7 +1620,7 @@ func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
 // TestUpgradeWithCreateProrations verifies that when a customer upgrades plans
 // immediately with ProrationBehaviorCreateProrations:
 //   - The preview shows the correct credit amount (~$300 for 15/30 days of $600/mo)
-//   - The preview next invoice total is reduced by that credit (~$2000 - $300 = $1700)
+//   - The preview next invoice total is $2000 reduced by that credit
 //   - The old subscription is cancelled and no wallet credit is created
 //   - The new subscription's opening invoice has BillingReason=SUBSCRIPTION_UPDATE
 func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
@@ -1626,8 +1634,8 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 	// Create subscription on the $600 plan
 	sub := s.createTestSubscription(sourcePlan.ID, cust.ID)
 
-	// Backdate: 15 days used of 30 days total
-	sub = s.backdateSub(sub, 15, 30)
+	// Backdate: 15 days into a monthly period
+	sub = s.backdateSub(sub, 15)
 
 	// Build request with create_prorations
 	req := s.createSubscriptionChangeRequest(targetPlan.ID, types.ProrationBehaviorCreateProrations)
@@ -1641,14 +1649,16 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 		assert.NotNil(s.T(), previewResp.ProrationDetails)
 	})
 
-	s.Run("preview/credit_amount_near_300", func() {
+	credit := s.unusedCredit(sub, 600)
+
+	s.Run("preview/credit_amount_for_unused_time", func() {
 		require.NotNil(s.T(), previewResp.ProrationDetails)
-		s.assertAmountNear(decimal.NewFromFloat(300), previewResp.ProrationDetails.CreditAmount, 1.0, "credit amount")
+		s.assertAmountNear(credit, previewResp.ProrationDetails.CreditAmount, 1.0, "credit amount")
 	})
 
-	s.Run("preview/next_invoice_total_near_1700", func() {
+	s.Run("preview/next_invoice_total_net_of_credit", func() {
 		require.NotNil(s.T(), previewResp.NextInvoicePreview)
-		s.assertAmountNear(decimal.NewFromFloat(1700), previewResp.NextInvoicePreview.Total, 1.0, "next invoice total")
+		s.assertAmountNear(decimal.NewFromFloat(2000).Sub(credit), previewResp.NextInvoicePreview.Total, 1.0, "next invoice total")
 	})
 
 	// --- Execute ---
@@ -1670,9 +1680,9 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(openingInvoice.BillingReason))
 	})
 
-	s.Run("execute/opening_invoice_amount_near_1700", func() {
+	s.Run("execute/opening_invoice_amount_net_of_credit", func() {
 		openingInvoice := s.getOpeningInvoiceForSub(execResp.NewSubscription.ID)
-		s.assertAmountNear(decimal.NewFromFloat(1700), openingInvoice.AmountDue, 1.0, "opening invoice total")
+		s.assertAmountNear(decimal.NewFromFloat(2000).Sub(credit), openingInvoice.AmountDue, 1.0, "opening invoice total")
 	})
 
 	s.Run("execute/no_wallet_credit", func() {

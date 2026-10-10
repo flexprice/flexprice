@@ -289,16 +289,12 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 		}
 	}
 
-	// Cadence relationship: price effective months (billing_period × billing_period_count)
-	// must equal or strictly divide subscription effective months. Uses the same
-	// types.IsCadenceCompatible check as splitInvoicePeriodByLineItemCadence at
-	// invoice time so anything accepted here cannot later error during fan-out.
-	// Mirrors the plan-attachment filter at internal/ee/service/subscription.go:3949-3950.
+	// The price cadence must equal, divide, or be a whole multiple of the subscription cadence.
 	if linePrice != nil && sub != nil &&
 		linePrice.BillingPeriod != types.BILLING_PERIOD_ONETIME &&
-		!types.IsCadenceCompatible(sub.BillingPeriod, sub.BillingPeriodCount, linePrice.BillingPeriod, linePrice.BillingPeriodCount) {
-		return ierr.NewError("price billing period must equal or divide subscription billing period").
-			WithHint("Price effective duration (billing_period × billing_period_count) must equal or divide the subscription's effective duration. For a quarterly sub, monthly or quarterly prices are allowed; 2-month, annual, or half-year prices are not.").
+		!types.IsCadenceAllowed(sub.BillingPeriod, sub.BillingPeriodCount, linePrice.BillingPeriod, linePrice.BillingPeriodCount) {
+		return ierr.NewError("price billing period must equal, divide, or be a multiple of the subscription billing period").
+			WithHint("Price effective duration (billing_period × billing_period_count) must equal, divide, or be a whole multiple of the subscription's. For a quarterly sub, monthly, quarterly, half-year and annual prices are allowed; 2-month prices are not.").
 			WithReportableDetails(map[string]interface{}{
 				"price_billing_period":              linePrice.BillingPeriod,
 				"price_billing_period_count":        linePrice.BillingPeriodCount,
@@ -495,6 +491,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		PriceType:           params.Price.Type,
 		Currency:            params.Subscription.Currency,
 		BillingPeriod:       params.Price.BillingPeriod,
+		BillingPeriodCount:  params.Price.BillingPeriodCount,
 		InvoiceCadence:      invoiceCadence,
 		EntityType:          params.EntityType,
 		Metadata:            r.Metadata,
@@ -842,23 +839,24 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, existingLineItem *subscription.SubscriptionLineItem, newPriceID string) *subscription.SubscriptionLineItem {
 	// Start with the existing line item as base
 	newLineItem := &subscription.SubscriptionLineItem{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID:   existingLineItem.SubscriptionID,
-		CustomerID:       existingLineItem.CustomerID,
-		PriceID:          newPriceID,
-		PriceType:        existingLineItem.PriceType,
-		Currency:         existingLineItem.Currency,
-		BillingPeriod:    existingLineItem.BillingPeriod,
-		InvoiceCadence:   existingLineItem.InvoiceCadence,
-		EntityType:       existingLineItem.EntityType,
-		EntityID:         existingLineItem.EntityID,
-		PlanDisplayName:  existingLineItem.PlanDisplayName,
-		MeterID:          existingLineItem.MeterID,
-		MeterDisplayName: existingLineItem.MeterDisplayName,
-		DisplayName:      existingLineItem.DisplayName,
-		Quantity:         existingLineItem.Quantity,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     existingLineItem.SubscriptionID,
+		CustomerID:         existingLineItem.CustomerID,
+		PriceID:            newPriceID,
+		PriceType:          existingLineItem.PriceType,
+		Currency:           existingLineItem.Currency,
+		BillingPeriod:      existingLineItem.BillingPeriod,
+		BillingPeriodCount: existingLineItem.BillingPeriodCount,
+		InvoiceCadence:     existingLineItem.InvoiceCadence,
+		EntityType:         existingLineItem.EntityType,
+		EntityID:           existingLineItem.EntityID,
+		PlanDisplayName:    existingLineItem.PlanDisplayName,
+		MeterID:            existingLineItem.MeterID,
+		MeterDisplayName:   existingLineItem.MeterDisplayName,
+		DisplayName:        existingLineItem.DisplayName,
+		Quantity:           existingLineItem.Quantity,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 
 		PriceUnitID:         existingLineItem.PriceUnitID,
 		PriceUnit:           existingLineItem.PriceUnit,

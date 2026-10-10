@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -169,76 +170,22 @@ func (c *EntitlementProrationCalculator) CalculateEntitlementProration(
 	return result, nil
 }
 
-// calculateProrationCoefficient calculates the proration coefficient by reusing the shared helper
-// For calendar billing, it uses the full calendar period (e.g., Dec 1-31) to match price proration
-// For anniversary billing, it uses the actual subscription period
+// calculateProrationCoefficient prorates over the full billing period, the same way charges do.
 func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 	params EntitlementProrationParams,
 ) (decimal.Decimal, error) {
-	// Load customer timezone
-	loc, err := time.LoadLocation(params.Timezone)
-	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
-			WithHintf("failed to load customer timezone '%s'", params.Timezone).
-			Mark(ierr.ErrSystem)
+	schedule := &subscription.Subscription{
+		BillingAnchor:      params.BillingAnchor,
+		BillingPeriod:      params.BillingPeriod,
+		BillingPeriodCount: params.BillingPeriodCount,
+		Timezone:           params.Timezone,
 	}
 
-	// Determine the period to use for proration calculation
-	// For calendar billing, we need to use the full calendar period (like price proration does)
-	var periodStart, periodEnd time.Time
+	serviceablePeriod := types.Period{Start: params.ProrationDate, End: params.PeriodEnd}
+	coefficient, _, err := CalculateProrationCoefficient(schedule, params.BillingPeriod, params.BillingPeriodCount,
+		serviceablePeriod, params.Strategy)
 
-	if params.BillingCycle == types.BillingCycleCalendar {
-		// For calendar billing, calculate the previous billing date to get the full period
-		// This ensures entitlement proration matches price proration
-		// Example: Subscription starts Dec 26, billing anchor is Jan 1
-		// Previous billing date is Dec 1, so we prorate based on 6/31 days
-		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
-			BillingAnchor: params.BillingAnchor,
-			Unit:          params.BillingPeriodCount,
-			Period:        params.BillingPeriod,
-		})
-		if err != nil {
-			// Fallback to subscription period start if calculation fails
-			c.logger.Info(context.Background(), "failed to calculate previous billing date for calendar proration, using fallback",
-				"error", err,
-				"billing_anchor", params.BillingAnchor,
-				"billing_period", params.BillingPeriod,
-				"billing_period_count", params.BillingPeriodCount)
-			periodStart = params.PeriodStart
-		} else {
-			periodStart = previousBillingDate
-		}
-		periodEnd = params.PeriodEnd
-	} else {
-		// For anniversary billing, use the actual subscription period
-		periodStart = params.PeriodStart
-		periodEnd = params.PeriodEnd
-	}
-
-	// Convert times to customer timezone
-	prorationDateInTZ := params.ProrationDate.In(loc)
-	periodStartInTZ := periodStart.In(loc)
-	periodEndInTZ := periodEnd.In(loc)
-
-	// Use the shared coefficient calculation helper
-	// This eliminates code duplication and ensures consistency with price proration
-	coefficient, err := calculateProrationCoefficient(
-		periodStartInTZ,
-		periodEndInTZ,
-		prorationDateInTZ,
-		loc,
-		params.Strategy,
-	)
-	if err != nil {
-		return decimal.Zero, err
-	}
-
-	c.logger.Debug(context.Background(), "proration coefficient calculated via shared helper",
-		"coefficient", coefficient.String(),
-		"period_start", periodStart,
-		"period_end", periodEnd)
-
-	return coefficient, nil
+	return coefficient, err
 }
 
 // calculateProratedLimit calculates the prorated limit with standard rounding

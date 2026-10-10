@@ -23,9 +23,11 @@ const entitlementGrantQuotaScale = 15
 type grantProrationSource string
 
 const (
-	grantProrationSourceAddonAttach  grantProrationSource = "addon_attach"
-	grantProrationSourceAddonDetach  grantProrationSource = "addon_detach"
-	grantProrationSourceAddonsModify grantProrationSource = "addons_modify"
+	grantProrationSourceSubscriptionCreate grantProrationSource = "subscription_create"
+	grantProrationSourceCreditGrantCreate  grantProrationSource = "credit_grant_create"
+	grantProrationSourceAddonAttach        grantProrationSource = "addon_attach"
+	grantProrationSourceAddonDetach        grantProrationSource = "addon_detach"
+	grantProrationSourceAddonsModify       grantProrationSource = "addons_modify"
 	// Not an addon change: an entitlement was deleted outright.
 	grantProrationSourceEntitlementGone grantProrationSource = "entitlement_deleted"
 )
@@ -91,7 +93,13 @@ func (s *subscriptionGrantService) resolveGrantProration(
 			prorationDate = effectiveDate
 		}
 
-		coefficient, err := proration.Coefficient(p.Start, p.End, prorationDate, types.StrategySecondBased)
+		// Same coefficient as the charge; e.g. 100 units attached Jan 20 in [Jan 1, Feb 1) → 38.71 (12/31).
+		coefficient, full := decimal.NewFromInt(1), p
+		if behavior == types.ProrationBehaviorCreateProrations {
+			serviceablePeriod := types.Period{Start: prorationDate, End: p.End}
+			coefficient, full, err = proration.CalculateProrationCoefficient(sub, sub.BillingPeriod, sub.BillingPeriodCount,
+				serviceablePeriod, types.StrategySecondBased)
+		}
 		if err != nil {
 			s.Logger.Info(ctx, "skipping entitlement grant proration; coefficient could not be computed",
 				"subscription_id", sub.ID,
@@ -139,8 +147,8 @@ func (s *subscriptionGrantService) resolveGrantProration(
 				Coefficient:   coefficient,
 				OriginalKey:   "proration_original_quota",
 				OriginalValue: originalQuota,
-				PeriodStart:   p.Start,
-				PeriodEnd:     p.End,
+				PeriodStart:   full.Start,
+				PeriodEnd:     full.End,
 				ProrationDate: prorationDate,
 				Strategy:      types.StrategySecondBased,
 			})).

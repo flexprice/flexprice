@@ -867,6 +867,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).
 				SetBillingPeriod(item.BillingPeriod).
+				SetBillingPeriodCount(max(item.BillingPeriodCount, 1)).
 				SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 				SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 				SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).

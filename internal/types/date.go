@@ -79,11 +79,9 @@ func AdvanceDays(t time.Time, n int, tz string) time.Time {
 // NextBillingDateParams holds the inputs for NextBillingDate.
 //
 // The BillingAnchor determines the reference point for billing cycles:
-//   - For MONTHLY periods, it sets the day of the month; if the period starts before that
-//     day in the month, the next billing date is that anchor day in the same month (first
-//     partial period), otherwise the usual advance by unit months applies
-//   - For ANNUAL periods, it sets the month and day of the year
-//   - For WEEKLY/DAILY periods, it's used only for validation
+//   - For month-based periods, billing dates are anchor + k periods, with the day clamped to
+//     month end (Jan 31 -> Feb 28 -> Mar 31); the next date is the first one after the start
+//   - For WEEKLY/DAILY periods, it sets the weekday and time of day
 //
 // If SubscriptionEndDate is provided, the result will be cliffed to not exceed it.
 // Timezone is an IANA timezone name (e.g. "Asia/Kolkata"); empty or "UTC" computes in UTC.
@@ -107,7 +105,7 @@ func NextBillingDate(p *NextBillingDateParams) (time.Time, error) {
 	localStart := p.CurrentPeriodStart.In(loc)
 	localAnchor := p.BillingAnchor.In(loc)
 
-	result, err := nextBillingDateCore(localStart, localAnchor, p.Unit, p.Period, p.SubscriptionEndDate)
+	result, err := nextBillingDateCore(localStart, localAnchor, p.Unit, p.Period, p.SubscriptionEndDate, p.Timezone)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -116,16 +114,10 @@ func NextBillingDate(p *NextBillingDateParams) (time.Time, error) {
 
 // nextBillingDateCore is the internal positional-arg implementation used by NextBillingDate
 // and other helpers in this file. Callers must pass times already in the desired location.
-func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
-	if unit <= 0 {
-		return currentPeriodStart, ierr.NewError("billing period unit must be a positive integer").
-			WithHint("Billing period unit must be a positive integer").
-			WithReportableDetails(
-				map[string]any{
-					"unit": unit,
-				},
-			).
-			Mark(ierr.ErrValidation)
+func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time, tz string) (time.Time, error) {
+	grid, err := NewBillingPeriodGrid(billingAnchor, period, unit, tz)
+	if err != nil {
+		return currentPeriodStart, err
 	}
 
 	// For daily and weekly periods, we can use simple addition
@@ -168,108 +160,11 @@ func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, 
 		return nextDate, nil
 	}
 
-	// For monthly and annual periods, calculate the target year and month
-	var years, months int
-	switch period {
-	case BILLING_PERIOD_MONTHLY:
-		months = unit
-	case BILLING_PERIOD_ANNUAL:
-		years = unit
-	case BILLING_PERIOD_QUARTER:
-		months = unit * 3
-	case BILLING_PERIOD_HALF_YEAR:
-		months = unit * 6
-	default:
-		return currentPeriodStart, ierr.NewError("invalid billing period type").
-			WithHint("Invalid billing period type").
-			WithReportableDetails(
-				map[string]any{
-					"period": period,
-				},
-			).
-			Mark(ierr.ErrValidation)
-	}
+	// index of the first billing date after start
+	periodIndexNextToStartDatePeriod := grid.periodIndexAfter(currentPeriodStart)
 
-	// For calendar billing with QUARTERLY and HALF_YEARLY periods, the billingAnchor
-	// is set to the start of the next calendar boundary (e.g. April 1 for a
-	// subscription starting mid-Q1). If currentPeriodStart is before the anchor,
-	// we are still in the partial first period and the next billing date IS
-	// the anchor itself.
-	if (period == BILLING_PERIOD_QUARTER || period == BILLING_PERIOD_HALF_YEAR) &&
-		currentPeriodStart.Before(billingAnchor) {
-		if subscriptionEndDate != nil && billingAnchor.After(*subscriptionEndDate) {
-			return *subscriptionEndDate, nil
-		}
-		return billingAnchor, nil
-	}
-
-	// MONTHLY: If the period starts before the anchor day in the same calendar month,
-	// the next billing date is that month's anchor day (Stripe-style first short period).
-	// Compare by day-of-month only (not time-of-day) so same-day start/anchor still
-	// advances by `unit` months via the logic below.
-	if period == BILLING_PERIOD_MONTHLY {
-		y, m, d := currentPeriodStart.Date()
-		h, min, sec := billingAnchor.Clock()
-		lastDayThisMonth := time.Date(y, m+1, 0, 0, 0, 0, 0, currentPeriodStart.Location()).Day()
-		clampedAnchorD := billingAnchor.Day()
-		if clampedAnchorD > lastDayThisMonth {
-			clampedAnchorD = lastDayThisMonth
-		}
-		if d < clampedAnchorD {
-			nextDate := time.Date(y, m, clampedAnchorD, h, min, sec, 0, currentPeriodStart.Location())
-			if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
-				return *subscriptionEndDate, nil
-			}
-			return nextDate, nil
-		}
-	}
-
-	// Get the current year and month
-	y, m, _ := currentPeriodStart.Date()
-	// get the time always from anchor because
-	// it's either 00:00:00 for calendar-aligned billing
-	// or the start time of the first billing period
-	h, min, sec := billingAnchor.Clock()
-
-	// Calculate the target year and month
-	targetY := y + years
-	targetM := time.Month(int(m) + months)
-
-	// Adjust for month overflow/underflow
-	for targetM > 12 {
-		targetM -= 12
-		targetY++
-	}
-	for targetM < 1 {
-		targetM += 12
-		targetY--
-	}
-
-	// For annual billing, preserve the billing anchor month
-	if period == BILLING_PERIOD_ANNUAL {
-		targetM = billingAnchor.Month()
-	}
-
-	// Get the target day from the billing anchor
-	targetD := billingAnchor.Day()
-
-	// Find the last day of the target month
-	lastDayOfMonth := time.Date(targetY, targetM+1, 0, 0, 0, 0, 0, currentPeriodStart.Location()).Day()
-
-	// Special handling for month-end dates and February
-	if targetD > lastDayOfMonth {
-		targetD = lastDayOfMonth
-	}
-
-	// Special case for February 29th in leap years
-	if period == BILLING_PERIOD_ANNUAL &&
-		billingAnchor.Month() == time.February &&
-		billingAnchor.Day() == 29 &&
-		!isLeapYear(targetY) {
-		targetD = 28
-	}
-
-	nextDate := time.Date(targetY, targetM, targetD, h, min, sec, 0, currentPeriodStart.Location())
+	// resolve the date of that period index
+	nextDate := grid.billingDateAtIndex(periodIndexNextToStartDatePeriod)
 
 	// Cliff to subscription end date if provided
 	if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
@@ -374,18 +269,53 @@ type PreviousBillingDateParams struct {
 	BillingAnchor time.Time
 	Unit          int
 	Period        BillingPeriod
+	Timezone      string
 }
 
 // PreviousBillingDate calculates the previous billing date by going backwards from the billing anchor
 // by the specified period duration. This is useful for proration calculations where we need to determine
 // the start of a full billing period that ends at the billing anchor.
 func PreviousBillingDate(p *PreviousBillingDateParams) (time.Time, error) {
-	billingAnchor := p.BillingAnchor
-	unit := p.Unit
-	period := p.Period
+	grid, err := NewBillingPeriodGrid(p.BillingAnchor, p.Period, p.Unit, p.Timezone)
+	if err != nil {
+		return p.BillingAnchor, err
+	}
 
+	// since we are finding the previous billing date from anchor
+	// we are already at the origin and just need to go back one unit distance
+	return grid.billingDateAtIndex(-1).UTC(), nil
+}
+
+// FullBillingPeriod returns the regular billing period on the grid's schedule that contains t.
+// Pk-1 ... t ... Pk, where k = periodIndexAfter(t)
+// e.g. monthly grid anchored Feb 1: t = Jan 15 → [Jan 1, Feb 1); t = Feb 1 → [Feb 1, Mar 1).
+func FullBillingPeriod(t time.Time, grid *billingPeriodGrid) Period {
+	if grid == nil {
+		return Period{}
+	}
+
+	k := grid.periodIndexAfter(t.In(grid.anchor.Location()))
+
+	return Period{
+		Start: grid.billingDateAtIndex(k - 1).UTC(),
+		End:   grid.billingDateAtIndex(k).UTC(),
+	}
+}
+
+// billingPeriodGrid is a billing schedule: the dates anchor + k periods, for any integer k.
+// Think of it like a time with origin at anchor
+// The next point at anchor + unit * period
+// later period is resolve to either N * days or N * months
+type billingPeriodGrid struct {
+	anchor time.Time
+	period BillingPeriod
+	unit   int
+}
+
+// NewBillingPeriodGrid validates the period and unit and builds the schedule in the timezone tz.
+func NewBillingPeriodGrid(anchor time.Time, period BillingPeriod, unit int, tz string) (*billingPeriodGrid, error) {
 	if unit <= 0 {
-		return billingAnchor, ierr.NewError("billing period unit must be a positive integer").
+		return nil, ierr.NewError("billing period unit must be a positive integer").
 			WithHint("Billing period unit must be a positive integer").
 			WithReportableDetails(
 				map[string]any{
@@ -394,28 +324,8 @@ func PreviousBillingDate(p *PreviousBillingDateParams) (time.Time, error) {
 			).
 			Mark(ierr.ErrValidation)
 	}
-
-	// For daily and weekly periods, we can use simple subtraction
-	switch period {
-	case BILLING_PERIOD_DAILY:
-		return billingAnchor.AddDate(0, 0, -unit), nil
-	case BILLING_PERIOD_WEEKLY:
-		return billingAnchor.AddDate(0, 0, -unit*7), nil
-	}
-
-	// For monthly and annual periods, calculate the target year and month
-	var years, months int
-	switch period {
-	case BILLING_PERIOD_MONTHLY:
-		months = -unit
-	case BILLING_PERIOD_ANNUAL:
-		years = -unit
-	case BILLING_PERIOD_QUARTER:
-		months = -unit * 3
-	case BILLING_PERIOD_HALF_YEAR:
-		months = -unit * 6
-	default:
-		return billingAnchor, ierr.NewError("invalid billing period type").
+	if period != BILLING_PERIOD_DAILY && period != BILLING_PERIOD_WEEKLY && monthsPerPeriod(period) == 0 {
+		return nil, ierr.NewError("invalid billing period type").
 			WithHint("Invalid billing period type").
 			WithReportableDetails(
 				map[string]any{
@@ -425,54 +335,80 @@ func PreviousBillingDate(p *PreviousBillingDateParams) (time.Time, error) {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get the anchor year, month, and time components
-	y, m, d := billingAnchor.Date()
-	h, min, sec := billingAnchor.Clock()
-
-	// Calculate the target year and month
-	targetY := y + years
-	targetM := time.Month(int(m) + months)
-
-	// Adjust for month overflow/underflow
-	for targetM > 12 {
-		targetM -= 12
-		targetY++
-	}
-	for targetM < 1 {
-		targetM += 12
-		targetY--
-	}
-
-	// For annual billing, preserve the billing anchor month and day
-	if period == BILLING_PERIOD_ANNUAL {
-		targetM = billingAnchor.Month()
-	}
-
-	// Get the target day from the billing anchor
-	targetD := d
-
-	// Find the last day of the target month
-	lastDayOfMonth := time.Date(targetY, targetM+1, 0, 0, 0, 0, 0, billingAnchor.Location()).Day()
-
-	// Special handling for month-end dates and February
-	if targetD > lastDayOfMonth {
-		targetD = lastDayOfMonth
-	}
-
-	// Special case for February 29th in leap years
-	if period == BILLING_PERIOD_ANNUAL &&
-		billingAnchor.Month() == time.February &&
-		billingAnchor.Day() == 29 &&
-		!isLeapYear(targetY) {
-		targetD = 28
-	}
-
-	return time.Date(targetY, targetM, targetD, h, min, sec, 0, billingAnchor.Location()), nil
+	return &billingPeriodGrid{anchor: anchor.In(loadTimezone(tz)), period: period, unit: unit}, nil
 }
 
-// isLeapYear returns true if the given year is a leap year
-func isLeapYear(year int) bool {
-	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
+// billingDateAtIndex returns the k-th billing date; k = 0 is the anchor and k may be negative.
+func (g billingPeriodGrid) billingDateAtIndex(k int) time.Time {
+	switch g.period {
+	case BILLING_PERIOD_DAILY:
+		return g.anchor.AddDate(0, 0, k*g.unit)
+	case BILLING_PERIOD_WEEKLY:
+		return g.anchor.AddDate(0, 0, k*g.unit*7)
+	}
+
+	// adding months on another month can lead to a date
+	// that is not a an actual date hence Date package rolling it over
+	// Eg: Jan 31 + 1 month => Feb 31 => Mar 3 but we want Feb 28
+	// So we clamp the day to the last day of the target month
+	// Possible only for months because they are of uneven number of days
+	// Not possible for weeks or any other cadence
+	return addMonthsClamped(g.anchor, k*g.unit*monthsPerPeriod(g.period))
+}
+
+// periodIndexAfter returns the smallest k whose billing date is strictly after t.
+func (g billingPeriodGrid) periodIndexAfter(t time.Time) int {
+	// Estimate k, then correct it: step back until dateAt(k) <= t, then forward to the first dateAt(k) > t.
+	var k int
+	if months := g.unit * monthsPerPeriod(g.period); months > 0 {
+		k = ((t.Year()-g.anchor.Year())*12 + int(t.Month()) - int(g.anchor.Month())) / months
+	} else {
+		k = int(t.Sub(g.anchor).Hours()/24) / (g.unit * lo.Ternary(g.period == BILLING_PERIOD_WEEKLY, 7, 1))
+	}
+
+	// step back until the date is before t in case we estimated too high
+	for g.billingDateAtIndex(k).After(t) {
+		k--
+	}
+
+	// step forward till we are at first billing date after t
+	for !g.billingDateAtIndex(k).After(t) {
+		k++
+	}
+
+	return k
+}
+
+func monthsPerPeriod(period BillingPeriod) int {
+	switch period {
+	case BILLING_PERIOD_MONTHLY:
+		return 1
+	case BILLING_PERIOD_QUARTER:
+		return 3
+	case BILLING_PERIOD_HALF_YEAR:
+		return 6
+	case BILLING_PERIOD_ANNUAL:
+		return 12
+	}
+
+	return 0
+}
+
+// addMonthsClamped moves t by n months, keeping its day-of-month but clamping it to the target month's end.
+func addMonthsClamped(t time.Time, n int) time.Time {
+	y, m, d := t.Date()
+	h, mi, sec := t.Clock()
+
+	// m+n => the target month
+	// m+n+1 => the next month after target month
+	// Day 0 of a month means the last day of the previous month.
+	// so m+n+1 day 0 is m+n (target month's) last day
+	lastDay := time.Date(y, m+time.Month(n)+1, 0, 0, 0, 0, 0, t.Location()).Day()
+
+	// If Jan 31 + 1 month => Feb 28 (not 31)
+	clampedDay := min(d, lastDay)
+
+	return time.Date(y, m+time.Month(n), clampedDay, h, mi, sec, 0, t.Location())
 }
 
 // CalculatePeriodIDParams holds the inputs for CalculatePeriodID.

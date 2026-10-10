@@ -592,12 +592,12 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	if f.TimeRangeFilter != nil && (f.TimeRangeFilter.StartTime != nil || f.TimeRangeFilter.EndTime != nil) {
 		// Matches the ent repository: the invoice's period lies inside the range.
 		if f.TimeRangeFilter.StartTime != nil {
-			if inv.PeriodStart == nil || inv.PeriodStart.After(*f.TimeRangeFilter.StartTime) {
+			if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.TimeRangeFilter.StartTime) {
 				return false
 			}
 		}
 		if f.TimeRangeFilter.EndTime != nil {
-			if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.TimeRangeFilter.EndTime) {
+			if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.TimeRangeFilter.EndTime) {
 				return false
 			}
 		}

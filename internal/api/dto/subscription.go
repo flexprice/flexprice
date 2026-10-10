@@ -814,6 +814,25 @@ type CancelSubscriptionResponse struct {
 	ProcessedAt time.Time `json:"processed_at"`
 }
 
+// ProrationSettings decides whether a change prorates each grant type.
+type ProrationSettings struct {
+	CreditGrantBehavior      types.ProrationBehavior `json:"credit_grant_behavior,omitempty"`
+	EntitlementGrantBehavior types.ProrationBehavior `json:"entitlement_grant_behavior,omitempty"`
+}
+
+// NewProrationSettings applies one behavior to every grant type.
+func NewProrationSettings(behavior types.ProrationBehavior) ProrationSettings {
+	return ProrationSettings{CreditGrantBehavior: behavior, EntitlementGrantBehavior: behavior}
+}
+
+// WithDefault fills each unset behavior with defaultBehavior.
+func (p ProrationSettings) WithDefault(defaultBehavior types.ProrationBehavior) ProrationSettings {
+	return ProrationSettings{
+		CreditGrantBehavior:      lo.CoalesceOrEmpty(p.CreditGrantBehavior, defaultBehavior),
+		EntitlementGrantBehavior: lo.CoalesceOrEmpty(p.EntitlementGrantBehavior, defaultBehavior),
+	}
+}
+
 // ProrationDetail provides line-item level proration information
 type ProrationDetail struct {
 	LineItemID     string          `json:"line_item_id"`
@@ -1399,7 +1418,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 	// If the start date is before the current date and proration mode is active, return an error
 	// This prevents creating subscriptions with backdated start dates that would trigger proration
 
-	if request.Workflow == lo.ToPtr(types.TemporalSubscriptionCreationWorkflow) {
+	if lo.FromPtr(request.Workflow) == types.TemporalSubscriptionCreationWorkflow {
 		return nil
 	}
 

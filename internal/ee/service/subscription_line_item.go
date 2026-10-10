@@ -110,9 +110,8 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		// This runs after the DTO validator, which enforces the same rule for
 		// request-path callers. Keeping it here is defense-in-depth for
 		// internal callers that construct SubscriptionLineItems directly.
-		itemDividesSub := types.IsCadenceCompatible(sub.BillingPeriod, sub.BillingPeriodCount, lineItem.BillingPeriod, lineItem.BillingPeriodCount)
-		subDividesItem := types.IsCadenceCompatible(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount)
-		if lineItem.BillingPeriod != types.BILLING_PERIOD_ONETIME && !itemDividesSub && !subDividesItem {
+		if lineItem.BillingPeriod != types.BILLING_PERIOD_ONETIME &&
+			!types.IsCadenceAllowed(sub.BillingPeriod, sub.BillingPeriodCount, lineItem.BillingPeriod, lineItem.BillingPeriodCount) {
 			return ierr.NewError("line item billing cadence is not compatible with subscription cadence").
 				WithHint("The line item's effective duration (billing_period × billing_period_count) must equal, strictly divide, or be a strict multiple of the subscription's effective duration.").
 				WithReportableDetails(map[string]interface{}{
@@ -1227,25 +1226,6 @@ func (s *subscriptionService) ListSubscriptionLineItems(ctx context.Context, fil
 			filter.GetOffset(),
 		),
 	}, nil
-}
-
-// validateMultiCadence enforces mutual exclusion between multi-cadence and proration.
-// Line items are allowed to have any mix of billing periods; alignment is not required.
-func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscription) error {
-	if len(sub.LineItems) == 0 {
-		return nil
-	}
-
-	if sub.HasMixedBillingPeriods() && sub.ProrationBehavior == types.ProrationBehaviorCreateProrations {
-		return ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
-			WithHint("Set proration_behavior to 'none' when using different billing periods on the same subscription").
-			WithReportableDetails(map[string]interface{}{
-				"proration_behavior": sub.ProrationBehavior,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
 }
 
 // validateBucketArray runs array-level validation on a bucket slice — every
