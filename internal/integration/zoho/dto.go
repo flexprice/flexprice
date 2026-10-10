@@ -32,21 +32,26 @@ type ContactPerson struct {
 	FirstName        string `json:"first_name,omitempty"`
 	LastName         string `json:"last_name,omitempty"`
 	Email            string `json:"email,omitempty"`
-	Phone            string `json:"phone,omitempty"`
+	Mobile           string `json:"mobile,omitempty"`
 	IsPrimaryContact bool   `json:"is_primary_contact,omitempty"`
 }
 
 type ContactAddress struct {
-	Address string `json:"address,omitempty"`
-	City    string `json:"city,omitempty"`
-	State   string `json:"state,omitempty"`
-	Zip     string `json:"zip,omitempty"`
-	Country string `json:"country,omitempty"`
+	Attention   string `json:"attention,omitempty"`
+	Address     string `json:"address,omitempty"`
+	Street2     string `json:"street2,omitempty"`
+	City        string `json:"city,omitempty"`
+	State       string `json:"state,omitempty"`
+	Zip         string `json:"zip,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
 }
 
 type ContactCreateRequest struct {
 	ContactName     string          `json:"contact_name"`
 	CompanyName     string          `json:"company_name,omitempty"`
+	LegalName       string          `json:"legal_name,omitempty"`
+	TraderName      string          `json:"trader_name,omitempty"`
 	ContactType     string          `json:"contact_type,omitempty"`
 	CustomerSubType string          `json:"customer_sub_type,omitempty"`
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`
@@ -153,6 +158,7 @@ type InvoiceCreateRequest struct {
 	Adjustment          decimal.Decimal   `json:"adjustment,omitzero"`
 	DiscountType        string            `json:"discount_type,omitempty"`
 	IsDiscountBeforeTax bool              `json:"is_discount_before_tax,omitempty"`
+	AccountID           string            `json:"account_id,omitempty"`
 
 	// PlaceOfSupply is the GST state code the supply is made to. It drives Zoho's
 	// IGST vs CGST/SGST split. Zoho falls back to the contact's place_of_contact

@@ -18,7 +18,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const zohoDiscountTypeItemLevel = "item_level"
+const (
+	zohoDiscountTypeItemLevel = "item_level"
+	zohoReceivableAccountKey  = "zoho_receivable_account_id"
+)
 
 type ZohoInvoiceService interface {
 	SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceSyncRequest) (*ZohoInvoiceSyncResponse, error)
@@ -149,6 +152,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
+	reqPayload.AccountID = strings.TrimSpace(flexCustomer.Metadata[zohoReceivableAccountKey])
 	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
 	// Ordered least to most specific: Zoho keeps the last write to a given field.
 	reqPayload.CustomFields = append(globalCustomFields(settings),

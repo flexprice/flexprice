@@ -131,11 +131,13 @@ func TestCreateContactCarriesGSTFields(t *testing.T) {
 	assert.Equal(t, "400072", req.ShippingAddress.Zip)
 
 	require.NotNil(t, req.BillingAddress)
-	assert.Contains(t, req.BillingAddress.Address, "Boomerang Building",
-		"AddressLine2 must not be dropped")
+	assert.Equal(t, "Boomerang Building, Chandivali Farm Road", req.BillingAddress.Street2)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.ShippingAddress.Attention)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.LegalName)
+	assert.Equal(t, "MCGILL FOODS PRIVATE LIMITED", req.TraderName)
 
 	require.Len(t, req.ContactPersons, 1)
-	assert.Equal(t, "9311916570", req.ContactPersons[0].Phone, "contact phone must not be dropped")
+	assert.Equal(t, "+91-9311916570", req.ContactPersons[0].Mobile)
 	assert.Equal(t, "billing@mcgill.example", req.ContactPersons[0].Email)
 }
 
@@ -251,4 +253,48 @@ func TestGSTTreatmentIsNotSent(t *testing.T) {
 	assert.NotContains(t, string(raw), "gst_treatment",
 		"gst_treatment is optional in Zoho and cannot express SEZ/deemed-export; we omit it")
 	assert.Contains(t, string(raw), "gst_no")
+}
+
+func TestToContactAddress(t *testing.T) {
+	tests := []struct {
+		name    string
+		country string
+		want    *ContactAddress
+	}{
+		{
+			name: "indian address gets the country name and code", country: "IN",
+			want: &ContactAddress{Attention: "Acme", Address: "l1", Street2: "l2", City: "c", State: "s", Zip: "z", Country: "India", CountryCode: "IN"},
+		},
+		{
+			name: "non-indian address", country: "US",
+			want: &ContactAddress{Attention: "Acme", Address: "l1", Street2: "l2", City: "c", State: "s", Zip: "z", Country: "United States", CountryCode: "US"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, toContactAddress("Acme", "l1", "l2", "c", "s", "z", tt.country))
+		})
+	}
+
+	assert.Nil(t, toContactAddress("Acme", "", "", "", "", "", ""), "attention alone is not an address")
+}
+
+func TestFormatMobile(t *testing.T) {
+	tests := []struct {
+		name    string
+		number  string
+		country string
+		want    string
+	}{
+		{name: "national number uses the address country", number: "9581401234", country: "IN", want: "+91-9581401234"},
+		{name: "own plus prefix wins over the address country", number: "+1 415 555 2671", country: "IN", want: "+1-4155552671"},
+		{name: "lowercase country", number: "09581401234", country: "in", want: "+91-9581401234"},
+		{name: "no country and no prefix is sent unchanged", number: "9581401234", country: "", want: "9581401234"},
+		{name: "garbage is sent unchanged", number: "call me", country: "IN", want: "call me"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, formatMobile(tt.number, tt.country))
+		})
+	}
 }

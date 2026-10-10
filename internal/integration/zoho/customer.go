@@ -2,6 +2,8 @@ package zoho
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
@@ -9,6 +11,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/nyaruka/phonenumbers"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 )
 
 type ZohoCustomerService interface {
@@ -106,19 +111,21 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	req := &ContactCreateRequest{
 		ContactName:     c.Name,
 		CompanyName:     c.Name,
+		LegalName:       c.Name,
+		TraderName:      c.Name,
 		ContactType:     "customer",
 		CustomerSubType: "business",
 	}
 
 	req.BillingAddress = toContactAddress(
-		c.AddressLine1, c.AddressLine2, c.AddressCity,
+		c.Name, c.AddressLine1, c.AddressLine2, c.AddressCity,
 		c.AddressState, c.AddressPostalCode, c.AddressCountry,
 	)
 
 	tax := types.TaxMetadataFromMap(c.Metadata)
 	if shipping := tax.ShippingAddress(); shipping != nil {
 		req.ShippingAddress = toContactAddress(
-			shipping.Line1(), shipping.Line2(), shipping.City(),
+			c.Name, shipping.Line1(), shipping.Line2(), shipping.City(),
 			shipping.State(), shipping.PostalCode(), shipping.Country(),
 		)
 	}
@@ -130,7 +137,7 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	if c.Email != "" || c.Contact != nil {
 		person := ContactPerson{IsPrimaryContact: true, Email: c.Email}
 		if c.Contact != nil {
-			person.Phone = *c.Contact
+			person.Mobile = formatMobile(*c.Contact, c.AddressCountry)
 		}
 		req.ContactPersons = []ContactPerson{person}
 	}
@@ -138,28 +145,37 @@ func buildContactRequest(c *customerDomain.Customer) *ContactCreateRequest {
 	return req
 }
 
-// toContactAddress folds line2 into Zoho's single street field, which is what the
-// invoice PDF path does too — Zoho's ContactAddress has no verified second line key.
-func toContactAddress(line1, line2, city, state, postalCode, country string) *ContactAddress {
-	street := line1
-	if line2 != "" {
-		if street != "" {
-			street += "\n"
-		}
-		street += line2
-	}
-
-	if street == "" && city == "" && state == "" && postalCode == "" && country == "" {
+func toContactAddress(attention, line1, line2, city, state, postalCode, country string) *ContactAddress {
+	if line1 == "" && line2 == "" && city == "" && state == "" && postalCode == "" && country == "" {
 		return nil
 	}
 
-	return &ContactAddress{
-		Address: street,
-		City:    city,
-		State:   state,
-		Zip:     postalCode,
-		Country: country,
+	addr := &ContactAddress{
+		Attention:   attention,
+		Address:     line1,
+		Street2:     line2,
+		City:        city,
+		State:       state,
+		Zip:         postalCode,
+		Country:     country,
+		CountryCode: country,
 	}
+	if region, err := language.ParseRegion(country); err == nil {
+		if name := display.English.Regions().Name(region); name != "" {
+			addr.Country = name
+		}
+	}
+	return addr
+}
+
+// formatMobile renders a number as "+<dial code>-<national number>", the form Zoho accepts
+// without a warning. Unparseable numbers are returned unchanged.
+func formatMobile(number, country string) string {
+	parsed, err := phonenumbers.Parse(number, strings.ToUpper(country))
+	if err != nil {
+		return number
+	}
+	return fmt.Sprintf("+%d-%s", parsed.GetCountryCode(), phonenumbers.GetNationalSignificantNumber(parsed))
 }
 
 func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *customerDomain.Customer, contact *ContactResponse) error {
