@@ -3,7 +3,6 @@ package proration
 import (
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -12,12 +11,15 @@ import (
 // ProrationParams holds all necessary input for calculating proration.
 type ProrationParams struct {
 	// Subscription & Line Item Context
-	SubscriptionID     string    // ID of the subscription
-	LineItemID         string    // ID of the line item being changed (empty for add_item)
-	PlanPayInAdvance   bool      // From the subscription's plan
-	CurrentPeriodStart time.Time // Start of the current billing period
-	CurrentPeriodEnd   time.Time // End of the current billing period
-	PlanDisplayName    string    // Display name of the plan
+	Subscription       *subscription.Subscription // Subscription whose billing schedule defines the full period
+	BillingPeriod      types.BillingPeriod        // Cadence of the item being prorated
+	BillingPeriodCount int                        // Cadence count of the item being prorated
+	SubscriptionID     string                     // ID of the subscription
+	LineItemID         string                     // ID of the line item being changed (empty for add_item)
+	PlanPayInAdvance   bool                       // From the subscription's plan
+	CurrentPeriodStart time.Time                  // Start of the current billing period
+	CurrentPeriodEnd   time.Time                  // End of the current billing period
+	PlanDisplayName    string                     // Display name of the plan
 
 	// Change Details
 	Action          types.ProrationAction // Type of change
@@ -35,13 +37,11 @@ type ProrationParams struct {
 	ScheduleType      types.ScheduleType      // When the change should take effect
 	ScheduleDate      time.Time               // Specific date for scheduled changes (if applicable)
 	HasScheduleDate   bool                    // Whether ScheduleDate is set
-	Timezone          string                  // Timezone of the customer
 
 	// Handling Multiple Changes / Credits
-	OriginalAmountPaid    decimal.Decimal         `swaggertype:"string"` // Amount originally paid for the item(s) being changed in this period
-	PreviousCreditsIssued decimal.Decimal         `swaggertype:"string"` // Sum of credits already issued against OriginalAmountPaid in this period
-	ProrationStrategy     types.ProrationStrategy // Strategy to use for proration
-	Currency              string                  // Currency of the proration
+	OriginalAmountPaid    decimal.Decimal `swaggertype:"string"` // Amount originally paid for the item(s) being changed in this period
+	PreviousCreditsIssued decimal.Decimal `swaggertype:"string"` // Sum of credits already issued against OriginalAmountPaid in this period
+	Currency              string          // Currency of the proration
 
 	// Cancellation-specific fields
 	CancellationType   types.CancellationType // immediate vs end_of_period
@@ -73,14 +73,6 @@ type ProrationResult struct {
 	CurrentPeriodStart time.Time             // Start of the current billing period
 	CurrentPeriodEnd   time.Time             // End of the current billing period
 	BillingPeriod      types.BillingPeriod   // Billing period of the proration
-}
-
-// SubscriptionProrationParams contains all necessary information for subscription-level proration
-type SubscriptionProrationParams struct {
-	Subscription      *subscription.Subscription
-	Prices            map[string]*price.Price // Map of priceID to price
-	ProrationBehavior types.ProrationBehavior
-	BillingCycle      types.BillingCycle
 }
 
 // SubscriptionProrationResult contains the results of subscription-level proration

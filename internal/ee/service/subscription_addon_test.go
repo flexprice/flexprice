@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -20,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 // razorpayCheckoutParams is the minimal checkout object the attach endpoint accepts.
@@ -1888,6 +1891,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_ManyAddons_AttachWitho
 // so the attach must leave the caller's slice as it found it.
 func (s *SubscriptionServiceSuite) TestCreateSubscription_Addons_LeaveCallerLineItemsAlone() {
 	sub := s.monthlyPeriodSubscription()
+	sub.CurrentPeriodStart = sub.StartDate // at creation the first period starts at the subscription start
 	s.seedFixedPriceAddon("addon_create_untouched", decimal.NewFromInt(20), types.InvoiceCadenceAdvance)
 
 	before := len(sub.LineItems)
@@ -1915,4 +1919,16 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_TooManyAddons_IsReject
 	})
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
+}
+
+// An addon line item keeps its price's period count, so a 6-month addon bills every 6 months.
+func TestCreateLineItemFromPrice_KeepsPeriodCount(t *testing.T) {
+	priceResp := &dto.PriceResponse{Price: &price.Price{
+		ID: "price_addon", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 6, InvoiceCadence: types.InvoiceCadenceAdvance,
+	}}
+	sub := &subscription.Subscription{ID: "sub_addon", Currency: "usd"}
+
+	item := (&subscriptionService{}).createLineItemFromPrice(context.Background(), priceResp, sub, "addon_1", "assoc_1", time.Now())
+	require.Equal(t, 6, item.BillingPeriodCount)
 }

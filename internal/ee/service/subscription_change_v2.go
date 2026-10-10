@@ -334,7 +334,7 @@ func (s *subscriptionService) resolveClosingEntitlementGrants(
 //
 // TODO: a change landing mid-period under the default billing_period_behaviour
 // ("unchanged") grants the target plan's first period in full even though only part of
-// that period remains. addonCreditGrantProration (subscription.go) already solves this
+// that period remains. creditGrantProration (subscription_grants.go) already solves this
 // exact shape for addons and is the intended reuse.
 func (s *subscriptionService) migrateCreditGrants(ctx context.Context, r *planChangeRequest) error {
 	if r.creditGrants == nil {
@@ -472,13 +472,6 @@ func (s *subscriptionService) checkPlanChangePreconditions(
 		return fail("the billing period cannot be reset on a calendar-aligned subscription",
 			"Calendar billing keeps every period on a calendar boundary. Use billing_period_behaviour='unchanged', or move the subscription to anniversary billing.",
 			map[string]any{"subscription_id": sub.ID, "billing_cycle": sub.BillingCycle})
-	}
-
-	// TODO: Handle mixed billing periods correctly.
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && sub.HasMixedBillingPeriods() {
-		return fail("proration is not supported for subscriptions with mixed billing periods",
-			"Set proration_behavior to 'none' to change this subscription's plan",
-			map[string]any{"subscription_id": sub.ID})
 	}
 
 	for _, item := range sub.LineItems {

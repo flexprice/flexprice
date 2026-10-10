@@ -39,13 +39,13 @@ func idsOf(ps []*dto.PriceResponse) []string {
 
 func TestFilterValidPricesForSubscription_IncludeIDsSemantics(t *testing.T) {
 	// Plan prices: one exact-cadence (quarterly), one divisor (monthly), one
-	// currency-mismatch, one ONETIME, one non-divisor (annual, on a quarterly sub).
+	// currency-mismatch, one ONETIME, one incompatible (2-month, on a quarterly sub).
 	prices := []*dto.PriceResponse{
 		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1), // exact match to sub
 		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1), // divisor (fan-out)
 		mkPrice("m2", types.BILLING_PERIOD_MONTHLY, 1), // divisor #2
 		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1), // always compatible
-		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),  // non-divisor for quarter
+		mkPrice("y1", types.BILLING_PERIOD_MONTHLY, 2), // neither divides nor multiplies a quarter
 	}
 	// Currency mismatch — should always be dropped regardless of includeIDs.
 	badCurrency := mkPrice("bc", types.BILLING_PERIOD_QUARTER, 1)
@@ -87,7 +87,7 @@ func TestFilterValidPricesForSubscription_IncludeIDsSemantics(t *testing.T) {
 		{
 			name:       "include list containing incompatible id — filter drops it defensively",
 			includeIDs: &[]string{"q1", "y1"},
-			// y1 is annual (12mo) on quarterly (3mo); 3%12 != 0. Filter drops
+			// y1 is 2-month on quarterly; neither divides the other. Filter drops
 			// it silently — the upstream validateIncludePriceIDs is expected
 			// to reject the whole request BEFORE reaching this filter.
 			want: []string{"q1"},
@@ -162,6 +162,14 @@ func TestFilterAddonPricesForSubscription_PreservesCompatSemantics(t *testing.T)
 
 	got := idsOf(filterAddonPricesForSubscription(prices, sub))
 	assertSameIDs(t, []string{"m1", "q1", "h1", "ot"}, got)
+
+	// Whole multiples are allowed too; a 2-month price on a quarterly sub is not.
+	longer := []*dto.PriceResponse{
+		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1),
+		mkPrice("b2", types.BILLING_PERIOD_MONTHLY, 2),
+	}
+	got = idsOf(filterAddonPricesForSubscription(longer, mkSub(types.BILLING_PERIOD_QUARTER, 1)))
+	assertSameIDs(t, []string{"y1"}, got)
 }
 
 func TestValidateIncludePriceIDs_UnknownAndIncompatible(t *testing.T) {
@@ -170,7 +178,7 @@ func TestValidateIncludePriceIDs_UnknownAndIncompatible(t *testing.T) {
 	planPrices := []*dto.PriceResponse{
 		mkPrice("m1", types.BILLING_PERIOD_MONTHLY, 1),
 		mkPrice("q1", types.BILLING_PERIOD_QUARTER, 1),
-		mkPrice("y1", types.BILLING_PERIOD_ANNUAL, 1), // incompatible with quarterly
+		mkPrice("y1", types.BILLING_PERIOD_MONTHLY, 2), // incompatible with quarterly
 		mkPrice("ot", types.BILLING_PERIOD_ONETIME, 1),
 	}
 

@@ -514,7 +514,8 @@ func (s *subscriptionModificationService) calculateProration(
 		if oldItem == nil {
 			continue
 		}
-		if oldItem.InvoiceCadence != types.InvoiceCadenceAdvance {
+		// Only recurring advance items are prorated; one-time charges never are.
+		if oldItem.InvoiceCadence != types.InvoiceCadenceAdvance || oldItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
 			continue
 		}
 
@@ -524,23 +525,24 @@ func (s *subscriptionModificationService) calculateProration(
 		}
 
 		result, err := prorationSvc.CalculateProration(ctx, proration.ProrationParams{
+			Subscription:       sub,
+			BillingPeriod:      oldItem.BillingPeriod,
+			BillingPeriodCount: oldItem.BillingPeriodCount,
 			SubscriptionID:     sub.ID,
 			LineItemID:         oldItem.ID,
 			PlanPayInAdvance:   oldItem.InvoiceCadence == types.InvoiceCadenceAdvance,
 			CurrentPeriodStart: sub.CurrentPeriodStart,
-			CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd,
 			Action:             types.ProrationActionQuantityChange,
 			NewPriceID:         oldItem.PriceID,
 			OldQuantity:        oldItem.Quantity,
 			NewQuantity:        mod.getQuantity(),
-			NewPricePerUnit:    price.Price.Amount,
-			OldPricePerUnit:    price.Price.Amount,
+			NewPricePerUnit:    priceSvc.CalculateUnitCost(ctx, price.Price, mod.getQuantity()),
+			OldPricePerUnit:    priceSvc.CalculateUnitCost(ctx, price.Price, oldItem.Quantity),
 			ProrationDate:      mod.getEffectiveDate(),
 			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-			ProrationStrategy:  types.StrategySecondBased,
 			Currency:           sub.Currency,
 			PlanDisplayName:    oldItem.PlanDisplayName,
-			Timezone:           customerTimezone,
 		})
 		if err != nil {
 			return nil, err

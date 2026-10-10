@@ -365,9 +365,8 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_AtPeriodStart_G
 	s.Equal("1", live.Metadata["proration_coefficient"])
 }
 
-// An attach in the last instant of a period prorates to a sliver. numeric(25,15)
-// still holds it, so the row is written — the point is that the attach never
-// fails over it, and the quota stays positive so Validate passes.
+// An attach in the last instant of a period prorates to zero whole seconds: the attach
+// must not fail over it, and no non-positive row is written.
 func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NearZeroCoefficient_StillAttaches() {
 	featureID := s.seedGrantFeature("feat_eg_sliver")
 	s.seedGrantAddon("addon_eg_sliver", "ent_sliver", featureID, 1, "")
@@ -376,10 +375,7 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NearZeroCoeffic
 	s.Require().NoError(s.attachAddon("addon_eg_sliver", at, types.ProrationBehaviorCreateProrations),
 		"a sliver must never fail the attach")
 
-	rows := s.grantsForFeature(featureID)
-	s.Require().Len(rows, 1)
-	s.True(rows[0].Quota.IsPositive(), "a sliver must stay positive or Validate would reject it")
-	s.True(rows[0].Quota.LessThan(decimal.NewFromFloat(0.001)), "expected a sliver, got %s", rows[0].Quota)
+	s.Empty(s.grantsForFeature(featureID), "a zero-second sliver writes no row")
 }
 
 // A grant config carrying no quota prorates to nothing; skip it rather than
@@ -501,11 +497,11 @@ func (s *SubscriptionServiceSuite) source(
 	ecs ...*entitlement.Entitlement,
 ) GrantSource {
 	return GrantSource{
-		ChangeType:    grantChangeTypeFor(s.testData.subscription, at),
-		EffectiveDate: at,
-		Behavior:      types.ProrationBehaviorCreateProrations,
-		Origin:        origin,
-		AddonID:       ecs[0].EntityID,
+		ChangeType:        grantChangeTypeFor(s.testData.subscription, at),
+		EffectiveDate:     at,
+		ProrationSettings: dto.NewProrationSettings(types.ProrationBehaviorCreateProrations),
+		Origin:            origin,
+		AddonID:           ecs[0].EntityID,
 	}
 }
 

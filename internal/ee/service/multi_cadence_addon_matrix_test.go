@@ -233,7 +233,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestMultiCadence_AnniversaryQuarter_Parit
 	sc := s.build(scenarioSpec{
 		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
 		periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.April, 1),
-		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorNone,
+		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
 		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
 		addonStart: d(2025, time.February, 15),
 	})
@@ -248,7 +248,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestSameCadence_Monthly_Parity() {
 	sc := s.build(scenarioSpec{
 		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_MONTHLY,
 		periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.February, 1),
-		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorNone,
+		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
 		planAmount: 100, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
 		addonStart: d(2025, time.January, 15),
 	})
@@ -261,7 +261,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestSameCadence_Quarterly_Parity() {
 	sc := s.build(scenarioSpec{
 		cycle: types.BillingCycleAnniversary, subPeriod: types.BILLING_PERIOD_QUARTER,
 		periodStart: d(2025, time.January, 1), periodEnd: d(2025, time.April, 1),
-		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorNone,
+		anchor: d(2025, time.January, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
 		planAmount: 300, addonPeriod: types.BILLING_PERIOD_QUARTER, addonAmount: 300,
 		addonStart: d(2025, time.February, 15),
 	})
@@ -293,7 +293,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_AddonRatioUsesItsOwnPeri
 	sc := s.build(scenarioSpec{
 		cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
 		periodStart: d(2025, time.February, 15), periodEnd: d(2025, time.April, 1),
-		anchor: d(2025, time.April, 1), prorationBehavior: types.ProrationBehaviorNone,
+		anchor: d(2025, time.April, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
 		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
 		addonStart: d(2025, time.February, 20),
 	})
@@ -364,7 +364,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestRatioDenominator_WindowVsItemPeriod()
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			tc.spec.prorationBehavior = types.ProrationBehaviorNone
+			tc.spec.prorationBehavior = types.ProrationBehaviorCreateProrations
 			sc := s.build(tc.spec)
 			s.equalMoney(tc.want, s.atCreateAddonTotal(sc), tc.why)
 		})
@@ -377,7 +377,7 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_Parity() {
 	sc := s.build(scenarioSpec{
 		cycle: types.BillingCycleCalendar, subPeriod: types.BILLING_PERIOD_QUARTER,
 		periodStart: d(2025, time.September, 8), periodEnd: d(2025, time.October, 1),
-		anchor: d(2025, time.October, 1), prorationBehavior: types.ProrationBehaviorNone,
+		anchor: d(2025, time.October, 1), prorationBehavior: types.ProrationBehaviorCreateProrations,
 		planAmount: 300, addonPeriod: types.BILLING_PERIOD_MONTHLY, addonAmount: 100,
 		addonStart: d(2025, time.September, 21),
 	})
@@ -446,4 +446,478 @@ func (s *MultiCadenceAddonMatrixSuite) TestCalendarStub_AddonStartingAtPeriodSta
 
 	s.equalMoney("76.67", s.atCreateAddonTotal(sc), "at-create addon total")
 	s.equalMoney("76.67", s.attachLaterAddonTotal(sc), "attach-later addon total")
+}
+
+func pvmDate(y int, m time.Month, day int) time.Time {
+	return time.Date(y, m, day, 0, 0, 0, 0, time.UTC)
+}
+
+func pvmLocalDate(tz string, y int, m time.Month, day int) time.Time {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		panic(err)
+	}
+	return time.Date(y, m, day, 0, 0, 0, 0, loc).UTC()
+}
+
+type pvmSubSpec struct {
+	cycle       types.BillingCycle
+	period      types.BillingPeriod
+	periodCount int
+	start       time.Time
+	periodStart time.Time
+	periodEnd   time.Time
+	anchor      time.Time
+	behavior    types.ProrationBehavior
+	timezone    string
+	endDate     *time.Time
+	grouping    types.LineItemGrouping
+}
+
+type pvmItemSpec struct {
+	period    types.BillingPeriod
+	count     int
+	amount    int64
+	start     time.Time
+	end       time.Time
+	arrear    bool
+	priceType types.PriceType
+}
+
+type pvmFixture struct {
+	sub    *subscription.Subscription
+	items  []*subscription.SubscriptionLineItem
+	prices []*price.Price
+}
+
+func (s *MultiCadenceAddonMatrixSuite) pvmBuild(spec pvmSubSpec, itemSpecs ...pvmItemSpec) *pvmFixture {
+	ctx := s.GetContext()
+	id := types.GenerateUUIDWithPrefix("pvm")
+
+	cust := &customer.Customer{ID: "cust_" + id, ExternalID: "ext_" + id, Name: "PVM", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{ID: "plan_" + id, Name: "PVM Plan", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	tz := spec.timezone
+	if tz == "" {
+		tz = "UTC"
+	}
+	count := spec.periodCount
+	if count == 0 {
+		count = 1
+	}
+	start := spec.start
+	if start.IsZero() {
+		start = spec.periodStart
+	}
+	sub := &subscription.Subscription{
+		ID: "sub_" + id, PlanID: pl.ID, CustomerID: cust.ID,
+		StartDate: start, BillingAnchor: spec.anchor, EndDate: spec.endDate,
+		CurrentPeriodStart: spec.periodStart, CurrentPeriodEnd: spec.periodEnd,
+		Currency: "usd", BillingPeriod: spec.period, BillingPeriodCount: count,
+		BillingCycle: spec.cycle, SubscriptionStatus: types.SubscriptionStatusActive,
+		Timezone: tz, ProrationBehavior: spec.behavior, LineItemGrouping: spec.grouping,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+
+	fx := &pvmFixture{sub: sub}
+	for i, is := range itemSpecs {
+		cadence := types.InvoiceCadenceAdvance
+		if is.arrear {
+			cadence = types.InvoiceCadenceArrear
+		}
+		priceType := is.priceType
+		if priceType == "" {
+			priceType = types.PRICE_TYPE_FIXED
+		}
+		itemCount := is.count
+		if itemCount == 0 {
+			itemCount = 1
+		}
+		billingCadence := types.BILLING_CADENCE_RECURRING
+		pr := &price.Price{
+			ID: types.GenerateUUIDWithPrefix("price_pvm"), Amount: decimal.NewFromInt(is.amount), Currency: "usd",
+			EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: pl.ID, Type: priceType,
+			BillingPeriod: is.period, BillingPeriodCount: itemCount, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence: billingCadence, InvoiceCadence: cadence,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, pr))
+		li := &subscription.SubscriptionLineItem{
+			ID: types.GenerateUUIDWithPrefix("li_pvm"), SubscriptionID: sub.ID, CustomerID: cust.ID,
+			EntityID: pl.ID, EntityType: types.SubscriptionLineItemEntityTypePlan,
+			PriceID: pr.ID, PriceType: priceType, DisplayName: "item" + string(rune('A'+i)),
+			Quantity: decimal.NewFromInt(1), Currency: "usd",
+			BillingPeriod: is.period, BillingPeriodCount: itemCount,
+			InvoiceCadence: cadence, StartDate: is.start, EndDate: is.end,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		fx.items = append(fx.items, li)
+		fx.prices = append(fx.prices, pr)
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, fx.items))
+	sub.LineItems = fx.items
+	return fx
+}
+
+func (s *MultiCadenceAddonMatrixSuite) pvmFixed(sub *subscription.Subscription, start, end time.Time) (*dto.CalculateFixedChargesResult, error) {
+	return s.billing.CalculateFixedCharges(s.GetContext(), &dto.CalculateFixedChargesParams{
+		Subscription: sub, PeriodStart: start, PeriodEnd: end,
+	})
+}
+
+func (s *MultiCadenceAddonMatrixSuite) pvmMoney(want string, got decimal.Decimal, msg string, args ...interface{}) {
+	expected := decimal.RequireFromString(want)
+	s.Truef(got.Sub(expected).Abs().LessThanOrEqual(decimal.NewFromFloat(0.05)),
+		"want ~%s, got %s: "+msg, append([]interface{}{want, got.StringFixed(2)}, args...)...)
+}
+
+// --- Shorter-cadence items on calendar stubs --------------------------------
+
+// Shorter-cadence item on a calendar sub whose first period is a stub. The stub window is
+// prorated against the item-cadence period it belongs to; whole windows bill 1x.
+func (s *MultiCadenceAddonMatrixSuite) TestShorterCadence_CalendarStub_FixedCharges() {
+	cases := []struct {
+		name     string
+		sub      pvmSubSpec
+		item     pvmItemSpec
+		want     string
+		wantRows int
+	}{
+		{
+			name: "quarterly item on calendar annual stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 2, 15)},
+			// [Feb15,Apr1) 45/90 of Q1 = 150, then Q2..Q4 = 900
+			want: "1050", wantRows: 4,
+		},
+		{
+			name: "quarterly item on calendar annual stub, proration none",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1),
+				behavior: types.ProrationBehaviorNone},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 2, 15)},
+			want: "1200", wantRows: 4,
+		},
+		{
+			name: "half-year item on calendar annual stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_HALF_YEAR, amount: 600, start: pvmDate(2026, 2, 15)},
+			// [Feb15,Jul1) 136/181 of H1 = 450.83, then H2 = 600
+			want: "1050.83", wantRows: 2,
+		},
+		{
+			name: "quarterly item on calendar half-year stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_HALF_YEAR,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 7, 1), anchor: pvmDate(2026, 7, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 2, 15)},
+			want: "450", wantRows: 2,
+		},
+		{
+			name: "monthly item, 1-day stub on calendar quarterly: divisor is Jan (31d) not Jan31->Feb28 (28d)",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 1, 31), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 1, 31)},
+			want: "203.23", wantRows: 3,
+		},
+		{
+			name: "monthly item on calendar annual stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15)},
+			want: "1050", wantRows: 11,
+		},
+		{
+			name: "monthly item on calendar half-year stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_HALF_YEAR,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 7, 1), anchor: pvmDate(2026, 7, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15)},
+			want: "450", wantRows: 5,
+		},
+		{
+			name: "monthly item on calendar quarterly stub, proration none charges the stub window in full",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorNone},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15)},
+			want: "200", wantRows: 2,
+		},
+		{
+			name: "monthly arrear item on calendar quarterly stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15), arrear: true},
+			want: "150", wantRows: 2,
+		},
+		{
+			name: "monthly item starting mid stub window",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 22)},
+			// 7/28 + 1
+			want: "125", wantRows: 2,
+		},
+		{
+			name: "monthly item starting at interior boundary",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 3, 1)},
+			want: "100", wantRows: 1,
+		},
+		{
+			name: "monthly item ending mid-period on anniversary quarterly",
+			sub: pvmSubSpec{cycle: types.BillingCycleAnniversary, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 1, 1), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 1, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 1, 1), end: pvmDate(2026, 2, 15)},
+			// Jan full + 14/28 Feb
+			want: "150", wantRows: 2,
+		},
+		{
+			name: "quarterly item on anniversary annual",
+			sub: pvmSubSpec{cycle: types.BillingCycleAnniversary, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 2, 15), anchor: pvmDate(2026, 2, 15),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 2, 15)},
+			want: "1200", wantRows: 4,
+		},
+		{
+			name: "quarterly item on calendar annual renewal (period after the stub)",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				start: pvmDate(2026, 2, 15), periodStart: pvmDate(2027, 1, 1), periodEnd: pvmDate(2028, 1, 1), anchor: pvmDate(2027, 1, 1),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 2, 15)},
+			want: "1200", wantRows: 4,
+		},
+		{
+			name: "monthly item on anniversary annual anchored on the 31st",
+			sub: pvmSubSpec{cycle: types.BillingCycleAnniversary, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 1, 31), periodEnd: pvmDate(2027, 1, 31), anchor: pvmDate(2026, 1, 31),
+				behavior: types.ProrationBehaviorCreateProrations},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 1, 31)},
+			want: "1200", wantRows: 12,
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			fx := s.pvmBuild(tc.sub, tc.item)
+			res, err := s.pvmFixed(fx.sub, tc.sub.periodStart, tc.sub.periodEnd)
+			s.Require().NoError(err)
+			s.Equal(tc.wantRows, len(res.LineItems), "invoice rows (one per item-cadence window)")
+			s.pvmMoney(tc.want, res.TotalAmount, "fixed total")
+		})
+	}
+}
+
+// The mid-cycle attach quote walks the same item-cadence windows as the invoice.
+func (s *MultiCadenceAddonMatrixSuite) TestShorterCadence_CalendarAnnualStub_AttachLater() {
+	fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+		periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1),
+		behavior: types.ProrationBehaviorCreateProrations},
+		pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmDate(2026, 3, 1)})
+
+	summary, err := NewLineItemProrationService(s.params).Compute(s.GetContext(), LineItemProrationRequest{
+		Subscription: fx.sub,
+		Entries: []LineItemProrationEntry{{
+			LineItem: fx.items[0], Action: types.ProrationActionAddItem,
+			NewPrice: fx.prices[0], NewQuantity: decimal.NewFromInt(1),
+		}},
+		EffectiveDate: pvmDate(2026, 3, 1),
+		Behavior:      types.ProrationBehaviorCreateProrations,
+	})
+	s.Require().NoError(err)
+	// [Mar1,Apr1) 31/90 of Q1 = 103.33, then Q2..Q4 = 900
+	s.pvmMoney("1003.33", summary.TotalChargeAmount, "attach-later quarterly item on calendar annual stub")
+}
+
+// Usage on a calendar stub is metered in one window per item-cadence period; a longer usage cadence
+// is metered over each sub invoice period.
+func (s *MultiCadenceAddonMatrixSuite) TestUsageWindows_FollowItemCadence() {
+	cases := []struct {
+		name string
+		sub  pvmSubSpec
+		item pvmItemSpec
+		want []time.Time // window starts
+	}{
+		{
+			name: "quarterly usage on calendar annual stub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2027, 1, 1), anchor: pvmDate(2027, 1, 1)},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, priceType: types.PRICE_TYPE_USAGE, arrear: true, start: pvmDate(2026, 2, 15)},
+			want: []time.Time{pvmDate(2026, 2, 15), pvmDate(2026, 4, 1), pvmDate(2026, 7, 1), pvmDate(2026, 10, 1)},
+		},
+		{
+			name: "monthly usage on calendar quarterly stub in IST",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER, timezone: "Asia/Kolkata",
+				periodStart: pvmLocalDate("Asia/Kolkata", 2026, 2, 15), periodEnd: pvmLocalDate("Asia/Kolkata", 2026, 4, 1),
+				anchor: pvmLocalDate("Asia/Kolkata", 2026, 4, 1)},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, priceType: types.PRICE_TYPE_USAGE, arrear: true, start: pvmLocalDate("Asia/Kolkata", 2026, 2, 15)},
+			want: []time.Time{pvmLocalDate("Asia/Kolkata", 2026, 2, 15), pvmLocalDate("Asia/Kolkata", 2026, 3, 1)},
+		},
+		{
+			name: "annual usage on calendar monthly sub",
+			sub: pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_MONTHLY,
+				periodStart: pvmDate(2026, 3, 1), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 2, 1)},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_ANNUAL, priceType: types.PRICE_TYPE_USAGE, arrear: true, start: pvmDate(2026, 1, 15)},
+			want: []time.Time{pvmDate(2026, 3, 1)},
+		},
+		{
+			name: "3-month usage on anniversary monthly sub",
+			sub: pvmSubSpec{cycle: types.BillingCycleAnniversary, period: types.BILLING_PERIOD_MONTHLY,
+				periodStart: pvmDate(2026, 3, 10), periodEnd: pvmDate(2026, 4, 10), anchor: pvmDate(2026, 1, 10)},
+			item: pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, count: 3, priceType: types.PRICE_TYPE_USAGE, arrear: true, start: pvmDate(2026, 1, 10)},
+			want: []time.Time{pvmDate(2026, 3, 10)},
+		},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			fx := s.pvmBuild(tc.sub, tc.item)
+			windows, err := usageWindows(tc.sub.periodStart, tc.sub.periodEnd, fx.items[0], fx.sub)
+			s.Require().NoError(err)
+			got := make([]time.Time, 0, len(windows))
+			for _, w := range windows {
+				got = append(got, w.Start)
+			}
+			s.Equal(tc.want, got)
+		})
+	}
+}
+
+// --- Onetime items --------------------------------------------------------------
+
+// A onetime advance item attached mid-period with create_prorations is charged in full at attach.
+func (s *MultiCadenceAddonMatrixSuite) TestOnetime_AttachWithProrationQuote() {
+	fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleAnniversary, period: types.BILLING_PERIOD_MONTHLY,
+		periodStart: pvmDate(2026, 3, 1), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 1, 1),
+		behavior: types.ProrationBehaviorCreateProrations},
+		pvmItemSpec{period: types.BILLING_PERIOD_ONETIME, amount: 500, start: pvmDate(2026, 3, 15)})
+
+	summary, err := NewLineItemProrationService(s.params).Compute(s.GetContext(), LineItemProrationRequest{
+		Subscription: fx.sub,
+		Entries: []LineItemProrationEntry{{
+			LineItem: fx.items[0], Action: types.ProrationActionAddItem,
+			NewPrice: fx.prices[0], NewQuantity: decimal.NewFromInt(1),
+		}},
+		EffectiveDate: pvmDate(2026, 3, 15),
+		Behavior:      types.ProrationBehaviorCreateProrations,
+	})
+	s.Require().NoError(err, "a onetime addon attached mid-period must not error")
+	s.pvmMoney("500", summary.TotalChargeAmount, "onetime charged once in full at attach")
+}
+
+// --- Renewal, grouping, timezone ---------------------------------------------
+
+// Period-end renewal of a calendar quarterly sub: next-quarter advance windows for a monthly
+// item are emitted once each; the monthly arrear item bills the current quarter's windows.
+func (s *MultiCadenceAddonMatrixSuite) TestRenewal_ShorterCadenceNextPeriodAdvance() {
+	fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+		start: pvmDate(2026, 2, 15), periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+		behavior: types.ProrationBehaviorCreateProrations},
+		pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15)},
+		pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 10, start: pvmDate(2026, 2, 15), arrear: true})
+
+	cls := s.billing.ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription: fx.sub, CurrentPeriodStart: pvmDate(2026, 2, 15), CurrentPeriodEnd: pvmDate(2026, 4, 1),
+		NextPeriodStart: pvmDate(2026, 4, 1), NextPeriodEnd: pvmDate(2026, 7, 1),
+	})
+	s.Require().Len(cls.NextPeriodAdvance, 1)
+	s.Require().Len(cls.CurrentPeriodArrear, 1)
+
+	adv := *fx.sub
+	adv.LineItems = cls.NextPeriodAdvance
+	res, err := s.pvmFixed(&adv, pvmDate(2026, 4, 1), pvmDate(2026, 7, 1))
+	s.Require().NoError(err)
+	s.Len(res.LineItems, 3)
+	s.pvmMoney("300", res.TotalAmount, "Apr, May, Jun advance windows")
+
+	arr := *fx.sub
+	arr.LineItems = cls.CurrentPeriodArrear
+	res, err = s.pvmFixed(&arr, pvmDate(2026, 2, 15), pvmDate(2026, 4, 1))
+	s.Require().NoError(err)
+	s.pvmMoney("15", res.TotalAmount, "stub arrear: 14/28 of Feb + Mar")
+}
+
+func (s *MultiCadenceAddonMatrixSuite) TestGrouping_PerBillingPeriodMergesWindows() {
+	for _, grouping := range []types.LineItemGrouping{types.LineItemGroupingPerChargePeriod, types.LineItemGroupingPerBillingPeriod} {
+		s.Run(string(grouping), func() {
+			fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER,
+				periodStart: pvmDate(2026, 2, 15), periodEnd: pvmDate(2026, 4, 1), anchor: pvmDate(2026, 4, 1),
+				behavior: types.ProrationBehaviorCreateProrations, grouping: grouping},
+				pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmDate(2026, 2, 15)})
+			res, err := s.pvmFixed(fx.sub, pvmDate(2026, 2, 15), pvmDate(2026, 4, 1))
+			s.Require().NoError(err)
+			out := applyLineItemGrouping(fx.sub, &dto.BillingCalculationResult{FixedCharges: res.LineItems, TotalAmount: res.TotalAmount})
+			want := 2
+			if grouping == types.LineItemGroupingPerBillingPeriod {
+				want = 1
+				s.Equal(pvmDate(2026, 2, 15), *out.FixedCharges[0].PeriodStart)
+				s.Equal(pvmDate(2026, 4, 1), *out.FixedCharges[0].PeriodEnd)
+			}
+			s.Len(out.FixedCharges, want)
+			sum := decimal.Zero
+			for _, li := range out.FixedCharges {
+				sum = sum.Add(li.Amount)
+			}
+			s.pvmMoney("150", sum, "grouping must not change the total")
+		})
+	}
+}
+
+func (s *MultiCadenceAddonMatrixSuite) TestTimezone_CrossCadence() {
+	s.Run("IST calendar annual stub, monthly item", func() {
+		tz := "Asia/Kolkata"
+		fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL, timezone: tz,
+			periodStart: pvmLocalDate(tz, 2026, 2, 15), periodEnd: pvmLocalDate(tz, 2027, 1, 1), anchor: pvmLocalDate(tz, 2027, 1, 1),
+			behavior: types.ProrationBehaviorCreateProrations},
+			pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmLocalDate(tz, 2026, 2, 15)})
+		res, err := s.pvmFixed(fx.sub, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd)
+		s.Require().NoError(err)
+		s.Require().Len(res.LineItems, 11)
+		s.Equal(pvmLocalDate(tz, 2026, 3, 1), *res.LineItems[1].PeriodStart, "window boundary is IST midnight")
+		s.pvmMoney("1050", res.TotalAmount, "IST")
+	})
+	s.Run("IST calendar annual stub, quarterly item", func() {
+		tz := "Asia/Kolkata"
+		fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_ANNUAL, timezone: tz,
+			periodStart: pvmLocalDate(tz, 2026, 2, 15), periodEnd: pvmLocalDate(tz, 2027, 1, 1), anchor: pvmLocalDate(tz, 2027, 1, 1),
+			behavior: types.ProrationBehaviorCreateProrations},
+			pvmItemSpec{period: types.BILLING_PERIOD_QUARTER, amount: 300, start: pvmLocalDate(tz, 2026, 2, 15)})
+		res, err := s.pvmFixed(fx.sub, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd)
+		s.Require().NoError(err)
+		s.pvmMoney("1050", res.TotalAmount, "IST quarterly on annual stub")
+	})
+	s.Run("DST New York calendar half-year, monthly windows across the March shift bill 1x", func() {
+		tz := "America/New_York"
+		fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_HALF_YEAR, timezone: tz,
+			periodStart: pvmLocalDate(tz, 2026, 1, 1), periodEnd: pvmLocalDate(tz, 2026, 7, 1), anchor: pvmLocalDate(tz, 2026, 1, 1),
+			behavior: types.ProrationBehaviorCreateProrations},
+			pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmLocalDate(tz, 2026, 1, 1)})
+		res, err := s.pvmFixed(fx.sub, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd)
+		s.Require().NoError(err)
+		s.Len(res.LineItems, 6)
+		s.pvmMoney("600", res.TotalAmount, "no DST hour leaks into a ratio")
+	})
+	s.Run("DST New York calendar quarterly stub straddling the shift", func() {
+		tz := "America/New_York"
+		fx := s.pvmBuild(pvmSubSpec{cycle: types.BillingCycleCalendar, period: types.BILLING_PERIOD_QUARTER, timezone: tz,
+			periodStart: pvmLocalDate(tz, 2026, 3, 1), periodEnd: pvmLocalDate(tz, 2026, 4, 1), anchor: pvmLocalDate(tz, 2026, 4, 1),
+			behavior: types.ProrationBehaviorCreateProrations},
+			pvmItemSpec{period: types.BILLING_PERIOD_MONTHLY, amount: 100, start: pvmLocalDate(tz, 2026, 3, 1)})
+		res, err := s.pvmFixed(fx.sub, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd)
+		s.Require().NoError(err)
+		s.pvmMoney("100", res.TotalAmount, "a whole local month (743h) is a full window")
+	})
 }

@@ -73,6 +73,31 @@ type subscriptionCoreResult struct {
 	ActivatedOnCreate bool
 }
 
+// validateBillingAnchor rejects an anchor before the start's local date or after start + 1 period.
+// e.g. monthly from Jan 10 09:00: Jan 20 and Feb 10 09:00 are allowed; Feb 10 17:00 and Dec 20 are rejected.
+func validateBillingAnchor(sub *subscription.Subscription) error {
+	// The first full period on a schedule anchored at the start is [start, start + 1 period).
+	grid, err := types.NewBillingPeriodGrid(sub.StartDate, sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
+	if err != nil {
+		return err
+	}
+	firstPeriod := types.FullBillingPeriod(sub.StartDate, grid)
+
+	anchorDay := types.FloorToStartOfDay(sub.BillingAnchor, sub.Timezone)
+	if anchorDay.Before(types.FloorToStartOfDay(firstPeriod.Start, sub.Timezone)) || sub.BillingAnchor.After(firstPeriod.End) {
+		return ierr.NewError("billing_anchor must be within one billing period of the start date").
+			WithHint("Set billing_anchor between the start date and one billing period after it, or backdate the start date instead").
+			WithReportableDetails(map[string]any{
+				"billing_anchor":        sub.BillingAnchor,
+				"start_date":            sub.StartDate,
+				"latest_billing_anchor": firstPeriod.End,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // createSubscription creates the subscription through invoice generation. Caller must be in a transaction.
 func (s *subscriptionService) createSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
 	if req.BillingCycle == "" {
@@ -173,15 +198,23 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	} else {
 		sub.StartDate = sub.StartDate.UTC().Truncate(time.Millisecond)
 	}
+	if sub.BillingPeriodCount == 0 {
+		sub.BillingPeriodCount = 1
+	}
+
 	if req.BillingAnchor != nil {
-		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor)
+		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor).UTC().Truncate(time.Millisecond)
+		// Stripe imports keep Stripe's anchor so the schedule matches Stripe's; an anchor before the start
+		// only sets the schedule (start Nov 16, anchor Nov 1 → first bill Dec 1).
+		if lo.FromPtr(req.Workflow) != types.TemporalStripeIntegrationWorkflow && sub.BillingAnchor.After(sub.StartDate) {
+			if err := validateBillingAnchor(sub); err != nil {
+				return nil, err
+			}
+		}
 	} else if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.Timezone)
 	} else {
 		sub.BillingAnchor = sub.StartDate
-	}
-	if sub.BillingPeriodCount == 0 {
-		sub.BillingPeriodCount = 1
 	}
 	nextBillingDate, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  sub.StartDate,
@@ -290,11 +323,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	sub.LineItems = lineItems
-
-	// Multi-cadence validations: interval alignment and proration mutual exclusion
-	if err := s.validateMultiCadence(sub); err != nil {
-		return nil, err
-	}
 
 	// Ensure subscription-level and line-item-level commitments don't conflict
 	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
@@ -411,10 +439,20 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	if sub.TrialEnd != nil {
 		creditGrantStart = lo.FromPtr(sub.TrialEnd)
 	}
+
+	// Anniversary billing re-anchors at trial end, so its first paid period is whole and the
+	// grant's own anchor (trial end) already matches billing.
+	// e.g. calendar sub from Jan 15 with a 14-day trial: the plan CG is prorated over [Jan 29, Feb 1) = 3/31.
+	var firstPeriod *dto.FirstPeriodProration
+	if sub.TrialEnd == nil || sub.BillingCycle == types.BillingCycleCalendar {
+		firstPeriod = newSubscriptionGrantService(s.ServiceParams).creditGrantProration(
+			ctx, sub, creditGrantStart, sub.ProrationBehavior, grantProrationSourceSubscriptionCreate)
+	}
 	if err = creditGrantService.CreateSubscriptionCreditGrants(ctx, dto.CreateSubscriptionCreditGrantsRequest{
-		Subscription: sub,
-		Grants:       creditGrantRequests,
-		StartDate:    creditGrantStart,
+		Subscription:         sub,
+		Grants:               creditGrantRequests,
+		StartDate:            creditGrantStart,
+		FirstPeriodProration: firstPeriod,
 	}); err != nil {
 		return nil, err
 	}
@@ -692,11 +730,21 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 
 	// Recalculate all dates with new start date
 	newStartDate := req.StartDate.UTC()
+	hasCustomAnchor := sub.BillingCycle == types.BillingCycleAnniversary && !sub.BillingAnchor.Equal(sub.StartDate)
+	startShift := newStartDate.Sub(sub.StartDate)
 	sub.StartDate = newStartDate
 
-	// Calculate billing anchor
+	// A custom anniversary anchor is kept if still valid, else moved with the start, else reset to the start.
+	// e.g. draft from Jan 10 with anchor Jan 20, activated Jan 25: Jan 20 is out of range, so it moves 15 days to Feb 4.
 	if sub.BillingCycle == types.BillingCycleCalendar {
 		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.Timezone)
+	} else if hasCustomAnchor {
+		if validateBillingAnchor(sub) != nil {
+			sub.BillingAnchor = sub.BillingAnchor.Add(startShift)
+		}
+		if validateBillingAnchor(sub) != nil {
+			sub.BillingAnchor = sub.StartDate
+		}
 	} else {
 		// default to start date for anniversary billing
 		sub.BillingAnchor = sub.StartDate
@@ -1987,17 +2035,6 @@ func (s *subscriptionService) CancelSubscription(
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	}
-
-	// Reject proration for subscriptions with mixed billing periods
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && subscription.HasMixedBillingPeriods() {
-		return nil, ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
-			WithHint("Set proration_behavior to 'none' when cancelling a subscription with different billing periods").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id":    subscriptionID,
-				"proration_behavior": req.ProrationBehavior,
-			}).
-			Mark(ierr.ErrValidation)
 	}
 
 	// Step 3b: Guard against double-scheduling
@@ -3852,10 +3889,8 @@ func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost 
 	return charge
 }
 
-// filterAddonPricesForSubscription filters addon prices for a subscription
-// using count-aware cadence compatibility (equal, strict divisor, or strict
-// multiple). This is the pre-include_price_ids default behavior, preserved on
-// the addon path since AddAddonRequest does not carry an include list.
+// filterAddonPricesForSubscription keeps addon prices whose cadence is allowed on the subscription
+// (equal, dividing, or a whole multiple). AddAddonRequest carries no include list.
 func filterAddonPricesForSubscription(prices []*dto.PriceResponse, subscription *subscription.Subscription) []*dto.PriceResponse {
 	var validPrices []*dto.PriceResponse
 	for _, p := range prices {
@@ -3866,7 +3901,7 @@ func filterAddonPricesForSubscription(prices []*dto.PriceResponse, subscription 
 			validPrices = append(validPrices, p)
 			continue
 		}
-		if types.IsCadenceCompatible(subscription.BillingPeriod, subscription.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
+		if types.IsCadenceAllowed(subscription.BillingPeriod, subscription.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
 			validPrices = append(validPrices, p)
 		}
 	}
@@ -3884,7 +3919,7 @@ func filterAddonPricesForSubscription(prices []*dto.PriceResponse, subscription 
 //     attachment (monthly-on-quarterly etc.) requires opt-in via include_price_ids.
 //   - includeIDs == []: attach nothing.
 //   - includeIDs == [X, Y, …]: attach the intersection of {X, Y, …} with the
-//     count-aware compatibility set (IsCadenceCompatible: equal or divides).
+//     allowed cadences (IsCadenceAllowed: equal, divides, or a whole multiple).
 //     Callers upstream (ValidateAndFilterPricesForSubscription) must have
 //     already validated that each id resolves to a plan price and is
 //     cadence-compatible, so this loop trusts the include set.
@@ -3930,7 +3965,7 @@ func filterValidPricesForSubscription(
 		// Explicit include list: compat gate then intersect. Upstream already
 		// validated per-id, but re-check defensively so a stray incompatible
 		// entry can't slip through if a caller bypasses the validator.
-		if !types.IsCadenceCompatible(subscription.BillingPeriod, subscription.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
+		if !types.IsCadenceAllowed(subscription.BillingPeriod, subscription.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
 			continue
 		}
 		if _, ok := include[p.Price.ID]; !ok {
@@ -4084,7 +4119,7 @@ func (s *subscriptionService) validateIncludePriceIDs(
 		if p.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
 			continue // always compatible
 		}
-		if !types.IsCadenceCompatible(sub.BillingPeriod, sub.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
+		if !types.IsCadenceAllowed(sub.BillingPeriod, sub.BillingPeriodCount, p.Price.BillingPeriod, p.Price.BillingPeriodCount) {
 			incompatible = append(incompatible, id)
 		}
 	}
@@ -4110,7 +4145,7 @@ func (s *subscriptionService) validateIncludePriceIDs(
 	}
 	return ierr.NewErrorf("include_price_ids is invalid for plan %s (billing period %s, currency %s): unknown=%v wrong_currency=%v incompatible=%v",
 		planID, subCadence, sub.Currency, unknown, wrongCurrency, incompatible).
-		WithHint("Every id in include_price_ids must belong to the plan, match the subscription currency, AND have a cadence that equals or strictly divides the subscription cadence.").
+		WithHint("Every id in include_price_ids must belong to the plan, match the subscription currency, AND have a cadence that equals, divides, or is a whole multiple of the subscription cadence.").
 		WithReportableDetails(details).
 		Mark(ierr.ErrValidation)
 }
@@ -4978,9 +5013,10 @@ func (s *subscriptionService) handleSubscriptionAddons(
 			addonReq.StartDate = &subscription.StartDate
 		}
 
-		// The opening invoice bills these line items for the whole period, so settling a
-		// proration here as well would charge the addon twice.
+		// The opening invoice already prices these line items, so settling a second
+		// proration would charge the addon twice. Grants still follow the subscription.
 		addonReq.ProrationBehavior = types.ProrationBehaviorNone
+		addonReq.ProrationSettings = dto.NewProrationSettings(subscription.ProrationBehavior)
 
 		adds = append(adds, AddonAdd{Request: &addonReq})
 	}
@@ -5107,6 +5143,9 @@ func (s *subscriptionService) createAddonAttachParams(
 	}
 
 	addonRequestedStart := lo.Ternary(req.StartDate != nil, lo.FromPtr(req.StartDate), time.Now())
+	if req.StartDate == nil && sub.CurrentPeriodStart.After(addonRequestedStart) {
+		addonRequestedStart = sub.CurrentPeriodStart
+	}
 
 	// A onetime addon ends on the boundary of the period containing its start date; any
 	// other cadence renews each period and keeps the zero time.
@@ -5129,12 +5168,13 @@ func (s *subscriptionService) createAddonAttachParams(
 		return nil, err
 	}
 
-	// createLineItemFromPrice clamps every line item's start to
-	// max(requestedStart, sub.StartDate, price.StartDate), so anchoring the proration at
-	// requestedStart alone would price a window the addon is not live for.
+	// createLineItemFromPrice clamps every line item's start to max(requestedStart, price.StartDate),
+	// so anchoring the proration at requestedStart alone would price a window the addon is not live for.
+	// e.g. attach Jan 10 with a price starting Jan 15 → prorate from Jan 15.
+	// A backdated start is charged from the current period start: closed periods are never billed.
 	prorationEffectiveDate := lo.Reduce(lineItems, func(acc time.Time, li *subscription.SubscriptionLineItem, _ int) time.Time {
 		return lo.Ternary(li.StartDate.After(acc), li.StartDate, acc)
-	}, addonRequestedStart)
+	}, types.LatestOf(addonRequestedStart, sub.CurrentPeriodStart))
 
 	// Ensure subscription-level and line-item-level commitments don't conflict
 	originalLineItems := sub.LineItems
@@ -5415,26 +5455,24 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 	price := priceResponse.Price
 
 	lineItemStart := addonRequestedStart
-	if sub.StartDate.After(lineItemStart) {
-		lineItemStart = sub.StartDate
-	}
 	if price.StartDate != nil && price.StartDate.After(lineItemStart) {
 		lineItemStart = *price.StartDate
 	}
 
 	lineItem := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: sub.ID,
-		CustomerID:     sub.CustomerID,
-		EntityID:       addonID,
-		EntityType:     types.SubscriptionLineItemEntityTypeAddon,
-		PriceID:        price.ID,
-		PriceType:      price.Type,
-		Currency:       sub.Currency,
-		BillingPeriod:  price.BillingPeriod,
-		InvoiceCadence: price.InvoiceCadence,
-		StartDate:      lineItemStart,
-		EndDate:        time.Time{},
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           addonID,
+		EntityType:         types.SubscriptionLineItemEntityTypeAddon,
+		PriceID:            price.ID,
+		PriceType:          price.Type,
+		Currency:           sub.Currency,
+		BillingPeriod:      price.BillingPeriod,
+		BillingPeriodCount: price.BillingPeriodCount,
+		InvoiceCadence:     price.InvoiceCadence,
+		StartDate:          lineItemStart,
+		EndDate:            time.Time{},
 		Metadata: map[string]string{
 			"addon_id":        addonID,
 			"subscription_id": sub.ID,
