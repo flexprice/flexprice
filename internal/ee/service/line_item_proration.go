@@ -92,11 +92,23 @@ func (s *LineItemProrationSummary) Merge(others ...*LineItemProrationSummary) *L
 	return s
 }
 
-func (s *LineItemProrationSummary) NetAmount() decimal.Decimal {
+// Subtotal is charges minus credits, before any discount.
+func (s *LineItemProrationSummary) Subtotal() decimal.Decimal {
 	if s == nil {
 		return decimal.Zero
 	}
-	return s.TotalChargeAmount.Sub(s.TotalDiscountAmount).Sub(s.TotalCreditAmount)
+	return s.TotalChargeAmount.Sub(s.TotalCreditAmount)
+}
+
+func (s *LineItemProrationSummary) NetAmount() decimal.Decimal {
+	return s.Subtotal().Sub(s.getTotalDiscountAmount())
+}
+
+func (s *LineItemProrationSummary) getTotalDiscountAmount() decimal.Decimal {
+	if s == nil {
+		return decimal.Zero
+	}
+	return s.TotalDiscountAmount
 }
 
 type SettleMode int
@@ -472,7 +484,7 @@ func buildNettedProrationInvoiceRequest(req *SettleProrationRequest) dto.CreateI
 		billingPeriod = string(sub.BillingPeriod)
 	}
 	// Pre-discount: invoice compute subtracts the coupons itself.
-	net := quote.TotalChargeAmount.Sub(quote.TotalCreditAmount)
+	subtotal := quote.Subtotal()
 	periodStart, periodEnd := req.PeriodStart, req.PeriodEnd
 
 	return dto.CreateInvoiceRequest{
@@ -481,9 +493,9 @@ func buildNettedProrationInvoiceRequest(req *SettleProrationRequest) dto.CreateI
 		InvoiceType:     types.InvoiceTypeOneOff,
 		Currency:        sub.Currency,
 		BillingReason:   types.InvoiceBillingReasonSubscriptionUpdate,
-		AmountDue:       net,
-		Total:           net,
-		Subtotal:        net,
+		AmountDue:       subtotal,
+		Total:           subtotal,
+		Subtotal:        subtotal,
 		PeriodStart:     &periodStart,
 		PeriodEnd:       &periodEnd,
 		BillingPeriod:   &billingPeriod,
