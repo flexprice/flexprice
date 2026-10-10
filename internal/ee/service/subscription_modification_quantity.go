@@ -309,6 +309,14 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			Mark(ierr.ErrValidation)
 	}
 
+	// This path invoices on the subscription itself, so a grouped child's charge would be skipped.
+	if sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		return nil, ierr.NewError("quantity_change is not supported on a grouped invoicing subscription").
+			WithHint("Use line_item_change to change quantities on this subscription").
+			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
+			Mark(ierr.ErrValidation)
+	}
+
 	now := time.Now().UTC()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItems))
 
@@ -786,18 +794,8 @@ func (s *subscriptionModificationService) settlePayFirst(
 		return nil, err
 	}
 
-	existing, err := anyPendingCheckoutSession(ctx, sp, sub.CustomerID, sub.ID)
-	if err != nil {
+	if err := ensureNoPendingCheckoutSession(ctx, sp, sub.ID); err != nil {
 		return nil, err
-	}
-	if len(existing) > 0 {
-		return nil, ierr.NewError("a pending checkout session already exists for this subscription").
-			WithHint("Complete or cancel the existing checkout before starting another payment-gated modification").
-			WithReportableDetails(map[string]any{
-				"subscription_id":     sub.ID,
-				"checkout_session_id": existing[0].ID,
-			}).
-			Mark(ierr.ErrAlreadyExists)
 	}
 
 	draftInvoice, err := s.createAggregatedProrationDraftInvoice(ctx, sub, prorationResult)

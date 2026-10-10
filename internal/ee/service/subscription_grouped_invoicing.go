@@ -275,3 +275,25 @@ func getGroupedInvoicingChildren(
 
 	return sp.SubRepo.List(ctx, filter)
 }
+
+// invoicingSubscription returns the subscription whose invoice carries sub's charges: the parent for a grouped child, else sub.
+func invoicingSubscription(ctx context.Context, sp ServiceParams, sub *subscription.Subscription) (*subscription.Subscription, error) {
+	if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing || lo.FromPtr(sub.ParentSubscriptionID) == "" {
+		return sub, nil
+	}
+
+	return sp.SubRepo.Get(ctx, *sub.ParentSubscriptionID)
+}
+
+// checkoutPayerID returns the customer who pays sub's checkout: the parent's invoicing customer for a grouped child, else sub's customer.
+func checkoutPayerID(ctx context.Context, sp ServiceParams, sub *subscription.Subscription) (string, error) {
+	invoicingSub, err := invoicingSubscription(ctx, sp, sub)
+	if err != nil {
+		return "", err
+	}
+	if invoicingSub == sub {
+		return sub.CustomerID, nil
+	}
+
+	return invoicingSub.GetInvoicingCustomerID(), nil
+}

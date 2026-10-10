@@ -36,29 +36,19 @@ func NewCheckoutSessionService(params ServiceParams) interfaces.CheckoutSessionS
 	return &checkoutSessionService{ServiceParams: params}
 }
 
-// anyPendingCheckoutSession returns the outstanding payment-gated change on a subscription, if
-// any. At most one can exist: starting a second is rejected against this very lookup.
-func anyPendingCheckoutSession(
-	ctx context.Context,
-	sp ServiceParams,
-	customerID string,
-	subscriptionID string,
-) ([]*domainCheckout.CheckoutSession, error) {
-	filter := pendingCheckoutSessionFilter(customerID, subscriptionID,
-		types.CheckoutActionModifySubscription, types.CheckoutActionAddAddon)
-	filter.Limit = lo.ToPtr(1)
-
-	return sp.CheckoutSessionRepo.List(ctx, filter)
+// pendingCheckoutSessions returns the subscription's payment-gated changes that are still open.
+func pendingCheckoutSessions(ctx context.Context, sp ServiceParams, subscriptionID string) ([]*domainCheckout.CheckoutSession, error) {
+	return sp.CheckoutSessionRepo.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:      types.NewNoLimitPublishedQueryFilter(),
+		Actions:          []types.CheckoutAction{types.CheckoutActionModifySubscription, types.CheckoutActionAddAddon},
+		CheckoutStatuses: []types.CheckoutStatus{types.CheckoutStatusInitiated, types.CheckoutStatusPending},
+		Configuration:    &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
+	})
 }
 
 // ensureNoPendingCheckoutSession rejects a second payment-gated change while one is still open.
-func ensureNoPendingCheckoutSession(
-	ctx context.Context,
-	sp ServiceParams,
-	customerID string,
-	subscriptionID string,
-) error {
-	existing, err := anyPendingCheckoutSession(ctx, sp, customerID, subscriptionID)
+func ensureNoPendingCheckoutSession(ctx context.Context, sp ServiceParams, subscriptionID string) error {
+	existing, err := pendingCheckoutSessions(ctx, sp, subscriptionID)
 	if err != nil {
 		return err
 	}
@@ -73,24 +63,6 @@ func ensureNoPendingCheckoutSession(
 			"checkout_session_id": existing[0].ID,
 		}).
 		Mark(ierr.ErrAlreadyExists)
-}
-
-// pendingCheckoutSessionFilter matches the subscription's checkouts that are still open.
-func pendingCheckoutSessionFilter(
-	customerID string,
-	subscriptionID string,
-	actions ...types.CheckoutAction,
-) *types.CheckoutSessionFilter {
-	return &types.CheckoutSessionFilter{
-		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
-		CustomerIDs: []string{customerID},
-		Actions:     actions,
-		CheckoutStatuses: []types.CheckoutStatus{
-			types.CheckoutStatusInitiated,
-			types.CheckoutStatusPending,
-		},
-		Configuration: &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
-	}
 }
 
 // openCheckoutSessionIDs returns the ids of the customer's checkout sessions that are still open.

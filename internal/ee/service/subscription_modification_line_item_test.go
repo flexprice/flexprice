@@ -647,3 +647,76 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_Coupon_PayFirs
 	s.Len(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID), 1, "a replay must not associate twice")
 	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID), "a replay must not redeem twice")
 }
+
+// -----------------------------------------------------------------------------
+// grouped invoicing child
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_GroupedChild_InvoicesParent() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-parent"), s.createCustomer("lic-grp-child")
+	parent, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	resp, err := s.service.Execute(ctx, child.ID,
+		s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(40)), effectiveDate))
+	s.Require().NoError(err)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, resp.ChangedResources.Invoices[0].ID)
+	s.Require().NoError(err)
+	s.Equal(parentCust.ID, inv.CustomerID, "the parent's customer pays for a child's change")
+	s.Equal(parent.ID, lo.FromPtr(inv.SubscriptionID))
+	s.NotEqual(types.InvoiceStatusSkipped, inv.InvoiceStatus)
+	s.True(inv.AmountDue.IsPositive(), "the charge must not be lost to a skipped draft")
+
+	s.Require().Len(inv.LineItems, 1)
+	s.Equal(child.ID, lo.FromPtr(inv.LineItems[0].SubscriptionID), "the line still names the child it belongs to")
+	s.Equal(childCust.ID, inv.LineItems[0].Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID])
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_GroupedChild_CreditsParentWallet() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-credit-parent"), s.createCustomer("lic-grp-credit-child")
+	_, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(40))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	resp, err := s.service.Execute(ctx, child.ID,
+		s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(10)), effectiveDate))
+	s.Require().NoError(err)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+	s.Equal(dto.ChangedInvoiceActionWalletCredit, resp.ChangedResources.Invoices[0].Action)
+
+	parentWallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, parentCust.ID)
+	s.Require().NoError(err)
+	s.Require().Len(parentWallets, 1, "the refund goes to the parent's customer")
+	s.True(parentWallets[0].Balance.IsPositive())
+
+	childWallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, childCust.ID)
+	s.Require().NoError(err)
+	s.Empty(childWallets)
+}
+
+// The open checkout is stored under the parent's customer; the guard must still find it by the child.
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_GroupedChild_PendingCheckoutBlocks() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-pending-parent"), s.createCustomer("lic-grp-pending-child")
+	_, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+	s.seedPendingModifyCheckout(parentCust.ID, child.ID, nil)
+
+	req := s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(40)), effectiveDate)
+	req.Checkout = s.checkoutParamsRazorpay()
+
+	_, err := s.service.Execute(ctx, child.ID, req)
+	s.True(ierr.IsAlreadyExists(err), "a second checkout on the child must be blocked: %v", err)
+}

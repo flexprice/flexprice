@@ -769,24 +769,32 @@ func (s *subscriptionModificationService) settleLineItemChangePayFirst(
 		return nil, err
 	}
 
-	var draft *dto.InvoiceResponse
+	var (
+		draft   *dto.InvoiceResponse
+		payerID string
+	)
 
 	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		locked, err := sp.SubRepo.GetForUpdate(txCtx, sub.ID)
+		lockedSubs, err := sp.SubRepo.GetForUpdate(txCtx, sub.ID)
 		if err != nil {
 			return err
 		}
-		if locked.SubscriptionStatus != types.SubscriptionStatusActive {
+		if lockedSubs.SubscriptionStatus != types.SubscriptionStatusActive {
 			return ierr.NewError("subscription is not active").
 				WithHint("Only active subscriptions can be modified").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_id": sub.ID,
-					"status":          locked.SubscriptionStatus,
+					"status":          lockedSubs.SubscriptionStatus,
 				}).
 				Mark(ierr.ErrValidation)
 		}
 
-		if err := ensureNoPendingCheckoutSession(txCtx, sp, locked.CustomerID, locked.ID); err != nil {
+		payerID, err = checkoutPayerID(txCtx, sp, lockedSubs)
+		if err != nil {
+			return err
+		}
+
+		if err := ensureNoPendingCheckoutSession(txCtx, sp, lockedSubs.ID); err != nil {
 			return err
 		}
 
@@ -802,7 +810,7 @@ func (s *subscriptionModificationService) settleLineItemChangePayFirst(
 	}
 
 	session, err := NewCheckoutSessionService(sp).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
-		CustomerID: sub.CustomerID,
+		CustomerID: payerID,
 		Action:     types.CheckoutActionModifySubscription,
 		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: modifyParams,

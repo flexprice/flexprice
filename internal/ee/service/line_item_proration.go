@@ -374,6 +374,12 @@ func (s *lineItemProrationService) Settle(ctx context.Context, req *SettleProrat
 		return nil, err
 	}
 
+	invoicingSub, err := invoicingSubscription(ctx, s.params, req.Subscription)
+	if err != nil {
+		return nil, err
+	}
+	req.Subscription = invoicingSub
+
 	result := &SettleProrationResult{Changed: make([]dto.ChangedInvoice, 0, 1)}
 	net := req.Quote.NetAmount()
 

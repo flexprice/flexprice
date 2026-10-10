@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -672,4 +673,50 @@ func (s *SubscriptionServiceSuite) TestBulkAddonModification_Coupon_RemovalCredi
 	s.True(control.GreaterThan(netCharged), "the undiscounted control credits the prorated list, got %s", control)
 	s.True(approxEqual(discounted, netCharged),
 		"discounted addon credited %s, expected the net charged %s", discounted, netCharged)
+}
+
+// A grouped child's add-on is invoiced on its parent, with the coupon still applied.
+func (s *SubscriptionServiceSuite) TestBulkAddonModification_Coupon_GroupedChildInvoicesParent() {
+	ctx := s.GetContext()
+	child := s.monthlyPeriodSubscription()
+
+	parentCustomer := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_cust_grp_parent",
+		Name:       "Parent Customer",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, parentCustomer))
+
+	parent := *child
+	parent.ID = "sub_grp_parent"
+	parent.CustomerID = parentCustomer.ID
+	parent.SubscriptionType = types.SubscriptionTypeParent
+	parent.LineItems = nil
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &parent))
+
+	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+	child.ParentSubscriptionID = lo.ToPtr(parent.ID)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, child))
+
+	s.seedFixedPriceAddon("addon_cpn_grp", decimal.NewFromInt(100), types.InvoiceCadenceAdvance)
+	seedPercentCoupon(ctx, s.Require(), s.GetStores(), "CPN_GRP", 50, nil)
+
+	at := child.CurrentPeriodStart.Add(10 * 24 * time.Hour)
+	_, err := s.modificationService().Execute(ctx, child.ID, s.bulkAddonRequest(&dto.SubModifyBulkAddonParams{
+		Adds: []*dto.AddAddonToSubscriptionRequest{
+			s.modifyAddWithCoupon("addon_cpn_grp", at, dto.SubscriptionCouponInput{CouponCode: "CPN_GRP"}),
+		},
+	}))
+	s.Require().NoError(err)
+
+	s.Empty(s.oneOffInvoicesFor(child.ID), "nothing is invoiced on the child itself")
+	invoices := s.oneOffInvoicesFor(parent.ID)
+	s.Require().Len(invoices, 1)
+	inv := invoices[0]
+	s.Equal(parentCustomer.ID, inv.CustomerID)
+	s.True(inv.Subtotal.IsPositive())
+	s.True(approxEqual(inv.TotalDiscount, inv.Subtotal.Div(decimal.NewFromInt(2))),
+		"discount %s should be half of subtotal %s", inv.TotalDiscount, inv.Subtotal)
+	s.True(approxEqual(inv.AmountDue, inv.Subtotal.Sub(inv.TotalDiscount)))
 }

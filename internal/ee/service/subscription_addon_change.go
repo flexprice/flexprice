@@ -699,15 +699,16 @@ func (s *addonChangeService) ExecutePayFirst(
 		config         *addonChangeConfig
 		settled        *SettleProrationResult
 		checkoutParams *types.AddAddonParams
+		payerID        string
 	)
 
 	subscriptionID := req.Subscription.ID
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		locked, err := s.sub.loadSubscriptionForChange(txCtx, subscriptionID, true)
+		lockedSubs, err := s.sub.loadSubscriptionForChange(txCtx, subscriptionID, true)
 		if err != nil {
 			return err
 		}
-		req.Subscription = locked
+		req.Subscription = lockedSubs
 
 		// Re-checked against the locked row: the first pass ran before the lock, so a
 		// subscription cancelled in between would otherwise get a checkout opened on it.
@@ -715,8 +716,13 @@ func (s *addonChangeService) ExecutePayFirst(
 			return err
 		}
 
+		payerID, err = checkoutPayerID(txCtx, s.ServiceParams, lockedSubs)
+		if err != nil {
+			return err
+		}
+
 		// Taken under the row lock, so two concurrent payment-gated changes cannot both pass.
-		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID); err != nil {
+		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, lockedSubs.ID); err != nil {
 			return err
 		}
 
@@ -755,9 +761,8 @@ func (s *addonChangeService) ExecutePayFirst(
 		return nil, nil
 	}
 
-	sub := config.getSubscription()
 	session, err := NewCheckoutSessionService(s.ServiceParams).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
-		CustomerID: sub.CustomerID,
+		CustomerID: payerID,
 		Action:     types.CheckoutActionAddAddon,
 		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: checkoutParams,
