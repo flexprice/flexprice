@@ -673,7 +673,13 @@ func buildProrationLineItem(
 		p.Amount.String(),
 		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
 
+	metadata := types.Metadata{"description": description}
+	if sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		metadata[types.InvoiceLineItemMetadataKeyChildCustomerID] = sub.CustomerID
+	}
+
 	return dto.CreateInvoiceLineItemRequest{
+		SubscriptionID:         &sub.ID,
 		PriceID:                &priceID,
 		PriceType:              &priceType,
 		PlanDisplayName:        &planDisplayName,
@@ -683,7 +689,7 @@ func buildProrationLineItem(
 		PeriodStart:            &effectiveDate,
 		PeriodEnd:              &periodEnd,
 		SubscriptionLineItemID: &subscriptionLineItemID,
-		Metadata:               types.Metadata{"description": description},
+		Metadata:               metadata,
 	}
 }
 
