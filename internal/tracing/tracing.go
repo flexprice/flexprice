@@ -25,8 +25,10 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/getsentry/sentry-go"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -37,6 +39,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -329,9 +332,12 @@ func (s *Service) initMeter(ctx context.Context) error {
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(interval))),
 	}
 	opts = append(opts, s.httpMetricViews()...)
+	opts = append(opts, s.appMetricViews()...)
+
 	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
 	s.meterProvider = mp
+	metrics.SetTenantAllowlist(mc.TenantAllowlist)
 
 	meter := mp.Meter(tracerName)
 	if s.dbDuration, err = meter.Float64Histogram("db.client.duration",
@@ -356,13 +362,6 @@ func (s *Service) initMeter(ctx context.Context) error {
 // no trace backend, trimmed to bounded attributes — the raw semconv set adds
 // server.address/port and protocol version, which cost series and say nothing here.
 func (s *Service) httpMetricViews() []sdkmetric.Option {
-	drop := func(pattern string) sdkmetric.Option {
-		return sdkmetric.WithView(sdkmetric.NewView(
-			sdkmetric.Instrument{Name: pattern},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
-		))
-	}
-
 	var views []sdkmetric.Option
 	if s.cfg.Otel.Metrics.HTTPServerEnabled {
 		// First matching view wins, so this must precede the http.server.* drop.
@@ -376,7 +375,24 @@ func (s *Service) httpMetricViews() []sdkmetric.Option {
 			)},
 		)))
 	}
-	return append(views, drop("http.server.*"), drop("http.client.*"))
+	return append(views, dropView(sdkmetric.Instrument{Name: "http.server.*"}), dropView(sdkmetric.Instrument{Name: "http.client.*"}))
+}
+
+// appMetricViews drops internal/metrics instruments named in disabled_metrics; "*" drops all.
+func (s *Service) appMetricViews() []sdkmetric.Option {
+	scope := instrumentation.Scope{Name: metrics.MeterName}
+	if !s.cfg.Otel.Metrics.AppEnabled {
+		return []sdkmetric.Option{dropView(sdkmetric.Instrument{Scope: scope})}
+	}
+
+	return lo.FilterMap(s.cfg.Otel.Metrics.DisabledMetrics, func(name string, _ int) (sdkmetric.Option, bool) {
+		name = strings.TrimSpace(name)
+		return dropView(sdkmetric.Instrument{Name: name, Scope: scope}), name != ""
+	})
+}
+
+func dropView(match sdkmetric.Instrument) sdkmetric.Option {
+	return sdkmetric.WithView(sdkmetric.NewView(match, sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}}))
 }
 
 // newMetricExporter builds the OTLP metric exporter (gRPC or HTTP), mirroring

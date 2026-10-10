@@ -1,10 +1,16 @@
 package webhook
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	domainconn "github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stretchr/testify/require"
 	"net/url"
 	"testing"
 
@@ -88,4 +94,23 @@ func TestVerifySignature_KnownVector(t *testing.T) {
 	if VerifySignature("deadbeef", signing, secret) {
 		t.Fatal("expected bad signature to fail")
 	}
+}
+
+// Only verified webhooks are counted; a verified one that fails processing counts as failed.
+func TestHandle_CountsOnlyVerifiedWebhooks(t *testing.T) {
+	r := metricstest.Install(t)
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_zoho"), "env_gw")
+	h := NewHandler(logger.NewNoopLogger())
+	conn := &domainconn.Connection{EncryptedSecretData: types.ConnectionMetadata{ZohoBooks: &types.ZohoBooksConnectionMetadata{OrganizationID: "org_1"}}}
+	body := []byte(`{"organization_id":"org_other"}`)
+	u, _ := url.Parse("https://example.com/hook")
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write([]byte(BuildSigningString(u, body)))
+	match := map[string]string{"tenant_id": "ten_gw_zoho", "provider": "zoho_books"}
+
+	require.Error(t, h.Handle(ctx, conn, u, body, "bad-signature", "secret", &ServiceDeps{}))
+	require.Equal(t, int64(0), r.Sum("gateway.webhooks", match))
+
+	require.Error(t, h.Handle(ctx, conn, u, body, hex.EncodeToString(mac.Sum(nil)), "secret", &ServiceDeps{}))
+	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_zoho", "event_type": "other", "outcome": "failed"}))
 }

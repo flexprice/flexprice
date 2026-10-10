@@ -17,9 +17,6 @@ import (
 // on the subscription's unfinalized cycle drafts, and only the rest expires.
 
 const (
-	// creditExpiryGracePeriod is how long after expiry the job waits when credit expiry settlement
-	// is off, so the period's invoice can finalize and use the credit first.
-	creditExpiryGracePeriod = 6 * time.Hour
 	// settlementGracePeriod lets late events timestamped before the expiry
 	// arrive before the credit is applied to drafts.
 	settlementGracePeriod = 2 * time.Hour
@@ -28,30 +25,8 @@ const (
 	settlementFinalizationHold = settlementGracePeriod + time.Hour
 )
 
-func (s *walletService) CreditExpiryCutoff(ctx context.Context) (time.Time, error) {
-	enabled, err := creditExpirySettlementEnabled(ctx, s.ServiceParams)
-	if err != nil {
-		return time.Time{}, err
-	}
-	grace := creditExpiryGracePeriod
-	if enabled {
-		grace = settlementGracePeriod
-	}
-	return time.Now().UTC().Add(-grace), nil
-}
-
-// creditExpirySettlementEnabled reports whether the tenant environment has credit expiry
-// settlement turned on.
-func creditExpirySettlementEnabled(ctx context.Context, params ServiceParams) (bool, error) {
-	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
-		return false, nil
-	}
-	settingsSvc := NewSettingsService(params).(*settingsService)
-	cfg, err := GetSetting[types.CreditExpirySettlementConfig](settingsSvc, ctx, types.SettingKeyCreditExpirySettlement)
-	if err != nil {
-		return false, err
-	}
-	return cfg.Enabled, nil
+func (s *walletService) CreditExpiryCutoff() time.Time {
+	return time.Now().UTC().Add(-settlementGracePeriod)
 }
 
 // draftAllocation is a draft invoice and the most it may take from an expiring credit.
@@ -176,9 +151,7 @@ func (s *walletService) settlementSubscriptions(ctx context.Context, tx *wallet.
 	eligible := lo.Filter(subs, func(sub *subscription.Subscription, _ int) bool {
 		return sub.SubscriptionStatus == types.SubscriptionStatusActive &&
 			(sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent) &&
-			types.IsMatchingCurrency(sub.Currency, tx.Currency) &&
-			// Threshold invoices move current_period_start and would orphan the draft.
-			!sub.HasPositiveAutoInvoiceThreshold()
+			types.IsMatchingCurrency(sub.Currency, tx.Currency)
 	})
 
 	sort.SliceStable(eligible, func(i, j int) bool {
@@ -308,6 +281,8 @@ func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID
 				continue
 			}
 			if now.Before(expiry.Add(settlementFinalizationHold)) {
+				s.Logger.Info(ctx, "waiting for the expiry job to apply an expiring credit",
+					"customer_id", customerID, "credit_transaction_id", c.ID, "expiry_date", expiry)
 				return true, nil
 			}
 			s.Logger.Error(ctx, "expiring credit still unprocessed past the finalization hold",

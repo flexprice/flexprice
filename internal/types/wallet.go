@@ -314,21 +314,10 @@ func (c WalletConfig) Validate() error {
 	return nil
 }
 
-// CreditExpirySkipReason is the reason a credit grant was skipped during expiry.
-type CreditExpirySkipReason string
-
-const (
-	CreditExpirySkipReasonNone               CreditExpirySkipReason = ""
-	CreditExpirySkipReasonActiveSubscription CreditExpirySkipReason = "active_subscription"
-	CreditExpirySkipReasonActiveInvoice      CreditExpirySkipReason = "active_invoice"
-)
-
 // ExpireCreditsResult is the result of attempting to expire a single credit transaction.
 type ExpireCreditsResult struct {
 	// Expired is true if the credits were expired.
 	Expired bool `json:"expired"`
-	// SkipReason is set when expiry was skipped (e.g. active_subscription, active_invoice).
-	SkipReason CreditExpirySkipReason `json:"skip_reason,omitempty"`
 	// Applied is the amount, in the wallet's currency, applied to draft invoices for usage before expiry.
 	Applied decimal.Decimal `json:"applied"`
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -500,27 +499,20 @@ func (s *InvoiceConversionSuite) seedPercentRate(name, pct string) *taxrate.TaxR
 	return tr
 }
 
-// seedTaxRow records the tax_applied row compute writes, keyed exactly as processTaxApplication
-// looks it up.
+// seedTaxRow records the published tax_applied row a compute leaves on a one-off draft.
 func (s *InvoiceConversionSuite) seedTaxRow(invID string, tr *taxrate.TaxRate, taxable, tax, currency string) {
-	key := idempotency.NewGenerator().GenerateKey(idempotency.ScopeTaxApplication, map[string]interface{}{
-		"tax_rate_id": tr.ID,
-		"entity_id":   invID,
-		"entity_type": string(types.TaxRateEntityTypeInvoice),
-	})
 	s.Require().NoError(s.GetStores().TaxAppliedRepo.Create(s.ctx(), &taxapplied.TaxApplied{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
-		TaxRateID:      tr.ID,
-		EntityType:     types.TaxRateEntityTypeInvoice,
-		EntityID:       invID,
-		TaxableAmount:  decimal.RequireFromString(taxable),
-		TaxAmount:      decimal.RequireFromString(tax),
-		TaxBehavior:    types.TaxBehaviorExclusive,
-		Currency:       currency,
-		AppliedAt:      time.Now().UTC(),
-		IdempotencyKey: lo.ToPtr(key),
-		EnvironmentID:  types.GetEnvironmentID(s.ctx()),
-		BaseModel:      types.GetDefaultBaseModel(s.ctx()),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
+		TaxRateID:     lo.ToPtr(tr.ID),
+		EntityType:    types.TaxRateEntityTypeInvoice,
+		EntityID:      invID,
+		TaxableAmount: decimal.RequireFromString(taxable),
+		TaxAmount:     decimal.RequireFromString(tax),
+		TaxBehavior:   types.TaxBehaviorExclusive,
+		Currency:      currency,
+		AppliedAt:     time.Now().UTC(),
+		EnvironmentID: types.GetEnvironmentID(s.ctx()),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx()),
 	}))
 }
 

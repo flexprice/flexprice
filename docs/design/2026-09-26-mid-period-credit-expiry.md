@@ -1,6 +1,7 @@
 # Mid-period credit expiry
 
-Status: v1 built (PR #2949), off by default. Linear: FLE-897.
+Status: v1 built (PR #2949), periods that end early handled (PR #2995, FLE-1498). On for all tenants.
+Linear: FLE-897.
 
 Terms used below:
 - **Draft**: the period's invoice before it's final. The billing run creates it at period end,
@@ -29,9 +30,7 @@ the wallet.
 
 ```mermaid
 flowchart TD
-    A[Expiry job, every 15 min] --> B{Setting on?}
-    B -- No --> Z[Credits expired 6h+ ago:<br/>expire the whole credit, as today]
-    B -- Yes --> Y[Credits expired 2h+ ago,<br/>earliest expiry first]
+    A[Expiry job, every 15 min] --> Y[Credits expired 2h+ ago,<br/>earliest expiry first]
     Y --> C[For each subscription the credit can pay]
     C --> D[Find its unfinalized drafts that have usage before the expiry:<br/>earlier periods, then the current period<br/>current draft created only if it has such usage]
     D --> E[Amount per draft =<br/>usage before expiry, priced like an invoice for that window,<br/>minus credits already applied]
@@ -69,8 +68,7 @@ Ongoing balance = wallet balance − usage not yet paid. It stays correct at eve
 - A draft with a payment recorded on it is skipped.
 - Custom-currency invoices are handled in their own currency.
 - Safe to re-run: a credit is applied to a draft at most once.
-- Only active prepaid wallets; only active standalone or parent subscriptions in the same currency,
-  without threshold billing.
+- Only active prepaid wallets; only active standalone or parent subscriptions in the same currency.
 
 ## When the expiry is processed
 
@@ -101,12 +99,9 @@ Main new code: `internal/ee/service/credit_expiry.go`. Ledger: the applied part 
 
 ## Rollout
 
-Per-environment setting `credit_expiry_settlement_config` (`{"enabled": true}`), off by default.
-With it off nothing changes (6h grace, today's skip rules).
-
-Before enabling for a tenant, check they rarely use immediate cancel or plan changes that reset the
-period (see "Not handled yet"), and watch for open cycle drafts with credits applied whose
-subscription has moved on.
+On for every tenant. It started behind a per-environment setting (`credit_expiry_settlement_config`),
+enabled for one tenant first; the setting and the old path (expire the whole credit 6h after expiry,
+holding it while its period's invoice was open) were removed in PR #2995.
 
 Cost: each expiring credit with usage computes a draft and runs a usage query on ClickHouse. Fine at
 today's volume; worth watching if a tenant expires many credits at once.
@@ -134,24 +129,45 @@ End to end on a local stack (wallet, ledger and invoices checked at each step):
 | Two credits in one period, processed in one run | 24 applied (20 if processed latest-expiry first) |
 | Void of a draft with applied credits | Refunded, no expiry |
 
+## When the period ends early
+
+The period-end run finds the draft by its key: subscription, billing reason, period. Flows that end
+or move the period early would bill a different invoice and leave the draft (with its applied
+credits) behind, billing the usage before the expiry twice. So **the open draft follows the period**:
+the flow moves the draft's period end and key, and bills that draft instead of a new invoice. Where
+the flow raises no invoice, the draft is voided.
+
+| Flow | What happens to the draft |
+|---|---|
+| Immediate cancel, `generate_invoice` | Moved to `[start, cancel]`, reason `PRORATION`; the cancel finalizes it |
+| Immediate cancel, `skip` (also auto-cancel, Stripe cancel) | Voided; applied credits refunded with no expiry |
+| Scheduled cancel inside the period | End moves to the cancel date; back again if the schedule is cancelled |
+| Resume after a pause | End moves out by the pause length |
+| Threshold invoice | Becomes the threshold invoice; the run waits while an expiring credit is pending |
+| Plan change v2, `anchor_at_effect` | The cut-short period is billed like an immediate cancel: moved to `[start, change]`, reason `PRORATION`, finalized in the change, paid after commit |
+| Cancel at period end, plan change v2 `unchanged`, deferred plan change, trials | Nothing to do: the period ends on time, or no draft exists |
+
+Plan change with `anchor_at_effect`, for every tenant: the old period's invoice is a subscription
+invoice with reason `PRORATION` (was a one-off, `SUBSCRIPTION_UPDATE`) and includes the old plan's
+arrear fixed charges for the cut-short period, which were billed nowhere before. Pricing those for a
+partial period is fixed separately (immediate cancels bill the full period amount today).
+
+Code: `MoveCycleDraft` / `VoidCycleDraft` on the invoice service (no-ops without an open draft for the
+current period), `InvoiceRepo.UpdateDraftInvoicePeriod`, and one key helper `subscriptionInvoiceKey`.
+Invoice `period_end` is no longer immutable in the ent schema (Go-level only, no migration).
+
 ## Not handled yet
 
-**v2 (designed, not built): a period that ends early.** Immediate cancel, scheduled cancel and plan
-change with `anchor_at_effect` create a new invoice for the shortened period. Until v2, a draft with
-credits applied is left behind: the usage before the expiry is billed again and the draft is never
-finalized. v2 rule: reuse the open draft instead (move its period end, set the flow's billing reason,
-recompute, finalize). Threshold billing has the same shape; v1 avoids it by skipping threshold
-subscriptions, so it only matters if a subscription is switched to threshold billing after a credit
-was applied to its draft. The same v2 rule then lets threshold subscriptions be included.
-
-**Accepted limits in v1**
+**Accepted limits**
 - Events arriving after the job ran aren't counted.
+- Immediate cancel or plan change within ~2h after a credit expires: the job hasn't applied the
+  credit yet and these can't wait, so that usage is paid from other credits.
+- Backdated subscriptions (a period that ended before the subscription was created).
 - `RecalculateInvoiceV2` on a draft can drop the applied amount.
 
 **Product calls pending**
 - Drafts now exist mid-period: customers and admins can see them before period end, and integrations
   that sync drafts (e.g. Tabs) will receive them. Confirm that's fine.
-- Immediate cancel with the default `skip` invoice policy: what happens to a draft with credits?
 - A backdated cancel that ends the period before an expiry that already paid usage.
 
 ## How others do it

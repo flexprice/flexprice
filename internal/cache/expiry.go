@@ -8,4 +8,5 @@ const (
 	ExpiryWalletBalance    = 30 * time.Minute
 	ExpiryWalletAlertCheck = 1 * time.Minute
 	ExpiryPriceSyncLock    = 2 * time.Hour
+	ExpiryBillerTaxIDs     = 1 * time.Hour
 )

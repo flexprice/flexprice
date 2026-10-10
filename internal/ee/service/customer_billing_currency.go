@@ -66,7 +66,7 @@ func (s *customerService) validateBillingCurrency(ctx context.Context, customerI
 		}
 	}
 	if len(missingSubs) > 0 {
-		return missingExchangeRatesError("missing exchange rates for subscriptions", missingSubs)
+		return missingExchangeRatesError(ccCfg, "missing conversions for subscriptions", missingSubs)
 	}
 
 	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
@@ -87,7 +87,7 @@ func (s *customerService) validateBillingCurrency(ctx context.Context, customerI
 		}
 	}
 	if len(missingWallets) > 0 {
-		return missingExchangeRatesError("missing exchange rates for wallets", missingWallets)
+		return missingExchangeRatesError(ccCfg, "missing conversions for wallets", missingWallets)
 	}
 
 	return nil
@@ -132,12 +132,33 @@ func (s *customerService) activeConvertibleSubscriptions(ctx context.Context, cu
 	return lo.Values(seen), nil
 }
 
-// missingExchangeRatesError lists, sorted, every pair that needs a rate before the billing currency can change.
-func missingExchangeRatesError(reason string, pairs []string) error {
+// missingExchangeRatesError lists, sorted, every pair that needs a rate (or, for a custom currency,
+// a factor) before the billing currency can change.
+func missingExchangeRatesError(ccCfg types.CustomCurrencyConfig, reason string, pairs []string) error {
 	pairs = lo.Uniq(pairs)
 	slices.Sort(pairs)
+	factors, rates := lo.FilterReject(pairs, func(pair string, _ int) bool {
+		from, _, _ := strings.Cut(pair, "->")
+		return ccCfg.IsCustom(from)
+	})
+
+	var missing []string
+	if len(rates) > 0 {
+		missing = append(missing, "No exchange rate for "+fxPairKeysLabel(rates))
+	}
+	if len(factors) > 0 {
+		missing = append(missing, "No conversion factor for "+fxPairKeysLabel(factors))
+	}
+	fix := "Add these rates"
+	switch {
+	case len(rates) > 0 && len(factors) > 0:
+		fix = "Add these rates and custom currency factors"
+	case len(factors) > 0:
+		fix = "Add these factors in the custom currency settings"
+	}
+
 	return ierr.NewError(reason).
-		WithHintf("No exchange rate for %s. Add these rates before setting this billing currency.", fxPairKeysLabel(pairs)).
+		WithHintf("%s. %s before setting this billing currency.", strings.Join(missing, ". "), fix).
 		WithReportableDetails(map[string]any{"missing_pairs": pairs}).
 		Mark(ierr.ErrValidation)
 }

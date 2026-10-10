@@ -45,6 +45,10 @@ type InvoiceData struct {
 	// Applied taxes (detailed breakdown)
 	AppliedTaxes []AppliedTaxData `json:"applied_taxes"`
 
+	// TaxNotice is a statement the invoice must carry to be compliant, such as the reverse
+	// charge wording when the buyer accounts for the tax. Empty when none applies.
+	TaxNotice string `json:"tax_notice,omitempty"`
+
 	// Applied discounts (detailed breakdown)
 	AppliedDiscounts []AppliedDiscountData `json:"applied_discounts"`
 }
@@ -57,6 +61,15 @@ type BillerInfo struct {
 	HelpEmail           string      `json:"help_email"`
 	PaymentInstructions string      `json:"payment_instructions"`
 	Address             AddressInfo `json:"address"`
+
+	// TaxIDs are the issuer's registered tax numbers. A compliant VAT invoice carries them.
+	TaxIDs []TaxIDData `json:"tax_ids,omitempty"`
+}
+
+// TaxIDData is one registered tax number rendered on the invoice.
+type TaxIDData struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 // RecipientInfo contains customer information for the invoice recipient
@@ -64,6 +77,10 @@ type RecipientInfo struct {
 	Name    string      `json:"name"`
 	Email   string      `json:"email"`
 	Address AddressInfo `json:"address"`
+
+	// TaxIDs are the customer's registered tax numbers. Required on a reverse charge invoice,
+	// where the customer accounts for the tax themselves.
+	TaxIDs []TaxIDData `json:"tax_ids,omitempty"`
 }
 
 // AddressInfo represents a physical address
@@ -98,6 +115,10 @@ type AppliedTaxData struct {
 	TaxRate       float64 `json:"tax_rate"`       // Rate value (e.g., 1.00 for fixed, 10.0 for 10%)
 	TaxableAmount float64 `json:"taxable_amount"` // Amount tax was calculated on
 	TaxAmount     float64 `json:"tax_amount"`     // Actual tax amount
+
+	// Jurisdiction is the authority that imposed the tax, e.g. "India" or "Colorado". Set by
+	// an external engine only; it is what tells apart several rows of the same tax.
+	Jurisdiction string `json:"jurisdiction,omitempty"`
 	// AppliedAt     string  `json:"applied_at"`     // Date when tax was applied
 }
 

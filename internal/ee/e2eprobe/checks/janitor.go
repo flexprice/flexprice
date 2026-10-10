@@ -14,10 +14,23 @@ import (
 )
 
 type Janitor struct {
-	client e2eprobe.Client
-	reg    e2eprobe.Registry
-	maxAge time.Duration
-	runID  string
+	client   e2eprobe.Client
+	reg      e2eprobe.Registry
+	maxAge   time.Duration
+	runID    string
+	sweepers []OrphanSweeper
+}
+
+// OrphanSweeper removes resources older than cutoff that its probe never cleaned up, returning
+// how many it removed and the deletes that failed.
+type OrphanSweeper interface {
+	SweepOrphans(ctx context.Context, cutoff time.Time) (int, []string)
+}
+
+// WithSweeper adds a probe-owned orphan sweep to each janitor run.
+func (j *Janitor) WithSweeper(s OrphanSweeper) *Janitor {
+	j.sweepers = append(j.sweepers, s)
+	return j
 }
 
 func NewJanitor(c e2eprobe.Client, r e2eprobe.Registry, maxAge time.Duration, runID string) *Janitor {
@@ -64,7 +77,21 @@ func (j *Janitor) Run(ctx context.Context) error {
 			"upstream_error", err.Error(),
 		)
 	}
+	// Phase 4: probe-owned sweeps (e.g. billing-matrix plans, addons, features). Best effort like Phase 3.
+	for _, s := range j.sweepers {
+		removed, failed := s.SweepOrphans(ctx, cutoff)
+		if removed > 0 || len(failed) > 0 {
+			slog.InfoContext(ctx, "janitor probe sweep", "removed", removed, "failed", len(failed), "first_failure", firstOf(failed))
+		}
+	}
 	return nil
+}
+
+func firstOf(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return items[0]
 }
 
 // errNotFound is the canonical sentinel returned by the fake and expected by

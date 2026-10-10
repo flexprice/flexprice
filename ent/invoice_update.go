@@ -460,6 +460,26 @@ func (_u *InvoiceUpdate) ClearLastComputedAt() *InvoiceUpdate {
 	return _u
 }
 
+// SetPeriodEnd sets the "period_end" field.
+func (_u *InvoiceUpdate) SetPeriodEnd(v time.Time) *InvoiceUpdate {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
+}
+
+// SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillablePeriodEnd(v *time.Time) *InvoiceUpdate {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
+	}
+	return _u
+}
+
+// ClearPeriodEnd clears the value of the "period_end" field.
+func (_u *InvoiceUpdate) ClearPeriodEnd() *InvoiceUpdate {
+	_u.mutation.ClearPeriodEnd()
+	return _u
+}
+
 // SetInvoicePdfURL sets the "invoice_pdf_url" field.
 func (_u *InvoiceUpdate) SetInvoicePdfURL(v string) *InvoiceUpdate {
 	_u.mutation.SetInvoicePdfURL(v)
@@ -959,6 +979,9 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoice.FieldPeriodStart, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PeriodEnd(); ok {
+		_spec.SetField(invoice.FieldPeriodEnd, field.TypeTime, value)
 	}
 	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(invoice.FieldPeriodEnd, field.TypeTime)
@@ -1570,6 +1593,26 @@ func (_u *InvoiceUpdateOne) ClearLastComputedAt() *InvoiceUpdateOne {
 	return _u
 }
 
+// SetPeriodEnd sets the "period_end" field.
+func (_u *InvoiceUpdateOne) SetPeriodEnd(v time.Time) *InvoiceUpdateOne {
+	_u.mutation.SetPeriodEnd(v)
+	return _u
+}
+
+// SetNillablePeriodEnd sets the "period_end" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillablePeriodEnd(v *time.Time) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetPeriodEnd(*v)
+	}
+	return _u
+}
+
+// ClearPeriodEnd clears the value of the "period_end" field.
+func (_u *InvoiceUpdateOne) ClearPeriodEnd() *InvoiceUpdateOne {
+	_u.mutation.ClearPeriodEnd()
+	return _u
+}
+
 // SetInvoicePdfURL sets the "invoice_pdf_url" field.
 func (_u *InvoiceUpdateOne) SetInvoicePdfURL(v string) *InvoiceUpdateOne {
 	_u.mutation.SetInvoicePdfURL(v)
@@ -2099,6 +2142,9 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if _u.mutation.PeriodStartCleared() {
 		_spec.ClearField(invoice.FieldPeriodStart, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PeriodEnd(); ok {
+		_spec.SetField(invoice.FieldPeriodEnd, field.TypeTime, value)
 	}
 	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(invoice.FieldPeriodEnd, field.TypeTime)

@@ -366,8 +366,6 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
-	case types.SettingKeyCreditExpirySettlement:
-		return getSettingByKey[types.CreditExpirySettlementConfig](s, ctx, key)
 	case types.SettingKeyUsageAlertConfig:
 		return getSettingByKey[types.UsageAlertConfig](s, ctx, key)
 	case types.SettingKeySAMLConfig:
@@ -376,6 +374,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.WalletTopupConfig](s, ctx, key)
 	case types.SettingKeyCustomCurrencyConfig:
 		return getSettingByKey[types.CustomCurrencyConfig](s, ctx, key)
+	case types.SettingKeyTaxConfig:
+		return getSettingByKey[types.TaxConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -432,8 +432,6 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
-	case types.SettingKeyCreditExpirySettlement:
-		return updateSettingByKey[types.CreditExpirySettlementConfig](s, ctx, key, req)
 	case types.SettingKeyUsageAlertConfig:
 		return updateSettingByKey[types.UsageAlertConfig](s, ctx, key, req)
 	case types.SettingKeySAMLConfig:
@@ -442,6 +440,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.WalletTopupConfig](s, ctx, key, req)
 	case types.SettingKeyCustomCurrencyConfig:
 		return updateSettingByKey[*types.CustomCurrencyConfig](s, ctx, key, req)
+	case types.SettingKeyTaxConfig:
+		return updateSettingByKey[types.TaxConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

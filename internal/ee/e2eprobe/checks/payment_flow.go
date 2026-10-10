@@ -40,8 +40,6 @@ var gatewayCapabilities = map[string][]paymentCapability{
 // PaymentProbeOpts configures one gateway's payment probes.
 type PaymentProbeOpts struct {
 	Provider e2eprobe.PaymentProviderConfig
-	// Driver vaults test cards on the gateway; nil skips card-dependent flows.
-	Driver GatewayDriver
 	// SettleTimeout bounds every wait for a payment or session to settle.
 	SettleTimeout time.Duration
 	// PollInterval spaces settle polls; tests shorten it.
@@ -389,65 +387,6 @@ func (f *paymentFlow) cancelQuietly(sessionID string) {
 		return
 	}
 	_, _ = f.client.Payments().CancelCheckoutSession(context.Background(), sessionID)
-}
-
-// resolveGatewayCustomer waits for the customer's sync to the gateway, which
-// the add-method calls trigger.
-func (f *paymentFlow) resolveGatewayCustomer(ctx context.Context) (string, error) {
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		id, err := f.client.Payments().GetGatewayCustomerID(ctx, f.customerID, f.provider())
-		if err != nil {
-			return "", f.fail("resolve_gateway_customer", nil, "read integration mappings: %w", err)
-		}
-		if id == "" && f.provider() == "stripe" {
-			id = f.stripeCustomerFromMetadata(ctx)
-		}
-		if id != "" {
-			return id, nil
-		}
-		if time.Now().After(deadline) {
-			return "", f.fail("resolve_gateway_customer", nil, "customer never synced to %s", f.provider())
-		}
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
-	}
-}
-
-// stripeCustomerFromMetadata reads the Stripe id the Stripe integration stores
-// on the customer's metadata.
-func (f *paymentFlow) stripeCustomerFromMetadata(ctx context.Context) string {
-	resp, err := f.client.Customers().Get(ctx, f.customerID)
-	if err != nil || resp == nil || resp.CustomerResponse == nil {
-		return ""
-	}
-	return resp.CustomerResponse.Metadata["stripe_customer_id"]
-}
-
-// waitMethodListed waits until the vaulted gateway method shows up in the listing.
-func (f *paymentFlow) waitMethodListed(ctx context.Context, methodID string) (e2eprobe.SavedPaymentMethod, error) {
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		methods, err := f.client.Payments().ListSavedMethods(ctx, f.customerID, f.provider())
-		if err != nil {
-			return e2eprobe.SavedPaymentMethod{}, f.fail("list_methods", nil, "list saved methods: %w", err)
-		}
-		if m, ok := findSavedMethod(methods, methodID); ok {
-			return m, nil
-		}
-		if time.Now().After(deadline) {
-			return e2eprobe.SavedPaymentMethod{}, f.fail("assert_method_listed", map[string]string{"payment_method_id": methodID},
-				"vaulted method never appeared in the saved-methods listing")
-		}
-		select {
-		case <-ctx.Done():
-			return e2eprobe.SavedPaymentMethod{}, ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
-	}
 }
 
 // expectCompleted fails unless the session ended completed.

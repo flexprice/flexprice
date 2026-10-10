@@ -1,10 +1,15 @@
 deployment:
-  mode: "local" # "local", "docker", "production"
+  mode: "local" # local, api, consumer, temporal_worker, admin
 
 server:
   address: ":8080"
   # Grace period for in-flight requests after SIGTERM. Clamped to 45s.
   shutdown_timeout: 25s
+
+# Operator portal (deployment.mode=admin). Empty secret refuses that mode at boot.
+# Prod sets FLEXPRICE_ADMIN_SECRET from the secret manager. Header: X-Admin-Secret.
+admin:
+  secret: ""
 
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
@@ -275,6 +280,9 @@ otel:
     # route). Off here — SigNoz derives it from traces; turn it on where the
     # backend cannot store traces.
     http_server_enabled: false
+    app_enabled: false # Kill switch for internal/metrics.
+    disabled_metrics: [] # internal/metrics names to drop.
+    tenant_allowlist: [] # "tenant_id:environment_id" or "tenant_id"; empty = all.
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling

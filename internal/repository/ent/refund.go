@@ -544,6 +544,41 @@ func (r *refundRepository) SumInFlightByPaymentIDs(ctx context.Context, invoiceI
 		[]string{string(types.RefundStatusPending), string(types.RefundStatusProcessing)}, refund.FieldAmount)
 }
 
+func (r *refundRepository) SumSettledToWalletByInvoice(ctx context.Context, invoiceID, currency string) (decimal.Decimal, error) {
+	span := StartRepositorySpan(ctx, "refund", "sum_settled_to_wallet_by_invoice", map[string]interface{}{
+		"invoice_id": invoiceID,
+	})
+	defer FinishSpan(span)
+
+	var rows []struct {
+		Total decimal.NullDecimal `json:"total"`
+	}
+	err := r.client.Reader(ctx).Refund.Query().
+		Where(
+			refund.InvoiceID(invoiceID),
+			refund.RefundStatusEQ(string(types.RefundStatusSucceeded)),
+			refund.RefundDestinationEQ(string(types.RefundDestinationWallet)),
+			refund.CurrencyEqualFold(currency),
+			refund.StatusEQ(string(types.StatusPublished)),
+			refund.EnvironmentID(types.GetEnvironmentID(ctx)),
+			refund.TenantID(types.GetTenantID(ctx)),
+		).
+		Aggregate(ent.As(ent.Sum(refund.FieldSettledAmount), "total")).
+		Scan(ctx, &rows)
+	if err != nil {
+		SetSpanError(span, err)
+		return decimal.Zero, ierr.WithError(err).
+			WithHint("Failed to sum wallet refunds").
+			WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(rows) == 0 || !rows[0].Total.Valid {
+		return decimal.Zero, nil
+	}
+	return rows[0].Total.Decimal, nil
+}
+
 func (r *refundRepository) sumByPaymentIDs(
 	ctx context.Context,
 	invoiceID string,

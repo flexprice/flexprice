@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
+	adminapi "github.com/flexprice/flexprice/internal/api/admin"
+	adminv1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -16,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -244,6 +248,10 @@ func main() {
 			service.NewUserService,
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
+			adminsvc.NewEnvironmentService,
+			adminsvc.NewTenantService,
+			adminsvc.NewUserService,
+			adminsvc.NewSettingsService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -317,6 +325,8 @@ func main() {
 			// API components
 			provideHandlers,
 			provideRouter,
+			provideAdminHandlers,
+			provideAdminRouter,
 		),
 		fx.Invoke(
 			tracing.RegisterHooks,
@@ -459,6 +469,28 @@ func provideHandlers(
 	}
 }
 
+func provideAdminHandlers(
+	environments adminsvc.EnvironmentService,
+	tenants adminsvc.TenantService,
+	users adminsvc.UserService,
+	settings adminsvc.SettingsService,
+) adminapi.Handlers {
+	return adminapi.Handlers{
+		Health:      adminv1.NewHealthHandler(),
+		Environment: adminv1.NewEnvironmentHandler(environments),
+		Tenant:      adminv1.NewTenantHandler(tenants),
+		User:        adminv1.NewUserHandler(users),
+		Settings:    adminv1.NewSettingsHandler(settings),
+	}
+}
+
+func provideAdminRouter(handlers adminapi.Handlers, log *logger.Logger, cfg *config.Configuration) (*adminapi.Server, error) {
+	if cfg.Deployment.Mode == types.ModeAdmin && strings.TrimSpace(cfg.Admin.Secret) == "" {
+		return nil, fmt.Errorf("admin mode requires admin.secret (FLEXPRICE_ADMIN_SECRET)")
+	}
+	return adminapi.NewRouter(handlers, log, cfg.Admin.Secret), nil
+}
+
 func provideRouter(
 	handlers api.Handlers,
 	cfg *config.Configuration,
@@ -554,6 +586,7 @@ func startServer(
 	lc fx.Lifecycle,
 	cfg *config.Configuration,
 	r *gin.Engine,
+	adminRouter *adminapi.Server,
 	consumer kafka.MessageConsumer,
 	temporalClient client.TemporalClient,
 	temporalService temporalservice.TemporalService,
@@ -609,6 +642,8 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
+	case types.ModeAdmin:
+		startAPIServer(lc, adminRouter, cfg, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -662,7 +697,7 @@ func startTemporalWorker(
 
 func startAPIServer(
 	lc fx.Lifecycle,
-	r *gin.Engine,
+	r http.Handler,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {

@@ -19330,6 +19330,11 @@
             "type": "string",
             "description": "address_state is the state, province, or region name with maximum 100 characters"
           },
+          "billing_currency": {
+            "maxLength": 10,
+            "type": "string",
+            "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is"
+          },
           "contact": {
             "maxLength": 20,
             "type": "string",
@@ -20334,6 +20339,13 @@
           "external_customer_id": {
             "type": "string"
           },
+          "fx_rates": {
+            "type": "array",
+            "description": "FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per\nnon-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.",
+            "items": {
+              "$ref": "#/components/schemas/InlineFXRate"
+            }
+          },
           "gateway_payment_method_id": {
             "type": "string"
           },
@@ -21125,6 +21137,10 @@
           "address_state": {
             "type": "string",
             "description": "AddressState is the state of the customer's address"
+          },
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
           },
           "contact": {
             "type": "string",
@@ -22776,6 +22792,22 @@
           "InheritanceActionRemove"
         ]
       },
+      "InlineFXRate": {
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rate": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "IntegrationConfigEntry": {
         "type": "object",
         "properties": {
@@ -22912,6 +22944,9 @@
           },
           "environment_id": {
             "type": "string"
+          },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
           },
           "id": {
             "type": "string"
@@ -23185,6 +23220,9 @@
             "type": "string",
             "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
             "format": "date-time"
+          },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
           },
           "id": {
             "type": "string",
@@ -27317,6 +27355,11 @@
             "type": "string",
             "description": "address_state is the updated state, province, or region name with maximum 100 characters"
           },
+          "billing_currency": {
+            "maxLength": 10,
+            "type": "string",
+            "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency"
+          },
           "contact": {
             "maxLength": 20,
             "type": "string",
@@ -28860,6 +28903,10 @@
             "type": "string",
             "description": "AddressState is the state of the customer's address"
           },
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
+          },
           "contact": {
             "type": "string",
             "description": "Contact is an optional contact number for the customer (e.g. phone)"
@@ -29177,6 +29224,9 @@
           },
           "environment_id": {
             "type": "string"
+          },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
           },
           "id": {
             "type": "string"
@@ -31655,6 +31705,57 @@
           "AFTER"
         ],
         "x-speakeasy-name-override": "FilterOperatorType"
+      },
+      "types.FxConversion": {
+        "type": "object",
+        "properties": {
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the currency the invoice was issued in."
+          },
+          "charge_currency": {
+            "type": "string",
+            "description": "ChargeCurrency is the invoice's original (draft) currency."
+          },
+          "converted_at": {
+            "type": "string",
+            "description": "ConvertedAt is when the conversion ran.",
+            "format": "date-time"
+          },
+          "rate": {
+            "type": "string",
+            "description": "Rate is the frozen rate: billing per 1 charge unit."
+          },
+          "rate_id": {
+            "type": "string",
+            "description": "RateID is the fx_rates row used, for reference only; never read again."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FxConversionSource"
+          }
+        },
+        "x-speakeasy-name-override": "FxConversion"
+      },
+      "types.FxConversionSource": {
+        "type": "object",
+        "properties": {
+          "net": {
+            "type": "string"
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "total_discount": {
+            "type": "string"
+          },
+          "total_prepaid_credits_applied": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "FxConversionSource"
       },
       "types.GlobalCustomField": {
         "type": "object",
@@ -34881,6 +34982,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
+          },
           "id": {
             "type": "string"
           },
@@ -34986,6 +35090,9 @@
           },
           "entity_type": {
             "type": "string"
+          },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
           },
           "id": {
             "type": "string"

@@ -38,8 +38,8 @@ const (
 	SettingKeyWalletTopupConfig           SettingKey = "wallet_topup_config"
 	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
 	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
-	SettingKeyCreditExpirySettlement      SettingKey = "credit_expiry_settlement_config"
 	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
+	SettingKeyTaxConfig                   SettingKey = "tax_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -64,8 +64,8 @@ func (s *SettingKey) Validate() error {
 		SettingKeyWalletTopupConfig,
 		SettingKeyCustomCurrencyConfig,
 		SettingKeyRevenueAnalyticsConfig,
-		SettingKeyCreditExpirySettlement,
 		SettingKeyUsageAlertConfig,
+		SettingKeyTaxConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -557,17 +557,6 @@ func (c RevenueAnalyticsConfig) Validate() error {
 	return nil
 }
 
-// CreditExpirySettlementConfig gates applying expiring wallet credits to the current
-// period's draft invoice before the unused remainder is expired.
-type CreditExpirySettlementConfig struct {
-	Enabled bool `json:"enabled"`
-}
-
-// Validate implements SettingConfig.
-func (c CreditExpirySettlementConfig) Validate() error {
-	return nil
-}
-
 // WalletTopupConfig holds guard rails for wallet top-up operations.
 type WalletTopupConfig struct {
 	// FreeCreditLimitPerTransaction is the maximum currency amount allowed for a single
@@ -623,6 +612,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		DueDateDays:                            lo.ToPtr(1),
 		AutoCompletePurchasedCreditTransaction: false,
 		FinalizationDelaySeconds:               7200, // 2 hours
+		IncludeZeroValueLineItems:              false,
 	}
 
 	defaultSubscriptionConfig := SubscriptionConfig{
@@ -815,11 +805,6 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
-	defaultCreditExpirySettlementMap, err := utils.ToMap(CreditExpirySettlementConfig{Enabled: false})
-	if err != nil {
-		return nil, err
-	}
-
 	defaultUsageAlertConfigMap, err := utils.ToMap(UsageAlertConfig{})
 	if err != nil {
 		return nil, err
@@ -933,11 +918,6 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultRevenueAnalyticsConfigMap,
 			Description:  "Gates the revenue_facts rollup for this tenant/environment: when enabled, the scheduled dirty-scan decomposes its active subscriptions into provisional revenue facts",
 		},
-		SettingKeyCreditExpirySettlement: {
-			Key:          SettingKeyCreditExpirySettlement,
-			DefaultValue: defaultCreditExpirySettlementMap,
-			Description:  "When enabled, an expiring wallet credit first pays the usage before expiry on the current period's draft invoice; only the unused remainder expires",
-		},
 		SettingKeyUsageAlertConfig: {
 			Key:          SettingKeyUsageAlertConfig,
 			DefaultValue: defaultUsageAlertConfigMap,
@@ -955,6 +935,13 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 				"default_fiat_currency": "",
 			},
 			Description: "Tenant-defined custom currencies and their fiat conversion factors. Empty means no enforcement",
+		},
+		SettingKeyTaxConfig: {
+			Key: SettingKeyTaxConfig,
+			// Empty, so the zero value decides: no external engine, and tax is calculated
+			// natively exactly as it is for a tenant that has never held this setting.
+			DefaultValue: map[string]interface{}{},
+			Description:  "Which external tax engine calculates tax, if any. Absent or disabled means the native engine",
 		},
 	}, nil
 }
@@ -1097,13 +1084,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyCreditExpirySettlement:
-		config, err := utils.ToStruct[CreditExpirySettlementConfig](value)
-		if err != nil {
-			return err
-		}
-		return config.Validate()
-
 	case SettingKeyUsageAlertConfig:
 		config, err := utils.ToStruct[UsageAlertConfig](value)
 		if err != nil {
@@ -1127,6 +1107,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 	case SettingKeyCustomCurrencyConfig:
 		// Lenient here: a partial update fragment may omit required fields the merged result already has.
 		return nil
+
+	case SettingKeyTaxConfig:
+		config, err := utils.ToStruct[TaxConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).

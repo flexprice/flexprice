@@ -63,8 +63,8 @@ type redisLocker struct {
 }
 
 func NewRedisLocker(cache RedisCache, logger *logger.Logger) (Locker, error) {
-	// When Redis is unreachable at startup, NewRedisCache returns a typed-nil
-	// *redisCacheImpl wrapped in RedisCache (the connection error is already logged by InitializeRedisCache)
+	// Cache is nil only when the Redis client could not be built (invalid config);
+	// an unreachable Redis still yields a reconnecting client.
 	if cache == nil {
 		logger.Info(context.Background(), "NewRedisLocker: Cache is nil, returning nil Locker")
 		return nil, nil

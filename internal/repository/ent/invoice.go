@@ -670,6 +670,41 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	return nil
 }
 
+func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+	span := StartRepositorySpan(ctx, "invoice", "update_draft_invoice_period", map[string]interface{}{
+		"invoice_id": id,
+	})
+	defer FinishSpan(span)
+
+	n, err := r.client.Writer(ctx).Invoice.Update().
+		Where(
+			invoice.ID(id),
+			invoice.TenantID(types.GetTenantID(ctx)),
+			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			invoice.Status(string(types.StatusPublished)),
+			invoice.InvoiceStatus(types.InvoiceStatusDraft),
+		).
+		SetPeriodEnd(periodEnd).
+		SetBillingReason(billingReason).
+		SetIdempotencyKey(idempotencyKey).
+		SetUpdatedAt(time.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		AddVersion(1).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("failed to move draft invoice period").Mark(ierr.ErrDatabase)
+	}
+	if n == 0 {
+		return ierr.NewError("draft invoice not found").
+			WithHint("Only a draft invoice can have its period moved").
+			WithReportableDetails(map[string]any{"invoice_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+	SetSpanSuccess(span)
+	return nil
+}
+
 func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "delete", map[string]interface{}{

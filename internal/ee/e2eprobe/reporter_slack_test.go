@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 )
 
 func TestSlackReporter_Posts(t *testing.T) {
@@ -85,4 +87,31 @@ func TestSlackReporter_SwallowsHTTPErr(t *testing.T) {
 	defer srv.Close()
 	r := NewSlackReporter(srv.URL, "", nil, nil)
 	r.Report(context.Background(), FailureReport{CheckName: "x"})
+}
+
+func TestFormatSlack_Terse(t *testing.T) {
+	status, msg := int64(500), "Unable to charge the stored token in Razorpay"
+	apiErr := &sdkerrors.ErrorResponse{HTTPStatusCode: &status, Message: &msg}
+	got := formatSlack(FailureReport{
+		CheckName: "payment-autocharge-probe-razorpay",
+		Step:      "run",
+		RunID:     "e2eprobe-1",
+		Err:       Errorf(map[string]string{"step": "topup_autocharge_start"}, "start top-up: %w", apiErr),
+		Attributes: map[string]string{
+			"tenant_id":             "gcp-staging-as1",
+			"environment_id":        "env_1",
+			"step":                  "topup_autocharge_start",
+			"external_customer_id":  "e2eprobe-cust-pay-razorpay-mandate",
+			"failed_legs":           "wallet_topup",
+			"leg.wallet_topup.step": "topup_autocharge_start",
+			"error_body":            apiErr.Error(),
+			"status_code":           "500",
+		},
+	})
+	want := ":rotating_light: *payment-autocharge-probe-razorpay* failed · gcp-staging-as1\n" +
+		"step `topup_autocharge_start` · external_customer_id `e2eprobe-cust-pay-razorpay-mandate`\n" +
+		"```500 Unable to charge the stored token in Razorpay```"
+	if got != want {
+		t.Errorf("formatSlack =\n%s\nwant\n%s", got, want)
+	}
 }

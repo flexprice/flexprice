@@ -3,6 +3,8 @@ package e2eprobe
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -67,6 +69,22 @@ func (c *dryRunClient) TaxAssociations() TaxAssociationOps {
 }
 func (c *dryRunClient) Payments() PaymentOps {
 	return &dryRunPayments{inner: c.inner.Payments(), lg: c.lg}
+}
+
+func (c *dryRunClient) Raw() RawOps { return &dryRunRaw{inner: c.inner.Raw(), lg: c.lg} }
+
+type dryRunRaw struct {
+	inner RawOps
+	lg    *logger.Logger
+}
+
+// Do passes reads through: GET, and POST searches and previews.
+func (d *dryRunRaw) Do(ctx context.Context, method, path string, body, out any) error {
+	if method == http.MethodGet || strings.HasSuffix(path, "/search") || strings.HasSuffix(path, "/preview") {
+		return d.inner.Do(ctx, method, path, body, out)
+	}
+	dryLog(ctx, d.lg, "Raw.Do", "method", method, "path", path)
+	return nil
 }
 
 // dryLog logs a skipped mutation at Info level.
@@ -433,9 +451,6 @@ func (d *dryRunPayments) ListSavedMethods(ctx context.Context, customerID, provi
 func (d *dryRunPayments) CreateSetupLink(ctx context.Context, customerID, provider, returnURL string) (string, error) {
 	dryLog(ctx, d.lg, "Payments.CreateSetupLink", "customer_id", customerID, "provider", provider)
 	return "", nil
-}
-func (d *dryRunPayments) GetGatewayCustomerID(ctx context.Context, customerID, provider string) (string, error) {
-	return d.inner.GetGatewayCustomerID(ctx, customerID, provider)
 }
 func (d *dryRunPayments) CreatePortalSession(ctx context.Context, externalCustomerID string) (string, error) {
 	return d.inner.CreatePortalSession(ctx, externalCustomerID)

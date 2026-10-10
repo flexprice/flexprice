@@ -21,21 +21,26 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 | Repository | `internal/repository/` | Implements domain interfaces; DB access only |
 | Service | `internal/service/` | All business logic; orchestrates repos + services |
 | API | `internal/api/v1/` | Parse → validate → delegate to service → respond |
+| Admin API | `internal/api/admin/` | Operator HTTP for the admin portal; same parse → delegate rule. Not mounted on the public router |
+| Admin service | `internal/ee/service/admin/` | Operator business logic; takes `service.ServiceParams` |
+| Admin DTO | `internal/api/dto/admin/` | Admin request and response types |
 | Temporal | `internal/temporal/` | Long-running workflows + activities |
 | Integration | `internal/integration/` | Third-party providers; factory pattern |
 
 ## Hard invariants
 
 ### Layering (never violate)
-- No business logic in `internal/api/v1/` — handlers call services, nothing more.
+- No business logic in `internal/api/v1/` or `internal/api/admin/` — handlers call services, nothing more.
 - No DB calls from handlers — all data access through service → repository chain.
 - Domain interfaces in `internal/domain/`; implementations in `internal/repository/`.
 - All new deps registered in `cmd/server/main.go` via `fx.Provide()`.
+- Admin portal routes stay on the admin router (`deployment.mode=admin`). Do not mount them on the public API.
 
 ### Multi-tenancy (every entity, every query)
 - Every DB entity carries `tenant_id` + `environment_id`.
 - Every query filters on both. Missing filter = data leak = critical bug.
 - No cross-tenant reads. No shared mutable state between tenants.
+- The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup is the only cross-tenant read, and it stays in `internal/ee/service/admin`.
 
 ### Event processing (billing correctness)
 - All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
@@ -99,6 +104,7 @@ The application supports multiple deployment modes via `FLEXPRICE_DEPLOYMENT_MOD
 - `api` - Runs only the API server
 - `consumer` - Runs only the Kafka consumer for event processing
 - `temporal_worker` - Runs only Temporal workflow workers
+- `admin` - Admin portal API only. Flexprice staff manage tenant accounts and settings here. Does not serve the public API, Kafka consumers, or Temporal workers (`make run-local-admin`)
 
 ```bash
 # Run in local mode (default)
@@ -552,11 +558,12 @@ The application can run in split mode for scalability:
 - **API Mode**: Handles HTTP requests only
 - **Consumer Mode**: Processes Kafka events only
 - **Worker Mode**: Runs Temporal workflows only
+- **Admin Mode**: Admin portal API. `/v1` requires `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). Cross-tenant tenant targeting is intentional. Per-operator RBAC and an action audit log are not built yet
 
 Set via environment variable:
 
 ```bash
-export FLEXPRICE_DEPLOYMENT_MODE=api  # or consumer, temporal_worker
+export FLEXPRICE_DEPLOYMENT_MODE=api  # or consumer, temporal_worker, admin
 ```
 
 Docker Compose demonstrates this pattern with separate services: `flexprice-api`, `flexprice-consumer`, `flexprice-worker`.

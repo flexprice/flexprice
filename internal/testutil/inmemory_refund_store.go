@@ -251,6 +251,26 @@ func (m *InMemoryRefundStore) SumInFlightByPaymentIDs(ctx context.Context, invoi
 		func(r *refund.Refund) decimal.Decimal { return r.Amount })
 }
 
+func (m *InMemoryRefundStore) SumSettledToWalletByInvoice(ctx context.Context, invoiceID, currency string) (decimal.Decimal, error) {
+	refunds, err := m.List(ctx, &types.RefundFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		InvoiceIDs:         []string{invoiceID},
+		RefundStatuses:     []types.RefundStatus{types.RefundStatusSucceeded},
+		RefundDestinations: []types.RefundDestination{types.RefundDestinationWallet},
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	total := decimal.Zero
+	for _, r := range refunds {
+		if types.IsMatchingCurrency(r.Currency, currency) {
+			total = total.Add(r.SettledAmount)
+		}
+	}
+	return total, nil
+}
+
 func (m *InMemoryRefundStore) sumByPaymentIDs(
 	ctx context.Context,
 	invoiceID string,

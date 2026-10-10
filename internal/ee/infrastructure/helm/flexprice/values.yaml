@@ -209,6 +209,34 @@ api:
   tolerations: []
   affinity: {}
 
+# Internal admin portal (deployment.mode=admin).
+admin:
+  enabled: false
+  replicaCount: 1
+  labels: {}
+  podLabels: {}
+  # Source of FLEXPRICE_ADMIN_SECRET; empty name = app secret.
+  secretRef:
+    name: ""
+    key: admin-secret
+  # Dev-only; used with chart-managed secret.
+  secret: ""
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  # Tailnet-only exposure.
+  tailscale:
+    enabled: false
+    hostname: ""
+    tags: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 # Consumer deployment configuration
 consumer:
   enabled: true

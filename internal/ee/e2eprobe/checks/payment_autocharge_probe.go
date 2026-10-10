@@ -2,7 +2,6 @@ package checks
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,16 +14,17 @@ import (
 
 var paymentPlanPrice = decimal.NewFromInt(10)
 
-// PaymentAutoChargeProbe charges a card vaulted directly on the gateway's test
-// mode, on an ephemeral customer, with nobody on a hosted page:
+// PaymentAutoChargeProbe charges a fixed customer's hand-saved cards or mandates,
+// with nobody on a hosted page:
+//   - set_default: the default alternates between two good cards each Run;
 //   - wallet_topup: the payment settles before anything reads the session (the
 //     webhook path), the session completes, and credits land exactly once even
 //     across repeated reconciling reads;
 //   - pay_invoice: the invoice ends SUCCEEDED with the full amount paid;
 //   - create_subscription: the subscription ends active;
-//   - a declining card leaves no credits and no completed session.
+//   - decline: the saved declining card leaves no credits and no completed session.
 //
-// Needs gateway test credentials; without a driver it is not registered.
+// Registered only for gateways with a fixed customer configured.
 type PaymentAutoChargeProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
@@ -40,20 +40,23 @@ func NewPaymentAutoChargeProbe(c e2eprobe.Client, r e2eprobe.Registry, runID str
 func (p *PaymentAutoChargeProbe) Name() string {
 	return "payment-autocharge-probe-" + p.opts.Provider.Provider
 }
+
 func (p *PaymentAutoChargeProbe) Kind() e2eprobe.Kind { return e2eprobe.KindScenario }
 
 func (p *PaymentAutoChargeProbe) Run(ctx context.Context) error {
-	fixed := p.opts.Provider.FixedCustomerExternalID
-	if (p.opts.Driver == nil && fixed == "") || !p.opts.supports(capAutoCharge) {
+	if p.opts.Provider.FixedCustomerExternalID == "" || !p.opts.supports(capAutoCharge) {
 		return nil
 	}
-	f := newPaymentFlow(p.client, p.reg, p.runID, p.opts, "ephemeral-payment-autocharge")
-	card, err := p.prepareChargeableCustomer(ctx, f)
+	f := newPaymentFlow(p.client, p.reg, p.runID, p.opts, "persistent-payment-autocharge")
+	saved, err := p.prepareFixedCustomer(ctx, f)
 	if err != nil {
 		return err
 	}
 
 	legs := &legResults{}
+	legs.runIf(len(saved.good) >= 2 && p.opts.supports(capSetDefault), "set_default", func() error {
+		return p.switchDefaultCard(ctx, f, saved)
+	})
 	legs.run("wallet_topup", func() error { return p.walletAutoCharge(ctx, f) })
 
 	var invoiceID string
@@ -67,21 +70,21 @@ func (p *PaymentAutoChargeProbe) Run(ctx context.Context) error {
 		subID, err = p.subscriptionAutoCharge(ctx, f)
 		return err
 	})
-	legs.runIf(subID != "", "modify_subscription", "create_subscription", func() error {
+	legs.runIf(subID != "", "modify_subscription", func() error {
 		return p.modifySubscriptionAutoCharge(ctx, f, subID)
 	})
-	legs.runIf(subID != "", "add_addon", "create_subscription", func() error {
+	legs.runIf(subID != "", "add_addon", func() error {
 		return p.addonAutoCharge(ctx, f, subID)
 	})
-	legs.runKnown(p.opts.knownIssue("refund"), invoiceID != "", "refund", "pay_invoice", func() error {
+	legs.runKnown(p.opts.knownIssue("refund"), invoiceID != "", "refund", func() error {
 		return p.refundPaidInvoice(ctx, f, invoiceID)
 	})
-	legs.runKnown(p.opts.knownIssue("decline"), card != nil, "decline", "a vaulted card", func() error {
-		return p.declinedAutoCharge(ctx, f, card.portalToken, card.gatewayCustomerID, card.methodID)
+	legs.runKnown(p.opts.knownIssue("decline"), saved.declineID != "", "decline", func() error {
+		return p.chargeDecliningCard(ctx, f, saved.portalToken, saved.declineID, saved.defaultID)
 	})
 	// The fixed mandate customer is never deleted by the janitor, so its
 	// subscriptions would otherwise pile up and renew against the mandate.
-	legs.runIf(subID != "", "cancel_subscription", "create_subscription", func() error {
+	legs.runIf(subID != "", "cancel_subscription", func() error {
 		return p.cancelSubscription(ctx, f, subID)
 	})
 	return legs.err(f)
@@ -99,73 +102,96 @@ func (p *PaymentAutoChargeProbe) cancelSubscription(ctx context.Context, f *paym
 	return nil
 }
 
-// vaultedCard is the card a Run vaulted itself; nil when it charges a fixed
-// customer's pre-authorized mandate instead.
-type vaultedCard struct {
-	portalToken       string
-	gatewayCustomerID string
-	methodID          string
+// savedCards are the fixed customer's hand-saved methods, split by behaviour.
+type savedCards struct {
+	portalToken string
+	good        []string
+	declineID   string
+	// defaultID is the good card currently set as default.
+	defaultID string
 }
 
-// prepareChargeableCustomer leaves f on a customer with an auto-chargeable method:
-// a fresh customer with a card vaulted through the driver, or the configured
-// fixed customer whose mandate was authorized by hand.
-func (p *PaymentAutoChargeProbe) prepareChargeableCustomer(ctx context.Context, f *paymentFlow) (*vaultedCard, error) {
-	if p.opts.Driver == nil {
-		if err := f.usePersistentCustomer(ctx, p.opts.Provider.FixedCustomerExternalID); err != nil {
-			return nil, err
-		}
-		if err := f.useOrCreateWallet(ctx); err != nil {
-			return nil, err
-		}
-		methods, err := p.client.Payments().ListSavedMethods(ctx, f.customerID, f.provider())
-		if err != nil {
-			return nil, f.fail("fixed_customer_mandate", nil, "list saved methods: %w", err)
-		}
-		for _, m := range methods {
-			if m.CanAutoCharge {
-				return nil, nil
-			}
-		}
-		return nil, f.fail("fixed_customer_mandate", nil, "fixed customer has no auto-chargeable method; re-authorize its mandate")
+// prepareFixedCustomer sorts the fixed customer's saved methods into good cards
+// and the declining card, and makes sure a good card is the default before any
+// charge, in case an earlier Run stopped while the declining card was default.
+func (p *PaymentAutoChargeProbe) prepareFixedCustomer(ctx context.Context, f *paymentFlow) (*savedCards, error) {
+	if err := f.usePersistentCustomer(ctx, p.opts.Provider.FixedCustomerExternalID); err != nil {
+		return nil, err
+	}
+	if err := f.useOrCreateWallet(ctx); err != nil {
+		return nil, err
+	}
+	methods, err := p.client.Payments().ListSavedMethods(ctx, f.customerID, f.provider())
+	if err != nil {
+		return nil, f.fail("fixed_customer_mandate", nil, "list saved methods: %w", err)
 	}
 
-	if err := f.createCustomer(ctx); err != nil {
-		return nil, err
+	saved := &savedCards{}
+	defaultIsGood := false
+	for _, m := range methods {
+		if !m.CanAutoCharge {
+			continue
+		}
+		if last4 := p.opts.Provider.DeclineCardLast4; last4 != "" && m.Last4() == last4 {
+			saved.declineID = m.ID
+			continue
+		}
+		saved.good = append(saved.good, m.ID)
+		if m.IsDefault {
+			saved.defaultID = m.ID
+			defaultIsGood = true
+		}
 	}
-	if err := f.createWallet(ctx); err != nil {
-		return nil, err
+	if len(saved.good) == 0 {
+		return nil, f.fail("fixed_customer_mandate", nil, "fixed customer has no auto-chargeable method other than the declining card; save a card or re-authorize its mandate")
 	}
-	token, err := p.client.Payments().CreatePortalSession(ctx, f.externalID)
+	if !p.opts.supports(capSetDefault) {
+		return saved, nil
+	}
+
+	saved.portalToken, err = p.client.Payments().CreatePortalSession(ctx, f.externalID)
 	if err != nil {
 		return nil, f.fail("portal_session", nil, "create portal session: %w", err)
 	}
-	// Issuing an add-method page is what syncs the customer to the gateway.
-	if p.opts.supports(capAddMethod) {
-		if _, err := p.client.Payments().PortalAddMethod(ctx, token, f.provider(), paymentReturnURL); err != nil {
-			return nil, f.fail("sync_customer", nil, "portal add method: %w", err)
+	if !defaultIsGood {
+		if _, err := p.client.Payments().PortalSetDefaultMethod(ctx, saved.portalToken, f.provider(), saved.good[0]); err != nil {
+			return nil, f.fail("fixed_customer_restore_default", map[string]string{"payment_method_id": saved.good[0]}, "make a good card default: %w", err)
 		}
+		saved.defaultID = saved.good[0]
 	}
-	gatewayCustomerID, err := f.resolveGatewayCustomer(ctx)
-	if err != nil {
-		return nil, err
-	}
-	methodID, err := p.vault(ctx, f, gatewayCustomerID, TestCardSuccess)
-	if err != nil {
-		return nil, err
-	}
-	return &vaultedCard{portalToken: token, gatewayCustomerID: gatewayCustomerID, methodID: methodID}, nil
+	return saved, nil
 }
 
-func (p *PaymentAutoChargeProbe) vault(ctx context.Context, f *paymentFlow, gatewayCustomerID string, card TestCard) (string, error) {
-	methodID, err := p.opts.Driver.AttachCard(ctx, gatewayCustomerID, card)
+// switchDefaultCard makes the other good card the default and checks the gateway
+// agrees, so successive Runs alternate between the two.
+func (p *PaymentAutoChargeProbe) switchDefaultCard(ctx context.Context, f *paymentFlow, saved *savedCards) error {
+	target := saved.good[0]
+	for _, id := range saved.good {
+		if id != saved.defaultID {
+			target = id
+			break
+		}
+	}
+	ids := map[string]string{"payment_method_id": target, "previous_default": saved.defaultID}
+
+	methods, err := p.client.Payments().PortalSetDefaultMethod(ctx, saved.portalToken, f.provider(), target)
 	if err != nil {
-		return "", f.fail("vault_card", map[string]string{"gateway_customer_id": gatewayCustomerID}, "vault test card: %w", err)
+		return f.fail("set_default", ids, "portal set default: %w", err)
 	}
-	if _, err := f.waitMethodListed(ctx, methodID); err != nil {
-		return "", err
+	if m, ok := findSavedMethod(methods, target); !ok || !m.IsDefault {
+		return f.fail("set_default_assert_response", ids, "set-default response does not mark the card default")
 	}
-	return methodID, nil
+	listed, err := p.client.Payments().ListSavedMethods(ctx, f.customerID, f.provider())
+	if err != nil {
+		return f.fail("set_default_list", ids, "list saved methods: %w", err)
+	}
+	for _, m := range listed {
+		if m.IsDefault != (m.ID == target) {
+			return f.fail("set_default_assert_listed", ids, "after set-default, %s lists is_default=%t", m.ID, m.IsDefault)
+		}
+	}
+	saved.defaultID = target
+	return nil
 }
 
 // walletAutoCharge separates the webhook path from the reconcile path: the
@@ -313,21 +339,11 @@ func (p *PaymentAutoChargeProbe) subscriptionAutoCharge(ctx context.Context, f *
 	return subID, nil
 }
 
-// declinedAutoCharge makes a declining card the default and asserts the charge
-// neither completes nor credits, then restores the good card as default.
-func (p *PaymentAutoChargeProbe) declinedAutoCharge(ctx context.Context, f *paymentFlow, token, gatewayCustomerID, goodMethodID string) error {
+// chargeDecliningCard makes the declining card the default and asserts the charge
+// neither completes nor credits, then restores goodMethodID as default.
+func (p *PaymentAutoChargeProbe) chargeDecliningCard(ctx context.Context, f *paymentFlow, token, declineID, goodMethodID string) error {
 	if !p.opts.supports(capSetDefault) {
 		return nil
-	}
-	declineID, err := p.opts.Driver.AttachCard(ctx, gatewayCustomerID, TestCardDecline)
-	if errors.Is(err, ErrTestCardUnsupported) {
-		return nil
-	}
-	if err != nil {
-		return f.fail("decline_vault_card", map[string]string{"gateway_customer_id": gatewayCustomerID}, "vault declining card: %w", err)
-	}
-	if _, err := f.waitMethodListed(ctx, declineID); err != nil {
-		return err
 	}
 	if _, err := p.client.Payments().PortalSetDefaultMethod(ctx, token, f.provider(), declineID); err != nil {
 		return f.fail("decline_set_default", map[string]string{"payment_method_id": declineID}, "portal set default: %w", err)

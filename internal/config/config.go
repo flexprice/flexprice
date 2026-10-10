@@ -78,6 +78,13 @@ type Configuration struct {
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
 	Analytics              AnalyticsConfig              `mapstructure:"analytics" validate:"omitempty"`
+	Admin                  AdminConfig                  `mapstructure:"admin" validate:"omitempty"`
+}
+
+// AdminConfig is the operator portal. Secret is required when deployment.mode is admin.
+// Set it from the secret manager via FLEXPRICE_ADMIN_SECRET. Callers send it as X-Admin-Secret.
+type AdminConfig struct {
+	Secret string `mapstructure:"secret"`
 }
 
 // AnalyticsConfig gates the fire-and-forget analytics meter_usage feed.
@@ -746,6 +753,10 @@ type OtelMetricsConfig struct {
 	// and SigNoz already derives it); turn it on where the backend cannot store
 	// traces and this is the only source of API latency.
 	HTTPServerEnabled bool `mapstructure:"http_server_enabled" default:"false"`
+	// AppEnabled, DisabledMetrics and TenantAllowlist control internal/metrics only.
+	AppEnabled      bool     `mapstructure:"app_enabled" default:"false"`
+	DisabledMetrics []string `mapstructure:"disabled_metrics"`
+	TenantAllowlist []string `mapstructure:"tenant_allowlist"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.

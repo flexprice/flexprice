@@ -2063,8 +2063,21 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		// A cancel that ends the period early would leave its open draft behind, so the draft becomes
+		// the cancel invoice, is voided (refunding its applied credits), or moves to the cancel date.
+		switch {
+		case req.CancellationType == types.CancellationTypeImmediate && shouldCreateInvoice:
+			_, err = invoiceService.MoveCycleDraft(ctx, subscription, effectiveDate, types.InvoiceBillingReasonProration)
+		case req.CancellationType == types.CancellationTypeImmediate:
+			err = invoiceService.VoidCycleDraft(ctx, subscription)
+		case req.CancellationType == types.CancellationTypeScheduledDate && effectiveDate.Before(subscription.CurrentPeriodEnd):
+			_, err = invoiceService.MoveCycleDraft(ctx, subscription, effectiveDate, types.InvoiceBillingReasonSubscriptionCycle)
+		}
+		if err != nil {
+			return err
+		}
 		if shouldCreateInvoice {
-			invoiceService := NewInvoiceService(s.ServiceParams)
 			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
 			paymentParams = paymentParams.NormalizePaymentParameters()
 			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
@@ -3263,8 +3276,13 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			sub.PauseStatus = types.PauseStatusNone
 			sub.ActivePauseID = nil
 
-			// Adjust the billing period by the pause duration
-			sub.CurrentPeriodEnd = sub.CurrentPeriodEnd.Add(pauseDuration)
+			// Adjust the billing period by the pause duration; the open draft's end moves with it.
+			newPeriodEnd := sub.CurrentPeriodEnd.Add(pauseDuration)
+			if _, err := NewInvoiceService(s.ServiceParams).MoveCycleDraft(ctx, sub, newPeriodEnd,
+				types.InvoiceBillingReasonSubscriptionCycle); err != nil {
+				return err
+			}
+			sub.CurrentPeriodEnd = newPeriodEnd
 
 			// Update the subscription and pause
 			if err := s.SubRepo.Update(ctx, sub); err != nil {
@@ -4374,11 +4392,16 @@ func (s *subscriptionService) executeResume(
 		sub.SubscriptionStatus = types.SubscriptionStatusActive
 	}
 
-	// Adjust the billing period by the pause duration
-	sub.CurrentPeriodEnd = sub.CurrentPeriodEnd.Add(pauseDuration)
-
 	// Execute the transaction
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Adjust the billing period by the pause duration; the open draft's end moves with it.
+		newPeriodEnd := sub.CurrentPeriodEnd.Add(pauseDuration)
+		if _, err := NewInvoiceService(s.ServiceParams).MoveCycleDraft(txCtx, sub, newPeriodEnd,
+			types.InvoiceBillingReasonSubscriptionCycle); err != nil {
+			return err
+		}
+		sub.CurrentPeriodEnd = newPeriodEnd
+
 		// Update the pause record
 		if err := s.SubRepo.UpdatePause(txCtx, activePause); err != nil {
 			return err
@@ -7879,7 +7902,7 @@ func (s *subscriptionService) validateSubscriptionBillingCurrency(
 	}
 	if !ok {
 		return "", ierr.NewErrorf("no conversion configured from %s to %s", sub.Currency, billing).
-			WithHintf("No exchange rate for %s. Add a global rate or custom factor before creating this subscription.", fxPairLabel(sub.Currency, billing)).
+			WithHintf("%s before creating this subscription.", missingConversionHint(ccCfg, sub.Currency, billing)).
 			WithReportableDetails(map[string]any{"from": sub.Currency, "to": billing, "missing_pairs": []string{fxPairKey(sub.Currency, billing)}}).
 			Mark(ierr.ErrValidation)
 	}
@@ -8352,6 +8375,11 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	if usageAmount.LessThan(lo.FromPtr(sub.AutoInvoiceThreshold)) {
 		return nil
 	}
+	// The threshold invoice finalizes at once, so it waits for an expiring credit the job hasn't applied.
+	pending, err := NewWalletService(s.ServiceParams).HasPendingExpiringCredit(ctx, sub.GetInvoicingCustomerID(), sub.Currency, sub.CurrentPeriodStart, effectiveTime)
+	if err != nil || pending {
+		return err
+	}
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
@@ -8360,6 +8388,10 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 
 	var inv *dto.InvoiceResponse
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// The period restarts at effectiveTime, so the open draft becomes the threshold invoice.
+		if _, err := invoiceService.MoveCycleDraft(ctx, sub, effectiveTime, types.InvoiceBillingReasonAutoInvoiceThreshold); err != nil {
+			return err
+		}
 
 		inv, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,

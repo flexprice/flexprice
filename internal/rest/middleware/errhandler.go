@@ -7,6 +7,8 @@ import (
 	"github.com/cockroachdb/errors"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ErrorHandler middleware handles error responses
@@ -19,6 +21,8 @@ func ErrorHandler() gin.HandlerFunc {
 
 			// Single call resolves both HTTP status and machine-readable code
 			status, code := ierr.ResolveError(err)
+
+			trace.SpanFromContext(c.Request.Context()).SetAttributes(attribute.String("app.error_code", string(code)))
 
 			response := ierr.ErrorResponse{
 				Code:           code,

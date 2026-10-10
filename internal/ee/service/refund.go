@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
@@ -108,6 +109,7 @@ func (s *refundService) persist(ctx context.Context, rows []*refund.Refund) ([]*
 		return nil, err
 	}
 	for _, row := range rows {
+		recordRefundTransition(ctx, row)
 		s.publishSystemEvent(ctx, types.WebhookEventRefundCreated, row.ID)
 	}
 	return rows, nil
@@ -284,25 +286,22 @@ func (s *refundService) Dispatch(ctx context.Context, refundID string) error {
 }
 
 func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) error {
-	inv, err := s.InvoiceRepo.Get(ctx, row.InvoiceID)
-	if err != nil {
-		return err
-	}
-
 	walletService := NewWalletService(s.ServiceParams)
 
 	return s.DB.WithTx(ctx, func(tx context.Context) error {
+		// Refunds on one invoice settle one at a time, so a converted invoice's running total stays
+		// consistent. The invoice is locked before the refund row, the same order void takes.
+		inv, err := s.InvoiceRepo.GetForUpdate(tx, row.InvoiceID)
+		if err != nil {
+			return err
+		}
+
 		locked, err := s.RefundRepo.GetForUpdate(tx, row.ID)
 		if err != nil {
 			return err
 		}
 		if locked.RefundStatus.IsTerminal() {
 			return nil
-		}
-
-		w, err := walletService.EnsurePrepaidWallet(tx, inv.CustomerID, row.Currency)
-		if err != nil {
-			return err
 		}
 
 		reason := types.TransactionReasonInvoiceVoidRefund
@@ -312,10 +311,36 @@ func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) 
 			metadata["credit_note_id"] = *row.CreditNoteID
 		}
 
+		walletCurrency, credit := row.Currency, row.Amount
+		// A converted invoice's refund credits the charge-currency wallet, at the frozen rate.
+		if fx := inv.FxConversion; fx != nil && types.IsMatchingCurrency(row.Currency, fx.BillingCurrency) {
+			walletCurrency = fx.ChargeCurrency
+			credit, err = s.chargeCurrencyCreditFor(tx, inv, row)
+			if err != nil {
+				return err
+			}
+			metadata["fx_rate"] = fx.Rate.String()
+			metadata["fx_charge_currency"] = fx.ChargeCurrency
+			metadata["fx_billing_currency"] = fx.BillingCurrency
+			metadata["fx_billing_amount"] = row.Amount.String()
+		}
+
+		// Worth less than the charge currency's smallest unit: nothing to credit.
+		if !credit.IsPositive() {
+			s.Logger.Info(tx, "refund settled without a wallet credit: converted amount rounds to zero",
+				"refund_id", row.ID, "invoice_id", row.InvoiceID, "amount", row.Amount.String())
+			return s.Settle(tx, &dto.SettleRefundRequest{RefundID: row.ID, SettledAmount: row.Amount})
+		}
+
+		w, err := walletService.EnsurePrepaidWallet(tx, inv.CustomerID, walletCurrency)
+		if err != nil {
+			return err
+		}
+
 		// Keyed on the refund row, not the credit note: one credit note can fan out
 		// into several rows and they must each top up.
 		topUp, err := walletService.TopUpWallet(tx, w.ID, &dto.TopUpWalletRequest{
-			Amount:            row.Amount,
+			Amount:            credit,
 			TransactionReason: reason,
 			Metadata:          metadata,
 			IdempotencyKey:    lo.ToPtr(row.ID),
@@ -336,6 +361,21 @@ func (s *refundService) settleToWallet(ctx context.Context, row *refund.Refund) 
 			DestinationID: walletTxnID,
 		})
 	})
+}
+
+// chargeCurrencyCreditFor converts a converted invoice's wallet refund at the frozen rate, as a step in
+// a running total, so everything the invoice returns to the wallet adds up to one rounding.
+func (s *refundService) chargeCurrencyCreditFor(ctx context.Context, inv *invoice.Invoice, row *refund.Refund) (decimal.Decimal, error) {
+	fx := inv.FxConversion
+	prior, err := s.RefundRepo.SumSettledToWalletByInvoice(ctx, inv.ID, fx.BillingCurrency)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	toCharge := func(billing decimal.Decimal) decimal.Decimal {
+		return types.RoundToCurrencyPrecision(billing.Div(fx.Rate), fx.ChargeCurrency)
+	}
+	return toCharge(prior.Add(row.Amount)).Sub(toCharge(prior)), nil
 }
 
 func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refund) error {
@@ -416,7 +456,7 @@ func (s *refundService) gatewayPaymentIDFor(ctx context.Context, row *refund.Ref
 }
 
 func (s *refundService) claimForGateway(ctx context.Context, refundID string) (bool, error) {
-	claimed := false
+	var claimed *refund.Refund
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
 		locked, err := s.RefundRepo.GetForUpdate(tx, refundID)
 		if err != nil {
@@ -434,10 +474,14 @@ func (s *refundService) claimForGateway(ctx context.Context, refundID string) (b
 		if err := s.RefundRepo.Update(tx, updated); err != nil {
 			return err
 		}
-		claimed = true
+		claimed = updated
 		return nil
 	})
-	return claimed, err
+	if err != nil || claimed == nil {
+		return false, err
+	}
+	recordRefundTransition(ctx, claimed)
+	return true, nil
 }
 
 func (s *refundService) recordGatewayAcceptance(ctx context.Context, refundID string, resp *interfaces.RefundProviderResponse) error {
@@ -464,7 +508,7 @@ func (s *refundService) Settle(ctx context.Context, req *dto.SettleRefundRequest
 		return err
 	}
 
-	settled := false
+	var settled *refund.Refund
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
 		row, err := s.RefundRepo.GetForUpdate(tx, req.RefundID)
 		if err != nil {
@@ -507,15 +551,13 @@ func (s *refundService) Settle(ctx context.Context, req *dto.SettleRefundRequest
 			builder = builder.WithGatewayMetadata(req.GatewayMetadata)
 		}
 
-		if err := s.RefundRepo.Update(tx, builder.Build()); err != nil {
-			return err
-		}
-		settled = true
-		return nil
+		settled = builder.Build()
+		return s.RefundRepo.Update(tx, settled)
 	})
-	if err != nil || !settled {
+	if err != nil || settled == nil {
 		return err
 	}
+	recordRefundTransition(ctx, settled)
 
 	s.publishSystemEvent(ctx, types.WebhookEventRefundSucceeded, req.RefundID)
 	return nil
@@ -547,6 +589,7 @@ func (s *refundService) Fail(ctx context.Context, refundID, reason string) error
 	if err != nil || failed == nil {
 		return err
 	}
+	recordRefundTransition(ctx, failed)
 
 	s.publishSystemEvent(ctx, types.WebhookEventRefundFailed, failed.ID)
 
@@ -565,6 +608,7 @@ func (s *refundService) Fail(ctx context.Context, refundID, reason string) error
 // gateway refund. It is keyed on the failed row's metadata so a retry never mints a second one.
 func (s *refundService) refundToWalletAsFallbackToFailure(ctx context.Context, failedID string) (*refund.Refund, error) {
 	var fallback *refund.Refund
+	var created bool
 
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
 		row, err := s.RefundRepo.GetForUpdate(tx, failedID)
@@ -602,6 +646,7 @@ func (s *refundService) refundToWalletAsFallbackToFailure(ctx context.Context, f
 		if err := s.RefundRepo.Create(tx, fallback); err != nil {
 			return err
 		}
+		created = true
 		s.publishSystemEvent(tx, types.WebhookEventRefundCreated, fallback.ID)
 
 		metadata := types.Metadata{}
@@ -615,7 +660,19 @@ func (s *refundService) refundToWalletAsFallbackToFailure(ctx context.Context, f
 	if err != nil {
 		return nil, err
 	}
+	if created {
+		recordRefundTransition(ctx, fallback)
+	}
 	return fallback, nil
+}
+
+func recordRefundTransition(ctx context.Context, r *refund.Refund) {
+	metrics.RecordCounter(ctx, metrics.RefundTransitions, 1,
+		metrics.L(metrics.KeyProvider, lo.FromPtrOr(r.PaymentGateway, "none")),
+		metrics.L(metrics.KeyDestination, string(r.RefundDestination)),
+		metrics.L(metrics.KeyReason, string(r.RefundReason)),
+		metrics.L(metrics.KeyStatus, string(r.RefundStatus)),
+	)
 }
 
 func (s *refundService) GetRefund(ctx context.Context, id string) (*dto.RefundResponse, error) {

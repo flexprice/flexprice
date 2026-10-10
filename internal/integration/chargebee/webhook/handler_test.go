@@ -7,6 +7,8 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -454,4 +456,13 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_SessionWinsOverLink
 	s.Equal([]string{session.ID}, s.checkoutSvc.completeCalls)
 	s.Empty(s.paymentSvc.updateReqs, "the session owns settlement")
 	s.Empty(invoiceSvc.reconciled)
+}
+
+func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
+	r := metricstest.Install(t)
+	h := NewHandler(nil, nil, nil, logger.NewNoopLogger())
+
+	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_cb"), "env_gw"), &ChargebeeWebhookEvent{EventType: "attacker_chosen"}, "env_gw", nil))
+
+	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_cb", "provider": "chargebee", "event_type": "other", "outcome": "ignored"}))
 }

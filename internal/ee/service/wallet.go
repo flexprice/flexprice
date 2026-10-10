@@ -77,12 +77,13 @@ type WalletService interface {
 	// CreditWallet processes a credit operation on a wallet
 	CreditWallet(ctx context.Context, req *wallet.WalletOperation) error
 
-	// ExpireCredits expires credits for a given transaction. Returns result with Expired or SkipReason (active_subscription, active_invoice).
+	// ExpireCredits applies an expired credit to usage before its expiry on unfinalized drafts,
+	// then expires the rest.
 	ExpireCredits(ctx context.Context, transactionID string) (*types.ExpireCreditsResult, error)
 
-	// CreditExpiryCutoff returns the latest expiry date the expiry job may process now. The
-	// grace after expiry depends on whether credit expiry settlement is on for the tenant.
-	CreditExpiryCutoff(ctx context.Context) (time.Time, error)
+	// CreditExpiryCutoff returns the latest expiry date the expiry job may process now, leaving
+	// late events timestamped before an expiry time to arrive.
+	CreditExpiryCutoff() time.Time
 
 	// HasPendingExpiringCredit reports whether a prepaid credit that expired inside
 	// (periodStart, periodEnd) may still be applied to that period's draft by the expiry job.
@@ -238,6 +239,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	if err := ccCfg.EnforceCurrency(w.Currency); err != nil {
 		return nil, err
 	}
+	if err := s.validateWalletConvertible(ctx, ccCfg, req.CustomerID, w.Currency); err != nil {
+		return nil, err
+	}
 
 	for _, existing := range existingWallets {
 		if existing.WalletStatus == types.WalletStatusActive && existing.Currency == w.Currency && existing.WalletType == w.WalletType {
@@ -302,6 +306,39 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
 
 	return response, nil
+}
+
+// validateWalletConvertible rejects a wallet whose currency has no rate (or custom factor) to the
+// customer's billing currency, since its top-up invoices could never be converted.
+func (s *walletService) validateWalletConvertible(ctx context.Context, ccCfg types.CustomCurrencyConfig, customerID, currency string) error {
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if cust.BillingCurrency == nil || *cust.BillingCurrency == "" || types.IsMatchingCurrency(currency, *cust.BillingCurrency) {
+		return nil
+	}
+
+	billing := strings.ToLower(*cust.BillingCurrency)
+	ok, err := conversionAvailable(ctx, s.ServiceParams, ccCfg, currency, billing)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ierr.NewErrorf("no exchange rate from %s to %s", currency, billing).
+			WithHintf("%s before creating a %s wallet for this customer.", missingConversionHint(ccCfg, currency, billing), strings.ToUpper(currency)).
+			WithReportableDetails(map[string]any{
+				"customer_id":      customerID,
+				"wallet_currency":  currency,
+				"billing_currency": billing,
+				"missing_pairs":    []string{fxPairKey(currency, billing)},
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *walletService) EnsurePrepaidWallet(ctx context.Context, customerID, currency string) (*dto.WalletResponse, error) {
@@ -1215,7 +1252,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create invoice for purchased credits").
-					Mark(ierr.ErrInternal)
+					Error()
 			}
 		}
 
@@ -2558,30 +2595,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	settlementEnabled, err := creditExpirySettlementEnabled(ctx, s.ServiceParams)
-	if err != nil {
-		return nil, err
-	}
-	if settlementEnabled {
-		return s.settleExpiringCredit(ctx, tx)
-	}
-
-	skipReason, err := s.shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	if skipReason != types.CreditExpirySkipReasonNone {
-		return &types.ExpireCreditsResult{Expired: false, SkipReason: skipReason}, nil
-	}
-
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		return s.debitExpiredCredits(ctx, tx)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.ExpireCreditsResult{Expired: true}, nil
+	return s.settleExpiringCredit(ctx, tx)
 }
 
 // EligibleCreditsAmount returns, in the wallet's currency, the credits an invoice for a period
@@ -2615,75 +2629,6 @@ func (s *walletService) debitExpiredCredits(ctx context.Context, tx *wallet.Tran
 			"expiry_date":            tx.ExpiryDate.Format(time.RFC3339),
 		},
 	})
-}
-
-// shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice checks if there is any subscription or invoice
-// for the customer with current_period_end/end time before now. If so, credit expiry should be skipped.
-// It returns the skip reason when expiry should be skipped, CreditExpirySkipReasonNone when expiry can proceed, and err on error.
-func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(ctx context.Context, tx *wallet.Transaction) (types.CreditExpirySkipReason, error) {
-	subFilter := types.NewSubscriptionFilter()
-	subFilter.CustomerID = tx.CustomerID
-	subFilter.Limit = lo.ToPtr(1)
-	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
-
-	// This is very important to only check for active subscriptions of type standalone and parent
-	subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
-	subFilter.TimeRangeFilter = &types.TimeRangeFilter{
-		EndTime: lo.ToPtr(time.Now().UTC()),
-	}
-
-	subscriptions, err := s.SubRepo.List(ctx, subFilter)
-	if err != nil {
-		return types.CreditExpirySkipReasonNone, err
-	}
-	if len(subscriptions) > 0 {
-		s.Logger.Debug(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
-			"transaction_id", tx.ID,
-			"subscription_id", subscriptions[0].ID,
-			"credits_available", tx.CreditsAvailable,
-		)
-		return types.CreditExpirySkipReasonActiveSubscription, nil
-	}
-
-	// Find invoices whose billing period contains the grant's created_at and whose period ended before grant expiry
-	// (skip expiry if there is such an invoice - grant was created in that period and period is not "very before")
-	invoiceFilter := types.NewInvoiceFilter()
-	invoiceFilter.CustomerID = tx.CustomerID
-	invoiceFilter.InvoiceType = types.InvoiceTypeSubscription
-	invoiceFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized, types.InvoiceStatusDraft}
-	invoiceFilter.Limit = lo.ToPtr(1000)         // bounded: a single grant period holds at most a handful of invoices
-	invoiceFilter.PeriodStartLTE = &tx.CreatedAt // period_start <= grant created_at
-	invoiceFilter.PeriodEndGTE = &tx.CreatedAt   // period_end >= grant created_at → grant created in this period
-	invoiceFilter.PeriodEndLTE = tx.ExpiryDate   // period_end <= grant expiry → exclude invoices that ended long after expiry
-
-	invoices, err := s.InvoiceRepo.List(ctx, invoiceFilter)
-	if err != nil {
-		return types.CreditExpirySkipReasonNone, err
-	}
-
-	// Hold the credits while an invoice covering this grant's period still has credits to apply:
-	//   - DRAFT: credits are applied at finalization, which can run hours after expiry.
-	//   - FINALIZED with amount remaining: the balance can still be settled from the wallet.
-	// A finalized, fully-settled invoice releases the hold so leftover credits expire normally.
-	for _, inv := range invoices {
-		// Wallets are per-currency; a custom-currency invoice is stored in fiat but paid in its denomination.
-		if !types.IsMatchingCurrency(inv.DenominationCurrency(), tx.Currency) {
-			continue
-		}
-		holdForDraft := inv.InvoiceStatus == types.InvoiceStatusDraft
-		holdForUnsettled := inv.InvoiceStatus == types.InvoiceStatusFinalized && !inv.AmountRemaining.IsZero()
-		if holdForDraft || holdForUnsettled {
-			s.Logger.Info(ctx, "there is an invoice for this customer with credits still to be applied",
-				"transaction_id", tx.ID,
-				"invoice_id", inv.ID,
-				"invoice_status", inv.InvoiceStatus,
-				"amount_remaining", inv.AmountRemaining,
-			)
-			return types.CreditExpirySkipReasonActiveInvoice, nil
-		}
-	}
-
-	return types.CreditExpirySkipReasonNone, nil
 }
 
 func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, eventName types.WebhookEventName, walletID string) {

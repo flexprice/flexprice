@@ -75,20 +75,24 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	// If status is already PENDING, we don't need to do anything more
 	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink && paymentObj.PaymentStatus == types.PaymentStatusInitiated {
 		// Update payment status to processing temporarily
+		statusBefore := paymentObj.PaymentStatus
 		paymentObj.PaymentStatus = types.PaymentStatusProcessing
 		paymentObj.UpdatedAt = time.Now().UTC()
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
+		recordPaymentTransition(ctx, paymentObj, statusBefore)
 		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	} else if paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink {
 		// Update payment status to processing and fire pending event
 		// TODO: take a lock on the payment object here to avoid race conditions
+		statusBefore := paymentObj.PaymentStatus
 		paymentObj.PaymentStatus = types.PaymentStatusProcessing
 		paymentObj.UpdatedAt = time.Now().UTC()
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
+		recordPaymentTransition(ctx, paymentObj, statusBefore)
 		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}
 
@@ -128,6 +132,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			Mark(ierr.ErrInvalidOperation)
 	}
 
+	statusBeforeOutcome := paymentObj.PaymentStatus
 	// Update payment status based on processing result
 	if processErr != nil {
 		// For payment links, if the error occurred during payment link creation,
@@ -172,6 +177,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
 	}
+	recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
@@ -302,6 +308,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 	}
 
 	// If Stripe SDK succeeds, update payment status to PENDING
+	statusBefore := paymentObj.PaymentStatus
 	paymentObj.PaymentStatus = types.PaymentStatusPending
 
 	// Update payment with gateway information
@@ -324,6 +331,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created stripe payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -395,6 +403,7 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 	}
 
 	// If Razorpay SDK succeeds, update payment status to PENDING
+	statusBefore := paymentObj.PaymentStatus
 	paymentObj.PaymentStatus = types.PaymentStatusPending
 
 	// Update payment with gateway information
@@ -416,6 +425,7 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created razorpay payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -459,6 +469,7 @@ func (p *paymentProcessor) handleChargebeePaymentLinkCreation(ctx context.Contex
 		return err
 	}
 
+	statusBefore := paymentObj.PaymentStatus
 	paymentObj.PaymentStatus = types.PaymentStatusPending
 	if resp.ProviderSessionID != "" {
 		paymentObj.GatewayTrackingID = &resp.ProviderSessionID
@@ -475,6 +486,7 @@ func (p *paymentProcessor) handleChargebeePaymentLinkCreation(ctx context.Contex
 			WithReportableDetails(map[string]interface{}{"payment_id": paymentObj.ID}).
 			Mark(ierr.ErrDatabase)
 	}
+	recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "created chargebee payment link",
 		"payment_id", paymentObj.ID,
@@ -590,6 +602,7 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 	}
 
 	// If Nomod API succeeds, update payment status to PENDING
+	statusBefore := paymentObj.PaymentStatus
 	paymentObj.PaymentStatus = types.PaymentStatusPending
 
 	// Update payment with gateway information
@@ -612,6 +625,7 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created nomod payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -782,6 +796,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	// Update the invoice
 	if err := p.InvoiceRepo.Update(ctx, invoice); err != nil {
 		return err
+	}
+	if finalizedNow {
+		recordInvoiceTransition(ctx, invoice)
 	}
 
 	// This path finalizes without performFinalizeInvoiceActions, so it emits

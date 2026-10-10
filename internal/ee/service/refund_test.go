@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -356,6 +357,43 @@ func (s *RefundServiceSuite) TestFailFallsBackToWallet() {
 
 	s.NotEmpty(lo.FromPtr(fallback.RefundDestinationID), "wallet transaction id is the destination")
 	s.True(s.customerWalletBalance().Equal(decimal.NewFromInt(100)))
+}
+
+// Each refund row counts once per status it reaches; a replayed failure adds nothing.
+func (s *RefundServiceSuite) TestRefundTransitionsCounted() {
+	r := metricstest.Install(s.T())
+	s.createPayment("pay_card", decimal.NewFromInt(100), types.PaymentMethodTypeCard, lo.ToPtr("razorpay"), s.testData.now)
+	count := func(provider string, destination types.RefundDestination, status types.RefundStatus) int64 {
+		return r.Sum("refund.transitions", map[string]string{
+			"provider":    provider,
+			"destination": string(destination),
+			"reason":      string(types.RefundReasonDuplicate),
+			"status":      string(status),
+		})
+	}
+	steps := []struct {
+		provider    string
+		destination types.RefundDestination
+		status      types.RefundStatus
+	}{
+		{"razorpay", types.RefundDestinationGateway, types.RefundStatusPending},
+		{"razorpay", types.RefundDestinationGateway, types.RefundStatusFailed},
+		{"none", types.RefundDestinationWallet, types.RefundStatusPending},
+		{"none", types.RefundDestinationWallet, types.RefundStatusSucceeded},
+	}
+	before := make([]int64, len(steps))
+	for i, st := range steps {
+		before[i] = count(st.provider, st.destination, st.status)
+	}
+
+	rows, err := s.service.PrepareRefundsForCreditNote(s.GetContext(), s.creditNote(decimal.NewFromInt(100)), s.testData.invoice, backToSource())
+	s.Require().NoError(err)
+	s.Require().NoError(s.service.Fail(s.GetContext(), rows[0].ID, "gateway declined"))
+	s.Require().NoError(s.service.Fail(s.GetContext(), rows[0].ID, "gateway declined again"))
+
+	for i, st := range steps {
+		s.Equal(before[i]+1, count(st.provider, st.destination, st.status), "%s %s", st.destination, st.status)
+	}
 }
 
 func (s *RefundServiceSuite) TestFailOnSettledRowIsNoOp() {

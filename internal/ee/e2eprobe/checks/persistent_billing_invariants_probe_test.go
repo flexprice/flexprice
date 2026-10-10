@@ -221,3 +221,24 @@ func TestPersistentBillingInvariantsProbe_MissingSeedsSoftSkip(t *testing.T) {
 		t.Fatalf("empty seeds must soft-skip; got %v", err)
 	}
 }
+
+func TestPersistentBillingInvariantsProbe_TaxSkipsUnfinalizedDraft(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(pbiSeeds())
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+
+	draft, finalized := sdktypes.InvoiceStatusDraft, sdktypes.InvoiceStatusFinalized
+	draftID, finalID := "inv_draft", "inv_final"
+	trID := "taxrate_1"
+	couponID := "coupon_1"
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
+		{ID: &draftID, InvoiceStatus: &draft},
+		{ID: &finalID, InvoiceStatus: &finalized, Taxes: []sdktypes.TaxAppliedResponse{{TaxRateID: &trID}}, CouponApplications: []sdktypes.CouponApplicationResponse{{CouponID: &couponID}}},
+	}
+
+	p := NewPersistentBillingInvariantsProbe(fc, reg, "test-run", lg)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("a newer untaxed draft must not fail the tax check; got %v", err)
+	}
+}

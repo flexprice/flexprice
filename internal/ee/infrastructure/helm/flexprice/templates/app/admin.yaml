@@ -1,0 +1,141 @@
+{{- if .Values.admin.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flexprice.fullname" . }}-admin
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "admin") | nindent 4 }}
+spec:
+  replicas: {{ .Values.admin.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin
+  template:
+    metadata:
+      annotations:
+        {{- if not .Values.env }}
+        checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        {{- end }}
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "admin") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.componentServiceAccountName" (dict "ctx" . "component" "admin") }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ include "flexprice.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: FLEXPRICE_DEPLOYMENT_MODE
+              value: "admin"
+            - name: TMPDIR
+              value: "/tmp"
+            {{- include "flexprice.env" . | nindent 12 }}
+            - name: FLEXPRICE_ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.admin.secretRef.name | default (include "flexprice.secretName" .) }}
+                  key: {{ .Values.admin.secretRef.key }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.admin.resources | nindent 12 }}
+          volumeMounts:
+            {{- if not .Values.env }}
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if not .Values.env }}
+        - name: config
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-config
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default .Values.nodeSelector .Values.admin.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.affinity .Values.admin.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.tolerations .Values.admin.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-admin
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "admin") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+{{- if .Values.admin.tailscale.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "flexprice.fullname" . }}-admin-ts
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "admin") | nindent 4 }}
+  {{- with .Values.admin.tailscale.tags }}
+  annotations:
+    tailscale.com/tags: {{ . | quote }}
+  {{- end }}
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: {{ include "flexprice.fullname" . }}-admin
+      port:
+        number: 80
+  tls:
+    - hosts:
+        - {{ required "admin.tailscale.hostname is required" .Values.admin.tailscale.hostname }}
+{{- end }}
+{{- end }}
