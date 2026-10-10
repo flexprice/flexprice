@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -1312,5 +1313,51 @@ func (s *LineItemProrationServiceSuite) TestCancel_CreditStopsAtLineItemEndDate(
 			s.Require().NoError(err)
 			s.True(res.TotalProrationAmount.Equal(decimal.RequireFromString(tt.want).Neg()), "cancel credit: got %s", res.TotalProrationAmount)
 		})
+	}
+}
+
+func TestLineItemProrationSummary_NetAmountSubtractsDiscountBeforeCredit(t *testing.T) {
+	d := decimal.NewFromInt
+	cases := []struct {
+		name                     string
+		charge, discount, credit decimal.Decimal
+		want                     decimal.Decimal
+	}{
+		{name: "no_discount", charge: d(100), discount: d(0), credit: d(80), want: d(20)},
+		{name: "discount_flips_to_credit", charge: d(100), discount: d(50), credit: d(80), want: d(-30)},
+		{name: "discount_only", charge: d(100), discount: d(50), credit: d(0), want: d(50)},
+		{name: "credit_only", charge: d(0), discount: d(0), credit: d(40), want: d(-40)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			summary := &LineItemProrationSummary{
+				TotalChargeAmount:   tc.charge,
+				TotalDiscountAmount: tc.discount,
+				TotalCreditAmount:   tc.credit,
+			}
+			if !summary.NetAmount().Equal(tc.want) {
+				t.Fatalf("net = %s, want %s", summary.NetAmount(), tc.want)
+			}
+		})
+	}
+
+	var nilSummary *LineItemProrationSummary
+	if !nilSummary.NetAmount().IsZero() {
+		t.Fatalf("nil summary nets to zero")
+	}
+}
+
+func TestLineItemProrationSummary_MergeCarriesDiscounts(t *testing.T) {
+	d := decimal.NewFromInt
+	a := &LineItemProrationSummary{TotalChargeAmount: d(100), TotalDiscountAmount: d(50), TotalCreditAmount: d(0),
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{{CouponID: "c1"}}}
+	b := &LineItemProrationSummary{TotalChargeAmount: d(0), TotalDiscountAmount: d(0), TotalCreditAmount: d(80)}
+
+	merged := a.Merge(b)
+	if !merged.TotalDiscountAmount.Equal(d(50)) || len(merged.LineItemCoupons) != 1 {
+		t.Fatalf("merge dropped the discount: %s, %d coupons", merged.TotalDiscountAmount, len(merged.LineItemCoupons))
+	}
+	if !merged.NetAmount().Equal(d(-30)) {
+		t.Fatalf("merged net = %s, want -30", merged.NetAmount())
 	}
 }

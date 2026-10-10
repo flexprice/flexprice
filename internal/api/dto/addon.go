@@ -91,6 +91,12 @@ type AddAddonToSubscriptionRequest struct {
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
+	// Coupons apply to this addon's line items; price_id targets one price, omitted targets all.
+	Coupons []SubscriptionCouponInput `json:"coupons,omitempty"`
+
+	// CouponRefs are the coupons resolved at quote time. Server-set on replay.
+	CouponRefs []types.CouponRef `json:"-"`
+
 	// PreviewOnly quotes the attach without writing anything. Server-set: callers reach it
 	// through the preview endpoint, never by sending it.
 	PreviewOnly bool `json:"-"`
