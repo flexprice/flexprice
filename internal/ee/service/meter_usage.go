@@ -1558,6 +1558,16 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	ctx context.Context,
 	params *events.MeterUsageDetailedAnalyticsParams,
 ) (*dto.GetUsageAnalyticsResponse, error) {
+	// No subscription context means there is no price to bill against, so
+	// report zero instead of fanning the query out over every meter in the
+	// environment. Disables this whole path for now — including the admin-style
+	// query with no external_customer_id — leaving the code below unreachable
+	// until the surface is reworked.
+	return &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.Zero,
+		Items:     []dto.UsageAnalyticItem{},
+	}, nil
+
 	// Fetch meter configs
 	meters, err := s.fetchMeters(ctx, params)
 	if err != nil {
