@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/serviceerror"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -133,5 +134,29 @@ func TestTemporalServiceStopStopsWorkersBeforeClient(t *testing.T) {
 	}
 	if client.stops != 1 {
 		t.Fatalf("Stop() client calls = %d, want 1", client.stops)
+	}
+}
+
+func TestBuildWorkerOptionsQueueOverrides(t *testing.T) {
+	s := &temporalService{workerConfig: config.TemporalWorkerConfig{
+		MaxConcurrentActivityExecutionSize: 10,
+		WorkerActivitiesPerSecond:          5,
+		TaskQueueActivitiesPerSecond:       0,
+		Queues: map[string]config.TemporalQueueWorkerConfig{
+			"invoice": {TaskQueueActivitiesPerSecond: 20},
+		},
+	}}
+
+	invoice := s.buildWorkerOptions(types.TemporalTaskQueueInvoice)
+	if invoice.TaskQueueActivitiesPerSecond != 20 {
+		t.Fatalf("invoice queue rate = %v, want 20", invoice.TaskQueueActivitiesPerSecond)
+	}
+	if invoice.MaxConcurrentActivityExecutionSize != 10 {
+		t.Fatalf("invoice queue must inherit global concurrency, got %d", invoice.MaxConcurrentActivityExecutionSize)
+	}
+
+	other := s.buildWorkerOptions(types.TemporalTaskQueueCron)
+	if other.TaskQueueActivitiesPerSecond != 0 {
+		t.Fatalf("unlisted queue rate = %v, want 0", other.TaskQueueActivitiesPerSecond)
 	}
 }
