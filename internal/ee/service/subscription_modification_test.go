@@ -174,6 +174,22 @@ func (s *SubscriptionModificationServiceSuite) createParentSubWithChild(parentEx
 	return parent, child, updatedParent, inheritedSub
 }
 
+// createGroupedChild returns a parent subscription and a grouped_invoicing child billed on it.
+func (s *SubscriptionModificationServiceSuite) createGroupedChild(parentCustomerID, childCustomerID string) (*subscription.Subscription, *subscription.Subscription) {
+	ctx := s.GetContext()
+
+	parent := s.createActiveSub(parentCustomerID)
+	parent.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
+
+	child := s.createActiveSub(childCustomerID)
+	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+	child.ParentSubscriptionID = lo.ToPtr(parent.ID)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, child))
+
+	return parent, child
+}
+
 func (s *SubscriptionModificationServiceSuite) createFixedLineItem(subID, customerID string, qty decimal.Decimal, cadence types.InvoiceCadence) *subscription.SubscriptionLineItem {
 	ctx := s.GetContext()
 	now := s.GetNow()
@@ -2538,4 +2554,64 @@ func (s *SubscriptionModificationServiceSuite) TestSettlePayFirst_ArchivesDraftW
 	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(getErr)
 	s.True(orig.EndDate.IsZero())
+}
+
+func (s *SubscriptionModificationServiceSuite) TestQuantityChange_GroupedChildRejected() {
+	ctx := s.GetContext()
+	parentCust, childCust := s.createCustomer("qty-grp-parent"), s.createCustomer("qty-grp-child")
+	_, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	li := s.createFixedLineItem(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{{ID: li.ID, Quantity: decimal.NewFromInt(3)}},
+		},
+	}
+
+	_, err := s.service.Execute(ctx, child.ID, req)
+	s.True(ierr.IsValidation(err), "execute must reject quantity_change on a grouped child: %v", err)
+
+	_, err = s.service.Preview(ctx, child.ID, req)
+	s.True(ierr.IsValidation(err), "preview must reject quantity_change on a grouped child: %v", err)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestCheckoutPayerID() {
+	ctx := s.GetContext()
+	sp := s.buildServiceParams()
+
+	parentCust, childCust := s.createCustomer("payer-parent"), s.createCustomer("payer-child")
+	billedCust := s.createCustomer("payer-billed")
+	parent, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	standalone := s.createActiveSub(childCust.ID)
+
+	delegated := s.createActiveSub(childCust.ID)
+	delegated.InvoicingCustomerID = lo.ToPtr(billedCust.ID)
+
+	cases := []struct {
+		name string
+		sub  *subscription.Subscription
+		want string
+	}{
+		{"standalone pays for itself", standalone, childCust.ID},
+		{"delegated invoicing keeps its own customer", delegated, childCust.ID},
+		{"grouped child is paid by the parent", child, parentCust.ID},
+		{"parent pays for itself", parent, parentCust.ID},
+	}
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			got, err := checkoutPayerID(ctx, sp, tc.sub)
+			s.Require().NoError(err)
+			s.Equal(tc.want, got)
+		})
+	}
+
+	s.Run("grouped child of a delegated parent is paid by the parent's invoicing customer", func() {
+		parent.InvoicingCustomerID = lo.ToPtr(billedCust.ID)
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
+
+		got, err := checkoutPayerID(ctx, sp, child)
+		s.Require().NoError(err)
+		s.Equal(billedCust.ID, got)
+	})
 }

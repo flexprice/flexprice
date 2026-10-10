@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -493,4 +494,229 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_Invoice
 	display := lo.FromPtr(inv.LineItems[0].DisplayName)
 	s.Contains(display, "Proration charge", "invoice line must say it is a proration: %q", display)
 	s.Contains(display, effectiveDate.Format("2 Jan 2006"), "invoice line must carry the window: %q", display)
+}
+
+// -----------------------------------------------------------------------------
+// coupons on a line item change
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionModificationServiceSuite) couponedLineItemChange(
+	lineItemID string,
+	quantity decimal.Decimal,
+	effectiveDate time.Time,
+	coupons ...dto.SubscriptionCouponInput,
+) dto.ExecuteSubscriptionModifyRequest {
+	req := s.lineItemChangeRequest(lineItemID, lo.ToPtr(quantity), nil, effectiveDate)
+	req.LineItemChangeParams.LineItems[0].Coupons = coupons
+	return req
+}
+
+// The coupon discounts the charge but never the credit, and always lands on the successor.
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_Coupon() {
+	type tc struct {
+		name              string
+		oldQty, newQty    int64
+		wantInvoiceAction dto.ChangedInvoiceAction
+	}
+	cases := []tc{
+		{name: "upgrade_discounts_charge", oldQty: 1, newQty: 3, wantInvoiceAction: dto.ChangedInvoiceActionCreated},
+		{name: "downgrade_credit_undiscounted", oldQty: 3, newQty: 1, wantInvoiceAction: dto.ChangedInvoiceActionWalletCredit},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			ctx := s.GetContext()
+			periodStart := s.GetNow()
+			periodEnd := periodStart.AddDate(0, 1, 0)
+			effectiveDate := periodStart.AddDate(0, 0, 15)
+			amount := decimal.NewFromInt(30)
+			code := "CPN_LIC_" + tc.name
+
+			cust := s.createCustomer("lic-coupon-" + tc.name)
+			sub := s.createActiveSub(cust.ID)
+			p := s.createFixedPrice(amount, types.InvoiceCadenceAdvance)
+			li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(tc.oldQty), types.InvoiceCadenceAdvance, p.ID)
+			c := seedPercentCoupon(ctx, s.Require(), s.GetStores(), code, 50, nil)
+
+			resp, err := s.service.Execute(ctx, sub.ID, s.couponedLineItemChange(
+				li.ID, decimal.NewFromInt(tc.newQty), effectiveDate, dto.SubscriptionCouponInput{CouponCode: code}))
+			s.Require().NoError(err)
+			s.Require().Len(resp.ChangedResources.Invoices, 1)
+			got := resp.ChangedResources.Invoices[0]
+			s.Equal(tc.wantInvoiceAction, got.Action)
+
+			delta := proratedDelta(periodStart, periodEnd, effectiveDate,
+				amount.Mul(decimal.NewFromInt(tc.newQty-tc.oldQty))).Abs()
+			tolerance := decimal.NewFromFloat(0.01)
+
+			if tc.wantInvoiceAction == dto.ChangedInvoiceActionCreated {
+				inv, err := s.GetStores().InvoiceRepo.Get(ctx, got.ID)
+				s.Require().NoError(err)
+				s.True(inv.Subtotal.Sub(delta).Abs().LessThanOrEqual(tolerance), "subtotal %s ≈ %s", inv.Subtotal, delta)
+				s.True(inv.TotalDiscount.Sub(delta.Div(decimal.NewFromInt(2))).Abs().LessThanOrEqual(tolerance),
+					"discount %s ≈ half of %s", inv.TotalDiscount, delta)
+				s.True(inv.Total.Sub(inv.Subtotal.Sub(inv.TotalDiscount)).Abs().LessThanOrEqual(tolerance),
+					"total %s should be subtotal - discount", inv.Total)
+				s.True(inv.AmountDue.Equal(inv.Total))
+			} else {
+				s.Require().NotNil(got.WalletTransaction)
+				s.True(got.WalletTransaction.Amount.Sub(delta).Abs().LessThanOrEqual(tolerance),
+					"credit %s should be the full undiscounted %s", got.WalletTransaction.Amount, delta)
+			}
+
+			ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+			s.Require().NoError(err)
+			successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+			s.Require().NotEmpty(successorID)
+
+			associations := subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID)
+			s.Require().Len(associations, 1)
+			s.Equal(c.ID, associations[0].CouponID)
+			s.Equal(successorID, lo.FromPtr(associations[0].SubscriptionLineItemID), "the coupon lands on the new item")
+			s.NotEqual(li.ID, lo.FromPtr(associations[0].SubscriptionLineItemID))
+			s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID))
+		})
+	}
+}
+
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_Coupon_PriceIDRejected() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 10)
+
+	cust := s.createCustomer("lic-coupon-price-id")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+	seedPercentCoupon(ctx, s.Require(), s.GetStores(), "CPN_LIC_PRICE_ID", 50, nil)
+
+	req := s.couponedLineItemChange(li.ID, decimal.NewFromInt(2), effectiveDate,
+		dto.SubscriptionCouponInput{CouponCode: "CPN_LIC_PRICE_ID", PriceID: lo.ToPtr(p.ID)})
+
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+
+	unchanged, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	s.True(unchanged.EndDate.IsZero())
+	s.Empty(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID))
+}
+
+// The checkout session carries the resolved coupon; replaying it on payment creates the
+// association once, under the id the draft was discounted with.
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_Coupon_PayFirstReplayCreatesAssociation() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("lic-coupon-replay")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+	c := seedPercentCoupon(ctx, s.Require(), s.GetStores(), "CPN_LIC_REPLAY", 50, nil)
+
+	impl := s.service.(*subscriptionModificationService)
+	request, err := impl.buildLineItemChangeRequest(ctx, sub.ID, &dto.SubModifyLineItemChangeRequest{
+		LineItems: []dto.LineItemChange{{
+			ID:            li.ID,
+			Quantity:      lo.ToPtr(decimal.NewFromInt(3)),
+			EffectiveDate: &effectiveDate,
+			Coupons:       []dto.SubscriptionCouponInput{{CouponCode: "CPN_LIC_REPLAY"}},
+		}},
+	})
+	s.Require().NoError(err)
+
+	params := request.toModifySubscriptionParams()
+	s.Require().Len(params.LineItemModifications, 1)
+	s.Require().Len(params.LineItemModifications[0].Coupons, 1)
+	ref := params.LineItemModifications[0].Coupons[0]
+	s.Zero(couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID), "resolving at quote time redeems nothing")
+
+	s.Require().NoError(impl.applyModifySubscriptionParams(ctx, params))
+
+	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+	s.Require().NotEmpty(successorID)
+
+	association, err := s.GetStores().CouponAssociationRepo.Get(ctx, ref.AssociationID)
+	s.Require().NoError(err)
+	s.Equal(successorID, lo.FromPtr(association.SubscriptionLineItemID))
+	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID))
+
+	s.Require().NoError(impl.applyModifySubscriptionParams(ctx, params), "duplicate delivery must not error")
+	s.Len(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID), 1, "a replay must not associate twice")
+	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID), "a replay must not redeem twice")
+}
+
+// -----------------------------------------------------------------------------
+// grouped invoicing child
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_GroupedChild_InvoicesParent() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-parent"), s.createCustomer("lic-grp-child")
+	parent, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	resp, err := s.service.Execute(ctx, child.ID,
+		s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(40)), effectiveDate))
+	s.Require().NoError(err)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, resp.ChangedResources.Invoices[0].ID)
+	s.Require().NoError(err)
+	s.Equal(parentCust.ID, inv.CustomerID, "the parent's customer pays for a child's change")
+	s.Equal(parent.ID, lo.FromPtr(inv.SubscriptionID))
+	s.NotEqual(types.InvoiceStatusSkipped, inv.InvoiceStatus)
+	s.True(inv.AmountDue.IsPositive(), "the charge must not be lost to a skipped draft")
+
+	s.Require().Len(inv.LineItems, 1)
+	s.Equal(child.ID, lo.FromPtr(inv.LineItems[0].SubscriptionID), "the line still names the child it belongs to")
+	s.Equal(childCust.ID, inv.LineItems[0].Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID])
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_GroupedChild_CreditsParentWallet() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-credit-parent"), s.createCustomer("lic-grp-credit-child")
+	_, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(40))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	resp, err := s.service.Execute(ctx, child.ID,
+		s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(10)), effectiveDate))
+	s.Require().NoError(err)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+	s.Equal(dto.ChangedInvoiceActionWalletCredit, resp.ChangedResources.Invoices[0].Action)
+
+	parentWallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, parentCust.ID)
+	s.Require().NoError(err)
+	s.Require().Len(parentWallets, 1, "the refund goes to the parent's customer")
+	s.True(parentWallets[0].Balance.IsPositive())
+
+	childWallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, childCust.ID)
+	s.Require().NoError(err)
+	s.Empty(childWallets)
+}
+
+// The open checkout is stored under the parent's customer; the guard must still find it by the child.
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_GroupedChild_PendingCheckoutBlocks() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	parentCust, childCust := s.createCustomer("lic-grp-pending-parent"), s.createCustomer("lic-grp-pending-child")
+	_, child := s.createGroupedChild(parentCust.ID, childCust.ID)
+	p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+	li := s.createFixedLineItemWithPrice(child.ID, childCust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+	s.seedPendingModifyCheckout(parentCust.ID, child.ID, nil)
+
+	req := s.lineItemChangeRequest(li.ID, nil, lo.ToPtr(decimal.NewFromInt(40)), effectiveDate)
+	req.Checkout = s.checkoutParamsRazorpay()
+
+	_, err := s.service.Execute(ctx, child.ID, req)
+	s.True(ierr.IsAlreadyExists(err), "a second checkout on the child must be blocked: %v", err)
 }

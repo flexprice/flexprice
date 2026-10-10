@@ -10,6 +10,7 @@ import (
 
 // CreateCouponAssociationRequest represents the request to create a new coupon association
 type CreateCouponAssociationRequest struct {
+	ID                     string            `json:"-"`
 	CouponID               string            `json:"coupon_id" validate:"required"`
 	SubscriptionID         string            `json:"subscription_id" validate:"required"`
 	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty"`

@@ -18,6 +18,8 @@ type CouponAssociationService interface {
 	DeleteCouponAssociation(ctx context.Context, id string) error
 	ListCouponAssociations(ctx context.Context, filter *types.CouponAssociationFilter) (*dto.ListCouponAssociationsResponse, error)
 	ApplyCouponsToSubscription(ctx context.Context, subscription *subscription.Subscription, coupons []dto.SubscriptionCouponRequest) error
+	ResolveCouponRefs(ctx context.Context, sub *subscription.Subscription, inputs []dto.SubscriptionCouponInput, defaultStart time.Time, targetPriceIDs []string) ([]types.CouponRef, error)
+	CreateCouponRefAssociations(ctx context.Context, sub *subscription.Subscription, refs []types.CouponRef, lineItemID string) error
 }
 
 type couponAssociationService struct {
@@ -59,7 +61,7 @@ func (s *couponAssociationService) createCouponAssociation(ctx context.Context, 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 
 		ca := &coupon_association.CouponAssociation{
-			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+			ID:                     lo.CoalesceOrEmpty(req.ID, types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION)),
 			CouponID:               req.CouponID,
 			SubscriptionID:         req.SubscriptionID,
 			SubscriptionLineItemID: req.SubscriptionLineItemID,
@@ -246,8 +248,6 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 		return nil
 	}
 
-	validationService := NewCouponValidationService(s.ServiceParams)
-
 	// Validate each coupon request
 	for i, couponReq := range coupons {
 		if err := couponReq.Validate(); err != nil {
@@ -265,35 +265,9 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 			return err
 		}
 
-		// Validate coupon applicability using subscription object (avoids DB fetch)
-		if err := validationService.ValidateCoupon(ctx, *coupon, subscription); err != nil {
-			return ierr.WithError(err).
-				WithHint("Coupon validation failed").
-				WithReportableDetails(map[string]interface{}{
-					"coupon_id":       couponReq.CouponID,
-					"subscription_id": subscription.ID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// For repeated cadence with no explicit end_date, derive end_date from
-		// duration_in_periods so the ActiveOnly date filter handles expiry without
-		// counting CouponApplication rows on every invoice.
-		if coupon.Cadence == types.CouponCadenceRepeated &&
-			coupon.DurationInPeriods != nil &&
-			couponReq.EndDate == nil {
-			endDate, err := computeCouponEndDate(
-				couponReq.StartDate,
-				subscription.BillingAnchor,
-				subscription.BillingPeriod,
-				subscription.BillingPeriodCount,
-				*coupon.DurationInPeriods,
-				subscription.Timezone,
-			)
-			if err != nil {
-				return err
-			}
-			couponReq.EndDate = &endDate
+		couponReq.EndDate, err = s.validateCouponForSubscription(ctx, coupon, subscription, couponReq.StartDate, couponReq.EndDate)
+		if err != nil {
+			return err
 		}
 
 		// Create coupon association request
@@ -331,6 +305,92 @@ func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_associ
 	}
 
 	return resp
+}
+
+func (s *couponAssociationService) validateCouponForSubscription(ctx context.Context, c *coupon.Coupon, sub *subscription.Subscription, startDate time.Time, endDate *time.Time) (*time.Time, error) {
+	if err := NewCouponValidationService(s.ServiceParams).ValidateCoupon(ctx, *c, sub); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Coupon validation failed").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id":       c.ID,
+				"subscription_id": sub.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if c.Cadence != types.CouponCadenceRepeated || c.DurationInPeriods == nil || endDate != nil {
+		return endDate, nil
+	}
+	computed, err := computeCouponEndDate(startDate, sub.BillingAnchor, sub.BillingPeriod, sub.BillingPeriodCount, *c.DurationInPeriods, sub.Timezone)
+	if err != nil {
+		return nil, err
+	}
+	return &computed, nil
+}
+
+// ResolveCouponRefs validates coupon inputs and fans them out to one ref per target price.
+// Association IDs are pre-generated; redemptions are not incremented here.
+func (s *couponAssociationService) ResolveCouponRefs(ctx context.Context, sub *subscription.Subscription, inputs []dto.SubscriptionCouponInput, defaultStart time.Time, targetPriceIDs []string) ([]types.CouponRef, error) {
+	var refs []types.CouponRef
+	for _, input := range inputs {
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
+		if err != nil {
+			return nil, err
+		}
+		startDate := lo.FromPtrOr(input.StartDate, defaultStart)
+		endDate, err := s.validateCouponForSubscription(ctx, c, sub, startDate, input.EndDate)
+		if err != nil {
+			return nil, err
+		}
+
+		priceIDs := targetPriceIDs
+		if input.PriceID != nil {
+			if !lo.Contains(targetPriceIDs, *input.PriceID) {
+				return nil, ierr.NewError("coupon price_id does not match any target price").
+					WithHint("price_id must be one of the prices being added").
+					WithReportableDetails(map[string]interface{}{
+						"coupon_code": input.CouponCode,
+						"price_id":    *input.PriceID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			priceIDs = []string{*input.PriceID}
+		}
+		for _, priceID := range priceIDs {
+			refs = append(refs, types.CouponRef{
+				AssociationID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+				CouponID:      c.ID,
+				PriceID:       lo.ToPtr(priceID),
+				StartDate:     startDate.UTC(),
+				EndDate:       endDate,
+			})
+		}
+	}
+	return refs, nil
+}
+
+// CreateCouponRefAssociations creates a line-level association per ref, incrementing redemptions under the cap guard.
+func (s *couponAssociationService) CreateCouponRefAssociations(ctx context.Context, sub *subscription.Subscription, refs []types.CouponRef, lineItemID string) error {
+	for _, ref := range refs {
+		c, err := s.CouponRepo.Get(ctx, ref.CouponID)
+		if err != nil {
+			return err
+		}
+		if _, err := s.createCouponAssociation(ctx, dto.CreateCouponAssociationRequest{
+			ID:                     ref.AssociationID,
+			CouponID:               ref.CouponID,
+			SubscriptionID:         sub.ID,
+			SubscriptionLineItemID: lo.ToPtr(lineItemID),
+			StartDate:              ref.StartDate,
+			EndDate:                ref.EndDate,
+			Metadata:               map[string]string{},
+		}, c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // computeCouponEndDate advances startDate through n billing periods using the

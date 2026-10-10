@@ -5,8 +5,10 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -33,6 +35,14 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckout(
 	outgoingAssociationID string,
 	at time.Time,
 ) (*domainCheckout.CheckoutSession, *addonChangeConfig, *dto.InvoiceResponse) {
+	return s.seedPayFirstAddonBatchCheckoutFor(s.modifyAdd(addonID, at), outgoingAssociationID, at)
+}
+
+func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckoutFor(
+	add *dto.AddAddonToSubscriptionRequest,
+	outgoingAssociationID string,
+	at time.Time,
+) (*domainCheckout.CheckoutSession, *addonChangeConfig, *dto.InvoiceResponse) {
 	ctx := s.GetContext()
 	params := s.service.(*subscriptionService).ServiceParams
 	sub := s.testData.subscription
@@ -40,7 +50,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckout(
 	changeSvc := NewAddonChangeService(params)
 	req := AddonChangeRequest{
 		Subscription: sub,
-		Adds:         []AddonAdd{{Request: s.modifyAdd(addonID, at)}},
+		Adds:         []AddonAdd{{Request: add}},
 	}
 	if outgoingAssociationID != "" {
 		req.Removes = []*dto.RemoveAddonRequest{s.modifyRemove(outgoingAssociationID, at)}
@@ -404,4 +414,140 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_GatedResponse_ReportsPendi
 func (s *SubscriptionServiceSuite) TestAddonsCheckout_GatedResponse_NoDraftReportsNoInvoice() {
 	s.Nil(draftChangedInvoices(&SettleProrationResult{}))
 	s.Nil(draftChangedInvoices(nil))
+}
+
+// -----------------------------------------------------------------------------
+// coupons on a gated attach
+// -----------------------------------------------------------------------------
+
+func (s *SubscriptionServiceSuite) seedCouponedPayFirstCheckout(
+	addonID, code string,
+	maxRedemptions *int,
+) (*domainCheckout.CheckoutSession, *addonChangeConfig, *dto.InvoiceResponse, string) {
+	sub := s.monthlyPeriodSubscription()
+	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(100), types.InvoiceCadenceAdvance)
+	c := seedPercentCoupon(s.GetContext(), s.Require(), s.GetStores(), code, 50, maxRedemptions)
+
+	at := sub.CurrentPeriodStart.Add(10 * 24 * time.Hour)
+	add := s.modifyAddWithCoupon(addonID, at, dto.SubscriptionCouponInput{CouponCode: code})
+	session, config, draft := s.seedPayFirstAddonBatchCheckoutFor(add, "", at)
+	return session, config, draft, c.ID
+}
+
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_DraftDiscountedNothingRedeemed() {
+	ctx := s.GetContext()
+	session, config, draft, couponID := s.seedCouponedPayFirstCheckout("addon_cpn_pf_draft", "CPN_PF_DRAFT", nil)
+
+	quote := config.getQuote()
+	s.True(quote.TotalDiscountAmount.IsPositive())
+	s.True(approxEqual(quote.TotalDiscountAmount, quote.TotalChargeAmount.Div(decimal.NewFromInt(2))))
+	s.True(approxEqual(draft.TotalDiscount, quote.TotalDiscountAmount), "draft discount %s", draft.TotalDiscount)
+	s.True(approxEqual(draft.Total, quote.NetAmount()), "draft total %s should be the discounted net %s", draft.Total, quote.NetAmount())
+	s.True(approxEqual(draft.AmountDue, quote.NetAmount()))
+
+	s.Zero(couponRedemptions(ctx, s.Require(), s.GetStores(), couponID), "a gated attach redeems nothing until payment")
+	s.Empty(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), s.testData.subscription.ID))
+
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	s.Require().Len(cfg.AddAddonParams.Addons, 1)
+	s.Require().Len(cfg.AddAddonParams.Addons[0].Coupons, 1, "the resolved coupon rides on the session")
+	s.NotEmpty(cfg.AddAddonParams.Addons[0].Coupons[0].AssociationID)
+}
+
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_CompletionCreatesPreGeneratedAssociation() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	session, _, draft, couponID := s.seedCouponedPayFirstCheckout("addon_cpn_pf_done", "CPN_PF_DONE", nil)
+	ref := session.Configuration.ToCheckoutConfiguration().AddAddonParams.Addons[0].Coupons[0]
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_addons_coupon_001",
+	}))
+
+	lineItems := s.addonLineItemsFor(s.testData.subscription.ID, "addon_cpn_pf_done")
+	s.Require().Len(lineItems, 1)
+
+	association, err := s.GetStores().CouponAssociationRepo.Get(ctx, ref.AssociationID)
+	s.Require().NoError(err, "completion reuses the id the draft was discounted under")
+	s.Equal(couponID, association.CouponID)
+	s.Equal(lineItems[0].ID, lo.FromPtr(association.SubscriptionLineItemID))
+	s.Len(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), s.testData.subscription.ID), 1)
+	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), couponID))
+
+	appFilter := types.NewNoLimitCouponApplicationFilter()
+	appFilter.InvoiceIDs = []string{draft.ID}
+	applications, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	for _, app := range applications {
+		s.Equal(ref.AssociationID, app.CouponAssociationID)
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_CompletionWithExhaustedCapFails() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	session, _, _, couponID := s.seedCouponedPayFirstCheckout("addon_cpn_pf_cap", "CPN_PF_CAP", lo.ToPtr(1))
+
+	// Someone else redeemed the last use while the checkout was outstanding.
+	c, err := s.GetStores().CouponRepo.Get(ctx, couponID)
+	s.Require().NoError(err)
+	c.TotalRedemptions = 1
+	s.Require().NoError(s.GetStores().CouponRepo.Update(ctx, c))
+
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	err = subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), couponID), "the cap holds")
+}
+
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_TerminatedSessionArchivesApplications() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	session, _, draft, couponID := s.seedCouponedPayFirstCheckout("addon_cpn_pf_term", "CPN_PF_TERM", nil)
+
+	appFilter := types.NewNoLimitCouponApplicationFilter()
+	appFilter.InvoiceIDs = []string{draft.ID}
+	before, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(before, "computing the draft records its coupon application")
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+
+	after, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Empty(lo.Filter(after, func(app *coupon_application.CouponApplication, _ int) bool {
+		return app.Status == types.StatusPublished
+	}), "an abandoned draft leaves no live coupon application behind")
+	s.Zero(couponRedemptions(ctx, s.Require(), s.GetStores(), couponID))
+	s.Empty(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), s.testData.subscription.ID))
+}
+
+// A discount that takes the net to a credit leaves nothing to collect, so the change applies now.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_DiscountedNetCreditAppliesImmediately() {
+	ctx := s.GetContext()
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_cpn_pfz_out", decimal.NewFromInt(80), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_cpn_pfz_in", decimal.NewFromInt(100), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_cpn_pfz_out", 80)
+	c := seedPercentCoupon(ctx, s.Require(), s.GetStores(), "CPN_PFZ", 50, nil)
+
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	resp, err := s.modificationService().Execute(ctx, sub.ID, s.addonsCheckoutRequest(&dto.SubModifyBulkAddonParams{
+		Adds: []*dto.AddAddonToSubscriptionRequest{
+			s.modifyAddWithCoupon("addon_cpn_pfz_in", at, dto.SubscriptionCouponInput{CouponCode: "CPN_PFZ"}),
+		},
+		Removes: []*dto.RemoveAddonRequest{s.modifyRemove(outgoing, at)},
+	}))
+	s.Require().NoError(err)
+
+	s.Nil(resp.CheckoutSession, "the discounted net is a credit, so there is nothing to collect")
+	s.Len(s.addonLineItemsFor(sub.ID, "addon_cpn_pfz_in"), 1)
+	s.Empty(s.oneOffInvoicesFor(sub.ID))
+	s.Len(s.prorationCredits(), 1)
+	s.Len(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID), 1)
+	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID))
 }

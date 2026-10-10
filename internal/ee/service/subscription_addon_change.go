@@ -237,6 +237,24 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 			return nil, err
 		}
 
+		refs := addReq.CouponRefs
+		if refs == nil {
+			priceIDs := lo.Map(params.getLineItems(), func(li *subscription.SubscriptionLineItem, _ int) string { return li.PriceID })
+			refs, err = NewCouponAssociationService(s.ServiceParams).ResolveCouponRefs(ctx, sub, addReq.Coupons, params.getRequestedStart(), priceIDs)
+			if err != nil {
+				sub.LineItems = originalLineItems
+				return nil, err
+			}
+		}
+
+		// coupon to line item mapping
+		params.coupons = map[string][]types.CouponRef{}
+		for _, ref := range refs {
+			if li, ok := lo.Find(params.getLineItems(), func(li *subscription.SubscriptionLineItem) bool { return li.PriceID == lo.FromPtr(ref.PriceID) }); ok {
+				params.coupons[li.ID] = append(params.coupons[li.ID], ref)
+			}
+		}
+
 		config.attaches = append(config.attaches, params)
 		sub.LineItems = lo.Flatten([][]*subscription.SubscriptionLineItem{sub.LineItems, params.getLineItems()})
 	}
@@ -343,6 +361,20 @@ func (s *addonChangeService) quote(ctx context.Context, config *addonChangeConfi
 
 	config.periodStart = groups[0].effectiveDate
 
+	var coupons []dto.InvoiceLineItemCoupon
+	for _, attach := range config.getAttaches() {
+		for _, li := range attach.getLineItems() {
+			for _, ref := range attach.getCoupons()[li.ID] {
+				coupons = append(coupons, dto.InvoiceLineItemCoupon{
+					LineItemID:             li.PriceID,
+					SubscriptionLineItemID: lo.ToPtr(li.ID),
+					CouponID:               ref.CouponID,
+					CouponAssociationID:    lo.ToPtr(ref.AssociationID),
+				})
+			}
+		}
+	}
+
 	prorationSvc := NewLineItemProrationService(s.ServiceParams)
 	for _, group := range groups {
 		summary, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
@@ -351,6 +383,7 @@ func (s *addonChangeService) quote(ctx context.Context, config *addonChangeConfi
 			EffectiveDate: group.effectiveDate,
 			Behavior:      types.ProrationBehaviorCreateProrations,
 			Reason:        config.getReason(),
+			Coupons:       coupons,
 		})
 		if err != nil {
 			return err
@@ -556,7 +589,19 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 		lineItems = append(lineItems, attach.getLineItems()...)
 	}
 
-	return s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems)
+	if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems); err != nil {
+		return err
+	}
+
+	couponSvc := NewCouponAssociationService(s.ServiceParams)
+	for _, attach := range config.getAttaches() {
+		for lineItemID, refs := range attach.getCoupons() {
+			if err := couponSvc.CreateCouponRefAssociations(ctx, sub, refs, lineItemID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Settle raises the one netted document the batch owes: an invoice when the net is a charge,
@@ -654,15 +699,16 @@ func (s *addonChangeService) ExecutePayFirst(
 		config         *addonChangeConfig
 		settled        *SettleProrationResult
 		checkoutParams *types.AddAddonParams
+		payerID        string
 	)
 
 	subscriptionID := req.Subscription.ID
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		locked, err := s.sub.loadSubscriptionForChange(txCtx, subscriptionID, true)
+		lockedSubs, err := s.sub.loadSubscriptionForChange(txCtx, subscriptionID, true)
 		if err != nil {
 			return err
 		}
-		req.Subscription = locked
+		req.Subscription = lockedSubs
 
 		// Re-checked against the locked row: the first pass ran before the lock, so a
 		// subscription cancelled in between would otherwise get a checkout opened on it.
@@ -670,8 +716,13 @@ func (s *addonChangeService) ExecutePayFirst(
 			return err
 		}
 
+		payerID, err = checkoutPayerID(txCtx, s.ServiceParams, lockedSubs)
+		if err != nil {
+			return err
+		}
+
 		// Taken under the row lock, so two concurrent payment-gated changes cannot both pass.
-		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, locked.CustomerID, locked.ID); err != nil {
+		if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, lockedSubs.ID); err != nil {
 			return err
 		}
 
@@ -710,9 +761,8 @@ func (s *addonChangeService) ExecutePayFirst(
 		return nil, nil
 	}
 
-	sub := config.getSubscription()
 	session, err := NewCheckoutSessionService(s.ServiceParams).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
-		CustomerID: sub.CustomerID,
+		CustomerID: payerID,
 		Action:     types.CheckoutActionAddAddon,
 		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: checkoutParams,
@@ -741,6 +791,7 @@ func addonChangeCheckoutParams(config *addonChangeConfig) *types.AddAddonParams 
 			Cadence:           req.Cadence,
 			ProrationBehavior: req.ProrationBehavior,
 			StartDate:         attach.getRequestedStart(),
+			Coupons:           lo.Flatten(lo.Values(attach.getCoupons())),
 		})
 	}
 
@@ -778,7 +829,7 @@ func (s *addonChangeService) archiveGatedChange(
 	}
 
 	if draft != nil {
-		if err := s.InvoiceRepo.Delete(ctx, draft.ID); err != nil {
+		if err := archiveDraftInvoice(ctx, s.ServiceParams, draft.ID); err != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after pay-first failure",
 				"error", err,
 				"invoice_id", draft.ID,

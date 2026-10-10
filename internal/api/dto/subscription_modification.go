@@ -110,6 +110,8 @@ type LineItemChange struct {
 	// Amount reprices the charge. Flat fee only for now.
 	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
+	// Coupons apply to the new line item created by this change.
+	Coupons []SubscriptionCouponInput `json:"coupons,omitempty"`
 }
 
 func (c *LineItemChange) ToOverrideLineItemRequest(priceID string) OverrideLineItemRequest {
@@ -168,6 +170,17 @@ func (r *SubModifyLineItemChangeRequest) Validate() error {
 				WithHint("Amount cannot be negative").
 				WithReportableDetails(map[string]any{"line_item_id": li.ID}).
 				Mark(ierr.ErrValidation)
+		}
+		for j := range li.Coupons {
+			if li.Coupons[j].PriceID != nil {
+				return ierr.NewError("price_id is not supported on line item change coupons").
+					WithHint("Coupons always apply to the new line item; omit price_id").
+					WithReportableDetails(map[string]any{"line_item_id": li.ID}).
+					Mark(ierr.ErrValidation)
+			}
+			if err := li.Coupons[j].Validate(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
