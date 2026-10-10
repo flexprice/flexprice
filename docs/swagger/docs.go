@@ -4750,7 +4750,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "delete"
             }
         },
         "/groups": {
@@ -13003,6 +13004,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/invoice.sync.failed": {
+            "post": {
+                "description": "Fired once per provider when an invoice sync fails after its last retry.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.sync.success": {
+            "post": {
+                "description": "Fired once per provider when an invoice is synced to that provider.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.success",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/invoice.update": {
             "post": {
                 "description": "Fired when an invoice is updated. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
@@ -14752,6 +14799,13 @@ const docTemplate = `{
                 "checkout": {
                     "$ref": "#/definitions/CheckoutParams"
                 },
+                "coupons": {
+                    "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
                     "type": "object",
@@ -14800,6 +14854,13 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.ScheduleType"
                         }
                     ]
+                },
+                "coupons": {
+                    "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
@@ -16154,7 +16215,7 @@ const docTemplate = `{
                     "description": "Expanded data (populated when expand options are specified)",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -16886,6 +16947,14 @@ const docTemplate = `{
                 "priority": {
                     "type": "integer"
                 },
+                "proration_behavior": {
+                    "description": "ProrationBehavior applies to SUBSCRIPTION scope only. create_prorations scales the first\napplication to the rest of the current billing period and puts later ones on the\nsubscription's billing dates, when the grant recurs on the subscription's billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
                 "scope": {
                     "$ref": "#/definitions/types.CreditGrantScope"
                 },
@@ -17027,6 +17096,11 @@ const docTemplate = `{
                     "description": "address_state is the state, province, or region name with maximum 100 characters",
                     "type": "string",
                     "maxLength": 100
+                },
+                "billing_currency": {
+                    "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is",
+                    "type": "string",
+                    "maxLength": 10
                 },
                 "contact": {
                     "description": "contact is an optional contact number for the customer (e.g. phone)",
@@ -18104,6 +18178,13 @@ const docTemplate = `{
                 "external_customer_id": {
                     "type": "string"
                 },
+                "fx_rates": {
+                    "description": "FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per\nnon-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InlineFXRate"
+                    }
+                },
                 "gateway_payment_method_id": {
                     "type": "string"
                 },
@@ -18968,6 +19049,10 @@ const docTemplate = `{
                 },
                 "address_state": {
                     "description": "AddressState is the state of the customer's address",
+                    "type": "string"
+                },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
                     "type": "string"
                 },
                 "contact": {
@@ -20618,6 +20703,20 @@ const docTemplate = `{
                 "InheritanceActionRemove"
             ]
         },
+        "InlineFXRate": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
         "IntegrationConfigEntry": {
             "type": "object",
             "properties": {
@@ -20756,6 +20855,14 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
@@ -21038,6 +21145,14 @@ const docTemplate = `{
                     "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
                     "type": "string"
                 },
+                "fx_conversion": {
+                    "description": "fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
+                },
                 "id": {
                     "description": "id is the unique identifier for this invoice",
                     "type": "string"
@@ -21222,6 +21337,13 @@ const docTemplate = `{
                 "amount": {
                     "description": "Amount reprices the charge. Flat fee only for now.",
                     "type": "string"
+                },
+                "coupons": {
+                    "description": "Coupons apply to the new line item created by this change.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 },
                 "effective_date": {
                     "type": "string"
@@ -21478,7 +21600,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "meter": {
-                    "$ref": "#/definitions/meter.Meter"
+                    "$ref": "#/definitions/Meter"
                 },
                 "meter_id": {
                     "type": "string"
@@ -23758,7 +23880,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -25459,6 +25581,11 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "billing_currency": {
+                    "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency",
+                    "type": "string",
+                    "maxLength": 10
+                },
                 "contact": {
                     "description": "contact is the updated contact number for the customer (e.g. phone)",
                     "type": "string",
@@ -26029,11 +26156,51 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateTenantAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "UpdateTenantBillingDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/UpdateTenantAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
         "UpdateTenantRequest": {
             "type": "object",
             "properties": {
                 "billing_details": {
-                    "$ref": "#/definitions/TenantBillingDetails"
+                    "$ref": "#/definitions/UpdateTenantBillingDetails"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -26221,7 +26388,7 @@ const docTemplate = `{
                     "description": "Full meter object (only if expand includes \"meter\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -27066,6 +27233,10 @@ const docTemplate = `{
                     "description": "AddressState is the state of the customer's address",
                     "type": "string"
                 },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
                 "contact": {
                     "description": "Contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string"
@@ -27189,6 +27360,68 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "unit_singular": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "Meter": {
+            "type": "object",
+            "properties": {
+                "aggregation": {
+                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meter.Aggregation"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the meter",
+                    "type": "string"
+                },
+                "event_name": {
+                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meter.Filter"
+                    }
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the meter",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the display name of the meter",
+                    "type": "string"
+                },
+                "reset_usage": {
+                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ResetUsage"
+                        }
+                    ]
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -27387,6 +27620,14 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
+                },
                 "id": {
                     "type": "string"
                 },
@@ -27512,68 +27753,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "meter.Meter": {
-            "type": "object",
-            "properties": {
-                "aggregation": {
-                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/meter.Aggregation"
-                        }
-                    ]
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the meter",
-                    "type": "string"
-                },
-                "event_name": {
-                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meter.Filter"
-                    }
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the meter",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Name is the display name of the meter",
-                    "type": "string"
-                },
-                "reset_usage": {
-                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ResetUsage"
-                        }
-                    ]
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
                 }
             }
         },
@@ -27919,7 +28098,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -28134,6 +28313,12 @@ const docTemplate = `{
                 },
                 "cadence": {
                     "$ref": "#/definitions/types.AddonCadence"
+                },
+                "coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CouponRef"
+                    }
                 },
                 "proration_behavior": {
                     "description": "Needed to prorate the addon's first credit grant.",
@@ -28900,6 +29085,26 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
+        "types.CouponRef": {
+            "type": "object",
+            "properties": {
+                "association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
                 }
             }
         },
@@ -29805,6 +30010,64 @@ const docTemplate = `{
                 "AFTER"
             ]
         },
+        "types.FxConversion": {
+            "type": "object",
+            "properties": {
+                "billing_currency": {
+                    "description": "BillingCurrency is the currency the invoice was issued in.",
+                    "type": "string"
+                },
+                "charge_currency": {
+                    "description": "ChargeCurrency is the invoice's original (draft) currency.",
+                    "type": "string"
+                },
+                "converted_at": {
+                    "description": "ConvertedAt is when the conversion ran.",
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "Rate is the frozen rate: billing per 1 charge unit.",
+                    "type": "string"
+                },
+                "rate_id": {
+                    "description": "RateID is the fx_rates row used, for reference only; never read again.",
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "Scope is where the rate was resolved: subscription, customer or tenant.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FXRateScope"
+                        }
+                    ]
+                },
+                "source": {
+                    "description": "Source holds the original charge-currency amounts, before tax.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversionSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "types.FxConversionSource": {
+            "type": "object",
+            "properties": {
+                "net": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_prepaid_credits_applied": {
+                    "type": "string"
+                }
+            }
+        },
         "types.GlobalCustomField": {
             "type": "object",
             "properties": {
@@ -30268,6 +30531,12 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "type": "string"
+                },
+                "coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CouponRef"
+                    }
                 },
                 "effective_date": {
                     "type": "string"
@@ -32351,6 +32620,8 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.sync.success",
+                "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
                 "wallet.credit_balance.recovered",
                 "wallet.ongoing_balance.dropped",
@@ -32413,6 +32684,8 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoiceSyncSuccess",
+                "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
                 "WebhookEventWalletCreditBalanceRecovered",
                 "WebhookEventWalletOngoingBalanceDropped",
@@ -33113,6 +33386,23 @@ const docTemplate = `{
                 }
             }
         },
+        "webhookDto.InvoiceSyncWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "provider_details": {
+                    "$ref": "#/definitions/webhookDto.ProviderDetails"
+                }
+            }
+        },
         "webhookDto.InvoiceWebhookPayload": {
             "type": "object",
             "properties": {
@@ -33299,6 +33589,20 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/types.PriceType"
+                }
+            }
+        },
+        "webhookDto.ProviderDetails": {
+            "type": "object",
+            "properties": {
+                "hosted_invoice_url": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
                 }
             }
         },

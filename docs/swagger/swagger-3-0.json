@@ -5740,7 +5740,8 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-scope": "delete"
       }
     },
     "/groups": {
@@ -15550,6 +15551,48 @@
         }
       }
     },
+    "/webhook-events/invoice.sync.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.sync.failed",
+        "description": "Fired once per provider when an invoice sync fails after its last retry.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoiceSyncWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook-events/invoice.sync.success": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "invoice.sync.success",
+        "description": "Fired once per provider when an invoice is synced to that provider.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.InvoiceSyncWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/invoice.update": {
       "post": {
         "tags": [
@@ -17180,6 +17223,13 @@
           "checkout": {
             "$ref": "#/components/schemas/CheckoutParams"
           },
+          "coupons": {
+            "type": "array",
+            "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
+          },
           "line_item_commitments": {
             "type": "object",
             "additionalProperties": {
@@ -17224,6 +17274,13 @@
           },
           "change_at": {
             "$ref": "#/components/schemas/types.ScheduleType"
+          },
+          "coupons": {
+            "type": "array",
+            "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
           },
           "line_item_commitments": {
             "type": "object",
@@ -18495,7 +18552,7 @@
             "type": "string"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string"
@@ -19208,6 +19265,9 @@
           "priority": {
             "type": "integer"
           },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "scope": {
             "$ref": "#/components/schemas/types.CreditGrantScope"
           },
@@ -19329,6 +19389,11 @@
             "maxLength": 100,
             "type": "string",
             "description": "address_state is the state, province, or region name with maximum 100 characters"
+          },
+          "billing_currency": {
+            "maxLength": 10,
+            "type": "string",
+            "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is"
           },
           "contact": {
             "maxLength": 20,
@@ -20334,6 +20399,13 @@
           "external_customer_id": {
             "type": "string"
           },
+          "fx_rates": {
+            "type": "array",
+            "description": "FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per\nnon-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.",
+            "items": {
+              "$ref": "#/components/schemas/InlineFXRate"
+            }
+          },
           "gateway_payment_method_id": {
             "type": "string"
           },
@@ -21125,6 +21197,10 @@
           "address_state": {
             "type": "string",
             "description": "AddressState is the state of the customer's address"
+          },
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
           },
           "contact": {
             "type": "string",
@@ -22776,6 +22852,22 @@
           "InheritanceActionRemove"
         ]
       },
+      "InlineFXRate": {
+        "type": "object",
+        "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rate": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "IntegrationConfigEntry": {
         "type": "object",
         "properties": {
@@ -22912,6 +23004,9 @@
           },
           "environment_id": {
             "type": "string"
+          },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
           },
           "id": {
             "type": "string"
@@ -23186,6 +23281,9 @@
             "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
             "format": "date-time"
           },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
+          },
           "id": {
             "type": "string",
             "description": "id is the unique identifier for this invoice"
@@ -23342,6 +23440,13 @@
           "amount": {
             "type": "string",
             "description": "Amount reprices the charge. Flat fee only for now."
+          },
+          "coupons": {
+            "type": "array",
+            "description": "Coupons apply to the new line item created by this change.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
           },
           "effective_date": {
             "type": "string",
@@ -23595,7 +23700,7 @@
             "type": "string"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string"
@@ -25708,7 +25813,7 @@
             }
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_display_name": {
             "type": "string"
@@ -27317,6 +27422,11 @@
             "type": "string",
             "description": "address_state is the updated state, province, or region name with maximum 100 characters"
           },
+          "billing_currency": {
+            "maxLength": 10,
+            "type": "string",
+            "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency"
+          },
           "contact": {
             "maxLength": 20,
             "type": "string",
@@ -27848,11 +27958,51 @@
           }
         }
       },
+      "UpdateTenantAddress": {
+        "type": "object",
+        "properties": {
+          "address_city": {
+            "type": "string"
+          },
+          "address_country": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string"
+          },
+          "address_line2": {
+            "type": "string"
+          },
+          "address_postal_code": {
+            "type": "string"
+          },
+          "address_state": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateTenantBillingDetails": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/UpdateTenantAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "help_email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateTenantRequest": {
         "type": "object",
         "properties": {
           "billing_details": {
-            "$ref": "#/components/schemas/TenantBillingDetails"
+            "$ref": "#/components/schemas/UpdateTenantBillingDetails"
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
@@ -28022,7 +28172,7 @@
             "$ref": "#/components/schemas/group.Group"
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_id": {
             "type": "string",
@@ -28860,6 +29010,10 @@
             "type": "string",
             "description": "AddressState is the state of the customer's address"
           },
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is."
+          },
           "contact": {
             "type": "string",
             "description": "Contact is an optional contact number for the customer (e.g. phone)"
@@ -28976,6 +29130,60 @@
             "type": "string"
           },
           "unit_singular": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "Meter": {
+        "type": "object",
+        "properties": {
+          "aggregation": {
+            "$ref": "#/components/schemas/meter.Aggregation"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the meter"
+          },
+          "event_name": {
+            "type": "string",
+            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
+          },
+          "filters": {
+            "type": "array",
+            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+            "items": {
+              "$ref": "#/components/schemas/meter.Filter"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the meter"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name is the display name of the meter"
+          },
+          "reset_usage": {
+            "$ref": "#/components/schemas/types.ResetUsage"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
             "type": "string"
           },
           "updated_at": {
@@ -29178,6 +29386,9 @@
           "environment_id": {
             "type": "string"
           },
+          "fx_conversion": {
+            "$ref": "#/components/schemas/types.FxConversion"
+          },
           "id": {
             "type": "string"
           },
@@ -29300,60 +29511,6 @@
             "items": {
               "type": "string"
             }
-          }
-        }
-      },
-      "meter.Meter": {
-        "type": "object",
-        "properties": {
-          "aggregation": {
-            "$ref": "#/components/schemas/meter.Aggregation"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the meter"
-          },
-          "event_name": {
-            "type": "string",
-            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
-          },
-          "filters": {
-            "type": "array",
-            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-            "items": {
-              "$ref": "#/components/schemas/meter.Filter"
-            }
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the meter"
-          },
-          "name": {
-            "type": "string",
-            "description": "Name is the display name of the meter"
-          },
-          "reset_usage": {
-            "$ref": "#/components/schemas/types.ResetUsage"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_by": {
-            "type": "string"
           }
         }
       },
@@ -29676,7 +29833,7 @@
             }
           },
           "meter": {
-            "$ref": "#/components/schemas/meter.Meter"
+            "$ref": "#/components/schemas/Meter"
           },
           "meter_display_name": {
             "type": "string"
@@ -29899,6 +30056,12 @@
           },
           "cadence": {
             "$ref": "#/components/schemas/types.AddonCadence"
+          },
+          "coupons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CouponRef"
+            }
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
@@ -30703,6 +30866,29 @@
           }
         },
         "x-speakeasy-name-override": "CouponFilter"
+      },
+      "types.CouponRef": {
+        "type": "object",
+        "properties": {
+          "association_id": {
+            "type": "string"
+          },
+          "coupon_id": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "x-speakeasy-name-override": "CouponRef"
       },
       "types.CouponType": {
         "type": "string",
@@ -31656,6 +31842,57 @@
         ],
         "x-speakeasy-name-override": "FilterOperatorType"
       },
+      "types.FxConversion": {
+        "type": "object",
+        "properties": {
+          "billing_currency": {
+            "type": "string",
+            "description": "BillingCurrency is the currency the invoice was issued in."
+          },
+          "charge_currency": {
+            "type": "string",
+            "description": "ChargeCurrency is the invoice's original (draft) currency."
+          },
+          "converted_at": {
+            "type": "string",
+            "description": "ConvertedAt is when the conversion ran.",
+            "format": "date-time"
+          },
+          "rate": {
+            "type": "string",
+            "description": "Rate is the frozen rate: billing per 1 charge unit."
+          },
+          "rate_id": {
+            "type": "string",
+            "description": "RateID is the fx_rates row used, for reference only; never read again."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/types.FXRateScope"
+          },
+          "source": {
+            "$ref": "#/components/schemas/types.FxConversionSource"
+          }
+        },
+        "x-speakeasy-name-override": "FxConversion"
+      },
+      "types.FxConversionSource": {
+        "type": "object",
+        "properties": {
+          "net": {
+            "type": "string"
+          },
+          "subtotal": {
+            "type": "string"
+          },
+          "total_discount": {
+            "type": "string"
+          },
+          "total_prepaid_credits_applied": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "FxConversionSource"
+      },
       "types.GlobalCustomField": {
         "type": "object",
         "properties": {
@@ -32123,6 +32360,12 @@
         "properties": {
           "amount": {
             "type": "string"
+          },
+          "coupons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CouponRef"
+            }
           },
           "effective_date": {
             "type": "string",
@@ -34254,6 +34497,8 @@
           "invoice.update.voided",
           "invoice.update",
           "invoice.payment.overdue",
+          "invoice.sync.success",
+          "invoice.sync.failed",
           "wallet.credit_balance.dropped",
           "wallet.credit_balance.recovered",
           "wallet.ongoing_balance.dropped",
@@ -34316,6 +34561,8 @@
           "WebhookEventInvoiceUpdateVoided",
           "WebhookEventInvoiceUpdate",
           "WebhookEventInvoicePaymentOverdue",
+          "WebhookEventInvoiceSyncSuccess",
+          "WebhookEventInvoiceSyncFailed",
           "WebhookEventWalletCreditBalanceDropped",
           "WebhookEventWalletCreditBalanceRecovered",
           "WebhookEventWalletOngoingBalanceDropped",
@@ -35039,6 +35286,23 @@
           }
         }
       },
+      "webhookDto.InvoiceSyncWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/webhookDto.Invoice"
+          },
+          "provider_details": {
+            "$ref": "#/components/schemas/webhookDto.ProviderDetails"
+          }
+        }
+      },
       "webhookDto.InvoiceWebhookPayload": {
         "type": "object",
         "properties": {
@@ -35229,6 +35493,20 @@
           },
           "type": {
             "$ref": "#/components/schemas/types.PriceType"
+          }
+        }
+      },
+      "webhookDto.ProviderDetails": {
+        "type": "object",
+        "properties": {
+          "hosted_invoice_url": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
           }
         }
       },

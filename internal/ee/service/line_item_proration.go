@@ -15,6 +15,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -37,6 +38,9 @@ type LineItemProrationRequest struct {
 	Behavior       types.ProrationBehavior
 	Reason         string // shown in wallet credit description
 	IdempotencyKey string
+
+	// Coupons discount the matching charge lines before credits are netted.
+	Coupons []dto.InvoiceLineItemCoupon
 }
 
 type LineItemProrationSummary struct {
@@ -48,6 +52,10 @@ type LineItemProrationSummary struct {
 	CreditLineItems   []dto.CreateInvoiceLineItemRequest
 	TotalCreditAmount decimal.Decimal
 
+	// Coupons matched to charge lines and their discount, netted before credits.
+	LineItemCoupons     []dto.InvoiceLineItemCoupon
+	TotalDiscountAmount decimal.Decimal
+
 	Currency  string
 	IsPreview bool
 }
@@ -55,8 +63,9 @@ type LineItemProrationSummary struct {
 // emptyProrationSummary is the zero quote for callers that resolved to "nothing to prorate".
 func emptyProrationSummary(sub *subscription.Subscription) *LineItemProrationSummary {
 	summary := &LineItemProrationSummary{
-		TotalChargeAmount: decimal.Zero,
-		TotalCreditAmount: decimal.Zero,
+		TotalChargeAmount:   decimal.Zero,
+		TotalCreditAmount:   decimal.Zero,
+		TotalDiscountAmount: decimal.Zero,
 	}
 
 	if sub != nil {
@@ -76,6 +85,8 @@ func (s *LineItemProrationSummary) Merge(others ...*LineItemProrationSummary) *L
 		s.CreditLineItems = append(s.CreditLineItems, other.CreditLineItems...)
 		s.TotalChargeAmount = s.TotalChargeAmount.Add(other.TotalChargeAmount)
 		s.TotalCreditAmount = s.TotalCreditAmount.Add(other.TotalCreditAmount)
+		s.LineItemCoupons = append(s.LineItemCoupons, other.LineItemCoupons...)
+		s.TotalDiscountAmount = s.TotalDiscountAmount.Add(other.TotalDiscountAmount)
 	}
 
 	return s
@@ -85,7 +96,7 @@ func (s *LineItemProrationSummary) NetAmount() decimal.Decimal {
 	if s == nil {
 		return decimal.Zero
 	}
-	return s.TotalChargeAmount.Sub(s.TotalCreditAmount)
+	return s.TotalChargeAmount.Sub(s.TotalDiscountAmount).Sub(s.TotalCreditAmount)
 }
 
 type SettleMode int
@@ -202,10 +213,11 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 	prorationSvc := NewProrationService(s.params)
 
 	summary := &LineItemProrationSummary{
-		Currency:          sub.Currency,
-		IsPreview:         req.Behavior == types.ProrationBehaviorNone,
-		TotalChargeAmount: decimal.Zero,
-		TotalCreditAmount: decimal.Zero,
+		Currency:            sub.Currency,
+		IsPreview:           req.Behavior == types.ProrationBehaviorNone,
+		TotalChargeAmount:   decimal.Zero,
+		TotalCreditAmount:   decimal.Zero,
+		TotalDiscountAmount: decimal.Zero,
 	}
 
 	for _, entry := range req.Entries {
@@ -338,6 +350,10 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 		}
 	}
 
+	if err := s.applyCoupons(ctx, summary, req.Coupons); err != nil {
+		return nil, err
+	}
+
 	return summary, nil
 }
 
@@ -401,6 +417,7 @@ func (s *lineItemProrationService) Settle(ctx context.Context, req *SettleProrat
 		}
 
 	case net.IsNegative():
+		// No invoice means no coupon application row, so a repeated coupon does not use up a period here.
 		credit, err := s.creditWallet(ctx, req, net.Abs())
 		if err != nil {
 			return nil, err
@@ -454,25 +471,61 @@ func buildNettedProrationInvoiceRequest(req *SettleProrationRequest) dto.CreateI
 	if billingPeriod == "" {
 		billingPeriod = string(sub.BillingPeriod)
 	}
-	net := quote.NetAmount()
+	// Pre-discount: invoice compute subtracts the coupons itself.
+	net := quote.TotalChargeAmount.Sub(quote.TotalCreditAmount)
 	periodStart, periodEnd := req.PeriodStart, req.PeriodEnd
 
 	return dto.CreateInvoiceRequest{
-		CustomerID:     sub.GetInvoicingCustomerID(),
-		SubscriptionID: &sub.ID,
-		InvoiceType:    types.InvoiceTypeOneOff,
-		Currency:       sub.Currency,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
-		AmountDue:      net,
-		Total:          net,
-		Subtotal:       net,
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BillingPeriod:  &billingPeriod,
-		LineItems:      lineItems,
-		IdempotencyKey: &req.IdempotencyKey,
-		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, req.DisplayName),
+		CustomerID:      sub.GetInvoicingCustomerID(),
+		SubscriptionID:  &sub.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		Currency:        sub.Currency,
+		BillingReason:   types.InvoiceBillingReasonSubscriptionUpdate,
+		AmountDue:       net,
+		Total:           net,
+		Subtotal:        net,
+		PeriodStart:     &periodStart,
+		PeriodEnd:       &periodEnd,
+		BillingPeriod:   &billingPeriod,
+		LineItems:       lineItems,
+		LineItemCoupons: quote.LineItemCoupons,
+		IdempotencyKey:  &req.IdempotencyKey,
+		Metadata:        types.WithCollapsedInvoiceDisplayName(nil, req.DisplayName),
 	}
+}
+
+func (s *lineItemProrationService) applyCoupons(
+	ctx context.Context,
+	quote *LineItemProrationSummary,
+	coupons []dto.InvoiceLineItemCoupon,
+) error {
+	// Only charge lines are discounted; a credit line never carries a coupon.
+	chargedItemIDs := lo.FilterMap(quote.ChargeLineItems, func(li dto.CreateInvoiceLineItemRequest, _ int) (string, bool) {
+		return lo.FromPtr(li.SubscriptionLineItemID), li.SubscriptionLineItemID != nil
+	})
+	coupons = lo.Filter(coupons, func(c dto.InvoiceLineItemCoupon, _ int) bool {
+		return lo.Contains(chargedItemIDs, lo.FromPtr(c.SubscriptionLineItemID))
+	})
+	if len(coupons) == 0 {
+		return nil
+	}
+
+	inv, err := (&dto.CreateInvoiceRequest{Currency: quote.Currency, LineItems: quote.ChargeLineItems}).ToInvoice(ctx)
+	if err != nil {
+		return err
+	}
+
+	result, err := NewCouponApplicationService(s.params).CalculateCouponsForInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice:         inv,
+		LineItemCoupons: coupons,
+	})
+	if err != nil {
+		return err
+	}
+
+	quote.LineItemCoupons = coupons
+	quote.TotalDiscountAmount = result.TotalDiscountAmount
+	return nil
 }
 
 // creditBasisForWindow caps a window's credit at what was billed for that window.

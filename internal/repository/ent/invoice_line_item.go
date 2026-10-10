@@ -590,7 +590,7 @@ func (r *invoiceLineItemRepository) GetBilledAmountsBySubscriptionLineItem(
 	query := fmt.Sprintf(`
 		SELECT
 			ili.subscription_line_item_id,
-			COALESCE(SUM(ili.amount) FILTER (WHERE ili.amount > 0), 0)::text  AS charged,
+			COALESCE(SUM(ili.amount - COALESCE(ili.line_item_discount, 0) - COALESCE(ili.invoice_level_discount, 0)) FILTER (WHERE ili.amount > 0), 0)::text AS charged,
 			COALESCE(SUM(-ili.amount) FILTER (WHERE ili.amount < 0), 0)::text AS credited
 		FROM invoice_line_items ili
 		INNER JOIN invoices inv

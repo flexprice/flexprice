@@ -2447,6 +2447,10 @@ func (s *invoiceService) CreatePreviewInvoice(ctx context.Context, req dto.Creat
 		return nil, err
 	}
 
+	if _, err := s.applyPreviewCoupons(ctx, inv, &req); err != nil {
+		return nil, err
+	}
+
 	if !inv.Subtotal.IsPositive() {
 		return dto.NewInvoiceResponse(inv), nil
 	}

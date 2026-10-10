@@ -507,6 +507,12 @@ definitions:
           with StartDate; omit both to attach now.
       checkout:
         $ref: '#/definitions/CheckoutParams'
+      coupons:
+        description: Coupons apply to this addon's line items; price_id targets one
+          price, omitted targets all.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
@@ -544,6 +550,12 @@ definitions:
         description: |-
           ChangeAt names when the attach applies without computing a date. Mutually exclusive
           with StartDate; omit both to attach now.
+      coupons:
+        description: Coupons apply to this addon's line items; price_id targets one
+          price, omitted targets all.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
@@ -1470,7 +1482,7 @@ definitions:
         type: string
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: Expanded data (populated when expand options are specified)
       meter_id:
         type: string
@@ -1963,6 +1975,13 @@ definitions:
         type: string
       priority:
         type: integer
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: |-
+          ProrationBehavior applies to SUBSCRIPTION scope only. create_prorations scales the first
+          application to the rest of the current billing period and puts later ones on the
+          subscription's billing dates, when the grant recurs on the subscription's billing period.
       scope:
         $ref: '#/definitions/types.CreditGrantScope'
       start_date:
@@ -2084,6 +2103,11 @@ definitions:
         description: address_state is the state, province, or region name with maximum
           100 characters
         maxLength: 100
+        type: string
+      billing_currency:
+        description: billing_currency is the fiat currency invoices are issued in;
+          empty means the charge currency is used as-is
+        maxLength: 10
         type: string
       contact:
         description: contact is an optional contact number for the customer (e.g.
@@ -2908,6 +2932,13 @@ definitions:
         type: string
       external_customer_id:
         type: string
+      fx_rates:
+        description: |-
+          FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per
+          non-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.
+        items:
+          $ref: '#/definitions/InlineFXRate'
+        type: array
       gateway_payment_method_id:
         type: string
       include_price_ids:
@@ -3565,6 +3596,10 @@ definitions:
         type: string
       address_state:
         description: AddressState is the state of the customer's address
+        type: string
+      billing_currency:
+        description: BillingCurrency is the fiat currency invoices are issued in;
+          nil means charge currency is used as-is.
         type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
@@ -4767,6 +4802,15 @@ definitions:
     x-enum-varnames:
     - InheritanceActionAdd
     - InheritanceActionRemove
+  InlineFXRate:
+    properties:
+      end_date:
+        type: string
+      rate:
+        type: string
+      start_date:
+        type: string
+    type: object
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -4864,6 +4908,12 @@ definitions:
         type: string
       environment_id:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: |-
+          fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency
+          and source only; the rate lives on the invoice). Nil for lines that were never converted.
       id:
         type: string
       invoice_id:
@@ -5083,6 +5133,11 @@ definitions:
         description: finalized_at is the timestamp when this invoice was finalized
           and made ready for payment
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: fx_conversion is the frozen fiat→fiat conversion applied at finalize;
+          nil when the invoice was never converted.
       id:
         description: id is the unique identifier for this invoice
         type: string
@@ -5233,6 +5288,11 @@ definitions:
       amount:
         description: Amount reprices the charge. Flat fee only for now.
         type: string
+      coupons:
+        description: Coupons apply to the new line item created by this change.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
       effective_date:
         type: string
       id:
@@ -5409,7 +5469,7 @@ definitions:
       event_name:
         type: string
       meter:
-        $ref: '#/definitions/meter.Meter'
+        $ref: '#/definitions/Meter'
       meter_id:
         type: string
     type: object
@@ -7012,7 +7072,7 @@ definitions:
         type: object
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: |-
           Meter is populated when the caller adds "meters" to a subscription-scoped
           expand string alongside "subscription_line_items". Only usage line items
@@ -8276,6 +8336,11 @@ definitions:
           with maximum 100 characters
         maxLength: 100
         type: string
+      billing_currency:
+        description: billing_currency updates the invoicing currency; send "" to clear
+          it back to the charge currency
+        maxLength: 10
+        type: string
       contact:
         description: contact is the updated contact number for the customer (e.g.
           phone)
@@ -8682,10 +8747,36 @@ definitions:
         - $ref: '#/definitions/types.TaxRateStatus'
         description: tax_rate_status is the updated status of the tax rate
     type: object
+  UpdateTenantAddress:
+    properties:
+      address_city:
+        type: string
+      address_country:
+        type: string
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      address_postal_code:
+        type: string
+      address_state:
+        type: string
+    type: object
+  UpdateTenantBillingDetails:
+    properties:
+      address:
+        $ref: '#/definitions/UpdateTenantAddress'
+      email:
+        type: string
+      help_email:
+        type: string
+      phone:
+        type: string
+    type: object
   UpdateTenantRequest:
     properties:
       billing_details:
-        $ref: '#/definitions/TenantBillingDetails'
+        $ref: '#/definitions/UpdateTenantBillingDetails'
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
@@ -8807,7 +8898,7 @@ definitions:
         description: Group when the feature belongs to a group (object includes id)
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: Full meter object (only if expand includes "meter")
       meter_id:
         description: Meter ID
@@ -9417,6 +9508,10 @@ definitions:
       address_state:
         description: AddressState is the state of the customer's address
         type: string
+      billing_currency:
+        description: BillingCurrency is the fiat currency invoices are issued in;
+          nil means charge currency is used as-is.
+        type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
           phone)
@@ -9504,6 +9599,56 @@ definitions:
       unit_plural:
         type: string
       unit_singular:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  Meter:
+    properties:
+      aggregation:
+        allOf:
+        - $ref: '#/definitions/meter.Aggregation'
+        description: |-
+          Aggregation defines the aggregation type and field for the meter
+          It is used to aggregate the events into a single value for calculating the usage
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the meter
+        type: string
+      event_name:
+        description: |-
+          EventName is the unique identifier for the event that this meter is tracking
+          It is a mandatory field in the events table and hence being used as the primary matching field
+          We can have multiple meters tracking the same event but with different filters and aggregation
+        type: string
+      filters:
+        description: |-
+          Filters define the criteria for the meter to be applied on the events before aggregation
+          It also defines the possible values on which later the charges will be applied
+        items:
+          $ref: '#/definitions/meter.Filter'
+        type: array
+      id:
+        description: ID is the unique identifier for the meter
+        type: string
+      name:
+        description: Name is the display name of the meter
+        type: string
+      reset_usage:
+        allOf:
+        - $ref: '#/definitions/types.ResetUsage'
+        description: |-
+          ResetUsage defines whether the usage should be reset periodically or not
+          For ex meters tracking total storage used do not get reset but meters tracking
+          total API requests do.
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
         type: string
       updated_at:
         type: string
@@ -9638,6 +9783,12 @@ definitions:
         type: string
       environment_id:
         type: string
+      fx_conversion:
+        allOf:
+        - $ref: '#/definitions/types.FxConversion'
+        description: |-
+          fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency
+          and source only; the rate lives on the invoice). Nil for lines that were never converted.
       id:
         type: string
       invoice_id:
@@ -9756,56 +9907,6 @@ definitions:
         items:
           type: string
         type: array
-    type: object
-  meter.Meter:
-    properties:
-      aggregation:
-        allOf:
-        - $ref: '#/definitions/meter.Aggregation'
-        description: |-
-          Aggregation defines the aggregation type and field for the meter
-          It is used to aggregate the events into a single value for calculating the usage
-      created_at:
-        type: string
-      created_by:
-        type: string
-      environment_id:
-        description: EnvironmentID is the environment identifier for the meter
-        type: string
-      event_name:
-        description: |-
-          EventName is the unique identifier for the event that this meter is tracking
-          It is a mandatory field in the events table and hence being used as the primary matching field
-          We can have multiple meters tracking the same event but with different filters and aggregation
-        type: string
-      filters:
-        description: |-
-          Filters define the criteria for the meter to be applied on the events before aggregation
-          It also defines the possible values on which later the charges will be applied
-        items:
-          $ref: '#/definitions/meter.Filter'
-        type: array
-      id:
-        description: ID is the unique identifier for the meter
-        type: string
-      name:
-        description: Name is the display name of the meter
-        type: string
-      reset_usage:
-        allOf:
-        - $ref: '#/definitions/types.ResetUsage'
-        description: |-
-          ResetUsage defines whether the usage should be reset periodically or not
-          For ex meters tracking total storage used do not get reset but meters tracking
-          total API requests do.
-      status:
-        $ref: '#/definitions/types.Status'
-      tenant_id:
-        type: string
-      updated_at:
-        type: string
-      updated_by:
-        type: string
     type: object
   models.TemporalWorkflowResult:
     properties:
@@ -10062,7 +10163,7 @@ definitions:
         type: object
       meter:
         allOf:
-        - $ref: '#/definitions/meter.Meter'
+        - $ref: '#/definitions/Meter'
         description: |-
           Meter is populated when the caller adds "meters" to a subscription-scoped
           expand string alongside "subscription_line_items". Only usage line items
@@ -10213,6 +10314,10 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.AddonCadence'
+      coupons:
+        items:
+          $ref: '#/definitions/types.CouponRef'
+        type: array
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -10773,6 +10878,19 @@ definitions:
         type: array
       status:
         $ref: '#/definitions/types.Status'
+    type: object
+  types.CouponRef:
+    properties:
+      association_id:
+        type: string
+      coupon_id:
+        type: string
+      end_date:
+        type: string
+      price_id:
+        type: string
+      start_date:
+        type: string
     type: object
   types.CouponType:
     enum:
@@ -11437,6 +11555,45 @@ definitions:
     - NOT_IN
     - BEFORE
     - AFTER
+  types.FxConversion:
+    properties:
+      billing_currency:
+        description: BillingCurrency is the currency the invoice was issued in.
+        type: string
+      charge_currency:
+        description: ChargeCurrency is the invoice's original (draft) currency.
+        type: string
+      converted_at:
+        description: ConvertedAt is when the conversion ran.
+        type: string
+      rate:
+        description: 'Rate is the frozen rate: billing per 1 charge unit.'
+        type: string
+      rate_id:
+        description: RateID is the fx_rates row used, for reference only; never read
+          again.
+        type: string
+      scope:
+        allOf:
+        - $ref: '#/definitions/types.FXRateScope'
+        description: 'Scope is where the rate was resolved: subscription, customer
+          or tenant.'
+      source:
+        allOf:
+        - $ref: '#/definitions/types.FxConversionSource'
+        description: Source holds the original charge-currency amounts, before tax.
+    type: object
+  types.FxConversionSource:
+    properties:
+      net:
+        type: string
+      subtotal:
+        type: string
+      total_discount:
+        type: string
+      total_prepaid_credits_applied:
+        type: string
+    type: object
   types.GlobalCustomField:
     properties:
       field:
@@ -11805,6 +11962,10 @@ definitions:
     properties:
       amount:
         type: string
+      coupons:
+        items:
+          $ref: '#/definitions/types.CouponRef'
+        type: array
       effective_date:
         type: string
       line_item_id:
@@ -13368,6 +13529,8 @@ definitions:
     - invoice.update.voided
     - invoice.update
     - invoice.payment.overdue
+    - invoice.sync.success
+    - invoice.sync.failed
     - wallet.credit_balance.dropped
     - wallet.credit_balance.recovered
     - wallet.ongoing_balance.dropped
@@ -13430,6 +13593,8 @@ definitions:
     - WebhookEventInvoiceUpdateVoided
     - WebhookEventInvoiceUpdate
     - WebhookEventInvoicePaymentOverdue
+    - WebhookEventInvoiceSyncSuccess
+    - WebhookEventInvoiceSyncFailed
     - WebhookEventWalletCreditBalanceDropped
     - WebhookEventWalletCreditBalanceRecovered
     - WebhookEventWalletOngoingBalanceDropped
@@ -13907,6 +14072,17 @@ definitions:
       subscription_line_item_id:
         type: string
     type: object
+  webhookDto.InvoiceSyncWebhookPayload:
+    properties:
+      error:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      invoice:
+        $ref: '#/definitions/webhookDto.Invoice'
+      provider_details:
+        $ref: '#/definitions/webhookDto.ProviderDetails'
+    type: object
   webhookDto.InvoiceWebhookPayload:
     properties:
       event_type:
@@ -14030,6 +14206,15 @@ definitions:
         $ref: '#/definitions/price.JSONBTransformQuantity'
       type:
         $ref: '#/definitions/types.PriceType'
+    type: object
+  webhookDto.ProviderDetails:
+    properties:
+      hosted_invoice_url:
+        type: string
+      invoice_id:
+        type: string
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
     type: object
   webhookDto.Refund:
     properties:
@@ -17417,6 +17602,7 @@ paths:
       summary: Delete an FX rate
       tags:
       - FX Rates
+      x-scope: delete
     get:
       consumes:
       - application/json
@@ -23063,6 +23249,37 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.payment.overdue
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.sync.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired once per provider when an invoice sync fails after its last
+        retry.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
+      summary: invoice.sync.failed
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.sync.success:
+    post:
+      consumes:
+      - application/json
+      description: Fired once per provider when an invoice is synced to that provider.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
+      summary: invoice.sync.success
       tags:
       - Webhook Events
   /webhook-events/invoice.update:

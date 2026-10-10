@@ -172,7 +172,7 @@ func (s *InMemoryInvoiceLineItemStore) GetBilledAmountsBySubscriptionLineItem(
 			continue
 		}
 		if item.Amount.IsPositive() {
-			charged[id] = charged[id].Add(item.Amount)
+			charged[id] = charged[id].Add(item.Amount.Sub(item.LineItemDiscount).Sub(item.InvoiceLevelDiscount))
 		} else if item.Amount.IsNegative() {
 			credited[id] = credited[id].Add(item.Amount.Neg())
 		}

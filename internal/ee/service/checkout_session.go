@@ -540,11 +540,28 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		if err := s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, invoiceID); err != nil {
 			return err
 		}
-		if err := s.InvoiceRepo.Delete(ctx, invoiceID); err != nil {
+		if err := archiveDraftInvoice(ctx, s.ServiceParams, invoiceID); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// archiveDraftInvoice archives an unpaid checkout draft along with the coupon applications computed onto it.
+func archiveDraftInvoice(ctx context.Context, sp ServiceParams, invoiceID string) error {
+	filter := types.NewNoLimitCouponApplicationFilter()
+	filter.InvoiceIDs = []string{invoiceID}
+	applications, err := sp.CouponApplicationRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	for _, application := range applications {
+		if err := sp.CouponApplicationRepo.Delete(ctx, application.ID); err != nil {
+			return err
+		}
+	}
+
+	return sp.InvoiceRepo.Delete(ctx, invoiceID)
 }
 
 const cleanupExpiredBatchSize = 1000
@@ -837,7 +854,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
 		// Compute already debited prepaid credits; archiving alone would not return them.
 		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
-		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
+		if delErr := archiveDraftInvoice(ctx, s.ServiceParams, draftInvoiceID); delErr != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
 				"invoice_id", draftInvoiceID,
 				"error", delErr,
