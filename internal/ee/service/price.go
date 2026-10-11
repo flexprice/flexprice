@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -921,6 +922,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 				bumpSequence = true
 			}
 
+			ctx = activity.WithAction(ctx, existingPrice.ID, activity.PriceTerminated)
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
 
@@ -1060,6 +1062,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 
 	price.EndDate = &endDate
 
+	ctx = activity.WithAction(ctx, id, activity.PriceTerminated)
 	// bumpSequence=true: DeletePrice is a termination event (end_date being set).
 	if err := s.PriceRepo.Update(ctx, price, true); err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainFeature "github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -307,7 +308,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 		updateQuery = updateQuery.SetAlertSettings(*f.AlertSettings)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	_, err := updateQuery.SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -351,6 +352,7 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 		meterID = existing.MeterID
 	}
 
+	ctx = activity.WithAction(ctx, id, activity.FeatureArchived)
 	_, err := client.Feature.Update().
 		Where(
 			feature.ID(id),
@@ -360,7 +362,7 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -566,7 +568,7 @@ func (r *featureRepository) ClearByGroupID(ctx context.Context, groupID string) 
 		ClearGroupID().
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to clear group ID from features").

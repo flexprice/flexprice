@@ -11,6 +11,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -606,6 +607,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	var originalStatus types.CreditNoteStatus
 
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+		tx = activity.WithAction(tx, id, activity.CreditNoteVoided)
 		// Lock to serialize against a concurrent finalize/void on the same invoice.
 		if _, err := s.InvoiceRepo.GetForUpdate(tx, cn.InvoiceID); err != nil {
 			return err
@@ -753,6 +755,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string, r
 
 	// Process the credit note in transaction
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+		tx = activity.WithAction(tx, id, activity.CreditNoteFinalized)
 		// Lock before any write so a concurrent finalize can't race the capacity check below.
 		lockedInv, err := s.InvoiceRepo.GetForUpdate(tx, cn.InvoiceID)
 		if err != nil {
@@ -1065,6 +1068,7 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 
 	// Update amounts and payment status based on credit note type
 	if cn.CreditNoteType == types.CreditNoteTypeRefund {
+		ctx = activity.WithAction(ctx, inv.ID, activity.InvoiceRefunded)
 		inv.RefundedAmount = inv.RefundedAmount.Add(cn.TotalAmount)
 
 		// Update payment status based on refund amount

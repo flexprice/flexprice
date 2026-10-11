@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/activity"
 	domainInvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -640,11 +641,11 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	}
 
 	// Execute update
-	n, err := query.Save(ctx)
+	rows, err := query.SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).WithHint("invoice update failed").Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		// No rows were updated - either record doesn't exist or version mismatch
 		exists, err := client.Invoice.Query().
 			Where(
@@ -676,7 +677,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 	})
 	defer FinishSpan(span)
 
-	n, err := r.client.Writer(ctx).Invoice.Update().
+	rows, err := r.client.Writer(ctx).Invoice.Update().
 		Where(
 			invoice.ID(id),
 			invoice.TenantID(types.GetTenantID(ctx)),
@@ -690,12 +691,12 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).WithHint("failed to move draft invoice period").Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		return ierr.NewError("draft invoice not found").
 			WithHint("Only a draft invoice can have its period moved").
 			WithReportableDetails(map[string]any{"invoice_id": id}).
@@ -731,6 +732,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 		}
 
 		// Then delete invoice
+		ctx = activity.WithAction(ctx, id, activity.InvoiceDeleted)
 		_, err = r.client.Writer(ctx).Invoice.Update().
 			Where(
 				invoice.ID(id),
@@ -740,7 +742,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			SetUpdatedAt(time.Now()).
-			Save(ctx)
+			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice deletion failed").Mark(ierr.ErrDatabase)
 		}

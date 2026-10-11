@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -447,6 +448,32 @@ func paymentProviderLabel(p *payment.Payment) string {
 	}
 }
 
+// paymentStatusAction maps a payment status to its declared activity action; pending and processing stay "updated".
+func paymentStatusAction(status types.PaymentStatus) string {
+	switch status {
+	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
+		return activity.PaymentSucceeded
+	case types.PaymentStatusFailed:
+		return activity.PaymentFailed
+	case types.PaymentStatusRefunded, types.PaymentStatusPartiallyRefunded:
+		return activity.PaymentRefunded
+	case types.PaymentStatusVoided:
+		return activity.PaymentVoided
+	}
+	return ""
+}
+
+// withPaymentStatusAction declares the action for a payment that moved from before to after.
+func withPaymentStatusAction(ctx context.Context, id string, before, after types.PaymentStatus) context.Context {
+	if before == after {
+		return ctx
+	}
+	if action := paymentStatusAction(after); action != "" {
+		return activity.WithAction(ctx, id, action)
+	}
+	return ctx
+}
+
 // UpdatePayment updates a payment
 func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
 	if id == "" {
@@ -532,6 +559,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	// this request changed it. The write persists the whole payment including
 	// PaymentStatus, so an update that only touches other fields would still
 	// write back the status it read and could revert a concurrent transition.
+	ctx = withPaymentStatusAction(ctx, p.ID, observedStatus, p.PaymentStatus)
 	if err := s.PaymentRepo.UpdateWithExpectedStatus(ctx, p, observedStatus); err != nil {
 		return nil, err // Repository already using ierr
 	}

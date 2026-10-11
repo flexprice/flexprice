@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
@@ -671,6 +672,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			Mark(ierr.ErrNotFound)
 	}
 
+	ctx = activity.WithAction(ctx, walletID, activity.WalletToppedUp)
 	// If Credits to Add is not provided then convert the currency amount to credits
 	// If both provided we give priority to Credits to add
 	if req.CreditsToAdd.IsZero() && !req.Amount.IsZero() {
@@ -1465,6 +1467,7 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 
 	// Execute completion in a transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		ctx = activity.WithAction(ctx, tx.WalletID, activity.WalletToppedUp)
 		// Serialize with processWalletOperation and other completion paths so a
 		// concurrent debit/credit cannot overwrite the absolute-value balance write
 		// below with a stale-snapshot value. Released on tx commit/rollback.
@@ -1973,6 +1976,7 @@ func (s *walletService) TerminateWallet(ctx context.Context, walletID string) er
 
 	// Use client's WithTx for atomic operations
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		ctx = activity.WithAction(ctx, walletID, activity.WalletTerminated)
 		// Debit remaining balance if any
 		if w.CreditBalance.GreaterThan(decimal.Zero) {
 			debitReq := &wallet.WalletOperation{

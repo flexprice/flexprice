@@ -170,7 +170,7 @@ func (r *refundRepository) Update(ctx context.Context, ref *domainRefund.Refund)
 		SetNillableSucceededAt(ref.SucceededAt).
 		SetNillableFailedAt(ref.FailedAt).
 		SetNillableCancelledAt(ref.CancelledAt).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -214,7 +214,7 @@ func (r *refundRepository) Delete(ctx context.Context, id string) error {
 			refund.TenantID(types.GetTenantID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

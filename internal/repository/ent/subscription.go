@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainSub "github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -294,7 +295,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Execute update
-	_, err := query.Save(ctx)
+	_, err := query.SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		r.logger.Error(ctx, "failed to update subscription", "error", err, "subscription_id", sub.ID)
@@ -334,7 +335,7 @@ func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, plan
 		SetPlanID(planID).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		r.logger.Error(ctx, "failed to update subscription plan", "error", err, "subscription_id", id, "plan_id", planID)
@@ -342,7 +343,7 @@ func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, plan
 			WithHint("Failed to change the subscription's plan").
 			Mark(ierr.ErrDatabase)
 	}
-	if affected == 0 {
+	if len(affected) == 0 {
 		return ierr.NewError("subscription not found").
 			WithHint("Subscription not found").
 			WithReportableDetails(map[string]any{"subscription_id": id}).
@@ -363,6 +364,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
+	ctx = activity.WithAction(ctx, id, activity.SubscriptionArchived)
 	err := client.Subscription.UpdateOneID(id).
 		Where(
 			subscription.TenantID(types.GetTenantID(ctx)),

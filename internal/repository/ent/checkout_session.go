@@ -11,6 +11,7 @@ import (
 	entCheckout "github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/predicate"
 	entSchema "github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/activity"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -125,7 +126,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 	span := StartRepositorySpan(ctx, "checkout_session", "update", map[string]interface{}{"id": s.ID})
 	defer FinishSpan(span)
 
-	n, err := r.client.Writer(ctx).CheckoutSession.Update().
+	rows, err := r.client.Writer(ctx).CheckoutSession.Update().
 		Where(
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
@@ -144,12 +145,12 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetMetadata(map[string]string(s.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).WithHint("checkout session update failed").Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		return ierr.NewError("checkout session not found").
 			WithHintf("checkout session %s not found or already archived", s.ID).
 			Mark(ierr.ErrNotFound)
@@ -319,7 +320,8 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 	span := StartRepositorySpan(ctx, "checkout_session", "delete", map[string]interface{}{"id": id})
 	defer FinishSpan(span)
 
-	n, err := r.client.Writer(ctx).CheckoutSession.Update().
+	ctx = activity.WithAction(ctx, id, activity.CheckoutSessionArchived)
+	rows, err := r.client.Writer(ctx).CheckoutSession.Update().
 		Where(
 			entCheckout.ID(id),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
@@ -328,7 +330,7 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).
@@ -336,7 +338,7 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 			WithReportableDetails(map[string]any{"id": id}).
 			Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		return ierr.NewError("checkout session not found").
 			WithHintf("checkout session %s not found or already archived", id).
 			Mark(ierr.ErrNotFound)
@@ -352,7 +354,7 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 	span := StartRepositorySpan(ctx, "checkout_session", "mark_completed", map[string]interface{}{"id": sessionID})
 	defer FinishSpan(span)
 
-	n, err := r.client.Writer(ctx).CheckoutSession.Update().
+	rows, err := r.client.Writer(ctx).CheckoutSession.Update().
 		Where(
 			entCheckout.ID(sessionID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
@@ -364,14 +366,14 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 		SetProviderResult(providerResult).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return false, ierr.WithError(err).WithHint("failed to mark checkout session completed").Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return n > 0, nil
+	return len(rows) > 0, nil
 }
 
 func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string) (bool, error) {
@@ -403,14 +405,14 @@ func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID 
 		q = q.SetFailureReason(*failureReason)
 	}
 
-	n, err := q.Save(ctx)
+	rows, err := q.SaveReturning(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return false, ierr.WithError(err).WithHint("failed to mark checkout session terminal").Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return n > 0, nil
+	return len(rows) > 0, nil
 }
 
 // ListExpiredCheckoutSessions returns active (initiated|pending) sessions whose ExpiresAt is before

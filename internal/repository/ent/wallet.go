@@ -207,7 +207,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 		SetWalletStatus(status).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -220,7 +220,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 			Mark(ierr.ErrDatabase)
 	}
 
-	if count == 0 {
+	if len(count) == 0 {
 		// Create an error to pass to SetSpanError instead of using ErrorBuilder directly
 		notFoundErr := fmt.Errorf("wallet not found or already updated")
 		SetSpanError(span, notFoundErr)
@@ -460,13 +460,13 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	})
 	defer FinishSpan(span)
 
-	err := r.client.Writer(ctx).Wallet.Update().
+	_, err := r.client.Writer(ctx).Wallet.Update().
 		Where(wallet.ID(walletID)).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Exec(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		return ierr.WithError(err).
@@ -1062,7 +1062,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	update.SetUpdatedAt(time.Now().UTC())
 	update.SetUpdatedBy(types.GetUserID(ctx))
 
-	count, err := update.Save(ctx)
+	count, err := update.SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to update wallet").
@@ -1072,7 +1072,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			Mark(ierr.ErrDatabase)
 	}
 
-	if count == 0 {
+	if len(count) == 0 {
 		return ierr.NewError("wallet not found or already updated").
 			WithHint("The wallet may not exist or has already been updated").
 			Mark(ierr.ErrNotFound)

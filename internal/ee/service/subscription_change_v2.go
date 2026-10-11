@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
@@ -855,6 +856,7 @@ func (s *subscriptionService) executePlanChangeAt(
 	var resp *dto.SubscriptionChangeV2Response
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		txCtx = activity.WithAction(txCtx, subscriptionID, activity.SubscriptionPlanChanged)
 		sub, err := s.loadSubscriptionForChange(txCtx, subscriptionID, true)
 		if err != nil {
 			return err

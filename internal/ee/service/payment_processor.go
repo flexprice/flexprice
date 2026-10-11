@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -174,6 +175,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	}
 
 	paymentObj.UpdatedAt = time.Now().UTC()
+	ctx = withPaymentStatusAction(ctx, paymentObj.ID, statusBeforeOutcome, paymentObj.PaymentStatus)
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
 	}
@@ -794,6 +796,10 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	}
 
 	// Update the invoice
+	ctx = withInvoicePaid(ctx, invoice.ID, invoice.PaymentStatus)
+	if finalizedNow {
+		ctx = activity.WithAction(ctx, invoice.ID, activity.InvoiceFinalized)
+	}
 	if err := p.InvoiceRepo.Update(ctx, invoice); err != nil {
 		return err
 	}

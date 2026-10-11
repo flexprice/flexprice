@@ -406,7 +406,7 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Execute update
-	n, err := query.Save(ctx)
+	rows, err := query.SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("credit note update failed").
@@ -415,7 +415,7 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		// No rows were updated - either record doesn't exist
 		exists, err := client.CreditNote.Query().
 			Where(
@@ -481,7 +481,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			SetUpdatedAt(time.Now()).
-			Save(ctx)
+			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note deletion failed").Mark(ierr.ErrDatabase)
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -554,6 +555,7 @@ func (s *refundService) Settle(ctx context.Context, req *dto.SettleRefundRequest
 		}
 
 		settled = builder.Build()
+		tx = activity.WithAction(tx, req.RefundID, activity.RefundSucceeded)
 		return s.RefundRepo.Update(tx, settled)
 	})
 	if err != nil || settled == nil {
@@ -586,6 +588,7 @@ func (s *refundService) Fail(ctx context.Context, refundID, reason string) error
 			WithFailureReason(lo.ToPtr(reason)).
 			WithFailedAt(&now).
 			Build()
+		tx = activity.WithAction(tx, refundID, activity.RefundFailed)
 		return s.RefundRepo.Update(tx, failed)
 	})
 	if err != nil || failed == nil {

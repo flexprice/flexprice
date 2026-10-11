@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -728,6 +729,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx = activity.WithAction(ctx, subID, activity.SubscriptionActivated)
 	// Recalculate all dates with new start date
 	newStartDate := req.StartDate.UTC()
 	hasCustomAnchor := sub.BillingCycle == types.BillingCycleAnniversary && !sub.BillingAnchor.Equal(sub.StartDate)
@@ -2072,6 +2074,7 @@ func (s *subscriptionService) CancelSubscription(
 	// non-zero invoice on cancellation is incorrect — skip invoice creation.
 	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
 
+	ctx = activity.WithAction(ctx, subscriptionID, activity.SubscriptionCancelled)
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
@@ -3844,7 +3847,8 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 		child.CancelAt = parentSub.CancelAt
 		child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
 		child.EndDate = parentSub.EndDate
-		if err := s.SubRepo.Update(ctx, child); err != nil {
+		childCtx := activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled)
+		if err := s.SubRepo.Update(childCtx, child); err != nil {
 			return ierr.WithError(err).
 				WithHintf("Failed to cascade cancel to inherited subscription %s", child.ID).
 				Mark(ierr.ErrInternal)

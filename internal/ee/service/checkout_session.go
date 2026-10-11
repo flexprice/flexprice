@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -403,11 +404,17 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 		failureReason = &msg
 	}
 
+	terminalAction := activity.CheckoutSessionExpired
+	if status == types.CheckoutStatusFailed {
+		terminalAction = activity.CheckoutSessionFailed
+	}
+
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.cleanupCheckoutResources(txCtx, session, reason); err != nil {
 			return err
 		}
 
+		txCtx = activity.WithAction(txCtx, session.ID, terminalAction)
 		claimed, err := s.CheckoutSessionRepo.MarkTerminal(txCtx, session.ID, status, failureReason)
 		if err != nil {
 			return err
@@ -607,6 +614,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 
 	// Atomic claim: only one concurrent caller gets n > 0.
 	now := time.Now().UTC()
+	ctx = activity.WithAction(ctx, sessionID, activity.CheckoutSessionCompleted)
 	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, mergedResult)
 	if err != nil {
 		return err

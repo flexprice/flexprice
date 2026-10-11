@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/predicate"
 	entSchema "github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -346,7 +347,7 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 		SetNillableRefundedAt(p.RefundedAt).
 		SetNillableVoidedAt(p.VoidedAt).
 		SetNillableErrorMessage(p.ErrorMessage).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -362,7 +363,7 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 	// so this count is the only signal that the write did not land — without it
 	// an unknown ID, or one belonging to another tenant, returns success having
 	// changed nothing.
-	if affected == 0 {
+	if len(affected) == 0 {
 		// With a status predicate, the row may well exist and simply have moved
 		// to a different status between the caller's read and this write.
 		// Reported as a conflict so the caller re-reads rather than treating the
@@ -412,6 +413,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 	})
 	defer FinishSpan(span)
 
+	ctx = activity.WithAction(ctx, id, activity.PaymentArchived)
 	client := r.client.Writer(ctx)
 
 	r.log.Debug(ctx, "deleting payment",
@@ -433,7 +435,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -447,7 +449,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 
 	// As in update: zero rows affected is the only signal that nothing was
 	// archived, since a bulk update does not report a missing row as an error.
-	if affected == 0 {
+	if len(affected) == 0 {
 		var mutationErr error
 		if expectedStatus != nil {
 			mutationErr = ierr.NewError("payment status changed during delete").

@@ -322,7 +322,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 		update = update.SetNillableGroupID(lo.ToPtr(p.GroupID))
 	}
 
-	_, err := update.Save(ctx)
+	_, err := update.SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -408,7 +408,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -861,7 +861,7 @@ func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) er
 		ClearGroupID().
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to clear group ID").

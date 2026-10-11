@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -1244,6 +1245,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		txCtx = activity.WithAction(txCtx, inv.ID, activity.InvoiceFinalized)
 		// Lock invoice to prevent concurrent finalization
 		lockedInv, err := s.InvoiceRepo.GetForUpdate(txCtx, inv.ID)
 		if err != nil {
@@ -1621,6 +1623,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 
 	var inv *invoice.Invoice
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
+		tx = activity.WithAction(tx, id, activity.InvoiceVoided)
 		// Re-read under a row lock so a concurrent refund cannot make RefundedAmount
 		// stale between the pre-check and the refund calculation below.
 		var err error
@@ -1681,6 +1684,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		// terminally REFUNDED — including the case where prior refunds already
 		// covered it and this void issued no additional credit.
 		if fundedAmount.IsPositive() && inv.RefundedAmount.GreaterThanOrEqual(fundedAmount) {
+			tx = activity.WithAction(tx, id, activity.InvoiceRefunded)
 			inv.PaymentStatus = types.PaymentStatusRefunded
 		}
 
@@ -2179,6 +2183,14 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv 
 	return nil
 }
 
+// withInvoicePaid declares invoice.paid for id when status settles the invoice.
+func withInvoicePaid(ctx context.Context, id string, status types.PaymentStatus) context.Context {
+	if status == types.PaymentStatusSucceeded || status == types.PaymentStatusOverpaid {
+		return activity.WithAction(ctx, id, activity.InvoicePaid)
+	}
+	return ctx
+}
+
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
 	var inv *invoice.Invoice
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -2265,6 +2277,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 			return err
 		}
 
+		txCtx = withInvoicePaid(txCtx, id, status)
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 			return err
 		}
@@ -2399,6 +2412,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		return err
 	}
 
+	ctx = withInvoicePaid(ctx, id, inv.PaymentStatus)
 	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
 		return err
 	}

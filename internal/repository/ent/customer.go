@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -362,7 +363,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		update.ClearBillingCurrency()
 	}
 
-	_, err := update.Save(ctx)
+	_, err := update.SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -409,6 +410,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
+	ctx = activity.WithAction(ctx, domainCustomer.ID, activity.CustomerArchived)
 	_, err := client.Customer.Update().
 		Where(
 			customer.ID(domainCustomer.ID),
@@ -418,7 +420,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
