@@ -15,7 +15,7 @@ Tenants can see who created, updated, archived or deleted their billing entities
 dashboard and the public API.
 
 - **Every change is recorded.** Each committed create, update, archive and delete of a registered
-  entity made through Flexprice (API, dashboard, workflows, consumers, scripts) produces an entry.
+  entity made through Flexprice (API, dashboard, workflows, consumers, webhooks) produces an entry.
   Several writes to one entity in one transaction produce one entry with its final state, since the
   intermediate states were never visible outside the transaction.
 - **Who did it.** Each entry names its actor: a user, an API key, or the system. Work the platform does
@@ -40,14 +40,14 @@ dashboard and the public API.
   crashes after commit are lost without being counted; there is no durable recovery path for them.
   An entry that exists is always correct on its own.
 - **Product interfaces only.** The log covers changes made through Flexprice: API, dashboard,
-  workflows, consumers and scripts. Direct SQL on the database is controlled by infrastructure access
+  workflows, consumers and webhooks. Scripts build their own ent clients and are not captured. Direct SQL on the database is controlled by infrastructure access
   rules, not by this log.
 
 ### 1.3 Non-goals
 
 - Failed or rejected requests. Only committed changes are logged.
 - Field-level before and after values. An entry holds the state after the change.
-- Domain-specific action names such as `invoice.voided`. Actions are generic.
+- Writes that bypass ent (raw SQL), and scripts.
 - Querying data older than one year from the dashboard.
 
 ### 1.4 Terms
@@ -87,7 +87,7 @@ flowchart LR
     C --> CH[("ClickHouse<br/>activity_logs, 1 year")]
     CH --> AR["Archiver<br/>Temporal cron"]
     AR --> S3[("S3<br/>Parquet")]
-    CH --> READ["GET /v1/activity<br/>service → repository"]
+    CH --> READ["POST /v1/activity<br/>service → repository"]
 ```
 
 **Flow of a write.**
@@ -141,17 +141,33 @@ Each logged entity has one registration, next to its repository:
 | Snapshot | The entity's `FromEnt` conversion to its domain model |
 | Drop | Fields left out of the snapshot (for example `version`, `synced_price_sequence`) |
 | Redact | Fields stored as `"[redacted]"` (for example payment method details) |
-| Customer | The customer id field, the parent lookup the consumer uses, or none |
-| Label | The human name shown in lists (for example invoice number, customer name) |
+| Customer | The customer id field, the parent lookup the consumer uses (`Parent`, optionally `When` a column matches), or none |
+| Label | The entity's own name field shown in lists (for example invoice number, customer name); empty when it has none |
 
 Entities without a registration are never logged.
 
 ### 3.1 Entities in phase 1
 
-Customer-facing billing entities: customer, subscription, subscription phase, subscription schedule,
-subscription pause, invoice, credit note, wallet, wallet transaction, credit grant, credit grant
-application, entitlement grant, payment, payment method, refund, checkout session, coupon
-association, coupon application, addon association, tax association.
+Twelve entities. The registrations and declared actions are in the table below.
+
+| Entity type | Customer | Label | Declared actions |
+| --- | --- | --- | --- |
+| `customer` | the row itself | `name`, else `external_id` | archived |
+| `subscription` | `customer_id` | none | archived, cancelled, plan_changed, activated |
+| `invoice` | `customer_id` | `invoice_number` | deleted, voided, finalized, refunded, paid |
+| `credit_note` | `customer_id` | `credit_note_number` | voided, finalized |
+| `wallet` | `customer_id` | `name` | terminated, topped_up |
+| `payment` | the invoice's customer, or `destination_id` for a card-save payment | none | archived, voided, refunded, failed, succeeded |
+| `payment_method` | `customer_id` | none | none |
+| `refund` | the invoice's customer | none | failed, succeeded |
+| `checkout_session` | `customer_id` | none | archived, completed, failed, expired |
+| `plan` | none | `name` | archived |
+| `price` | the subscription's customer for a subscription override price, else none | `display_name`, else `lookup_key` | terminated |
+| `feature` | none | `name` | archived |
+
+Later phases: subscription schedule, pause and phase, wallet transaction, credit grant and its
+application, entitlement grant, coupon association and application, addon association, tax
+association.
 
 ---
 
@@ -164,17 +180,17 @@ moment of each write.
 
 | Entry point | Actor | Source |
 | --- | --- | --- |
-| Dashboard (JWT) | `user`: user id and name | `dashboard` |
-| API key | `api_key`: key id and key name | `api` |
-| Temporal activity | `system`: workflow name, set once by a worker interceptor | `workflow` |
-| Gateway webhook | `system`: event name | `webhook` |
-| Kafka consumer | `system`: consumer group name | `consumer` |
-| Script | `system`: `script:<name>` | `script` |
+| Dashboard (JWT) | `user`: user id and name (email when unnamed) | `dashboard` |
+| API key | `api_key`: key id and key name (`config` / "Operator key" for a configured key) | `api` |
+| Customer portal session | `customer`: customer id and external customer id | `customer_portal` |
+| Temporal activity | `system`: workflow type, set once by a worker interceptor | `workflow` |
+| Gateway webhook | `system`: the provider named in the route, set by one middleware on the webhook group | `webhook` |
+| Kafka consumer | `system`: the handler name passed to the router wrapper | `consumer` |
 
-**Writes the platform makes on a user's behalf** are attributed to the system. A top-up by a user
-creates the wallet transaction as the user, and the invoice and payment as `system` "Credit purchase
-billing". All three share the request id, which links the system entries to the user who triggered
-them. The code doing derived work wraps the context with `WithDerivedSystemActor(ctx, name, label)`.
+**Writes the platform makes on a user's behalf** are attributed to the system. A credit purchase by a
+user creates the invoice as `system` "Credit purchase billing". The entry keeps the request id and
+source of the request that triggered it, which links it to the user. The code doing derived work wraps
+the context with `types.SetDerivedSystemActor(ctx, id, label)`.
 
 Request middleware adds the request id, IP address and user agent. System work has none.
 
@@ -256,9 +272,12 @@ tests run on every ent upgrade, since the template depends on ent's generated in
 
 ### 4.4 Collector
 
-- `WithTx` installs one collector per transaction. Nested `WithTx` calls reuse it.
-- Several writes to one entity in a transaction become one entry with the last snapshot. A create
-  followed by updates stays `created`.
+- `WithTx` installs a small transaction-scoped store next to the post-commit hook list. The hook
+  creates the collector in it on the first entry and registers one post-commit flush. Nested `WithTx`
+  calls reuse it.
+- Several writes to one entity in a transaction become one entry with the last snapshot. The action
+  is the highest ranked: deleted (hard or declared), then created, then the highest-priority
+  declared action, then updated. A create followed by updates stays `created`.
 - On commit, the existing post-commit hook hands the entries to the publisher with the commit time.
 - On rollback the collector is dropped with the other post-commit work.
 - A write outside any transaction goes to the publisher right after it succeeds.
@@ -272,8 +291,8 @@ it.
 
 For each write it:
 
-1. Checks the registry. Unregistered entities, and contexts under `Suppress` (section 4.7), pass
-   straight through.
+1. Checks the registry. Unregistered entities, and updates that set only dropped fields plus
+   `updated_at` / `updated_by`, pass straight through.
 2. Lets the write run.
 3. Takes the rows the write returned: the created entity, or the rows from `SaveReturning` /
    `ExecReturning`.
@@ -282,7 +301,7 @@ For each write it:
 5. Adds the entries to the transaction's collector (section 4.4).
 
 It makes no database calls and never returns an error to the write. If building an entry fails,
-the entry is skipped and `activity_capture_failed_total` is incremented.
+the entry is skipped and `activity.capture_failed` is incremented.
 
 ### 4.6 How each write is captured
 
@@ -294,43 +313,28 @@ The hook records the rows that each write hands back:
 | `CreateBulk` | The batch `INSERT`; the hook runs once per row | None |
 | `Update()…SaveReturning` (one row or many) | `UPDATE … RETURNING *` | None |
 | `Delete()…ExecReturning` (one row or many) | `DELETE … RETURNING *` | None |
-| Raw SQL | The statement's own `RETURNING *`, passed to `activity.Record` | None |
 
-Raw SQL bypasses ent, so the repository passes the rows from its own `RETURNING *` to
-`activity.Record(ctx, entityType, rows)`, which builds entries the same way the hook does.
+Raw SQL bypasses ent and is not captured in phase 1 (for example
+`MarkOverdueGatedSubscriptionsIncomplete`).
 
 **Rule for registered entities:** updates end in `SaveReturning`, deletes end in `ExecReturning`.
 A plain `Save` or `Exec` on a registered entity returns only a count, so the hook cannot capture it.
-That fails in tests and local runs, and increments `activity_uncaptured_total` in production.
+That fails in tests and local runs, and increments `activity.uncaptured` in production.
 
-**Action** is `created`, `updated`, `archived` or `deleted` (row removed). The hook sees only the
-row after the write, so `archived` means the update set the status to archived or deleted, which the
-hook reads from the mutation. Re-archiving an already archived entity is also logged as `archived`.
+**Action** is `<entity>.<past verb>`, two segments, using the webhook word where one exists. The hook
+supplies `created`, `updated` and `deleted` from the ent operation. Every other action is declared by
+the service for one entity id with `activity.WithAction(ctx, id, activity.InvoiceVoided)`. Soft
+deletes are declared in the repository `Delete` with the status word they write (`archived`, or
+`deleted` for an invoice). Nothing declared means `<entity>.updated`. The constants are hand-written
+in `internal/activity/actions.go`, one block per entity, and a test checks them against the registry.
 
-### 4.7 Suppress
-
-`activity.Suppress(ctx, reason)` returns a context in which the hook records nothing. It is for
-system paths that keep data up to date as a side effect of other work, not changes anyone made.
-
-```go
-evalCtx := activity.Suppress(ctx, "wallet balance evaluation")
-balance, err := s.GetWalletBalanceV2(evalCtx, walletID)
-```
-
-The wallet's running balance is recomputed every time usage arrives. That evaluation runs under
-`Suppress`, so it never fills the customer's timeline. Only code that receives `evalCtx` is
-skipped: an auto top-up started from the same flow uses the normal context and is logged.
-
-- A reason is required and is logged at info level, so suppression always leaves a trace.
-- It is only for system maintenance paths. Using it on a path a tenant acts on would hide their changes.
-
-### 4.8 Repository changes for phase 1
+### 4.7 Repository changes for phase 1
 
 | Change | Sites |
 | --- | --- |
 | Template added to `generate-ent`, code regenerated | Once |
-| Updates on registered entities: `Save` to `SaveReturning` (single-row and bulk, including addon `CancelBulk` / `ActivateBulk` / `DeleteBulk` and credit grant `DeleteBulk`) | About 37 |
-| Deletes on registered entities: `Exec` / `DeleteOneID` to `ExecReturning` | 2 |
+| Updates on registered entities: `Save` to `SaveReturning` (single-row and bulk, including addon `CancelBulk` / `ActivateBulk` / `DeleteBulk` and credit grant `DeleteBulk`) | 31 |
+| Deletes on registered entities: `Exec` / `DeleteOneID` to `ExecReturning` | None (all deletes are soft) |
 | `Create`, `CreateBulk`, existing `UpdateOne` | None |
 
 ---
@@ -344,11 +348,10 @@ skipped: an auto top-up started from the same flow uses the normal context and i
   messages when a message would exceed 100 entries or 512 KB, whichever comes first. This follows
   the existing bulk publish bound (`bulk_max_batch_bytes`) and stays under Kafka's 1 MB message
   limit.
-- A single entry whose snapshot exceeds 256 KB is still published, with `state` cut down to the
-  entity's id and label fields and `state_truncated: true`. `activity_snapshot_truncated_total` is
-  incremented.
+- A single entry whose snapshot exceeds 256 KB is still published, with `state: null`.
+  `activity.snapshot_truncated` is incremented.
 - Never blocks the request. A full buffer, or a publish that still fails after retries, drops the
-  message and increments `activity_dropped_total`.
+  message and increments `activity.dropped`.
 - On shutdown it drains the buffer, with a timeout, before the process exits.
 
 ### 5.2 Kafka message
@@ -395,7 +398,7 @@ the offset is committed only after the insert is acknowledged.
    - Has a customer field: read it from `state`.
    - Linked through a parent: look the customer up on the Postgres read replica, with a cache. If the
      parent is not on the replica yet, the consumer fails the message and Kafka redelivers it with
-     backoff. After the retry limit it goes to the DLQ and `activity_customer_unresolved_total` is
+     backoff. After the retry limit it goes to the DLQ and `activity.customer_unresolved` is
      incremented. Nothing is inserted until every entry in the message is resolved.
    - No customer: stored with an empty customer, no lookup and no retry.
 3. Computes `entity_label` from the snapshot using the registration.
@@ -419,23 +422,23 @@ CREATE TABLE activity_logs
     -- What changed
     entity_type     LowCardinality(String),     -- subscription, invoice, wallet, …
     entity_id       String,
-    entity_label    String,                     -- human name shown in lists
+    entity_label    String,                     -- entity's own name field shown in lists
     customer_id     String,                     -- customer roll-up
-    action          LowCardinality(String),     -- created, updated, archived, deleted
+    action          LowCardinality(String),     -- invoice.created, invoice.voided, customer.archived, …
 
     -- Who changed it
-    actor_type      LowCardinality(String),     -- user, api_key, system
+    actor_type      LowCardinality(String),     -- user, api_key, customer, system
     actor_id        String,
     actor_label     String,
 
     -- Where the request came from
-    source          LowCardinality(String),     -- dashboard, api, workflow, webhook, consumer, script
+    source          LowCardinality(String),     -- dashboard, api, customer_portal, workflow, webhook, consumer
     request_id      String,
     ip              String,
     user_agent      String,
 
     -- State after the change
-    state           String CODEC(ZSTD(3)),      -- snapshot JSON, API field names
+    state           String CODEC(ZSTD(3)),      -- snapshot JSON, API field names; empty when over 256 KB (the API returns null)
     schema_version  UInt16,
 
     -- Time
@@ -523,17 +526,18 @@ flowchart LR
 
 ### 7.1 List
 
-`GET /v1/activity` returns lean rows, newest first, with no snapshot.
+`POST /v1/activity` (JSON body, `@x-scope "read"`) returns lean rows, newest first, with no snapshot.
 
-| Filter | Notes |
+| Field | Notes |
 | --- | --- |
-| `start_time`, `end_time` | Required. At most 90 days, within the last year |
-| `entity_type` + `entity_id` | One entity's timeline |
+| `start_time`, `end_time` | Optional. Both omitted: the last 30 days. Only `start_time`: until now. Only `end_time`: the 30 days before it. At most 90 days, within the last year; the window is `[start, end)` |
+| `entity_type` + `entity_id` | One entity's timeline; `entity_id` needs `entity_type` |
 | `customer_id` | Everything for one customer |
-| `actor_type`, `actor_id` | Everything one user or key did |
-| `request_id` | Every entry from one request, bounded to that request's day |
-| `action` | One or more of created, updated, archived, deleted |
-| `cursor`, `limit` | Cursor pagination. Default 50, maximum 200 |
+| `actor_types[]`, `actor_id` | Everything one kind of actor, or one user or key, did |
+| `actions[]` | Exact action names |
+| `request_id` | Every entry from one request |
+| `expand` | `["state"]` adds the snapshot to each item (`null` when it was over 256 KB) |
+| `cursor`, `limit` | Keyset cursor on `(occurred_at, id)`. Default 50, maximum 100 (50 with `state`) |
 
 ```json
 {
@@ -541,8 +545,8 @@ flowchart LR
     {
       "id": "act_01JB8Q…A",
       "occurred_at": "2026-10-08T11:02:44.170Z",
-      "action": "updated",
-      "entity": { "type": "subscription", "id": "subs_01", "label": "Pro, Acme" },
+      "action": "subscription.cancelled",
+      "entity": { "type": "subscription", "id": "subs_01", "label": "" },
       "customer_id": "cus_3",
       "actor": { "type": "user", "id": "user_7", "label": "Manish" },
       "source": "dashboard",
@@ -551,24 +555,28 @@ flowchart LR
       "user_agent": "Mozilla/5.0 …"
     }
   ],
-  "next_cursor": "…",
-  "has_more": true
+  "pagination": { "limit": 50, "next_cursor": "…", "has_more": true }
 }
 ```
 
+Empty optional fields are omitted. `next_cursor` is always present and is `null` on the last page.
+List queries that filter on a customer or an entity set `optimize_read_in_order = 0`, because
+ClickHouse otherwise reads the main sort key in order and skips the `by_customer` / `by_entity`
+projections.
+
 ### 7.2 Detail
 
-`GET /v1/activity/{id}` returns the row plus `state` and `schema_version`. The id's embedded time is
-when the entry was built, shortly before its commit time, and a transaction can commit in the next
-month. The lookup therefore searches from that time to one day after it, which touches at most two
-partitions.
+`GET /v1/activity/{id}` returns the item plus `state` (`null` when not stored). `schema_version` is
+stored but never returned. The id's embedded time is when the entry was built, shortly before its
+commit time, and a transaction can commit in the next month. The lookup therefore searches from that
+time to one day after it, which touches at most two partitions.
 
 ### 7.3 Access
 
-- Entity and customer timelines need read permission on that entity type.
-- The tenant-wide feed needs a new activity read permission.
+- Both routes need the single `activity:read` permission; roles with a wildcard already have it.
 - API keys can read the log.
 - Every query filters on the tenant and environment from the context.
+- Both routes exist only when `activity.enabled` is on.
 
 The dashboard shows that entries can take a few seconds to appear.
 
@@ -578,15 +586,15 @@ The dashboard shows that entries can take a few seconds to appear.
 
 | Metric | Alert |
 | --- | --- |
-| `activity_dropped_total` (by reason) | Any sustained drops |
+| `activity.dropped` (by reason) | Any sustained drops |
 | Consumer lag on the activity topic | Above five minutes |
-| `activity_uncaptured_total` (by entity) | Any non-zero value |
-| `activity_customer_unresolved_total` | Sustained growth |
-| `activity_unknown_actor_total` (by entry point) | Any non-zero value |
-| `activity_capture_failed_total` (by entity) | Any non-zero value |
-| `activity_snapshot_truncated_total` (by entity) | Any non-zero value |
+| `activity.uncaptured` (by entity) | Any non-zero value |
+| `activity.customer_unresolved` | Sustained growth |
+| `activity.unknown_actor` (by entry point) | Any non-zero value |
+| `activity.capture_failed` (by entity) | Any non-zero value |
+| `activity.snapshot_truncated` (by entity) | Any non-zero value |
 
-- Scripts that change data install the hook with a `script:<name>` actor.
+- Scripts build their own ent clients, so the hook is not installed there and their writes are not logged.
 - The Kafka topic is created with the other topics in `init-kafka`.
 - CI runs the parity tests for the returning methods and fails on any uncaptured write to a
   registered entity.
