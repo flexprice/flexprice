@@ -28,6 +28,13 @@ const (
 	InvoiceTransitions Name = "invoice.transitions"
 	RefundTransitions  Name = "refund.transitions"
 	GatewayWebhooks    Name = "gateway.webhooks"
+
+	ActivityDropped            Name = "activity.dropped"
+	ActivityUncaptured         Name = "activity.uncaptured"
+	ActivityCaptureFailed      Name = "activity.capture_failed"
+	ActivitySnapshotTruncated  Name = "activity.snapshot_truncated"
+	ActivityUnknownActor       Name = "activity.unknown_actor"
+	ActivityCustomerUnresolved Name = "activity.customer_unresolved"
 )
 
 type definition struct {
@@ -43,6 +50,13 @@ var catalog = map[Name]definition{
 	InvoiceTransitions: {"Invoice status changes by new status, including draft creation", "{transition}"},
 	RefundTransitions:  {"Refund status changes by new status, including creation", "{transition}"},
 	GatewayWebhooks:    {"Inbound gateway webhooks by processing outcome; unhandled types are labelled other", "{webhook}"},
+
+	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
+	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},
+	ActivityCaptureFailed:      {"Activity entries skipped because building them failed, by entity", "{entry}"},
+	ActivitySnapshotTruncated:  {"Activity entries whose state was too large and was stored as null, by entity", "{entry}"},
+	ActivityUnknownActor:       {"Activity entries written without an actor, by entry point", "{entry}"},
+	ActivityCustomerUnresolved: {"Activity messages whose customer could not be resolved", "{message}"},
 }
 
 // counters is built once at init and only read afterwards, so concurrent lookups are safe.
@@ -69,6 +83,8 @@ const (
 	KeyBillingReason LabelKey = "billing_reason"
 	KeyDestination   LabelKey = "destination"
 	KeyReason        LabelKey = "reason"
+	KeyEntity        LabelKey = "entity"
+	KeyEntryPoint    LabelKey = "entry_point"
 )
 
 type Label struct {

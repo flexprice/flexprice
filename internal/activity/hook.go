@@ -1,0 +1,160 @@
+package activity
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"slices"
+
+	entgo "entgo.io/ent"
+	"github.com/flexprice/flexprice/internal/metrics"
+	"github.com/flexprice/flexprice/internal/types"
+)
+
+// HookOptions configures the ent hook.
+type HookOptions struct {
+	// Strict panics on bulk writes that return only a row count.
+	Strict bool
+	// EntryPoint labels the unknown-actor metric (the deployment mode).
+	EntryPoint string
+}
+
+const redacted = `"[redacted]"`
+
+var unrecordedFields = []string{"updated_at", "updated_by"}
+
+// Hook records an entry for every captured write to a registered entity. It never fails a write.
+func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
+	return func(next entgo.Mutator) entgo.Mutator {
+		return entgo.MutateFunc(func(ctx context.Context, m entgo.Mutation) (entgo.Value, error) {
+			r, ok := reg.ByEntName(m.Type())
+			if !ok || onlyDroppedFields(m, r) {
+				return next.Mutate(ctx, m)
+			}
+			v, err := next.Mutate(ctx, m)
+			if err != nil {
+				return v, err
+			}
+			rows, counted := rowsOf(v)
+			if counted {
+				if opts.Strict {
+					panic(fmt.Sprintf("activity: uncaptured write to %s; use SaveReturning or ExecReturning", r.EntityType))
+				}
+				metrics.RecordCounter(ctx, metrics.ActivityUncaptured, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
+				return v, nil
+			}
+			for _, row := range rows {
+				buildEntry(ctx, reg, sink, opts, r, m.Op(), row)
+			}
+			return v, nil
+		})
+	}
+}
+
+// onlyDroppedFields reports whether an update touches nothing but dropped fields and timestamps.
+func onlyDroppedFields(m entgo.Mutation, r *Registration) bool {
+	if !m.Op().Is(entgo.OpUpdate | entgo.OpUpdateOne) {
+		return false
+	}
+	touched := append(append(m.Fields(), m.AddedFields()...), m.ClearedFields()...)
+	return len(touched) > 0 && !slices.ContainsFunc(touched, func(f string) bool {
+		return !slices.Contains(r.Drop, f) && !slices.Contains(unrecordedFields, f)
+	})
+}
+
+// rowsOf extracts written rows from a mutation result; counted is true when only a row count came back.
+func rowsOf(v entgo.Value) (rows []any, counted bool) {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Int:
+		return nil, true
+	case reflect.Ptr:
+		if !rv.IsNil() {
+			return []any{v}, false
+		}
+	case reflect.Slice:
+		for i := 0; i < rv.Len(); i++ {
+			rows = append(rows, rv.Index(i).Interface())
+		}
+	}
+	return rows, false
+}
+
+// buildEntry snapshots one written row and queues it; any failure skips the entry and is counted.
+func buildEntry(ctx context.Context, reg *Registry, sink Sink, opts HookOptions, r *Registration, op entgo.Op, row any) {
+	defer func() {
+		if recover() != nil {
+			metrics.RecordCounter(ctx, metrics.ActivityCaptureFailed, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
+		}
+	}()
+	entry, ok := newEntry(ctx, opts, r, op, row)
+	if !ok {
+		metrics.RecordCounter(ctx, metrics.ActivityCaptureFailed, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
+		return
+	}
+	add(ctx, reg, sink, entry)
+}
+
+func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.Op, row any) (Entry, bool) {
+	raw, err := json.Marshal(r.Snapshot(row))
+	if err != nil {
+		return Entry{}, false
+	}
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return Entry{}, false
+	}
+	entityID, tenantID, envID := stringField(fields, "id"), stringField(fields, "tenant_id"), stringField(fields, "environment_id")
+	if tenantID == "" {
+		tenantID = types.GetTenantID(ctx)
+	}
+	if envID == "" {
+		envID = types.GetEnvironmentID(ctx)
+	}
+	if entityID == "" || (tenantID == "" && envID == "") {
+		return Entry{}, false
+	}
+	for _, key := range r.Drop {
+		delete(fields, key)
+	}
+	for _, key := range r.Redact {
+		if _, ok := fields[key]; ok {
+			fields[key] = json.RawMessage(redacted)
+		}
+	}
+	state, err := json.Marshal(fields)
+	if err != nil {
+		return Entry{}, false
+	}
+
+	actor, _, hasActor := types.GetActor(ctx)
+	if !hasActor {
+		actor = types.Actor{Type: types.ActorTypeSystem, ID: "unknown", Label: "unknown"}
+		metrics.RecordCounter(ctx, metrics.ActivityUnknownActor, 1, metrics.L(metrics.KeyEntryPoint, opts.EntryPoint))
+	}
+	return Entry{
+		ID: types.GenerateUUIDWithPrefix("act"), EntityType: r.EntityType, EntityID: entityID,
+		Action: actionFor(ctx, r, op, entityID), Actor: actor, State: state, TenantID: tenantID, EnvironmentID: envID,
+	}, true
+}
+
+func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID string) string {
+	if declared, ok := declaredFor(ctx, r, entityID); ok {
+		return declared
+	}
+	prefix := string(r.EntityType) + "."
+	switch {
+	case op.Is(entgo.OpCreate):
+		return prefix + "created"
+	case op.Is(entgo.OpDelete | entgo.OpDeleteOne):
+		return prefix + "deleted"
+	}
+	return prefix + "updated"
+}
+
+func stringField(fields map[string]json.RawMessage, key string) string {
+	var s string
+	_ = json.Unmarshal(fields[key], &s)
+	return s
+}
