@@ -65,6 +65,7 @@ type Configuration struct {
 	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
 	OAuth                  OAuthConfig                  `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert     WalletBalanceAlertConfig     `mapstructure:"wallet_balance_alert" validate:"required"`
+	Activity               ActivityConfig               `mapstructure:"activity" validate:"omitempty"`
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
@@ -960,6 +961,25 @@ type WalletBalanceAlertConfig struct {
 	Topic         string `mapstructure:"topic" default:"wallet_alert"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_wallet_alert_service"`
+}
+
+// ActivityConfig configures the activity log pipeline; Enabled is the kill switch.
+type ActivityConfig struct {
+	Enabled       bool                    `mapstructure:"enabled" default:"false"`
+	Topic         string                  `mapstructure:"topic" default:"activity_logs"`
+	TopicDLQ      string                  `mapstructure:"topic_dlq" default:"activity_logs_dlq"`
+	ConsumerGroup string                  `mapstructure:"consumer_group" default:"flexprice-activity-consumer"`
+	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
+	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
+}
+
+type ActivityPublisherConfig struct {
+	BufferSize           int           `mapstructure:"buffer_size" default:"10000"`
+	Workers              int           `mapstructure:"workers" default:"4"`
+	MaxEntriesPerMessage int           `mapstructure:"max_entries_per_message" default:"100"`
+	MaxMessageBytes      int           `mapstructure:"max_message_bytes" default:"524288"`
+	MaxSnapshotBytes     int           `mapstructure:"max_snapshot_bytes" default:"262144"`
+	ShutdownTimeout      time.Duration `mapstructure:"shutdown_timeout" default:"10s"`
 }
 
 type RawEventsReprocessingConfig struct {

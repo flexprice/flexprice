@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/activity"
 	"net/http"
 	"strings"
 	"time"
@@ -223,6 +224,15 @@ func main() {
 		),
 	)
 
+	// Activity log capture (hook, publisher); inert unless activity.enabled
+	opts = append(opts,
+		fx.Provide(
+			provideActivityPubSub,
+			activity.DefaultRegistry,
+			activity.NewPublisher,
+		),
+	)
+
 	// Service layer
 	opts = append(opts,
 		fx.Provide(
@@ -332,6 +342,7 @@ func main() {
 			tracing.RegisterHooks,
 			repository.InitTracing,
 			pyroscope.RegisterHooks,
+			activity.Install,
 			initIntegrationFactory,
 			startServer,
 		),
@@ -806,6 +817,21 @@ func provideWalletBalanceAlertPubSub(
 		return types.WalletBalanceAlertPubSub{}
 	}
 	return types.WalletBalanceAlertPubSub{PubSub: pubSub}
+}
+
+func provideActivityPubSub(
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) types.ActivityPubSub {
+	if !cfg.Activity.Enabled {
+		return types.ActivityPubSub{}
+	}
+	pubSub, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.Activity.ConsumerGroup)
+	if err != nil {
+		logger.Fatalw("failed to create pubsub for activity log", "error", err)
+		return types.ActivityPubSub{}
+	}
+	return types.ActivityPubSub{PubSub: pubSub}
 }
 
 // enrichServiceParams returns the ServiceParams the rest of the app consumes:

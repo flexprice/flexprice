@@ -547,6 +547,20 @@ wallet_balance_alert:
   rate_limit: 1
   consumer_group: "v1_wallet_alert_service"
 
+activity:
+  enabled: false
+  topic: activity_logs
+  topic_dlq: activity_logs_dlq
+  consumer_group: flexprice-activity-consumer
+  rate_limit: 50
+  publisher:
+    buffer_size: 10000
+    workers: 4
+    max_entries_per_message: 100
+    max_message_bytes: 524288
+    max_snapshot_bytes: 262144
+    shutdown_timeout: 10s
+
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:
   api_key: ""

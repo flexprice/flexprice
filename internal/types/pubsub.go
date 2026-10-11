@@ -11,3 +11,8 @@ type WalletBalanceAlertPubSub struct {
 type IntegrationEventsPubSub struct {
 	pubsub.PubSub
 }
+
+// ActivityPubSub carries activity log messages.
+type ActivityPubSub struct {
+	pubsub.PubSub
+}
