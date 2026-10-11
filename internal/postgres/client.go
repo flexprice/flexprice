@@ -252,6 +252,7 @@ func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error)
 	// Work that must observe this transaction's writes queues here and runs
 	// below, once the commit has made those writes visible.
 	txCtx = types.WithPostCommitHooks(txCtx)
+	txCtx = types.WithTxStore(txCtx)
 
 	if err := fn(txCtx); err != nil {
 		if rerr := tx.Rollback(); rerr != nil {

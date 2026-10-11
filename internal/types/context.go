@@ -21,6 +21,9 @@ const (
 	CtxWriterPin     ContextKey = "ctx_writer_pin"   // Mutable read-your-writes pin, installed per unit of work
 	CtxPostCommit    ContextKey = "ctx_post_commit"  // Mutable post-commit hook list, installed per transaction
 	CtxRoles         ContextKey = "ctx_roles"        // RBAC roles array for permission checks
+	CtxActor         ContextKey = "ctx_actor"        // Who is making changes, with the entry point
+	CtxRequestMeta   ContextKey = "ctx_request_meta" // Client IP and user agent of the request
+	CtxTxStore       ContextKey = "ctx_tx_store"     // Per-transaction key/value store, installed per transaction
 
 	// Default values
 	DefaultTenantID = "00000000-0000-0000-0000-000000000000"
@@ -282,4 +285,65 @@ func WithoutDBTransaction(ctx context.Context) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, CtxDBTransaction, nil)
+}
+
+type actorInfo struct {
+	actor  Actor
+	source Source
+}
+
+// SetActor records who is acting and through which entry point.
+func SetActor(ctx context.Context, actor Actor, source Source) context.Context {
+	return context.WithValue(ctx, CtxActor, actorInfo{actor: actor, source: source})
+}
+
+// GetActor returns the acting party and source; ok is false when none was set.
+func GetActor(ctx context.Context) (Actor, Source, bool) {
+	info, ok := ctx.Value(CtxActor).(actorInfo)
+	return info.actor, info.source, ok
+}
+
+// SetDerivedSystemActor attributes work the platform does on someone's behalf to the system,
+// keeping the original source (and request metadata).
+func SetDerivedSystemActor(ctx context.Context, id, label string) context.Context {
+	_, source, _ := GetActor(ctx)
+	return SetActor(ctx, Actor{Type: ActorTypeSystem, ID: id, Label: label}, source)
+}
+
+type requestMeta struct{ ip, userAgent string }
+
+func SetRequestMeta(ctx context.Context, ip, userAgent string) context.Context {
+	return context.WithValue(ctx, CtxRequestMeta, requestMeta{ip: ip, userAgent: userAgent})
+}
+
+func GetRequestMeta(ctx context.Context) (ip, userAgent string) {
+	m, _ := ctx.Value(CtxRequestMeta).(requestMeta)
+	return m.ip, m.userAgent
+}
+
+type txStore struct {
+	mu sync.Mutex
+	m  map[string]any
+}
+
+// WithTxStore installs an empty per-transaction store.
+func WithTxStore(ctx context.Context) context.Context {
+	return context.WithValue(ctx, CtxTxStore, &txStore{m: map[string]any{}})
+}
+
+// TxStoreLoadOrStore returns the value for key, creating it with create on first use.
+// ok is false outside a transaction (no store installed); the value is then not kept.
+func TxStoreLoadOrStore(ctx context.Context, key string, create func() any) (value any, ok bool) {
+	store, has := ctx.Value(CtxTxStore).(*txStore)
+	if !has {
+		return nil, false
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	v, found := store.m[key]
+	if !found {
+		v = create()
+		store.m[key] = v
+	}
+	return v, true
 }
