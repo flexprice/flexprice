@@ -382,6 +382,8 @@ init-kafka:
 				events_post_processing_backfill \
 				system_events \
 				wallet_alert \
+				activity_logs \
+				activity_logs_dlq \
 				onboarding_events \
 				staging_benchmarking \
 				prod_events_v4 \

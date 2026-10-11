@@ -147,6 +147,7 @@ func main() {
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
 			repository.NewMeterUsageRepository,
+			repository.NewActivityRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -230,6 +231,8 @@ func main() {
 			provideActivityPubSub,
 			activity.DefaultRegistry,
 			activity.NewPublisher,
+			activity.NewParentLookup,
+			activity.NewConsumer,
 		),
 	)
 
@@ -611,6 +614,7 @@ func startServer(
 	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
+	activityConsumer *activity.Consumer,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -624,7 +628,7 @@ func startServer(
 			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 
@@ -632,7 +636,7 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 	case types.ModeAPI:
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
 		startRouter(lc, router, log)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
@@ -642,7 +646,7 @@ func startServer(
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
@@ -651,7 +655,7 @@ func startServer(
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
 		startRouter(lc, router, log)
 	case types.ModeAdmin:
 		startAPIServer(lc, adminRouter, cfg, log)
@@ -762,6 +766,7 @@ func registerRouterHandlers(
 	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
+	activityConsumer *activity.Consumer,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
@@ -778,6 +783,9 @@ func registerRouterHandlers(
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		meterUsageTrackingSvc.RegisterBulkHandler(router, cfg)
+		if cfg.Activity.Enabled {
+			activityConsumer.RegisterHandler(router, cfg)
+		}
 	}
 }
 
