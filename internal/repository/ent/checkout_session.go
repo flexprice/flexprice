@@ -116,7 +116,7 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 	}
 
 	SetSpanSuccess(span)
-	return fromEntCheckout(e), nil
+	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckout.CheckoutSession) error {
@@ -189,7 +189,7 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 	SetSpanSuccess(span)
 	result := make([]*domainCheckout.CheckoutSession, len(entities))
 	for i, e := range entities {
-		result[i] = fromEntCheckout(e)
+		result[i] = domainCheckout.FromEnt(e)
 	}
 	return result, nil
 }
@@ -253,7 +253,7 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 	}
 
 	SetSpanSuccess(span)
-	return fromEntCheckout(e), nil
+	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
@@ -281,7 +281,7 @@ func (r *checkoutSessionRepository) GetByCheckoutInvoiceID(ctx context.Context, 
 	}
 
 	SetSpanSuccess(span)
-	return fromEntCheckout(e), nil
+	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) GetSessionByPaymentID(ctx context.Context, paymentID string) (*domainCheckout.CheckoutSession, error) {
@@ -310,7 +310,7 @@ func (r *checkoutSessionRepository) GetSessionByPaymentID(ctx context.Context, p
 	}
 
 	SetSpanSuccess(span)
-	return fromEntCheckout(e), nil
+	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error {
@@ -442,7 +442,7 @@ func (r *checkoutSessionRepository) ListExpiredCheckoutSessions(ctx context.Cont
 	SetSpanSuccess(span)
 	result := make([]*domainCheckout.CheckoutSession, len(entities))
 	for i, e := range entities {
-		result[i] = fromEntCheckout(e)
+		result[i] = domainCheckout.FromEnt(e)
 	}
 	return result, nil
 }
@@ -556,41 +556,4 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 		}
 	}
 	return query, nil
-}
-
-func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
-	s := &domainCheckout.CheckoutSession{
-		ID:                    e.ID,
-		EnvironmentID:         e.EnvironmentID,
-		CustomerID:            e.CustomerID,
-		Action:                e.Action,
-		CheckoutStatus:        types.CheckoutStatus(e.CheckoutStatus),
-		PaymentProvider:       e.PaymentProvider,
-		CheckoutInvoiceID:     e.CheckoutInvoiceID,
-		CheckoutPaymentID:     e.CheckoutPaymentID,
-		Configuration:         domainCheckout.JSONBCheckoutConfiguration(e.Configuration),
-		PaymentProviderConfig: (*domainCheckout.JSONBCheckoutPaymentProviderConfig)(e.PaymentProviderConfig),
-		Result:                (*domainCheckout.JSONBCheckoutResult)(e.Result),
-		ProviderResult:        (*domainCheckout.JSONBCheckoutProviderResult)(e.ProviderResult),
-		IdempotencyKey:        e.IdempotencyKey,
-		SuccessURL:            e.SuccessURL,
-		FailureURL:            e.FailureURL,
-		CancelURL:             e.CancelURL,
-		CompletedAt:           e.CompletedAt,
-		CancelledAt:           e.CancelledAt,
-		FailureReason:         e.FailureReason,
-		Metadata:              types.Metadata(e.Metadata),
-		BaseModel: types.BaseModel{
-			TenantID:  e.TenantID,
-			Status:    types.Status(e.Status),
-			CreatedAt: e.CreatedAt,
-			UpdatedAt: e.UpdatedAt,
-			CreatedBy: e.CreatedBy,
-			UpdatedBy: e.UpdatedBy,
-		},
-	}
-	if e.ExpiresAt != nil {
-		s.ExpiresAt = *e.ExpiresAt
-	}
-	return s
 }
